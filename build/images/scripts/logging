@@ -1,0 +1,31 @@
+declare NC='\033[0m' # No Color
+declare ID_C='\033[0;36m' # ID Color
+
+function write_log {
+    # $1: ID (Required)
+    # $2: Message (Required)
+    declare dateTimeISO8601=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    declare LT_BLUE='\033[1;34m'
+    echo -e "[${LT_BLUE}${dateTimeISO8601} $1 $2"
+}
+
+function log_info {
+    # $1: ID (Required)
+    # $2: Message (Required)
+    declare GREEN='\033[0;32m'
+    write_log "${GREEN}INFO ${ID_C}$1${NC}]:" "$2"
+}
+
+function log_warning {
+    # $1: ID (Required)
+    # $2: Message (Required)
+    declare ORANGE='\033[0;33m'
+    write_log "${ORANGE}WARNING ${ID_C}$1${NC}]:" "$2"
+}
+
+function log_error {
+    # $1: ID (Required)
+    # $2: Message (Required)
+    declare RED='\033[0;31m'
+    write_log "${RED}ERROR ${ID_C}$1${NC}]:" "$2"
+}
