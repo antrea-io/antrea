@@ -1,0 +1,41 @@
+syntax = "proto3";
+package cnimsg;
+
+message CniCmdArgsMessage {
+    string container_id = 1;
+    string netns = 2;
+    string ifname = 3;
+    string args = 4;
+    string path = 5;
+    bytes network_configuration = 6;
+}
+
+message CniCmdRequestMessage {
+    string version = 1;
+    CniCmdArgsMessage cni_args = 2;
+}
+
+message CniCmdResponseMessage {
+    enum ErrorCode {
+        SUCCESS = 0;
+        INCOMPATIBLE_CNI_VERSION = 1;
+        UNSUPPORTED_NETWORK_CONFIGURATION = 2;
+        UNKNOWN_CONTAINER = 3;
+        TRY_AGAIN_LATER = 11;
+    }
+    string version = 1;
+    ErrorCode status_code = 2;
+    bytes cni_result = 3;
+    string error_message = 4;
+}
+
+service Cni {
+    rpc CmdAdd (CniCmdRequestMessage) returns (CniCmdResponseMessage) {
+    }
+
+    rpc CmdCheck (CniCmdRequestMessage) returns (CniCmdResponseMessage) {
+    }
+
+    rpc CmdDel (CniCmdRequestMessage) returns (CniCmdResponseMessage) {
+    }
+}
