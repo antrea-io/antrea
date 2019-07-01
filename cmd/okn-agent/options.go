@@ -2,15 +2,12 @@ package main
 
 import (
 	"errors"
-
 	"io/ioutil"
+
+	"okn/pkg/cni"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
-)
-
-const (
-	defaultCNISocket = "/var/run/okn/cni.sock"
 )
 
 type Options struct {
@@ -68,6 +65,6 @@ func (o *Options) loadConfigFromFile(file string) (*AgentConfig, error) {
 
 func (o *Options) setDefaults() {
 	if o.config.CNISocket == "" {
-		o.config.CNISocket = defaultCNISocket
+		o.config.CNISocket = cni.OKNCniAddr
 	}
 }

@@ -1,24 +1,18 @@
 package main
 
 import (
+	"okn/pkg/cni"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/version"
 )
 
-const cniInfoString = "OKN CNI"
-
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, cniInfoString)
-}
-
-func cmdAdd(args *skel.CmdArgs) error {
-	return nil
-}
-
-func cmdCheck(args *skel.CmdArgs) error {
-	return nil
-}
-
-func cmdDel(args *skel.CmdArgs) error {
-	return nil
+	skel.PluginMain(
+		cni.ActionAdd.Request,
+		cni.ActionCheck.Request,
+		cni.ActionDel.Request,
+		version.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1"),
+		"OKN CNI",
+	)
 }
