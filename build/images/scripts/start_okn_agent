@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+source logging
+
+set -euo pipefail
+
+sleep infinity
