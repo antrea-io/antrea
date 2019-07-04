@@ -1,5 +1,3 @@
 BUILD
 
 .*.swp
-go.mod
-go.sum
