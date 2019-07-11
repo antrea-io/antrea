@@ -3,7 +3,9 @@ module okn
 go 1.12
 
 require (
+	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20190103132138-cf96a9e61bd1
 	github.com/blang/semver v3.5.0+incompatible // indirect
+	github.com/containernetworking/cni v0.7.1
 	github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96 // indirect
 	github.com/elazarl/goproxy v0.0.0-20170405201442-c4fc26588b6e // indirect
 	github.com/evanphx/json-patch v4.2.0+incompatible // indirect

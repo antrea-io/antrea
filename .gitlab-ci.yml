@@ -1,0 +1,22 @@
+image: golang:1.12
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - /go/pkg/mod
+
+before_script:
+  - go mod download
+
+stages:
+  - test
+
+format:
+  stage: test
+  script:
+    - make test-fmt
+
+unit:
+  stage: test
+  script:
+    - make test-unit
