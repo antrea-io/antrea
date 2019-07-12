@@ -15,19 +15,19 @@ func main() {
 	klog.InitFlags(flag.CommandLine)
 	defer klog.Flush()
 
-	command := newAgentCommand()
+	command := newControllerCommand()
 
 	if err := command.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
-func newAgentCommand() *cobra.Command {
+func newControllerCommand() *cobra.Command {
 	opts := newOptions()
 
 	cmd := &cobra.Command{
-		Use:  "okn-agent",
-		Long: "The OKN agent runs on each node.",
+		Use:  "okn-controller",
+		Long: "The OKN Controller.",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := opts.complete(args); err != nil {
 				klog.Fatalf("Failed to complete: %v", err)
@@ -35,7 +35,7 @@ func newAgentCommand() *cobra.Command {
 			if err := opts.validate(args); err != nil {
 				klog.Fatalf("Failed to validate: %v", err)
 			}
-			klog.Fatal(runAgent(opts))
+			klog.Fatal(runController(opts))
 		},
 	}
 
@@ -46,10 +46,10 @@ func newAgentCommand() *cobra.Command {
 	return cmd
 }
 
-func runAgent(o *Options) error {
-	agent, err := newOKNAgent(o.config)
+func runController(o *Options) error {
+	controller, err := newOKNController(o.config)
 	if err != nil {
 		return err
 	}
-	return agent.run()
+	return controller.run()
 }
