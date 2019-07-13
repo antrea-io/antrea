@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultCNISocket  = "/var/run/okn/cni.sock"
+	defaultCNISocket = "/var/run/okn/cni.sock"
 )
 
 type Options struct {

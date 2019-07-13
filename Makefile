@@ -1,4 +1,5 @@
 BUILD_DIR = $(PWD)/BUILD
+GO_FILES=`find . -name "*.go" -type f`
 
 export BUILD_DIR
 
@@ -16,3 +17,16 @@ build: build_dir
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR)
+
+.PHONY: fmt
+fmt:
+	gofmt -s -l -w $(GO_FILES)
+
+.PHONY: test test-fmt test-unit
+test: test-fmt test-unit
+
+test-fmt:
+	@test -z "$$(gofmt -s -l -d $(GO_FILES) | tee /dev/stderr)"
+
+test-unit:
+	go test -cover $$(go list ./... | grep -v "okn/pkg/ovs/ovsconfig")
