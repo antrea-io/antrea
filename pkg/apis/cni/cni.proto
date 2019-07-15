@@ -23,6 +23,7 @@ message CniCmdResponseMessage {
         UNKNOWN_CONTAINER = 3;
         TRY_AGAIN_LATER = 11;
         INCOMPATIBLE_PROTO_VERSION = 100;
+        IPAM_FAILURE = 101;
     }
     string version = 1;
     ErrorCode status_code = 2;
