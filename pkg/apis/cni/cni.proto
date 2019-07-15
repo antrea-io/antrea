@@ -22,6 +22,7 @@ message CniCmdResponseMessage {
         UNSUPPORTED_NETWORK_CONFIGURATION = 2;
         UNKNOWN_CONTAINER = 3;
         TRY_AGAIN_LATER = 11;
+        INCOMPATIBLE_PROTO_VERSION = 100;
     }
     string version = 1;
     ErrorCode status_code = 2;
