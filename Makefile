@@ -33,4 +33,4 @@ test-fmt:
 	@test -z "$$(gofmt -s -l -d $(GO_FILES) | tee /dev/stderr)"
 
 test-unit:
-	go test -cover $$(go list ./... | grep -v "okn/pkg/ovs/ovsconfig")
+	go test -cover $$(go list ./... | grep -v "okn/pkg/[ovs/ovsconfig\|test]")

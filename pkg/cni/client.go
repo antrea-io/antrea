@@ -20,15 +20,15 @@ const (
 )
 
 const (
-	OKNCniAddr = "/var/run/okn/cni.sock"
-	OKNVersion = "1.0.0"
+	OKNCNISocketAddr = "/var/run/okn/cni.sock"
+	OKNVersion       = "1.0.0"
 )
 
 var withClient = rpcClient
 
 func rpcClient(f func(client cnipb.CniClient) error) error {
 	conn, err := grpc.Dial(
-		OKNCniAddr,
+		OKNCNISocketAddr,
 		grpc.WithInsecure(),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (conn net.Conn, e error) {
 			return net.Dial("unix", addr)

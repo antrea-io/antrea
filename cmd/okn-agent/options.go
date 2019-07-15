@@ -10,6 +10,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const (
+	defaultOVSBridge = "br-int"
+)
+
 type Options struct {
 	// The path of configuration file.
 	configFile string
@@ -65,6 +69,9 @@ func (o *Options) loadConfigFromFile(file string) (*AgentConfig, error) {
 
 func (o *Options) setDefaults() {
 	if o.config.CNISocket == "" {
-		o.config.CNISocket = cni.OKNCniAddr
+		o.config.CNISocket = cni.OKNCNISocketAddr
+	}
+	if o.config.OVSBridge == "" {
+		o.config.OVSBridge = defaultOVSBridge
 	}
 }
