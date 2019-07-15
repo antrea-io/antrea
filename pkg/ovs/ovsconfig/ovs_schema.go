@@ -1,18 +1,14 @@
 package ovsconfig
 
-import (
-	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovshelper"
-)
-
-type BaseInterface ovshelper.Interface
-type BasePort ovshelper.Port
-
 type Port struct {
-	BasePort
+	Name        string        `json:"name"`
+	Interfaces  []interface{} `json:"interfaces"`
 	ExternalIDs []interface{} `json:"external_ids,omitempty"`
 }
 
 type Interface struct {
-	BaseInterface
-	Type string `json:"type,omitempty"`
+	Name          string        `json:"name"`
+	Type          string        `json:"type,omitempty"`
+	OFPortRequest int32         `json:"ofport_request,omitempty"`
+	Options       []interface{} `json:"options,omitempty"`
 }
