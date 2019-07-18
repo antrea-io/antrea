@@ -1,0 +1,102 @@
+package ipam
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+
+	"github.com/containernetworking/cni/pkg/invoke"
+	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
+	"k8s.io/klog"
+)
+
+const (
+	IPAM_HOST_LOCAL = "host-local"
+)
+
+type IPAMDelegator struct {
+	pluginType string
+}
+
+func (d *IPAMDelegator) Add(args *invoke.Args, networkConfig []byte) (*current.Result, error) {
+	var success = false
+	defer func() {
+		if !success {
+			// Rollback to delete assigned network configuration for failed to execute Add operation
+			args.Command = "DEL"
+			if err := delegateNoResult(d.pluginType, networkConfig, args); err != nil {
+				klog.Errorf("Failed to roll back to delete configuration %s, %v", string(networkConfig), err)
+			}
+		}
+	}()
+	args.Command = "ADD"
+	r, err := delegateWithResult(d.pluginType, networkConfig, args)
+	if err != nil {
+		return nil, err
+	}
+
+	ipamResult, err := current.NewResultFromResult(r)
+	if err != nil {
+		return nil, err
+	}
+	success = true
+	return ipamResult, nil
+}
+
+func (d *IPAMDelegator) Del(args *invoke.Args, networkConfig []byte) error {
+	args.Command = "DEL"
+	if err := delegateNoResult(d.pluginType, networkConfig, args); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *IPAMDelegator) Check(args *invoke.Args, networkConfig []byte) error {
+	args.Command = "CHECK"
+	if err := delegateNoResult(d.pluginType, networkConfig, args); err != nil {
+		return err
+	}
+	return nil
+}
+
+var defaultExec = &invoke.DefaultExec{
+	RawExec: &invoke.RawExec{Stderr: os.Stderr},
+}
+
+func delegateCommon(delegatePlugin string, exec invoke.Exec, cniPath string) (string, invoke.Exec, error) {
+	paths := filepath.SplitList(cniPath)
+	pluginPath, err := exec.FindInPath(delegatePlugin, paths)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return pluginPath, exec, nil
+}
+
+func delegateWithResult(delegatePlugin string, networkConfig []byte, args *invoke.Args) (types.Result, error) {
+	ctx := context.TODO()
+	pluginPath, realExec, err := delegateCommon(delegatePlugin, defaultExec, args.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	return invoke.ExecPluginWithResult(ctx, pluginPath, networkConfig, args, realExec)
+}
+
+func delegateNoResult(delegatePlugin string, networkConfig []byte, args *invoke.Args) error {
+	ctx := context.TODO()
+	pluginPath, realExec, err := delegateCommon(delegatePlugin, defaultExec, args.Path)
+	if err != nil {
+		return err
+	}
+
+	return invoke.ExecPluginWithoutResult(ctx, pluginPath, networkConfig, args, realExec)
+}
+
+func init() {
+	if err := RegisterIPAMDriver(IPAM_HOST_LOCAL, &IPAMDelegator{pluginType: IPAM_HOST_LOCAL}); err != nil {
+		klog.Errorf("Failed to register IPAM plugin on type %s", IPAM_HOST_LOCAL)
+	}
+}
