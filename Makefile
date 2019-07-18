@@ -22,6 +22,10 @@ clean:
 fmt:
 	gofmt -s -l -w $(GO_FILES)
 
+.PHONY: lint
+lint:
+	golint $$(go list ./...)
+
 .PHONY: test test-fmt test-unit
 test: test-fmt test-unit
 
