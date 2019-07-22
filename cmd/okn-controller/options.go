@@ -2,9 +2,8 @@ package main
 
 import (
 	"errors"
-	"io/ioutil"
 
-	"okn/pkg/cni"
+	"io/ioutil"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
@@ -14,12 +13,12 @@ type Options struct {
 	// The path of configuration file.
 	configFile string
 	// The configuration object
-	config *AgentConfig
+	config *ControllerConfig
 }
 
 func newOptions() *Options {
 	return &Options{
-		config: new(AgentConfig),
+		config: new(ControllerConfig),
 	}
 }
 
@@ -37,7 +36,6 @@ func (o *Options) complete(args []string) error {
 		}
 		o.config = c
 	}
-	o.setDefaults()
 	return nil
 }
 
@@ -49,22 +47,16 @@ func (o *Options) validate(args []string) error {
 	return nil
 }
 
-func (o *Options) loadConfigFromFile(file string) (*AgentConfig, error) {
+func (o *Options) loadConfigFromFile(file string) (*ControllerConfig, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
 
-	var c AgentConfig
+	var c ControllerConfig
 	err = yaml.UnmarshalStrict(data, &c)
 	if err != nil {
 		return nil, err
 	}
 	return &c, nil
-}
-
-func (o *Options) setDefaults() {
-	if o.config.CNISocket == "" {
-		o.config.CNISocket = cni.OKNCniAddr
-	}
 }
