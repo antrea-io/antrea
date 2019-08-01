@@ -31,7 +31,7 @@ type NodeController struct {
 	queue            workqueue.RateLimitingInterface
 }
 
-func New(kubeClient clientset.Interface, nodeInformer coreinformers.NodeInformer) (*NodeController, error) {
+func NewNodeController(kubeClient clientset.Interface, nodeInformer coreinformers.NodeInformer) (*NodeController, error) {
 	n := &NodeController{
 		kubeClient:       kubeClient,
 		nodeInformer:     nodeInformer,
