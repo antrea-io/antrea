@@ -30,7 +30,7 @@ func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
 		return nil, err
 	}
 
-	nodeController, err := nodecontroller.New(client, nodeInformer)
+	nodeController, err := nodecontroller.NewNodeController(client, nodeInformer)
 	if err != nil {
 		return nil, err
 	}

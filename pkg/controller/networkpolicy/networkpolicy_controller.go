@@ -42,7 +42,7 @@ type NetworkPolicyController struct {
 	queue                     workqueue.RateLimitingInterface
 }
 
-func New(kubeClient clientset.Interface, podInformer coreinformers.PodInformer, namespaceInformer coreinformers.NamespaceInformer, networkPolicyInformer networkinginformers.NetworkPolicyInformer) (*NetworkPolicyController, error) {
+func NewNetworkPolicyController(kubeClient clientset.Interface, podInformer coreinformers.PodInformer, namespaceInformer coreinformers.NamespaceInformer, networkPolicyInformer networkinginformers.NetworkPolicyInformer) (*NetworkPolicyController, error) {
 	n := &NetworkPolicyController{
 		kubeClient:                kubeClient,
 		podInformer:               podInformer,

@@ -25,7 +25,7 @@ func newOKNController(config *ControllerConfig) (*OKNController, error) {
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 
-	networkPolicyController, err := networkpolicy.New(client, podInformer, namespaceInformer, networkPolicyInformer)
+	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(client, podInformer, namespaceInformer, networkPolicyInformer)
 	if err != nil {
 		return nil, err
 	}
