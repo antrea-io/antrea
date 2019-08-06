@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
+	"okn/pkg/iptables"
 	"okn/pkg/ovs/ovsconfig"
 )
 
@@ -81,6 +82,11 @@ func (ai *agentInitializer) setupOVSBridge(bridge string, gatewayIface string, t
 func (ai *agentInitializer) SetupNodeNetwork(bridge string, gatewayIface string, tunType string, nodeConfig *NodeConfig) error {
 	// Create OVS bridge, add host gateway interface and tunnel port
 	if err := ai.setupOVSBridge(bridge, gatewayIface, tunType, nodeConfig); err != nil {
+		return err
+	}
+
+	// Setup iptables chain and rules
+	if err := iptables.SetupHostIPTablesRules(gatewayIface); err != nil {
 		return err
 	}
 
