@@ -37,6 +37,22 @@ spec:
         version: v1
     spec:
       hostNetwork: true
+      initContainers:
+        - name: install-cni
+          image: okn-ubuntu
+          imagePullPolicy: IfNotPresent
+          command: ["install_cni"]
+          volumeMounts:
+          - name: config-volume
+            mountPath: /etc/okn/okn.conf
+            subPath: okn.conf
+            readOnly: true
+          - name: host-cni-conf
+            mountPath: /host/etc/cni/net.d
+          - name: host-cni-bin
+            mountPath: /host/opt/cni/bin
+          - name: host-var-run-okn
+            mountPath: /host/var/run/okn
       containers:
         - name: okn-agent
           image: okn-ubuntu
@@ -62,6 +78,8 @@ spec:
             mountPath: /etc/okn/okn.conf
             subPath: okn.conf
             readOnly: true
+          - name: host-var-run-okn
+            mountPath: /var/run/okn
         - name: okn-ovs
           image: okn-ubuntu
           imagePullPolicy: IfNotPresent
@@ -93,3 +111,12 @@ spec:
         - name: openvswitch
           hostPath:
             path: /var/run/openvswitch
+        - name: host-cni-conf
+          hostPath:
+            path: /etc/cni/net.d
+        - name: host-cni-bin
+          hostPath:
+            path: /opt/cni/bin
+        - name: host-var-run-okn
+          hostPath:
+            path: /var/run/okn
