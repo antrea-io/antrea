@@ -10,6 +10,12 @@ import (
 
 var ipamDrivers map[string]IPAMDriver
 
+type IPAMConfig struct {
+	Type    string `json:"type,omitempty"`
+	Subnet  string `json:"subnet,omitempty"`
+	Gateway string `json:"gateway,omitempty"`
+}
+
 type IPAMDriver interface {
 	Add(args *invoke.Args, networkConfig []byte) (*current.Result, error)
 	Del(args *invoke.Args, networkConfig []byte) error

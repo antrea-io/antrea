@@ -6,6 +6,7 @@ require (
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20190103132138-cf96a9e61bd1
 	github.com/containernetworking/cni v0.7.1
 	github.com/containernetworking/plugins v0.8.2-0.20190724153215-ded2f1757770
+	github.com/coreos/go-iptables v0.4.1
 	github.com/gogo/protobuf v0.0.0-20171007142547-342cbe0a0415 // indirect
 	github.com/golang/groupcache v0.0.0-20160516000752-02826c3e7903 // indirect
 	github.com/golang/mock v1.1.1

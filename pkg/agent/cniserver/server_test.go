@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"okn/pkg/ovs/ovsconfig"
+	"net"
 	"testing"
 
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	mock "github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"okn/pkg/agent"
 	"okn/pkg/agent/cniserver/ipam"
 	"okn/pkg/apis/cni"
 	"okn/pkg/cni"
@@ -22,7 +23,8 @@ const (
 	netns                   = "ns-1"
 	ifname                  = "eth0"
 	testScock               = "/tmp/test.sock"
-	test_ipam_type          = "test"
+	testIpamType            = "test"
+	testBr                  = "br0"
 	testPodNamespace        = "test"
 	testPodName             = "test-1"
 	testPodInfraContainerID = "test-infra-11111111"
@@ -32,6 +34,9 @@ var routes = []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 var dns = []string{"192.168.100.1"}
 var ips = []string{"10.1.2.100/24,10.1.2.1,4"}
 var args string = test.GenerateCNIArgs(testPodName, testPodNamespace, testPodInfraContainerID)
+var containerNamespace = "test"
+var testNodeConfig *agent.NodeConfig
+var gwIP net.IP
 
 func TestLoadNetConfig(t *testing.T) {
 	cniService := generateCNIServer(t)
@@ -61,6 +66,12 @@ func TestLoadNetConfig(t *testing.T) {
 	if netCfg.IPAM.Type != networkCfg.IPAM.Type {
 		t.Error("Failed to parse network configuration")
 	}
+	if netCfg.IPAM.Subnet != cniService.nodeConfig.PodCIDR.String() {
+		t.Error("Failed to update local IPAM configuration")
+	}
+	if netCfg.IPAM.Gateway != testNodeConfig.Gateway.IP.String() {
+		t.Error("Failed to update local IPAM configuration")
+	}
 }
 
 func TestRequestCheck(t *testing.T) {
@@ -81,17 +92,17 @@ func TestNewCNIServer(t *testing.T) {
 	controller := mock.NewController(t)
 	defer controller.Finish()
 	ipamMock := mocks.NewMockIPAMDriver(controller)
-	_ = ipam.RegisterIPAMDriver(test_ipam_type, ipamMock)
+	_ = ipam.RegisterIPAMDriver(testIpamType, ipamMock)
 	testSupportedVersionStr := "0.3.0, 0.3.1, 0.4.0"
 	var supporteVersions = []string{"0.3.0", "0.3.1", "0.4.0"}
-	cniServer := &CNIServer{cniSocket: testScock, supportedCNIVersions: supportedCNIVersionSet, serverVersion: cni.OKNVersion}
+	cniServer := generateCNIServer(t)
 	cniServer.supportedCNIVersions = buildVersionSet(testSupportedVersionStr)
 	for _, ver := range supporteVersions {
 		if !cniServer.isCNIVersionSupported(ver) {
 			t.Errorf("CniService init failed for wrong supportedCNIVersions")
 		}
 	}
-	isValid := ipam.IsIPAMTypeValid(test_ipam_type)
+	isValid := ipam.IsIPAMTypeValid(testIpamType)
 	if !isValid {
 		t.Errorf("Failed to load Ipam service")
 	}
@@ -169,28 +180,29 @@ func TestValidatePrevResult(t *testing.T) {
 	ipamResult := test.GenerateIPAMResult(cniVersion, ips, routes, dns)
 	networkCfg.RawPrevResult, _ = translateRawPrevResult(ipamResult, cniVersion)
 
-	networkCfg.Ifname = "eth1"
+	cniConfig := &CNIConfig{NetworkConfig: networkCfg, CniCmdArgsMessage: &cnimsg.CniCmdArgsMessage{Args: args}}
+	cniConfig.Ifname = "eth1"
 	prevResult, _ := cniServer.parsePrevResultFromRequest(networkCfg)
 	containerID := uuid.New().String()
-	networkCfg.ContainerId = containerID
+	cniConfig.ContainerId = containerID
 	containerIface := &current.Interface{Name: ifname, Sandbox: netns}
 	hostIfaceName := GenerateContainerPeerName(testPodName, testPodNamespace)
 	hostIface := &current.Interface{Name: hostIfaceName}
 	prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-	response, _ := cniServer.validatePrevResult(networkCfg.CniCmdArgsMessage, k8sPodArgs, prevResult)
+	response, _ := cniServer.validatePrevResult(cniConfig.CniCmdArgsMessage, k8sPodArgs, prevResult)
 	if response == nil || response.StatusCode != cnimsg.CniCmdResponseMessage_UNKNOWN_CONTAINER {
 		t.Errorf("Failed to catch invalid container interface from request")
 	}
 
-	networkCfg.Ifname = ifname
-	networkCfg.Netns = "invalid_netns"
-	response, _ = cniServer.validatePrevResult(networkCfg.CniCmdArgsMessage, k8sPodArgs, prevResult)
+	cniConfig.Ifname = ifname
+	cniConfig.Netns = "invalid_netns"
+	response, _ = cniServer.validatePrevResult(cniConfig.CniCmdArgsMessage, k8sPodArgs, prevResult)
 	if response == nil || response.StatusCode != cnimsg.CniCmdResponseMessage_CHECK_INTERFACE_FAILURE {
 		t.Errorf("Failed to catch invalid container interface from request")
 	}
 	hostIface = &current.Interface{Name: "unknown_iface"}
 	prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-	response, _ = cniServer.validatePrevResult(networkCfg.CniCmdArgsMessage, k8sPodArgs, prevResult)
+	response, _ = cniServer.validatePrevResult(cniConfig.CniCmdArgsMessage, k8sPodArgs, prevResult)
 	if response == nil || response.StatusCode != cnimsg.CniCmdResponseMessage_UNKNOWN_CONTAINER {
 		t.Errorf("Failed to catch invalid host interface from request")
 	}
@@ -234,7 +246,7 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 	cniVersion := "0.3.1"
 	testIps := []string{"10.1.2.100/24, ,4", "192.168.1.100/24, 192.168.2.253, 4"}
 	result := test.GenerateIPAMResult(cniVersion, testIps, routes, dns)
-	updateResultIfaceConfig(result)
+	updateResultIfaceConfig(result, gwIP)
 	if len(result.IPs) != 2 {
 		t.Errorf("Failed to construct result")
 	}
@@ -251,35 +263,30 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 			t.Errorf("Failed to identify ip address from result")
 		}
 	}
-}
-
-func TestParseContainerAttachInfo(t *testing.T) {
-	containerID := uuid.New().String()
-	cniVersion := "0.3.1"
-	containerMAC := "aa:bb:cc:dd:ee:ff"
-	result := test.GenerateIPAMResult(cniVersion, ips, routes, dns)
-	containerIface := &current.Interface{Name: ifname, Sandbox: netns, Mac: containerMAC}
-	containerConfig := buildContainerConfig(containerID, testPodName, testPodNamespace, containerIface, result.IPs)
-	externalIds := parseContainerAttachInfo(containerID, containerConfig)
-	parsedIP, existed := externalIds[OVSExternalIDIP]
-	if !existed || parsedIP != "10.1.2.100" {
-		t.Errorf("Failed to parse container configuration")
-	}
-	parsedMac, existed := externalIds[OVSExternalIDMAC]
-	if !existed || parsedMac != containerMAC {
-		t.Errorf("Failed to parse container configuration")
-	}
-	parsedID, existed := externalIds[OVSExternalIDContainerID]
-	if !existed || parsedID != containerID {
-		t.Errorf("Failed to parse container configuration")
+	emptyRoute := []string{}
+	result = test.GenerateIPAMResult(cniVersion, testIps, emptyRoute, dns)
+	updateResultIfaceConfig(result, testNodeConfig.Gateway.IP)
+	if result.Routes == nil || len(result.Routes) == 0 {
+		t.Error("Failed to add default route via node host gateway interface")
+	} else {
+		found := false
+		for _, route := range result.Routes {
+			if route.Dst.String() == "0.0.0.0/0" && route.GW.String() == testNodeConfig.Gateway.IP.String() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("Failed to add default route via node host gateway interface")
+		}
 	}
 }
 
 func TestOVSOperations(t *testing.T) {
-	containerConfigCache = make(map[string]*ContainerConfig)
 	controller := mock.NewController(t)
 	defer controller.Finish()
 	mockOVSdbClient := mocks.NewMockOVSdbClient(controller)
+	ifaceStore := agent.NewInterfaceStore()
 	cniVersion := "0.3.1"
 	containerID := uuid.New().String()
 	containerMAC := "11:22:33:44:55:66"
@@ -298,10 +305,13 @@ func TestOVSOperations(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to handle OVS success add")
 	} else {
-		containerConfig.ovsPortConfig = &ovsPortConfig{ifaceName: hostIfaceName, portUUID: portUUID}
-		containerConfigCache[containerID] = containerConfig
+		containerConfig.OvsPortConfig = &agent.OvsPortConfig{PortUUID: portUUID, IfaceName: hostIfaceName}
+		ifaceStore.AddInterface(containerID, containerConfig)
+		if containerConfig.PortUUID != fakePortUUID {
+			t.Errorf("Failed to cache OVS port UUID")
+		}
 	}
-	err = validateOVSPort(hostIfaceName, containerMAC, containerID, result.IPs)
+	err = validateOVSPort(ifaceStore, hostIfaceName, containerMAC, containerID, result.IPs)
 	if err != nil {
 		t.Errorf("Failed to validate OVS port configuration")
 	}
@@ -310,8 +320,8 @@ func TestOVSOperations(t *testing.T) {
 	failedContainerID := uuid.New().String()
 	pod2 := "test-2"
 	failedOVSPortName := GenerateContainerPeerName(pod2, testPodNamespace)
-	containerConfig2 := &ContainerConfig{id: failedContainerID, ip: "10.1.2.101", mac: containerMAC}
-	containerConfigCache[failedContainerID] = containerConfig2
+	containerConfig2 := agent.NewContainerInterface(failedContainerID, testPodName, testPodNamespace, "", containerMAC, "10.1.2.101")
+	ifaceStore.AddInterface(failedContainerID, containerConfig2)
 	mockOVSdbClient.EXPECT().CreatePort(failedOVSPortName, failedOVSPortName, mock.Any()).Return(
 		"", mocks.NewMockOVSConfigError("Error while create OVS port", true, true))
 	failedhostIface := &current.Interface{Name: failedOVSPortName}
@@ -326,33 +336,35 @@ func TestOVSOperations(t *testing.T) {
 	ovsExternalIDs[OVSExternalIDContainerID] = containerID
 	ovsExternalIDs[OVSExternalIDIP] = "10.1.2.100"
 	ovsExternalIDs[OVSExternalIDMAC] = containerMAC
-	err = validateOVSPort(hostIfaceName, containerMAC, containerID, result.IPs)
+	err = validateOVSPort(ifaceStore, hostIfaceName, containerMAC, containerID, result.IPs)
 	if err != nil {
 		t.Errorf("Failed to compare success result from OVS service")
 	}
 }
 
 func TestRemoveInterface(t *testing.T) {
-	containerConfigCache = make(map[string]*ContainerConfig)
 	controller := mock.NewController(t)
 	defer controller.Finish()
+	ifaceStore := agent.NewInterfaceStore()
 	mockOVSdbClient := mocks.NewMockOVSdbClient(controller)
 	cniVersion := "0.4.0"
 	netcfg := generateNetworkConfiguration("testCfg", cniVersion)
-	netcfg.Ifname = "eth0"
+	cniConfig := &CNIConfig{NetworkConfig: netcfg, CniCmdArgsMessage: &cnimsg.CniCmdArgsMessage{}}
+	cniConfig.Ifname = "eth0"
 	containerID := uuid.New().String()
 	hostIfaceName := GenerateContainerPeerName(testPodName, testPodNamespace)
-	netcfg.ContainerId = containerID
-	netcfg.Netns = ""
+	cniConfig.ContainerId = containerID
+	cniConfig.Netns = ""
 	fakePortUUID := uuid.New().String()
-	containerConfig := &ContainerConfig{id: containerID, ovsPortConfig: &ovsPortConfig{portUUID: fakePortUUID, ifaceName: hostIfaceName}}
-	containerConfigCache[containerID] = containerConfig
+	containerConfig := agent.NewContainerInterface(containerID, testPodName, testPodNamespace, "", "aa:bb:cc:dd:ee:ff", "1.1.1.1")
+	containerConfig.OvsPortConfig = &agent.OvsPortConfig{hostIfaceName, fakePortUUID, 0}
 	mockOVSdbClient.EXPECT().DeletePort(fakePortUUID).Return(nil)
-	err := removeInterfaces(mockOVSdbClient, netcfg.ContainerId, netcfg.Netns, netcfg.Ifname)
+	ifaceStore.AddInterface(containerID, containerConfig)
+	err := removeInterfaces(mockOVSdbClient, ifaceStore, containerID, cniConfig.Netns, cniConfig.Ifname)
 	if err != nil {
 		t.Errorf("Failed to remove interfaces")
 	} else {
-		_, found := containerConfigCache[containerID]
+		_, found := ifaceStore.GetInterface(containerID)
 		if found {
 			t.Errorf("Failed to remove from local cache")
 		}
@@ -361,68 +373,20 @@ func TestRemoveInterface(t *testing.T) {
 	containerID2 := uuid.New().String()
 	pod2 := "test2"
 	hostIfaceName2 := GenerateContainerPeerName(pod2, testPodNamespace)
-	netcfg.ContainerId = containerID2
-	netcfg.Netns = ""
+	cniConfig.ContainerId = containerID2
 	fakePortUUID2 := uuid.New().String()
-	containerConfig2 := &ContainerConfig{id: containerID2, ovsPortConfig: &ovsPortConfig{portUUID: fakePortUUID2, ifaceName: hostIfaceName2}}
-	containerConfigCache[containerID2] = containerConfig2
+	containerConfig2 := agent.NewContainerInterface(containerID2, testPodName, testPodNamespace, "", "aa:bb:cc:dd:ee:ff", "1.1.1.1")
+	containerConfig2.OvsPortConfig = &agent.OvsPortConfig{hostIfaceName2, fakePortUUID2, 0}
+	ifaceStore.AddInterface(containerID2, containerConfig2)
 	mockOVSdbClient.EXPECT().DeletePort(fakePortUUID2).Return(mocks.NewMockOVSConfigError("Failed to delete", true, true))
-	err = removeInterfaces(mockOVSdbClient, containerID2, "", netcfg.Ifname)
+	err = removeInterfaces(mockOVSdbClient, ifaceStore, containerID2, "", cniConfig.Ifname)
 	if err == nil {
 		t.Errorf("Failed delete port on OVS")
 	} else {
-		_, found := containerConfigCache[containerID2]
+		_, found := ifaceStore.GetInterface(containerID2)
 		if !found {
 			t.Errorf("Failed to return after OVS delete failure")
 		}
-	}
-}
-
-func TestInitCache(t *testing.T) {
-	containerConfigCache = make(map[string]*ContainerConfig)
-	controller := mock.NewController(t)
-	defer controller.Finish()
-	mockOVSdbClient := mocks.NewMockOVSdbClient(controller)
-
-	mockOVSdbClient.EXPECT().GetPortList().Return(nil, mocks.NewMockOVSConfigError("Failed to list OVS ports", true, true))
-	err := initCache(mockOVSdbClient)
-	if err == nil {
-		t.Errorf("Failed to handle OVS return error")
-	}
-
-	uuid1 := uuid.New().String()
-	p1Mac := "11:22:33:44:55:66"
-	p1IP := "1.1.1.1"
-	ovsPort1 := ovsconfig.OVSPortData{UUID: uuid.New().String(), Name: "p1", IFName: "p1", OFPort: 1,
-		ExternalIDs: map[string]string{OVSExternalIDContainerID: uuid1,
-			OVSExternalIDMAC: p1Mac, OVSExternalIDIP: p1IP}}
-	uuid2 := uuid.New().String()
-	ovsPort2 := ovsconfig.OVSPortData{UUID: uuid.New().String(), Name: "p2", IFName: "p2", OFPort: 2,
-		ExternalIDs: map[string]string{OVSExternalIDContainerID: uuid2,
-			OVSExternalIDMAC: "11:22:33:44:55:77", OVSExternalIDIP: "1.1.1.2"}}
-	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
-
-	mockOVSdbClient.EXPECT().GetPortList().Return(initOVSPorts, mocks.NewMockOVSConfigError("Failed to list OVS ports", true, true))
-	err = initCache(mockOVSdbClient)
-	if len(containerConfigCache) != 0 {
-		t.Errorf("Failed to load OVS port in initCache")
-	}
-
-	ovsPort2.OFPort = 2
-	mockOVSdbClient.EXPECT().GetPortList().Return(initOVSPorts, nil)
-	err = initCache(mockOVSdbClient)
-	if len(containerConfigCache) != 2 {
-		t.Errorf("Failed to load OVS port in initCache")
-	}
-	container1, found1 := containerConfigCache[uuid1]
-	if !found1 {
-		t.Errorf("Failed to load OVS port into local cache")
-	} else if container1.ofport != 1 || container1.ip != p1IP || container1.mac != p1Mac || container1.ifaceName != "p1" {
-		t.Errorf("Failed to load OVS port configuration into local cache")
-	}
-	_, found2 := containerConfigCache[uuid2]
-	if !found2 {
-		t.Errorf("Failed to load OVS port into local cache")
 	}
 }
 
@@ -446,11 +410,8 @@ func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[
 
 func generateCNIServer(t *testing.T) *CNIServer {
 	supportedVersions := "0.3.0,0.3.1,0.4.0"
-	cniServer := &CNIServer{
-		cniSocket:            testScock,
-		supportedCNIVersions: buildVersionSet(supportedVersions),
-		serverVersion:        cni.OKNVersion,
-	}
+	cniServer := &CNIServer{cniSocket: testScock, nodeConfig: testNodeConfig, serverVersion: cni.OKNVersion}
+	cniServer.supportedCNIVersions = buildVersionSet(supportedVersions)
 	return cniServer
 }
 
@@ -459,8 +420,7 @@ func generateNetworkConfiguration(name string, cniVersion string) *NetworkConfig
 	netCfg.Name = name
 	netCfg.CNIVersion = cniVersion
 	netCfg.Type = "okn"
-	netCfg.IPAM = types.IPAM{Type: test_ipam_type}
-	netCfg.CniCmdArgsMessage = &cnimsg.CniCmdArgsMessage{Args: args}
+	netCfg.IPAM = ipam.IPAMConfig{Type: testIpamType}
 	return netCfg
 }
 
@@ -491,4 +451,12 @@ func generateUUID(t *testing.T) string {
 		t.Fatal("Failed to generate UUID")
 	}
 	return newId.String()
+}
+
+func init() {
+	nodeName := "node1"
+	gwIP := net.ParseIP("192.168.1.1")
+	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
+	gateway := &agent.Gateway{Name: "gw", IP: gwIP, MAC: "00:00:00:00:00:01"}
+	testNodeConfig = &agent.NodeConfig{testBr, nodeName, nodePodCIDR, gateway}
 }

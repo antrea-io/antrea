@@ -15,6 +15,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"google.golang.org/grpc"
 	"k8s.io/klog"
+	"okn/pkg/agent"
 	"okn/pkg/agent/cniserver/ipam"
 	"okn/pkg/apis/cni"
 	"okn/pkg/cni"
@@ -25,7 +26,9 @@ type CNIServer struct {
 	cniSocket            string
 	supportedCNIVersions map[string]bool
 	serverVersion        string
-	ovsdbClient          ovsconfig.OVSBridgeClient
+	ovsBridgeClient      ovsconfig.OVSBridgeClient
+	nodeConfig           *agent.NodeConfig
+	ifaceStore           agent.InterfaceStore
 }
 
 const (
@@ -37,12 +40,23 @@ const (
 var supportedCNIVersionSet map[string]bool
 
 type NetworkConfig struct {
-	types.NetConf
+	CNIVersion string          `json:"cniVersion,omitempty"`
+	Name       string          `json:"name,omitempty"`
+	Type       string          `json:"type,omitempty"`
+	DNS        types.DNS       `json:"dns"`
+	IPAM       ipam.IPAMConfig `json:"ipam,omitempty"`
+
+	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
+	PrevResult    types.Result           `json:"-"`
+}
+
+type CNIConfig struct {
+	*NetworkConfig
 	*cnimsg.CniCmdArgsMessage
 	*k8sArgs
 }
 
-func updateResultIfaceConfig(result *current.Result) {
+func updateResultIfaceConfig(result *current.Result, defaultV4Gateway net.IP) {
 	for _, ipc := range result.IPs {
 		// result.Interfaces[0] is host interface, and result.Interfaces[1] is container interface
 		ipc.Interface = current.Int(1)
@@ -52,20 +66,38 @@ func updateResultIfaceConfig(result *current.Result) {
 			ipc.Gateway = ip.NextIP(netID)
 		}
 	}
+
+	foundDefaultRoute := false
+	defaultRouteDst := "0.0.0.0/0"
+	if result.Routes != nil {
+		for _, route := range result.Routes {
+			if route.Dst.String() == defaultRouteDst {
+				foundDefaultRoute = true
+				break
+			}
+		}
+	} else {
+		result.Routes = []*types.Route{}
+	}
+	if !foundDefaultRoute {
+		_, defaultRouteDstNet, _ := net.ParseCIDR(defaultRouteDst)
+		result.Routes = append(result.Routes, &types.Route{Dst: *defaultRouteDstNet, GW: defaultV4Gateway})
+	}
 }
 
-func (s *CNIServer) loadNetworkConfig(request *cnimsg.CniCmdRequestMessage) (*NetworkConfig, error) {
-	networkConfig := &NetworkConfig{}
-	networkConfig.CniCmdArgsMessage = request.CniArgs
-	if err := json.Unmarshal(request.CniArgs.NetworkConfiguration, networkConfig); err != nil {
-		return networkConfig, err
+func (s *CNIServer) loadNetworkConfig(request *cnimsg.CniCmdRequestMessage) (*CNIConfig, error) {
+	cniConfig := &CNIConfig{}
+	cniConfig.CniCmdArgsMessage = request.CniArgs
+	if err := json.Unmarshal(request.CniArgs.NetworkConfiguration, cniConfig); err != nil {
+		return cniConfig, err
 	}
-	networkConfig.k8sArgs = &k8sArgs{}
-	if err := types.LoadArgs(request.CniArgs.Args, networkConfig.k8sArgs); err != nil {
-		return networkConfig, err
+	cniConfig.k8sArgs = &k8sArgs{}
+	if err := types.LoadArgs(request.CniArgs.Args, cniConfig.k8sArgs); err != nil {
+		return cniConfig, err
 	}
-	klog.Infof("Load network configurations: %v", networkConfig)
-	return networkConfig, nil
+	s.updateLocalIPAMSubnet(cniConfig)
+	klog.Infof("Load network configurations: %v", cniConfig)
+	return cniConfig, nil
 }
 
 func (s *CNIServer) isCNIVersionSupported(reqVersion string) bool {
@@ -74,32 +106,37 @@ func (s *CNIServer) isCNIVersionSupported(reqVersion string) bool {
 }
 
 func (s *CNIServer) checkRequestMessage(request *cnimsg.CniCmdRequestMessage) (
-	*NetworkConfig, *cnimsg.CniCmdResponseMessage) {
+	*CNIConfig, *cnimsg.CniCmdResponseMessage) {
 	if request.Version != s.serverVersion {
 		klog.Error(fmt.Sprintf("Unsupported request version %s, supported versions: %s", request.Version, s.serverVersion))
 		return nil, s.incompatibleProtocolVersionResponse(request.Version)
 	}
-	networkConfig, err := s.loadNetworkConfig(request)
+	cniConfig, err := s.loadNetworkConfig(request)
 	if err != nil {
 		klog.Errorf("Failed to parse network configuration: %v", err)
 		return nil, s.unsupportedNetworkConfigResponse("networkconfiguration",
 			string(request.CniArgs.NetworkConfiguration))
 	}
-	cniVersion := networkConfig.CNIVersion
+	cniVersion := cniConfig.CNIVersion
 	// Check if CNI version in the request is supported
 	if !s.isCNIVersionSupported(cniVersion) {
 		klog.Errorf(fmt.Sprintf("Unsupported CNI version [%s], supported CNI versions [%s]", cniVersion, supportedCNIVersions))
-		return networkConfig, s.incompatibleCniVersionResponse(cniVersion)
+		return cniConfig, s.incompatibleCniVersionResponse(cniVersion)
 	}
 	// Find IPAM Service according configuration
-	ipamType := networkConfig.IPAM.Type
+	ipamType := cniConfig.IPAM.Type
 	isValid := ipam.IsIPAMTypeValid(ipamType)
 	if !isValid {
 		klog.Errorf("Unsupported IPAM type %s", ipamType)
-		return networkConfig, s.unsupportedNetworkConfigResponse("ipam/type", ipamType)
+		return cniConfig, s.unsupportedNetworkConfigResponse("ipam/type", ipamType)
 	}
+	return cniConfig, nil
+}
 
-	return networkConfig, nil
+func (s *CNIServer) updateLocalIPAMSubnet(cniConfig *CNIConfig) {
+	cniConfig.NetworkConfig.IPAM.Gateway = s.nodeConfig.Gateway.IP.String()
+	cniConfig.NetworkConfig.IPAM.Subnet = s.nodeConfig.PodCIDR.String()
+	cniConfig.NetworkConfiguration, _ = json.Marshal(cniConfig.NetworkConfig)
 }
 
 func (s *CNIServer) generateCNIErrorResponse(cniErrorCode cnimsg.CniCmdResponseMessage_ErrorCode,
@@ -168,12 +205,12 @@ func buildVersionSet(versions string) map[string]bool {
 }
 
 func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*current.Result, *cnimsg.CniCmdResponseMessage) {
-	if networkConfig.NetConf.PrevResult == nil && networkConfig.NetConf.RawPrevResult == nil {
+	if networkConfig.PrevResult == nil && networkConfig.RawPrevResult == nil {
 		klog.Errorf("Previous network configuration not specified")
 		return nil, s.unsupportedNetworkConfigResponse("prevResult", "")
 	}
 
-	if err := version.ParsePrevResult(&networkConfig.NetConf); err != nil {
+	if err := parsePrevResult(networkConfig); err != nil {
 		klog.Errorf("Failed to parse previous network configuration")
 		return nil, s.unsupportedNetworkConfigResponse("prevResult", networkConfig.RawPrevResult)
 	}
@@ -212,7 +249,7 @@ func (s *CNIServer) validatePrevResult(cfgArgs *cnimsg.CniCmdArgsMessage, k8sCNI
 		return s.unknownContainerError(containerID), nil
 	}
 
-	if err := checkInterfaces(containerID, netNS, containerIntf, hostIntf, hostVethName, prevResult); err != nil {
+	if err := checkInterfaces(s.ifaceStore, containerID, netNS, containerIntf, hostIntf, hostVethName, prevResult); err != nil {
 		return s.checkInterfaceFailureResponse(err), nil
 	}
 
@@ -226,11 +263,11 @@ func (s *CNIServer) validatePrevResult(cfgArgs *cnimsg.CniCmdArgsMessage, k8sCNI
 func (s *CNIServer) CmdAdd(ctx context.Context, request *cnimsg.CniCmdRequestMessage) (
 	*cnimsg.CniCmdResponseMessage, error) {
 	klog.Infof("Receive CmdAdd request %v", request)
-	networkConfig, response := s.checkRequestMessage(request)
+	cniConfig, response := s.checkRequestMessage(request)
 	if response != nil {
 		return response, nil
 	}
-	cniVersion := networkConfig.CNIVersion
+	cniVersion := cniConfig.CNIVersion
 	result := &current.Result{CNIVersion: cniVersion}
 
 	success := false
@@ -244,8 +281,8 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnimsg.CniCmdRequestMes
 		}
 	}()
 
-	// Request ip Address from IPAM driver
-	ipamResult, err := ipam.ExecIPAMAdd(networkConfig.CniCmdArgsMessage, networkConfig.IPAM.Type)
+	// Request IP Address from IPAM driver
+	ipamResult, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgsMessage, cniConfig.IPAM.Type)
 	if err != nil {
 		klog.Errorf("Failed to add ip addresses from IPAM driver: %v", err)
 		return s.ipamFailureResponse(err), nil
@@ -254,13 +291,13 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnimsg.CniCmdRequestMes
 	result.IPs = ipamResult.IPs
 	result.Routes = ipamResult.Routes
 	// Ensure interface gateway setting and mapping relations between result.Interfaces and result.IPs
-	updateResultIfaceConfig(result)
+	updateResultIfaceConfig(result, s.nodeConfig.Gateway.IP)
 	// Setup pod interfaces and connect to ovs bridge
-	if err = configureInterface(s.ovsdbClient, networkConfig.ContainerId, networkConfig.k8sArgs, networkConfig.Netns, networkConfig.Ifname, result); err != nil {
-		klog.Errorf("Failed to configure container %s interface: %v", networkConfig.ContainerId, err)
+	if err = configureInterface(s.ovsBridgeClient, s.ifaceStore, cniConfig.ContainerId, cniConfig.k8sArgs, cniConfig.Netns, cniConfig.Ifname, result); err != nil {
+		klog.Errorf("Failed to configure container %s interface: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
-	result.DNS = networkConfig.DNS
+	result.DNS = cniConfig.DNS
 	var resultBytes bytes.Buffer
 	result.PrintTo(&resultBytes)
 	klog.Infof("CmdAdd request success")
@@ -276,20 +313,20 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnimsg.CniCmdRequestMes
 func (s *CNIServer) CmdDel(ctx context.Context, request *cnimsg.CniCmdRequestMessage) (
 	*cnimsg.CniCmdResponseMessage, error) {
 	klog.Infof("Receive CmdDel request %v", request)
-	networkConfig, response := s.checkRequestMessage(request)
+	cniConfig, response := s.checkRequestMessage(request)
 	if response != nil {
 		return response, nil
 	}
 
 	// Release IP to IPAM driver
-	if err := ipam.ExecIPAMDelete(networkConfig.CniCmdArgsMessage, networkConfig.IPAM.Type); err != nil {
+	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgsMessage, cniConfig.IPAM.Type); err != nil {
 		klog.Errorf("Failed to delete IP addresses by IPAM driver: %v", err)
 		return s.ipamFailureResponse(err), nil
 	}
 	klog.Info("Deleted IP addresses by IPAM driver")
 	// Remove host interface and OVS configuration
-	if err := removeInterfaces(s.ovsdbClient, networkConfig.ContainerId, networkConfig.Netns, networkConfig.Ifname); err != nil {
-		klog.Errorf("Failed to remove container %s interface configuration: %v", networkConfig.ContainerId, err)
+	if err := removeInterfaces(s.ovsBridgeClient, s.ifaceStore, cniConfig.ContainerId, cniConfig.Netns, cniConfig.Ifname); err != nil {
+		klog.Errorf("Failed to remove container %s interface configuration: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
 	return &cnimsg.CniCmdResponseMessage{
@@ -302,20 +339,20 @@ func (s *CNIServer) CmdDel(ctx context.Context, request *cnimsg.CniCmdRequestMes
 func (s *CNIServer) CmdCheck(ctx context.Context, request *cnimsg.CniCmdRequestMessage) (
 	*cnimsg.CniCmdResponseMessage, error) {
 	klog.Infof("Receive CmdCheck request %v", request)
-	networkConfig, response := s.checkRequestMessage(request)
+	cniConfig, response := s.checkRequestMessage(request)
 	if response != nil {
 		return response, nil
 	}
-	cniVersion := networkConfig.CNIVersion
-	if err := ipam.ExecIPAMCheck(networkConfig.CniCmdArgsMessage, networkConfig.IPAM.Type); err != nil {
+	cniVersion := cniConfig.CNIVersion
+	if err := ipam.ExecIPAMCheck(cniConfig.CniCmdArgsMessage, cniConfig.IPAM.Type); err != nil {
 		klog.Errorf("Failed to check IPAM configuration: %v", err)
 		return s.ipamFailureResponse(err), nil
 	}
 
 	if valid, _ := version.GreaterThanOrEqualTo(cniVersion, "0.4.0"); valid {
-		if prevResult, response := s.parsePrevResultFromRequest(networkConfig); response != nil {
+		if prevResult, response := s.parsePrevResultFromRequest(cniConfig.NetworkConfig); response != nil {
 			return response, nil
-		} else if response, err := s.validatePrevResult(networkConfig.CniCmdArgsMessage, networkConfig.k8sArgs, prevResult); err != nil {
+		} else if response, err := s.validatePrevResult(cniConfig.CniCmdArgsMessage, cniConfig.k8sArgs, prevResult); err != nil {
 			return response, err
 		}
 	}
@@ -327,12 +364,8 @@ func (s *CNIServer) CmdCheck(ctx context.Context, request *cnimsg.CniCmdRequestM
 	}, nil
 }
 
-func New(cniSocket string, ovsdbClient ovsconfig.OVSBridgeClient) (*CNIServer, error) {
-	cniServer := &CNIServer{cniSocket: cniSocket, ovsdbClient: ovsdbClient, supportedCNIVersions: supportedCNIVersionSet, serverVersion: cni.OKNVersion}
-	if err := initCache(ovsdbClient); err != nil {
-		return cniServer, err
-	}
-	return cniServer, nil
+func New(cniSocket string, nodeConfig *agent.NodeConfig, ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore agent.InterfaceStore) (*CNIServer, error) {
+	return &CNIServer{cniSocket: cniSocket, ovsBridgeClient: ovsBridgeClient, supportedCNIVersions: supportedCNIVersionSet, serverVersion: cni.OKNVersion, nodeConfig: nodeConfig}, nil
 }
 
 func (s *CNIServer) Run(stopCh <-chan struct{}) {

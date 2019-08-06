@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"okn/pkg/agent"
 	"os"
 	"testing"
 
@@ -68,7 +69,7 @@ const (
             [{
                 "subnet":  "%s"
             }]`
-	rangeSubnetGWConfStr = `
+	rangeSubnetGatewayConfStr = `
             [{
                 "subnet":  "%s",
                 "gateway": "%s"
@@ -82,6 +83,7 @@ const (
 
 var ipamMock *mocks.MockIPAMDriver
 var ovsServiceMock *mocks.MockOVSdbClient
+var testNodeConfig *agent.NodeConfig
 
 type Net struct {
 	Name          string                 `json:"name"`
@@ -101,14 +103,14 @@ type rangeInfo struct {
 }
 
 type testCase struct {
-	cniVersion string      // CNI Version
-	subnet     string      // Single subnet config: Subnet CIDR
-	gateway    string      // Single subnet config: Gateway
-	ranges     []rangeInfo // Ranges list (multiple subnets config)
-	expGWCIDRs []string    // Expected gateway addresses in CIDR form
-	addresses  []string
-	routes     []string
-	dns        []string
+	cniVersion      string      // CNI Version
+	subnet          string      // Single subnet config: Subnet CIDR
+	gateway         string      // Single subnet config: Gateway
+	ranges          []rangeInfo // Ranges list (multiple subnets config)
+	expGatewayCIDRs []string    // Expected gateway addresses in CIDR form
+	addresses       []string
+	routes          []string
+	dns             []string
 }
 
 func (tc testCase) netConfJSON(dataDir string) string {
@@ -145,7 +147,7 @@ func (tc testCase) rangesConfig() string {
 			conf += ","
 		}
 		if tcRange.gateway != "" {
-			conf += fmt.Sprintf(rangeSubnetGWConfStr, tcRange.subnet, tcRange.gateway)
+			conf += fmt.Sprintf(rangeSubnetGatewayConfStr, tcRange.subnet, tcRange.gateway)
 		} else {
 			conf += fmt.Sprintf(rangeSubnetConfStr, tcRange.subnet)
 		}
@@ -287,7 +289,7 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 		Expect(err).NotTo(HaveOccurred())
 
 		var defaultRouteFound4, defaultRouteFound6 bool
-		for _, cidr := range tc.expGWCIDRs {
+		for _, cidr := range tc.expGatewayCIDRs {
 			gwIP, _, err := net.ParseCIDR(cidr)
 			Expect(err).NotTo(HaveOccurred())
 			var found *bool
@@ -391,7 +393,7 @@ func (tester *cmdAddDelTester) cmdCheckTest(tc testCase, conf *Net, dataDir stri
 		Expect(err).NotTo(HaveOccurred())
 
 		var defaultRouteFound4, defaultRouteFound6 bool
-		for _, cidr := range tc.expGWCIDRs {
+		for _, cidr := range tc.expGatewayCIDRs {
 			gwIP, _, err := net.ParseCIDR(cidr)
 			Expect(err).NotTo(HaveOccurred())
 			var found *bool
@@ -453,7 +455,7 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
-	tester.server, _ = cniserver.New(testSock, ovsServiceMock)
+	tester.server, _ = cniserver.New(testSock, testNodeConfig, ovsServiceMock)
 	ctx, _ := context.WithCancel(context.Background())
 	tester.ctx = ctx
 	return tester
@@ -548,9 +550,9 @@ var _ = Describe("CNI server operations", func() {
 				ranges: []rangeInfo{{
 					subnet: "10.1.2.0/24",
 				}},
-				expGWCIDRs: []string{"10.1.2.1/24"},
-				addresses:  []string{"10.1.2.100/24,10.1.2.1,4"},
-				routes:     []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"},
+				expGatewayCIDRs: []string{"10.1.2.1/24"},
+				addresses:       []string{"10.1.2.100/24,10.1.2.1,4"},
+				routes:          []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"},
 			},
 		}
 		for _, tc := range testCases {
@@ -568,4 +570,13 @@ func TestOknServerFunc(t *testing.T) {
 	ovsServiceMock = mocks.NewMockOVSdbClient(controller)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "CNI server operations suite")
+}
+
+func init() {
+	nodeName := "node1"
+	gwIP := net.ParseIP("192.168.1.1")
+	nodeGateway := &agent.Gateway{IP: gwIP, MAC: "11:11:11:11:11:11", Name: "gw"}
+	_, nodePodeCIDR, _ := net.ParseCIDR("192.168.1.0/24")
+
+	testNodeConfig = &agent.NodeConfig{"br0", nodeName, nodePodeCIDR, nodeGateway}
 }
