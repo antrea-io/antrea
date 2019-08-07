@@ -31,16 +31,16 @@ const openvSwitchSchema = "Open_vSwitch"
 // If address is set to "", the default UNIX domain socket path
 // "/run/openvswitch/db.sock" will be used.
 // Returns the OVSDB struct on success.
-func NewOVSDBConnectionUDS(address string) *ovsdb.OVSDB {
+func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 	if address == "" {
 		address = defaultUDSAddress
 	}
-	return ovsdb.Dial([][]string{{"unix", address}}, nil, nil)
+	return ovsdb.Dial([][]string{{"unix", address}}, nil, nil), nil
 }
 
 // Create and return OVSBridge.
 // If the bridge with name bridgeName does not exist, it will be created.
-func NewOVSBridge(bridgeName string, ovsdb *ovsdb.OVSDB) (*OVSBridge, error) {
+func NewOVSBridge(bridgeName string, ovsdb *ovsdb.OVSDB) (*OVSBridge, Error) {
 	bridge := &OVSBridge{ovsdb, bridgeName, ""}
 	if exits, err := bridge.lookupByName(); err != nil {
 		return nil, err
@@ -55,17 +55,17 @@ func NewOVSBridge(bridgeName string, ovsdb *ovsdb.OVSDB) (*OVSBridge, error) {
 	return bridge, nil
 }
 
-func (br *OVSBridge) lookupByName() (bool, error) {
+func (br *OVSBridge) lookupByName() (bool, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	tx.Select(dbtransaction.Select{
 		Table:   "Bridge",
 		Columns: []string{"_uuid"},
 		Where:   [][]interface{}{{"name", "==", br.name}},
 	})
-	res, err, _ := tx.Commit()
+	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return false, err
+		return false, newTransactionError(err, temporary)
 	}
 
 	if len(res[0].Rows) == 0 {
@@ -76,7 +76,7 @@ func (br *OVSBridge) lookupByName() (bool, error) {
 	return true, nil
 }
 
-func (br *OVSBridge) create() error {
+func (br *OVSBridge) create() Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	bridge := ovshelper.Bridge{
 		Name: br.name,
@@ -94,17 +94,17 @@ func (br *OVSBridge) create() error {
 		Mutations: [][]interface{}{{"bridges", "insert", mutateSet}},
 	})
 
-	res, err, _ := tx.Commit()
+	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return err
+		return newTransactionError(err, temporary)
 	}
 
 	br.uuid = res[0].UUID[1]
 	return nil
 }
 
-func (br *OVSBridge) Delete() error {
+func (br *OVSBridge) Delete() Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	mutateSet := helpers.MakeOVSDBSet(map[string]interface{}{
 		"uuid": []string{br.uuid},
@@ -114,16 +114,16 @@ func (br *OVSBridge) Delete() error {
 		Mutations: [][]interface{}{{"bridges", "delete", mutateSet}},
 	})
 
-	_, err, _ := tx.Commit()
+	_, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
+		return newTransactionError(err, temporary)
 	}
-
-	return err
+	return nil
 }
 
 // Return UUIDs of all ports on the bridge
-func (br *OVSBridge) getPortUUIDList() ([]string, error) {
+func (br *OVSBridge) getPortUUIDList() ([]string, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	tx.Select(dbtransaction.Select{
 		Table:   "Bridge",
@@ -131,10 +131,10 @@ func (br *OVSBridge) getPortUUIDList() ([]string, error) {
 		Where:   [][]interface{}{{"name", "==", br.name}},
 	})
 
-	res, err, _ := tx.Commit()
+	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return nil, err
+		return nil, newTransactionError(err, temporary)
 	}
 
 	portRes := res[0].Rows[0].(map[string]interface{})["ports"].([]interface{})
@@ -142,7 +142,7 @@ func (br *OVSBridge) getPortUUIDList() ([]string, error) {
 }
 
 // Delete ports in portUUIDList on the bridge
-func (br *OVSBridge) DeletePorts(portUUIDList []string) error {
+func (br *OVSBridge) DeletePorts(portUUIDList []string) Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	mutateSet := helpers.MakeOVSDBSet(map[string]interface{}{
 		"uuid": portUUIDList,
@@ -152,15 +152,15 @@ func (br *OVSBridge) DeletePorts(portUUIDList []string) error {
 		Mutations: [][]interface{}{{"ports", "delete", mutateSet}},
 	})
 
-	_, err, _ := tx.Commit()
+	_, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
+		return newTransactionError(err, temporary)
 	}
-
-	return err
+	return nil
 }
 
-func (br *OVSBridge) DeletePort(portUUID string) error {
+func (br *OVSBridge) DeletePort(portUUID string) Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	mutateSet := helpers.MakeOVSDBSet(map[string]interface{}{
 		"uuid": []string{portUUID},
@@ -170,19 +170,19 @@ func (br *OVSBridge) DeletePort(portUUID string) error {
 		Mutations: [][]interface{}{{"ports", "delete", mutateSet}},
 	})
 
-	_, err, _ := tx.Commit()
+	_, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
+		return newTransactionError(err, temporary)
 	}
-
-	return err
+	return nil
 }
 
 // Creates an internal port with the specified name on the bridge.
 // If externalIDs is not empty, the map key/value pairs will be set to the
 // port's external_ids.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
-func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, error) {
+func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error) {
 	return br.createPort(name, name, "internal", ofPortRequest, externalIDs, nil)
 }
 
@@ -190,7 +190,7 @@ func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, extern
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 // If remoteIP is not empty, it will be set to the tunnel port interface
 // options; otherwise flow based tunneling will be configured.
-func (br *OVSBridge) CreateVXLANPort(name string, ofPortRequest int32, remoteIP string) (string, error) {
+func (br *OVSBridge) CreateVXLANPort(name string, ofPortRequest int32, remoteIP string) (string, Error) {
 	return br.createTunnelPort(name, "vxlan", ofPortRequest, remoteIP)
 }
 
@@ -198,11 +198,11 @@ func (br *OVSBridge) CreateVXLANPort(name string, ofPortRequest int32, remoteIP 
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 // If remoteIP is not empty, it will be set to the tunnel port interface
 // options; otherwise flow based tunneling will be configured.
-func (br *OVSBridge) CreateGenevePort(name string, ofPortRequest int32, remoteIP string) (string, error) {
+func (br *OVSBridge) CreateGenevePort(name string, ofPortRequest int32, remoteIP string) (string, Error) {
 	return br.createTunnelPort(name, "geneve", ofPortRequest, remoteIP)
 }
 
-func (br *OVSBridge) createTunnelPort(name, ifType string, ofPortRequest int32, remoteIP string) (string, error) {
+func (br *OVSBridge) createTunnelPort(name, ifType string, ofPortRequest int32, remoteIP string) (string, Error) {
 	var options map[string]interface{}
 	if remoteIP != "" {
 		options = map[string]interface{}{"remote_ip": remoteIP}
@@ -216,11 +216,11 @@ func (br *OVSBridge) createTunnelPort(name, ifType string, ofPortRequest int32, 
 // specified by ifDev to the port.
 // If externalIDs is not empty, the map key/value pairs will be set to the
 // port's external_ids.
-func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, error) {
+func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error) {
 	return br.createPort(name, ifDev, "", 0, externalIDs, nil)
 }
 
-func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32, externalIDs, options map[string]interface{}) (string, error) {
+func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32, externalIDs, options map[string]interface{}) (string, Error) {
 	var externalIDMap []interface{}
 	var optionMap []interface{}
 
@@ -265,10 +265,10 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 		Where:     [][]interface{}{{"name", "==", br.name}},
 	})
 
-	res, err, _ := tx.Commit()
+	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return "", err
+		return "", newTransactionError(err, temporary)
 	}
 
 	return res[1].UUID[1], nil
@@ -278,7 +278,7 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 // The function will invoke OVSDB "wait" operation with 1 second timeout to wait
 // the ofport is set on the interface, and so could be blocked for 1 second. If
 // the "wait" operation timeout, value 0 will be returned.
-func (br *OVSBridge) GetOFPort(ifName string) (int32, error) {
+func (br *OVSBridge) GetOFPort(ifName string) (int32, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 
 	tx.Wait(dbtransaction.Wait{
@@ -297,11 +297,11 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, error) {
 		Where:   [][]interface{}{{"name", "==", ifName}},
 	})
 
-	res, err, _ := tx.Commit()
+	res, err, temporary := tx.Commit()
 	if err != nil {
 		// TODO: differentiate timeout error
 		klog.Error("Transaction failed: ", err)
-		return 0, err
+		return 0, newTransactionError(err, temporary)
 	}
 
 	ofport := int32(res[1].Rows[0].(map[string]interface{})["ofport"].(float64))
@@ -334,7 +334,7 @@ func buildPortDataCommon(port, intf map[string]interface{}, portData *OVSPortDat
 // nil is returned, if the port or interface could not be found, or the
 // interface is not attached to the port.
 // The port's OFPort will be set to 0, if its ofport is not assigned by OVS yet.
-func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, error) {
+func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	tx.Select(dbtransaction.Select{
 		Table:   "Port",
@@ -347,10 +347,10 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, error) 
 		Where:   [][]interface{}{{"name", "==", ifName}},
 	})
 
-	res, err, _ := tx.Commit()
+	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return nil, err
+		return nil, newTransactionError(err, temporary)
 	}
 	if len(res[0].Rows) == 0 {
 		klog.Warning("Could not find port ", portUUID)
@@ -358,7 +358,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, error) 
 	}
 	if len(res[1].Rows) == 0 {
 		klog.Warning("Could not find interface ", ifName)
-		return nil, errors.New("Interface not exists")
+		return nil, newTransactionError(errors.New("Interface not exists"), false)
 	}
 
 	port := res[0].Rows[0].(map[string]interface{})
@@ -375,7 +375,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, error) 
 	}
 	if !found {
 		klog.Errorf("Interface %s is not attached to the port %s", ifName, portUUID)
-		return nil, errors.New("Interface is not attached to the port")
+		return nil, newTransactionError(errors.New("Interface is not attached to the port"), false)
 	}
 
 	portData := OVSPortData{UUID: portUUID, IFName: ifName}
@@ -385,7 +385,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, error) 
 
 // Return all ports on the bridge.
 // A port's OFPort will be set to 0, if its ofport is not assigned by OVS yet.
-func (br *OVSBridge) GetPortList() ([]OVSPortData, error) {
+func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	tx.Select(dbtransaction.Select{
 		Table:   "Bridge",
@@ -401,10 +401,10 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, error) {
 		Columns: []string{"_uuid", "name", "ofport"},
 	})
 
-	res, err, _ := tx.Commit()
+	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return nil, err
+		return nil, newTransactionError(err, temporary)
 	}
 
 	if len(res[0].Rows) == 0 {
