@@ -1,13 +1,15 @@
 package main
 
 import (
+	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
-
 	"okn/pkg/agent/cniserver"
+	_ "okn/pkg/agent/cniserver/ipam"
 	nodecontroller "okn/pkg/agent/controller/node"
 	"okn/pkg/k8s"
+	"okn/pkg/ovs/ovsconfig"
 )
 
 type OKNAgent struct {
@@ -15,6 +17,7 @@ type OKNAgent struct {
 	informerFactory informers.SharedInformerFactory
 	cniServer       *cniserver.CNIServer
 	nodeController  *nodecontroller.NodeController
+	ovsdbConnection *ovsdb.OVSDB
 }
 
 func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
@@ -25,7 +28,19 @@ func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
 	informerFactory := informers.NewSharedInformerFactory(client, 60)
 	nodeInformer := informerFactory.Core().V1().Nodes()
 
-	cniServer, err := cniserver.New(config.CNISocket)
+	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS("")
+	if err != nil {
+		//Todo: ovsconfig.NewOVSDBConnectionUDS might return timeout in the future, need to add retry
+		// Currrently it return nil
+		klog.Errorf("Failed to connect OVSDB socket")
+		return nil, err
+	}
+	br, err := ovsconfig.NewOVSBridge(config.OVSBridge, ovsdbConnection)
+	if err != nil {
+		klog.Errorf("Failed to create OVS bridge %s", config.OVSBridge)
+	}
+
+	cniServer, err := cniserver.New(config.CNISocket, br)
 	if err != nil {
 		return nil, err
 	}
@@ -40,6 +55,7 @@ func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
 		informerFactory: informerFactory,
 		cniServer:       cniServer,
 		nodeController:  nodeController,
+		ovsdbConnection: ovsdbConnection,
 	}, nil
 }
 
@@ -55,5 +71,7 @@ func (agent *OKNAgent) run() error {
 	agent.informerFactory.Start(stopCh)
 
 	<-stopCh
+	// Close OVSDB connection
+	agent.ovsdbConnection.Close()
 	return nil
 }

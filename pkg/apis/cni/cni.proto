@@ -24,6 +24,8 @@ message CniCmdResponseMessage {
         TRY_AGAIN_LATER = 11;
         INCOMPATIBLE_PROTO_VERSION = 100;
         IPAM_FAILURE = 101;
+        CONFIG_INTERFACE_FAILURE = 102;
+        CHECK_INTERFACE_FAILURE = 103;
     }
     string version = 1;
     ErrorCode status_code = 2;

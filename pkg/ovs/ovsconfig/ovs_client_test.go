@@ -120,9 +120,9 @@ func testCreatePort(br *OVSBridge, name string, ifType string, t *testing.T) str
 		} else {
 			for k, v := range externalIDs {
 				if rv, ok := port.ExternalIDs[k]; !ok {
-					t.Errorf("Returned port does not include the requested external ID: %s:%s", k, v)
+					t.Errorf("Returned port does not include the requested external id: %s:%s", k, v)
 				} else if rv != v.(string) {
-					t.Errorf("Returned port has an external ID does not match the requested value: %s:%s", k, v)
+					t.Errorf("Returned port has an external id does not match the requested value: %s:%s", k, v)
 				}
 			}
 		}

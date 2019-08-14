@@ -27,7 +27,7 @@ func RegisterIPAMDriver(ipamType string, ipamDriver IPAMDriver) error {
 	return nil
 }
 
-func argsFromEnv(cniArgs cnimsg.CniCmdArgsMessage) *invoke.Args {
+func argsFromEnv(cniArgs *cnimsg.CniCmdArgsMessage) *invoke.Args {
 	return &invoke.Args{
 		ContainerID: cniArgs.ContainerId,
 		NetNS:       cniArgs.Netns,
@@ -36,19 +36,19 @@ func argsFromEnv(cniArgs cnimsg.CniCmdArgsMessage) *invoke.Args {
 	}
 }
 
-func ExecIPAMAdd(cniArgs cnimsg.CniCmdArgsMessage, ipamType string) (*current.Result, error) {
+func ExecIPAMAdd(cniArgs *cnimsg.CniCmdArgsMessage, ipamType string) (*current.Result, error) {
 	args := argsFromEnv(cniArgs)
 	driver := ipamDrivers[ipamType]
 	return driver.Add(args, cniArgs.NetworkConfiguration)
 }
 
-func ExecIPAMDelete(cniArgs cnimsg.CniCmdArgsMessage, ipamType string) error {
+func ExecIPAMDelete(cniArgs *cnimsg.CniCmdArgsMessage, ipamType string) error {
 	args := argsFromEnv(cniArgs)
 	driver := ipamDrivers[ipamType]
 	return driver.Del(args, cniArgs.NetworkConfiguration)
 }
 
-func ExecIPAMCheck(cniArgs cnimsg.CniCmdArgsMessage, ipamType string) error {
+func ExecIPAMCheck(cniArgs *cnimsg.CniCmdArgsMessage, ipamType string) error {
 	args := argsFromEnv(cniArgs)
 	driver := ipamDrivers[ipamType]
 	return driver.Check(args, cniArgs.NetworkConfiguration)
