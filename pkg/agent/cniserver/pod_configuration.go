@@ -3,6 +3,7 @@ package cniserver
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/containernetworking/cni/pkg/types"
 	"io"
@@ -10,12 +11,14 @@ import (
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 	"k8s.io/klog"
+	"okn/pkg/agent"
 	"okn/pkg/ovs/ovsconfig"
 )
 
@@ -25,22 +28,6 @@ const (
 	OVSExternalIDContainerID = "container-id"
 	containerKeyConnector    = `/`
 )
-
-type ovsPortConfig struct {
-	ifaceName string
-	portUUID  string
-	ofport    int32
-}
-
-type ContainerConfig struct {
-	id           string
-	ip           string
-	mac          string
-	podName      string
-	podNamespace string
-	netNS        string
-	*ovsPortConfig
-}
 
 type vethPair struct {
 	name      string
@@ -54,18 +41,6 @@ type k8sArgs struct {
 	K8S_POD_NAMESPACE          types.UnmarshallableString
 	K8S_POD_INFRA_CONTAINRE_ID types.UnmarshallableString
 }
-
-// Local cache for container configuration, including containerID, podName, podNamespace, netns, IP, MAC
-// and OVS Port configurations, such as ifacename, portUUID and OFport. OFPort might be filled
-// later when it is used to install openflow entry.
-// Key of this cache should be container ID
-// Container configuration is added into cache after invocation of cniserver.CmdAdd, and removed
-// from cache after invocation of cniserver.CmdDel. For cniserver.CmdCheck, the server would
-// also check previousResult with local cache.
-// If some errors occurred during OVS manipulation for adding Port, it also would remove from
-// local cache.
-// Todo: add periodic task to sync local cache with container veth pair
-var containerConfigCache = make(map[string]*ContainerConfig)
 
 func GenerateContainerPeerName(podName string, podNamespace string) string {
 	hash := sha1.New()
@@ -223,25 +198,15 @@ func parseContainerIP(ips []*current.IPConfig) (string, error) {
 	return "", fmt.Errorf("Failed to find a valid IP address")
 }
 
-func parseContainerAttachInfo(containerID string, containerConfig *ContainerConfig) map[string]interface{} {
-	externalIDs := make(map[string]interface{})
-	externalIDs[OVSExternalIDMAC] = containerConfig.mac
-	externalIDs[OVSExternalIDContainerID] = containerID
-	externalIDs[OVSExternalIDIP] = containerConfig.ip
-	return externalIDs
-}
-
-func buildContainerConfig(containerID string, podName string, podNamespace string, containerIface *current.Interface, ips []*current.IPConfig) *ContainerConfig {
-	containerConfig := &ContainerConfig{id: containerID, netNS: containerIface.Sandbox, mac: containerIface.Mac, podName: podName, podNamespace: podNamespace}
-	var err error
-	containerConfig.ip, err = parseContainerIP(ips)
+func buildContainerConfig(containerID string, podName string, podNamespace string, containerIface *current.Interface, ips []*current.IPConfig) *agent.InterfaceConfig {
+	containerIP, err := parseContainerIP(ips)
 	if err != nil {
 		klog.Errorf("Failed to find container %s IP", containerID)
 	}
-	return containerConfig
+	return agent.NewContainerInterface(containerID, podName, podNamespace, containerIface.Sandbox, containerIface.Mac, containerIP)
 }
 
-func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, containerID string, k8sCNIArgs *k8sArgs, containerNetNS string, ifname string, result *current.Result) error {
+func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ifaceStore agent.InterfaceStore, containerID string, k8sCNIArgs *k8sArgs, containerNetNS string, ifname string, result *current.Result) error {
 	netns, err := ns.GetNS(containerNetNS)
 	if err != nil {
 		klog.Errorf("Failed to open netns with %s: %v", containerNetNS, err)
@@ -280,25 +245,24 @@ func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, containerID string,
 		}
 	}()
 
-	// Configure ip for container
+	// Configure IP for container
 	if err = configureContainerAddr(netns, containerIface, result); err != nil {
-		klog.Errorf("Failed to configure ip address on container %s:%v", containerID, err)
+		klog.Errorf("Failed to configure IP address on container %s:%v", containerID, err)
 		return fmt.Errorf("Failed to configure container ip")
 	}
 	// containerConfig OFPort field is not filled after create OVS port, need to check and retrieve
 	// when used it when install openflow
-	// Todo: need to decide whether to retrieve OFPort asynchronously to reduce CNI command delay
-	containerConfig.ovsPortConfig = &ovsPortConfig{ifaceName: ovsPortName, portUUID: portUUID}
+	// Todo: need to decide whether to retrieve OFport asynchronously to reduce CNI command delay
+	containerConfig.OvsPortConfig = &agent.OvsPortConfig{PortUUID: portUUID, IfaceName: ovsPortName}
 	// Add containerConfig into local cache
-	containerConfigCache[containerID] = containerConfig
+	ifaceStore.AddInterface(containerID, containerConfig)
 	// Mark the manipulation as success to cancel defer deletion
 	success = true
 	return nil
 }
 
-func setupContainerOVSPort(ovsBridge ovsconfig.OVSBridgeClient, containerConfig *ContainerConfig, ovsPortName string) (string, error) {
-	containerID := containerConfig.id
-	ovsAttchInfo := parseContainerAttachInfo(containerID, containerConfig)
+func setupContainerOVSPort(ovsBridge ovsconfig.OVSBridgeClient, containerConfig *agent.InterfaceConfig, ovsPortName string) (string, error) {
+	ovsAttchInfo := agent.BuildOVSPortExternalIDs(containerConfig)
 	if portUUID, err := ovsBridge.CreatePort(ovsPortName, ovsPortName, ovsAttchInfo); err != nil {
 		klog.Errorf("Failed to add OVS port %s, remove from local cache: %v", ovsPortName, err)
 		return "", err
@@ -323,7 +287,7 @@ func removeContainerLink(containerID string, containerNetns string, ifname strin
 	return nil
 }
 
-func removeInterfaces(ovsBridgeClient ovsconfig.OVSBridgeClient, containerID string, containerNetns string, ifname string) error {
+func removeInterfaces(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore agent.InterfaceStore, containerID string, containerNetns string, ifname string) error {
 	if containerNetns != "" {
 		if err := removeContainerLink(containerID, containerNetns, ifname); err != nil {
 			return err
@@ -331,13 +295,14 @@ func removeInterfaces(ovsBridgeClient ovsconfig.OVSBridgeClient, containerID str
 	} else {
 		klog.Infof("Target netns not specified, return success")
 	}
-	containerConfig, found := containerConfigCache[containerID]
+
+	containerConfig, found := ifaceStore.GetInterface(containerID)
 	if !found {
 		klog.Infof("Not find container %s port from local cache", containerID)
 		return nil
 	}
 
-	portUUID := containerConfig.portUUID
+	portUUID := containerConfig.PortUUID
 	klog.Infof("Delete OVS port with UUID %s peer container %s", portUUID, containerID)
 	// Todo: handle error and introduce garbage collection for deletion failure
 	if err := ovsBridgeClient.DeletePort(portUUID); err != nil {
@@ -345,12 +310,12 @@ func removeInterfaces(ovsBridgeClient ovsconfig.OVSBridgeClient, containerID str
 		return err
 	}
 	// Remove container configuration from cache.
-	delete(containerConfigCache, containerID)
+	ifaceStore.DeleteInterface(containerID)
 	klog.Infof("Succeed to remove interfaces")
 	return nil
 }
 
-func checkInterfaces(containerID string, containerNetNS string, containerIface, hostIface *current.Interface, hostVethName string, prevResult *current.Result) error {
+func checkInterfaces(ifaceStore agent.InterfaceStore, containerID string, containerNetNS string, containerIface, hostIface *current.Interface, hostVethName string, prevResult *current.Result) error {
 	netns, err := ns.GetNS(containerNetNS)
 	if err != nil {
 		klog.Errorf("Failed to check netns config %s: %v", containerNetNS, err)
@@ -359,7 +324,7 @@ func checkInterfaces(containerID string, containerNetNS string, containerIface, 
 	defer netns.Close()
 	if containerlink, err := checkContainerInterface(netns, containerNetNS, containerID, containerIface, prevResult); err != nil {
 		return err
-	} else if err := checkHostInterface(hostIface, containerIface, containerlink, containerID, hostVethName, prevResult.IPs); err != nil {
+	} else if err := checkHostInterface(ifaceStore, hostIface, containerIface, containerlink, containerID, hostVethName, prevResult.IPs); err != nil {
 		return err
 	}
 	return nil
@@ -382,7 +347,7 @@ func checkContainerInterface(netns ns.NetNS, containerNetns, containerID string,
 		if errlink != nil {
 			return errlink
 		}
-		// Check container ip config
+		// Check container IP config
 		if err := ip.ValidateExpectedInterfaceIPs(containerIface.Name, prevResult.IPs); err != nil {
 			return err
 		}
@@ -399,14 +364,14 @@ func checkContainerInterface(netns ns.NetNS, containerNetns, containerID string,
 	return contlink, nil
 }
 
-func checkHostInterface(hostIntf, containerIntf *current.Interface, containerLink *vethPair, containerID, vethName string, containerIPs []*current.IPConfig) error {
+func checkHostInterface(ifaceStore agent.InterfaceStore, hostIntf, containerIntf *current.Interface, containerLink *vethPair, containerID, vethName string, containerIPs []*current.IPConfig) error {
 	hostVeth, errlink := validateContainerPeerInterface(hostIntf, containerLink)
 	if errlink != nil {
 		klog.Errorf("Failed to check container interface %s peer %s in the host: %v",
 			containerID, vethName, errlink)
 		return errlink
 	}
-	if err := validateOVSPort(hostVeth.name, containerIntf.Mac, containerID, containerIPs); err != nil {
+	if err := validateOVSPort(ifaceStore, hostVeth.name, containerIntf.Mac, containerID, containerIPs); err != nil {
 		klog.Errorf("Failed to check host link %s for container %s attaching status on ovs. err: %v",
 			hostVeth.name, containerID, err)
 		return err
@@ -414,43 +379,40 @@ func checkHostInterface(hostIntf, containerIntf *current.Interface, containerLin
 	return nil
 }
 
-func validateOVSPort(ovsPortName string, containerMAC string, containerID string, ips []*current.IPConfig) error {
-	if containerConfig, found := containerConfigCache[containerID]; found {
-		if containerConfig.mac != containerMAC {
+func validateOVSPort(ifaceStore agent.InterfaceStore, ovsPortName string, containerMAC string, containerID string, ips []*current.IPConfig) error {
+	if containerConfig, found := ifaceStore.GetInterface(containerID); found {
+		if containerConfig.MAC != containerMAC {
 			return fmt.Errorf("Failed to check container MAC %s on OVS port %s",
 				containerID, ovsPortName)
 		}
 
 		for _, ipc := range ips {
 			if ipc.Version == "4" {
-				if containerConfig.ip == ipc.Address.IP.String() {
+				if containerConfig.IP == ipc.Address.IP.String() {
 					return nil
 				}
 			}
 		}
-		return fmt.Errorf("Failed to find a valid ip equal to attached address")
+		return fmt.Errorf("Failed to find a valid IP equal to attached address")
 	} else {
 		klog.Infof("Not found container %s config from local cache", containerID)
 		return fmt.Errorf("Not found OVS port %s", ovsPortName)
 	}
 }
 
-func initCache(ovsBridgeClient ovsconfig.OVSBridgeClient) error {
-	if ovsPorts, err := ovsBridgeClient.GetPortList(); err != nil {
-		klog.Errorf("Failed to list OVS ports: %v", err)
-		return err
-	} else {
-		for _, port := range ovsPorts {
-			if port.ExternalIDs != nil {
-				if containerID, found := port.ExternalIDs[OVSExternalIDContainerID]; found {
-					containerConfig := &ContainerConfig{id: containerID}
-					containerConfig.ip, _ = port.ExternalIDs[OVSExternalIDIP]
-					containerConfig.mac, _ = port.ExternalIDs[OVSExternalIDMAC]
-					containerConfig.ovsPortConfig = &ovsPortConfig{ifaceName: port.IFName, portUUID: port.UUID, ofport: port.OFPort}
-					containerConfigCache[containerID] = containerConfig
-				}
-			}
-		}
+func parsePrevResult(conf *NetworkConfig) error {
+	if conf.RawPrevResult == nil {
+		return nil
+	}
+
+	resultBytes, err := json.Marshal(conf.RawPrevResult)
+	if err != nil {
+		return fmt.Errorf("Could not serialize prevResult: %v", err)
+	}
+	conf.RawPrevResult = nil
+	conf.PrevResult, err = version.NewResult(conf.CNIVersion, resultBytes)
+	if err != nil {
+		return fmt.Errorf("Could not parse prevResult: %v", err)
 	}
 	return nil
 }

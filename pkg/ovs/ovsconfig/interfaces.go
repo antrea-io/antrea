@@ -1,6 +1,10 @@
 package ovsconfig
 
-// OVSBridgeClient is an interface for ovsdb client, which could be used in unit tests to construct mock instances
+const (
+	GENEVE_TUNNEL = "geneve"
+	VXLAN_TUNNEL  = "vxlan"
+)
+
 type OVSBridgeClient interface {
 	Delete() Error
 	CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error)

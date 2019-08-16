@@ -10,4 +10,6 @@ type AgentConfig struct {
 	// to use when communicating with the apiserver.
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration `yaml:"clientConnection"`
 	OVSBridge        string                                            `yaml:"ovsBridge,omitempty"`
+	HostGateway      string                                            `yaml:"hostGateway,omitempty"`
+	TunnelType       string                                            `yaml:"tunnelType,omitempty"`
 }

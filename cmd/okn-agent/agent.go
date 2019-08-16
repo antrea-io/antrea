@@ -5,6 +5,7 @@ import (
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
+	"okn/pkg/agent"
 	"okn/pkg/agent/cniserver"
 	_ "okn/pkg/agent/cniserver/ipam"
 	nodecontroller "okn/pkg/agent/controller/node"
@@ -30,17 +31,35 @@ func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
 
 	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS("")
 	if err != nil {
-		//Todo: ovsconfig.NewOVSDBConnectionUDS might return timeout in the future, need to add retry
-		// Currrently it return nil
+		// Todo: ovsconfig.NewOVSDBConnectionUDS might return timeout in the future, need to add retry
+		// Currently it return nil
 		klog.Errorf("Failed to connect OVSDB socket")
 		return nil, err
 	}
 	br, err := ovsconfig.NewOVSBridge(config.OVSBridge, ovsdbConnection)
 	if err != nil {
 		klog.Errorf("Failed to create OVS bridge %s", config.OVSBridge)
+		return nil, err
 	}
 
-	cniServer, err := cniserver.New(config.CNISocket, br)
+	nodeConfig, err := agent.GetNodeLocalConfig(client)
+	if err != nil {
+		klog.Errorf("Failed to calculate local PodCIDR: %v", err)
+		return nil, err
+	}
+
+	// Create interface store
+	ifaceStore := agent.NewInterfaceStore()
+
+	// Create agent initializer
+	agentInitializer := agent.NewInitializer(br, ifaceStore)
+
+	err = agentInitializer.SetupNodeNetwork(config.OVSBridge, config.HostGateway, config.TunnelType, nodeConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	cniServer, err := cniserver.New(config.CNISocket, nodeConfig, br, ifaceStore)
 	if err != nil {
 		return nil, err
 	}
