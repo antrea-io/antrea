@@ -1,63 +1,125 @@
-# yaml template for OKN Agent DaemonSet
+# yaml template for OKN
 # Right config parameters and OKN Docker image must be specified.
-
-# ConfigMap for okn.ini
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: okn-config
-  labels:
-    version: v1
+  namespace: kube-system
 data:
-  okn.conf: |
-    # Configuration for OKN Agent
-    agent:
-      # Name of the OVS bridge.
-      # ovsBridge: br-int
+  okn-agent.conf: |
+    # Name of the OpenVSwitch bridge okn-agent will create and use.
+    # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
+    #ovsBridge: br-int
 
+    # Name of the interface okn-agent will create and use for host <--> pod communication.
+    # Make sure it doesn't conflict with your existing interfaces.
+    #hostGateway: gw0
 
+    # Encapsulation mode for communication between pods accross nodes, supported values:
+    # - vxlan (default)
+    # - geneve
+    #tunnelType: vxlan
+  okn-cni.conf: |
+    {
+      "cniVersion":"0.3.0",
+      "name": "okn",
+      "type": "okn",
+      "ipam": {
+        "type": "host-local"
+      }
+    }
 ---
-# nsx-node-agent DaemonSet
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: okn-agent
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: okn-agent
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - watch
+      - list
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: okn-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: okn-agent
+subjects:
+  - kind: ServiceAccount
+    name: okn-agent
+    namespace: kube-system
+---
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
   name: okn-agent
+  namespace: kube-system
   labels:
-    tier: okn
+    app: okn
+    tier: node
     component: okn-agent
-    version: v1
 spec:
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        tier: okn
+        app: okn
+        tier: node
         component: okn-agent
-        version: v1
     spec:
       hostNetwork: true
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+      serviceAccountName: okn-agent
       initContainers:
         - name: install-cni
           image: okn-ubuntu
           imagePullPolicy: IfNotPresent
           command: ["install_cni"]
           volumeMounts:
-          - name: config-volume
-            mountPath: /etc/okn/okn.conf
-            subPath: okn.conf
+          - name: okn-config
+            mountPath: /etc/okn/okn-cni.conf
+            subPath: okn-cni.conf
             readOnly: true
           - name: host-cni-conf
             mountPath: /host/etc/cni/net.d
           - name: host-cni-bin
             mountPath: /host/opt/cni/bin
-          - name: host-var-run-okn
-            mountPath: /host/var/run/okn
       containers:
         - name: okn-agent
           image: okn-ubuntu
           imagePullPolicy: IfNotPresent
-          command: ["start_okn_agent"]
+          command: ["okn-agent"]
+          args: ["--config", "/etc/okn/okn-agent.conf"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           livenessProbe:
             exec:
               command:
@@ -69,17 +131,17 @@ spec:
             periodSeconds: 10
             failureThreshold: 5
           securityContext:
-            capabilities:
-              add:
-                - NET_ADMIN
-                - SYS_ADMIN
+            # okn-agent needs to manipulate /proc/sys/net/ipv4/conf/XXX/send_redirects"
+            privileged: true
           volumeMounts:
-          - name: config-volume
-            mountPath: /etc/okn/okn.conf
-            subPath: okn.conf
+          - name: okn-config
+            mountPath: /etc/okn/okn-agent.conf
+            subPath: okn-agent.conf
             readOnly: true
           - name: host-var-run-okn
             mountPath: /var/run/okn
+          - name: openvswitch
+            mountPath: /var/run/openvswitch
         - name: okn-ovs
           image: okn-ubuntu
           imagePullPolicy: IfNotPresent
@@ -97,15 +159,10 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
           volumeMounts:
-          - name: config-volume
-            mountPath: /etc/okn/okn.conf
-            subPath: okn.conf
-            readOnly: true
-          # mount openvswitch dir
           - name: openvswitch
             mountPath: /var/run/openvswitch
       volumes:
-        - name: config-volume
+        - name: okn-config
           configMap:
             name: okn-config
         - name: openvswitch
