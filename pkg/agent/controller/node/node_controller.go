@@ -5,6 +5,7 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -31,7 +32,8 @@ type NodeController struct {
 	queue            workqueue.RateLimitingInterface
 }
 
-func NewNodeController(kubeClient clientset.Interface, nodeInformer coreinformers.NodeInformer) (*NodeController, error) {
+func NewNodeController(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory) *NodeController {
+	nodeInformer := informerFactory.Core().V1().Nodes()
 	n := &NodeController{
 		kubeClient:       kubeClient,
 		nodeInformer:     nodeInformer,
@@ -53,7 +55,7 @@ func NewNodeController(kubeClient clientset.Interface, nodeInformer coreinformer
 		},
 		nodeSyncPeriod,
 	)
-	return n, nil
+	return n
 }
 
 // enqueueNode adds an object to the controller work queue

@@ -11,7 +11,7 @@ LDFLAGS ?= ""
 export GOPATH
 export GOBIN
 
-all: build_env cni
+all: build_env cni agent
 
 build_env:
 	mkdir -p $(GOBIN) $(GOSRC)
@@ -20,6 +20,9 @@ build_env:
 
 cni: build_env
 	go install -gcflags "${GCFLAGS}" -ldflags "${LDFLAGS}" okn/cmd/okn-cni
+
+agent: build_env
+	go install -gcflags "${GCFLAGS}" -ldflags "${LDFLAGS}" okn/cmd/okn-agent
 
 .PHONY: clean
 clean:

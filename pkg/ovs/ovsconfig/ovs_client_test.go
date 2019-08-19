@@ -5,7 +5,16 @@ import (
 )
 
 func TestOVSBridge(t *testing.T) {
-	br, err := NewOVSBridge("br1", NewOVSDBConnectionUDS(""))
+	ovsdb, err := NewOVSDBConnectionUDS("")
+	if err != nil {
+		t.Error("Failed to open OVSDB connection: ", err)
+		return
+	}
+
+	defer ovsdb.Close()
+
+	br := NewOVSBridge("br1", ovsdb)
+	err = br.Create()
 	if err != nil {
 		t.Error("Failed to create bridge: ", err)
 		return

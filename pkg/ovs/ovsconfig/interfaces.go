@@ -6,6 +6,7 @@ const (
 )
 
 type OVSBridgeClient interface {
+	Create() Error
 	Delete() Error
 	CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error)
 	CreateGenevePort(name string, ofPortRequest int32, remoteIP string) (string, Error)
