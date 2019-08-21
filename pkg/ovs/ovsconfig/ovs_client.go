@@ -27,7 +27,7 @@ const defaultUDSAddress = "/run/openvswitch/db.sock"
 
 const openvSwitchSchema = "Open_vSwitch"
 
-// Connects to the ovsdb server on the UNIX domain socket specified by address.
+// Connects to the OVSDB server on the UNIX domain socket specified by address.
 // If address is set to "", the default UNIX domain socket path
 // "/run/openvswitch/db.sock" will be used.
 // Returns the OVSDB struct on success.
@@ -38,21 +38,25 @@ func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 	return ovsdb.Dial([][]string{{"unix", address}}, nil, nil), nil
 }
 
-// Create and return OVSBridge.
+// Creates and returns a new OVSBridge struct.
+func NewOVSBridge(bridgeName string, ovsdb *ovsdb.OVSDB) *OVSBridge {
+	return &OVSBridge{ovsdb, bridgeName, ""}
+}
+
+// Looks up or creates the bridge.
 // If the bridge with name bridgeName does not exist, it will be created.
-func NewOVSBridge(bridgeName string, ovsdb *ovsdb.OVSDB) (*OVSBridge, Error) {
-	bridge := &OVSBridge{ovsdb, bridgeName, ""}
-	if exits, err := bridge.lookupByName(); err != nil {
-		return nil, err
-	} else if exits {
-		klog.Info("Bridge exits: ", bridge.uuid)
-	} else if err = bridge.create(); err != nil {
-		return nil, err
+func (br *OVSBridge) Create() Error {
+	if exists, err := br.lookupByName(); err != nil {
+		return err
+	} else if exists {
+		klog.Info("Bridge exists: ", br.uuid)
+	} else if err = br.create(); err != nil {
+		return err
 	} else {
-		klog.Info("Created bridge: ", bridge.uuid)
+		klog.Info("Created bridge: ", br.uuid)
 	}
 
-	return bridge, nil
+	return nil
 }
 
 func (br *OVSBridge) lookupByName() (bool, Error) {

@@ -26,8 +26,8 @@ type CNIServer struct {
 	cniSocket            string
 	supportedCNIVersions map[string]bool
 	serverVersion        string
-	ovsBridgeClient      ovsconfig.OVSBridgeClient
 	nodeConfig           *agent.NodeConfig
+	ovsBridgeClient      ovsconfig.OVSBridgeClient
 	ifaceStore           agent.InterfaceStore
 }
 
@@ -364,13 +364,21 @@ func (s *CNIServer) CmdCheck(ctx context.Context, request *cnimsg.CniCmdRequestM
 	}, nil
 }
 
-func New(cniSocket string, nodeConfig *agent.NodeConfig, ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore agent.InterfaceStore) (*CNIServer, error) {
-	return &CNIServer{cniSocket: cniSocket, ovsBridgeClient: ovsBridgeClient, supportedCNIVersions: supportedCNIVersionSet, serverVersion: cni.OKNVersion, nodeConfig: nodeConfig}, nil
+func New(cniSocket string, nodeConfig *agent.NodeConfig, ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore agent.InterfaceStore) *CNIServer {
+	return &CNIServer{
+		cniSocket:            cniSocket,
+		supportedCNIVersions: supportedCNIVersionSet,
+		serverVersion:        cni.OKNVersion,
+		nodeConfig:           nodeConfig,
+		ovsBridgeClient:      ovsBridgeClient,
+		ifaceStore:           ifaceStore,
+	}
 }
 
 func (s *CNIServer) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting CNI server")
 	defer klog.Info("Shutting down CNI server")
+
 	listener, err := net.Listen("unix", s.cniSocket)
 	if err != nil {
 		klog.Errorf("Failed to bind on %s: %v", s.cniSocket, err)

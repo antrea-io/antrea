@@ -30,6 +30,18 @@ func (m *MockOVSdbClient) EXPECT() *MockOVSdbClientMockRecorder {
 	return m.recorder
 }
 
+// Create mocks base method
+func (m *MockOVSdbClient) Create() ovsconfig.Error {
+	ret := m.ctrl.Call(m, "Create")
+	ret0, _ := ret[0].(ovsconfig.Error)
+	return ret0
+}
+
+// Create indicates an expected call of Create
+func (mr *MockOVSdbClientMockRecorder) Create() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockOVSdbClient)(nil).Create))
+}
+
 // CreateGenevePort mocks base method
 func (m *MockOVSdbClient) CreateGenevePort(arg0 string, arg1 int32, arg2 string) (string, ovsconfig.Error) {
 	ret := m.ctrl.Call(m, "CreateGenevePort", arg0, arg1, arg2)
