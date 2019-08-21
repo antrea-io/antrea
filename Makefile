@@ -1,36 +1,47 @@
-BUILD_DIR = $(PWD)/BUILD
-GO_FILES=`find . -name "*.go" -type f`
+# go options
+GO          ?= go
+LDFLAGS     :=
+GOFLAGS     :=
+BINDIR      ?= $(CURDIR)/bin
+GO_FILES := $$(find . -name '*.go')
 
-export BUILD_DIR
+.PHONY: all
+all: dev build
 
-all: build_dir cmd build
+.PHONY: dev
+dev:
+	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' okn/cmd/...
 
-build_dir:
-	mkdir -p $(BUILD_DIR)
-
-cmd: build_dir
-	@$(MAKE) -C cmd
-
-build: build_dir
+.PHONY: build
+build:
 	@$(MAKE) -C build
 
-.PHONY: clean
-clean:
-	rm -rf $(BUILD_DIR)
+.PHONY: test
+test: build
+test: test-unit
+test: test-fmt
+
+.PHONY: test-unit
+test-unit:
+	@echo
+	@echo "==> Running unit tests <=="
+	$(GO) test -cover $$(go list ./... | grep -v "okn/pkg/[ovs/ovsconfig\|test]")
+
+test-fmt:
+	@echo
+	@echo "===> Checking format of Go files <==="
+	@test -z "$$(gofmt -s -l -d $(GO_FILES) | tee /dev/stderr)"
 
 .PHONY: fmt
 fmt:
-	gofmt -s -l -w $(GO_FILES)
+	@echo
+	@echo "===> Formatting Go files <==="
+	@gofmt -s -l -w $(GO_FILES)
 
 .PHONY: lint
 lint:
 	golint $$(go list ./...)
 
-.PHONY: test test-fmt test-unit
-test: test-fmt test-unit
-
-test-fmt:
-	@test -z "$$(gofmt -s -l -d $(GO_FILES) | tee /dev/stderr)"
-
-test-unit:
-	go test -cover $$(go list ./... | grep -v "okn/pkg/[ovs/ovsconfig\|test]")
+.PHONY: clean
+clean:
+	@rm -rf $(BINDIR)
