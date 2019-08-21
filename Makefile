@@ -25,7 +25,7 @@ test: test-fmt
 test-unit:
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -cover $$(go list ./... | grep -v "okn/pkg/[ovs/ovsconfig\|test]")
+	$(GO) test -cover $$(go list ./... | grep -E -v "okn/pkg/(ovs/ovsconfig|test)")
 
 test-fmt:
 	@echo
