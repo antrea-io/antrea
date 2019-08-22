@@ -65,3 +65,21 @@ func parseIPConfig(ipAddress string, gw string, version string) *current.IPConfi
 func GenerateCNIArgs(podName string, podNamespace string, podInfraContainerID string) string {
 	return fmt.Sprintf(ArgsFormat, podNamespace, podName, podInfraContainerID)
 }
+
+type DummyOVSConfigError struct {
+	error
+	timeout   bool
+	temporary bool
+}
+
+func (e *DummyOVSConfigError) Timeout() bool {
+	return e.timeout
+}
+
+func (e *DummyOVSConfigError) Temporary() bool {
+	return e.temporary
+}
+
+func NewDummyOVSConfigError(errMsg string, temporary bool, timeout bool) *DummyOVSConfigError {
+	return &DummyOVSConfigError{error: fmt.Errorf(errMsg), timeout: timeout, temporary: temporary}
+}
