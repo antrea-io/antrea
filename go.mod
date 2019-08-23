@@ -37,6 +37,7 @@ require (
 	gopkg.in/yaml.v2 v2.2.2
 	k8s.io/api v0.0.0-20190313235455-40a48860b5ab
 	k8s.io/apimachinery v0.0.0-20190313205120-d7deff9243b1
+	k8s.io/apiserver v0.0.0-20190313205120-8b27c41bdbb1
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/component-base v0.0.0-20190314000054-4a91899592f4
 	k8s.io/klog v0.3.3
