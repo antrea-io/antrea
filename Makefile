@@ -2,19 +2,19 @@
 GO          ?= go
 LDFLAGS     :=
 GOFLAGS     :=
-BINDIR      ?= $(CURDIR)/bin
+BINDIR      := $(CURDIR)/bin
 GO_FILES := $$(find . -name '*.go')
 
 .PHONY: all
-all: dev build
+all: bin build
 
-.PHONY: dev
-dev:
+.PHONY: bin
+bin:
 	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' okn/cmd/...
 
 .PHONY: build
-build:
-	@$(MAKE) -C build
+build: bin
+build: ubuntu
 
 .PHONY: test
 test: build
@@ -45,3 +45,10 @@ lint:
 .PHONY: clean
 clean:
 	@rm -rf $(BINDIR)
+
+### Docker images ###
+
+.PHONY: ubuntu
+ubuntu:
+	@echo "===> Building okn-ubuntu Docker image <==="
+	docker build -t okn-ubuntu -f build/images/Dockerfile.ubuntu .

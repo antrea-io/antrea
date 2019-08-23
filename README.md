@@ -13,6 +13,6 @@ To develop locally, you can follow these steps:
 
  2. Clone this repository anywhere on your machine and `cd` into it
 
- 3. To build all Go files and install them under `bin`, run `make dev`
+ 3. To build all Go files and install them under `bin`, run `make bin`
 
  4. To run all Go unit tests, run `make test-unit`

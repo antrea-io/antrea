@@ -2,7 +2,8 @@ FROM ubuntu:16.04
 
 MAINTAINER OKN <okn@github.com>
 
-ADD scripts/* /usr/local/bin/
+ADD build/images/scripts/* /usr/local/bin/
+ADD bin/* /usr/local/bin/
 
 USER root
 
