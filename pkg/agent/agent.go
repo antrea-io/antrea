@@ -116,10 +116,14 @@ func (ai *AgentInitializer) setupOVSBridge() error {
 }
 
 func (ai *AgentInitializer) SetupNodeNetwork() error {
+	klog.Info("Setting up node network")
 	if err := ai.initNodeLocalConfig(ai.client); err != nil {
 		return err
 	}
 	// Setup iptables chain and rules
+	if err := iptables.SetupIPTables(); err != nil {
+		return err
+	}
 	if err := iptables.SetupHostIPTablesRules(ai.hostGateway); err != nil {
 		return err
 	}

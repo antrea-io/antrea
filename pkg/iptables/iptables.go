@@ -144,7 +144,7 @@ func newChain(table string, chainName string) (*chain, error) {
 			return nil, err
 		}
 	}
-	klog.Infof("Success to create target chain %s in table %s", chainName, table)
+	klog.Infof("Created target chain %s in table %s", chainName, table)
 	return &chain{table: table, chain: chainName}, nil
 }
 
@@ -181,6 +181,13 @@ func SetupHostIPTablesRules(hostGw string) error {
 	return setupHostPostRouting()
 }
 
-func init() {
-	ipt, _ = iptables.New()
+func SetupIPTables() error {
+	klog.Info("Creating new IPTables")
+	var err error
+	ipt, err = iptables.New()
+	if err != nil {
+		klog.Errorf("Error when creating new IPTables: %s", err)
+		return err
+	}
+	return nil
 }

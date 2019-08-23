@@ -7,4 +7,4 @@ ADD bin/* /usr/local/bin/
 
 USER root
 
-RUN apt-get update && apt-get install -y openvswitch-switch
+RUN apt-get update && apt-get install -y openvswitch-switch iptables
