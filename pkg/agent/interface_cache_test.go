@@ -1,11 +1,13 @@
 package agent
 
 import (
+	"testing"
+
 	mock "github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"okn/pkg/ovs/ovsconfig"
+	"okn/pkg/test"
 	"okn/pkg/test/mocks"
-	"testing"
 )
 
 func TestInitCache(t *testing.T) {
@@ -13,7 +15,7 @@ func TestInitCache(t *testing.T) {
 	defer controller.Finish()
 	mockOVSdbClient := mocks.NewMockOVSdbClient(controller)
 
-	mockOVSdbClient.EXPECT().GetPortList().Return(nil, mocks.NewMockOVSConfigError("Failed to list OVS ports", true, true))
+	mockOVSdbClient.EXPECT().GetPortList().Return(nil, test.NewDummyOVSConfigError("Failed to list OVS ports", true, true))
 
 	cache := NewInterfaceStore()
 	err := cache.Initialize(mockOVSdbClient, "", "")
@@ -33,7 +35,7 @@ func TestInitCache(t *testing.T) {
 			OVSExternalIDMAC: "11:22:33:44:55:77", OVSExternalIDIP: "1.1.1.2"}}
 	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
 
-	mockOVSdbClient.EXPECT().GetPortList().Return(initOVSPorts, mocks.NewMockOVSConfigError("Failed to list OVS ports", true, true))
+	mockOVSdbClient.EXPECT().GetPortList().Return(initOVSPorts, test.NewDummyOVSConfigError("Failed to list OVS ports", true, true))
 	err = cache.Initialize(mockOVSdbClient, "", "")
 	if cache.Len() != 0 {
 		t.Errorf("Failed to load OVS port in initCache")

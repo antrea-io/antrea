@@ -1,5 +1,12 @@
 bin
+.mockgen
 
 .DS_Store
+
+# VIM
 .*.swp
+
+# Emacs
+*~
+
 .idea/
