@@ -39,7 +39,7 @@ type k8sArgs struct {
 	types.CommonArgs
 	K8S_POD_NAME               types.UnmarshallableString
 	K8S_POD_NAMESPACE          types.UnmarshallableString
-	K8S_POD_INFRA_CONTAINRE_ID types.UnmarshallableString
+	K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString
 }
 
 func GenerateContainerPeerName(podName string, podNamespace string) string {
@@ -49,6 +49,8 @@ func GenerateContainerPeerName(podName string, podNamespace string) string {
 	hashValue := hex.EncodeToString(hash.Sum(nil))
 	return hashValue[:hostVethLength]
 }
+
+// TODO: mock the ip dependency by defining an interface and write unit tests for this code.
 
 // Create veth pair: containerVeth plugged in the netns, and hostVeth will be attached to OVS bridge
 func setupInterface(containerID string, k8sCNIArgs *k8sArgs, ifname string, netns ns.NetNS) (*current.Interface, *current.Interface, error) {

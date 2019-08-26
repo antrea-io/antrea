@@ -142,6 +142,12 @@ spec:
             mountPath: /var/run/okn
           - name: openvswitch
             mountPath: /var/run/openvswitch
+          # The host's /proc directory needs to be mounted in the container so that the network
+          # namespace path can be opened and the container interface can be created by okn-agent in
+          # that namespace.
+          - name: host-proc
+            mountPath: /host/proc
+            readOnly: true
         - name: okn-ovs
           image: okn-ubuntu
           imagePullPolicy: IfNotPresent
@@ -177,3 +183,6 @@ spec:
         - name: host-var-run-okn
           hostPath:
             path: /var/run/okn
+        - name: host-proc
+          hostPath:
+            path: /proc

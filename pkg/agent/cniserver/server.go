@@ -29,6 +29,7 @@ type CNIServer struct {
 	nodeConfig           *agent.NodeConfig
 	ovsBridgeClient      ovsconfig.OVSBridgeClient
 	ifaceStore           agent.InterfaceStore
+	hostProcPathPrefix   string
 }
 
 const (
@@ -222,11 +223,18 @@ func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*c
 	return prevResult, nil
 }
 
+// When running in a container, the host's /proc directory is mounted under s.hostProcPathPrefix, so
+// we need to prepend s.hostProcPathPrefix to the network namespace path provided by the cni. When
+// running as a simple process, s.hostProcPathPrefix will be empty.
+func (s *CNIServer) hostNetNsPath(netNS string) string {
+	return s.hostProcPathPrefix + netNS
+}
+
 func (s *CNIServer) validatePrevResult(cfgArgs *cnimsg.CniCmdArgsMessage, k8sCNIArgs *k8sArgs, prevResult *current.Result) (*cnimsg.CniCmdResponseMessage, error) {
 	var containerIntf, hostIntf *current.Interface
 	hostVethName := GenerateContainerPeerName(string(k8sCNIArgs.K8S_POD_NAME), string(k8sCNIArgs.K8S_POD_NAMESPACE))
 	containerID := cfgArgs.ContainerId
-	netNS := cfgArgs.Netns
+	netNS := s.hostNetNsPath(cfgArgs.Netns)
 
 	// Find interfaces from previous configuration
 	for _, intf := range prevResult.Interfaces {
@@ -269,6 +277,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnimsg.CniCmdRequestMes
 	}
 	cniVersion := cniConfig.CNIVersion
 	result := &current.Result{CNIVersion: cniVersion}
+	netNS := s.hostNetNsPath(cniConfig.Netns)
 
 	success := false
 	defer func() {
@@ -293,7 +302,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnimsg.CniCmdRequestMes
 	// Ensure interface gateway setting and mapping relations between result.Interfaces and result.IPs
 	updateResultIfaceConfig(result, s.nodeConfig.Gateway.IP)
 	// Setup pod interfaces and connect to ovs bridge
-	if err = configureInterface(s.ovsBridgeClient, s.ifaceStore, cniConfig.ContainerId, cniConfig.k8sArgs, cniConfig.Netns, cniConfig.Ifname, result); err != nil {
+	if err = configureInterface(s.ovsBridgeClient, s.ifaceStore, cniConfig.ContainerId, cniConfig.k8sArgs, netNS, cniConfig.Ifname, result); err != nil {
 		klog.Errorf("Failed to configure container %s interface: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
@@ -364,7 +373,12 @@ func (s *CNIServer) CmdCheck(ctx context.Context, request *cnimsg.CniCmdRequestM
 	}, nil
 }
 
-func New(cniSocket string, nodeConfig *agent.NodeConfig, ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore agent.InterfaceStore) *CNIServer {
+func New(
+	cniSocket, hostProcPathPrefix string,
+	nodeConfig *agent.NodeConfig,
+	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	ifaceStore agent.InterfaceStore,
+) *CNIServer {
 	return &CNIServer{
 		cniSocket:            cniSocket,
 		supportedCNIVersions: supportedCNIVersionSet,
@@ -372,6 +386,7 @@ func New(cniSocket string, nodeConfig *agent.NodeConfig, ovsBridgeClient ovsconf
 		nodeConfig:           nodeConfig,
 		ovsBridgeClient:      ovsBridgeClient,
 		ifaceStore:           ifaceStore,
+		hostProcPathPrefix:   hostProcPathPrefix,
 	}
 }
 
@@ -379,6 +394,8 @@ func (s *CNIServer) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting CNI server")
 	defer klog.Info("Shutting down CNI server")
 
+	// remove before bind to avoid "address already in use" errors
+	os.Remove(s.cniSocket)
 	listener, err := net.Listen("unix", s.cniSocket)
 	if err != nil {
 		klog.Errorf("Failed to bind on %s: %v", s.cniSocket, err)

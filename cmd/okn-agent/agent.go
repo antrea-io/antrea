@@ -28,7 +28,8 @@ func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
 
 	ifaceStore := agent.NewInterfaceStore()
 
-	agentInitializer := agent.NewInitializer(config.OVSBridge, config.HostGateway, config.TunnelType, client, ifaceStore)
+	agentInitializer := agent.NewInitializer(
+		config.OVSBridge, config.HostGateway, config.TunnelType, client, ifaceStore)
 
 	return &OKNAgent{
 		informerFactory:  informerFactory,
@@ -50,6 +51,7 @@ func (agent *OKNAgent) run() error {
 
 	cniServer := cniserver.New(
 		agent.config.CNISocket,
+		agent.config.HostProcPathPrefix,
 		agent.agentInitializer.GetNodeConfig(),
 		agent.agentInitializer.GetOVSBridgeClient(),
 		agent.agentInitializer.GetInterfaceStore())
