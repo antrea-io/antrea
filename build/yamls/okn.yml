@@ -153,9 +153,14 @@ spec:
           imagePullPolicy: IfNotPresent
           command: ["start_ovs"]
           securityContext:
+            # capabilities required by OVS daemons
             capabilities:
               add:
                 - SYS_NICE
+                - NET_ADMIN
+                - SYS_ADMIN
+                - SYS_MODULE
+                - IPC_LOCK
           livenessProbe:
             exec:
               command:
@@ -167,6 +172,9 @@ spec:
           volumeMounts:
           - name: openvswitch
             mountPath: /var/run/openvswitch
+          - name: host-var-log-okn
+            mountPath: /var/log/openvswitch
+            subPath: openvswitch
       volumes:
         - name: okn-config
           configMap:
@@ -186,3 +194,9 @@ spec:
         - name: host-proc
           hostPath:
             path: /proc
+        - name: host-var-log-okn
+          hostPath:
+            path: /var/log/okn
+            # we use subPath to create logging subdirectories for different component (e.g. OVS) and
+            # subPath requires the base volume to exist
+            type: DirectoryOrCreate
