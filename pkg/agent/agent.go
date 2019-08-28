@@ -58,8 +58,18 @@ func disableICMPSendRedirects(intfName string) error {
 	return nil
 }
 
-func NewInitializer(ovsBridge, hostGateway, tunnelType string, client clientset.Interface, ifaceStore InterfaceStore) *AgentInitializer {
-	return &AgentInitializer{ovsBridge: ovsBridge, hostGateway: hostGateway, tunnelType: tunnelType, client: client, ifaceStore: ifaceStore}
+func NewInitializer(
+	ovsBridge, hostGateway, tunnelType string,
+	client clientset.Interface,
+	ifaceStore InterfaceStore,
+) *AgentInitializer {
+	return &AgentInitializer{
+		ovsBridge:   ovsBridge,
+		hostGateway: hostGateway,
+		tunnelType:  tunnelType,
+		client:      client,
+		ifaceStore:  ifaceStore,
+	}
 }
 
 // Close OVSDB connection.

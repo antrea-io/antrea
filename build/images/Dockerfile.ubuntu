@@ -2,9 +2,13 @@ FROM ubuntu:16.04
 
 MAINTAINER OKN <okn@github.com>
 
-ADD build/images/scripts/* /usr/local/bin/
-ADD bin/* /usr/local/bin/
-
 USER root
 
-RUN apt-get update && apt-get install -y openvswitch-switch iptables
+# We clean-up apt cache after installing packages to reduce the size of the
+# final image
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends openvswitch-switch iptables && \
+    rm -rf /var/cache/apt/* /var/lib/apt/lists/*
+
+ADD build/images/scripts/* /usr/local/bin/
+ADD bin/* /usr/local/bin/

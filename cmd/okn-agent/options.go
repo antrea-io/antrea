@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	defaultOVSBridge   = "br-int"
-	defaultHostGateway = "gw0"
+	defaultOVSBridge          = "br-int"
+	defaultHostGateway        = "gw0"
+	defaultHostProcPathPrefix = "/host"
 )
 
 type Options struct {
@@ -81,5 +82,8 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.TunnelType == "" {
 		o.config.TunnelType = ovsconfig.VXLAN_TUNNEL
+	}
+	if o.config.HostProcPathPrefix == "" {
+		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
 	}
 }
