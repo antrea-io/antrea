@@ -455,7 +455,8 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
-	tester.server, _ = cniserver.New(testSock, testNodeConfig, ovsServiceMock)
+	ifaceStore := agent.NewInterfaceStore()
+	tester.server = cniserver.New(testSock, testNodeConfig, ovsServiceMock, ifaceStore)
 	ctx, _ := context.WithCancel(context.Background())
 	tester.ctx = ctx
 	return tester
