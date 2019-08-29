@@ -66,6 +66,13 @@ mocks: .mockgen
 	@echo "===> Re-generating mocks with Mockgen <==="
 	PATH=$$PATH:$(GOPATH)/bin $(GO) generate ./...
 
+# Install a specific version of k8s.io/code-generator to
+# generate monitoring CRDs client and deepcopy
+.PHONY: crd-gen
+crd-gen:
+	@echo "===> Re-generating CRD client and deepcopy with code-generator <==="
+	$(CURDIR)/hack/update-codegen.sh
+
 ### Docker images ###
 
 .PHONY: ubuntu
