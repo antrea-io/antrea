@@ -6,24 +6,6 @@ set -euo pipefail
 
 declare -r ovs_container_name="okn-ovs"
 
-# Reads the OVS bridge name
-function read_ovs_bridge_name {
-    declare bridge=$(sed 's/#.*//' /etc/okn/okn.conf | sed -nr '0,/.*ovsBridge: / s/.*ovsBridge: //p')
-    if [[ -z "$bridge" ]]; then
-        # Default to br-int
-        bridge="br-int"
-    fi
-    echo $bridge
-}
-
-declare -r ovs_bridge=$(read_ovs_bridge_name)
-
-function create_ovs_bridge {
-    log_info $ovs_container_name "Creating OVS bridge"
-    # Creates the OVS bridge.
-    ovs-vsctl --may-exist add-br $ovs_bridge
-}
-
 function stop_ovs {
     /usr/share/openvswitch/scripts/ovs-ctl stop
 }
@@ -53,7 +35,6 @@ while true; do
         log_warning $ovs_container_name "OVS was stopped in the container. Starting it again"
 
         /usr/share/openvswitch/scripts/ovs-ctl --system-id=random start
-        create_ovs_bridge
         log_info $ovs_container_name "Started OVS in this container"
     fi
     sleep 30
