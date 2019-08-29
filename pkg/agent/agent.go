@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
+
 	"okn/pkg/agent/openflow"
 	"okn/pkg/iptables"
 	"okn/pkg/ovs/ovsconfig"
@@ -80,32 +81,37 @@ func NewInitializer(
 	}
 }
 
-// Close OVSDB connection.
+// Cleanup closes the OVSDB connection.
 func (ai *AgentInitializer) Cleanup() {
 	ai.ovsdbConnection.Close()
 }
 
-// Return InterfaceStore.
+// GetK8sClient returns the kubernetes clientset in agent initializer.
+func (ai *AgentInitializer) GetK8sClient() clientset.Interface {
+	return ai.client
+}
+
+// GetInterfaceStore returns the InterfaceStore.
 func (ai *AgentInitializer) GetInterfaceStore() InterfaceStore {
 	return ai.ifaceStore
 }
 
-// Return NodeConfig.
+// GetNodeConfig returns the NodeConfig.
 func (ai *AgentInitializer) GetNodeConfig() *NodeConfig {
 	return ai.nodeConfig
 }
 
-// Return GetOVSBridgeClient.
+// GetOVSBridgeClient returns the GetOVSBridgeClient.
 func (ai *AgentInitializer) GetOVSBridgeClient() ovsconfig.OVSBridgeClient {
 	return ai.ovsBridgeClient
 }
 
-// Return openflow client
+// GetOFClient returns the openflow client
 func (ai *AgentInitializer) GetOFClient() openflow.Client {
 	return ai.ofClient
 }
 
-// Setup OVS bridge and create host gateway interface and tunnel port
+// setupOVSBridge sets up the OVS bridge and create host gateway interface and tunnel port
 func (ai *AgentInitializer) setupOVSBridge() error {
 	if err := ai.ovsBridgeClient.Create(); err != nil {
 		klog.Error("Failed to create OVS bridge: ", err)
@@ -176,7 +182,7 @@ func (ai *AgentInitializer) SetupNodeNetwork() error {
 	return nil
 }
 
-// Setup necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
+// initOpenFlowPipeline sets up necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
 func (ai *AgentInitializer) initOpenFlowPipeline() error {
 	var err error
 
@@ -215,8 +221,8 @@ func (ai *AgentInitializer) initOpenFlowPipeline() error {
 	return nil
 }
 
-// Create host gateway interface which is an internal port on OVS. The ofport for host gateway interface
-// is predefined, so invoke CreateInternalPort with a specific ofport_request
+// setupGatewayInterface creates the host gateway interface which is an internal port on OVS. The ofport for host
+// gateway interface is predefined, so invoke CreateInternalPort with a specific ofport_request
 func (ai *AgentInitializer) setupGatewayInterface() error {
 	// Create host Gateway port if not existent
 	gatewayIface, existed := ai.ifaceStore.GetInterface(ai.hostGateway)
@@ -319,8 +325,8 @@ func (ai *AgentInitializer) setupTunnelInterface(tunnelPortName string) error {
 	return nil
 }
 
-// Retrieve node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
-// host Gateway interface.
+// initNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
+// host gateway interface.
 func (ai *AgentInitializer) initNodeLocalConfig(client clientset.Interface) error {
 	// Todo: change other valid functions to find node except for hostname
 	nodeName, err := os.Hostname()
