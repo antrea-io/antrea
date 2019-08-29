@@ -16,7 +16,7 @@ data:
     # Make sure it doesn't conflict with your existing interfaces.
     #hostGateway: gw0
 
-    # Encapsulation mode for communication between pods accross nodes, supported values:
+    # Encapsulation mode for communication between Pods across Nodes, supported values:
     # - vxlan (default)
     # - geneve
     #tunnelType: vxlan
