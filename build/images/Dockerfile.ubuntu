@@ -7,7 +7,10 @@ USER root
 # We clean-up apt cache after installing packages to reduce the size of the
 # final image
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openvswitch-switch iptables && \
+    apt-get install -y --no-install-recommends openvswitch-switch iptables wget ca-certificates && \
+    mkdir -p /opt/cni/bin && \
+    wget -q -O - https://dl.k8s.io/network-plugins/cni-plugins-amd64-v0.7.5.tgz | tar -xz -C /opt/cni/bin ./host-local && \
+    apt-get remove -y wget ca-certificates && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/*
 
 ADD build/images/scripts/* /usr/local/bin/
