@@ -5,11 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/containernetworking/cni/pkg/types"
 	"io"
 	"net"
 	"strings"
 
+	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -19,6 +19,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"k8s.io/klog"
 	"okn/pkg/agent"
+	"okn/pkg/agent/openflow"
 	"okn/pkg/ovs/ovsconfig"
 )
 
@@ -53,7 +54,7 @@ func GenerateContainerPeerName(podName string, podNamespace string) string {
 // TODO: mock the ip dependency by defining an interface and write unit tests for this code.
 
 // setupInterface creates veth pair, containerVeth plugged in the netns, and hostVeth will be attached to OVS bridge
-func setupInterface(containerID string, k8sCNIArgs *k8sArgs, ifname string, netns ns.NetNS) (*current.Interface, *current.Interface, error) {
+func setupInterface(k8sCNIArgs *k8sArgs, ifname string, netns ns.NetNS) (*current.Interface, *current.Interface, error) {
 	hostVethName := GenerateContainerPeerName(string(k8sCNIArgs.K8S_POD_NAME), string(k8sCNIArgs.K8S_POD_NAMESPACE))
 	containerIface := &current.Interface{}
 	hostIface := &current.Interface{}
@@ -210,7 +211,7 @@ func buildContainerConfig(containerID string, podName string, podNamespace strin
 	return agent.NewContainerInterface(containerID, podName, podNamespace, containerIface.Sandbox, containerMAC, containerIP)
 }
 
-func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ifaceStore agent.InterfaceStore, containerID string, k8sCNIArgs *k8sArgs, containerNetNS string, ifname string, result *current.Result) error {
+func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ofClient openflow.Client, gateway *agent.Gateway, ifaceStore agent.InterfaceStore, containerID string, k8sCNIArgs *k8sArgs, containerNetNS string, ifname string, result *current.Result) error {
 	netns, err := ns.GetNS(containerNetNS)
 	if err != nil {
 		klog.Errorf("Failed to open netns with %s: %v", containerNetNS, err)
@@ -218,7 +219,7 @@ func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ifaceStore agent.In
 	}
 	defer netns.Close()
 	// Create veth pair and link up
-	hostIface, containerIface, err := setupInterface(containerID, k8sCNIArgs, ifname, netns)
+	hostIface, containerIface, err := setupInterface(k8sCNIArgs, ifname, netns)
 	if err != nil {
 		return err
 	}
@@ -254,9 +255,19 @@ func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ifaceStore agent.In
 		klog.Errorf("Failed to configure IP address on container %s:%v", containerID, err)
 		return fmt.Errorf("failed to configure container ip")
 	}
-	// containerConfig OFPort field is not filled after create OVS port, need to check and retrieve
-	// when used it when install openflow
+
 	// Todo: need to decide whether to retrieve OFport asynchronously to reduce CNI command delay
+	ofPort, err := ovsBridge.GetOFPort(ovsPortName)
+	if err != nil {
+		klog.Errorf("Failed to get of_port of OVS interface %s: %v", ovsPortName, err)
+		return err
+	}
+	// Setup openflow entries for OVS interface
+	params := &openflow.PodConnectivityParam{PodInterfaceIP: containerConfig.IP, PodInterfaceMAC: containerConfig.MAC, GatewayMAC: gateway.MAC, OFPort: uint32(ofPort)}
+	if err := ofClient.InstallPodFlows(containerID, params); err != nil {
+		klog.Errorf("Failed to add openflow entries for container %s: %v", containerID, err)
+		return err
+	}
 	containerConfig.OvsPortConfig = &agent.OvsPortConfig{PortUUID: portUUID, IfaceName: ovsPortName}
 	// Add containerConfig into local cache
 	ifaceStore.AddInterface(containerID, containerConfig)
@@ -291,7 +302,7 @@ func removeContainerLink(containerID string, containerNetns string, ifname strin
 	return nil
 }
 
-func removeInterfaces(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore agent.InterfaceStore, containerID string, containerNetns string, ifname string) error {
+func removeInterfaces(ovsBridgeClient ovsconfig.OVSBridgeClient, ofClient openflow.Client, ifaceStore agent.InterfaceStore, containerID string, containerNetns string, ifname string) error {
 	if containerNetns != "" {
 		if err := removeContainerLink(containerID, containerNetns, ifname); err != nil {
 			return err
@@ -308,6 +319,11 @@ func removeInterfaces(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore agen
 
 	portUUID := containerConfig.PortUUID
 	klog.Infof("Delete OVS port with UUID %s peer container %s", portUUID, containerID)
+	// Remove openflow entries of target container
+	if err := ofClient.UninstallPodFlows(containerID); err != nil {
+		klog.Errorf("Failed to delete Openflow entries for container %s: %v", containerID, err)
+		return err
+	}
 	// Todo: handle error and introduce garbage collection for deletion failure
 	if err := ovsBridgeClient.DeletePort(portUUID); err != nil {
 		klog.Errorf("Failed to delete OVS port %s: %v", portUUID, err)

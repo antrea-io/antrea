@@ -17,6 +17,7 @@ import (
 	"k8s.io/klog"
 	"okn/pkg/agent"
 	"okn/pkg/agent/cniserver/ipam"
+	"okn/pkg/agent/openflow"
 	"okn/pkg/apis/cni"
 	"okn/pkg/cni"
 	"okn/pkg/ovs/ovsconfig"
@@ -30,6 +31,7 @@ type CNIServer struct {
 	ovsBridgeClient      ovsconfig.OVSBridgeClient
 	ifaceStore           agent.InterfaceStore
 	hostProcPathPrefix   string
+	ofClient             openflow.Client
 }
 
 const (
@@ -302,7 +304,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnimsg.CniCmdRequestMes
 	// Ensure interface gateway setting and mapping relations between result.Interfaces and result.IPs
 	updateResultIfaceConfig(result, s.nodeConfig.Gateway.IP)
 	// Setup pod interfaces and connect to ovs bridge
-	if err = configureInterface(s.ovsBridgeClient, s.ifaceStore, cniConfig.ContainerId, cniConfig.k8sArgs, netNS, cniConfig.Ifname, result); err != nil {
+	if err = configureInterface(s.ovsBridgeClient, s.ofClient, s.nodeConfig.Gateway, s.ifaceStore, cniConfig.ContainerId, cniConfig.k8sArgs, netNS, cniConfig.Ifname, result); err != nil {
 		klog.Errorf("Failed to configure container %s interface: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
@@ -334,7 +336,7 @@ func (s *CNIServer) CmdDel(ctx context.Context, request *cnimsg.CniCmdRequestMes
 	}
 	klog.Info("Deleted IP addresses by IPAM driver")
 	// Remove host interface and OVS configuration
-	if err := removeInterfaces(s.ovsBridgeClient, s.ifaceStore, cniConfig.ContainerId, cniConfig.Netns, cniConfig.Ifname); err != nil {
+	if err := removeInterfaces(s.ovsBridgeClient, s.ofClient, s.ifaceStore, cniConfig.ContainerId, cniConfig.Netns, cniConfig.Ifname); err != nil {
 		klog.Errorf("Failed to remove container %s interface configuration: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
@@ -377,6 +379,7 @@ func New(
 	cniSocket, hostProcPathPrefix string,
 	nodeConfig *agent.NodeConfig,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	ofClient openflow.Client,
 	ifaceStore agent.InterfaceStore,
 ) *CNIServer {
 	return &CNIServer{
@@ -387,6 +390,7 @@ func New(
 		ovsBridgeClient:      ovsBridgeClient,
 		ifaceStore:           ifaceStore,
 		hostProcPathPrefix:   hostProcPathPrefix,
+		ofClient:             ofClient,
 	}
 }
 

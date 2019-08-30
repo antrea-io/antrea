@@ -83,6 +83,7 @@ const (
 
 var ipamMock *mocks.MockIPAMDriver
 var ovsServiceMock *mocks.MockOVSdbClient
+var ofServiceMock *mocks.MockClient
 var testNodeConfig *agent.NodeConfig
 
 type Net struct {
@@ -456,7 +457,7 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := agent.NewInterfaceStore()
-	tester.server = cniserver.New(testSock, "", testNodeConfig, ovsServiceMock, ifaceStore)
+	tester.server = cniserver.New(testSock, "", testNodeConfig, ovsServiceMock, ofServiceMock, ifaceStore)
 	ctx, _ := context.WithCancel(context.Background())
 	tester.ctx = ctx
 	return tester
@@ -536,7 +537,11 @@ var _ = Describe("CNI server operations", func() {
 
 		ovsServiceMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).AnyTimes()
 		ovsServiceMock.EXPECT().CreatePort(mock.Any(), mock.Any(), mock.Any()).Return("", nil).AnyTimes()
+		ovsServiceMock.EXPECT().GetOFPort(mock.Any()).Return(int32(10), nil).AnyTimes()
 		ovsServiceMock.EXPECT().DeletePort(mock.Any()).Return(nil).AnyTimes()
+
+		ofServiceMock.EXPECT().InstallPodFlows(mock.Any(), mock.Any()).Return(nil)
+		ofServiceMock.EXPECT().UninstallPodFlows(mock.Any()).Return(nil)
 	})
 
 	AfterEach(func() {
@@ -569,6 +574,7 @@ func TestOknServerFunc(t *testing.T) {
 	ipamMock = mocks.NewMockIPAMDriver(controller)
 	_ = ipam.RegisterIPAMDriver("mock", ipamMock)
 	ovsServiceMock = mocks.NewMockOVSdbClient(controller)
+	ofServiceMock = mocks.NewMockClient(controller)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "CNI server operations suite")
 }

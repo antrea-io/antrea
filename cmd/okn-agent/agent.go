@@ -54,6 +54,7 @@ func (agent *OKNAgent) run() error {
 		agent.config.HostProcPathPrefix,
 		agent.agentInitializer.GetNodeConfig(),
 		agent.agentInitializer.GetOVSBridgeClient(),
+		agent.agentInitializer.GetOFClient(),
 		agent.agentInitializer.GetInterfaceStore())
 
 	stopCh := make(chan struct{})
