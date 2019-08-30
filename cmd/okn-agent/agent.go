@@ -29,7 +29,7 @@ func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
 	ifaceStore := agent.NewInterfaceStore()
 
 	agentInitializer := agent.NewInitializer(
-		config.OVSBridge, config.HostGateway, config.TunnelType, client, ifaceStore)
+		config.OVSBridge, config.HostGateway, config.TunnelType, config.ServiceCIDR, client, ifaceStore)
 
 	return &OKNAgent{
 		informerFactory:  informerFactory,

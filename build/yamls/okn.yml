@@ -20,6 +20,10 @@ data:
     # - vxlan (default)
     # - geneve
     #tunnelType: vxlan
+
+    # CIDR Range for services in cluster. It's required to support egress network policy, should
+    # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
+    #serviceCIDR: 10.96.0.0/12
   okn-cni.conf: |
     {
       "cniVersion":"0.3.0",

@@ -26,4 +26,8 @@ type AgentConfig struct {
 	// as /host/proc in the okn-agent container). When running okn-agent as a process,
 	// hostProcPathPrefix should be set to '' in the YAML config.
 	HostProcPathPrefix string `yaml:"hostProcPathPrefix,omitempty"`
+	// CIDR Range for services in cluster. It's required to support egress network policy, should
+	// be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
+	// Default is 10.96.0.0/12
+	ServiceCIDR string `yaml:"serviceCIDR,omitempty"`
 }

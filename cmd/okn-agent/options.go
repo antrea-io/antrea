@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"io/ioutil"
+	"net"
 	"okn/pkg/ovs/ovsconfig"
 
 	"okn/pkg/cni"
@@ -15,6 +16,7 @@ const (
 	defaultOVSBridge          = "br-int"
 	defaultHostGateway        = "gw0"
 	defaultHostProcPathPrefix = "/host"
+	defaultServiceCIDR        = "10.96.0.0/12"
 )
 
 type Options struct {
@@ -53,6 +55,11 @@ func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
 		return errors.New("No arguments are supported")
 	}
+	// Validate service CIDR configuration
+	_, _, err := net.ParseCIDR(o.config.ServiceCIDR)
+	if err != nil {
+		return errors.New("Service CIDR configuration is invalid")
+	}
 	return nil
 }
 
@@ -85,5 +92,8 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.HostProcPathPrefix == "" {
 		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
+	}
+	if o.config.ServiceCIDR == "" {
+		o.config.ServiceCIDR = defaultServiceCIDR
 	}
 }
