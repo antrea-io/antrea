@@ -1,0 +1,24 @@
+- name: docker status
+  service:
+    name: docker
+    state: started
+
+- name: kubelet status
+  service:
+    name: kubelet
+    state: started
+
+- name: stop openvswitch-switch
+  service:
+    name: openvswitch-switch
+    state: stopped
+
+- name: stop ovs-vswitchd
+  service:
+    name: ovs-vswitchd
+    state: stopped
+
+- name: stop ovsdb-server
+  service:
+    name: ovsdb-server
+    state: stopped

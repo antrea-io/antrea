@@ -1,0 +1,20 @@
+- name: Install packages that allow apt to be used over HTTPS
+  apt:
+    name: "{{ packages }}"
+    state: present
+    update_cache: yes
+    force_apt_get: yes
+  vars:
+    packages:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - gnupg-agent
+    - software-properties-common
+
+- name: Install pip
+  apt:
+    name: python3-pip
+    state: present
+    update_cache: no
+    force_apt_get: yes

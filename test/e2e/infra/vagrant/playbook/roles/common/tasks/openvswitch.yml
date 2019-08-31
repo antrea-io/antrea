@@ -1,0 +1,11 @@
+- name: Install openvswitch packages but do not start services
+  apt:
+    name: openvswitch-switch
+    state: present
+    force_apt_get: yes
+  notify:
+    - stop ovs-vswitchd
+    - stop ovsdb-server
+    - stop openvswitch-switch
+  environment:
+    RUNLEVEL: 1

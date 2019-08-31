@@ -1,0 +1,5 @@
+.vagrant
+*.retry
+playbook/kube
+ssh-config
+*.log
