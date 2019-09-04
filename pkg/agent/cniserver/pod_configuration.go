@@ -52,7 +52,7 @@ func GenerateContainerPeerName(podName string, podNamespace string) string {
 
 // TODO: mock the ip dependency by defining an interface and write unit tests for this code.
 
-// Create veth pair: containerVeth plugged in the netns, and hostVeth will be attached to OVS bridge
+// setupInterface creates veth pair, containerVeth plugged in the netns, and hostVeth will be attached to OVS bridge
 func setupInterface(containerID string, k8sCNIArgs *k8sArgs, ifname string, netns ns.NetNS) (*current.Interface, *current.Interface, error) {
 	hostVethName := GenerateContainerPeerName(string(k8sCNIArgs.K8S_POD_NAME), string(k8sCNIArgs.K8S_POD_NAMESPACE))
 	containerIface := &current.Interface{}
@@ -81,14 +81,14 @@ func setupInterface(containerID string, k8sCNIArgs *k8sArgs, ifname string, netn
 			_, err := ip.DelLinkByNameAddr(ifname)
 			return err
 		})
-		return nil, nil, fmt.Errorf("Failed to lookup host interface %q: %v", hostIface.Name, err)
+		return nil, nil, fmt.Errorf("failed to lookup host interface %q: %v", hostIface.Name, err)
 	}
 
 	hostIface.Mac = hostVeth.Attrs().HardwareAddr.String()
 	return hostIface, containerIface, nil
 }
 
-// Configure container address and routes if existed in IPAM result, and send GARP after that.
+// configureContainerAddr configures container address and routes if existed in IPAM result, and send GARP after that.
 func configureContainerAddr(netns ns.NetNS, contIntf *current.Interface, result *current.Result) error {
 	if err := netns.Do(func(containerNs ns.NetNS) error {
 		contVeth, err := net.InterfaceByName(contIntf.Name)
@@ -116,19 +116,19 @@ func configureContainerAddr(netns ns.NetNS, contIntf *current.Interface, result 
 func validateInterface(intf *current.Interface, inNetns bool) (*vethPair, netlink.Link, error) {
 	veth := &vethPair{}
 	if intf.Name == "" {
-		return veth, nil, fmt.Errorf("Interface name is missing")
+		return veth, nil, fmt.Errorf("interface name is missing")
 	}
 	link, err := netlink.LinkByName(intf.Name)
 	if err != nil {
-		return veth, link, fmt.Errorf("Failed to find interface with name %s", intf.Name)
+		return veth, link, fmt.Errorf("failed to find interface with name %s", intf.Name)
 	}
 	if inNetns {
 		if intf.Sandbox == "" {
-			return veth, link, fmt.Errorf("Interface %s is expected in netns", intf.Name)
+			return veth, link, fmt.Errorf("interface %s is expected in netns", intf.Name)
 		}
 	} else {
 		if intf.Sandbox != "" {
-			return veth, link, fmt.Errorf("Interface %s is expected not in netns", intf.Name)
+			return veth, link, fmt.Errorf("interface %s is expected not in netns", intf.Name)
 		}
 	}
 	return veth, link, nil
@@ -143,15 +143,15 @@ func validateContainerInterface(intf *current.Interface) (*vethPair, error) {
 	linkAddrName := link.Attrs().Name
 	_, isVeth := link.(*netlink.Veth)
 	if !isVeth {
-		return veth, fmt.Errorf("Container interface %s is not of type veth", linkAddrName)
+		return veth, fmt.Errorf("container interface %s is not of type veth", linkAddrName)
 	}
 	_, veth.peerIndex, err = ip.GetVethPeerIfindex(linkAddrName)
 	if err != nil {
-		return veth, fmt.Errorf("Unable to obtain veth peer index for veth %s", linkAddrName)
+		return veth, fmt.Errorf("unable to obtain veth peer index for veth %s", linkAddrName)
 	}
 	veth.ifIndex = link.Attrs().Index
 	if intf.Mac != link.Attrs().HardwareAddr.String() {
-		return veth, fmt.Errorf("Interface %s MAC %s doesn't match container MAC: %s",
+		return veth, fmt.Errorf("interface %s MAC %s doesn't match container MAC: %s",
 			intf.Name, intf.Mac, link.Attrs().HardwareAddr.String())
 	}
 	veth.name = linkAddrName
@@ -171,12 +171,12 @@ func validateContainerPeerInterface(hostIntf *current.Interface, contVeth *vethP
 	linkName := link.Attrs().Name
 	_, hostVeth.peerIndex, err = ip.GetVethPeerIfindex(linkName)
 	if err != nil {
-		return hostVeth, fmt.Errorf("Unable to obtain veth peer index for veth %s", linkName)
+		return hostVeth, fmt.Errorf("unable to obtain veth peer index for veth %s", linkName)
 	}
 
 	hostVeth.ifIndex = link.Attrs().Index
 	if (hostVeth.ifIndex != contVeth.peerIndex) || (hostVeth.peerIndex != contVeth.ifIndex) {
-		return hostVeth, fmt.Errorf("Host interface %s doesn't match container %s peer configuration",
+		return hostVeth, fmt.Errorf("host interface %s doesn't match container %s peer configuration",
 			linkName, contVeth.name)
 	}
 
@@ -184,20 +184,20 @@ func validateContainerPeerInterface(hostIntf *current.Interface, contVeth *vethP
 		if hostIntf.Mac != link.Attrs().HardwareAddr.String() {
 			klog.Errorf("Host interface mac %s doesn't match link address %s", hostIntf.Mac,
 				link.Attrs().HardwareAddr.String())
-			return hostVeth, fmt.Errorf("Interface %s mac doesn't match: %s not found", hostIntf.Name, hostIntf.Mac)
+			return hostVeth, fmt.Errorf("interface %s mac doesn't match: %s not found", hostIntf.Name, hostIntf.Mac)
 		}
 	}
 	hostVeth.name = linkName
 	return hostVeth, nil
 }
 
-func parseContainerIP(ips []*current.IPConfig) (string, error) {
+func parseContainerIP(ips []*current.IPConfig) (net.IP, error) {
 	for _, ipc := range ips {
 		if ipc.Version == "4" {
-			return ipc.Address.IP.String(), nil
+			return ipc.Address.IP, nil
 		}
 	}
-	return "", fmt.Errorf("Failed to find a valid IP address")
+	return nil, fmt.Errorf("failed to find a valid IP address")
 }
 
 func buildContainerConfig(containerID string, podName string, podNamespace string, containerIface *current.Interface, ips []*current.IPConfig) *agent.InterfaceConfig {
@@ -205,7 +205,9 @@ func buildContainerConfig(containerID string, podName string, podNamespace strin
 	if err != nil {
 		klog.Errorf("Failed to find container %s IP", containerID)
 	}
-	return agent.NewContainerInterface(containerID, podName, podNamespace, containerIface.Sandbox, containerIface.Mac, containerIP)
+	// containerIface.Mac should be a valid MAC string, otherwise it should throw error before
+	containerMAC, _ := net.ParseMAC(containerIface.Mac)
+	return agent.NewContainerInterface(containerID, podName, podNamespace, containerIface.Sandbox, containerMAC, containerIP)
 }
 
 func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ifaceStore agent.InterfaceStore, containerID string, k8sCNIArgs *k8sArgs, containerNetNS string, ifname string, result *current.Result) error {
@@ -250,7 +252,7 @@ func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ifaceStore agent.In
 	// Configure IP for container
 	if err = configureContainerAddr(netns, containerIface, result); err != nil {
 		klog.Errorf("Failed to configure IP address on container %s:%v", containerID, err)
-		return fmt.Errorf("Failed to configure container ip")
+		return fmt.Errorf("failed to configure container ip")
 	}
 	// containerConfig OFPort field is not filled after create OVS port, need to check and retrieve
 	// when used it when install openflow
@@ -338,7 +340,7 @@ func checkContainerInterface(netns ns.NetNS, containerNetns, containerID string,
 	if containerNetns != containerIface.Sandbox {
 		klog.Errorf("Sandbox in prevResult %s doesn't match configured netns: %s",
 			containerIface.Sandbox, containerNetns)
-		return nil, fmt.Errorf("Sandbox in prevResult %s doesn't match configured netns: %s",
+		return nil, fmt.Errorf("sandbox in prevResult %s doesn't match configured netns: %s",
 			containerIface.Sandbox, containerNetns)
 	}
 	// Check container interface configuration
@@ -383,22 +385,22 @@ func checkHostInterface(ifaceStore agent.InterfaceStore, hostIntf, containerIntf
 
 func validateOVSPort(ifaceStore agent.InterfaceStore, ovsPortName string, containerMAC string, containerID string, ips []*current.IPConfig) error {
 	if containerConfig, found := ifaceStore.GetInterface(containerID); found {
-		if containerConfig.MAC != containerMAC {
-			return fmt.Errorf("Failed to check container MAC %s on OVS port %s",
+		if containerConfig.MAC.String() != containerMAC {
+			return fmt.Errorf("failed to check container MAC %s on OVS port %s",
 				containerID, ovsPortName)
 		}
 
 		for _, ipc := range ips {
 			if ipc.Version == "4" {
-				if containerConfig.IP == ipc.Address.IP.String() {
+				if containerConfig.IP.Equal(ipc.Address.IP) {
 					return nil
 				}
 			}
 		}
-		return fmt.Errorf("Failed to find a valid IP equal to attached address")
+		return fmt.Errorf("failed to find a valid IP equal to attached address")
 	} else {
 		klog.Infof("Not found container %s config from local cache", containerID)
-		return fmt.Errorf("Not found OVS port %s", ovsPortName)
+		return fmt.Errorf("not found OVS port %s", ovsPortName)
 	}
 }
 
@@ -409,12 +411,12 @@ func parsePrevResult(conf *NetworkConfig) error {
 
 	resultBytes, err := json.Marshal(conf.RawPrevResult)
 	if err != nil {
-		return fmt.Errorf("Could not serialize prevResult: %v", err)
+		return fmt.Errorf("could not serialize prevResult: %v", err)
 	}
 	conf.RawPrevResult = nil
 	conf.PrevResult, err = version.NewResult(conf.CNIVersion, resultBytes)
 	if err != nil {
-		return fmt.Errorf("Could not parse prevResult: %v", err)
+		return fmt.Errorf("could not parse prevResult: %v", err)
 	}
 	return nil
 }

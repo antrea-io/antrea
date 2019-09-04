@@ -2,6 +2,7 @@ package agent
 
 import (
 	"k8s.io/klog"
+	"net"
 	"okn/pkg/ovs/ovsconfig"
 )
 
@@ -31,16 +32,16 @@ type OvsPortConfig struct {
 type InterfaceConfig struct {
 	ID           string
 	Type         InterfaceType
-	IP           string
-	MAC          string
+	IP           net.IP
+	MAC          net.HardwareAddr
 	PodName      string
 	PodNamespace string
 	NetNS        string
 	*OvsPortConfig
 }
 
-// Service interface to create local interfaces for container, host gateway, and tunnel port. Support
-// add/delete/get operations
+// InterfaceStore is a service interface to create local interfaces for container, host gateway, and tunnel port.
+// Support add/delete/get operations
 type InterfaceStore interface {
 	Initialize(ovsBridgeClient ovsconfig.OVSBridgeClient, gatewayPort string, tunnelPort string) error
 	AddInterface(key string, interfaceConfig *InterfaceConfig)
@@ -71,69 +72,83 @@ type interfaceCache struct {
 var ifaceCache *interfaceCache
 
 func (c *interfaceCache) Initialize(ovsBridgeClient ovsconfig.OVSBridgeClient, gatewayPort string, tunnelPort string) error {
-	if ovsPorts, err := ovsBridgeClient.GetPortList(); err != nil {
+	ovsPorts, err := ovsBridgeClient.GetPortList()
+	if err != nil {
 		klog.Errorf("Failed to list OVS ports: %v", err)
 		return err
-	} else {
-		for _, port := range ovsPorts {
-			ovsPort := &OvsPortConfig{IfaceName: port.Name, PortUUID: port.UUID, OFPort: port.OFPort}
-			var intf *InterfaceConfig
-			if port.Name == gatewayPort {
-				intf = &InterfaceConfig{Type: GatewayInterface, OvsPortConfig: ovsPort, ID: gatewayPort}
-			} else if port.Name == tunnelPort {
-				intf = &InterfaceConfig{Type: TunnelInterface, OvsPortConfig: ovsPort, ID: tunnelPort}
-			} else if port.ExternalIDs != nil {
-				if containerID, found := port.ExternalIDs[OVSExternalIDContainerID]; found {
-					intf = &InterfaceConfig{Type: ContainerInterface, OvsPortConfig: ovsPort, ID: containerID,
-						IP: port.ExternalIDs[OVSExternalIDIP], MAC: port.ExternalIDs[OVSExternalIDMAC]}
+	}
+
+	for _, port := range ovsPorts {
+		ovsPort := &OvsPortConfig{IfaceName: port.Name, PortUUID: port.UUID, OFPort: port.OFPort}
+		var intf *InterfaceConfig
+		switch {
+		case port.Name == gatewayPort:
+			intf = &InterfaceConfig{Type: GatewayInterface, OvsPortConfig: ovsPort, ID: gatewayPort}
+		case port.Name == tunnelPort:
+			intf = &InterfaceConfig{Type: TunnelInterface, OvsPortConfig: ovsPort, ID: tunnelPort}
+		default:
+			if port.ExternalIDs == nil {
+				klog.Infof("OVS port %s has no external_ids, continue to next", port.Name)
+				continue
+			}
+
+			if containerID, found := port.ExternalIDs[OVSExternalIDContainerID]; found {
+				containerIP := net.ParseIP(port.ExternalIDs[OVSExternalIDIP])
+				containerMAC, err := net.ParseMAC(port.ExternalIDs[OVSExternalIDMAC])
+				if err != nil {
+					klog.Errorf("Failed to parse MAC address from OVS external config %s: %v",
+						port.ExternalIDs[OVSExternalIDMAC], err)
+					return err
 				}
+				intf = &InterfaceConfig{Type: ContainerInterface, OvsPortConfig: ovsPort, ID: containerID,
+					IP: containerIP, MAC: containerMAC}
 			}
-			if intf != nil {
-				c.cache[intf.ID] = intf
-			}
+		}
+		if intf != nil {
+			c.cache[intf.ID] = intf
 		}
 	}
 	return nil
 }
 
-// Create container interface configuration
-func NewContainerInterface(containerID string, podName string, podNamespace string, containerNetNS string, mac string, ip string) *InterfaceConfig {
+// NewContainerInterface creates container interface configuration
+func NewContainerInterface(containerID string, podName string, podNamespace string, containerNetNS string, mac net.HardwareAddr, ip net.IP) *InterfaceConfig {
 	containerConfig := &InterfaceConfig{ID: containerID, PodName: podName, PodNamespace: podNamespace, NetNS: containerNetNS, MAC: mac, IP: ip, Type: ContainerInterface}
 	return containerConfig
 }
 
-// Create host gateway interface configuration
+// NewGatewayInterface creates host gateway interface configuration
 func NewGatewayInterface(gatewayName string) *InterfaceConfig {
 	gatewayConfig := &InterfaceConfig{ID: gatewayName, Type: GatewayInterface}
 	return gatewayConfig
 }
 
-// Create tunnel port interface configuration
+// NewTunnelInterface creates tunnel port interface configuration
 func NewTunnelInterface(tunnelName string) *InterfaceConfig {
-	tunnelConfig := &InterfaceConfig{ID: TunPortName, Type: TunnelInterface}
+	tunnelConfig := &InterfaceConfig{ID: tunnelName, Type: TunnelInterface}
 	return tunnelConfig
 }
 
-// Parse OVS port external_ids from local cache, it is used to check container configuration
+// BuildOVSPortExternalIDs parses OVS port external_ids from local cache, it is used to check container configuration
 func BuildOVSPortExternalIDs(containerConfig *InterfaceConfig) map[string]interface{} {
 	externalIDs := make(map[string]interface{})
-	externalIDs[OVSExternalIDMAC] = containerConfig.MAC
+	externalIDs[OVSExternalIDMAC] = containerConfig.MAC.String()
 	externalIDs[OVSExternalIDContainerID] = containerConfig.ID
-	externalIDs[OVSExternalIDIP] = containerConfig.IP
+	externalIDs[OVSExternalIDIP] = containerConfig.IP.String()
 	return externalIDs
 }
 
-// Add interfaceConfig into localCache
+// AddInterface adds interfaceConfig into localCache
 func (c *interfaceCache) AddInterface(key string, interfaceConfig *InterfaceConfig) {
 	c.cache[key] = interfaceConfig
 }
 
-// Delete interface from local cache
+// DeleteInterface deletes interface from local cache
 func (c *interfaceCache) DeleteInterface(ifaceID string) {
 	delete(c.cache, ifaceID)
 }
 
-// Retrieve interface from local cache
+// GetInterface retrieves interface from local cache
 func (c *interfaceCache) GetInterface(ifaceID string) (*InterfaceConfig, bool) {
 	iface, found := c.cache[ifaceID]
 	return iface, found

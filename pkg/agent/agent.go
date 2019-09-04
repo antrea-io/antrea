@@ -34,7 +34,7 @@ type NodeConfig struct {
 
 type Gateway struct {
 	IP   net.IP
-	MAC  string
+	MAC  net.HardwareAddr
 	Name string
 }
 
@@ -190,10 +190,8 @@ func (ai *AgentInitializer) initOpenFlowPipeline() error {
 	// Setup flow entries for gateway interface, including classifier, skip spoof guard check,
 	// L3 forwarding and L2 forwarding
 	gateway, _ := ai.ifaceStore.GetInterface(ai.hostGateway)
-	gatewayIP := net.ParseIP(gateway.IP)
-	gatewayMAC, _ := net.ParseMAC(gateway.MAC)
 	gatewayOFPort := uint32(gateway.OFPort)
-	err = ai.ofClient.InstallGatewayFlows(gatewayIP, gatewayMAC, gatewayOFPort)
+	err = ai.ofClient.InstallGatewayFlows(gateway.IP, gateway.MAC, gatewayOFPort)
 	if err != nil {
 		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
 		return err
@@ -265,9 +263,9 @@ func (ai *AgentInitializer) setupGatewayInterface() error {
 	subnetID := localSubnet.IP.Mask(localSubnet.Mask)
 	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
 	gwAddr := &netlink.Addr{IPNet: gwIP, Label: ""}
-	gwMAC := link.Attrs().HardwareAddr.String()
+	gwMAC := link.Attrs().HardwareAddr
 	ai.nodeConfig.Gateway = &Gateway{Name: ai.hostGateway, IP: gwIP.IP, MAC: gwMAC}
-	gatewayIface.IP = gwIP.IP.String()
+	gatewayIface.IP = gwIP.IP
 	gatewayIface.MAC = gwMAC
 
 	// Check IP address configuration on existing interface, return if already has target address

@@ -576,7 +576,8 @@ func TestOknServerFunc(t *testing.T) {
 func init() {
 	nodeName := "node1"
 	gwIP := net.ParseIP("192.168.1.1")
-	nodeGateway := &agent.Gateway{IP: gwIP, MAC: "11:11:11:11:11:11", Name: "gw"}
+	gwMAC, _ := net.ParseMAC("11:11:11:11:11:11")
+	nodeGateway := &agent.Gateway{IP: gwIP, MAC: gwMAC, Name: "gw"}
 	_, nodePodeCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 
 	testNodeConfig = &agent.NodeConfig{"br0", nodeName, nodePodeCIDR, nodeGateway}
