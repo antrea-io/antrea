@@ -311,7 +311,7 @@ func (c *client) gatewayIPSpoofGuardFlow(gatewayOFPort uint32) openflow.Flow {
 }
 
 // serviceCIDRDNATFlow adds flows to match dst IP in service CIDR and output to host gateway interface directly.
-func (c *client) serviceCIDRDNATFlow(serviceCIDR net.IPNet, gatewayOFPort uint32) openflow.Flow {
+func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayOFPort uint32) openflow.Flow {
 	return c.pipeline[dnatTable].BuildFlow().MatchProtocol(ipProtocol).Priority(priorityNormal).
 		MatchField("nw_dst", serviceCIDR.String()).
 		Action().Output(int(gatewayOFPort)).

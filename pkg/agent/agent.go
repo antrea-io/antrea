@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
+	"okn/pkg/agent/openflow"
 	"okn/pkg/iptables"
 	"okn/pkg/ovs/ovsconfig"
 )
@@ -46,6 +47,8 @@ type AgentInitializer struct {
 	nodeConfig      *NodeConfig
 	ovsdbConnection *ovsdb.OVSDB
 	ovsBridgeClient ovsconfig.OVSBridgeClient
+	serviceCIDR     *net.IPNet
+	ofClient        openflow.Client
 }
 
 func disableICMPSendRedirects(intfName string) error {
@@ -60,15 +63,20 @@ func disableICMPSendRedirects(intfName string) error {
 
 func NewInitializer(
 	ovsBridge, hostGateway, tunnelType string,
+	serviceCIDR string,
 	client clientset.Interface,
 	ifaceStore InterfaceStore,
 ) *AgentInitializer {
+	// Parse service CIDR configuration. config.ServiceCIDR is checked in option.validate, so
+	// it should be a valid configuration here.
+	_, serviceCIDRNet, _ := net.ParseCIDR(serviceCIDR)
 	return &AgentInitializer{
 		ovsBridge:   ovsBridge,
 		hostGateway: hostGateway,
 		tunnelType:  tunnelType,
 		client:      client,
 		ifaceStore:  ifaceStore,
+		serviceCIDR: serviceCIDRNet,
 	}
 }
 
@@ -90,6 +98,11 @@ func (ai *AgentInitializer) GetNodeConfig() *NodeConfig {
 // Return GetOVSBridgeClient.
 func (ai *AgentInitializer) GetOVSBridgeClient() ovsconfig.OVSBridgeClient {
 	return ai.ovsBridgeClient
+}
+
+// Return openflow client
+func (ai *AgentInitializer) GetOFClient() openflow.Client {
+	return ai.ofClient
 }
 
 // Setup OVS bridge and create host gateway interface and tunnel port
@@ -154,11 +167,58 @@ func (ai *AgentInitializer) SetupNodeNetwork() error {
 	}
 
 	ai.ovsdbConnection = ovsdbConnection
+
+	// Install Openflow entries on OVS bridge
+	if err := ai.initOpenFlowPipeline(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Setup necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
+func (ai *AgentInitializer) initOpenFlowPipeline() error {
+	var err error
+
+	// Openflow pipeline is built while creating openflow client
+	ai.ofClient, err = openflow.NewClient(ai.ovsBridge)
+	if err != nil {
+		klog.Errorf("Failed to new openflow client: %v", err)
+		return err
+	}
+
+	// Setup flow entries for gateway interface, including classifier, skip spoof guard check,
+	// L3 forwarding and L2 forwarding
+	gateway, _ := ai.ifaceStore.GetInterface(ai.hostGateway)
+	gatewayIP := net.ParseIP(gateway.IP)
+	gatewayMAC, _ := net.ParseMAC(gateway.MAC)
+	gatewayOFPort := uint32(gateway.OFPort)
+	err = ai.ofClient.InstallGatewayFlows(gatewayIP, gatewayMAC, gatewayOFPort)
+	if err != nil {
+		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
+		return err
+	}
+
+	// Setup flow entries for tunnel port Interface, including classifier and L2 Forwarding(match
+	// vMAC as dst)
+	if err := ai.ofClient.InstallTunnelFlows(tunOFPort); err != nil {
+		klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
+		return err
+	}
+
+	// Setup flow entries to enable service connectivity. Upstream kube-proxy is leveraged to
+	// provide service feature, and this flow entry is to ensure traffic sent from pod to service
+	// address could be forwarded to host gateway interface correctly. Otherwise packets might be
+	// dropped by egress rules before they are DNATed to backend Pods.
+	if err := ai.ofClient.InstallServiceFlows(ai.serviceCIDR.String(), ai.serviceCIDR, gatewayOFPort); err != nil {
+		klog.Errorf("Failed to setup openflow entries for serviceCIDR %s: %v", ai.serviceCIDR, err)
+		return err
+	}
 	return nil
 }
 
 // Create host gateway interface which is an internal port on OVS. The ofport for host gateway interface
-// is predefined, so invoke CreateInternalPort with a specific ofportRequest
+// is predefined, so invoke CreateInternalPort with a specific ofport_request
 func (ai *AgentInitializer) setupGatewayInterface() error {
 	// Create host Gateway port if not existent
 	gatewayIface, existed := ai.ifaceStore.GetInterface(ai.hostGateway)
@@ -261,7 +321,7 @@ func (ai *AgentInitializer) setupTunnelInterface(tunnelPortName string) error {
 	return nil
 }
 
-// Retrieve node's subnet CDIR from node.spec.PodCIDR, which is used for IPAM and setup
+// Retrieve node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
 // host Gateway interface.
 func (ai *AgentInitializer) initNodeLocalConfig(client clientset.Interface) error {
 	// Todo: change other valid functions to find node except for hostname

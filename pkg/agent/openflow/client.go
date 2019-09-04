@@ -46,7 +46,7 @@ type Client interface {
 
 	// InstallServiceFlows should be invoked when a connection to a kubernetes service is going to be connected, all
 	// arguments should be filled. The serviceName is used to identify the added flows.
-	InstallServiceFlows(serviceName string, serviceNet net.IPNet, gatewayOFPort uint32) error
+	InstallServiceFlows(serviceName string, serviceNet *net.IPNet, gatewayOFPort uint32) error
 
 	// UninstallServiceFlows removes the connection to the service specified with the serviceName. UninstallServiceFlows
 	// will do nothing if no connection to the service was established.
@@ -121,7 +121,7 @@ func (c *client) UninstallPodFlows(containerID string) error {
 	return nil
 }
 
-func (c *client) InstallServiceFlows(serviceName string, serviceNet net.IPNet, gatewayOFPort uint32) error {
+func (c *client) InstallServiceFlows(serviceName string, serviceNet *net.IPNet, gatewayOFPort uint32) error {
 	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort)
 	if err := flow.Add(); err != nil {
 		return err
