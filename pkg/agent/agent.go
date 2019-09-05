@@ -183,7 +183,7 @@ func (ai *AgentInitializer) initOpenFlowPipeline() error {
 	// Openflow pipeline is built while creating openflow client
 	ai.ofClient, err = openflow.NewClient(ai.ovsBridge)
 	if err != nil {
-		klog.Errorf("Failed to new openflow client: %v", err)
+		klog.Errorf("Failed to create openflow client: %v", err)
 		return err
 	}
 
