@@ -349,7 +349,7 @@ func TestRemoveInterface(t *testing.T) {
 	defer controller.Finish()
 	ifaceStore := agent.NewInterfaceStore()
 	mockOVSdbClient := mocks.NewMockOVSdbClient(controller)
-	mockOFClient := mocks.NewMockClient(controller)
+	mockOFClient := mocks.NewMockOFClient(controller)
 	cniVersion := "0.4.0"
 	netcfg := generateNetworkConfiguration("testCfg", cniVersion)
 	cniConfig := &CNIConfig{NetworkConfig: netcfg, CniCmdArgsMessage: &cnimsg.CniCmdArgsMessage{}}
