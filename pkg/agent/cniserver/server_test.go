@@ -271,7 +271,7 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 	} else {
 		found := false
 		for _, route := range result.Routes {
-			if route.Dst.String() == "0.0.0.0/0" && route.GW.String() == testNodeConfig.Gateway.IP.String() {
+			if route.Dst.String() == "0.0.0.0/0" && route.GW.Equal(testNodeConfig.Gateway.IP) {
 				found = true
 				break
 			}
@@ -289,10 +289,11 @@ func TestOVSOperations(t *testing.T) {
 	ifaceStore := agent.NewInterfaceStore()
 	cniVersion := "0.3.1"
 	containerID := uuid.New().String()
-	containerMAC := "11:22:33:44:55:66"
+	containerMACStr := "11:22:33:44:55:66"
+	containerMAC, _ := net.ParseMAC(containerMACStr)
 	containerIp := []string{"10.1.2.100/24,10.1.2.1,4"}
 	result := test.GenerateIPAMResult(cniVersion, containerIp, routes, dns)
-	containerIface := &current.Interface{Name: ifname, Sandbox: netns, Mac: containerMAC}
+	containerIface := &current.Interface{Name: ifname, Sandbox: netns, Mac: containerMACStr}
 	hostIfaceName := GenerateContainerPeerName(testPodName, testPodNamespace)
 	hostIface := &current.Interface{Name: hostIfaceName}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
@@ -311,7 +312,7 @@ func TestOVSOperations(t *testing.T) {
 			t.Errorf("Failed to cache OVS port UUID")
 		}
 	}
-	err = validateOVSPort(ifaceStore, hostIfaceName, containerMAC, containerID, result.IPs)
+	err = validateOVSPort(ifaceStore, hostIfaceName, containerMACStr, containerID, result.IPs)
 	if err != nil {
 		t.Errorf("Failed to validate OVS port configuration")
 	}
@@ -319,8 +320,9 @@ func TestOVSOperations(t *testing.T) {
 	// Test failed add OVS port and then remove local cache case
 	failedContainerID := uuid.New().String()
 	pod2 := "test-2"
+	containerIP := net.ParseIP("10.1.2.101")
 	failedOVSPortName := GenerateContainerPeerName(pod2, testPodNamespace)
-	containerConfig2 := agent.NewContainerInterface(failedContainerID, testPodName, testPodNamespace, "", containerMAC, "10.1.2.101")
+	containerConfig2 := agent.NewContainerInterface(failedContainerID, testPodName, testPodNamespace, "", containerMAC, containerIP)
 	ifaceStore.AddInterface(failedContainerID, containerConfig2)
 	mockOVSdbClient.EXPECT().CreatePort(failedOVSPortName, failedOVSPortName, mock.Any()).Return(
 		"", test.NewDummyOVSConfigError("Error while create OVS port", true, true))
@@ -335,8 +337,8 @@ func TestOVSOperations(t *testing.T) {
 	ovsExternalIDs := make(map[string]string)
 	ovsExternalIDs[OVSExternalIDContainerID] = containerID
 	ovsExternalIDs[OVSExternalIDIP] = "10.1.2.100"
-	ovsExternalIDs[OVSExternalIDMAC] = containerMAC
-	err = validateOVSPort(ifaceStore, hostIfaceName, containerMAC, containerID, result.IPs)
+	ovsExternalIDs[OVSExternalIDMAC] = containerMACStr
+	err = validateOVSPort(ifaceStore, hostIfaceName, containerMACStr, containerID, result.IPs)
 	if err != nil {
 		t.Errorf("Failed to compare success result from OVS service")
 	}
@@ -347,6 +349,7 @@ func TestRemoveInterface(t *testing.T) {
 	defer controller.Finish()
 	ifaceStore := agent.NewInterfaceStore()
 	mockOVSdbClient := mocks.NewMockOVSdbClient(controller)
+	mockOFClient := mocks.NewMockClient(controller)
 	cniVersion := "0.4.0"
 	netcfg := generateNetworkConfiguration("testCfg", cniVersion)
 	cniConfig := &CNIConfig{NetworkConfig: netcfg, CniCmdArgsMessage: &cnimsg.CniCmdArgsMessage{}}
@@ -355,12 +358,15 @@ func TestRemoveInterface(t *testing.T) {
 	hostIfaceName := GenerateContainerPeerName(testPodName, testPodNamespace)
 	cniConfig.ContainerId = containerID
 	cniConfig.Netns = ""
+	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
+	containerIP := net.ParseIP("1.1.1.1")
 	fakePortUUID := uuid.New().String()
-	containerConfig := agent.NewContainerInterface(containerID, testPodName, testPodNamespace, "", "aa:bb:cc:dd:ee:ff", "1.1.1.1")
+	containerConfig := agent.NewContainerInterface(containerID, testPodName, testPodNamespace, "", containerMAC, containerIP)
 	containerConfig.OvsPortConfig = &agent.OvsPortConfig{hostIfaceName, fakePortUUID, 0}
+	mockOFClient.EXPECT().UninstallPodFlows(containerID).Return(nil)
 	mockOVSdbClient.EXPECT().DeletePort(fakePortUUID).Return(nil)
 	ifaceStore.AddInterface(containerID, containerConfig)
-	err := removeInterfaces(mockOVSdbClient, ifaceStore, containerID, cniConfig.Netns, cniConfig.Ifname)
+	err := removeInterfaces(mockOVSdbClient, mockOFClient, ifaceStore, containerID, cniConfig.Netns, cniConfig.Ifname)
 	if err != nil {
 		t.Errorf("Failed to remove interfaces")
 	} else {
@@ -375,15 +381,35 @@ func TestRemoveInterface(t *testing.T) {
 	hostIfaceName2 := GenerateContainerPeerName(pod2, testPodNamespace)
 	cniConfig.ContainerId = containerID2
 	fakePortUUID2 := uuid.New().String()
-	containerConfig2 := agent.NewContainerInterface(containerID2, testPodName, testPodNamespace, "", "aa:bb:cc:dd:ee:ff", "1.1.1.1")
+	containerConfig2 := agent.NewContainerInterface(containerID2, testPodName, testPodNamespace, "", containerMAC, containerIP)
 	containerConfig2.OvsPortConfig = &agent.OvsPortConfig{hostIfaceName2, fakePortUUID2, 0}
 	ifaceStore.AddInterface(containerID2, containerConfig2)
 	mockOVSdbClient.EXPECT().DeletePort(fakePortUUID2).Return(test.NewDummyOVSConfigError("Failed to delete", true, true))
-	err = removeInterfaces(mockOVSdbClient, ifaceStore, containerID2, "", cniConfig.Ifname)
+	mockOFClient.EXPECT().UninstallPodFlows(containerID2).Return(nil)
+	err = removeInterfaces(mockOVSdbClient, mockOFClient, ifaceStore, containerID2, "", cniConfig.Ifname)
 	if err == nil {
 		t.Errorf("Failed delete port on OVS")
 	} else {
 		_, found := ifaceStore.GetInterface(containerID2)
+		if !found {
+			t.Errorf("Failed to return after OVS delete failure")
+		}
+	}
+
+	containerID3 := uuid.New().String()
+	pod3 := "test3"
+	hostIfaceName3 := GenerateContainerPeerName(pod3, testPodNamespace)
+	cniConfig.ContainerId = containerID3
+	fakePortUUID3 := uuid.New().String()
+	containerConfig3 := agent.NewContainerInterface(containerID3, testPodName, testPodNamespace, "", containerMAC, containerIP)
+	containerConfig3.OvsPortConfig = &agent.OvsPortConfig{hostIfaceName3, fakePortUUID3, 0}
+	ifaceStore.AddInterface(containerID3, containerConfig3)
+	mockOFClient.EXPECT().UninstallPodFlows(containerID3).Return(fmt.Errorf("Failed to delete openflow entry"))
+	err = removeInterfaces(mockOVSdbClient, mockOFClient, ifaceStore, containerID3, "", cniConfig.Ifname)
+	if err == nil {
+		t.Errorf("Failed delete openflow entries on OVS")
+	} else {
+		_, found := ifaceStore.GetInterface(containerID3)
 		if !found {
 			t.Errorf("Failed to return after OVS delete failure")
 		}
@@ -457,6 +483,7 @@ func init() {
 	nodeName := "node1"
 	gwIP := net.ParseIP("192.168.1.1")
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
-	gateway := &agent.Gateway{Name: "gw", IP: gwIP, MAC: "00:00:00:00:00:01"}
+	gwMAC, _ := net.ParseMAC("00:00:00:00:00:01")
+	gateway := &agent.Gateway{Name: "gw", IP: gwIP, MAC: gwMAC}
 	testNodeConfig = &agent.NodeConfig{testBr, nodeName, nodePodCIDR, gateway}
 }

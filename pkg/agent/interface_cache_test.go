@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"net"
 	"testing"
 
 	mock "github.com/golang/mock/gomock"
@@ -50,7 +51,7 @@ func TestInitCache(t *testing.T) {
 	container1, found1 := cache.GetInterface(uuid1)
 	if !found1 {
 		t.Errorf("Failed to load OVS port into local cache")
-	} else if container1.OFPort != 1 || container1.IP != p1IP || container1.MAC != p1Mac || container1.IfaceName != "p1" {
+	} else if container1.OFPort != 1 || container1.IP.String() != p1IP || container1.MAC.String() != p1Mac || container1.IfaceName != "p1" {
 		t.Errorf("Failed to load OVS port configuration into local cache")
 	}
 	_, found2 := cache.GetInterface(uuid2)
@@ -61,15 +62,16 @@ func TestInitCache(t *testing.T) {
 
 func TestParseContainerAttachInfo(t *testing.T) {
 	containerID := uuid.New().String()
-	containerMAC := "aa:bb:cc:dd:ee:ff"
-	containerConfig := NewContainerInterface(containerID, "test-1", "t1", "", containerMAC, "10.1.2.100")
+	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
+	containerIP := net.ParseIP("10.1.2.100")
+	containerConfig := NewContainerInterface(containerID, "test-1", "t1", "", containerMAC, containerIP)
 	externalIds := BuildOVSPortExternalIDs(containerConfig)
 	parsedIP, existed := externalIds[OVSExternalIDIP]
 	if !existed || parsedIP != "10.1.2.100" {
 		t.Errorf("Failed to parse container configuration")
 	}
 	parsedMac, existed := externalIds[OVSExternalIDMAC]
-	if !existed || parsedMac != containerMAC {
+	if !existed || parsedMac != containerMAC.String() {
 		t.Errorf("Failed to parse container configuration")
 	}
 	parsedID, existed := externalIds[OVSExternalIDContainerID]
