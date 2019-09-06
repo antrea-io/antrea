@@ -13,29 +13,38 @@ type commandFlow struct {
 	actions  []string
 }
 
-func (e *commandFlow) format(withActions bool) string {
-	repr := fmt.Sprintf("table=%d,priority=%d", e.table, e.priority)
-	if len(e.matchers) > 0 {
-		repr += fmt.Sprintf(",%s", strings.Join(e.matchers, ","))
+func (f *commandFlow) format(withActions bool) string {
+	repr := fmt.Sprintf("table=%d,priority=%d", f.table, f.priority)
+	if len(f.matchers) > 0 {
+		repr += fmt.Sprintf(",%s", strings.Join(f.matchers, ","))
 	}
 	if withActions {
-		repr += fmt.Sprintf(",actions=%s", strings.Join(e.actions, ","))
+		repr += fmt.Sprintf(",actions=%s", strings.Join(f.actions, ","))
 	}
 	return repr
 }
 
-func (e *commandFlow) Add() error {
-	return executor("ovs-ofctl", "add-flow", e.bridge, "-O"+Version13, e.format(true)).Run()
+func (f *commandFlow) Add() error {
+	if output, err := executor("ovs-ofctl", "add-flow", f.bridge, "-O"+Version13, f.format(true)).CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to add flow %q: %v (%q)", f.format(true), err, output)
+	}
+	return nil
 }
 
-func (e *commandFlow) Modify() error {
-	return executor("ovs-ofctl", "mod-flows", e.bridge, "-O"+Version13, e.format(true)).Run()
+func (f *commandFlow) Modify() error {
+	if output, err := executor("ovs-ofctl", "mod-flows", f.bridge, "-O"+Version13, f.format(true)).CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to modify flow %q: %v (%q)", f.format(true), err, output)
+	}
+	return nil
 }
 
-func (e *commandFlow) Delete() error {
-	return executor("ovs-ofctl", "del-flows", e.bridge, "-O"+Version13, e.format(false)).Run()
+func (f *commandFlow) Delete() error {
+	if output, err := executor("ovs-ofctl", "del-flows", f.bridge, "-O"+Version13, f.format(false)).CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to delete flow %q: %v (%q)", f.format(true), err, output)
+	}
+	return nil
 }
 
-func (e *commandFlow) String() string {
-	return e.format(true)
+func (f *commandFlow) String() string {
+	return f.format(true)
 }

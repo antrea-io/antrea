@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"net"
 
-	"k8s.io/klog"
-
 	"okn/pkg/ovs/openflow"
 )
 
@@ -80,8 +78,8 @@ type client struct {
 	nodeFlowCache, podFlowCache, serviceCache map[string][]openflow.Flow // cache for correspond deletions
 }
 
-// installDefaultFlows sets up the default flow of each table.
-func (c *client) installDefaultFlows() error {
+// defaultFlows generates the default flows of all tables.
+func (c *client) defaultFlows() (flows []openflow.Flow) {
 	for _, table := range c.pipeline {
 		flowBuilder := table.BuildFlow().Priority(priorityMiss).MatchProtocol(ipProtocol)
 		switch table.MissAction {
@@ -94,16 +92,12 @@ func (c *client) installDefaultFlows() error {
 		default:
 			flowBuilder = flowBuilder.Action().Drop()
 		}
-		flow := flowBuilder.Done()
-		if err := flow.Add(); err != nil {
-			klog.Errorf("Failed to add flow <%s>, error: %s", flow, err)
-			return err
-		}
+		flows = append(flows, flowBuilder.Done())
 	}
-	return nil
+	return flows
 }
 
-// tunnelClassifierFlow adds the flow to mark traffic comes from the tunnelOFPort.
+// tunnelClassifierFlow generates the flow to mark traffic comes from the tunnelOFPort.
 func (c *client) tunnelClassifierFlow(tunnelOFPort uint32) openflow.Flow {
 	return c.pipeline[classifierTable].BuildFlow().Priority(priorityNormal).
 		MatchField(inPortField, fmt.Sprint(tunnelOFPort)).
@@ -112,7 +106,7 @@ func (c *client) tunnelClassifierFlow(tunnelOFPort uint32) openflow.Flow {
 		Done()
 }
 
-// gatewayClassifierFlow adds the flow to mark traffic comes from the gatewayOFPort.
+// gatewayClassifierFlow generates the flow to mark traffic comes from the gatewayOFPort.
 func (c *client) gatewayClassifierFlow(gatewayOFPort uint32) openflow.Flow {
 	classifierTable := c.pipeline[classifierTable]
 	return classifierTable.BuildFlow().Priority(priorityNormal).
@@ -122,7 +116,7 @@ func (c *client) gatewayClassifierFlow(gatewayOFPort uint32) openflow.Flow {
 		Done()
 }
 
-// podClassifierFlow adds the flow to mark traffic comes from the podOFPort.
+// podClassifierFlow generates the flow to mark traffic comes from the podOFPort.
 func (c *client) podClassifierFlow(podOFPort uint32) openflow.Flow {
 	classifierTable := c.pipeline[classifierTable]
 	return classifierTable.BuildFlow().Priority(priorityNormal-10).
@@ -132,7 +126,7 @@ func (c *client) podClassifierFlow(podOFPort uint32) openflow.Flow {
 		Done()
 }
 
-// connectionTrackFlows adds flows that redirect traffic to ct_zone and handle traffic according to ct_state:
+// connectionTrackFlows generates flows that redirect traffic to ct_zone and handle traffic according to ct_state:
 // 1) commit new connections to ct that sent from non-gateway.
 // 2) Add ct_mark on traffic replied from the host gateway.
 // 3) Cache src MAC if traffic comes from the host gateway and rewrite the dst MAC on traffic replied from Pod to the
@@ -191,7 +185,7 @@ func (c *client) connectionTrackFlows() (flows []openflow.Flow) {
 	return flows
 }
 
-// l2ForwardCalcFlow sets the flow that matches dst MAC and loads ofPort to reg.
+// l2ForwardCalcFlow generates the flow that matches dst MAC and loads ofPort to reg.
 func (c *client) l2ForwardCalcFlow(dstMAC string, ofPort uint32) openflow.Flow {
 	l2FwdCalcTable := c.pipeline[l2ForwardingCalcTable]
 	return l2FwdCalcTable.BuildFlow().Priority(priorityNormal).
@@ -202,7 +196,7 @@ func (c *client) l2ForwardCalcFlow(dstMAC string, ofPort uint32) openflow.Flow {
 		Done()
 }
 
-// l2ForwardOutputFlow sets the flow that outputs packets to OVS port after L2 forwarding calculation.
+// l2ForwardOutputFlow generates the flow that outputs packets to OVS port after L2 forwarding calculation.
 func (c *client) l2ForwardOutputFlow() openflow.Flow {
 	return c.pipeline[l2ForwardingOutTable].BuildFlow().
 		Priority(priorityNormal).
@@ -212,7 +206,7 @@ func (c *client) l2ForwardOutputFlow() openflow.Flow {
 		Done()
 }
 
-// l3FlowsToPod adds the flow to rewrite MAC if the packet is received from tunnel port and destined for local Pods.
+// l3FlowsToPod generates the flow to rewrite MAC if the packet is received from tunnel port and destined for local Pods.
 func (c *client) l3FlowsToPod(localGatewayMAC string, podInterfaceIP string, podInterfaceMAC string) openflow.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	// Rewrite src MAC to local gateway MAC, and rewrite dst MAC to pod MAC
@@ -226,7 +220,7 @@ func (c *client) l3FlowsToPod(localGatewayMAC string, podInterfaceIP string, pod
 		Done()
 }
 
-// l3ToGatewayFlow adds flow that rewrites MAC of the packet received from tunnel port and destined to local gateway.
+// l3ToGatewayFlow generates flow that rewrites MAC of the packet received from tunnel port and destined to local gateway.
 func (c *client) l3ToGatewayFlow(localGatewayIP string, localGatewayMAC string) openflow.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	return l3FwdTable.BuildFlow().MatchProtocol(ipProtocol).Priority(priorityNormal).
@@ -236,7 +230,7 @@ func (c *client) l3ToGatewayFlow(localGatewayIP string, localGatewayMAC string) 
 		Done()
 }
 
-// l3FwdFlowToRemote adds the L3 forward flow on source node to support traffic to remote pods/gateway.
+// l3FwdFlowToRemote generates the L3 forward flow on source node to support traffic to remote pods/gateway.
 func (c *client) l3FwdFlowToRemote(localGatewayMAC, peerSubnet, peerTunnel string) openflow.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	// Rewrite src MAC to local gateway MAC and rewrite dst MAC to virtual MAC
@@ -250,7 +244,7 @@ func (c *client) l3FwdFlowToRemote(localGatewayMAC, peerSubnet, peerTunnel strin
 		Done()
 }
 
-// arpResponderFlow adds the ARP responder flow entry that replies request comes from local gateway for peer
+// arpResponderFlow generates the ARP responder flow entry that replies request comes from local gateway for peer
 // gateway MAC.
 func (c *client) arpResponderFlow(peerGatewayIP string) openflow.Flow {
 	return c.pipeline[arpResponderTable].BuildFlow().
@@ -268,7 +262,7 @@ func (c *client) arpResponderFlow(peerGatewayIP string) openflow.Flow {
 		Done()
 }
 
-// podIPSpoofGuardFlow adds the flow to check IP traffic sent out from local pod. Traffic from host gateway interface
+// podIPSpoofGuardFlow generates the flow to check IP traffic sent out from local pod. Traffic from host gateway interface
 // will not be checked, since it might be pod to service traffic or host namespace traffic.
 func (c *client) podIPSpoofGuardFlow(ifIP string, ifMAC string, ifOfPort uint32) openflow.Flow {
 	ipPipeline := c.pipeline
@@ -281,7 +275,7 @@ func (c *client) podIPSpoofGuardFlow(ifIP string, ifMAC string, ifOfPort uint32)
 		Done()
 }
 
-// gatewayARPSpoofGuardFlow adds the flow to skip ARP UP check on packets sent out from the local gateway interface.
+// gatewayARPSpoofGuardFlow generates the flow to skip ARP UP check on packets sent out from the local gateway interface.
 func (c *client) gatewayARPSpoofGuardFlow(gatewayOFPort uint32) openflow.Flow {
 	return c.pipeline[spoofGuardTable].BuildFlow().MatchProtocol(arpProtocol).Priority(priorityNormal).
 		MatchField("in_port", fmt.Sprint(gatewayOFPort)).
@@ -289,7 +283,7 @@ func (c *client) gatewayARPSpoofGuardFlow(gatewayOFPort uint32) openflow.Flow {
 		Done()
 }
 
-// arpSpoofGuardFlow adds the flow to check ARP traffic sent out from local pods interfaces.
+// arpSpoofGuardFlow generates the flow to check ARP traffic sent out from local pods interfaces.
 func (c *client) arpSpoofGuardFlow(ifIP string, ifMAC string, ifOFPort uint32) openflow.Flow {
 	return c.pipeline[spoofGuardTable].BuildFlow().MatchProtocol(arpProtocol).Priority(priorityNormal).
 		MatchField("in_port", fmt.Sprint(ifOFPort)).
@@ -299,7 +293,7 @@ func (c *client) arpSpoofGuardFlow(ifIP string, ifMAC string, ifOFPort uint32) o
 		Done()
 }
 
-// gatewayIPSpoofGuardFlow adds the flow to skip spoof guard checking for traffic sent from gateway interface.
+// gatewayIPSpoofGuardFlow generates the flow to skip spoof guard checking for traffic sent from gateway interface.
 func (c *client) gatewayIPSpoofGuardFlow(gatewayOFPort uint32) openflow.Flow {
 	ipPipeline := c.pipeline
 	ipSpoofGuardTable := ipPipeline[spoofGuardTable]
@@ -310,7 +304,7 @@ func (c *client) gatewayIPSpoofGuardFlow(gatewayOFPort uint32) openflow.Flow {
 		Done()
 }
 
-// serviceCIDRDNATFlow adds flows to match dst IP in service CIDR and output to host gateway interface directly.
+// serviceCIDRDNATFlow generates flows to match dst IP in service CIDR and output to host gateway interface directly.
 func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayOFPort uint32) openflow.Flow {
 	return c.pipeline[dnatTable].BuildFlow().MatchProtocol(ipProtocol).Priority(priorityNormal).
 		MatchField("nw_dst", serviceCIDR.String()).
@@ -318,7 +312,7 @@ func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayOFPort uint3
 		Done()
 }
 
-// arpNormalFlow adds the flow to response arp in normal way if no flow in arpResponderTable is matched.
+// arpNormalFlow generates the flow to response arp in normal way if no flow in arpResponderTable is matched.
 func (c *client) arpNormalFlow() openflow.Flow {
 	return c.pipeline[arpResponderTable].BuildFlow().
 		MatchProtocol(arpProtocol).Priority(priorityNormal - 10).
@@ -326,17 +320,20 @@ func (c *client) arpNormalFlow() openflow.Flow {
 }
 
 func (c *client) initialize() error {
-	if err := c.installDefaultFlows(); err != nil {
-		return err
-	} else if err := c.arpNormalFlow().Add(); err != nil {
-		return err
-	} else if err := c.l2ForwardOutputFlow().Add(); err != nil {
-		return err
-	} else {
-		for _, flow := range c.connectionTrackFlows() {
-			if err := flow.Add(); err != nil {
-				return err
-			}
+	for _, flow := range c.defaultFlows() {
+		if err := flow.Add(); err != nil {
+			return fmt.Errorf("failed to install default flows: %v", err)
+		}
+	}
+	if err := c.arpNormalFlow().Add(); err != nil {
+		return fmt.Errorf("failed to install arp normal flow: %v", err)
+	}
+	if err := c.l2ForwardOutputFlow().Add(); err != nil {
+		return fmt.Errorf("failed to install l2 forward output flows: %v", err)
+	}
+	for _, flow := range c.connectionTrackFlows() {
+		if err := flow.Add(); err != nil {
+			return fmt.Errorf("failed to install connection track flows: %v", err)
 		}
 	}
 	return nil
