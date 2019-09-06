@@ -2,7 +2,7 @@
 
 : "${NUM_WORKERS:=1}"
 SAVED_IMG=/tmp/okn-ubuntu.tar
-IMG_NAME=okn-ubuntu
+IMG_NAME=okn-ubuntu:latest
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -25,43 +25,60 @@ fi
 echo "Saving $IMG_NAME image to $SAVED_IMG"
 docker save -o $SAVED_IMG $IMG_NAME
 
+function waitForNodes {
+    pids=("$@")
+    for pid in "${pids[@]}"; do
+        if ! wait $pid; then
+            echo "Command failed for one or more node"
+            wait # wait for all remaining processes
+            exit 2
+        fi
+    done
+}
+
 echo "Copying $IMG_NAME image to every node..."
 # Copy image to master
 scp -F ssh-config $SAVED_IMG k8s-node-master:/tmp/okn-ubuntu.tar &
+pids[0]=$!
 # Loop over all worker nodes and copy image to each one
 for ((i=1; i<=$NUM_WORKERS; i++)); do
     name="k8s-node-worker-$i"
     scp -F ssh-config $SAVED_IMG $name:/tmp/okn-ubuntu.tar &
+    pids[$i]=$!
 done
 # Wait for all child processes to complete
-wait
+waitForNodes "${pids[@]}"
 echo "Done!"
 
 echo "Loading $IMG_NAME image in every node..."
 ssh -F ssh-config k8s-node-master docker load -i /tmp/okn-ubuntu.tar &
+pids[0]=$!
 # Loop over all worker nodes and copy image to each one
 for ((i=1; i<=$NUM_WORKERS; i++)); do
     name="k8s-node-worker-$i"
     ssh -F ssh-config $name docker load -i /tmp/okn-ubuntu.tar &
+    pids[$i]=$!
 done
 # Wait for all child processes to complete
-wait
+waitForNodes "${pids[@]}"
 echo "Done!"
 
 echo "Copying OKN deployment YAML to every node..."
 scp -F ssh-config $OKN_YML k8s-node-master:~/ &
+pids[0]=$!
 # Loop over all worker nodes and copy image to each one
 for ((i=1; i<=$NUM_WORKERS; i++)); do
     name="k8s-node-worker-$i"
     scp -F ssh-config $OKN_YML $name:~/ &
+    pids[$i]=$!
 done
 # Wait for all child processes to complete
-wait
+waitForNodes "${pids[@]}"
 echo "Done!"
 
 # To ensure that the most recent version of OKN (that we just pushed) will be
 # used.
 echo "Restarting OKN DaemonSet"
-ssh -F ssh-config k8s-node-master kubectl -n kube-system delete daemonset.apps/okn-agent
+ssh -F ssh-config k8s-node-master kubectl -n kube-system delete all -l app=okn
 ssh -F ssh-config k8s-node-master kubectl apply -f okn.yml
 echo "Done!"
