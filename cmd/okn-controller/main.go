@@ -35,7 +35,9 @@ func newControllerCommand() *cobra.Command {
 			if err := opts.validate(args); err != nil {
 				klog.Fatalf("Failed to validate: %v", err)
 			}
-			klog.Fatal(runController(opts))
+			if err := runController(opts); err != nil {
+				klog.Fatalf("Error running controller: %v", err)
+			}
 		},
 	}
 

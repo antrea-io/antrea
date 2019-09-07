@@ -11,6 +11,7 @@ import (
 	_ "okn/pkg/agent/cniserver/ipam"
 	nodecontroller "okn/pkg/agent/controller/node"
 	"okn/pkg/k8s"
+	"okn/pkg/signals"
 )
 
 // Determine how often we go through reconciliation (between current and desired state)
@@ -68,14 +69,16 @@ func (agent *OKNAgent) run() error {
 		agent.agentInitializer.GetOFClient(),
 		agent.agentInitializer.GetInterfaceStore())
 
-	stopCh := make(chan struct{})
+	// set up signals so we handle the first shutdown signal gracefully
+	stopCh := signals.SetupSignalHandler()
 
 	go cniServer.Run(stopCh)
 
-	go agent.nodeController.Run(stopCh)
-
 	agent.informerFactory.Start(stopCh)
 
+	go agent.nodeController.Run(stopCh)
+
 	<-stopCh
+	klog.Info("Stopping OKN agent")
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 
 	networkpolicy "okn/pkg/controller/networkpolicy"
 	"okn/pkg/k8s"
+	"okn/pkg/signals"
 )
 
 // Determine how often we go through reconciliation (between current and desired state)
@@ -46,12 +47,14 @@ func newOKNController(config *ControllerConfig) (*OKNController, error) {
 func (c *OKNController) run() error {
 	klog.Info("Starting OKN Controller")
 
-	stopCh := make(chan struct{})
-
-	go c.networkPolicyController.Run(stopCh)
+	// set up signals so we handle the first shutdown signal gracefully
+	stopCh := signals.SetupSignalHandler()
 
 	c.informerFactory.Start(stopCh)
 
+	go c.networkPolicyController.Run(stopCh)
+
 	<-stopCh
+	klog.Info("Stopping OKN controller")
 	return nil
 }
