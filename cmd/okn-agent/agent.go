@@ -1,14 +1,21 @@
 package main
 
 import (
+	"time"
+
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
+
 	"okn/pkg/agent"
 	"okn/pkg/agent/cniserver"
 	_ "okn/pkg/agent/cniserver/ipam"
 	nodecontroller "okn/pkg/agent/controller/node"
 	"okn/pkg/k8s"
 )
+
+// Determine how often we go through reconciliation (between current and desired state)
+// Same as in https://github.com/kubernetes/sample-controller/blob/master/main.go
+const informerDefaultResync time.Duration = 30 * time.Second
 
 type OKNAgent struct {
 	informerFactory  informers.SharedInformerFactory
@@ -22,7 +29,7 @@ func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
 	if err != nil {
 		return nil, err
 	}
-	informerFactory := informers.NewSharedInformerFactory(client, 60)
+	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 
 	nodeController := nodecontroller.NewNodeController(client, informerFactory)
 
