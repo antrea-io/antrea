@@ -6,10 +6,19 @@ RUN apt-get update && \
 RUN mkdir -p /opt/cni/bin && \
     wget -q -O - https://dl.k8s.io/network-plugins/cni-plugins-amd64-v0.7.5.tgz | tar -xz -C /opt/cni/bin ./host-local
 
+
+FROM golang:1.12 as okn-build
+
+COPY . /okn
+
+WORKDIR /okn
+
+RUN make bin
+
 FROM ubuntu:18.04
 
 LABEL maintainer="OKN <okn@github.com>"
-LABEL description="A docker image to deploy the OKN CNI. Requires the OKN binaries to be built prior to building the image."
+LABEL description="A docker image to deploy the OKN CNI. Takes care of building the OKN binaries as part of building the image."
 
 USER root
 
@@ -21,5 +30,5 @@ RUN apt-get update && \
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
 
-COPY build/images/scripts/* /usr/local/bin/
-COPY bin/* /usr/local/bin/
+COPY --from=okn-build /okn/build/images/scripts/* /usr/local/bin/
+COPY --from=okn-build /okn/bin/* /usr/local/bin/
