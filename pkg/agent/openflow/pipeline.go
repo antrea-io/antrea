@@ -53,9 +53,10 @@ func i2h(data int64) string {
 
 const (
 	emptyPlaceholderStr = ""
-
-	trafficSource regType = 0
-	portCache     regType = 1
+	// marksReg stores traffic-source mark and pod-found mark.
+	// traffic-source resides in [0..15], pod-found resides in [16..31]
+	marksReg     regType = 0
+	portCacheReg regType = 1
 
 	ctZone = 0xfff0
 
@@ -101,7 +102,7 @@ func (c *client) defaultFlows() (flows []openflow.Flow) {
 func (c *client) tunnelClassifierFlow(tunnelOFPort uint32) openflow.Flow {
 	return c.pipeline[classifierTable].BuildFlow().Priority(priorityNormal).
 		MatchField(inPortField, fmt.Sprint(tunnelOFPort)).
-		Action().Load(trafficSource.reg(), markTrafficFromTunnel).
+		Action().LoadRange(marksReg.reg(), markTrafficFromTunnel, openflow.Range{0, 15}).
 		Action().Resubmit(emptyPlaceholderStr, conntrackStateTable).
 		Done()
 }
@@ -111,7 +112,7 @@ func (c *client) gatewayClassifierFlow(gatewayOFPort uint32) openflow.Flow {
 	classifierTable := c.pipeline[classifierTable]
 	return classifierTable.BuildFlow().Priority(priorityNormal).
 		MatchField(inPortField, fmt.Sprint(gatewayOFPort)).
-		Action().Load(trafficSource.reg(), markTrafficFromGateway).
+		Action().LoadRange(marksReg.reg(), markTrafficFromGateway, openflow.Range{0, 15}).
 		Action().Resubmit(emptyPlaceholderStr, classifierTable.Next).
 		Done()
 }
@@ -121,7 +122,7 @@ func (c *client) podClassifierFlow(podOFPort uint32) openflow.Flow {
 	classifierTable := c.pipeline[classifierTable]
 	return classifierTable.BuildFlow().Priority(priorityNormal-10).
 		MatchField(inPortField, fmt.Sprint(podOFPort)).
-		Action().Load(trafficSource.reg(), markTrafficFromLocal).
+		Action().LoadRange(marksReg.reg(), markTrafficFromLocal, openflow.Range{0, 15}).
 		Action().Resubmit(emptyPlaceholderStr, classifierTable.Next).
 		Done()
 }
@@ -141,7 +142,7 @@ func (c *client) connectionTrackFlows() (flows []openflow.Flow) {
 
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	gatewayReplyFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(ipProtocol).Priority(priorityNormal+10).
-		MatchField(trafficSource.reg(), fmt.Sprint(markTrafficFromGateway)).
+		MatchFieldRange(marksReg.reg(), fmt.Sprint(markTrafficFromGateway), openflow.Range{0, 15}).
 		MatchField(ctMarkField, i2h(gatewayCTMark)).
 		MatchField(ctStateFiled, "-new+trk").
 		Action().Resubmit(emptyPlaceholderStr, connectionTrackStateTable.Next).
@@ -149,7 +150,7 @@ func (c *client) connectionTrackFlows() (flows []openflow.Flow) {
 	flows = append(flows, gatewayReplyFlow)
 
 	gatewaySendFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(ipProtocol).Priority(priorityNormal).
-		MatchField(trafficSource.reg(), fmt.Sprint(markTrafficFromGateway)).
+		MatchFieldRange(marksReg.reg(), fmt.Sprint(markTrafficFromGateway), openflow.Range{0, 15}).
 		MatchField(ctStateFiled, "+new+trk").
 		Action().
 		CT(
@@ -190,8 +191,8 @@ func (c *client) l2ForwardCalcFlow(dstMAC string, ofPort uint32) openflow.Flow {
 	l2FwdCalcTable := c.pipeline[l2ForwardingCalcTable]
 	return l2FwdCalcTable.BuildFlow().Priority(priorityNormal).
 		MatchField("dl_dst", dstMAC).
-		Action().LoadRange(portCache.nxm(), portFoundMark, openflow.Range{0, 15}).
-		Action().LoadRange(portCache.nxm(), ofPort, openflow.Range{16, 31}).
+		Action().LoadRange(portCacheReg.nxm(), ofPort, openflow.Range{0, 31}).
+		Action().LoadRange(marksReg.nxm(), portFoundMark, openflow.Range{16, 31}).
 		Action().Resubmit(emptyPlaceholderStr, l2FwdCalcTable.Next).
 		Done()
 }
@@ -201,8 +202,8 @@ func (c *client) l2ForwardOutputFlow() openflow.Flow {
 	return c.pipeline[l2ForwardingOutTable].BuildFlow().
 		Priority(priorityNormal).
 		MatchProtocol(ipProtocol).
-		MatchFieldRange(portCache.reg(), i2h(portFoundMark), openflow.Range{0, 15}).
-		Action().OutputFieldRange(portCache.nxm(), openflow.Range{16, 31}).
+		MatchFieldRange(marksReg.reg(), i2h(portFoundMark), openflow.Range{16, 31}).
+		Action().OutputFieldRange(portCacheReg.nxm(), openflow.Range{0, 31}).
 		Done()
 }
 
