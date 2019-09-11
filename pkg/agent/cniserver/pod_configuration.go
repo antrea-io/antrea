@@ -263,8 +263,8 @@ func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ofClient openflow.C
 		return err
 	}
 	// Setup openflow entries for OVS interface
-	params := &openflow.PodConnectivityParam{PodInterfaceIP: containerConfig.IP, PodInterfaceMAC: containerConfig.MAC, GatewayMAC: gateway.MAC, OFPort: uint32(ofPort)}
-	if err := ofClient.InstallPodFlows(containerID, params); err != nil {
+	err = ofClient.InstallPodFlows(containerID, containerConfig.IP, containerConfig.MAC, gateway.MAC, uint32(ofPort))
+	if err != nil {
 		klog.Errorf("Failed to add openflow entries for container %s: %v", containerID, err)
 		return err
 	}

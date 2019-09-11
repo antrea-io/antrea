@@ -4,21 +4,6 @@ import (
 	"net"
 )
 
-// NodeConnectivityParam groups essential parameters to setup node connection in OKN.
-type NodeConnectivityParam struct {
-	LocalGatewayMAC           net.HardwareAddr
-	PeerNodeIP, PeerGatewayIP net.IP
-	PeerPodCIDR               net.IPNet
-	PeerTunnelName            string
-}
-
-// PodConnectivityParam groups essential parameters to setup pod connection in OKN.
-type PodConnectivityParam struct {
-	PodInterfaceIP              net.IP
-	PodInterfaceMAC, GatewayMAC net.HardwareAddr
-	OFPort                      uint32
-}
-
 // Client is the interface to program OVS flows for entity connectivity of OKN.
 // TODO: flow sync (e.g. at agent restart), retry at failure, garbage collection mechanisms
 type Client interface {
@@ -28,17 +13,17 @@ type Client interface {
 	// InstallTunnelFlows sets up flows related to an OVS tunnel port, the tunnel port must exist.
 	InstallTunnelFlows(tunnelOFPort uint32) error
 
-	// InstallNodeFlows should be invoked when a connection to a remote node is going to be set up, all fields of the
-	// param should be filled. The hostname is used to identify the added flows.
-	InstallNodeFlows(hostname string, param *NodeConnectivityParam) error
+	// InstallNodeFlows should be invoked when a connection to a remote node is going to be set up.
+	// The hostname is used to identify the added flows.
+	InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerNodeIP, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error
 
 	// UninstallNodeFlows removes the connection to the remote node specified with the hostname. UninstallNodeFlows will
 	// do nothing if no connection to the host was established.
 	UninstallNodeFlows(hostname string) error
 
-	// InstallPodFlows should be invoked when a connection to a pod on current node, all fields of the param should be
-	// filled. The containerID is used to identify the added flows.
-	InstallPodFlows(containerID string, param *PodConnectivityParam) error
+	// InstallPodFlows should be invoked when a connection to a pod on current node.
+	// The containerID is used to identify the added flows.
+	InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error
 
 	// UninstallPodFlows removes the connection to the local pod specified with the containerID. UninstallPodFlows will
 	// do nothing if no connection to the pod was established.
@@ -53,14 +38,14 @@ type Client interface {
 	UninstallServiceFlows(serviceName string) error
 }
 
-func (c *client) InstallNodeFlows(hostname string, param *NodeConnectivityParam) error {
-	flow := c.arpResponderFlow(param.PeerGatewayIP.String())
+func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerNodeIP, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error {
+	flow := c.arpResponderFlow(peerGatewayIP.String())
 	if err := flow.Add(); err != nil {
 		return err
 	}
 	c.nodeFlowCache[hostname] = append(c.nodeFlowCache[hostname], flow)
 
-	flow = c.l3FwdFlowToRemote(param.LocalGatewayMAC.String(), param.PeerPodCIDR.String(), param.PeerTunnelName)
+	flow = c.l3FwdFlowToRemote(localGatewayMAC.String(), peerPodCIDR.String(), peerTunnelName)
 	if err := flow.Add(); err != nil {
 		return err
 	}
@@ -78,32 +63,32 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 	return nil
 }
 
-func (c *client) InstallPodFlows(containerID string, param *PodConnectivityParam) error {
-	flow := c.podClassifierFlow(param.OFPort)
+func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
+	flow := c.podClassifierFlow(ofPort)
 	if err := flow.Add(); err != nil {
 		return err
 	}
 	c.podFlowCache[containerID] = append(c.podFlowCache[containerID], flow)
 
-	flow = c.podIPSpoofGuardFlow(param.PodInterfaceIP.String(), param.PodInterfaceMAC.String(), param.OFPort)
+	flow = c.podIPSpoofGuardFlow(podInterfaceIP.String(), podInterfaceMAC.String(), ofPort)
 	if err := flow.Add(); err != nil {
 		return err
 	}
 	c.podFlowCache[containerID] = append(c.podFlowCache[containerID], flow)
 
-	flow = c.arpSpoofGuardFlow(param.PodInterfaceIP.String(), param.PodInterfaceMAC.String(), param.OFPort)
+	flow = c.arpSpoofGuardFlow(podInterfaceIP.String(), podInterfaceMAC.String(), ofPort)
 	if err := flow.Add(); err != nil {
 		return err
 	}
 	c.podFlowCache[containerID] = append(c.podFlowCache[containerID], flow)
 
-	flow = c.l2ForwardCalcFlow(param.PodInterfaceMAC.String(), param.OFPort)
+	flow = c.l2ForwardCalcFlow(podInterfaceMAC.String(), ofPort)
 	if err := flow.Add(); err != nil {
 		return err
 	}
 	c.podFlowCache[containerID] = append(c.podFlowCache[containerID], flow)
 
-	flow = c.l3FlowsToPod(param.GatewayMAC.String(), param.PodInterfaceIP.String(), param.PodInterfaceMAC.String())
+	flow = c.l3FlowsToPod(gatewayMAC.String(), podInterfaceIP.String(), podInterfaceMAC.String())
 	if err := flow.Add(); err != nil {
 		return err
 	}

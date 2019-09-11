@@ -540,7 +540,7 @@ var _ = Describe("CNI server operations", func() {
 		ovsServiceMock.EXPECT().GetOFPort(mock.Any()).Return(int32(10), nil).AnyTimes()
 		ovsServiceMock.EXPECT().DeletePort(mock.Any()).Return(nil).AnyTimes()
 
-		ofServiceMock.EXPECT().InstallPodFlows(mock.Any(), mock.Any()).Return(nil)
+		ofServiceMock.EXPECT().InstallPodFlows(mock.Any(), mock.Any(), mock.Any(), mock.Any(), mock.Any()).Return(nil)
 		ofServiceMock.EXPECT().UninstallPodFlows(mock.Any()).Return(nil)
 	})
 
