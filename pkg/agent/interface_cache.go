@@ -62,7 +62,7 @@ type InterfaceStore interface {
 // from cache after invocation of cniserver.CmdDel. For cniserver.CmdCheck, the server would
 // check previousResult with local cache.
 // Host gateway and tunnel interfaces are added into cache in node initialization phase or
-// retrieved from exited OVS ports
+// retrieved from existing OVS ports
 // Todo: add periodic task to sync local cache with container veth pair
 
 type interfaceCache struct {

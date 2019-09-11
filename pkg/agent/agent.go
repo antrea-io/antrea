@@ -187,9 +187,10 @@ func (i *Initializer) initOpenFlowPipeline() error {
 // setupGatewayInterface creates the host gateway interface which is an internal port on OVS. The ofport for host
 // gateway interface is predefined, so invoke CreateInternalPort with a specific ofport_request
 func (i *Initializer) setupGatewayInterface() error {
-	// Create host Gateway port if not existent
-	gatewayIface, existed := i.ifaceStore.GetInterface(i.hostGateway)
-	if !existed {
+	// Create host Gateway port if it does not exist
+	gatewayIface, portExists := i.ifaceStore.GetInterface(i.hostGateway)
+	if !portExists {
+		klog.V(2).Infof("Creating gateway port %s on OVS bridge", i.hostGateway)
 		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, hostGatewayOFPort, nil)
 		if err != nil {
 			klog.Errorf("Failed to add host interface %s on OVS: %v", i.hostGateway, err)
@@ -198,6 +199,8 @@ func (i *Initializer) setupGatewayInterface() error {
 		gatewayIface = NewGatewayInterface(i.hostGateway)
 		gatewayIface.OvsPortConfig = &OvsPortConfig{i.hostGateway, gwPortUUID, hostGatewayOFPort}
 		i.ifaceStore.AddInterface(i.hostGateway, gatewayIface)
+	} else {
+		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
 	}
 	// host link might not be queried at once after create OVS internal port, retry max 5 times with 1s
 	// delay each time to ensure the link is ready. If still failed after max retry return error.
@@ -237,23 +240,27 @@ func (i *Initializer) setupGatewayInterface() error {
 	gatewayIface.IP = gwIP.IP
 	gatewayIface.MAC = gwMAC
 
-	// Check IP address configuration on existing interface, return if already has target address
-	if existed {
-		if addrs, err := netlink.AddrList(link, netlink.FAMILY_V4); err != nil {
-			klog.Errorf("Failed to query gateway interface %s with address %v: %v", i.hostGateway, gwAddr, err)
-			return err
-		} else if addrs != nil {
-			for _, addr := range addrs {
-				klog.V(2).Infof("Found existing addr %s from host", addr.IP.String())
-				if addr.IP.Equal(gwAddr.IPNet.IP) {
-					return nil
-				}
+	// Check IP address configuration on existing interface, return if already has target
+	// address
+	// We perform this check unconditionally, even if the OVS port did not exist when this
+	// function was called (i.e. portExists is false). Indeed, it may be possible for the Linux
+	// interface to exist even if the OVS bridge does not exist.
+	if addrs, err := netlink.AddrList(link, netlink.FAMILY_V4); err != nil {
+		klog.Errorf("Failed to query IPv4 address list for interface %s: %v", i.hostGateway, err)
+		return err
+	} else if addrs != nil {
+		for _, addr := range addrs {
+			klog.V(4).Infof("Found IPv4 address %s for interface %s", addr.IP.String(), i.hostGateway)
+			if addr.IP.Equal(gwAddr.IPNet.IP) {
+				klog.V(2).Infof("IPv4 address %s already assigned to interface %s", addr.IP.String(), i.hostGateway)
+				return nil
 			}
-		} else {
-			// Address is not configured on existing interface, try to configure it.
-			klog.V(2).Infof("Link %s has not configured any address", i.hostGateway)
 		}
+	} else {
+		klog.V(2).Infof("Link %s has no configured IPv4 address", i.hostGateway)
 	}
+
+	klog.V(2).Infof("Adding address %v to gateway interface %s", gwAddr, i.hostGateway)
 	if err := netlink.AddrAdd(link, gwAddr); err != nil {
 		klog.Errorf("Failed to set gateway interface %s with address %v: %v", i.hostGateway, gwAddr, err)
 		return err
@@ -262,8 +269,8 @@ func (i *Initializer) setupGatewayInterface() error {
 }
 
 func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
-	tunnelIface, existed := i.ifaceStore.GetInterface(tunnelPortName)
-	if existed {
+	tunnelIface, portExists := i.ifaceStore.GetInterface(tunnelPortName)
+	if portExists {
 		klog.V(2).Infof("Tunnel port %s already exists on OVS", tunnelPortName)
 		return nil
 	}

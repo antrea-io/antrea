@@ -3,7 +3,13 @@ package openflow
 import (
 	"fmt"
 	"net"
+	"os/exec"
+	"time"
+
+	"k8s.io/klog"
 )
+
+const maxRetryForOFSwitch = 5
 
 // Client is the interface to program OVS flows for entity connectivity of OKN.
 // TODO: flow sync (e.g. at agent restart), retry at failure, garbage collection mechanisms
@@ -154,7 +160,28 @@ func (c *client) InstallTunnelFlows(tunnelOFPort uint32) error {
 	return nil
 }
 
+func waitForBridge(bridgeName string) error {
+	for retry := 0; retry < maxRetryForOFSwitch; retry++ {
+		klog.V(2).Infof("Trying to connect to OpenFlow switch...")
+		cmd := exec.Command("ovs-ofctl", "show", bridgeName)
+		if err := cmd.Run(); err != nil {
+			time.Sleep(1 * time.Second)
+		} else {
+			return nil
+		}
+	}
+	return fmt.Errorf("failed to connect to OpenFlow switch after %d tries", maxRetryForOFSwitch)
+}
+
 func (c *client) Initialize() error {
+	// Wait for the OpenFlow switch to be ready.
+	// Without this, the rest of the steps can fail with "<bridge> is not a bridge or a socket".
+	// TODO: this may not be needed any more after we transition to libopenflow and stop using
+	// ovs-ofctl directly
+	if err := waitForBridge(c.bridge.Name); err != nil {
+		return err
+	}
+
 	for _, flow := range c.defaultFlows() {
 		if err := flow.Add(); err != nil {
 			return fmt.Errorf("failed to install default flows: %v", err)
