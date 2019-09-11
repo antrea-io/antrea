@@ -11,121 +11,137 @@ import (
 	reflect "reflect"
 )
 
-// MockClient is a mock of Client interface
-type MockClient struct {
+// MockOFClient is a mock of Client interface
+type MockOFClient struct {
 	ctrl     *gomock.Controller
-	recorder *MockClientMockRecorder
+	recorder *MockOFClientMockRecorder
 }
 
-// MockClientMockRecorder is the mock recorder for MockClient
-type MockClientMockRecorder struct {
-	mock *MockClient
+// MockOFClientMockRecorder is the mock recorder for MockOFClient
+type MockOFClientMockRecorder struct {
+	mock *MockOFClient
 }
 
-// NewMockClient creates a new mock instance
-func NewMockClient(ctrl *gomock.Controller) *MockClient {
-	mock := &MockClient{ctrl: ctrl}
-	mock.recorder = &MockClientMockRecorder{mock}
+// NewMockOFClient creates a new mock instance
+func NewMockOFClient(ctrl *gomock.Controller) *MockOFClient {
+	mock := &MockOFClient{ctrl: ctrl}
+	mock.recorder = &MockOFClientMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use
-func (m *MockClient) EXPECT() *MockClientMockRecorder {
+func (m *MockOFClient) EXPECT() *MockOFClientMockRecorder {
 	return m.recorder
 }
 
 // InstallGatewayFlows mocks base method
-func (m *MockClient) InstallGatewayFlows(arg0 net.IP, arg1 net.HardwareAddr, arg2 uint32) error {
+func (m *MockOFClient) InstallGatewayFlows(arg0 net.IP, arg1 net.HardwareAddr, arg2 uint32) error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallGatewayFlows", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallGatewayFlows indicates an expected call of InstallGatewayFlows
-func (mr *MockClientMockRecorder) InstallGatewayFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallGatewayFlows", reflect.TypeOf((*MockClient)(nil).InstallGatewayFlows), arg0, arg1, arg2)
+func (mr *MockOFClientMockRecorder) InstallGatewayFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallGatewayFlows", reflect.TypeOf((*MockOFClient)(nil).InstallGatewayFlows), arg0, arg1, arg2)
 }
 
 // InstallNodeFlows mocks base method
-func (m *MockClient) InstallNodeFlows(arg0 string, arg1 *openflow.NodeConnectivityParam) error {
+func (m *MockOFClient) InstallNodeFlows(arg0 string, arg1 *openflow.NodeConnectivityParam) error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallNodeFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallNodeFlows indicates an expected call of InstallNodeFlows
-func (mr *MockClientMockRecorder) InstallNodeFlows(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallNodeFlows), arg0, arg1)
+func (mr *MockOFClientMockRecorder) InstallNodeFlows(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockOFClient)(nil).InstallNodeFlows), arg0, arg1)
 }
 
 // InstallPodFlows mocks base method
-func (m *MockClient) InstallPodFlows(arg0 string, arg1 *openflow.PodConnectivityParam) error {
+func (m *MockOFClient) InstallPodFlows(arg0 string, arg1 *openflow.PodConnectivityParam) error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallPodFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallPodFlows indicates an expected call of InstallPodFlows
-func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockClient)(nil).InstallPodFlows), arg0, arg1)
+func (mr *MockOFClientMockRecorder) InstallPodFlows(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockOFClient)(nil).InstallPodFlows), arg0, arg1)
 }
 
 // InstallServiceFlows mocks base method
-func (m *MockClient) InstallServiceFlows(arg0 string, arg1 *net.IPNet, arg2 uint32) error {
+func (m *MockOFClient) InstallServiceFlows(arg0 string, arg1 *net.IPNet, arg2 uint32) error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallServiceFlows", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallServiceFlows indicates an expected call of InstallServiceFlows
-func (mr *MockClientMockRecorder) InstallServiceFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallServiceFlows), arg0, arg1, arg2)
+func (mr *MockOFClientMockRecorder) InstallServiceFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceFlows", reflect.TypeOf((*MockOFClient)(nil).InstallServiceFlows), arg0, arg1, arg2)
 }
 
 // InstallTunnelFlows mocks base method
-func (m *MockClient) InstallTunnelFlows(arg0 uint32) error {
+func (m *MockOFClient) InstallTunnelFlows(arg0 uint32) error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallTunnelFlows", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallTunnelFlows indicates an expected call of InstallTunnelFlows
-func (mr *MockClientMockRecorder) InstallTunnelFlows(arg0 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTunnelFlows", reflect.TypeOf((*MockClient)(nil).InstallTunnelFlows), arg0)
+func (mr *MockOFClientMockRecorder) InstallTunnelFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTunnelFlows", reflect.TypeOf((*MockOFClient)(nil).InstallTunnelFlows), arg0)
 }
 
 // UninstallNodeFlows mocks base method
-func (m *MockClient) UninstallNodeFlows(arg0 string) error {
+func (m *MockOFClient) UninstallNodeFlows(arg0 string) error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UninstallNodeFlows", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UninstallNodeFlows indicates an expected call of UninstallNodeFlows
-func (mr *MockClientMockRecorder) UninstallNodeFlows(arg0 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallNodeFlows", reflect.TypeOf((*MockClient)(nil).UninstallNodeFlows), arg0)
+func (mr *MockOFClientMockRecorder) UninstallNodeFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallNodeFlows", reflect.TypeOf((*MockOFClient)(nil).UninstallNodeFlows), arg0)
 }
 
 // UninstallPodFlows mocks base method
-func (m *MockClient) UninstallPodFlows(arg0 string) error {
+func (m *MockOFClient) UninstallPodFlows(arg0 string) error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UninstallPodFlows", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UninstallPodFlows indicates an expected call of UninstallPodFlows
-func (mr *MockClientMockRecorder) UninstallPodFlows(arg0 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodFlows", reflect.TypeOf((*MockClient)(nil).UninstallPodFlows), arg0)
+func (mr *MockOFClientMockRecorder) UninstallPodFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodFlows", reflect.TypeOf((*MockOFClient)(nil).UninstallPodFlows), arg0)
 }
 
 // UninstallServiceFlows mocks base method
-func (m *MockClient) UninstallServiceFlows(arg0 string) error {
+func (m *MockOFClient) UninstallServiceFlows(arg0 string) error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UninstallServiceFlows", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UninstallServiceFlows indicates an expected call of UninstallServiceFlows
-func (mr *MockClientMockRecorder) UninstallServiceFlows(arg0 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallServiceFlows", reflect.TypeOf((*MockClient)(nil).UninstallServiceFlows), arg0)
+func (mr *MockOFClientMockRecorder) UninstallServiceFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallServiceFlows", reflect.TypeOf((*MockOFClient)(nil).UninstallServiceFlows), arg0)
 }
