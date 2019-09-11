@@ -31,8 +31,6 @@ func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
 	}
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 
-	nodeController := nodecontroller.NewNodeController(client, informerFactory)
-
 	ifaceStore := agent.NewInterfaceStore()
 
 	agentInitializer := agent.NewInitializer(
@@ -40,7 +38,6 @@ func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
 
 	return &OKNAgent{
 		informerFactory:  informerFactory,
-		nodeController:   nodeController,
 		agentInitializer: agentInitializer,
 		config:           config,
 	}, nil
@@ -55,6 +52,13 @@ func (agent *OKNAgent) run() error {
 		return err
 	}
 	defer agent.agentInitializer.Cleanup()
+
+	agent.nodeController = nodecontroller.NewNodeController(
+		agent.agentInitializer.GetK8sClient(),
+		agent.informerFactory,
+		agent.agentInitializer.GetOFClient(),
+		agent.agentInitializer.GetNodeConfig(),
+	)
 
 	cniServer := cniserver.New(
 		agent.config.CNISocket,
