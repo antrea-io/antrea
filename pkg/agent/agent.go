@@ -24,6 +24,7 @@ const (
 	tunOFPort           = 1
 	hostGatewayOFPort   = 2
 	maxRetryForHostLink = 5
+	NodeNameKey         = "NODE_NAME"
 )
 
 type NodeConfig struct {
@@ -328,10 +329,8 @@ func (ai *AgentInitializer) setupTunnelInterface(tunnelPortName string) error {
 // initNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
 // host gateway interface.
 func (ai *AgentInitializer) initNodeLocalConfig(client clientset.Interface) error {
-	// Todo: change other valid functions to find node except for hostname
-	nodeName, err := os.Hostname()
+	nodeName, err := getNodeName()
 	if err != nil {
-		klog.Errorf("Failed to get local hostname: %v", err)
 		return err
 	}
 	node, err := client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
@@ -348,4 +347,22 @@ func (ai *AgentInitializer) initNodeLocalConfig(client clientset.Interface) erro
 
 	ai.nodeConfig = &NodeConfig{Name: nodeName, PodCIDR: localSubnet}
 	return nil
+}
+
+// getNodeName returns the node's name used in Kubernetes, based on the priority:
+// - Environment variable NODE_NAME, which should be set by Downward API
+// - OS's hostname
+func getNodeName() (string, error) {
+	nodeName := os.Getenv(NodeNameKey)
+	if nodeName != "" {
+		return nodeName, nil
+	}
+	klog.Infof("Environment variable %s not found, use hostname instead", NodeNameKey)
+	var err error
+	nodeName, err = os.Hostname()
+	if err != nil {
+		klog.Errorf("Failed to get local hostname: %v", err)
+		return "", err
+	}
+	return nodeName, nil
 }
