@@ -1,15 +1,27 @@
 package agent
 
 import (
-	"k8s.io/klog"
+	"crypto/sha1"
+	"encoding/hex"
+	"fmt"
+	"io"
 	"net"
+	"strings"
+
+	"k8s.io/klog"
 	"okn/pkg/ovs/ovsconfig"
 )
 
 const (
-	OVSExternalIDMAC         = "attached-mac"
-	OVSExternalIDIP          = "ip-address"
-	OVSExternalIDContainerID = "container-id"
+	OVSExternalIDMAC          = "attached-mac"
+	OVSExternalIDIP           = "ip-address"
+	OVSExternalIDContainerID  = "container-id"
+	OVSExternalIDPodName      = "pod-name"
+	OVSExternalIDPodNamespace = "pod-namespace"
+
+	hostVethLength        = 15
+	podNamePrefixLength   = 8
+	containerKeyConnector = `-`
 )
 
 type InterfaceType uint8
@@ -47,16 +59,17 @@ type InterfaceStore interface {
 	AddInterface(key string, interfaceConfig *InterfaceConfig)
 	DeleteInterface(ifaceID string)
 	GetInterface(ifaceID string) (*InterfaceConfig, bool)
+	GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool)
 	Len() int
 }
 
 // Local cache for interfaces created on node, including container, host gateway, and tunnel
 // ports, `Type` field is used to differentiate interface category
 //  1) For container interface, the fields should include: containerID, podName, namespace, netns,
-//     IP, MAC, and OVS Port configurations, and containerID is the cache key
+//     IP, MAC, and OVS Port configurations, and IfaceName is the cache key
 //  2) For host gateway/tunnel port, the fields should include: name, IP, MAC, and OVS port
-//     configurations, and ifaceName is the cache key
-// OVS Port configurations include ifacename, portUUID and OFport. OFPort might be filled
+//     configurations, and IfaceName is the cache key
+// OVS Port configurations include IfaceName, PortUUID and OFport. OFPort might be filled
 // later when it is used to install openflow entry.
 // Container interface is added into cache after invocation of cniserver.CmdAdd, and removed
 // from cache after invocation of cniserver.CmdDel. For cniserver.CmdCheck, the server would
@@ -100,12 +113,14 @@ func (c *interfaceCache) Initialize(ovsBridgeClient ovsconfig.OVSBridgeClient, g
 						port.ExternalIDs[OVSExternalIDMAC], err)
 					return err
 				}
+				podName, _ := port.ExternalIDs[OVSExternalIDPodName]
+				podNamespace, _ := port.ExternalIDs[OVSExternalIDPodNamespace]
 				intf = &InterfaceConfig{Type: ContainerInterface, OvsPortConfig: ovsPort, ID: containerID,
-					IP: containerIP, MAC: containerMAC}
+					IP: containerIP, MAC: containerMAC, PodName: podName, PodNamespace: podNamespace}
 			}
 		}
 		if intf != nil {
-			c.cache[intf.ID] = intf
+			c.cache[intf.IfaceName] = intf
 		}
 	}
 	return nil
@@ -135,6 +150,8 @@ func BuildOVSPortExternalIDs(containerConfig *InterfaceConfig) map[string]interf
 	externalIDs[OVSExternalIDMAC] = containerConfig.MAC.String()
 	externalIDs[OVSExternalIDContainerID] = containerConfig.ID
 	externalIDs[OVSExternalIDIP] = containerConfig.IP.String()
+	externalIDs[OVSExternalIDPodName] = containerConfig.PodName
+	externalIDs[OVSExternalIDPodNamespace] = containerConfig.PodNamespace
 	return externalIDs
 }
 
@@ -156,6 +173,29 @@ func (c *interfaceCache) GetInterface(ifaceID string) (*InterfaceConfig, bool) {
 
 func (c *interfaceCache) Len() int {
 	return len(c.cache)
+}
+
+// GenerateContainerInterfaceName calculates OVS port name using pod name and pod namespace. The output
+// should be a string with the first part of the hash value for <podNamespace>/<podName>, and its
+// length should be `hostVethLength`
+func GenerateContainerInterfaceName(podName string, podNamespace string) string {
+	hash := sha1.New()
+	podID := fmt.Sprintf("%s/%s", podNamespace, podName)
+	io.WriteString(hash, podID)
+	podKey := hex.EncodeToString(hash.Sum(nil))
+	name := strings.Replace(podName, "-", "", -1)
+	if len(name) > podNamePrefixLength {
+		name = name[:podNamePrefixLength]
+	}
+	podKeyLength := hostVethLength - len(name) - len(containerKeyConnector)
+	return strings.Join([]string{name, podKey[:podKeyLength]}, containerKeyConnector)
+}
+
+// GetPodInterface retrieve interface for Pod filtered by pod name and pod namespace
+func (c *interfaceCache) GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool) {
+	ovsPortName := GenerateContainerInterfaceName(podName, podNamespace)
+	iface, found := c.cache[ovsPortName]
+	return iface, found
 }
 
 func NewInterfaceStore() InterfaceStore {

@@ -35,7 +35,6 @@ type CNIServer struct {
 }
 
 const (
-	hostVethLength       = 15
 	supportedCNIVersions = "0.1.0,0.2.0,0.3.0,0.3.1,0.4.0"
 	defaultMTU           = 1500
 )
@@ -234,7 +233,7 @@ func (s *CNIServer) hostNetNsPath(netNS string) string {
 
 func (s *CNIServer) validatePrevResult(cfgArgs *cnimsg.CniCmdArgsMessage, k8sCNIArgs *k8sArgs, prevResult *current.Result) (*cnimsg.CniCmdResponseMessage, error) {
 	var containerIntf, hostIntf *current.Interface
-	hostVethName := GenerateContainerPeerName(string(k8sCNIArgs.K8S_POD_NAME), string(k8sCNIArgs.K8S_POD_NAMESPACE))
+	hostVethName := agent.GenerateContainerInterfaceName(string(k8sCNIArgs.K8S_POD_NAME), string(k8sCNIArgs.K8S_POD_NAMESPACE))
 	containerID := cfgArgs.ContainerId
 	netNS := s.hostNetNsPath(cfgArgs.Netns)
 
@@ -304,7 +303,9 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnimsg.CniCmdRequestMes
 	// Ensure interface gateway setting and mapping relations between result.Interfaces and result.IPs
 	updateResultIfaceConfig(result, s.nodeConfig.Gateway.IP)
 	// Setup pod interfaces and connect to ovs bridge
-	if err = configureInterface(s.ovsBridgeClient, s.ofClient, s.nodeConfig.Gateway, s.ifaceStore, cniConfig.ContainerId, cniConfig.k8sArgs, netNS, cniConfig.Ifname, result); err != nil {
+	podName := string(cniConfig.K8S_POD_NAME)
+	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
+	if err = configureInterface(s.ovsBridgeClient, s.ofClient, s.nodeConfig.Gateway, s.ifaceStore, podName, podNamespace, cniConfig.ContainerId, netNS, cniConfig.Ifname, result); err != nil {
 		klog.Errorf("Failed to configure container %s interface: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
@@ -336,7 +337,9 @@ func (s *CNIServer) CmdDel(ctx context.Context, request *cnimsg.CniCmdRequestMes
 	}
 	klog.Info("Deleted IP addresses by IPAM driver")
 	// Remove host interface and OVS configuration
-	if err := removeInterfaces(s.ovsBridgeClient, s.ofClient, s.ifaceStore, cniConfig.ContainerId, cniConfig.Netns, cniConfig.Ifname); err != nil {
+	podName := string(cniConfig.K8S_POD_NAME)
+	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
+	if err := removeInterfaces(s.ovsBridgeClient, s.ofClient, s.ifaceStore, podName, podNamespace, cniConfig.ContainerId, cniConfig.Netns, cniConfig.Ifname); err != nil {
 		klog.Errorf("Failed to remove container %s interface configuration: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
