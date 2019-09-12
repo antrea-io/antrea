@@ -154,20 +154,22 @@ func (c *NodeController) syncNode(nodeName string) error {
 
 	if node, err := c.nodeLister.Get(nodeName); err != nil {
 		klog.Infof("Deleting routes and flow entries to node %v", nodeName)
-		route, existed := c.connectedNodes.Load(nodeName)
-		if existed && route != nil {
+		route, flowsAreInstalled := c.connectedNodes.Load(nodeName)
+		if route != nil {
 			if err = netlink.RouteDel(route.(*netlink.Route)); err != nil {
 				klog.Errorf("Failed to delete the route to the node %v: %v", nodeName, err)
 				return err
 			}
 			c.connectedNodes.Store(nodeName, nil)
 		}
-		if err = c.ofClient.UninstallNodeFlows(nodeName); err != nil {
-			klog.Errorf("Failed to uninstall flows to the node %v: %v", nodeName, err)
-			return err
+		if flowsAreInstalled {
+			if err = c.ofClient.UninstallNodeFlows(nodeName); err != nil {
+				klog.Errorf("Failed to uninstall flows to the node %v: %v", nodeName, err)
+				return err
+			}
 		}
 		c.connectedNodes.Delete(nodeName)
-	} else if existedRoute, flowInstalled := c.connectedNodes.Load(nodeName); existedRoute != nil {
+	} else if route, flowsAreInstalled := c.connectedNodes.Load(nodeName); route == nil {
 		klog.Infof("Adding routes and flows to node %v, podCIDR: %v, addresses: %v",
 			nodeName, node.Spec.PodCIDR, node.Status.Addresses)
 
@@ -179,7 +181,7 @@ func (c *NodeController) syncNode(nodeName string) error {
 		}
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
-		if !flowInstalled { // then install flows
+		if !flowsAreInstalled { // then install flows
 			connectivityParam := &openflow.NodeConnectivityParam{
 				LocalGatewayMAC: c.nodeConfig.Gateway.MAC,
 				PeerNodeIP:      peerNodeIP,
