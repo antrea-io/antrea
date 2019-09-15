@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
 
 source logging
+source daemon_status
+
+CONTAINER_NAME="okn-ovs"
+OVS_DB_FILE="/var/run/openvswitch/conf.db"
 
 set -euo pipefail
 
-declare -r ovs_container_name="okn-ovs"
+function start_ovs {
+    log_info $CONTAINER_NAME "Starting OVS"
+    /usr/share/openvswitch/scripts/ovs-ctl --system-id=random start --db-file=$OVS_DB_FILE
+}
 
 function stop_ovs {
+    log_info $CONTAINER_NAME "Stopping OVS"
     /usr/share/openvswitch/scripts/ovs-ctl stop
 }
 
 SLEEP_PID=
 
 function quit {
-    log_info $ovs_container_name "Stopping OVS agents before quit"
+    log_info $CONTAINER_NAME "Stopping OVS before quit"
     stop_ovs
     # kill background sleep process
     if [ "$SLEEP_PID" != "" ]; then kill $SLEEP_PID > /dev/null 2>&1 || true; fi
@@ -24,29 +32,21 @@ function quit {
 # exit with code 128 + SIGNAL
 trap "quit" INT TERM
 
-function get_ovs_status {
-    # Verifies that OVS agents are running
-    /usr/share/openvswitch/scripts/ovs-ctl status > /dev/null
-    if [ $? != 0 ]; then
-        echo "stopped"
-    else
-        echo "running"
-    fi
-}
+start_ovs
 
-log_info $ovs_container_name "Started the loop that checks OVS status every 30 seconds"
+log_info $CONTAINER_NAME "Started the loop that checks OVS status every 30 seconds"
 while true; do
-    if [ $(get_ovs_status) == "stopped" ]; then
-        # OVS was stopped in the container.
-        log_warning $ovs_container_name "OVS was stopped in the container. Starting it again"
-
-        /usr/share/openvswitch/scripts/ovs-ctl --system-id=random start
-        log_info $ovs_container_name "Started OVS in this container"
-    fi
     # we run sleep in the background so that we can immediately exit when we
     # receive SIGINT / SIGTERM
     # see https://stackoverflow.com/questions/32041674/linux-how-to-kill-sleep
     sleep 30 &
     SLEEP_PID=$!
     wait $SLEEP_PID
+
+    if ! check_ovs_status ; then
+        # OVS was stopped in the container.
+        log_warning $CONTAINER_NAME "OVS was stopped. Starting it again"
+
+        start_ovs
+    fi
 done

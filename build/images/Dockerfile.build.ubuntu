@@ -47,7 +47,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends iptables libstrongswan-standard-plugins && \
     (dpkg -i /tmp/ovs-debs/*.deb || apt-get -f -y --no-install-recommends install) && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
-    rm -rf /tmp/ovs-debs
+    rm -rf /tmp/ovs-debs && \
+    CHARON_FILELOG_CONFIG="\ \ \ \ \ \ \ \ /var/log/strongswan/charon.log {\n\ \ \ \ \ \ \ \ }" && \
+    sed -i "/^.*filelog.*{/a $CHARON_FILELOG_CONFIG" /etc/strongswan.d/charon-logging.conf
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
 

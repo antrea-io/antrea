@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+source logging
+source daemon_status
+
+CONTAINER_NAME="okn-ovs-ipsec"
+
+set -euo pipefail
+
+function start_agents {
+    log_info $CONTAINER_NAME "Storting ovs-monitor-ipsec and strongSwan agents"
+    /usr/share/openvswitch/scripts/ovs-ctl --ike-daemon=strongswan start-ovs-ipsec
+}
+
+function stop_agents {
+    log_info $CONTAINER_NAME "Stopping ovs-monitor-ipsec agent"
+    /usr/share/openvswitch/scripts/ovs-ctl stop-ovs-ipsec
+    log_info $CONTAINER_NAME "Stopping strongSwan agents"
+    ipsec stop
+}
+
+function quit {
+    log_info $CONTAINER_NAME "Stopping OVS IPSec before quit"
+    stop_agents
+    exit 0
+}
+trap quit Exit
+
+start_agents
+
+log_info $CONTAINER_NAME "Started the loop that checks agents status every 30 seconds"
+while true; do
+    sleep 30
+    if ! check_ovs_ipsec_status ; then
+        log_warning $CONTAINER_NAME "OVS IPSec was stopped. Starting it again"
+
+        start_agents
+    fi
+done
