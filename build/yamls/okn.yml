@@ -149,8 +149,9 @@ spec:
             readOnly: true
           - name: host-var-run-okn
             mountPath: /var/run/okn
-          - name: openvswitch
+          - name: host-var-run-okn
             mountPath: /var/run/openvswitch
+            subPath: openvswitch
           # The host's /proc directory needs to be mounted in the container so that the network
           # namespace path can be opened and the container interface can be created by okn-agent in
           # that namespace.
@@ -179,8 +180,9 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
           volumeMounts:
-          - name: openvswitch
+          - name: host-var-run-okn
             mountPath: /var/run/openvswitch
+            subPath: openvswitch
           - name: host-var-log-okn
             mountPath: /var/log/openvswitch
             subPath: openvswitch
@@ -188,24 +190,23 @@ spec:
         - name: okn-config
           configMap:
             name: okn-config
-        - name: openvswitch
-          hostPath:
-            path: /var/run/openvswitch
         - name: host-cni-conf
           hostPath:
             path: /etc/cni/net.d
         - name: host-cni-bin
           hostPath:
             path: /opt/cni/bin
-        - name: host-var-run-okn
-          hostPath:
-            path: /var/run/okn
         - name: host-proc
           hostPath:
             path: /proc
+        - name: host-var-run-okn
+          hostPath:
+            path: /var/run/okn
+            # we use subPath to create run subdirectories for different component (e.g. OVS) and
+            # subPath requires the base volume to exist
+            type: DirectoryOrCreate
         - name: host-var-log-okn
           hostPath:
             path: /var/log/okn
-            # we use subPath to create logging subdirectories for different component (e.g. OVS) and
-            # subPath requires the base volume to exist
+            # we use subPath to create logging subdirectories for different component (e.g. OVS)
             type: DirectoryOrCreate
