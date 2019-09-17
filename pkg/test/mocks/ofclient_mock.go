@@ -7,7 +7,6 @@ package mocks
 import (
 	gomock "github.com/golang/mock/gomock"
 	net "net"
-	openflow "okn/pkg/agent/openflow"
 	reflect "reflect"
 )
 
@@ -49,31 +48,31 @@ func (mr *MockOFClientMockRecorder) InstallGatewayFlows(arg0, arg1, arg2 interfa
 }
 
 // InstallNodeFlows mocks base method
-func (m *MockOFClient) InstallNodeFlows(arg0 string, arg1 *openflow.NodeConnectivityParam) error {
+func (m *MockOFClient) InstallNodeFlows(arg0 string, arg1 net.HardwareAddr, arg2, arg3 net.IP, arg4 net.IPNet, arg5 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallNodeFlows", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallNodeFlows", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallNodeFlows indicates an expected call of InstallNodeFlows
-func (mr *MockOFClientMockRecorder) InstallNodeFlows(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockOFClientMockRecorder) InstallNodeFlows(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockOFClient)(nil).InstallNodeFlows), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockOFClient)(nil).InstallNodeFlows), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // InstallPodFlows mocks base method
-func (m *MockOFClient) InstallPodFlows(arg0 string, arg1 *openflow.PodConnectivityParam) error {
+func (m *MockOFClient) InstallPodFlows(arg0 string, arg1 net.IP, arg2, arg3 net.HardwareAddr, arg4 uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallPodFlows", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallPodFlows", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallPodFlows indicates an expected call of InstallPodFlows
-func (mr *MockOFClientMockRecorder) InstallPodFlows(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockOFClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockOFClient)(nil).InstallPodFlows), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockOFClient)(nil).InstallPodFlows), arg0, arg1, arg2, arg3, arg4)
 }
 
 // InstallServiceFlows mocks base method

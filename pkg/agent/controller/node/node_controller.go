@@ -182,14 +182,7 @@ func (c *NodeController) syncNode(nodeName string) error {
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
 		if !flowsAreInstalled { // then install flows
-			connectivityParam := &openflow.NodeConnectivityParam{
-				LocalGatewayMAC: c.nodeConfig.Gateway.MAC,
-				PeerNodeIP:      peerNodeIP,
-				PeerGatewayIP:   peerGatewayIP,
-				PeerPodCIDR:     *peerPodCIDR,
-				PeerTunnelName:  peerNodeIP.String(),
-			}
-			err = c.ofClient.InstallNodeFlows(nodeName, connectivityParam)
+			err = c.ofClient.InstallNodeFlows(nodeName, c.nodeConfig.Gateway.MAC, peerNodeIP, peerGatewayIP, *peerPodCIDR, peerNodeIP.String())
 			if err != nil {
 				return err
 			}
