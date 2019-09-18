@@ -33,6 +33,20 @@ func (m *MockOFClient) EXPECT() *MockOFClientMockRecorder {
 	return m.recorder
 }
 
+// Initialize mocks base method
+func (m *MockOFClient) Initialize() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Initialize")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Initialize indicates an expected call of Initialize
+func (mr *MockOFClientMockRecorder) Initialize() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockOFClient)(nil).Initialize))
+}
+
 // InstallGatewayFlows mocks base method
 func (m *MockOFClient) InstallGatewayFlows(arg0 net.IP, arg1 net.HardwareAddr, arg2 uint32) error {
 	m.ctrl.T.Helper()

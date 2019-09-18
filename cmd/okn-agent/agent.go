@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"k8s.io/client-go/informers"
@@ -10,7 +11,9 @@ import (
 	"okn/pkg/agent/cniserver"
 	_ "okn/pkg/agent/cniserver/ipam"
 	nodecontroller "okn/pkg/agent/controller/node"
+	"okn/pkg/agent/openflow"
 	"okn/pkg/k8s"
+	"okn/pkg/ovs/ovsconfig"
 	"okn/pkg/signals"
 )
 
@@ -18,65 +21,59 @@ import (
 // Same as in https://github.com/kubernetes/sample-controller/blob/master/main.go
 const informerDefaultResync time.Duration = 30 * time.Second
 
-type OKNAgent struct {
-	informerFactory  informers.SharedInformerFactory
-	nodeController   *nodecontroller.NodeController
-	agentInitializer *agent.AgentInitializer
-	config           *AgentConfig
-}
-
-func newOKNAgent(config *AgentConfig) (*OKNAgent, error) {
-	client, err := k8s.CreateClient(config.ClientConnection)
+// run starts OKN agent with the given options and waits for termination signal.
+func run(o *Options) error {
+	klog.Info("Starting OKN agent")
+	// Create a K8s Clientset and SharedInformerFactory for the given config.
+	k8sClient, err := k8s.CreateClient(o.config.ClientConnection)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("error creating K8s client: %v", err)
 	}
-	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
+
+	// Create ovsdb and openflow clients.
+	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS("")
+	if err != nil {
+		// TODO: ovsconfig.NewOVSDBConnectionUDS might return timeout in the future, need to add retry
+		return fmt.Errorf("error connecting OVSDB: %v", err)
+	}
+	defer ovsdbConnection.Close()
+
+	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsdbConnection)
+
+	ofClient := openflow.NewClient(o.config.OVSBridge)
+
+	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := agent.NewInterfaceStore()
 
-	agentInitializer := agent.NewInitializer(
-		config.OVSBridge, config.HostGateway, config.TunnelType, config.ServiceCIDR, client, ifaceStore)
-
-	return &OKNAgent{
-		informerFactory:  informerFactory,
-		agentInitializer: agentInitializer,
-		config:           config,
-	}, nil
-}
-
-func (agent *OKNAgent) run() error {
-	klog.Info("Starting OKN Agent")
-
-	// Initialize agent and node network
-	err := agent.agentInitializer.SetupNodeNetwork()
+	// Initialize agent and node network.
+	agentInitializer := agent.NewInitializer(ovsBridgeClient,
+		ofClient,
+		k8sClient,
+		o.config.OVSBridge,
+		o.config.ServiceCIDR,
+		o.config.HostGateway,
+		o.config.TunnelType,
+		ifaceStore)
+	err = agentInitializer.Initialize()
 	if err != nil {
-		return err
+		return fmt.Errorf("error initializing agent: %v", err)
 	}
-	defer agent.agentInitializer.Cleanup()
+	nodeConfig := agentInitializer.GetNodeConfig()
 
-	agent.nodeController = nodecontroller.NewNodeController(
-		agent.agentInitializer.GetK8sClient(),
-		agent.informerFactory,
-		agent.agentInitializer.GetOFClient(),
-		agent.agentInitializer.GetNodeConfig(),
-	)
+	nodeController := nodecontroller.NewNodeController(k8sClient, informerFactory, ofClient, nodeConfig)
 
-	cniServer := cniserver.New(
-		agent.config.CNISocket,
-		agent.config.HostProcPathPrefix,
-		agent.agentInitializer.GetNodeConfig(),
-		agent.agentInitializer.GetOVSBridgeClient(),
-		agent.agentInitializer.GetOFClient(),
-		agent.agentInitializer.GetInterfaceStore())
+	cniServer := cniserver.New(o.config.CNISocket, o.config.HostProcPathPrefix, nodeConfig, ovsBridgeClient, ofClient, ifaceStore)
 
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 
 	go cniServer.Run(stopCh)
 
-	agent.informerFactory.Start(stopCh)
+	informerFactory.Start(stopCh)
 
-	go agent.nodeController.Run(stopCh)
+	go nodeController.Run(stopCh)
 
 	<-stopCh
 	klog.Info("Stopping OKN agent")

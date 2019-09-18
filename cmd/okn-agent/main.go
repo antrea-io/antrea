@@ -35,7 +35,7 @@ func newAgentCommand() *cobra.Command {
 			if err := opts.validate(args); err != nil {
 				klog.Fatalf("Failed to validate: %v", err)
 			}
-			if err := runAgent(opts); err != nil {
+			if err := run(opts); err != nil {
 				klog.Fatalf("Error running agent: %v", err)
 			}
 		},
@@ -46,12 +46,4 @@ func newAgentCommand() *cobra.Command {
 	// Install log flags
 	flags.AddGoFlagSet(flag.CommandLine)
 	return cmd
-}
-
-func runAgent(o *Options) error {
-	agent, err := newOKNAgent(o.config)
-	if err != nil {
-		return err
-	}
-	return agent.run()
 }
