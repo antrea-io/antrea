@@ -320,28 +320,8 @@ func (c *client) arpNormalFlow() openflow.Flow {
 		Action().Normal().Done()
 }
 
-func (c *client) initialize() error {
-	for _, flow := range c.defaultFlows() {
-		if err := flow.Add(); err != nil {
-			return fmt.Errorf("failed to install default flows: %v", err)
-		}
-	}
-	if err := c.arpNormalFlow().Add(); err != nil {
-		return fmt.Errorf("failed to install arp normal flow: %v", err)
-	}
-	if err := c.l2ForwardOutputFlow().Add(); err != nil {
-		return fmt.Errorf("failed to install l2 forward output flows: %v", err)
-	}
-	for _, flow := range c.connectionTrackFlows() {
-		if err := flow.Add(); err != nil {
-			return fmt.Errorf("failed to install connection track flows: %v", err)
-		}
-	}
-	return nil
-}
-
-// NewClient is the constructor of the Client interface, it will set up all basic flows on the specific OVS bridge.
-func NewClient(bridgeName string) (Client, error) {
+// NewClient is the constructor of the Client interface.
+func NewClient(bridgeName string) Client {
 	bridge := &openflow.Bridge{Name: bridgeName}
 	c := &client{
 		bridge: bridge,
@@ -360,8 +340,5 @@ func NewClient(bridgeName string) (Client, error) {
 		podFlowCache:  map[string][]openflow.Flow{},
 		serviceCache:  map[string][]openflow.Flow{},
 	}
-	if err := c.initialize(); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return c
 }

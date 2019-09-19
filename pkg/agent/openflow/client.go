@@ -1,12 +1,16 @@
 package openflow
 
 import (
+	"fmt"
 	"net"
 )
 
 // Client is the interface to program OVS flows for entity connectivity of OKN.
 // TODO: flow sync (e.g. at agent restart), retry at failure, garbage collection mechanisms
 type Client interface {
+	// Initialize sets up all basic flows on the specific OVS bridge.
+	Initialize() error
+
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
 
@@ -96,6 +100,7 @@ func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podI
 
 	return nil
 }
+
 func (c *client) UninstallPodFlows(containerID string) error {
 	defer delete(c.podFlowCache, containerID)
 	for _, flow := range c.podFlowCache[containerID] {
@@ -114,6 +119,7 @@ func (c *client) InstallServiceFlows(serviceName string, serviceNet *net.IPNet, 
 	c.serviceCache[serviceName] = append(c.serviceCache[serviceName], flow)
 	return nil
 }
+
 func (c *client) UninstallServiceFlows(serviceName string) error {
 	defer delete(c.serviceCache, serviceName)
 	for _, flow := range c.serviceCache[serviceName] {
@@ -138,11 +144,32 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 	}
 	return nil
 }
+
 func (c *client) InstallTunnelFlows(tunnelOFPort uint32) error {
 	if err := c.tunnelClassifierFlow(tunnelOFPort).Add(); err != nil {
 		return err
 	} else if err := c.l2ForwardCalcFlow(globalVirtualMAC, tunnelOFPort).Add(); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (c *client) Initialize() error {
+	for _, flow := range c.defaultFlows() {
+		if err := flow.Add(); err != nil {
+			return fmt.Errorf("failed to install default flows: %v", err)
+		}
+	}
+	if err := c.arpNormalFlow().Add(); err != nil {
+		return fmt.Errorf("failed to install arp normal flow: %v", err)
+	}
+	if err := c.l2ForwardOutputFlow().Add(); err != nil {
+		return fmt.Errorf("failed to install l2 forward output flows: %v", err)
+	}
+	for _, flow := range c.connectionTrackFlows() {
+		if err := flow.Add(); err != nil {
+			return fmt.Errorf("failed to install connection track flows: %v", err)
+		}
 	}
 	return nil
 }

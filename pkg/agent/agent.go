@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/vishvananda/netlink"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,14 +39,14 @@ type Gateway struct {
 	Name string
 }
 
-type AgentInitializer struct {
+// Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
+type Initializer struct {
 	ovsBridge       string
 	hostGateway     string
 	tunnelType      string
 	client          clientset.Interface
 	ifaceStore      InterfaceStore
 	nodeConfig      *NodeConfig
-	ovsdbConnection *ovsdb.OVSDB
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 	serviceCIDR     *net.IPNet
 	ofClient        openflow.Client
@@ -64,119 +63,86 @@ func disableICMPSendRedirects(intfName string) error {
 }
 
 func NewInitializer(
-	ovsBridge, hostGateway, tunnelType string,
-	serviceCIDR string,
-	client clientset.Interface,
-	ifaceStore InterfaceStore,
-) *AgentInitializer {
-	// Parse service CIDR configuration. config.ServiceCIDR is checked in option.validate, so
+	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	ofClient openflow.Client,
+	k8sClient clientset.Interface,
+	ovsBridge, serviceCIDR, hostGateway, tunnelType string,
+	ifaceStore InterfaceStore) *Initializer {
+	// Parse service CIDR configuration. serviceCIDR is checked in option.validate, so
 	// it should be a valid configuration here.
 	_, serviceCIDRNet, _ := net.ParseCIDR(serviceCIDR)
-	return &AgentInitializer{
-		ovsBridge:   ovsBridge,
-		hostGateway: hostGateway,
-		tunnelType:  tunnelType,
-		client:      client,
-		ifaceStore:  ifaceStore,
-		serviceCIDR: serviceCIDRNet,
+	return &Initializer{
+		ovsBridgeClient: ovsBridgeClient,
+		ovsBridge:       ovsBridge,
+		hostGateway:     hostGateway,
+		tunnelType:      tunnelType,
+		client:          k8sClient,
+		ifaceStore:      ifaceStore,
+		serviceCIDR:     serviceCIDRNet,
+		ofClient:        ofClient,
 	}
 }
 
-// Cleanup closes the OVSDB connection.
-func (ai *AgentInitializer) Cleanup() {
-	ai.ovsdbConnection.Close()
-}
-
-// GetK8sClient returns the kubernetes clientset in agent initializer.
-func (ai *AgentInitializer) GetK8sClient() clientset.Interface {
-	return ai.client
-}
-
-// GetInterfaceStore returns the InterfaceStore.
-func (ai *AgentInitializer) GetInterfaceStore() InterfaceStore {
-	return ai.ifaceStore
-}
-
 // GetNodeConfig returns the NodeConfig.
-func (ai *AgentInitializer) GetNodeConfig() *NodeConfig {
-	return ai.nodeConfig
-}
-
-// GetOVSBridgeClient returns the GetOVSBridgeClient.
-func (ai *AgentInitializer) GetOVSBridgeClient() ovsconfig.OVSBridgeClient {
-	return ai.ovsBridgeClient
-}
-
-// GetOFClient returns the openflow client
-func (ai *AgentInitializer) GetOFClient() openflow.Client {
-	return ai.ofClient
+func (i *Initializer) GetNodeConfig() *NodeConfig {
+	return i.nodeConfig
 }
 
 // setupOVSBridge sets up the OVS bridge and create host gateway interface and tunnel port
-func (ai *AgentInitializer) setupOVSBridge() error {
-	if err := ai.ovsBridgeClient.Create(); err != nil {
+func (i *Initializer) setupOVSBridge() error {
+	if err := i.ovsBridgeClient.Create(); err != nil {
 		klog.Error("Failed to create OVS bridge: ", err)
 		return err
 	}
 
 	// Initialize interface cache
-	if err := ai.ifaceStore.Initialize(ai.ovsBridgeClient, ai.hostGateway, TunPortName); err != nil {
-		return err
-	}
-	// Setup Tunnel port on OVS
-	if err := ai.setupTunnelInterface(TunPortName); err != nil {
+	if err := i.ifaceStore.Initialize(i.ovsBridgeClient, i.hostGateway, TunPortName); err != nil {
 		return err
 	}
 
+	// Setup Tunnel port on OVS
+	if err := i.setupTunnelInterface(TunPortName); err != nil {
+		return err
+	}
 	// Setup host gateway interface
-	err := ai.setupGatewayInterface()
+	err := i.setupGatewayInterface()
 	if err != nil {
 		return err
 	}
 
-	// Disable `all` send ICMP redirects, otherwise disable send_redirects for other interfaces may not work
+	// send_redirects for the interface will be enabled if at least one of
+	// conf/{all,interface}/send_redirects is set to TRUE, so "all" and the
+	// interface must be disabled together.
+	// See https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt.
 	if err := disableICMPSendRedirects("all"); err != nil {
 		return err
 	}
-	// Disable host gateway send ICMP redirects
-	if err := disableICMPSendRedirects(ai.hostGateway); err != nil {
+	if err := disableICMPSendRedirects(i.hostGateway); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (ai *AgentInitializer) SetupNodeNetwork() error {
+func (i *Initializer) Initialize() error {
 	klog.Info("Setting up node network")
-	if err := ai.initNodeLocalConfig(ai.client); err != nil {
+	if err := i.initNodeLocalConfig(i.client); err != nil {
 		return err
 	}
+
 	// Setup iptables chain and rules
 	if err := iptables.SetupIPTables(); err != nil {
 		return err
 	}
-	if err := iptables.SetupHostIPTablesRules(ai.hostGateway); err != nil {
+	if err := iptables.SetupHostIPTablesRules(i.hostGateway); err != nil {
 		return err
 	}
 
-	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS("")
-	if err != nil {
-		// Todo: ovsconfig.NewOVSDBConnectionUDS might return timeout in the future, need to add retry
-		// Currently it return nil
-		klog.Errorf("Failed to open OVSDB connection")
+	if err := i.setupOVSBridge(); err != nil {
 		return err
 	}
-
-	// Create OVS bridge, add host gateway interface and tunnel port
-	ai.ovsBridgeClient = ovsconfig.NewOVSBridge(ai.ovsBridge, ovsdbConnection)
-	if err := ai.setupOVSBridge(); err != nil {
-		ovsdbConnection.Close()
-		return err
-	}
-
-	ai.ovsdbConnection = ovsdbConnection
 
 	// Install Openflow entries on OVS bridge
-	if err := ai.initOpenFlowPipeline(); err != nil {
+	if err := i.initOpenFlowPipeline(); err != nil {
 		return err
 	}
 
@@ -184,29 +150,25 @@ func (ai *AgentInitializer) SetupNodeNetwork() error {
 }
 
 // initOpenFlowPipeline sets up necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
-func (ai *AgentInitializer) initOpenFlowPipeline() error {
-	var err error
-
-	// Openflow pipeline is built while creating openflow client
-	ai.ofClient, err = openflow.NewClient(ai.ovsBridge)
-	if err != nil {
-		klog.Errorf("Failed to create openflow client: %v", err)
+func (i *Initializer) initOpenFlowPipeline() error {
+	// Setup all basic flows.
+	if err := i.ofClient.Initialize(); err != nil {
+		klog.Errorf("Failed to setup basic openflow entries: %v", err)
 		return err
 	}
 
 	// Setup flow entries for gateway interface, including classifier, skip spoof guard check,
 	// L3 forwarding and L2 forwarding
-	gateway, _ := ai.ifaceStore.GetInterface(ai.hostGateway)
+	gateway, _ := i.ifaceStore.GetInterface(i.hostGateway)
 	gatewayOFPort := uint32(gateway.OFPort)
-	err = ai.ofClient.InstallGatewayFlows(gateway.IP, gateway.MAC, gatewayOFPort)
-	if err != nil {
+	if err := i.ofClient.InstallGatewayFlows(gateway.IP, gateway.MAC, gatewayOFPort); err != nil {
 		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
 		return err
 	}
 
 	// Setup flow entries for tunnel port Interface, including classifier and L2 Forwarding(match
 	// vMAC as dst)
-	if err := ai.ofClient.InstallTunnelFlows(tunOFPort); err != nil {
+	if err := i.ofClient.InstallTunnelFlows(tunOFPort); err != nil {
 		klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
 		return err
 	}
@@ -215,8 +177,8 @@ func (ai *AgentInitializer) initOpenFlowPipeline() error {
 	// provide service feature, and this flow entry is to ensure traffic sent from pod to service
 	// address could be forwarded to host gateway interface correctly. Otherwise packets might be
 	// dropped by egress rules before they are DNATed to backend Pods.
-	if err := ai.ofClient.InstallServiceFlows(ai.serviceCIDR.String(), ai.serviceCIDR, gatewayOFPort); err != nil {
-		klog.Errorf("Failed to setup openflow entries for serviceCIDR %s: %v", ai.serviceCIDR, err)
+	if err := i.ofClient.InstallServiceFlows(i.serviceCIDR.String(), i.serviceCIDR, gatewayOFPort); err != nil {
+		klog.Errorf("Failed to setup openflow entries for serviceCIDR %s: %v", i.serviceCIDR, err)
 		return err
 	}
 	return nil
@@ -224,25 +186,25 @@ func (ai *AgentInitializer) initOpenFlowPipeline() error {
 
 // setupGatewayInterface creates the host gateway interface which is an internal port on OVS. The ofport for host
 // gateway interface is predefined, so invoke CreateInternalPort with a specific ofport_request
-func (ai *AgentInitializer) setupGatewayInterface() error {
+func (i *Initializer) setupGatewayInterface() error {
 	// Create host Gateway port if not existent
-	gatewayIface, existed := ai.ifaceStore.GetInterface(ai.hostGateway)
+	gatewayIface, existed := i.ifaceStore.GetInterface(i.hostGateway)
 	if !existed {
-		gwPortUUID, err := ai.ovsBridgeClient.CreateInternalPort(ai.hostGateway, hostGatewayOFPort, nil)
+		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, hostGatewayOFPort, nil)
 		if err != nil {
-			klog.Errorf("Failed to add host interface %s on OVS: %v", ai.hostGateway, err)
+			klog.Errorf("Failed to add host interface %s on OVS: %v", i.hostGateway, err)
 			return err
 		}
-		gatewayIface = NewGatewayInterface(ai.hostGateway)
-		gatewayIface.OvsPortConfig = &OvsPortConfig{ai.hostGateway, gwPortUUID, hostGatewayOFPort}
-		ai.ifaceStore.AddInterface(ai.hostGateway, gatewayIface)
+		gatewayIface = NewGatewayInterface(i.hostGateway)
+		gatewayIface.OvsPortConfig = &OvsPortConfig{i.hostGateway, gwPortUUID, hostGatewayOFPort}
+		i.ifaceStore.AddInterface(i.hostGateway, gatewayIface)
 	}
 	// host link might not be queried at once after create OVS internal port, retry max 5 times with 1s
 	// delay each time to ensure the link is ready. If still failed after max retry return error.
 	link, err := func() (netlink.Link, error) {
-		for i := 0; i < maxRetryForHostLink; i++ {
-			if link, err := netlink.LinkByName(ai.hostGateway); err != nil {
-				klog.V(2).Infof("Not found host link for gateway %s, retry after 1s", ai.hostGateway)
+		for retry := 0; retry < maxRetryForHostLink; retry++ {
+			if link, err := netlink.LinkByName(i.hostGateway); err != nil {
+				klog.V(2).Infof("Not found host link for gateway %s, retry after 1s", i.hostGateway)
 				if _, ok := err.(netlink.LinkNotFoundError); ok {
 					time.Sleep(1 * time.Second)
 				} else {
@@ -252,33 +214,33 @@ func (ai *AgentInitializer) setupGatewayInterface() error {
 				return link, nil
 			}
 		}
-		return nil, fmt.Errorf("Link %s not found", ai.hostGateway)
+		return nil, fmt.Errorf("link %s not found", i.hostGateway)
 	}()
 	if err != nil {
-		klog.Errorf("Failed to find host link for gateway %s: %v", ai.hostGateway, err)
+		klog.Errorf("Failed to find host link for gateway %s: %v", i.hostGateway, err)
 		return err
 	}
 
 	// Set host gateway interface up
 	if err := netlink.LinkSetUp(link); err != nil {
-		klog.Errorf("Failed to set host link for %s up: %v", ai.hostGateway, err)
+		klog.Errorf("Failed to set host link for %s up: %v", i.hostGateway, err)
 		return err
 	}
 
 	// Configure host gateway IP using the first address of node localSubnet
-	localSubnet := ai.nodeConfig.PodCIDR
+	localSubnet := i.nodeConfig.PodCIDR
 	subnetID := localSubnet.IP.Mask(localSubnet.Mask)
 	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
 	gwAddr := &netlink.Addr{IPNet: gwIP, Label: ""}
 	gwMAC := link.Attrs().HardwareAddr
-	ai.nodeConfig.Gateway = &Gateway{Name: ai.hostGateway, IP: gwIP.IP, MAC: gwMAC}
+	i.nodeConfig.Gateway = &Gateway{Name: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
 	gatewayIface.IP = gwIP.IP
 	gatewayIface.MAC = gwMAC
 
 	// Check IP address configuration on existing interface, return if already has target address
 	if existed {
 		if addrs, err := netlink.AddrList(link, netlink.FAMILY_V4); err != nil {
-			klog.Errorf("Failed to query gateway interface %s with address %v: %v", ai.hostGateway, gwAddr, err)
+			klog.Errorf("Failed to query gateway interface %s with address %v: %v", i.hostGateway, gwAddr, err)
 			return err
 		} else if addrs != nil {
 			for _, addr := range addrs {
@@ -289,53 +251,52 @@ func (ai *AgentInitializer) setupGatewayInterface() error {
 			}
 		} else {
 			// Address is not configured on existing interface, try to configure it.
-			klog.V(2).Infof("Link %s has not configured any address", ai.hostGateway)
+			klog.V(2).Infof("Link %s has not configured any address", i.hostGateway)
 		}
 	}
 	if err := netlink.AddrAdd(link, gwAddr); err != nil {
-		klog.Errorf("Failed to set gateway interface %s with address %v: %v", ai.hostGateway, gwAddr, err)
+		klog.Errorf("Failed to set gateway interface %s with address %v: %v", i.hostGateway, gwAddr, err)
 		return err
 	}
 	return nil
 }
 
-func (ai *AgentInitializer) setupTunnelInterface(tunnelPortName string) error {
-	tunnelIntf, existed := ai.ifaceStore.GetInterface(tunnelPortName)
+func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
+	tunnelIface, existed := i.ifaceStore.GetInterface(tunnelPortName)
 	if existed {
-		klog.V(2).Infof("Already exist port %s on OVS", tunnelPortName)
+		klog.V(2).Infof("Tunnel port %s already exists on OVS", tunnelPortName)
 		return nil
-	} else {
-		var err error
-		var tunnelPortUUID string
-		switch ai.tunnelType {
-		case ovsconfig.GENEVE_TUNNEL:
-			tunnelPortUUID, err = ai.ovsBridgeClient.CreateGenevePort(tunnelPortName, tunOFPort, "")
-		case ovsconfig.VXLAN_TUNNEL:
-			tunnelPortUUID, err = ai.ovsBridgeClient.CreateVXLANPort(tunnelPortName, tunOFPort, "")
-		default:
-			err = fmt.Errorf("Unsupported tunnel type %s", ai.tunnelType)
-		}
-		if err != nil {
-			klog.Errorf("Failed to add Tunnel port %s type %s on OVS: %v", tunnelPortName, ai.tunnelType, err)
-			return err
-		}
-		tunnelIntf = NewTunnelInterface(tunnelPortName)
-		tunnelIntf.OvsPortConfig = &OvsPortConfig{tunnelPortName, tunnelPortUUID, tunOFPort}
-		ai.ifaceStore.AddInterface(tunnelPortName, tunnelIntf)
 	}
+	var err error
+	var tunnelPortUUID string
+	switch i.tunnelType {
+	case ovsconfig.GENEVE_TUNNEL:
+		tunnelPortUUID, err = i.ovsBridgeClient.CreateGenevePort(tunnelPortName, tunOFPort, "")
+	case ovsconfig.VXLAN_TUNNEL:
+		tunnelPortUUID, err = i.ovsBridgeClient.CreateVXLANPort(tunnelPortName, tunOFPort, "")
+	default:
+		err = fmt.Errorf("unsupported tunnel type %s", i.tunnelType)
+	}
+	if err != nil {
+		klog.Errorf("Failed to add tunnel port %s type %s on OVS: %v", tunnelPortName, i.tunnelType, err)
+		return err
+	}
+	tunnelIface = NewTunnelInterface(tunnelPortName)
+	tunnelIface.OvsPortConfig = &OvsPortConfig{tunnelPortName, tunnelPortUUID, tunOFPort}
+	i.ifaceStore.AddInterface(tunnelPortName, tunnelIface)
 	return nil
 }
 
 // initNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
 // host gateway interface.
-func (ai *AgentInitializer) initNodeLocalConfig(client clientset.Interface) error {
+func (i *Initializer) initNodeLocalConfig(client clientset.Interface) error {
 	nodeName, err := getNodeName()
 	if err != nil {
 		return err
 	}
 	node, err := client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 	if err != nil || node == nil {
-		klog.Errorf("Failed to get node from K8S with name %s: %v", nodeName, err)
+		klog.Errorf("Failed to get node from K8s with name %s: %v", nodeName, err)
 		return err
 	}
 	localCidr := node.Spec.PodCIDR
@@ -345,7 +306,7 @@ func (ai *AgentInitializer) initNodeLocalConfig(client clientset.Interface) erro
 		return err
 	}
 
-	ai.nodeConfig = &NodeConfig{Name: nodeName, PodCIDR: localSubnet}
+	i.nodeConfig = &NodeConfig{Name: nodeName, PodCIDR: localSubnet}
 	return nil
 }
 
