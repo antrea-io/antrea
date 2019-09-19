@@ -66,6 +66,7 @@ type InterfaceStore interface {
 	DeleteInterface(ifaceID string)
 	GetInterface(ifaceID string) (*InterfaceConfig, bool)
 	GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool)
+	GetContainerInterfaceNum() int
 	Len() int
 	GetInterfaceIDs() []string
 }
@@ -176,6 +177,16 @@ func (c *interfaceCache) DeleteInterface(ifaceID string) {
 func (c *interfaceCache) GetInterface(ifaceID string) (*InterfaceConfig, bool) {
 	iface, found := c.cache[ifaceID]
 	return iface, found
+}
+
+func (c *interfaceCache) GetContainerInterfaceNum() int {
+	num := 0
+	for _, v := range c.cache {
+		if v.Type == ContainerInterface {
+			num++
+		}
+	}
+	return num
 }
 
 func (c *interfaceCache) Len() int {

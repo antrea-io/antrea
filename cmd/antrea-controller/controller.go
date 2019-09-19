@@ -23,6 +23,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
@@ -34,12 +35,11 @@ const informerDefaultResync time.Duration = 30 * time.Second
 // run starts Antrea Controller with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.Infof("Starting Antrea Controller (version %s)", version.GetFullVersion())
-	// Create a K8s Clientset and SharedInformerFactory for the given config.
-	client, err := k8s.CreateClient(o.config.ClientConnection)
+	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
+	client, crdClient, err := k8s.CreateClients(o.config.ClientConnection)
 	if err != nil {
-		return fmt.Errorf("error creating K8s client: %v", err)
+		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
-
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
@@ -53,6 +53,9 @@ func run(o *Options) error {
 	stopCh := signals.RegisterSignalHandlers()
 
 	informerFactory.Start(stopCh)
+
+	controllerMonitor := monitor.NewControllerMonitor(crdClient)
+	go controllerMonitor.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
 

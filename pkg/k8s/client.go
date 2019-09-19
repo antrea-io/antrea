@@ -20,10 +20,12 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog"
+
+	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 )
 
-// CreateClient creates a kube client from the given config.
-func CreateClient(config componentbaseconfig.ClientConnectionConfiguration) (clientset.Interface, error) {
+// CreateClients creates kube clients from the given config.
+func CreateClients(config componentbaseconfig.ClientConnectionConfiguration) (clientset.Interface, crdclientset.Interface, error) {
 	var kubeConfig *rest.Config
 	var err error
 
@@ -36,7 +38,7 @@ func CreateClient(config componentbaseconfig.ClientConnectionConfiguration) (cli
 			&clientcmd.ConfigOverrides{}).ClientConfig()
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	kubeConfig.AcceptContentTypes = config.AcceptContentTypes
@@ -46,8 +48,12 @@ func CreateClient(config componentbaseconfig.ClientConnectionConfiguration) (cli
 
 	client, err := clientset.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
-	return client, nil
+	// Create client for crd operations
+	crdClient, err := crdclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, crdClient, nil
 }
