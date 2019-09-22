@@ -67,7 +67,7 @@ subjects:
     name: okn-agent
     namespace: kube-system
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: okn-agent
@@ -77,6 +77,11 @@ metadata:
     tier: node
     component: okn-agent
 spec:
+  selector:
+    matchLabels:
+      app: okn
+      tier: node
+      component: okn-agent
   updateStrategy:
     type: RollingUpdate
   template:
