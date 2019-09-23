@@ -8,7 +8,7 @@ CONTAINER_NAME="okn-ovs-ipsec"
 set -euo pipefail
 
 function start_agents {
-    log_info $CONTAINER_NAME "Storting ovs-monitor-ipsec and strongSwan agents"
+    log_info $CONTAINER_NAME "Starting ovs-monitor-ipsec and strongSwan agents"
     /usr/share/openvswitch/scripts/ovs-ctl --ike-daemon=strongswan start-ovs-ipsec
 }
 
