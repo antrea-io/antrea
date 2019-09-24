@@ -101,3 +101,8 @@ func (a *commandAction) Normal() FlowBuilder {
 	a.builder.actions = append(a.builder.actions, "Normal")
 	return a.builder
 }
+
+func (a *commandAction) Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder {
+	a.builder.actions = append(a.builder.actions, fmt.Sprintf("conjunction(%d,%d/%d)", conjID, clauseID, nClause))
+	return a.builder
+}
