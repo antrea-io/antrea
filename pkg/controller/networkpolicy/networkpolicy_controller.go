@@ -167,6 +167,6 @@ func (n *NetworkPolicyController) handleErr(err error, key interface{}) {
 		return
 	}
 
-	klog.V(2).Infof("Error syncing networkpolicy %q, retrying. Error: %v", key, err)
+	klog.Errorf("Error syncing networkpolicy %q, retrying. Error: %v", key, err)
 	n.queue.AddRateLimited(key)
 }
