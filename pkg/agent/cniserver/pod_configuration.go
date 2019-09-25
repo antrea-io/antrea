@@ -249,7 +249,7 @@ func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ofClient openflow.C
 		klog.Errorf("Failed to add openflow entries for container %s: %v", containerID, err)
 		return err
 	}
-	containerConfig.OvsPortConfig = &agent.OvsPortConfig{PortUUID: portUUID, IfaceName: ovsPortName}
+	containerConfig.OvsPortConfig = &agent.OvsPortConfig{PortUUID: portUUID, IfaceName: ovsPortName, OFPort: ofPort}
 	// Add containerConfig into local cache
 	ifaceStore.AddInterface(ovsPortName, containerConfig)
 	// Mark the manipulation as success to cancel defer deletion
