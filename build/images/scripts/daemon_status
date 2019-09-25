@@ -1,0 +1,40 @@
+# Check if the process is running
+function is_process_running() {
+    name=$1
+    pidfile=$2
+
+    # Check pidfile exists or not
+    [ ! -f "$pidfile" ] && return 1
+
+    pid=`cat $pidfile`
+    [ -z "$pid" ] && return 1
+    [ ! -d /proc/$pid ] &&  return 1
+
+    cmd=`cat /proc/$pid/cmdline | tr "\000" " "|cut -d " " -f 2`
+    # Check cmd matches (ends with) the expected name or not
+    [[ $cmd != *$name ]] && return 1
+
+    return 0
+}
+
+function check_ovs_status {
+    /usr/share/openvswitch/scripts/ovs-ctl status > /dev/null
+    return $?
+}
+
+OVS_MONITOR_IPSEC_PIDFILE=/var/run/openvswitch/ovs-monitor-ipsec.pid
+
+function check_ovs_monitor_ipsec_status {
+   is_process_running "ovs-monitor-ipsec" $OVS_MONITOR_IPSEC_PIDFILE && return 0
+   return 1
+}
+
+function check_strongswan_status {
+    ipsec status > /dev/null
+    return $?
+}
+
+function check_ovs_ipsec_status {
+    check_ovs_monitor_ipsec_status && check_strongswan_status && return 0
+    return 1
+}

@@ -134,7 +134,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - check_pod_liveness agent
+                - container_liveness_probe agent
             initialDelaySeconds: 5
             timeoutSeconds: 5
             periodSeconds: 10
@@ -175,7 +175,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - timeout 5 check_pod_liveness ovs
+                - timeout 5 container_liveness_probe ovs
             initialDelaySeconds: 5
             periodSeconds: 5
           volumeMounts:
