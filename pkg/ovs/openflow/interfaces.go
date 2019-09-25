@@ -73,6 +73,7 @@ type Action interface {
 	OutputInPort() FlowBuilder
 	DecTTL() FlowBuilder
 	Normal() FlowBuilder
+	Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder
 }
 
 type FlowBuilder interface {

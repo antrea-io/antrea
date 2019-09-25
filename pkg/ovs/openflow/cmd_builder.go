@@ -2,6 +2,7 @@ package openflow
 
 import (
 	"fmt"
+	"strings"
 )
 
 type commandBuilder struct {
@@ -52,7 +53,7 @@ func (b *commandBuilder) Table(id TableIDType) FlowBuilder {
 }
 
 func (b *commandBuilder) MatchProtocol(protocol protocol) FlowBuilder {
-	b.matchers = append(b.matchers, protocol)
+	b.matchers = append(b.matchers, strings.ToLower(protocol))
 	return b
 }
 
