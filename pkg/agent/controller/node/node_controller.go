@@ -210,7 +210,7 @@ func (c *NodeController) handleErr(err error, key interface{}) {
 		return
 	}
 
-	klog.V(2).Infof("Error syncing node %q, retrying. Error: %v", key, err)
+	klog.Errorf("Error syncing node %q, retrying. Error: %v", key, err)
 	c.queue.AddRateLimited(key)
 }
 
