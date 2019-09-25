@@ -34,7 +34,7 @@ https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-mul
 cat >okn-agent.conf <<EOF
 clientConnection:
   kubeconfig: <PATH_TO_KUBE_CONF>
-hostProcPathPrefix: ''
+hostProcPathPrefix: "/"
 EOF
 ```
 

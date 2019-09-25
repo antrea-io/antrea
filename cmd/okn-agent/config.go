@@ -24,7 +24,7 @@ type AgentConfig struct {
 	// Mount location of the /proc directory. The default is "/host", which is appropriate when
 	// okn-agent is run as part of the OKN DaemonSet (and the host's /proc directory is mounted
 	// as /host/proc in the okn-agent container). When running okn-agent as a process,
-	// hostProcPathPrefix should be set to '' in the YAML config.
+	// hostProcPathPrefix should be set to "/" in the YAML config.
 	HostProcPathPrefix string `yaml:"hostProcPathPrefix,omitempty"`
 	// CIDR Range for services in cluster. It's required to support egress network policy, should
 	// be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
