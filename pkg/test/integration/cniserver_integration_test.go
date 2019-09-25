@@ -16,6 +16,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
 	mock "github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
@@ -35,6 +36,7 @@ const (
 	testPod              = "test-1"
 	testPodNamespace     = "t1"
 	testPodInfraContaner = "test-111111"
+	bridge               = "br0"
 )
 
 const (
@@ -202,6 +204,7 @@ func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir st
 			Ifname:               IFNAME,
 			Netns:                targetNS.Path(),
 			NetworkConfiguration: []byte(conf),
+			Args:                 test.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContaner),
 		},
 		Version: reqVersion,
 	}
@@ -254,7 +257,7 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 		Expect(result.Interfaces[1].Sandbox).To(Equal(tester.targetNS.Path()))
 
 		// Check for the veth link in the main namespace
-		hostIfaceName := cniserver.GenerateContainerPeerName(testPod, testPodNamespace)
+		hostIfaceName := agent.GenerateContainerInterfaceName(testPod, testPodNamespace)
 		Expect(result.Interfaces[0].Name).To(Equal(hostIfaceName))
 		Expect(result.Interfaces[0].Mac).To(HaveLen(17))
 
@@ -477,6 +480,13 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	ipamResult := test.GenerateIPAMResult("0.4.0", tc.addresses, tc.routes, tc.dns)
 	ipamMock.EXPECT().Add(mock.Any(), mock.Any()).Return(ipamResult, nil).AnyTimes()
 
+	// Mock ovs output while get ovs port external configuration
+	ovsPortname := agent.GenerateContainerInterfaceName(testPod, testPodNamespace)
+	ovsPortUUID := uuid.New().String()
+	ovsServiceMock.EXPECT().CreatePort(ovsPortname, ovsPortname, mock.Any()).Return(ovsPortUUID, nil).AnyTimes()
+	ovsServiceMock.EXPECT().GetOFPort(ovsPortname).Return(int32(10), nil).AnyTimes()
+	ofServiceMock.EXPECT().InstallPodFlows(ovsPortname, mock.Any(), mock.Any(), mock.Any(), mock.Any()).Return(nil)
+
 	// Test ip allocation
 	prevResult, err := tester.cmdAddTest(tc, dataDir)
 	Expect(err).NotTo(HaveOccurred())
@@ -495,15 +505,12 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	newConf, err := buildOneConfig("testConfig", tc.cniVersion, conf, prevResult)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Mock ovs output while get ovs port external configuration
-
-	ovsExternalIDs := make(map[string]string)
-	ovsExternalIDs[cniserver.OVSExternalIDContainerID] = CONTAINERID
-	ovsExternalIDs[cniserver.OVSExternalIDIP], ovsExternalIDs[cniserver.OVSExternalIDMAC] = getContainerIPMacConfig(prevResult)
 	// Test CHECK
 	tester.cmdCheckTest(tc, newConf, dataDir)
 
-	// Test ip Release
+	// Test delete
+	ovsServiceMock.EXPECT().DeletePort(ovsPortUUID).Return(nil).AnyTimes()
+	ofServiceMock.EXPECT().UninstallPodFlows(ovsPortname).Return(nil)
 	tester.cmdDelTest(tc, dataDir)
 }
 
@@ -536,12 +543,6 @@ var _ = Describe("CNI server operations", func() {
 		ipamMock.EXPECT().Check(mock.Any(), mock.Any()).Return(nil).AnyTimes()
 
 		ovsServiceMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).AnyTimes()
-		ovsServiceMock.EXPECT().CreatePort(mock.Any(), mock.Any(), mock.Any()).Return("", nil).AnyTimes()
-		ovsServiceMock.EXPECT().GetOFPort(mock.Any()).Return(int32(10), nil).AnyTimes()
-		ovsServiceMock.EXPECT().DeletePort(mock.Any()).Return(nil).AnyTimes()
-
-		ofServiceMock.EXPECT().InstallPodFlows(mock.Any(), mock.Any(), mock.Any(), mock.Any(), mock.Any()).Return(nil)
-		ofServiceMock.EXPECT().UninstallPodFlows(mock.Any()).Return(nil)
 	})
 
 	AfterEach(func() {
@@ -586,5 +587,5 @@ func init() {
 	nodeGateway := &agent.Gateway{IP: gwIP, MAC: gwMAC, Name: "gw"}
 	_, nodePodeCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 
-	testNodeConfig = &agent.NodeConfig{"br0", nodeName, nodePodeCIDR, nodeGateway}
+	testNodeConfig = &agent.NodeConfig{bridge, nodeName, nodePodeCIDR, nodeGateway}
 }
