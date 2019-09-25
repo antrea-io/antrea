@@ -61,12 +61,30 @@ type Client interface {
 	// arguments should be filled. The serviceName is used to identify the added flows.
 	InstallServiceFlows(serviceName string, serviceNet *net.IPNet, gatewayOFPort uint32) error
 
-	// UninstallServiceFlows removes the connection to the service specified with the serviceName. UninstallServiceFlows
+	// UninstallServiceFlows removes the connection to the Service specified with the serviceName. UninstallServiceFlows
 	// will do nothing if no connection to the service was established.
 	UninstallServiceFlows(serviceName string) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
+
+	// InstallPolicyRuleFlows installs flows for a new NetworkPolicy rule. Rule should include all fields in the
+	// NetworkPolicy rule. Each ingress/egress policy rule installs Openflow entries on two tables, one for
+	// ruleTable and the other for dropTable. If a packet does not pass the ruleTable, it will be dropped by the
+	// dropTable.
+	InstallPolicyRuleFlows(rule *PolicyRule) error
+
+	// UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
+	// UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
+	UninstallPolicyRuleFlows(ruleID uint32) error
+
+	// AddPolicyRuleAddress adds one or multiple addresses to the specified NetworkPolicy rule. If addrType is true, the
+	// addresses are added to PolicyRule.From, else to PolicyRule.To.
+	AddPolicyRuleAddress(ruleID uint32, addrType AddressType, addresses []Address) error
+
+	// DeletePolicyRuleAddress removes addresses from the specified NetworkPolicy rule. If addrType is true, the addresses
+	// are removed from PolicyRule.From, else from PolicyRule.To.
+	DeletePolicyRuleAddress(ruleID uint32, addrType AddressType, addresses []Address) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.

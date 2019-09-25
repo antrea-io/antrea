@@ -100,6 +100,7 @@ type client struct {
 	bridge                                    binding.Bridge
 	pipeline                                  map[binding.TableIDType]binding.Table
 	nodeFlowCache, podFlowCache, serviceCache map[string][]binding.Flow // cache for correspond deletions
+	policyCache                               map[uint32]*conjunction   // cache for conjunction
 }
 
 // defaultFlows generates the default flows of all tables.
@@ -374,6 +375,7 @@ func NewClient(bridgeName string) Client {
 		nodeFlowCache: map[string][]binding.Flow{},
 		podFlowCache:  map[string][]binding.Flow{},
 		serviceCache:  map[string][]binding.Flow{},
+		policyCache:   map[uint32]*conjunction{},
 	}
 	return c
 }

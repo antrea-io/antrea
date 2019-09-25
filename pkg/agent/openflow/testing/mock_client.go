@@ -23,7 +23,8 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	openflow "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	openflow "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	openflow0 "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	net "net"
 	reflect "reflect"
 )
@@ -51,11 +52,39 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
+// AddPolicyRuleAddress mocks base method
+func (m *MockClient) AddPolicyRuleAddress(arg0 uint32, arg1 openflow.AddressType, arg2 []openflow.Address) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddPolicyRuleAddress", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddPolicyRuleAddress indicates an expected call of AddPolicyRuleAddress
+func (mr *MockClientMockRecorder) AddPolicyRuleAddress(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).AddPolicyRuleAddress), arg0, arg1, arg2)
+}
+
+// DeletePolicyRuleAddress mocks base method
+func (m *MockClient) DeletePolicyRuleAddress(arg0 uint32, arg1 openflow.AddressType, arg2 []openflow.Address) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePolicyRuleAddress", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePolicyRuleAddress indicates an expected call of DeletePolicyRuleAddress
+func (mr *MockClientMockRecorder) DeletePolicyRuleAddress(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).DeletePolicyRuleAddress), arg0, arg1, arg2)
+}
+
 // GetFlowTableStatus mocks base method
-func (m *MockClient) GetFlowTableStatus() []openflow.TableStatus {
+func (m *MockClient) GetFlowTableStatus() []openflow0.TableStatus {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetFlowTableStatus")
-	ret0, _ := ret[0].([]openflow.TableStatus)
+	ret0, _ := ret[0].([]openflow0.TableStatus)
 	return ret0
 }
 
@@ -121,6 +150,20 @@ func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3, arg4 i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockClient)(nil).InstallPodFlows), arg0, arg1, arg2, arg3, arg4)
 }
 
+// InstallPolicyRuleFlows mocks base method
+func (m *MockClient) InstallPolicyRuleFlows(arg0 *openflow.PolicyRule) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallPolicyRuleFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallPolicyRuleFlows indicates an expected call of InstallPolicyRuleFlows
+func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyRuleFlows), arg0)
+}
+
 // InstallServiceFlows mocks base method
 func (m *MockClient) InstallServiceFlows(arg0 string, arg1 *net.IPNet, arg2 uint32) error {
 	m.ctrl.T.Helper()
@@ -175,6 +218,20 @@ func (m *MockClient) UninstallPodFlows(arg0 string) error {
 func (mr *MockClientMockRecorder) UninstallPodFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodFlows", reflect.TypeOf((*MockClient)(nil).UninstallPodFlows), arg0)
+}
+
+// UninstallPolicyRuleFlows mocks base method
+func (m *MockClient) UninstallPolicyRuleFlows(arg0 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallPolicyRuleFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallPolicyRuleFlows indicates an expected call of UninstallPolicyRuleFlows
+func (mr *MockClientMockRecorder) UninstallPolicyRuleFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).UninstallPolicyRuleFlows), arg0)
 }
 
 // UninstallServiceFlows mocks base method
