@@ -61,11 +61,6 @@ func (b *commandBuilder) Priority(priority uint32) FlowBuilder {
 	return b
 }
 
-func (b *commandBuilder) Table(id TableIDType) FlowBuilder {
-	b.table = id
-	return b
-}
-
 func (b *commandBuilder) MatchProtocol(protocol protocol) FlowBuilder {
 	b.matchers = append(b.matchers, strings.ToLower(protocol))
 	return b

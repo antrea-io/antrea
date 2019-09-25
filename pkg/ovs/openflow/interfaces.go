@@ -14,14 +14,15 @@
 
 package openflow
 
-import "os/exec"
+import (
+	"os/exec"
+	"time"
+)
 
 var executor = exec.Command
 
 type versionType = string
 type protocol = string
-type builderType = commandBuilder
-
 type TableIDType uint8
 
 const LastTableID TableIDType = 0xff
@@ -42,28 +43,36 @@ const (
 	TableMissActionNext
 )
 
-type Bridge struct {
-	Name string
+// Bridge defines operations on an openflow bridge.
+type Bridge interface {
+	CreateTable(id, next TableIDType, missAction missActionType) Table
+	GetName() string
+	DeleteTable(id TableIDType) bool
+	DumpTableStatus() []TableStatus
 }
 
-func (b *Bridge) CreateTable(id, next TableIDType, missActionType missActionType) *Table {
-	return &Table{
-		Bridge:     b.Name,
-		ID:         id,
-		Next:       next,
-		MissAction: missActionType,
+func NewBridge(name string) Bridge {
+	return &commandBridge{
+		name:       name,
+		tableCache: map[TableIDType]Table{},
 	}
 }
 
-func (b *Bridge) DeleteTable(id TableIDType) bool {
-	// TODO: no need to delete table currently
-	return true
+// TableStatus represents the status of a specific flow table. The status is useful for debugging.
+type TableStatus struct {
+	ID         uint      `json:"id"`
+	FlowCount  uint      `json:"flowCount"`
+	UpdateTime time.Time `json:"updateTime"`
 }
 
-type Table struct {
-	Bridge     string
-	ID, Next   TableIDType
-	MissAction missActionType
+type Table interface {
+	GetID() TableIDType
+	BuildFlow() FlowBuilder
+	GetMissAction() missActionType
+	Status() TableStatus
+	GetNext() TableIDType
+
+	updateStatus(flowCountDelta int)
 }
 
 type Flow interface {
@@ -71,6 +80,7 @@ type Flow interface {
 	Modify() error
 	Delete() error
 	String() string
+	Table() Table
 }
 
 type Action interface {
@@ -91,7 +101,6 @@ type Action interface {
 }
 
 type FlowBuilder interface {
-	Table(id TableIDType) FlowBuilder
 	Priority(value uint32) FlowBuilder
 	Switch(name string) FlowBuilder
 	MatchProtocol(name protocol) FlowBuilder
@@ -102,8 +111,4 @@ type FlowBuilder interface {
 
 	Action() Action
 	Done() Flow
-}
-
-func (t *Table) BuildFlow() FlowBuilder {
-	return new(builderType).Table(t.ID).Switch(t.Bridge)
 }

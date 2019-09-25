@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"k8s.io/klog"
+
+	binding "okn/pkg/ovs/openflow"
 )
 
 const maxRetryForOFSwitch = 5
@@ -60,6 +62,14 @@ type Client interface {
 	// UninstallServiceFlows removes the connection to the service specified with the serviceName. UninstallServiceFlows
 	// will do nothing if no connection to the service was established.
 	UninstallServiceFlows(serviceName string) error
+
+	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
+	GetFlowTableStatus() []binding.TableStatus
+}
+
+// GetFlowTableStatus returns an array of flow table status.
+func (c *client) GetFlowTableStatus() []binding.TableStatus {
+	return c.bridge.DumpTableStatus()
 }
 
 func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error {
@@ -192,7 +202,7 @@ func (c *client) Initialize() error {
 	// Without this, the rest of the steps can fail with "<bridge> is not a bridge or a socket".
 	// TODO: this may not be needed any more after we transition to libopenflow and stop using
 	// ovs-ofctl directly
-	if err := waitForBridge(c.bridge.Name); err != nil {
+	if err := waitForBridge(c.bridge.GetName()); err != nil {
 		return err
 	}
 
