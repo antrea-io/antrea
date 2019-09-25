@@ -28,7 +28,7 @@ type TableIDType uint8
 
 const LastTableID TableIDType = 0xff
 
-type missActionType uint32
+type MissActionType uint32
 type Range [2]uint32
 
 const (
@@ -43,7 +43,7 @@ const (
 )
 
 const (
-	TableMissActionDrop missActionType = iota
+	TableMissActionDrop MissActionType = iota
 	TableMissActionNormal
 	TableMissActionNext
 )
@@ -61,9 +61,10 @@ const (
 	NxmFieldReg     = "NXM_NX_REG"
 )
 
+//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -destination testing/mock_openflow.go -package=testing github.com/vmware-tanzu/antrea/pkg/ovs/openflow Bridge,Table,Flow,Action,FlowBuilder
 // Bridge defines operations on an openflow bridge.
 type Bridge interface {
-	CreateTable(id, next TableIDType, missAction missActionType) Table
+	CreateTable(id, next TableIDType, missAction MissActionType) Table
 	GetName() string
 	DeleteTable(id TableIDType) bool
 	DumpTableStatus() []TableStatus
@@ -91,11 +92,13 @@ type TableStatus struct {
 type Table interface {
 	GetID() TableIDType
 	BuildFlow() FlowBuilder
-	GetMissAction() missActionType
+	GetMissAction() MissActionType
 	Status() TableStatus
 	GetNext() TableIDType
+}
 
-	updateStatus(flowCountDelta int)
+type updater interface {
+	UpdateStatus(delta int)
 }
 
 type Flow interface {
@@ -104,11 +107,12 @@ type Flow interface {
 	Delete() error
 	String() string
 	MatchString() string
-	Table() Table
+	GetTable() Table
+	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not not copy the actions.
+	CopyToBuilder() FlowBuilder
 }
 
 type Action interface {
-	SetField(key, value string) FlowBuilder
 	LoadARPOperation(value uint16) FlowBuilder
 	LoadRegRange(regID int, value uint32, to Range) FlowBuilder
 	LoadRange(name string, addr uint32, to Range) FlowBuilder
@@ -137,7 +141,6 @@ type Action interface {
 
 type FlowBuilder interface {
 	Priority(value uint32) FlowBuilder
-	Switch(name string) FlowBuilder
 	MatchProtocol(name protocol) FlowBuilder
 	MatchReg(regID int, data uint32) FlowBuilder
 	MatchRegRange(regID int, data uint32, rng Range) FlowBuilder
@@ -153,8 +156,8 @@ type FlowBuilder interface {
 	MatchARPSpa(ip net.IP) FlowBuilder
 	MatchARPTpa(ip net.IP) FlowBuilder
 	MatchARPOp(op uint16) FlowBuilder
-	CTState(value string) FlowBuilder
-	CTMark(value string) FlowBuilder
+	MatchCTState(value string) FlowBuilder
+	MatchCTMark(value string) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
 	MatchTCPDstPort(port uint16) FlowBuilder
 	MatchUDPDstPort(port uint16) FlowBuilder

@@ -27,7 +27,7 @@ type commandFlow struct {
 	actions  []string
 }
 
-func (f *commandFlow) Table() Table {
+func (f *commandFlow) GetTable() Table {
 	return f.table
 }
 
@@ -51,15 +51,20 @@ func (f *commandFlow) Add() error {
 	if output, err := executor("ovs-ofctl", "add-flow", f.bridge, "-O"+Version13, f.format(true)).CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to add flow %q: %v (%q)", f.format(true), err, output)
 	}
-	f.table.updateStatus(1)
+
+	f.updateTableStatus(1)
 	return nil
 }
 
 func (f *commandFlow) Modify() error {
+	type a interface {
+		UpdateStatus(delta int)
+	}
 	if output, err := executor("ovs-ofctl", "mod-flows", f.bridge, "-O"+Version13, f.format(true)).CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to modify flow %q: %v (%q)", f.format(true), err, output)
 	}
-	f.table.updateStatus(0)
+
+	f.updateTableStatus(0)
 	return nil
 }
 
@@ -67,8 +72,14 @@ func (f *commandFlow) Delete() error {
 	if output, err := executor("ovs-ofctl", "del-flows", f.bridge, "-O"+Version13, f.format(false)).CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to delete flow %q: %v (%q)", f.format(false), err, output)
 	}
-	f.table.updateStatus(-1)
+	f.updateTableStatus(-1)
 	return nil
+}
+
+func (f *commandFlow) updateTableStatus(delta int) {
+	if updater, ok := f.table.(updater); ok {
+		updater.UpdateStatus(delta)
+	}
 }
 
 func (f *commandFlow) String() string {
@@ -77,4 +88,14 @@ func (f *commandFlow) String() string {
 
 func (f *commandFlow) MatchString() string {
 	return f.format(false)
+}
+
+func (f *commandFlow) CopyToBuilder() FlowBuilder {
+	var newFlow = commandFlow{
+		table:    f.table,
+		bridge:   f.bridge,
+		priority: f.priority,
+		matchers: f.matchers,
+	}
+	return &commandBuilder{newFlow}
 }

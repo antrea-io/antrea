@@ -24,11 +24,6 @@ type commandBuilder struct {
 	commandFlow
 }
 
-func (b *commandBuilder) Switch(name string) FlowBuilder {
-	b.bridge = name
-	return b
-}
-
 func (b *commandBuilder) Done() Flow {
 	return &b.commandFlow
 }
@@ -51,12 +46,12 @@ func (b *commandBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBu
 	return b.MatchFieldRange(fmt.Sprintf("reg%d", regID), fmt.Sprintf("0x%x", data), rng)
 }
 
-func (b *commandBuilder) CTState(value string) FlowBuilder {
+func (b *commandBuilder) MatchCTState(value string) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("ct_state=%s", value))
 	return b
 }
 
-func (b *commandBuilder) CTMark(value string) FlowBuilder {
+func (b *commandBuilder) MatchCTMark(value string) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("ct_mark=%s", value))
 	return b
 }

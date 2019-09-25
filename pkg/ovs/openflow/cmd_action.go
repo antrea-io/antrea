@@ -123,7 +123,7 @@ func (a *commandAction) CT(commit bool, tableID TableIDType, zone int) CTAction 
 	return ct
 }
 
-func (a *commandAction) SetField(key, value string) FlowBuilder {
+func (a *commandAction) setField(key, value string) FlowBuilder {
 	a.builder.actions = append(a.builder.actions, fmt.Sprintf("set_field:%s->%s", value, key))
 	return a.builder
 }
@@ -183,37 +183,37 @@ func (a *commandAction) Conjunction(conjID uint32, clauseID uint8, nClause uint8
 }
 
 func (a *commandAction) SetDstMAC(addr net.HardwareAddr) FlowBuilder {
-	return a.SetField("dl_dst", addr.String())
+	return a.setField("dl_dst", addr.String())
 }
 
 func (a *commandAction) SetSrcMAC(addr net.HardwareAddr) FlowBuilder {
-	return a.SetField("dl_src", addr.String())
+	return a.setField("dl_src", addr.String())
 }
 
 func (a *commandAction) SetARPSha(addr net.HardwareAddr) FlowBuilder {
-	return a.SetField("arp_sha", addr.String())
+	return a.setField("arp_sha", addr.String())
 }
 
 func (a *commandAction) SetARPTha(addr net.HardwareAddr) FlowBuilder {
-	return a.SetField("arp_tha", addr.String())
+	return a.setField("arp_tha", addr.String())
 }
 
 func (a *commandAction) SetARPSpa(addr net.IP) FlowBuilder {
-	return a.SetField("arp_spa", addr.String())
+	return a.setField("arp_spa", addr.String())
 }
 
 func (a *commandAction) SetARPTpa(addr net.IP) FlowBuilder {
-	return a.SetField("arp_tpa", addr.String())
+	return a.setField("arp_tpa", addr.String())
 }
 
 func (a *commandAction) SetSrcIP(addr net.IP) FlowBuilder {
-	return a.SetField("nw_src", addr.String())
+	return a.setField("nw_src", addr.String())
 }
 
 func (a *commandAction) SetDstIP(addr net.IP) FlowBuilder {
-	return a.SetField("nw_dst", addr.String())
+	return a.setField("nw_dst", addr.String())
 }
 
 func (a *commandAction) SetTunnelDst(addr net.IP) FlowBuilder {
-	return a.SetField("tun_dst", addr.String())
+	return a.setField("tun_dst", addr.String())
 }

@@ -80,7 +80,7 @@ type Client interface {
 	// addresses are added to PolicyRule.From, else to PolicyRule.To.
 	AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error
 
-	// DeletePolicyRuleAddress removes addresses from the specified NetworkPolicy rule. If addrType is true, the addresses
+	// DeletePolicyRuleAddress removes addresses from the specified NetworkPolicy rule. If addrType is srcAddress, the addresses
 	// are removed from PolicyRule.From, else from PolicyRule.To.
 	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error
 
@@ -217,6 +217,11 @@ func (c *client) Initialize() error {
 	for _, flow := range c.connectionTrackFlows() {
 		if err := c.flowOperations.Add(flow); err != nil {
 			return fmt.Errorf("failed to install connection track flows: %v", err)
+		}
+	}
+	for _, flow := range c.establishedConnectionFlows() {
+		if err := flow.Add(); err != nil {
+			return fmt.Errorf("failed to install flows to skip established connections: %v", err)
 		}
 	}
 	return nil
