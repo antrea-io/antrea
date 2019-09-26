@@ -37,7 +37,8 @@ const (
 	tunOFPort           = 1
 	hostGatewayOFPort   = 2
 	maxRetryForHostLink = 5
-	NodeNameKey         = "NODE_NAME"
+	NodeNameEnvKey      = "NODE_NAME"
+	IPSecPSKEnvKey      = "ANTREA_IPSEC_PSK"
 )
 
 type NodeConfig struct {
@@ -55,16 +56,18 @@ type Gateway struct {
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
-	ovsBridge       string
-	hostGateway     string
-	tunnelType      string
-	MTU             int
-	client          clientset.Interface
-	ifaceStore      InterfaceStore
-	nodeConfig      *NodeConfig
-	ovsBridgeClient ovsconfig.OVSBridgeClient
-	serviceCIDR     *net.IPNet
-	ofClient        openflow.Client
+	ovsBridge         string
+	hostGateway       string
+	tunnelType        string
+	MTU               int
+	enableIPSecTunnel bool
+	client            clientset.Interface
+	ifaceStore        InterfaceStore
+	nodeConfig        *NodeConfig
+	ovsBridgeClient   ovsconfig.OVSBridgeClient
+	serviceCIDR       *net.IPNet
+	ofClient          openflow.Client
+	ipsecPSK          string
 }
 
 func disableICMPSendRedirects(intfName string) error {
@@ -81,28 +84,35 @@ func NewInitializer(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
 	k8sClient clientset.Interface,
+	ifaceStore InterfaceStore,
 	ovsBridge, serviceCIDR, hostGateway, tunnelType string,
 	MTU int,
-	ifaceStore InterfaceStore) *Initializer {
+	enableIPSecTunnel bool) *Initializer {
 	// Parse service CIDR configuration. serviceCIDR is checked in option.validate, so
 	// it should be a valid configuration here.
 	_, serviceCIDRNet, _ := net.ParseCIDR(serviceCIDR)
 	return &Initializer{
-		ovsBridgeClient: ovsBridgeClient,
-		ovsBridge:       ovsBridge,
-		hostGateway:     hostGateway,
-		tunnelType:      tunnelType,
-		MTU:             MTU,
-		client:          k8sClient,
-		ifaceStore:      ifaceStore,
-		serviceCIDR:     serviceCIDRNet,
-		ofClient:        ofClient,
+		ovsBridgeClient:   ovsBridgeClient,
+		ovsBridge:         ovsBridge,
+		hostGateway:       hostGateway,
+		tunnelType:        tunnelType,
+		MTU:               MTU,
+		enableIPSecTunnel: enableIPSecTunnel,
+		client:            k8sClient,
+		ifaceStore:        ifaceStore,
+		serviceCIDR:       serviceCIDRNet,
+		ofClient:          ofClient,
 	}
 }
 
 // GetNodeConfig returns the NodeConfig.
 func (i *Initializer) GetNodeConfig() *NodeConfig {
 	return i.nodeConfig
+}
+
+// GetIPSecPSK returns PSK used for IPSec tunnel.
+func (i *Initializer) GetIPSecPSK() string {
+	return i.ipsecPSK
 }
 
 // setupOVSBridge sets up the OVS bridge and create host gateway interface and tunnel port
@@ -142,7 +152,11 @@ func (i *Initializer) setupOVSBridge() error {
 
 func (i *Initializer) Initialize() error {
 	klog.Info("Setting up node network")
-	if err := i.initNodeLocalConfig(i.client); err != nil {
+	if err := i.initNodeLocalConfig(); err != nil {
+		return err
+	}
+
+	if err := i.readIPSecPSK(); err != nil {
 		return err
 	}
 
@@ -319,12 +333,12 @@ func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
 
 // initNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
 // host gateway interface.
-func (i *Initializer) initNodeLocalConfig(client clientset.Interface) error {
+func (i *Initializer) initNodeLocalConfig() error {
 	nodeName, err := getNodeName()
 	if err != nil {
 		return err
 	}
-	node, err := client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	node, err := i.client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("Failed to get node from K8s with name %s: %v", nodeName, err)
 		return err
@@ -344,11 +358,11 @@ func (i *Initializer) initNodeLocalConfig(client clientset.Interface) error {
 // - Environment variable NODE_NAME, which should be set by Downward API
 // - OS's hostname
 func getNodeName() (string, error) {
-	nodeName := os.Getenv(NodeNameKey)
+	nodeName := os.Getenv(NodeNameEnvKey)
 	if nodeName != "" {
 		return nodeName, nil
 	}
-	klog.Infof("Environment variable %s not found, use hostname instead", NodeNameKey)
+	klog.Infof("Environment variable %s not found, using hostname instead", NodeNameEnvKey)
 	var err error
 	nodeName, err = os.Hostname()
 	if err != nil {
@@ -356,4 +370,21 @@ func getNodeName() (string, error) {
 		return "", err
 	}
 	return nodeName, nil
+}
+
+// readIPSecPSK reads the IPSec PSK value from environment variable
+// ANTREA_IPSEC_PSK, when enableIPSecTunnel is set to true.
+func (i *Initializer) readIPSecPSK() error {
+	if !i.enableIPSecTunnel {
+		return nil
+	}
+
+	i.ipsecPSK = os.Getenv(IPSecPSKEnvKey)
+	if i.ipsecPSK == "" {
+		return fmt.Errorf("IPSec PSK environment variable is not set or is empty")
+	}
+
+	// Normally we want not to log the secret data.
+	klog.V(4).Infof("IPSec PSK value: %s", i.ipsecPSK)
+	return nil
 }

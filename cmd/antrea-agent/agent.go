@@ -67,19 +67,23 @@ func run(o *Options) error {
 		ovsBridgeClient,
 		ofClient,
 		k8sClient,
+		ifaceStore,
 		o.config.OVSBridge,
 		o.config.ServiceCIDR,
 		o.config.HostGateway,
 		o.config.TunnelType,
 		o.config.DefaultMTU,
-		ifaceStore)
+		o.config.EnableIPSecTunnel)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
 	}
 	nodeConfig := agentInitializer.GetNodeConfig()
 
-	nodeController := nodecontroller.NewNodeController(k8sClient, informerFactory, ofClient, nodeConfig)
+	nodeController := nodecontroller.NewNodeController(k8sClient,
+		informerFactory,
+		ofClient,
+		nodeConfig)
 
 	cniServer := cniserver.New(
 		o.config.CNISocket,
