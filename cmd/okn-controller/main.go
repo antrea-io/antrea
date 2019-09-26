@@ -35,7 +35,7 @@ func newControllerCommand() *cobra.Command {
 			if err := opts.validate(args); err != nil {
 				klog.Fatalf("Failed to validate: %v", err)
 			}
-			if err := runController(opts); err != nil {
+			if err := run(opts); err != nil {
 				klog.Fatalf("Error running controller: %v", err)
 			}
 		},
@@ -46,12 +46,4 @@ func newControllerCommand() *cobra.Command {
 	// Install log flags
 	flags.AddGoFlagSet(flag.CommandLine)
 	return cmd
-}
-
-func runController(o *Options) error {
-	controller, err := newOKNController(o.config)
-	if err != nil {
-		return err
-	}
-	return controller.run()
 }
