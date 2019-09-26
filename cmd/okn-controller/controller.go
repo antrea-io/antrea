@@ -1,13 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"k8s.io/client-go/informers"
-	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
-	networkpolicy "okn/pkg/controller/networkpolicy"
+	"okn/pkg/controller/networkpolicy"
 	"okn/pkg/k8s"
 	"okn/pkg/signals"
 )
@@ -16,17 +16,15 @@ import (
 // Same as in https://github.com/kubernetes/sample-controller/blob/master/main.go
 const informerDefaultResync time.Duration = 30 * time.Second
 
-type OKNController struct {
-	client                  clientset.Interface
-	informerFactory         informers.SharedInformerFactory
-	networkPolicyController *networkpolicy.NetworkPolicyController
-}
-
-func newOKNController(config *ControllerConfig) (*OKNController, error) {
-	client, err := k8s.CreateClient(config.ClientConnection)
+// run starts OKN Controller with the given options and waits for termination signal.
+func run(o *Options) error {
+	klog.Info("Starting OKN Controller")
+	// Create a K8s Clientset and SharedInformerFactory for the given config.
+	client, err := k8s.CreateClient(o.config.ClientConnection)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("error creating K8s client: %v", err)
 	}
+
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
@@ -34,25 +32,15 @@ func newOKNController(config *ControllerConfig) (*OKNController, error) {
 
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(client, podInformer, namespaceInformer, networkPolicyInformer)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("error creating network policy controller: %v", err)
 	}
-
-	return &OKNController{
-		client:                  client,
-		informerFactory:         informerFactory,
-		networkPolicyController: networkPolicyController,
-	}, nil
-}
-
-func (c *OKNController) run() error {
-	klog.Info("Starting OKN Controller")
 
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 
-	c.informerFactory.Start(stopCh)
+	informerFactory.Start(stopCh)
 
-	go c.networkPolicyController.Run(stopCh)
+	go networkPolicyController.Run(stopCh)
 
 	<-stopCh
 	klog.Info("Stopping OKN controller")
