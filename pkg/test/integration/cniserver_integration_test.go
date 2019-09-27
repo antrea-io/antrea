@@ -84,7 +84,7 @@ const (
 )
 
 var ipamMock *mocks.MockIPAMDriver
-var ovsServiceMock *mocks.MockOVSdbClient
+var ovsServiceMock *mocks.MockOVSBridgeClient
 var ofServiceMock *mocks.MockOFClient
 var testNodeConfig *agent.NodeConfig
 
@@ -574,7 +574,7 @@ func TestOknServerFunc(t *testing.T) {
 	defer controller.Finish()
 	ipamMock = mocks.NewMockIPAMDriver(controller)
 	_ = ipam.RegisterIPAMDriver("mock", ipamMock)
-	ovsServiceMock = mocks.NewMockOVSdbClient(controller)
+	ovsServiceMock = mocks.NewMockOVSBridgeClient(controller)
 	ofServiceMock = mocks.NewMockOFClient(controller)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "CNI server operations suite")

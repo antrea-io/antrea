@@ -5,7 +5,7 @@ https://github.com/golang/mock for its unit tests.
 
 The following interfaces are mocked at the moment:
  * `OVSBridgeClient` from the `okn/pkg/ovs/ovsconfig` package is mocked as
-   `MockOVSdbClient`
+   `MockOVSBridgeClient`
  * `IPAMDriver` from the `okn/pkg/agent/cniserver/ipam` package is mocked as
    `MockIPAMDriver`
   * `Client` from the `okn/pkg/agent/openflow` package is mocked as
