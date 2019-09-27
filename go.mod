@@ -9,7 +9,7 @@ require (
 	github.com/coreos/go-iptables v0.4.1
 	github.com/gogo/protobuf v0.0.0-20171007142547-342cbe0a0415 // indirect
 	github.com/golang/groupcache v0.0.0-20160516000752-02826c3e7903 // indirect
-	github.com/golang/mock v1.3.1
+	github.com/golang/mock v1.3.1-0.20190508161146-9fa652df1129
 	github.com/golang/protobuf v1.3.2
 	github.com/google/gofuzz v1.0.0 // indirect
 	github.com/google/uuid v1.1.1

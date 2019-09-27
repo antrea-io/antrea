@@ -16,12 +16,12 @@ import (
 func TestInitCache(t *testing.T) {
 	controller := mock.NewController(t)
 	defer controller.Finish()
-	mockOVSdbClient := mocks.NewMockOVSdbClient(controller)
+	mockOVSBridgeClient := mocks.NewMockOVSBridgeClient(controller)
 
-	mockOVSdbClient.EXPECT().GetPortList().Return(nil, test.NewDummyOVSConfigError("Failed to list OVS ports", true, true))
+	mockOVSBridgeClient.EXPECT().GetPortList().Return(nil, test.NewDummyOVSConfigError("Failed to list OVS ports", true, true))
 
 	cache := NewInterfaceStore()
-	err := cache.Initialize(mockOVSdbClient, "", "")
+	err := cache.Initialize(mockOVSBridgeClient, "", "")
 	if err == nil {
 		t.Errorf("Failed to handle OVS return error")
 	}
@@ -38,15 +38,15 @@ func TestInitCache(t *testing.T) {
 			OVSExternalIDMAC: "11:22:33:44:55:77", OVSExternalIDIP: "1.1.1.2", OVSExternalIDPodName: "pod2", OVSExternalIDPodNamespace: "test"}}
 	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
 
-	mockOVSdbClient.EXPECT().GetPortList().Return(initOVSPorts, test.NewDummyOVSConfigError("Failed to list OVS ports", true, true))
-	err = cache.Initialize(mockOVSdbClient, "", "")
+	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, test.NewDummyOVSConfigError("Failed to list OVS ports", true, true))
+	err = cache.Initialize(mockOVSBridgeClient, "", "")
 	if cache.Len() != 0 {
 		t.Errorf("Failed to load OVS port in initCache")
 	}
 
 	ovsPort2.OFPort = 2
-	mockOVSdbClient.EXPECT().GetPortList().Return(initOVSPorts, nil)
-	err = cache.Initialize(mockOVSdbClient, "", "")
+	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, nil)
+	err = cache.Initialize(mockOVSBridgeClient, "", "")
 	if cache.Len() != 2 {
 		t.Errorf("Failed to load OVS port in initCache")
 	}
