@@ -302,7 +302,7 @@ func (i *Initializer) initNodeLocalConfig(client clientset.Interface) error {
 		return err
 	}
 	node, err := client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
-	if err != nil || node == nil {
+	if err != nil {
 		klog.Errorf("Failed to get node from K8s with name %s: %v", nodeName, err)
 		return err
 	}
