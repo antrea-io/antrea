@@ -228,6 +228,9 @@ func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*c
 // we need to prepend s.hostProcPathPrefix to the network namespace path provided by the cni. When
 // running as a simple process, s.hostProcPathPrefix will be empty.
 func (s *CNIServer) hostNetNsPath(netNS string) string {
+	if netNS == "" {
+		return ""
+	}
 	return s.hostProcPathPrefix + netNS
 }
 
@@ -339,7 +342,8 @@ func (s *CNIServer) CmdDel(ctx context.Context, request *cnimsg.CniCmdRequestMes
 	// Remove host interface and OVS configuration
 	podName := string(cniConfig.K8S_POD_NAME)
 	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
-	if err := removeInterfaces(s.ovsBridgeClient, s.ofClient, s.ifaceStore, podName, podNamespace, cniConfig.ContainerId, cniConfig.Netns, cniConfig.Ifname); err != nil {
+	netNS := s.hostNetNsPath(cniConfig.Netns)
+	if err := removeInterfaces(s.ovsBridgeClient, s.ofClient, s.ifaceStore, podName, podNamespace, cniConfig.ContainerId, netNS, cniConfig.Ifname); err != nil {
 		klog.Errorf("Failed to remove container %s interface configuration: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
