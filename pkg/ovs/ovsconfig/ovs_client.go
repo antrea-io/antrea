@@ -2,6 +2,8 @@ package ovsconfig
 
 import (
 	"errors"
+	"time"
+
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/dbtransaction"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/helpers"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
@@ -32,10 +34,37 @@ const openvSwitchSchema = "Open_vSwitch"
 // "/run/openvswitch/db.sock" will be used.
 // Returns the OVSDB struct on success.
 func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
+	klog.Infof("Connecting to OVSDB at address %s", address)
+
 	if address == "" {
 		address = defaultUDSAddress
 	}
-	return ovsdb.Dial([][]string{{"unix", address}}, nil, nil), nil
+
+	// For the sake of debugging, we keep logging messages until the
+	// connection is succesful. We use exponential backoff to determine the
+	// sleep  duration between two successive log messages (up to
+	// maxBackoffTime).
+	const maxBackoffTime = 8 * time.Second
+	success := make(chan bool, 1)
+	go func() {
+		backoff := 1 * time.Second
+		for {
+			select {
+			case <-success:
+				return
+			case <-time.After(backoff):
+				backoff *= 2
+				if backoff > maxBackoffTime {
+					backoff = maxBackoffTime
+				}
+				klog.Infof("Not connected yet, will try again in %v", backoff)
+			}
+		}
+	}()
+
+	db := ovsdb.Dial([][]string{{"unix", address}}, nil, nil)
+	success <- true
+	return db, nil
 }
 
 // Creates and returns a new OVSBridge struct.
