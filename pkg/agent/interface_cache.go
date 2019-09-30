@@ -35,7 +35,7 @@ const (
 	TunnelInterface
 )
 
-type OvsPortConfig struct {
+type OVSPortConfig struct {
 	IfaceName string
 	PortUUID  string
 	OFPort    int32
@@ -49,7 +49,7 @@ type InterfaceConfig struct {
 	PodName      string
 	PodNamespace string
 	NetNS        string
-	*OvsPortConfig
+	*OVSPortConfig
 }
 
 // InterfaceStore is a service interface to create local interfaces for container, host gateway, and tunnel port.
@@ -92,13 +92,13 @@ func (c *interfaceCache) Initialize(ovsBridgeClient ovsconfig.OVSBridgeClient, g
 	}
 
 	for _, port := range ovsPorts {
-		ovsPort := &OvsPortConfig{IfaceName: port.Name, PortUUID: port.UUID, OFPort: port.OFPort}
+		ovsPort := &OVSPortConfig{IfaceName: port.Name, PortUUID: port.UUID, OFPort: port.OFPort}
 		var intf *InterfaceConfig
 		switch {
 		case port.Name == gatewayPort:
-			intf = &InterfaceConfig{Type: GatewayInterface, OvsPortConfig: ovsPort, ID: gatewayPort}
+			intf = &InterfaceConfig{Type: GatewayInterface, OVSPortConfig: ovsPort, ID: gatewayPort}
 		case port.Name == tunnelPort:
-			intf = &InterfaceConfig{Type: TunnelInterface, OvsPortConfig: ovsPort, ID: tunnelPort}
+			intf = &InterfaceConfig{Type: TunnelInterface, OVSPortConfig: ovsPort, ID: tunnelPort}
 		default:
 			if port.ExternalIDs == nil {
 				klog.Infof("OVS port %s has no external_ids, continue to next", port.Name)
@@ -115,7 +115,7 @@ func (c *interfaceCache) Initialize(ovsBridgeClient ovsconfig.OVSBridgeClient, g
 				}
 				podName, _ := port.ExternalIDs[OVSExternalIDPodName]
 				podNamespace, _ := port.ExternalIDs[OVSExternalIDPodNamespace]
-				intf = &InterfaceConfig{Type: ContainerInterface, OvsPortConfig: ovsPort, ID: containerID,
+				intf = &InterfaceConfig{Type: ContainerInterface, OVSPortConfig: ovsPort, ID: containerID,
 					IP: containerIP, MAC: containerMAC, PodName: podName, PodNamespace: podNamespace}
 			}
 		}

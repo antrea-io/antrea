@@ -197,7 +197,7 @@ func (i *Initializer) setupGatewayInterface() error {
 			return err
 		}
 		gatewayIface = NewGatewayInterface(i.hostGateway)
-		gatewayIface.OvsPortConfig = &OvsPortConfig{i.hostGateway, gwPortUUID, hostGatewayOFPort}
+		gatewayIface.OVSPortConfig = &OVSPortConfig{i.hostGateway, gwPortUUID, hostGatewayOFPort}
 		i.ifaceStore.AddInterface(i.hostGateway, gatewayIface)
 	} else {
 		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
@@ -289,7 +289,7 @@ func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
 		return err
 	}
 	tunnelIface = NewTunnelInterface(tunnelPortName)
-	tunnelIface.OvsPortConfig = &OvsPortConfig{tunnelPortName, tunnelPortUUID, tunOFPort}
+	tunnelIface.OVSPortConfig = &OVSPortConfig{tunnelPortName, tunnelPortUUID, tunOFPort}
 	i.ifaceStore.AddInterface(tunnelPortName, tunnelIface)
 	return nil
 }
