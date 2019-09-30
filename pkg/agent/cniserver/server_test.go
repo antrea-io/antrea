@@ -306,7 +306,7 @@ func TestOVSOperations(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to handle OVS success add")
 	} else {
-		containerConfig.OvsPortConfig = &agent.OvsPortConfig{PortUUID: portUUID, IfaceName: hostIfaceName}
+		containerConfig.OVSPortConfig = &agent.OVSPortConfig{PortUUID: portUUID, IfaceName: hostIfaceName}
 		ifaceStore.AddInterface(hostIfaceName, containerConfig)
 		if containerConfig.PortUUID != fakePortUUID {
 			t.Errorf("Failed to cache OVS port UUID")
@@ -359,7 +359,7 @@ func TestRemoveInterface(t *testing.T) {
 	containerIP := net.ParseIP("1.1.1.1")
 	fakePortUUID := uuid.New().String()
 	containerConfig := agent.NewContainerInterface(containerID, pod1, testPodNamespace, "", containerMAC, containerIP)
-	containerConfig.OvsPortConfig = &agent.OvsPortConfig{hostIfaceName, fakePortUUID, 0}
+	containerConfig.OVSPortConfig = &agent.OVSPortConfig{hostIfaceName, fakePortUUID, 0}
 	mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
 	mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(nil)
 	ifaceStore.AddInterface(hostIfaceName, containerConfig)
@@ -380,7 +380,7 @@ func TestRemoveInterface(t *testing.T) {
 	cniConfig.ContainerId = containerID2
 	fakePortUUID2 := uuid.New().String()
 	containerConfig2 := agent.NewContainerInterface(containerID2, pod2, testPodNamespace, "", containerMAC, containerIP)
-	containerConfig2.OvsPortConfig = &agent.OvsPortConfig{hostIfaceName2, fakePortUUID2, 0}
+	containerConfig2.OVSPortConfig = &agent.OVSPortConfig{hostIfaceName2, fakePortUUID2, 0}
 	ifaceStore.AddInterface(hostIfaceName2, containerConfig2)
 	mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID2).Return(test.NewDummyOVSConfigError("Failed to delete", true, true))
 	mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName2).Return(nil)
@@ -400,7 +400,7 @@ func TestRemoveInterface(t *testing.T) {
 	cniConfig.ContainerId = containerID3
 	fakePortUUID3 := uuid.New().String()
 	containerConfig3 := agent.NewContainerInterface(containerID3, pod3, testPodNamespace, "", containerMAC, containerIP)
-	containerConfig3.OvsPortConfig = &agent.OvsPortConfig{hostIfaceName3, fakePortUUID3, 0}
+	containerConfig3.OVSPortConfig = &agent.OVSPortConfig{hostIfaceName3, fakePortUUID3, 0}
 	ifaceStore.AddInterface(hostIfaceName3, containerConfig3)
 	mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName3).Return(fmt.Errorf("failed to delete openflow entry"))
 	err = removeInterfaces(mockOVSBridgeClient, mockOFClient, ifaceStore, pod3, testPodNamespace, containerID3, "", cniConfig.Ifname)
