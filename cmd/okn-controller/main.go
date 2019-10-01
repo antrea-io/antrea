@@ -7,6 +7,8 @@ import (
 	"flag"
 	"os"
 
+	"okn/pkg/version"
+
 	"github.com/spf13/cobra"
 	"k8s.io/klog"
 )
@@ -39,6 +41,7 @@ func newControllerCommand() *cobra.Command {
 				klog.Fatalf("Error running controller: %v", err)
 			}
 		},
+		Version: version.GetFullVersionWithRuntimeInfo(),
 	}
 
 	flags := cmd.Flags()
