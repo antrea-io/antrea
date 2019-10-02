@@ -1,6 +1,12 @@
+/*
+Package networkpolicy provides NetworkPolicyController implementation to manage
+and synchronize the Pods and Namespaces affected by Network Policies and enforce
+their rules.
+*/
 package networkpolicy
 
 import (
+	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -15,12 +21,12 @@ import (
 )
 
 const (
-	// Interval of synchronizing status from apiserver
+	// Interval of synchronizing status from apiserver.
 	syncPeriod = 60 * time.Second
-	// How long to wait before retrying the processing of a networkpolicy change
+	// How long to wait before retrying the processing of a NetworkPolicy change.
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
-	// Default number of workers processing a networkpolicy change
+	// Default number of workers processing a NetworkPolicy change.
 	defaultWorkers = 4
 )
 
@@ -28,21 +34,43 @@ var (
 	keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
 )
 
+// NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
+// affected by a Network Policy.
 type NetworkPolicyController struct {
-	kubeClient                clientset.Interface
-	podInformer               coreinformers.PodInformer
-	podLister                 corelisters.PodLister
-	podListerSynced           cache.InformerSynced
-	namespaceInformer         coreinformers.NamespaceInformer
-	namespaceLister           corelisters.NamespaceLister
-	namespaceListerSynced     cache.InformerSynced
-	networkPolicyInformer     networkinginformers.NetworkPolicyInformer
-	networkPolicyLister       networkinglisters.NetworkPolicyLister
+	kubeClient  clientset.Interface
+	podInformer coreinformers.PodInformer
+
+	// podLister is able to list/get Pods and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	podLister corelisters.PodLister
+
+	// podListerSynced is a function which returns true if the Pod shared informer has been synced at least once.
+	podListerSynced cache.InformerSynced
+
+	namespaceInformer coreinformers.NamespaceInformer
+
+	// namespaceLister is able to list/get Namespaces and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	namespaceLister corelisters.NamespaceLister
+
+	// namespaceListerSynced is a function which returns true if the Namespace shared informer has been synced at least once.
+	namespaceListerSynced cache.InformerSynced
+
+	networkPolicyInformer networkinginformers.NetworkPolicyInformer
+
+	// networkPolicyLister is able to list/get Network Policies and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	networkPolicyLister networkinglisters.NetworkPolicyLister
+
+	// networkPolicyListerSynced is a function which returns true if the Network Policy shared informer has been synced at least once.
 	networkPolicyListerSynced cache.InformerSynced
-	queue                     workqueue.RateLimitingInterface
+
+	// queue maintains the Network Policies that need to be synced.
+	queue workqueue.RateLimitingInterface
 }
 
-func NewNetworkPolicyController(kubeClient clientset.Interface, podInformer coreinformers.PodInformer, namespaceInformer coreinformers.NamespaceInformer, networkPolicyInformer networkinginformers.NetworkPolicyInformer) (*NetworkPolicyController, error) {
+// NewNetworkPolicyController returns a new *NetworkPolicyController.
+func NewNetworkPolicyController(kubeClient clientset.Interface, podInformer coreinformers.PodInformer, namespaceInformer coreinformers.NamespaceInformer, networkPolicyInformer networkinginformers.NetworkPolicyInformer) *NetworkPolicyController {
 	n := &NetworkPolicyController{
 		kubeClient:                kubeClient,
 		podInformer:               podInformer,
@@ -92,7 +120,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface, podInformer core
 		},
 		syncPeriod,
 	)
-	return n, nil
+	return n
 }
 
 // enqueueNetworkPolicy adds an object to the controller work queue
@@ -107,18 +135,19 @@ func (n *NetworkPolicyController) enqueueNetworkPolicy(obj interface{}) {
 	n.queue.Add(key)
 }
 
+// Run begins watching and syncing of a NetworkPolicyController.
 func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	defer n.queue.ShutDown()
 
-	klog.Info("Starting networkpolicy controller")
-	defer klog.Info("Shutting down networkpolicy controller")
+	klog.Info("Starting NetworkPolicy controller")
+	defer klog.Info("Shutting down NetworkPolicy controller")
 
-	klog.Info("Waiting for caches to sync for networkpolicy controller")
+	klog.Info("Waiting for caches to sync for NetworkPolicy controller")
 	if !cache.WaitForCacheSync(stopCh, n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced) {
-		klog.Error("Unable to sync caches for networkpolicy controller")
+		klog.Error("Unable to sync caches for NetworkPolicy controller")
 		return
 	}
-	klog.Info("Caches are synced for networkpolicy controller")
+	klog.Info("Caches are synced for NetworkPolicy controller")
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(n.worker, time.Second, stopCh)
@@ -133,40 +162,52 @@ func (n *NetworkPolicyController) worker() {
 	}
 }
 
+// processNextWorkItem retrieves a NetworkPolicy object from the WorkQueue until a shutdown signal is received.
 func (n *NetworkPolicyController) processNextWorkItem() bool {
-	key, quit := n.queue.Get()
+	obj, quit := n.queue.Get()
 	if quit {
 		return false
 	}
-	defer n.queue.Done(key)
+	// We defer the call to Done so that the workqueue knows we have finished processing this item. We also
+	// must remember to call Forget if we do not want this work item being re-queued. For
+	// example, we do not call Forget if a transient error occurs, instead the item is put back
+	// on the workqueue and attempted again after a back-off period.
+	defer n.queue.Done(obj)
 
-	err := n.syncNetworkPolicy(key.(string))
-	n.handleErr(err, key)
+	// We expect strings ("NamespaceName/NetworkPolicyName") to come off the workqueue.
+	key, ok := obj.(string)
+	if !ok {
+		// As the item in the workqueue is actually invalid, we call Forget here else we'd
+		// go into a loop of attempting to process a work item that is invalid.
+		// This should not happen: enqueueNetworkPolicy only enqueues strings.
+		n.queue.Forget(obj)
+		klog.Errorf("Expected string in work queue but got %#v", obj)
+		return true
+	}
+	err := n.syncNetworkPolicy(key)
+	if err != nil {
+		// Put the item back on the workqueue to handle any transient errors.
+		n.queue.AddRateLimited(key)
+		klog.Errorf("Error syncing NetworkPolicy %s, requeuing. Error: %v", key, err)
+		return true
+	}
+	// If no error occurs we Forget this item so it does not get queued again until
+	// another change happens.
+	n.queue.Forget(key)
 	return true
 }
 
 func (n *NetworkPolicyController) syncNetworkPolicy(key string) error {
 	startTime := time.Now()
 	defer func() {
-		klog.V(4).Infof("Finished syncing networkpolicy %q. (%v)", key, time.Since(startTime))
+		klog.V(4).Infof("Finished syncing NetworkPolicy %s. (%v)", key, time.Since(startTime))
 	}()
 
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	networkPolicy, err := n.networkPolicyLister.NetworkPolicies(namespace).Get(name)
 	if err != nil {
-		klog.Errorf("Failed to get networkpolicy %v: %v", key, err)
-		return err
+		return fmt.Errorf("failed to get NetworkPolicy %s: %v", key, err)
 	}
-	klog.Infof("Syncing networkpolicy %v: %v", key, networkPolicy.Spec.PodSelector)
+	klog.Infof("Syncing NetworkPolicy %s: %v", key, networkPolicy.Spec.PodSelector)
 	return nil
-}
-
-func (n *NetworkPolicyController) handleErr(err error, key interface{}) {
-	if err == nil {
-		n.queue.Forget(key)
-		return
-	}
-
-	klog.Errorf("Error syncing networkpolicy %q, retrying. Error: %v", key, err)
-	n.queue.AddRateLimited(key)
 }
