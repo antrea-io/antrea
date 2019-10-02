@@ -15,15 +15,11 @@
 package agent
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
-	"fmt"
-	"io"
 	"net"
-	"strings"
 
 	"k8s.io/klog"
 	"okn/pkg/ovs/ovsconfig"
+	"okn/pkg/util"
 )
 
 const (
@@ -32,10 +28,6 @@ const (
 	OVSExternalIDContainerID  = "container-id"
 	OVSExternalIDPodName      = "pod-name"
 	OVSExternalIDPodNamespace = "pod-namespace"
-
-	hostVethLength        = 15
-	podNamePrefixLength   = 8
-	containerKeyConnector = `-`
 )
 
 type InterfaceType uint8
@@ -189,20 +181,9 @@ func (c *interfaceCache) Len() int {
 	return len(c.cache)
 }
 
-// GenerateContainerInterfaceName calculates OVS port name using pod name and pod namespace. The output
-// should be a string with the first part of the hash value for <podNamespace>/<podName>, and its
-// length should be `hostVethLength`
+// GenerateContainerInterfaceName calculates OVS port name using pod name and pod namespace.
 func GenerateContainerInterfaceName(podName string, podNamespace string) string {
-	hash := sha1.New()
-	podID := fmt.Sprintf("%s/%s", podNamespace, podName)
-	io.WriteString(hash, podID)
-	podKey := hex.EncodeToString(hash.Sum(nil))
-	name := strings.Replace(podName, "-", "", -1)
-	if len(name) > podNamePrefixLength {
-		name = name[:podNamePrefixLength]
-	}
-	podKeyLength := hostVethLength - len(name) - len(containerKeyConnector)
-	return strings.Join([]string{name, podKey[:podKeyLength]}, containerKeyConnector)
+	return util.GenerateContainerInterfaceName(podName, podNamespace)
 }
 
 // GetPodInterface retrieve interface for Pod filtered by pod name and pod namespace
