@@ -25,7 +25,7 @@ type Client interface {
 
 	// InstallNodeFlows should be invoked when a connection to a remote node is going to be set up.
 	// The hostname is used to identify the added flows.
-	InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerNodeIP, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error
+	InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error
 
 	// UninstallNodeFlows removes the connection to the remote node specified with the hostname. UninstallNodeFlows will
 	// do nothing if no connection to the host was established.
@@ -48,7 +48,7 @@ type Client interface {
 	UninstallServiceFlows(serviceName string) error
 }
 
-func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerNodeIP, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error {
+func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error {
 	flow := c.arpResponderFlow(peerGatewayIP.String())
 	if err := flow.Add(); err != nil {
 		return err

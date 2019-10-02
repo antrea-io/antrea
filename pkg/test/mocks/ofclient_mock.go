@@ -62,17 +62,17 @@ func (mr *MockOFClientMockRecorder) InstallGatewayFlows(arg0, arg1, arg2 interfa
 }
 
 // InstallNodeFlows mocks base method
-func (m *MockOFClient) InstallNodeFlows(arg0 string, arg1 net.HardwareAddr, arg2, arg3 net.IP, arg4 net.IPNet, arg5 string) error {
+func (m *MockOFClient) InstallNodeFlows(arg0 string, arg1 net.HardwareAddr, arg2 net.IP, arg3 net.IPNet, arg4 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallNodeFlows", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret := m.ctrl.Call(m, "InstallNodeFlows", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallNodeFlows indicates an expected call of InstallNodeFlows
-func (mr *MockOFClientMockRecorder) InstallNodeFlows(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+func (mr *MockOFClientMockRecorder) InstallNodeFlows(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockOFClient)(nil).InstallNodeFlows), arg0, arg1, arg2, arg3, arg4, arg5)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockOFClient)(nil).InstallNodeFlows), arg0, arg1, arg2, arg3, arg4)
 }
 
 // InstallPodFlows mocks base method
