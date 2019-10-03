@@ -214,6 +214,47 @@ func TestRamStoreGetByIndex(t *testing.T) {
 	}
 }
 
+func TestRamStoreList(t *testing.T) {
+	testCases := []struct {
+		// The operations that will be executed on the storage
+		operations func(*store)
+		// The objects expected to be got by the List
+		expected []runtime.Object
+	}{
+		{
+			operations: func(store *store) {
+				store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}, Spec: v1.PodSpec{}})
+				store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx2"}}, Spec: v1.PodSpec{}})
+				store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3", Labels: map[string]string{"app": "nginx3"}}, Spec: v1.PodSpec{}})
+			},
+			expected: []runtime.Object{
+				&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}, Spec: v1.PodSpec{}},
+				&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx2"}}, Spec: v1.PodSpec{}},
+				&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3", Labels: map[string]string{"app": "nginx3"}}, Spec: v1.PodSpec{}},
+			},
+		},
+		{
+			operations: func(store *store) {
+				store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}, Spec: v1.PodSpec{}})
+				store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx2"}}, Spec: v1.PodSpec{}})
+				store.Delete("pod2")
+			},
+			expected: []runtime.Object{
+				&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}, Spec: v1.PodSpec{}},
+			},
+		},
+	}
+	for i, testCase := range testCases {
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+
+		testCase.operations(store)
+		objs := store.List()
+		if !reflect.DeepEqual(objs, testCase.expected) {
+			t.Errorf("%d: get unexpected object: %v", i, objs)
+		}
+	}
+}
+
 func TestRamStoreWatchAll(t *testing.T) {
 	testCases := []struct {
 		// The operations that will be executed on the storage

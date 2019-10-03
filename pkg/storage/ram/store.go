@@ -151,6 +151,16 @@ func (s *store) Update(obj runtime.Object) error {
 	return nil
 }
 
+// Return a list of all the objects
+func (s *store) List() []runtime.Object {
+	items := s.storage.List()
+	objs := make([]runtime.Object, len(items))
+	for i, item := range items {
+		objs[i] = item.(runtime.Object)
+	}
+	return objs
+}
+
 func (s *store) Delete(key string) error {
 	s.eventLock.Lock()
 	defer s.eventLock.Unlock()
