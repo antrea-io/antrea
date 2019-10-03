@@ -56,6 +56,9 @@ type Interface interface {
 	// GetByIndex gets a list of objects that has the specified index.
 	GetByIndex(indexName, indexKey string) ([]runtime.Object, error)
 
+	// List gets a list of all objects.
+	List() []runtime.Object
+
 	// Delete removes an object that has specified key.
 	Delete(key string) error
 
