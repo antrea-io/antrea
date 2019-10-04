@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -249,8 +250,11 @@ func TestRamStoreList(t *testing.T) {
 
 		testCase.operations(store)
 		objs := store.List()
-		if !reflect.DeepEqual(objs, testCase.expected) {
-			t.Errorf("%d: get unexpected object: %v", i, objs)
+		if len(objs) != len(testCase.expected) {
+			t.Errorf("%d: Unexpected number of objects returned for List operation. %d != %d", i, len(objs), len(testCase.expected))
+		}
+		if !assert.ElementsMatch(t, testCase.expected, objs) {
+			t.Errorf("%d: Expected objects %v do not match objects retrieved from List operation: %v", i, testCase.expected, objs)
 		}
 	}
 }
