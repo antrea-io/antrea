@@ -88,7 +88,12 @@ func run(o *Options) error {
 		nodeConfig,
 		ovsBridgeClient,
 		ofClient,
-		ifaceStore)
+		ifaceStore,
+		k8sClient)
+	err = cniServer.Initialize()
+	if err != nil {
+		return fmt.Errorf("error initializing CNI server: %v", err)
+	}
 
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program

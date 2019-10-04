@@ -75,6 +75,32 @@ func TestPodConnectivitySameNode(t *testing.T) {
 	data.runPingMesh(t, podNames)
 }
 
+// createPodsOnDifferentNodes creates numPods busybox test Pods and assign them to all the different
+// Nodes in round-robin fashion, then returns the names of the created Pods as well as a function
+// which will delete the Pods when called.
+func createPodsOnDifferentNodes(t *testing.T, data *TestData, numPods int) (podNames []string, cleanup func()) {
+	podNames = make([]string, 0, numPods)
+
+	cleanup = func() {
+		for _, podName := range podNames {
+			deletePodWrapper(t, data, podName)
+		}
+	}
+
+	for idx := 0; idx < numPods; idx++ {
+		podName := randPodName(fmt.Sprintf("test-pod-%d-", idx))
+		nodeName := nodeName(idx % clusterInfo.numNodes)
+		t.Logf("Creating busybox test Pods '%s' on '%s'", podName, nodeName)
+		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
+			cleanup()
+			t.Fatalf("Error when creating busybox test Pod: %v", err)
+		}
+		podNames = append(podNames, podName)
+	}
+
+	return podNames, cleanup
+}
+
 // TestPodConnectivityDifferentNodes checks that Pods running on different Nodes can reach each
 // other, by creating multiple Pods across distinct Nodes and having them ping each other.
 func TestPodConnectivityDifferentNodes(t *testing.T) {
@@ -88,23 +114,39 @@ func TestPodConnectivityDifferentNodes(t *testing.T) {
 	defer teardownTest(t, data)
 
 	numPods := 2 // can be increased
-	podNames := make([]string, numPods)
-	for idx := range podNames {
-		podNames[idx] = randPodName(fmt.Sprintf("test-pod-%d-", idx))
+	podNames, deletePods := createPodsOnDifferentNodes(t, data, numPods)
+	defer deletePods()
+
+	data.runPingMesh(t, podNames)
+}
+
+// TestPodConnectivityAfterAntreaRestart checks that restarting antrea-agent does not create
+// connectivity issues between Pods.
+func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
 	}
-	nodeNames := make([]string, numPods)
-	// allocate Pods to Nodes in round-robin fashion
-	for idx := range nodeNames {
-		nodeNames[idx] = nodeName(idx % clusterInfo.numNodes)
+	defer teardownTest(t, data)
+
+	numPods := 2 // can be increased
+	podNames, deletePods := createPodsOnDifferentNodes(t, data, numPods)
+	defer deletePods()
+
+	data.runPingMesh(t, podNames)
+
+	t.Logf("Deleting Antrea Agent DaemonSet")
+	if err := data.deleteAntrea(defaultTimeout); err != nil {
+		t.Fatalf("Error when deleting Antrea DaemonSet: %v", err)
 	}
 
-	for idx, podName := range podNames {
-		nodeName := nodeNames[idx]
-		t.Logf("Creating busybox test Pods '%s' on '%s'", podName, nodeName)
-		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
-			t.Fatalf("Error when creating busybox test Pod: %v", err)
-		}
-		defer deletePodWrapper(t, data, podName)
+	t.Logf("Applying Antrea YAML")
+	if err := data.deployAntrea(); err != nil {
+		t.Fatalf("Error when restarting Antrea: %v", err)
+	}
+	t.Logf("Waiting for all Antrea DaemonSet pods")
+	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
+		t.Fatalf("Error when restarting Antrea: %v", err)
 	}
 
 	data.runPingMesh(t, podNames)

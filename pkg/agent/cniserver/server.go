@@ -34,6 +34,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"google.golang.org/grpc"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 )
 
@@ -47,6 +49,7 @@ type CNIServer struct {
 	hostProcPathPrefix   string
 	ofClient             openflow.Client
 	defaultMTU           int
+	kubeClient           clientset.Interface
 }
 
 const (
@@ -419,6 +422,7 @@ func New(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
 	ifaceStore agent.InterfaceStore,
+	kubeClient clientset.Interface,
 ) *CNIServer {
 	return &CNIServer{
 		cniSocket:            cniSocket,
@@ -430,7 +434,15 @@ func New(
 		hostProcPathPrefix:   hostProcPathPrefix,
 		ofClient:             ofClient,
 		defaultMTU:           defaultMTU,
+		kubeClient:           kubeClient,
 	}
+}
+
+func (s *CNIServer) Initialize() error {
+	if err := s.reconcile(); err != nil {
+		return fmt.Errorf("error during initial reconciliation for CNI server: %v", err)
+	}
+	return nil
 }
 
 func (s *CNIServer) Run(stopCh <-chan struct{}) {
@@ -454,6 +466,95 @@ func (s *CNIServer) Run(stopCh <-chan struct{}) {
 		}
 	}()
 	<-stopCh
+}
+
+// reconcile performs startup reconciliation for the CNI server. The CNI server is in charge of
+// installing Pod flows, so as part of this reconciliation process we retrieve the Pod list from the
+// K8s apiserver and replay the necessary flows.
+func (s *CNIServer) reconcile() error {
+	klog.Infof("Reconciliation for CNI server")
+	pods, err := s.kubeClient.CoreV1().Pods("").List(metav1.ListOptions{
+		FieldSelector: "spec.nodeName=" + s.nodeConfig.Name,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list Pods running on Node %s: %v", s.nodeConfig.Name, err)
+	}
+
+	// desiredInterfaces is the exact set of interfaces that should be present, based on the
+	// current list of Pods.
+	desiredInterfaces := make(map[string]bool)
+	// knownInterfaces is the list of interfaces currently in the local cache.
+	knownInterfaces := s.ifaceStore.GetInterfaceIDs()
+
+	for _, pod := range pods.Items {
+		// Skip Pods for which we are not in charge of the networking.
+		if pod.Spec.HostNetwork {
+			continue
+		}
+
+		// We rely on the interface cache / store - which is initialized from the persistent
+		// OVSDB - to map the Pod to its interface configuration. The interface
+		// configuration includes the parameters we need to replay the flows.
+		containerConfig, found := s.ifaceStore.GetContainerInterface(pod.Name, pod.Namespace)
+		if !found {
+			// This should not happen since OVSDB is persisted on the Node.
+			// TODO: is there anything else we should be doing? Assuming that the Pod's
+			// interface still exists, we can repair the interface store since we can
+			// retrieve the name of the host interface for the Pod by calling
+			// GenerateContainerInterfaceName. One thing we would not be able to
+			// retrieve is the container ID which is part of the container configuration
+			// we store in the cache, but this ID is not used for anything at the
+			// moment. However, if the interface does not exist, there is nothing we can
+			// do since we do not have the original CNI parameters.
+			klog.Warningf("Interface for Pod %s/%s not found in the interface store", pod.Namespace, pod.Name)
+			continue
+		}
+		klog.V(4).Infof("Syncing interface %s for Pod %s/%s", containerConfig.IfaceName, pod.Namespace, pod.Name)
+		if err := s.ofClient.InstallPodFlows(
+			containerConfig.IfaceName,
+			containerConfig.IP,
+			containerConfig.MAC,
+			s.nodeConfig.Gateway.MAC,
+			uint32(containerConfig.OFPort),
+		); err != nil {
+			klog.Errorf("Error when re-installing flows for Pod %s/%s", pod.Namespace, pod.Name)
+			continue
+		}
+		desiredInterfaces[containerConfig.IfaceName] = true
+	}
+
+	for _, ifaceID := range knownInterfaces {
+		if _, found := desiredInterfaces[ifaceID]; found {
+			// this interface matches an existing Pod.
+			continue
+		}
+		// clean-up and delete interface
+		containerConfig, found := s.ifaceStore.GetInterface(ifaceID)
+		if !found {
+			// should not happen, nothing should have concurrent access to the interface
+			// store.
+			klog.Errorf("Interface %s can no longer be found in the interface store", ifaceID)
+			continue
+		}
+		if containerConfig.PodName == "" {
+			// not a container interface, skipping.
+			continue
+		}
+		klog.V(4).Infof("Deleting interface %s", ifaceID)
+		// ignore error, removeInterfaces already log them
+		_ = removeInterfaces(
+			s.ovsBridgeClient,
+			s.ofClient,
+			s.ifaceStore,
+			containerConfig.PodName,
+			containerConfig.PodNamespace,
+			containerConfig.ID,
+			"",
+			"",
+		)
+		// interface should no longer be in store after the call to removeInterfaces
+	}
+	return nil
 }
 
 func init() {
