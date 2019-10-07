@@ -3,11 +3,15 @@ GO          ?= go
 LDFLAGS     :=
 GOFLAGS     :=
 BINDIR      := $(CURDIR)/bin
-GO_FILES := $$(find . -name '*.go')
+GO_FILES := $(shell find . -name '*.go')
 GOPATH      ?= $$(go env GOPATH)
 
 .PHONY: all
 all: bin build
+
+include versioning.mk
+
+LDFLAGS += $(VERSION_LDFLAGS)
 
 .PHONY: bin
 bin:
@@ -68,3 +72,4 @@ mocks: .mockgen
 ubuntu:
 	@echo "===> Building okn-ubuntu Docker image <==="
 	docker build -t okn-ubuntu -f build/images/Dockerfile.ubuntu .
+	docker tag okn-ubuntu okn-ubuntu:$(DOCKER_IMG_VERSION)
