@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package apiserver contains code to create kubernetes-like API server for okn-controller.
-// The API server provides REST APIs supporting listing and watching OKN resources.
-package apiserver
+// Package signals contains utilities for dealing with signals.
+// This code was taken from https://github.com/kubernetes/sample-controller/tree/master/pkg/signals.
+package signals

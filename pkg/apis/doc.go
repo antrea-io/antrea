@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package apiserver contains code to create kubernetes-like API server for okn-controller.
-// The API server provides REST APIs supporting listing and watching OKN resources.
-package apiserver
+// Package apis contains API definitions used to interface with the different OKN components,
+// along with files auto-generated from these API definitions.
+package apis

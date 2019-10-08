@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package apiserver contains code to create kubernetes-like API server for okn-controller.
-// The API server provides REST APIs supporting listing and watching OKN resources.
-package apiserver
+// Package cni contains the libraries that drive the okn-cni binary.
+// okn-cni is invoked by Kubelet and is responsible for requesting the okn-agent to set up networking for Pods.
+package cni

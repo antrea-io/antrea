@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package apiserver contains code to create kubernetes-like API server for okn-controller.
-// The API server provides REST APIs supporting listing and watching OKN resources.
-package apiserver
+// Package agent contains the libraries that drive the okn-agent binary.
+// okn-agent is responsible for the Pod networking and policy implementation on a Kubernetes Node.
+package agent

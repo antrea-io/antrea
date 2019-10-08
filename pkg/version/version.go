@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package version provides information about the current semantic version for
-// the OKN project.
-
 package version
 
 import (
