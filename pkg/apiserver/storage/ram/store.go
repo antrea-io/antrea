@@ -13,7 +13,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
-	oknstorage "okn/pkg/storage"
+	oknstorage "okn/pkg/apiserver/storage"
 )
 
 type watchersMap map[int]*storeWatcher

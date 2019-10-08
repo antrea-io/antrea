@@ -2,7 +2,6 @@ package ram
 
 import (
 	"context"
-	"okn/pkg/storage"
 	"reflect"
 	"testing"
 
@@ -10,6 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+
+	"okn/pkg/apiserver/storage"
 )
 
 // simpleInternalEvent simply construct watch.Event based on the provided Type and Object
