@@ -17,8 +17,8 @@ import (
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
 	mock "github.com/golang/mock/gomock"
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 	"okn/pkg/agent/cniserver"
 	"okn/pkg/agent/cniserver/ipam"
@@ -106,6 +106,8 @@ type rangeInfo struct {
 }
 
 type testCase struct {
+	t               *testing.T
+	name            string
 	cniVersion      string      // CNI Version
 	subnet          string      // Single subnet config: Subnet CIDR
 	gateway         string      // Single subnet config: Gateway
@@ -162,7 +164,7 @@ func (tc testCase) expectedCIDRs() ([]*net.IPNet, []*net.IPNet) {
 	var cidrsV4, cidrsV6 []*net.IPNet
 	appendSubnet := func(subnet string) {
 		ip, cidr, err := net.ParseCIDR(subnet)
-		Expect(err).NotTo(HaveOccurred())
+		require.Nil(tc.t, err)
 		if ipVersion(ip) == "4" {
 			cidrsV4 = append(cidrsV4, cidr)
 		} else {
@@ -195,7 +197,7 @@ func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *cnimsg.CniC
 
 func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir string) *cnimsg.CniCmdRequestMessage {
 	conf, err := json.Marshal(config)
-	Expect(err).NotTo(HaveOccurred())
+	require.Nil(tc.t, err)
 
 	reqVersion := cni.OKNVersion
 	return &cnimsg.CniCmdRequestMessage{
@@ -232,91 +234,108 @@ func (tester *cmdAddDelTester) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
 	tester.targetNS = targetNS
 }
 
+func linkByName(netNS ns.NetNS, name string) (link netlink.Link, err error) {
+	err = netNS.Do(func(ns.NetNS) error {
+		link, err = netlink.LinkByName(name)
+		return err
+	})
+	return link, err
+}
+
+func routeList(netNS ns.NetNS, link netlink.Link) (routes []netlink.Route, err error) {
+	err = netNS.Do(func(ns.NetNS) error {
+		routes, err = netlink.RouteList(link, netlink.FAMILY_ALL)
+		return err
+	})
+	return routes, err
+}
+
+func matchRoute(expectedCIDR string, routes []netlink.Route) (*netlink.Route, error) {
+	gwIP, _, err := net.ParseCIDR(expectedCIDR)
+	if err != nil {
+		return nil, err
+	}
+	for _, route := range routes {
+		if route.Dst == nil && route.Src == nil && route.Gw.Equal(gwIP) {
+			return &route, nil
+		}
+	}
+	return nil, nil
+}
+
+// checkContainerNetworking checks for the presence of the interface called IFNAME inside the
+// container namespace and checks for the presence of a default route through the Pod CIDR gateway.
+func (tester *cmdAddDelTester) checkContainerNetworking(tc testCase) {
+	require := require.New(tc.t)
+	link, err := linkByName(tester.targetNS, IFNAME)
+	require.Nil(err)
+	require.Equal(IFNAME, link.Attrs().Name)
+	require.IsType(&netlink.Veth{}, link)
+
+	expCIDRsV4, _ := tc.expectedCIDRs()
+	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	require.Nil(err)
+	require.Len(addrs, len(expCIDRsV4))
+
+	// Check that default route exsists.
+	routes, err := routeList(tester.targetNS, link)
+	require.Nil(err)
+	for _, cidr := range tc.expGatewayCIDRs {
+		expectedRoute, err := matchRoute(cidr, routes)
+		require.Nil(err)
+		require.NotNil(expectedRoute)
+	}
+}
+
 func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current.Result, error) {
-	// Generate network config and command arguments
+	require := require.New(tc.t)
+	var err error
+
+	// Generate network config and command arguments.
 	tester.request = tc.createCmdArgs(tester.targetNS, dataDir)
 
-	// Execute cmdADD on the plugin
-	var result *current.Result
-	err := tester.testNS.Do(func(ns.NetNS) error {
-		defer GinkgoRecover()
-
-		response, err := tester.server.CmdAdd(tester.ctx, tester.request)
-		Expect(err).NotTo(HaveOccurred())
-
-		r, err := current.NewResult(response.CniResult)
-		Expect(err).NotTo(HaveOccurred())
-
-		result, err = current.GetResult(r)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(len(result.Interfaces)).To(Equal(2))
-
-		Expect(result.Interfaces[1].Name).To(Equal(IFNAME))
-		Expect(result.Interfaces[1].Mac).To(HaveLen(17)) //mac is random
-		Expect(result.Interfaces[1].Sandbox).To(Equal(tester.targetNS.Path()))
-
-		// Check for the veth link in the main namespace
-		hostIfaceName := agent.GenerateContainerInterfaceName(testPod, testPodNamespace)
-		Expect(result.Interfaces[0].Name).To(Equal(hostIfaceName))
-		Expect(result.Interfaces[0].Mac).To(HaveLen(17))
-
-		link, err := netlink.LinkByName(result.Interfaces[0].Name)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
-		Expect(link.Attrs().Name).To(Equal(hostIfaceName))
-		Expect(link.Attrs().HardwareAddr.String()).To(Equal(result.Interfaces[0].Mac))
-
-		return nil
+	// Execute cmdADD on the plugin.
+	var response *cnimsg.CniCmdResponseMessage
+	err = tester.testNS.Do(func(ns.NetNS) error {
+		response, err = tester.server.CmdAdd(tester.ctx, tester.request)
+		return err
 	})
-	Expect(err).NotTo(HaveOccurred())
+	require.Nil(err)
 
-	// Find the veth peer in the container namespace and the default route
+	r, err := current.NewResult(response.CniResult)
+	require.Nil(err)
+
+	result, err := current.GetResult(r)
+	require.Nil(err)
+
+	require.Len(result.Interfaces, 2)
+
+	require.Equal(IFNAME, result.Interfaces[1].Name)
+	require.Len(result.Interfaces[1].Mac, 17) // mac is random
+	require.Equal(tester.targetNS.Path(), result.Interfaces[1].Sandbox)
+
+	// Check for the veth link in the test namespace.
+	hostIfaceName := agent.GenerateContainerInterfaceName(testPod, testPodNamespace)
+	require.Equal(hostIfaceName, result.Interfaces[0].Name)
+	require.Len(result.Interfaces[0].Mac, 17)
+
+	link, err := linkByName(tester.testNS, result.Interfaces[0].Name)
+	require.Nil(err)
+
+	require.IsType(&netlink.Veth{}, link)
+	require.Equal(hostIfaceName, link.Attrs().Name)
+	require.Equal(result.Interfaces[0].Mac, link.Attrs().HardwareAddr.String())
+
+	var linkList []netlink.Link
 	err = tester.targetNS.Do(func(ns.NetNS) error {
-		defer GinkgoRecover()
-		// Wait interface plugged on namespace
-		linkList, err := netlink.LinkList()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(2).To(Equal(len(linkList)))
-		link, err := netlink.LinkByName(IFNAME)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(link.Attrs().Name).To(Equal(IFNAME))
-		Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
-
-		expCIDRsV4, _ := tc.expectedCIDRs()
-		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(len(addrs)).To(Equal(len(expCIDRsV4)))
-
-		// Ensure the default route(s)
-		routes, err := netlink.RouteList(link, 0)
-		Expect(err).NotTo(HaveOccurred())
-
-		var defaultRouteFound4, defaultRouteFound6 bool
-		for _, cidr := range tc.expGatewayCIDRs {
-			gwIP, _, err := net.ParseCIDR(cidr)
-			Expect(err).NotTo(HaveOccurred())
-			var found *bool
-			if ipVersion(gwIP) == "4" {
-				found = &defaultRouteFound4
-			} else {
-				found = &defaultRouteFound6
-			}
-			if *found == true {
-				continue
-			}
-			for _, route := range routes {
-				*found = (route.Dst == nil && route.Src == nil && route.Gw.Equal(gwIP))
-				if *found {
-					break
-				}
-			}
-			Expect(*found).To(Equal(true))
-		}
-
-		return nil
+		linkList, err = netlink.LinkList()
+		return err
 	})
-	Expect(err).NotTo(HaveOccurred())
+	require.Nil(err)
+	require.Len(linkList, 2)
+
+	// Find the veth peer in the container namespace and the default route.
+	tester.checkContainerNetworking(tc)
 
 	return result, nil
 }
@@ -364,97 +383,47 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 }
 
 func (tester *cmdAddDelTester) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
-	// Generate network config and command arguments
+	require := require.New(tc.t)
+	var err error
+
+	// Generate network config and command arguments.
 	tester.request = tc.createCheckCmdArgs(tester.targetNS, conf, dataDir)
 
-	// Execute cmdCHECK on the plugin
-	err := tester.testNS.Do(func(ns.NetNS) error {
-		defer GinkgoRecover()
-
-		_, err := tester.server.CmdCheck(tester.ctx, tester.request)
-		Expect(err).NotTo(HaveOccurred())
-
-		return nil
+	// Execute cmdCHECK on the plugin.
+	err = tester.testNS.Do(func(ns.NetNS) error {
+		_, err = tester.server.CmdCheck(tester.ctx, tester.request)
+		return err
 	})
-	Expect(err).NotTo(HaveOccurred())
+	require.Nil(err)
 
-	// Find the veth peer in the container namespace and the default route
-	err = tester.targetNS.Do(func(ns.NetNS) error {
-		defer GinkgoRecover()
-
-		link, err := netlink.LinkByName(IFNAME)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(link.Attrs().Name).To(Equal(IFNAME))
-		Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
-
-		expCIDRsV4, _ := tc.expectedCIDRs()
-		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(len(addrs)).To(Equal(len(expCIDRsV4)))
-
-		// Ensure the default route(s)
-		routes, err := netlink.RouteList(link, 0)
-		Expect(err).NotTo(HaveOccurred())
-
-		var defaultRouteFound4, defaultRouteFound6 bool
-		for _, cidr := range tc.expGatewayCIDRs {
-			gwIP, _, err := net.ParseCIDR(cidr)
-			Expect(err).NotTo(HaveOccurred())
-			var found *bool
-			if ipVersion(gwIP) == "4" {
-				found = &defaultRouteFound4
-			} else {
-				found = &defaultRouteFound6
-			}
-			if *found == true {
-				continue
-			}
-			for _, route := range routes {
-				*found = (route.Dst == nil && route.Src == nil && route.Gw.Equal(gwIP))
-				if *found {
-					break
-				}
-			}
-			Expect(*found).To(Equal(true))
-		}
-
-		return nil
-	})
-	Expect(err).NotTo(HaveOccurred())
+	// Find the veth peer in the container namespace and the default route.
+	tester.checkContainerNetworking(tc)
 }
 
 func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
+	require := require.New(tc.t)
+	var err error
+
 	tester.request = tc.createCmdArgs(tester.targetNS, dataDir)
-	err := tester.testNS.Do(func(ns.NetNS) error {
-		defer GinkgoRecover()
 
+	// Execute cmdDEL on the plugin.
+	err = tester.testNS.Do(func(ns.NetNS) error {
 		_, err := tester.server.CmdDel(tester.ctx, tester.request)
-		Expect(err).NotTo(HaveOccurred())
-		return nil
+		return err
 	})
-	Expect(err).NotTo(HaveOccurred())
+	require.Nil(err)
 
-	// Make sure the host veth has been deleted
-	err = tester.targetNS.Do(func(ns.NetNS) error {
-		defer GinkgoRecover()
+	var link netlink.Link
 
-		link, err := netlink.LinkByName(IFNAME)
-		Expect(err).To(HaveOccurred())
-		Expect(link).To(BeNil())
-		return nil
-	})
-	Expect(err).NotTo(HaveOccurred())
+	// Make sure the host veth has been deleted.
+	link, err = netlink.LinkByName(IFNAME)
+	require.NotNil(err)
+	require.Nil(link)
 
 	// Make sure the container veth has been deleted
-	err = tester.testNS.Do(func(ns.NetNS) error {
-		defer GinkgoRecover()
-
-		link, err := netlink.LinkByName(tester.vethName)
-		Expect(err).To(HaveOccurred())
-		Expect(link).To(BeNil())
-		return nil
-	})
-	Expect(err).NotTo(HaveOccurred())
+	link, err = netlink.LinkByName(tester.vethName)
+	require.NotNil(err)
+	require.Nil(link)
 }
 
 func newTester() *cmdAddDelTester {
@@ -467,13 +436,15 @@ func newTester() *cmdAddDelTester {
 }
 
 func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
-	Expect(tc.cniVersion).To(Equal("0.4.0"))
+	require := require.New(tc.t)
+
+	require.Equal("0.4.0", tc.cniVersion)
 
 	// Get a Add/Del tester based on test case version
 	tester := newTester()
 
 	targetNS, err := testutils.NewNS()
-	Expect(err).NotTo(HaveOccurred())
+	require.Nil(err)
 	defer targetNS.Close()
 	tester.setNS(testNS, targetNS)
 
@@ -489,21 +460,21 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 
 	// Test ip allocation
 	prevResult, err := tester.cmdAddTest(tc, dataDir)
-	Expect(err).NotTo(HaveOccurred())
+	require.Nil(err)
 
-	Expect(prevResult).NotTo(BeNil())
+	require.NotNil(prevResult)
 
 	confString := tc.netConfJSON(dataDir)
 
 	conf := &Net{}
 	err = json.Unmarshal([]byte(confString), &conf)
-	Expect(err).NotTo(HaveOccurred())
+	require.Nil(err)
 
 	conf.IPAM, _, err = allocator.LoadIPAMConfig([]byte(confString), "")
-	Expect(err).NotTo(HaveOccurred())
+	require.Nil(err)
 
 	newConf, err := buildOneConfig("testConfig", tc.cniVersion, conf, prevResult)
-	Expect(err).NotTo(HaveOccurred())
+	require.Nil(err)
 
 	// Test CHECK
 	tester.cmdCheckTest(tc, newConf, dataDir)
@@ -526,49 +497,6 @@ func getContainerIPMacConfig(ipamResult *current.Result) (string, string) {
 	return containerIP, containerMAC
 }
 
-var _ = Describe("CNI server operations", func() {
-	var originalNS ns.NetNS
-	var dataDir string
-
-	BeforeEach(func() {
-		// Create a new netNS so we don't modify the host
-		var err error
-		originalNS, err = testutils.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-
-		dataDir, err = ioutil.TempDir("", "okn_server_test")
-		Expect(err).NotTo(HaveOccurred())
-
-		ipamMock.EXPECT().Del(mock.Any(), mock.Any()).Return(nil).AnyTimes()
-		ipamMock.EXPECT().Check(mock.Any(), mock.Any()).Return(nil).AnyTimes()
-
-		ovsServiceMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).AnyTimes()
-	})
-
-	AfterEach(func() {
-		Expect(os.RemoveAll(dataDir)).To(Succeed())
-		Expect(originalNS.Close()).To(Succeed())
-	})
-
-	It("configures and deconfigures veth with default route with ADD/DEL/CHECK for 0.4.0 config", func() {
-		testCases := []testCase{
-			{
-				// IPv4 only
-				ranges: []rangeInfo{{
-					subnet: "10.1.2.0/24",
-				}},
-				expGatewayCIDRs: []string{"10.1.2.1/24"},
-				addresses:       []string{"10.1.2.100/24,10.1.2.1,4"},
-				routes:          []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"},
-			},
-		}
-		for _, tc := range testCases {
-			tc.cniVersion = "0.4.0"
-			cmdAddDelCheckTest(originalNS, tc, dataDir)
-		}
-	})
-})
-
 func TestOknServerFunc(t *testing.T) {
 	controller := mock.NewController(t)
 	defer controller.Finish()
@@ -576,8 +504,51 @@ func TestOknServerFunc(t *testing.T) {
 	_ = ipam.RegisterIPAMDriver("mock", ipamMock)
 	ovsServiceMock = mocks.NewMockOVSBridgeClient(controller)
 	ofServiceMock = mocks.NewMockOFClient(controller)
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "CNI server operations suite")
+
+	var originalNS ns.NetNS
+	var dataDir string
+
+	setup := func() {
+		// Create a new netNS so we don't modify the host
+		var err error
+		originalNS, err = testutils.NewNS()
+		require.Nil(t, err)
+
+		dataDir, err = ioutil.TempDir("", "okn_server_test")
+		require.Nil(t, err)
+
+		ipamMock.EXPECT().Del(mock.Any(), mock.Any()).Return(nil).AnyTimes()
+		ipamMock.EXPECT().Check(mock.Any(), mock.Any()).Return(nil).AnyTimes()
+
+		ovsServiceMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).AnyTimes()
+	}
+
+	teardown := func() {
+		assert.Nil(t, os.RemoveAll(dataDir))
+		assert.Nil(t, originalNS.Close())
+	}
+
+	testCases := []testCase{
+		{
+			name:       "ADD/DEL/CHECK for 0.4.0 config",
+			cniVersion: "0.4.0",
+			// IPv4 only
+			ranges: []rangeInfo{{
+				subnet: "10.1.2.0/24",
+			}},
+			expGatewayCIDRs: []string{"10.1.2.1/24"},
+			addresses:       []string{"10.1.2.100/24,10.1.2.1,4"},
+			routes:          []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			setup()
+			defer teardown()
+			tc.t = t
+			cmdAddDelCheckTest(originalNS, tc, dataDir)
+		})
+	}
 }
 
 func init() {
