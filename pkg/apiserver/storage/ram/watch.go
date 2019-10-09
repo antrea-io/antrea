@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog"
 
-	"okn/pkg/storage"
+	"okn/pkg/apiserver/storage"
 )
 
 // storeWatcher implements watch.Interface

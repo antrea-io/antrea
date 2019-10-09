@@ -15,7 +15,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
 
-	oknstorage "okn/pkg/storage"
+	oknstorage "okn/pkg/apiserver/storage"
 )
 
 // testEvent implements InternalEvent.

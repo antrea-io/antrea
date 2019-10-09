@@ -13,8 +13,8 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
+	"okn/pkg/agent/iptables"
 	"okn/pkg/agent/openflow"
-	"okn/pkg/iptables"
 	"okn/pkg/ovs/ovsconfig"
 )
 
