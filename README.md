@@ -2,23 +2,37 @@
 
 ## Getting started
 
-OKN components can be installed as Kubernetes DaemonSet and Deployment using Kubernetes manifests.
+OKN is super easy to install. All the OKN components are containerized and can
+be installed using the Kubernetes deployment manifest.
 
 ### Requirements
 
-* A kubernetes cluster is created. See [Creating a cluster with kubeadm](
-https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/) for details.
+OKN requires that `NodeIPAMController` and `CNI` network plugin are enabled for
+the Kubernetes cluster, and it also requires that the Open vSwitch kernel module
+>= version 2.6.0 is installed on all the Kubernetes worker Nodes (which should
+be the case for most popular Linux distributions). OKN packages the Open vSwitch
+agents in the OKN Docker image and runs them in the OKN Agent DaemonSet, and
+thus does not require the Open vSwitch agents to be installed on the worker
+Nodes in advance.
 
-* `kube-controller-manager` is configured to enable `NodeIPAMController` by setting the following flags:
+* To enable `NodeIPAMController`, `kube-controller-manager` should be started
+with the following flags:
   - `--cluster-cidr=<CIDR Range for Pods>`
   - `--allocate-node-cidrs=true`
 
-  If `kubeadm` is used, passing `--pod-network-cidr=<CIDR Range for Pods>` to `kubeadm init` will set the two flags.
+  When using `kubeadm` to create the Kubernetes cluster, passing
+  `--pod-network-cidr=<CIDR Range for Pods>` to `kubeadm init` will set the two
+  required flags. Refer to [Creating a cluster with kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm) for more information
+  about setting up a Kubernetes cluster with `kubeadm`.
 
-* `kubelet` is configured to use `cni` network plugin. If `kubeadm` is used, `--network-plugin=cni` is set by default.
+* To enable `CNI` network plugin, `kubelet` should be started with the
+`--network-plugin=cni` flag.
 
-* Open vSwitch >= 2.8.0 kernel module is installed and loaded on all worker nodes, See [Installing Open vSwitch](
-https://docs.openvswitch.org/en/latest/intro/install/#installation-from-packages) for details.
+  If `kubeadm` is used, `CNI` network plugin is enabled by default.
+
+* In case a Node does not have the Open vSwitch kernel module >= version 2.6.0
+installed, you can install it following the instructions at: [Installing Open
+vSwitch](https://docs.openvswitch.org/en/latest/intro/install).
 
 ### Installation
 
@@ -28,7 +42,7 @@ kubectl apply -f build/yamls/okn.yml
 ```
 
 OKN components can also be run manually for development purpose. See [Manual Installation](docs/manual-installation.md)
-for details.
+for information.
 
 ## Building and testing
 
