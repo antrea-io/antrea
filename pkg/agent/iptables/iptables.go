@@ -11,156 +11,130 @@ const (
 	NATTable    = "nat"
 	FilterTable = "filter"
 
-	ForwardRuleComment            = "okn:okn forwarding rules"
-	ForwardPodInternalComment     = "okn:inter pod communication"
-	ForwardPodExternalNATComment  = "okn:pod to external traffic requiring SNAT"
-	ForwardPodExternalComment     = "okn:pod to external communication"
-	PostRoutingRuleComment        = "okn:okn postrouting rules"
-	PostRoutingPodExternalComment = "okn:pod to external traffic requiring SNAT"
+	AcceptTarget     = "ACCEPT"
+	MasqueradeTarget = "MASQUERADE"
+	MarkTarget       = "MARK"
+
+	ForwardChain        = "FORWARD"
+	PostRoutingChain    = "POSTROUTING"
+	OKNForwardChain     = "OKN-FORWARD"
+	OKNPostRoutingChain = "OKN-POSTROUTING"
 )
 
-// Use the 10th bit as masquerade mark
 var (
-	masqueradeBits  = uint(10)
-	masqueradeValue = 1 << masqueradeBits
+	// The bit of the mark space to mark packets requiring SNAT. It must be within the
+	// range [0, 31] and be different from other mark bits that are used by Kubernetes.
+	// Kubernetes uses 14th for SNAT and 15th for dropping by default.
+	// OKN uses 10th for SNAT.
+	masqueradeBit   = uint(10)
+	masqueradeValue = 1 << masqueradeBit
 	masqueradeMark  = fmt.Sprintf("%#08x/%#08x", masqueradeValue, masqueradeValue)
 )
 
-var ipt *iptables.IPTables
+// Client knows how to set up host iptables rules OKN requires.
+type Client struct {
+	ipt         *iptables.IPTables
+	hostGateway string
+}
 
-type chain struct {
+// NewClient constructs a Client instance for iptables operations.
+func NewClient(hostGateway string) (*Client, error) {
+	ipt, err := iptables.New()
+	if err != nil {
+		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
+	}
+	return &Client{
+		ipt:         ipt,
+		hostGateway: hostGateway,
+	}, nil
+}
+
+// rule is a generic struct that describes an iptables rule.
+type rule struct {
+	// The table of this rule.
 	table string
+	// The chain of this rule.
 	chain string
+	// The parameters that make up a rule specification, e.g. "-i name", "-o name", "-p tcp".
+	parameters []string
+	// The target of this rule, could be a chain or an action e.g. "ACCEPT", "MARK".
+	target string
+	// The extra options of the target, for example, "MARK" has extra options "--set-xmark value".
+	targetOptions []string
+	// The comment of this rule.
+	comment string
 }
 
-// Add jump action from target to current chain
-func (c *chain) appendJumpFrom(fromChain string, oriRuleSpec ...string) error {
-	oriRuleSpec = append(oriRuleSpec, "-j", c.chain)
-	return appendRule(c.table, fromChain, oriRuleSpec)
-}
-
-// Add jump action from current chain to target
-func (c *chain) appendJumpTo(target string, oriRuleSpec ...string) error {
-	oriRuleSpec = append(oriRuleSpec, "-j", target)
-	return appendRule(c.table, c.chain, oriRuleSpec)
-}
-
-// Add specified mark on packets
-func (c *chain) appendMarkRule(oriRuleSpec []string, mark string) error {
-	oriRuleSpec = append(oriRuleSpec, "-j", "MARK", "--set-xmark", mark)
-	return appendRule(c.table, c.chain, oriRuleSpec)
-}
-
-// Create OKN-FORWARD chain which is for forwarding packets from/to host
-// gateway interface. Packets would jump to OKN-FORWARD from FORWARD, and
-//   1) traffic among local pods and host would be accepted,
-//   2) traffic from pod to external addresses would add mark as 0x10/0x10 which
-// is used in nat table before accepted
-func setupGwForwarding(gwIface string) error {
-	// Create OKN-FORWARD Chain
-	hostFwdChain, err := createFilterChain("OKN-FORWARD")
-	if err != nil {
-		return err
+// SetupRules ensures the iptables rules OKN requires are set up.
+// It's idempotent and can be safely called on every startup.
+func (c *Client) SetupRules() error {
+	rules := []rule{
+		// Append OKN-FORWARD chain which contains OKN related forwarding rules to FORWARD chain.
+		{FilterTable, ForwardChain, nil, OKNForwardChain, nil, "okn: jump to okn forwarding rules"},
+		// Accept inter-Pod traffic which is received and sent via host gateway interface.
+		// Note: Since L3 forwarding flows are installed, direct inter-Pod traffic won't go through host gateway interface,
+		// only Pod-Service-Pod traffic will go through it.
+		{FilterTable, OKNForwardChain, []string{"-i", c.hostGateway, "-o", c.hostGateway}, AcceptTarget, nil, "okn: accept inter pod traffic"},
+		// Mark Pod-to-external traffic which are received via host gateway interface but not sent via it for later masquerading in NAT table.
+		{FilterTable, OKNForwardChain, []string{"-i", c.hostGateway, "!", "-o", c.hostGateway}, MarkTarget, []string{"--set-xmark", masqueradeMark}, "okn: mark pod to external traffic"},
+		// Accept Pod-to-external traffic which are received via host gateway interface but not sent via it.
+		{FilterTable, OKNForwardChain, []string{"-i", c.hostGateway, "!", "-o", c.hostGateway}, AcceptTarget, nil, "okn: accept pod to external traffic"},
+		// Append OKN-POSTROUTING chain which contains OKN related postrouting rules to POSTROUTING chain.
+		{NATTable, PostRoutingChain, nil, OKNPostRoutingChain, nil, "okn: jump to okn postrouting rules"},
+		// Masquerade traffic requiring SNAT (has masqueradeMark set).
+		{NATTable, OKNPostRoutingChain, []string{"-m", "mark", "--mark", masqueradeMark}, MasqueradeTarget, nil, "okn: masquerade traffic requiring SNAT"},
 	}
 
-	// Add iptables rule to ensure packets jump from FORWARD to OKN-FORWARD
-	err = hostFwdChain.appendJumpFrom("FORWARD", addMatchComment(ForwardRuleComment)...)
-	if err != nil {
-		return err
+	// Ensure all the chains involved exist.
+	for _, rule := range rules {
+		if err := c.ensureChain(rule.table, rule.chain); err != nil {
+			return err
+		}
 	}
 
-	// Add iptables rule to accept inter pod communication
-	ruleSpec := []string{"-i", gwIface, "-o", gwIface}
-	ruleSpec = append(ruleSpec, addMatchComment(ForwardPodInternalComment)...)
-	if err := hostFwdChain.appendJumpTo("ACCEPT", ruleSpec...); err != nil {
-		return err
-	}
-
-	// Add iptables rule to add Mark on packets that from local pods to external
-	ruleSpec = []string{"-i", gwIface, "!", "-o", gwIface}
-	ruleSpec = append(ruleSpec, addMatchComment(ForwardPodExternalNATComment)...)
-	if err := hostFwdChain.appendMarkRule(ruleSpec, masqueradeMark); err != nil {
-		return err
-	}
-
-	// Add iptables rule to accept traffic from pod to external
-	ruleSpec = []string{"-i", gwIface, "!", "-o", gwIface}
-	ruleSpec = append(ruleSpec, addMatchComment(ForwardPodExternalComment)...)
-	if err := hostFwdChain.appendJumpTo("ACCEPT", ruleSpec...); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Create OKN-POSTROUTING chain which is for executing SNAT on packets from
-// local pods. Packets would jump to OKN-POSTROUTING from POSTROUTING, and execute
-// SNAT only if it has masquerade mark set
-func setupHostPostRouting() error {
-	// Create OKN-POSTROUTING Chain in nat table
-	hostPostRoutingChain, err := createNATChain("OKN-POSTROUTING")
-	if err != nil {
-		return err
-	}
-
-	// Add iptables rule to ensure packets jump from POSTROUTING to OKN-POSTROUTING
-	if err := hostPostRoutingChain.appendJumpFrom("POSTROUTING", addMatchComment(PostRoutingRuleComment)...); err != nil {
-		return err
-	}
-
-	ruleSpec := []string{"-m", "mark", "--mark", masqueradeMark}
-	ruleSpec = append(ruleSpec, addMatchComment(PostRoutingPodExternalComment)...)
-	// Add iptables rule to masquerade packets that has been marked in OKN-FORWARD chain
-	if err := hostPostRoutingChain.appendJumpTo("MASQUERADE", ruleSpec...); err != nil {
-		return err
+	// Ensure all the rules exist.
+	for _, rule := range rules {
+		var ruleSpec []string
+		ruleSpec = append(ruleSpec, rule.parameters...)
+		ruleSpec = append(ruleSpec, "-j", rule.target)
+		ruleSpec = append(ruleSpec, rule.targetOptions...)
+		ruleSpec = append(ruleSpec, "-m", "comment", "--comment", rule.comment)
+		if err := c.ensureRule(rule.table, rule.chain, ruleSpec); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-// Create chain on filter table
-func createFilterChain(chainName string) (*chain, error) {
-	return newChain(FilterTable, chainName)
-}
-
-// Create chain on nat table
-func createNATChain(chainName string) (*chain, error) {
-	return newChain(NATTable, chainName)
-}
-
-// Add comments on iptables rule
-func addMatchComment(comment string) []string {
-	return []string{"-m", "comment", "--comment", comment}
-}
-
-// Check if target chain already exists, create only if not exist
-func newChain(table string, chainName string) (*chain, error) {
-	oriChains, err := ipt.ListChains(table)
+// ensureChain checks if target chain already exists, creates it if not.
+func (c *Client) ensureChain(table string, chain string) error {
+	oriChains, err := c.ipt.ListChains(table)
 	if err != nil {
-		klog.Errorf("Failed to list existing iptables chains: %v", err)
-		return nil, err
+		return fmt.Errorf("error listing exsiting chains in table %s: %v", table, err)
 	}
-	if !contains(oriChains, chainName) {
-		if err := ipt.NewChain(table, chainName); err != nil {
-			klog.Errorf("Failed to create chain %s in table %s: %v", chainName, table, err)
-			return nil, err
-		}
+	if contains(oriChains, chain) {
+		return nil
 	}
-	klog.Infof("Created target chain %s in table %s", chainName, table)
-	return &chain{table: table, chain: chainName}, nil
+	if err := c.ipt.NewChain(table, chain); err != nil {
+		return fmt.Errorf("error creating chain %s in table %s: %v", chain, table, err)
+	}
+	klog.V(2).Infof("Created chain %s in table %s", chain, table)
+	return nil
 }
 
-// Check if iptables rule already exists firstly, add only if not exist
-func appendRule(table string, chain string, ruleSpec []string) error {
-	exist, err := ipt.Exists(table, chain, ruleSpec...)
+// ensureRule checks if target rule already exists, appends it if not.
+func (c *Client) ensureRule(table string, chain string, ruleSpec []string) error {
+	exist, err := c.ipt.Exists(table, chain, ruleSpec...)
 	if err != nil {
-		klog.Errorf("Failed to check existence in table %s chain %s for %v: %v", table, chain, ruleSpec, err)
-		return err
+		return fmt.Errorf("error checking if rule %v exists in table %s chain %s: %v", ruleSpec, table, chain, err)
 	}
-	if !exist {
-		if err := ipt.Append(table, chain, ruleSpec...); err != nil {
-			klog.Errorf("Failed to append on table %s chain %s with rule %v: %v", table, chain, ruleSpec, err)
-		}
+	if exist {
+		return nil
 	}
+	if err := c.ipt.Append(table, chain, ruleSpec...); err != nil {
+		return fmt.Errorf("error appending rule %v to table %s chain %s: %v", ruleSpec, table, chain, err)
+	}
+	klog.V(2).Infof("Appended rule %v to table %s chain %s", ruleSpec, table, chain)
 	return nil
 }
 
@@ -171,24 +145,4 @@ func contains(chains []string, targetChain string) bool {
 		}
 	}
 	return false
-}
-
-// Create OKN-FORWARD in filter table, and create OKN-POSTROUTING in nat table. Add
-// forwarding and snat rules to ensure connectivity from local pods to external address.
-func SetupHostIPTablesRules(hostGw string) error {
-	if err := setupGwForwarding(hostGw); err != nil {
-		return err
-	}
-	return setupHostPostRouting()
-}
-
-func SetupIPTables() error {
-	klog.Info("Creating new IPTables")
-	var err error
-	ipt, err = iptables.New()
-	if err != nil {
-		klog.Errorf("Error when creating new IPTables: %s", err)
-		return err
-	}
-	return nil
 }
