@@ -32,13 +32,12 @@ type k8sArgs struct {
 	K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString
 }
 
-// TODO: mock the ip dependency by defining an interface and write unit tests for this code.
-
-// setupInterface creates veth pair, containerVeth plugged in the netns, and hostVeth will be attached to OVS bridge
-func setupInterface(podName string, podNamespace string, ifname string, netns ns.NetNS) (*current.Interface, *current.Interface, error) {
+// setupInterface creates a veth pair: containerIface is in the container namespace and hostIface is
+// in the host namespace.
+func setupInterface(podName string, podNamespace string, ifname string, netns ns.NetNS) (hostIface *current.Interface, containerIface *current.Interface, err error) {
 	hostVethName := agent.GenerateContainerInterfaceName(podName, podNamespace)
-	containerIface := &current.Interface{}
-	hostIface := &current.Interface{}
+	hostIface = &current.Interface{}
+	containerIface = &current.Interface{}
 
 	if err := netns.Do(func(hostNS ns.NetNS) error {
 		hostVeth, containerVeth, err := ip.SetupVethWithName(ifname, hostVethName, defaultMTU, hostNS)
@@ -50,42 +49,34 @@ func setupInterface(podName string, podNamespace string, ifname string, netns ns
 		containerIface.Mac = containerVeth.HardwareAddr.String()
 		containerIface.Sandbox = netns.Path()
 		hostIface.Name = hostVeth.Name
+		hostIface.Mac = hostVeth.HardwareAddr.String()
 		return nil
 	}); err != nil {
 		return nil, nil, err
 	}
 
-	hostVeth, err := netlink.LinkByName(hostIface.Name)
-	if err != nil {
-		// Todo: Add retry before remove interfaces
-		// Remove veth pair if not find peer link on host
-		_ = netns.Do(func(hostNS ns.NetNS) error {
-			_, err := ip.DelLinkByNameAddr(ifname)
-			return err
-		})
-		return nil, nil, fmt.Errorf("failed to lookup host interface %q: %v", hostIface.Name, err)
-	}
-
-	hostIface.Mac = hostVeth.Attrs().HardwareAddr.String()
 	return hostIface, containerIface, nil
 }
 
-// configureContainerAddr configures container address and routes if existed in IPAM result, and send GARP after that.
-func configureContainerAddr(netns ns.NetNS, contIntf *current.Interface, result *current.Result) error {
+// configureContainerAddr takes the result of the IPAM plugin, and adds the appropriate IP
+// addresses and routes to the interface. It then sends a gratuitous ARP to the network.
+func configureContainerAddr(netns ns.NetNS, containerInterface *current.Interface, result *current.Result) error {
 	if err := netns.Do(func(containerNs ns.NetNS) error {
-		contVeth, err := net.InterfaceByName(contIntf.Name)
+		containerVeth, err := net.InterfaceByName(containerInterface.Name)
 		if err != nil {
-			klog.Errorf("Failed to find container interface %s in ns %s", contIntf.Name, netns.Path())
+			klog.Errorf("Failed to find container interface %s in ns %s", containerInterface.Name, netns.Path())
 			return err
 		}
-		if err := ipam.ConfigureIface(contIntf.Name, result); err != nil {
+		if err := ipam.ConfigureIface(containerInterface.Name, result); err != nil {
 			return err
 		}
-		// Send ARP to activate container interface
-		// Todo: change the maxRetry times and use async mode
+		// Send gratuitous ARP to network in case of stale mappings for this IP address
+		// (e.g. if a previous - deleted - Pod was using the same IP). The GARP is sent to
+		// every Pod in the sunet (all local to this Node).
 		for _, ipc := range result.IPs {
 			if ipc.Version == "4" {
-				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
+				// Ignore error
+				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *containerVeth)
 			}
 		}
 		return nil
@@ -140,7 +131,7 @@ func validateContainerInterface(intf *current.Interface) (*vethPair, error) {
 	return veth, nil
 }
 
-func validateContainerPeerInterface(hostIntf *current.Interface, contVeth *vethPair) (*vethPair, error) {
+func validateContainerPeerInterface(hostIntf *current.Interface, containerVeth *vethPair) (*vethPair, error) {
 	hostVeth, link, err := validateInterface(hostIntf, false)
 	if err != nil {
 		return hostVeth, err
@@ -157,9 +148,9 @@ func validateContainerPeerInterface(hostIntf *current.Interface, contVeth *vethP
 	}
 
 	hostVeth.ifIndex = link.Attrs().Index
-	if (hostVeth.ifIndex != contVeth.peerIndex) || (hostVeth.peerIndex != contVeth.ifIndex) {
+	if (hostVeth.ifIndex != containerVeth.peerIndex) || (hostVeth.peerIndex != containerVeth.ifIndex) {
 		return hostVeth, fmt.Errorf("host interface %s doesn't match container %s peer configuration",
-			linkName, contVeth.name)
+			linkName, containerVeth.name)
 	}
 
 	if hostIntf.Mac != "" {
@@ -237,7 +228,7 @@ func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ofClient openflow.C
 		return fmt.Errorf("failed to configure container ip")
 	}
 
-	// Todo: need to decide whether to retrieve OFport asynchronously to reduce CNI command delay
+	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
 	ofPort, err := ovsBridge.GetOFPort(ovsPortName)
 	if err != nil {
 		klog.Errorf("Failed to get of_port of OVS interface %s: %v", ovsPortName, err)
@@ -273,28 +264,43 @@ func removeContainerLink(containerID string, containerNetns string, ifname strin
 		_, err = ip.DelLinkByNameAddr(ifname)
 		if err != nil && err == ip.ErrLinkNotFound {
 			// Not found link should return success for deletion
+			klog.Infof("Interface %s not found in netns %s", ifname, containerNetns)
 			return nil
 		}
 		return err
 	}); err != nil {
-		klog.Errorf("Failed to delete interfaces of container %s: %v", containerID, err)
+		klog.Errorf("Failed to delete interface %s of container %s: %v", ifname, containerID, err)
 		return err
 	}
 	return nil
 }
 
-func removeInterfaces(ovsBridgeClient ovsconfig.OVSBridgeClient, ofClient openflow.Client, ifaceStore agent.InterfaceStore, podName string, podNamespace string, containerID string, containerNetns string, ifname string) error {
+func removeInterfaces(
+	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	ofClient openflow.Client,
+	ifaceStore agent.InterfaceStore,
+	podName string,
+	podNamespace string,
+	containerID string,
+	containerNetns string,
+	ifname string,
+) error {
 	if containerNetns != "" {
 		if err := removeContainerLink(containerID, containerNetns, ifname); err != nil {
 			return err
 		}
 	} else {
-		klog.Infof("Target netns not specified, return success")
+		// From the CNI spec for the DEL command:
+		// When CNI_NETNS and/or prevResult are not provided, the plugin should clean up as
+		// many resources as possible (e.g. releasing IPAM allocations) and return a
+		// successful response.
+		// In our case it means deleting the OVS port.
+		klog.Infof("Target netns not specified, not removing veth pair")
 	}
 
 	containerConfig, found := ifaceStore.GetContainerInterface(podName, podNamespace)
 	if !found {
-		klog.Infof("Not find container %s port from local cache", containerID)
+		klog.Infof("Did not find the port for container %s in local cache", containerID)
 		return nil
 	}
 
@@ -306,14 +312,14 @@ func removeInterfaces(ovsBridgeClient ovsconfig.OVSBridgeClient, ofClient openfl
 		klog.Errorf("Failed to delete Openflow entries for container %s: %v", containerID, err)
 		return err
 	}
-	// Todo: handle error and introduce garbage collection for deletion failure
+	// TODO: handle error and introduce garbage collection for failure on deletion
 	if err := ovsBridgeClient.DeletePort(portUUID); err != nil {
 		klog.Errorf("Failed to delete OVS port %s: %v", portUUID, err)
 		return err
 	}
 	// Remove container configuration from cache.
 	ifaceStore.DeleteInterface(ovsPortName)
-	klog.Infof("Succeed to remove interfaces")
+	klog.Infof("Interfaces removed successfully for container %s", containerID)
 	return nil
 }
 

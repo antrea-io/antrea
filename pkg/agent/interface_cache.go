@@ -56,7 +56,7 @@ type InterfaceConfig struct {
 // Support add/delete/get operations
 type InterfaceStore interface {
 	Initialize(ovsBridgeClient ovsconfig.OVSBridgeClient, gatewayPort string, tunnelPort string) error
-	AddInterface(key string, interfaceConfig *InterfaceConfig)
+	AddInterface(ifaceID string, interfaceConfig *InterfaceConfig)
 	DeleteInterface(ifaceID string)
 	GetInterface(ifaceID string) (*InterfaceConfig, bool)
 	GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool)
@@ -156,8 +156,8 @@ func BuildOVSPortExternalIDs(containerConfig *InterfaceConfig) map[string]interf
 }
 
 // AddInterface adds interfaceConfig into localCache
-func (c *interfaceCache) AddInterface(key string, interfaceConfig *InterfaceConfig) {
-	c.cache[key] = interfaceConfig
+func (c *interfaceCache) AddInterface(ifaceID string, interfaceConfig *InterfaceConfig) {
+	c.cache[ifaceID] = interfaceConfig
 }
 
 // DeleteInterface deletes interface from local cache
