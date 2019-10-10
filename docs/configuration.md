@@ -37,3 +37,22 @@ clientConnection:
 # hostProcPathPrefix should be set to "/" in the YAML config.
 #hostProcPathPrefix: /host
 ```
+
+## okn-controller
+
+### Command line options
+```
+--config string                    The path to the configuration file
+--v Level                          number for the log level verbosity
+```
+Use `okn-controller -h` to see complete options.
+
+### Configuration
+```
+# clientConnection specifies the kubeconfig file and client connection settings for the 
+# controller to communicate with the apiserver.
+clientConnection:
+  # Path of the kubeconfig file that is used to configure access to a K8s cluster.
+  # If not specified, InClusterConfig will be used, which handles API host discovery and authentication automatically.
+  #kubeconfig: <PATH_TO_KUBE_CONF>
+```

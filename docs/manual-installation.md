@@ -2,13 +2,15 @@
 
 ## Overview
 
-There are three components need to be deployed to run OKN:
+There are four components which need to be deployed in order to run OKN:
 
 * The OpenVSwitch daemons `ovs-vswitchd` and `ovsdb-server`
 
 * The agent `okn-agent`
 
 * The CNI plugin `okn-cni`
+
+* **Optional** The controller `okn-controller`
 
 ## Instructions
 
@@ -69,4 +71,29 @@ EOF
 2. Install `okn-cni` to `/opt/cni/bin/okn`.
 ```
 cp bin/okn-cni /opt/cni/bin/okn
+```
+
+### okn-controller
+
+`okn-controller` is required to implement Kubernetes Network Policies. At any time, there should be only a single active replica of `okn-controller`. Deploying `okn-controller` may be skipped, if only basic Pod connectivity is desired.
+
+1. Grant `okn-controller` user or ServiceAccount necessary permissions to Kubernetes APIs. You can follow the `ClusterRole`
+and `ClusterRoleBinding` sections in the [Deployment yaml](/build/yamls/okn.yml) to configure
+Kubernetes RBAC to do it.
+
+2. Create the kubeconfig file that contains the tokens or certificates of ServiceAccount or user created in the above
+step. See [Configure Access to Multiple Clusters](
+https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/) for more information.
+
+3. Create the `okn-controller` config file, see [Configuration](configuration.md) for details.
+```
+cat >okn-controller.conf <<EOF
+clientConnection:
+  kubeconfig: <PATH_TO_KUBE_CONF>
+EOF
+```
+
+4. Start `okn-controller`.
+```
+okn-controller --config okn-controller.conf
 ```
