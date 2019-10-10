@@ -34,26 +34,26 @@ type watchersMap map[int]*storeWatcher
 
 // store implements ram.Interface, serving the requests for a given resource from its internal cache storage.
 type store struct {
-	// Used to protect watchers when adding and deleting watcher
-	watcherLock sync.RWMutex
-	// Used to avoid race condition when generating events.
-	eventLock sync.RWMutex
-	// HighWaterMarks for performance debugging.
+	// watcherMutex protects the watchers map from concurrent access during watcher insertion and deletion.
+	watcherMutex sync.RWMutex
+	// eventMutex is used to avoid race condition when generating events.
+	eventMutex sync.RWMutex
+	// incomingHWM is HighWaterMark for performance debugging.
 	// It records the maximum number of events backed up in incoming channel that have been seen.
 	incomingHWM storage.HighWaterMark
-	// Incoming events that should be dispatched to watchers.
+	// incoming stores the incoming events that should be dispatched to watchers.
 	incoming chan oknstorage.InternalEvent
 
-	// underlying storage.
+	// storage is the underlying storage.
 	storage cache.Indexer
 	// keyFunc is used to get a key in the underlying storage for a given object.
 	keyFunc cache.KeyFunc
 	// genEventFunc is used to generate InternalEvent from update of an object.
 	genEventFunc oknstorage.GenEventFunc
 
-	// ResourceVersion up to which the store has generated.
+	// resourceVersion up to which the store has generated.
 	resourceVersion uint64
-	// watcher index will be allocated to next watcher and used as key in watchersMap
+	// watcherIdx is the index that will be allocated to next watcher and used as key in watchersMap
 	// so that a watcher can be deleted from the map according to its index later.
 	watcherIdx int
 	// watchers is a mapping from the index of a watcher to the watcher.
@@ -82,7 +82,8 @@ func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc oknst
 	return s
 }
 
-// nextResourceVersion is not thread safe, should be called under lock.
+// nextResourceVersion increments the resourceVersion and returns it.
+// It is not thread safe and should be called while holding a lock on eventMutex.
 func (s *store) nextResourceVersion() uint64 {
 	s.resourceVersion++
 	return s.resourceVersion
@@ -96,14 +97,20 @@ func (s *store) processEvent(event oknstorage.InternalEvent) {
 	s.incoming <- event
 }
 
+// Get returns the object matching the provided key along with a boolean value
+// indicating of its presence in the store and an error, if any.
 func (s *store) Get(key string) (runtime.Object, bool, error) {
-	item, exists, _ := s.storage.GetByKey(key)
+	item, exists, err := s.storage.GetByKey(key)
+	if err != nil {
+		return nil, false, err
+	}
 	if !exists {
 		return nil, exists, nil
 	}
 	return item.(runtime.Object), true, nil
 }
 
+// GetByIndex returns the objects which match the indexer or the error encountered.
 func (s *store) GetByIndex(indexName, indexKey string) ([]runtime.Object, error) {
 	items, err := s.storage.ByIndex(indexName, indexKey)
 	if err != nil {
@@ -116,14 +123,15 @@ func (s *store) GetByIndex(indexName, indexKey string) ([]runtime.Object, error)
 	return objs, nil
 }
 
+// Create stores the object in internal cache storage.
 func (s *store) Create(obj runtime.Object) error {
 	key, err := s.keyFunc(obj)
 	if err != nil {
 		return fmt.Errorf("couldn't get key for object %+v: %v", obj, err)
 	}
 
-	s.eventLock.Lock()
-	defer s.eventLock.Unlock()
+	s.eventMutex.Lock()
+	defer s.eventMutex.Unlock()
 	_, exists, _ := s.storage.GetByKey(key)
 	if exists {
 		return fmt.Errorf("object %+v already exists in storage", obj)
@@ -140,14 +148,15 @@ func (s *store) Create(obj runtime.Object) error {
 	return nil
 }
 
+// Update updates the store with the latest copy of the object, if it exists.
 func (s *store) Update(obj runtime.Object) error {
 	key, err := s.keyFunc(obj)
 	if err != nil {
 		return fmt.Errorf("couldn't get key for object %+v: %v", obj, err)
 	}
 
-	s.eventLock.Lock()
-	defer s.eventLock.Unlock()
+	s.eventMutex.Lock()
+	defer s.eventMutex.Unlock()
 	prevObj, exists, _ := s.storage.GetByKey(key)
 	if !exists {
 		return fmt.Errorf("object %+v not found in storage", obj)
@@ -165,7 +174,7 @@ func (s *store) Update(obj runtime.Object) error {
 	return nil
 }
 
-// Return a list of all the objects
+// List returns a list of all the objects.
 func (s *store) List() []runtime.Object {
 	items := s.storage.List()
 	objs := make([]runtime.Object, len(items))
@@ -175,9 +184,10 @@ func (s *store) List() []runtime.Object {
 	return objs
 }
 
+// Delete deletes the object from internal cache storage.
 func (s *store) Delete(key string) error {
-	s.eventLock.Lock()
-	defer s.eventLock.Unlock()
+	s.eventMutex.Lock()
+	defer s.eventMutex.Unlock()
 	prevObj, exists, _ := s.storage.GetByKey(key)
 	if !exists {
 		return fmt.Errorf("object %+v not found in storage", key)
@@ -192,15 +202,16 @@ func (s *store) Delete(key string) error {
 	return nil
 }
 
+// Watch creates a watcher based on the key, label selector and field selector.
 func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Selector, fieldSelector fields.Selector) (watch.Interface, error) {
-	// Locks eventLock for reading so that no new events will be generated in the meantime
+	// Locks eventMutex for reading so that no new events will be generated in the meantime
 	// while other watchers won't be blocked.
-	s.eventLock.RLock()
-	defer s.eventLock.RUnlock()
+	s.eventMutex.RLock()
+	defer s.eventMutex.RUnlock()
 	allObjects := s.storage.List()
 	initEvents := make([]oknstorage.InternalEvent, len(allObjects))
 	for i, obj := range allObjects {
-		// Objects got from storage have been verified with keyFunc when they are inserted
+		// Objects retrieved from storage have been verified with keyFunc when they are inserted.
 		key, _ := s.keyFunc(obj)
 		event, err := s.genEventFunc(key, nil, obj.(runtime.Object), s.resourceVersion)
 		if err != nil {
@@ -210,8 +221,8 @@ func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Sele
 	}
 
 	watcher := func() *storeWatcher {
-		s.watcherLock.Lock()
-		defer s.watcherLock.Unlock()
+		s.watcherMutex.Lock()
+		defer s.watcherMutex.Unlock()
 
 		w := newStoreWatcher(10, &oknstorage.Selectors{key, labelSelector, fieldSelector}, forgetWatcher(s, s.watcherIdx))
 		s.watchers[s.watcherIdx] = w
@@ -227,8 +238,8 @@ func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Sele
 
 func forgetWatcher(s *store, index int) func() {
 	return func() {
-		s.watcherLock.Lock()
-		defer s.watcherLock.Unlock()
+		s.watcherMutex.Lock()
+		defer s.watcherMutex.Unlock()
 
 		delete(s.watchers, index)
 	}
@@ -249,8 +260,8 @@ func (s *store) dispatchEvents() {
 }
 
 func (s *store) dispatchEvent(event oknstorage.InternalEvent) {
-	s.watcherLock.Lock()
-	defer s.watcherLock.Unlock()
+	s.watcherMutex.Lock()
+	defer s.watcherMutex.Unlock()
 	// TODO: Optimize this to dispatch the event based on watchers' selector.
 	for _, watcher := range s.watchers {
 		watcher.add(event)
