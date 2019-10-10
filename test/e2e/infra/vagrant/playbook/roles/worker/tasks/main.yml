@@ -1,0 +1,41 @@
+- name: Copy the join command from host
+  copy:
+    src: kube/join-command
+    dest: /tmp/join-command.sh
+    mode: 0777
+  register: join_command
+
+- name: Copy kubeconfig from host
+  copy:
+    src: kube/config
+    dest: /tmp/kubeconfig
+
+- name: Compare kubeconfig with existing one
+  command: diff /tmp/kubeconfig /home/vagrant/.kube/config
+  failed_when: False
+  register: kubeconfig_diff
+  changed_when: kubeconfig_diff.rc != 0
+
+- name: Reset kubeadm if kubeconfig has changed
+  command: kubeadm reset -f
+  when: kubeconfig_diff.changed
+  failed_when: False
+
+- name: Join the node to cluster
+  command: sh /tmp/join-command.sh
+  when: kubeconfig_diff.changed
+
+# We copy the config file last, as we use it to determine whether the join was
+# succesful in future runs.
+- name: Setup kubeconfig for vagrant user
+  block:
+    - name: Create /home/vagrant/.kube directory
+      file:
+        path: /home/vagrant/.kube
+        state: directory
+    - name: Copy kubeconfig file to /home/vagrant/.kube
+      copy:
+        src: kube/config
+        dest: /home/vagrant/.kube/config
+        owner: vagrant
+        group: vagrant
