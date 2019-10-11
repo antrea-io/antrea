@@ -21,8 +21,8 @@ require (
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
-	github.com/onsi/ginkgo v1.8.0
-	github.com/onsi/gomega v1.5.0
+	github.com/onsi/ginkgo v1.8.0 // indirect
+	github.com/onsi/gomega v1.5.0 // indirect
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.3
 	github.com/stretchr/testify v1.3.0
