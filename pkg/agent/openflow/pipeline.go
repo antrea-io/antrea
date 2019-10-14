@@ -47,6 +47,14 @@ const (
 	markTrafficFromLocal   = 2
 )
 
+var (
+	// ofportMarkRange takes the 16th bit of register marksReg to indicate if the ofport number of an interface
+	// is found or not. Its value is 0x1 if yes.
+	ofportMarkRange = openflow.Range{16, 16}
+	// ofportRegRange takes a 32-bit range of register portCacheReg to cache the ofport number of the interface.
+	ofportRegRange = openflow.Range{0, 31}
+)
+
 type regType uint
 
 func (rt regType) number() string {
@@ -68,7 +76,7 @@ func i2h(data int64) string {
 const (
 	emptyPlaceholderStr = ""
 	// marksReg stores traffic-source mark and pod-found mark.
-	// traffic-source resides in [0..15], pod-found resides in [16..31]
+	// traffic-source resides in [0..15], pod-found resides in [16].
 	marksReg     regType = 0
 	portCacheReg regType = 1
 
@@ -81,8 +89,9 @@ const (
 	portFoundMark = 0x1
 	gatewayCTMark = 0x20
 
-	ipProtocol  = "ip"
-	arpProtocol = "arp"
+	ipProtocol   = "ip"
+	arpProtocol  = "arp"
+	icmpProtocol = "icmp"
 
 	globalVirtualMAC = "aa:bb:cc:dd:ee:ff"
 )
@@ -205,8 +214,8 @@ func (c *client) l2ForwardCalcFlow(dstMAC string, ofPort uint32) openflow.Flow {
 	l2FwdCalcTable := c.pipeline[l2ForwardingCalcTable]
 	return l2FwdCalcTable.BuildFlow().Priority(priorityNormal).
 		MatchField("dl_dst", dstMAC).
-		Action().LoadRange(portCacheReg.nxm(), ofPort, openflow.Range{0, 31}).
-		Action().LoadRange(marksReg.nxm(), portFoundMark, openflow.Range{16, 31}).
+		Action().LoadRange(portCacheReg.nxm(), ofPort, ofportRegRange).
+		Action().LoadRange(marksReg.nxm(), portFoundMark, ofportMarkRange).
 		Action().Resubmit(emptyPlaceholderStr, l2FwdCalcTable.Next).
 		Done()
 }
@@ -216,8 +225,8 @@ func (c *client) l2ForwardOutputFlow() openflow.Flow {
 	return c.pipeline[l2ForwardingOutTable].BuildFlow().
 		Priority(priorityNormal).
 		MatchProtocol(ipProtocol).
-		MatchFieldRange(marksReg.reg(), i2h(portFoundMark), openflow.Range{16, 31}).
-		Action().OutputFieldRange(portCacheReg.nxm(), openflow.Range{0, 31}).
+		MatchFieldRange(marksReg.reg(), i2h(portFoundMark), ofportMarkRange).
+		Action().OutputFieldRange(portCacheReg.nxm(), ofportRegRange).
 		Done()
 }
 
@@ -334,6 +343,14 @@ func (c *client) arpNormalFlow() openflow.Flow {
 		Action().Normal().Done()
 }
 
+// conjunctionActionFlow generates the flow to resubmit to a specific table if conjunctive matches are matched.
+func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID openflow.TableIDType, nextTable openflow.TableIDType) openflow.Flow {
+	return c.pipeline[tableID].BuildFlow().
+		MatchProtocol(ipProtocol).Priority(priorityNormal).
+		MatchField("conj_id", fmt.Sprintf("%d", conjunctionID)).
+		Action().Resubmit(emptyPlaceholderStr, nextTable).Done()
+}
+
 // NewClient is the constructor of the Client interface.
 func NewClient(bridgeName string) Client {
 	bridge := &openflow.Bridge{Name: bridgeName}
@@ -344,11 +361,15 @@ func NewClient(bridgeName string) Client {
 			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, conntrackTable, openflow.TableMissActionDrop),
 			conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, openflow.TableMissActionNext),
 			conntrackStateTable:   bridge.CreateTable(conntrackStateTable, dnatTable, openflow.TableMissActionNext),
-			dnatTable:             bridge.CreateTable(dnatTable, l3ForwardingTable, openflow.TableMissActionNext),
+			dnatTable:             bridge.CreateTable(dnatTable, egressRuleTable, openflow.TableMissActionNext),
 			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, openflow.TableMissActionNext),
-			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, l2ForwardingOutTable, openflow.TableMissActionNext),
+			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, ingressRuleTable, openflow.TableMissActionNext),
 			l2ForwardingOutTable:  bridge.CreateTable(l2ForwardingOutTable, openflow.LastTableID, openflow.TableMissActionDrop),
 			arpResponderTable:     bridge.CreateTable(arpResponderTable, openflow.LastTableID, openflow.TableMissActionDrop),
+			egressRuleTable:       bridge.CreateTable(egressRuleTable, egressDefaultTable, openflow.TableMissActionNext),
+			egressDefaultTable:    bridge.CreateTable(egressDefaultTable, l3ForwardingTable, openflow.TableMissActionNext),
+			ingressRuleTable:      bridge.CreateTable(ingressRuleTable, ingressDefaultTable, openflow.TableMissActionNext),
+			ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, l2ForwardingOutTable, openflow.TableMissActionNext),
 		},
 		nodeFlowCache: map[string][]openflow.Flow{},
 		podFlowCache:  map[string][]openflow.Flow{},
