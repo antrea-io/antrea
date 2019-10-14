@@ -16,13 +16,14 @@ package cni
 
 import (
 	"context"
-	cnipb "okn/pkg/apis/cni"
 	"testing"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	cnipb "okn/pkg/apis/cni"
 )
 
 type testClient struct {

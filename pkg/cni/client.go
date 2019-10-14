@@ -18,11 +18,12 @@ import (
 	"context"
 	"fmt"
 	"net"
-	cnipb "okn/pkg/apis/cni"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"google.golang.org/grpc"
+
+	cnipb "okn/pkg/apis/cni"
 )
 
 type Action int
@@ -38,6 +39,7 @@ const (
 	OKNVersion       = "1.0.0"
 )
 
+// To allow for testing with a fake client.
 var withClient = rpcClient
 
 func rpcClient(f func(client cnipb.CniClient) error) error {
@@ -55,6 +57,8 @@ func rpcClient(f func(client cnipb.CniClient) error) error {
 	return f(cnipb.NewCniClient(conn))
 }
 
+// Request requests the okn-agent to execute the specified action with the provided arguments via RPC.
+// If successful, it outputs the result to stdout and returns nil. Otherwise types.Error is returned.
 func (a Action) Request(arg *skel.CmdArgs) error {
 	return withClient(func(client cnipb.CniClient) error {
 		cmdRequest := cnipb.CniCmdRequestMessage{
@@ -83,25 +87,21 @@ func (a Action) Request(arg *skel.CmdArgs) error {
 			resp, err = client.CmdDel(ctx, &cmdRequest)
 		}
 
-		// The error here is only used to indicate issues during rpc but not cni procedure
+		// The error indicates issues during rpc.
 		if err != nil {
 			return &types.Error{
 				Code: uint(cnipb.CniCmdResponseMessage_TRY_AGAIN_LATER),
 				Msg:  err.Error(),
 			}
 		}
-		return a.generateOutput(resp)
-	})
-}
-
-func (a Action) generateOutput(resp *cnipb.CniCmdResponseMessage) error {
-	if resp.StatusCode == cnipb.CniCmdResponseMessage_SUCCESS {
+		// The error indicates issues during cni procedure.
+		if resp.StatusCode != cnipb.CniCmdResponseMessage_SUCCESS {
+			return &types.Error{
+				Code: uint(resp.StatusCode),
+				Msg:  resp.ErrorMessage,
+			}
+		}
 		fmt.Print(string(resp.CniResult))
 		return nil
-	} else {
-		return &types.Error{
-			Msg:  resp.ErrorMessage,
-			Code: uint(resp.StatusCode),
-		}
-	}
+	})
 }
