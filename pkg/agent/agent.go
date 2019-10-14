@@ -143,12 +143,13 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	// Setup iptables chain and rules
-	if err := iptables.SetupIPTables(); err != nil {
-		return err
+	// Setup iptables chains and rules.
+	iptablesClient, err := iptables.NewClient(i.hostGateway)
+	if err != nil {
+		return fmt.Errorf("error creating iptables client: %v", err)
 	}
-	if err := iptables.SetupHostIPTablesRules(i.hostGateway); err != nil {
-		return err
+	if err := iptablesClient.SetupRules(); err != nil {
+		return fmt.Errorf("error setting up iptables rules: %v", err)
 	}
 
 	if err := i.setupOVSBridge(); err != nil {
