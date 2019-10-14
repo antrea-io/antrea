@@ -29,6 +29,7 @@ import (
 	"okn/pkg/k8s"
 	"okn/pkg/ovs/ovsconfig"
 	"okn/pkg/signals"
+	"okn/pkg/version"
 )
 
 // Determine how often we go through reconciliation (between current and desired state)
@@ -37,7 +38,7 @@ const informerDefaultResync time.Duration = 30 * time.Second
 
 // run starts OKN agent with the given options and waits for termination signal.
 func run(o *Options) error {
-	klog.Info("Starting OKN agent")
+	klog.Infof("Starting OKN agent (version %s)", version.GetFullVersion())
 	// Create a K8s Clientset and SharedInformerFactory for the given config.
 	k8sClient, err := k8s.CreateClient(o.config.ClientConnection)
 	if err != nil {
