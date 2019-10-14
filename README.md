@@ -48,26 +48,11 @@ kubectl apply -f build/yamls/antrea.yml
 Antrea components can also be run manually for development purpose. See [Manual Installation](docs/manual-installation.md)
 for information.
 
-## Building and testing
+### Contribute
 
-The Antrea project uses the [Go modules
-support](https://github.com/golang/go/wiki/Modules) which was introduced in Go
-1.11. It facilitates dependency tracking and no longer requires projects to live
-inside the `$GOPATH`.
+The Antrea community welcomes new contributors. Please join our [slack channel](https://projectantrea.slack.com/)
+and [mailing list](https://groups.google.com/forum/#!forum/antrea-dev) to stay updated, get help to get started, start conversations
+and propose new ideas. We are waiting for your PRs!
 
-To develop locally, you can follow these steps:
-
- 1. [Install Go 1.12](https://golang.org/doc/install)
-
- 2. Clone this repository anywhere on your machine and `cd` into it
-
- 3. To build all Go files and install them under `bin`, run `make bin`
-
- 4. To run all Go unit tests, run `make test-unit`
-
-### Running the end-to-end tests
-
-In addition to the unit tests, we provide a suite of end-to-end tests, which
-require a running Kubernetes cluster. Instructions on how to run these tests,
-including how to setup a local Kubernetes cluster, can be found in
-[test/e2e/README.md](test/e2e/README.md).
+Check out the [Contributor Guide](CONTRIBUTING.md) for detailed
+information on how to effectively contribute to this project.
