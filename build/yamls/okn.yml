@@ -101,6 +101,11 @@ spec:
           image: okn-ubuntu
           imagePullPolicy: IfNotPresent
           command: ["install_cni"]
+          securityContext:
+            capabilities:
+              add:
+                # SYS_MODULE is required to load the OVS kernel module.
+                - SYS_MODULE
           volumeMounts:
           - name: okn-config
             mountPath: /etc/okn/okn-cni.conf
@@ -110,6 +115,9 @@ spec:
             mountPath: /host/etc/cni/net.d
           - name: host-cni-bin
             mountPath: /host/opt/cni/bin
+          # For loading the OVS kernel module.
+          - name: host-lib-modules
+            mountPath: /lib/modules
       containers:
         - name: okn-agent
           image: okn-ubuntu
@@ -169,7 +177,6 @@ spec:
                 - SYS_NICE
                 - NET_ADMIN
                 - SYS_ADMIN
-                - SYS_MODULE
                 - IPC_LOCK
           livenessProbe:
             exec:
@@ -210,3 +217,6 @@ spec:
             path: /var/log/okn
             # we use subPath to create logging subdirectories for different component (e.g. OVS)
             type: DirectoryOrCreate
+        - name: host-lib-modules
+          hostPath:
+            path: /lib/modules
