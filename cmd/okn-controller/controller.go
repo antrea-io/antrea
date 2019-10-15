@@ -47,8 +47,10 @@ func run(o *Options) error {
 
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client, podInformer, namespaceInformer, networkPolicyInformer)
 
-	// set up signals so we handle the first shutdown signal gracefully
-	stopCh := signals.SetupSignalHandler()
+	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
+	// cause the stopCh channel to be closed; if another signal is received before the program
+	// exits, we will force exit.
+	stopCh := signals.RegisterSignalHandlers()
 
 	informerFactory.Start(stopCh)
 
