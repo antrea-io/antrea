@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package test
+package testing
 
 import (
-	"fmt"
-	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
 	"net"
 	"strings"
-)
 
-const (
-	ArgsFormat = "IgnoreUnknown=1;K8S_POD_NAMESPACE=%s;K8S_POD_NAME=%s;K8S_POD_INFRA_CONTAINER_ID=%s"
+	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
 )
 
 func GenerateIPAMResult(cniVersion string, ipConfig []string, routeConfig []string, dnsConfig []string) *current.Result {
@@ -65,6 +61,7 @@ func parseIPs(ips []string) []*current.IPConfig {
 	}
 	return ipConfigs
 }
+
 func parseIPConfig(ipAddress string, gw string, version string) *current.IPConfig {
 	ip, ipv4Net, _ := net.ParseCIDR(ipAddress)
 	ipv4Net.IP = ip
@@ -74,26 +71,4 @@ func parseIPConfig(ipAddress string, gw string, version string) *current.IPConfi
 		ipConfig.Gateway = gateway
 	}
 	return ipConfig
-}
-
-func GenerateCNIArgs(podName string, podNamespace string, podInfraContainerID string) string {
-	return fmt.Sprintf(ArgsFormat, podNamespace, podName, podInfraContainerID)
-}
-
-type DummyOVSConfigError struct {
-	error
-	timeout   bool
-	temporary bool
-}
-
-func (e *DummyOVSConfigError) Timeout() bool {
-	return e.timeout
-}
-
-func (e *DummyOVSConfigError) Temporary() bool {
-	return e.temporary
-}
-
-func NewDummyOVSConfigError(errMsg string, temporary bool, timeout bool) *DummyOVSConfigError {
-	return &DummyOVSConfigError{error: fmt.Errorf(errMsg), timeout: timeout, temporary: temporary}
 }

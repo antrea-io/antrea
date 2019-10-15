@@ -19,6 +19,8 @@ const (
 	VXLAN_TUNNEL  = "vxlan"
 )
 
+//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -destination testing/mock_ovsconfig.go -package=testing okn/pkg/ovs/ovsconfig OVSBridgeClient
+
 type OVSBridgeClient interface {
 	Create() Error
 	Delete() Error

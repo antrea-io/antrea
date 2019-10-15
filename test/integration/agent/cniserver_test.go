@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package it
+package agent
 
 import (
 	"context"
@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"okn/pkg/agent"
 	"os"
 	"testing"
 
@@ -34,13 +33,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
+
+	"okn/pkg/agent"
 	"okn/pkg/agent/cniserver"
 	"okn/pkg/agent/cniserver/ipam"
+	ipamtest "okn/pkg/agent/cniserver/ipam/testing"
+	cniservertest "okn/pkg/agent/cniserver/testing"
+	openflowtest "okn/pkg/agent/openflow/testing"
 	cnimsg "okn/pkg/apis/cni"
 	"okn/pkg/cni"
 	"okn/pkg/ovs/ovsconfig"
-	"okn/pkg/test"
-	"okn/pkg/test/mocks"
+	ovsconfigtest "okn/pkg/ovs/ovsconfig/testing"
 )
 
 const (
@@ -97,9 +100,9 @@ const (
     }`
 )
 
-var ipamMock *mocks.MockIPAMDriver
-var ovsServiceMock *mocks.MockOVSBridgeClient
-var ofServiceMock *mocks.MockOFClient
+var ipamMock *ipamtest.MockIPAMDriver
+var ovsServiceMock *ovsconfigtest.MockOVSBridgeClient
+var ofServiceMock *openflowtest.MockClient
 var testNodeConfig *agent.NodeConfig
 
 type Net struct {
@@ -203,7 +206,7 @@ func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *cnimsg.CniC
 			Ifname:               IFNAME,
 			Netns:                targetNS.Path(),
 			NetworkConfiguration: []byte(conf),
-			Args:                 test.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContaner),
+			Args:                 cniservertest.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContaner),
 		},
 		Version: reqVersion,
 	}
@@ -219,8 +222,8 @@ func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir st
 			ContainerId:          CONTAINERID,
 			Ifname:               IFNAME,
 			Netns:                targetNS.Path(),
-			NetworkConfiguration: []byte(conf),
-			Args:                 test.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContaner),
+			NetworkConfiguration: conf,
+			Args:                 cniservertest.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContaner),
 		},
 		Version: reqVersion,
 	}
@@ -443,7 +446,7 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := agent.NewInterfaceStore()
-	tester.server = cniserver.New(testSock, "", testNodeConfig, ovsServiceMock, ofServiceMock, ifaceStore)
+	tester.server = cniserver.New(testSock, "", 1450, testNodeConfig, ovsServiceMock, ofServiceMock, ifaceStore)
 	ctx, _ := context.WithCancel(context.Background())
 	tester.ctx = ctx
 	return tester
@@ -462,7 +465,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	defer targetNS.Close()
 	tester.setNS(testNS, targetNS)
 
-	ipamResult := test.GenerateIPAMResult("0.4.0", tc.addresses, tc.routes, tc.dns)
+	ipamResult := ipamtest.GenerateIPAMResult("0.4.0", tc.addresses, tc.routes, tc.dns)
 	ipamMock.EXPECT().Add(mock.Any(), mock.Any()).Return(ipamResult, nil).AnyTimes()
 
 	// Mock ovs output while get ovs port external configuration
@@ -514,10 +517,10 @@ func getContainerIPMacConfig(ipamResult *current.Result) (string, string) {
 func TestOknServerFunc(t *testing.T) {
 	controller := mock.NewController(t)
 	defer controller.Finish()
-	ipamMock = mocks.NewMockIPAMDriver(controller)
+	ipamMock = ipamtest.NewMockIPAMDriver(controller)
 	_ = ipam.RegisterIPAMDriver("mock", ipamMock)
-	ovsServiceMock = mocks.NewMockOVSBridgeClient(controller)
-	ofServiceMock = mocks.NewMockOFClient(controller)
+	ovsServiceMock = ovsconfigtest.NewMockOVSBridgeClient(controller)
+	ofServiceMock = openflowtest.NewMockClient(controller)
 
 	var originalNS ns.NetNS
 	var dataDir string

@@ -12,31 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ovsconfig
+package testing
 
-import (
-	"strings"
-)
+import "fmt"
 
-type Error interface {
-	error
-	Timeout() bool   // Is the error a timeout?
-	Temporary() bool // Is the error temporary?
-}
+const argsFormat = "IgnoreUnknown=1;K8S_POD_NAMESPACE=%s;K8S_POD_NAME=%s;K8S_POD_INFRA_CONTAINER_ID=%s"
 
-type TransactionError struct {
-	error
-	temporary bool
-}
-
-func NewTransactionError(err error, temporary bool) *TransactionError {
-	return &TransactionError{err, temporary}
-}
-
-func (e *TransactionError) Temporary() bool {
-	return e.temporary || e.Timeout()
-}
-
-func (e *TransactionError) Timeout() bool {
-	return strings.HasPrefix(e.Error(), "timed out:")
+func GenerateCNIArgs(podName string, podNamespace string, podInfraContainerID string) string {
+	return fmt.Sprintf(argsFormat, podNamespace, podName, podInfraContainerID)
 }

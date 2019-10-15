@@ -30,7 +30,13 @@ test: test-fmt
 test-unit:
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -cover $$(go list okn/pkg/... | grep -E -v "okn/pkg/(ovs/ovsconfig|test)")
+	$(GO) test -cover $$(go list okn/pkg/... | grep -E -v "okn/pkg/ovs/ovsconfig")
+
+.PHONY: test-integration
+test-integration:
+	@echo
+	@echo "==> Running integration tests <=="
+	$(GO) test okn/test/integration/...
 
 test-fmt:
 	@echo

@@ -12,31 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ovsconfig
-
-import (
-	"strings"
-)
-
-type Error interface {
-	error
-	Timeout() bool   // Is the error a timeout?
-	Temporary() bool // Is the error temporary?
-}
-
-type TransactionError struct {
-	error
-	temporary bool
-}
-
-func NewTransactionError(err error, temporary bool) *TransactionError {
-	return &TransactionError{err, temporary}
-}
-
-func (e *TransactionError) Temporary() bool {
-	return e.temporary || e.Timeout()
-}
-
-func (e *TransactionError) Timeout() bool {
-	return strings.HasPrefix(e.Error(), "timed out:")
-}
+// Package integration provides integration tests that require a running OVS
+// or invoking external calls on the system.
+package integration

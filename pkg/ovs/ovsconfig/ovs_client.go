@@ -112,7 +112,7 @@ func (br *OVSBridge) lookupByName() (bool, Error) {
 	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return false, newTransactionError(err, temporary)
+		return false, NewTransactionError(err, temporary)
 	}
 
 	if len(res[0].Rows) == 0 {
@@ -144,7 +144,7 @@ func (br *OVSBridge) create() Error {
 	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return newTransactionError(err, temporary)
+		return NewTransactionError(err, temporary)
 	}
 
 	br.uuid = res[0].UUID[1]
@@ -164,7 +164,7 @@ func (br *OVSBridge) Delete() Error {
 	_, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return newTransactionError(err, temporary)
+		return NewTransactionError(err, temporary)
 	}
 	return nil
 }
@@ -181,7 +181,7 @@ func (br *OVSBridge) getPortUUIDList() ([]string, Error) {
 	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return nil, newTransactionError(err, temporary)
+		return nil, NewTransactionError(err, temporary)
 	}
 
 	portRes := res[0].Rows[0].(map[string]interface{})["ports"].([]interface{})
@@ -202,7 +202,7 @@ func (br *OVSBridge) DeletePorts(portUUIDList []string) Error {
 	_, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return newTransactionError(err, temporary)
+		return NewTransactionError(err, temporary)
 	}
 	return nil
 }
@@ -220,7 +220,7 @@ func (br *OVSBridge) DeletePort(portUUID string) Error {
 	_, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return newTransactionError(err, temporary)
+		return NewTransactionError(err, temporary)
 	}
 	return nil
 }
@@ -315,7 +315,7 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return "", newTransactionError(err, temporary)
+		return "", NewTransactionError(err, temporary)
 	}
 
 	return res[1].UUID[1], nil
@@ -348,7 +348,7 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, Error) {
 	if err != nil {
 		// TODO: differentiate timeout error
 		klog.Error("Transaction failed: ", err)
-		return 0, newTransactionError(err, temporary)
+		return 0, NewTransactionError(err, temporary)
 	}
 
 	ofport := int32(res[1].Rows[0].(map[string]interface{})["ofport"].(float64))
@@ -397,7 +397,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) 
 	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return nil, newTransactionError(err, temporary)
+		return nil, NewTransactionError(err, temporary)
 	}
 	if len(res[0].Rows) == 0 {
 		klog.Warning("Could not find port ", portUUID)
@@ -405,7 +405,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) 
 	}
 	if len(res[1].Rows) == 0 {
 		klog.Warning("Could not find interface ", ifName)
-		return nil, newTransactionError(errors.New("Interface not exists"), false)
+		return nil, NewTransactionError(errors.New("Interface not exists"), false)
 	}
 
 	port := res[0].Rows[0].(map[string]interface{})
@@ -422,7 +422,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) 
 	}
 	if !found {
 		klog.Errorf("Interface %s is not attached to the port %s", ifName, portUUID)
-		return nil, newTransactionError(errors.New("Interface is not attached to the port"), false)
+		return nil, NewTransactionError(errors.New("Interface is not attached to the port"), false)
 	}
 
 	portData := OVSPortData{UUID: portUUID, IFName: ifName}
@@ -451,7 +451,7 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	res, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return nil, newTransactionError(err, temporary)
+		return nil, NewTransactionError(err, temporary)
 	}
 
 	if len(res[0].Rows) == 0 {
@@ -500,7 +500,7 @@ func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
 	_, err, temporary := tx.Commit()
 	if err != nil {
 		klog.Error("Transaction failed: ", err)
-		return newTransactionError(err, temporary)
+		return NewTransactionError(err, temporary)
 	}
 
 	return nil
