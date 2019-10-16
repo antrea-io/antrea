@@ -1,3 +1,17 @@
+// Copyright 2019 OKN Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package providers
 
 import (
@@ -42,25 +56,29 @@ func convertConfig(inConfig *ssh_config.Config, name string) (string, *ssh.Clien
 		return "", nil, fmt.Errorf("input config is nil")
 	}
 
-	hostName, err := inConfig.Get(name, "HostName")
-	if err != nil {
-		return "", nil, fmt.Errorf("cannot find HostName for '%s' in config: %v", name, err)
-	}
-	port, err := inConfig.Get(name, "Port")
-	if err != nil {
-		return "", nil, fmt.Errorf("cannot find Port for '%s' in config: %v", name, err)
-	}
-	host := fmt.Sprintf("%s:%s", hostName, port)
-
-	user, err := inConfig.Get(name, "User")
-	if err != nil {
-		return "", nil, fmt.Errorf("cannot find User for '%s' in config: %v", name, err)
+	getFromKeyStrict := func(key string) (string, error) {
+		v, err := inConfig.Get(name, key)
+		if err != nil {
+			return "", fmt.Errorf("error when retrieving '%s' for '%s' in SSH config: %v", key, name, err)
+		}
+		if v == "" {
+			return "", fmt.Errorf("unable to find '%s' for '%s' in SSH config", key, name)
+		}
+		return v, nil
 	}
 
-	identityFile, err := inConfig.Get(name, "IdentityFile")
-	if err != nil {
-		return "", nil, fmt.Errorf("cannot find IdentityFile for '%s' in config: %v", name, err)
+	keyList := []string{"HostName", "Port", "User", "IdentityFile"}
+	values := make(map[string]string)
+
+	for _, key := range keyList {
+		if value, err := getFromKeyStrict(key); err != nil {
+			return "", nil, err
+		} else {
+			values[key] = value
+		}
 	}
+
+	identityFile := values["IdentityFile"]
 	// Read the private key identified by identityFile.
 	key, err := ioutil.ReadFile(identityFile)
 	if err != nil {
@@ -73,10 +91,11 @@ func convertConfig(inConfig *ssh_config.Config, name string) (string, *ssh.Clien
 	}
 
 	config := &ssh.ClientConfig{
-		User:            user,
+		User:            values["User"],
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
+	host := fmt.Sprintf("%s:%s", values["HostName"], values["Port"])
 	return host, config, nil
 }
 
@@ -104,6 +123,8 @@ func (provider *VagrantProvider) GetKubeconfigPath() (string, error) {
 	return kubeconfigPath, nil
 }
 
+// NewVagrantProvider returns an implementation of ProviderInterface which is suitable for a
+// Kubernetes test cluster created with the provided Vagrantfile.
 // configPath is unused for the vagrant provider
 func NewVagrantProvider(configPath string) (ProviderInterface, error) {
 	return &VagrantProvider{}, nil
