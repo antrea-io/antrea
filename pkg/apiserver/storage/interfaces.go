@@ -29,9 +29,11 @@ const Patched watch.EventType = "PATCHED"
 
 // Selectors represent a watcher's conditions to select objects.
 type Selectors struct {
-	// The key of object the watcher interests, can be empty.
-	Key   string
+	// Key is the identifier of the object the watcher monitors. It can be empty.
+	Key string
+	// Label filters objects based on LabelSelector.
 	Label labels.Selector
+	// Field filters objects based on the value of the resource fields.
 	Field fields.Selector
 }
 
@@ -45,7 +47,7 @@ type InternalEvent interface {
 	// pods by nodes is a potential candidate.
 	ToWatchEvent(selectors *Selectors) *watch.Event
 	// GetResourceVersion returns the resourceVersion of this event.
-	// The resourceVersion is used to filter out previously buffered events when starting watching.
+	// The resourceVersion is used to filter out previously buffered events when watcher is started.
 	GetResourceVersion() uint64
 }
 
@@ -55,7 +57,7 @@ type InternalEvent interface {
 type GenEventFunc func(key string, prevObj, obj runtime.Object, resourceVersion uint64) (InternalEvent, error)
 
 // Interface offers a common storage interface for runtime.Object.
-// It's provided for network policy controller to store the translated network policy resources, then OKN apiserver can
+// It's provided for Network Policy controller to store the translated Network Policy resources, then OKN apiserver can
 // dispatch events to clients that watch them via the Watch function.
 type Interface interface {
 	// Create adds a new object unless it already exists.
@@ -77,6 +79,5 @@ type Interface interface {
 	Delete(key string) error
 
 	// Watch starts watching with the specified key and selectors. Events will be sent to the returned watch.Interface.
-	// In particular, objects that exist before the watching starts will be sent in "ADDED" events.
 	Watch(ctx context.Context, key string, labelSelector labels.Selector, fieldSelector fields.Selector) (watch.Interface, error)
 }

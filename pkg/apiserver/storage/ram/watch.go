@@ -25,9 +25,9 @@ import (
 
 // storeWatcher implements watch.Interface
 type storeWatcher struct {
-	// The channel for incoming internal events that should be processed.
+	// input represents the channel for incoming internal events that should be processed.
 	input chan storage.InternalEvent
-	// The channel for outgoing events that will be sent to the client.
+	// result represents the channel for outgoing events that will be sent to the client.
 	result chan watch.Event
 	done   chan struct{}
 	// selectors represent a watcher's conditions to select objects.
@@ -47,16 +47,16 @@ func newStoreWatcher(chanSize int, selectors *storage.Selectors, forget func()) 
 }
 
 // add sends InternalEvent to channel input.
-// It's not blocking and simply discard the event if the channel is full currently.
-// Finally we should wait the channel's availability for a while and terminate the
-// watcher if timeout.
+// It's non blocking and simply discards the event if the channel is currently full.
+// Finally, we should wait for the channel to be available and terminate the
+// watcher, if it times out.
 func (w *storeWatcher) add(event storage.InternalEvent) bool {
 	select {
 	case w.input <- event:
 		return true
 	default:
 		// TODO: handle the case the channel is full
-		klog.Errorf("The input channel had been full, event %+v was discarded", event)
+		klog.Errorf("The input channel is full. Event %+v was discarded", event)
 		return false
 	}
 }
@@ -84,8 +84,8 @@ func (w *storeWatcher) process(ctx context.Context, initEvents []storage.Interna
 	}
 }
 
-// sendWatchEvent converts an InternalEvent to watch.Event based on the watcher's selectors,
-// sends the converted event to result channel if not nil.
+// sendWatchEvent converts an InternalEvent to watch.Event based on the watcher's selectors.
+// It sends the converted event to result channel, if not nil.
 func (w *storeWatcher) sendWatchEvent(event storage.InternalEvent) {
 	watchEvent := event.ToWatchEvent(w.selectors)
 	if watchEvent == nil {
@@ -105,12 +105,12 @@ func (w *storeWatcher) sendWatchEvent(event storage.InternalEvent) {
 	}
 }
 
-// Implements watch.Interface.
+// ResultChan returns the channel for outgoing events to the client.
 func (w *storeWatcher) ResultChan() <-chan watch.Event {
 	return w.result
 }
 
-// Implements watch.Interface.
+// Stop stops the store watcher.
 func (w *storeWatcher) Stop() {
 	w.forget()
 }
