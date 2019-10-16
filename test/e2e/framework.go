@@ -518,44 +518,72 @@ func (data *TestData) podWaitForIP(timeout time.Duration, name string) (string, 
 	return pod.Status.PodIP, nil
 }
 
-// deleteOneAntreaPod deletes one "random" Pod belonging to the Antrea DaemonSet and measure how long it
-// takes for the Pod not to be visible to the client any more.
-func (data *TestData) deleteOneAntreaAgentPod(gracePeriodSeconds int64, timeout time.Duration) (time.Duration, error) {
+// deleteAntreaAgentOnNode deletes the antrea-agent Pod on a specific Node and measure how long it
+// takes for the Pod not to be visible to the client any more. It also waits for a new antrea-agent
+// Pod to be running on the Node.
+func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSeconds int64, timeout time.Duration) (time.Duration, error) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea,component=antrea-agent",
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	}
-	pods, err := data.clientset.CoreV1().Pods(AntreaNamespace).List(listOptions)
+	// we do not use DeleteCollection directly because we want to ensure the resources no longer
+	// exist by the time we return
+	pods, err := data.clientset.CoreV1().Pods("kube-system").List(listOptions)
 	if err != nil {
-		return 0, fmt.Errorf("failed to list Antrea Pods: %v", err)
+		return 0, fmt.Errorf("failed to list antrea-agent Pods on Node '%s': %v", nodeName, err)
 	}
+	// in the normal case, there should be a single Pod in the list
 	if len(pods.Items) == 0 {
-		return 0, fmt.Errorf("no available Pods")
+		return 0, fmt.Errorf("no available antrea-agent Pods on Node '%s'", nodeName)
 	}
-	onePod := pods.Items[0].Name
-
 	deleteOptions := &metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
 
 	start := time.Now()
-	if err := data.clientset.CoreV1().Pods(AntreaNamespace).Delete(onePod, deleteOptions); err != nil {
-		return 0, fmt.Errorf("error when deleting Pod: %v", err)
+	if err := data.clientset.CoreV1().Pods("kube-system").DeleteCollection(deleteOptions, listOptions); err != nil {
+		return 0, fmt.Errorf("error when deleting antrea-agent Pods on Node '%s': %v", nodeName, err)
 	}
 
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if _, err := data.clientset.CoreV1().Pods(AntreaNamespace).Get(onePod, metav1.GetOptions{}); err != nil {
-			if errors.IsNotFound(err) {
-				return true, nil
+		for _, pod := range pods.Items {
+			if _, err := data.clientset.CoreV1().Pods("kube-system").Get(pod.Name, metav1.GetOptions{}); err != nil {
+				if errors.IsNotFound(err) {
+					continue
+				}
+				return false, fmt.Errorf("error when getting Pod: %v", err)
 			}
-			return false, fmt.Errorf("error when getting Pod: %v", err)
+			// Keep trying, at least one Pod left
+			return false, nil
 		}
-		// Keep trying
-		return false, nil
+		return true, nil
 	}); err != nil {
 		return 0, err
 	}
 
-	return time.Since(start), nil
+	delay := time.Since(start)
+
+	// wait for new antrea-agent Pod
+	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+		pods, err := data.clientset.CoreV1().Pods("kube-system").List(listOptions)
+		if err != nil {
+			return false, fmt.Errorf("failed to list antrea-agent Pods on Node '%s': %v", nodeName, err)
+		}
+		if len(pods.Items) == 0 {
+			// keep trying
+			return false, nil
+		}
+		for _, pod := range pods.Items {
+			if pod.Status.Phase != v1.PodRunning {
+				return false, nil
+			}
+		}
+		return true, nil
+	}); err != nil {
+		return 0, err
+	}
+
+	return delay, nil
 }
 
 // getAntreaPodOnNode retrieves the name of the Antrea Pod (antrea-agent-*) running on a specific Node.
