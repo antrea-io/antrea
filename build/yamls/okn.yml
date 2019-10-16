@@ -7,6 +7,8 @@ metadata:
   name: okn-config
   namespace: kube-system
 data:
+  okn-controller.conf: |
+    # Placeholder
   okn-agent.conf: |
     # Name of the OpenVSwitch bridge okn-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -37,8 +39,37 @@ data:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  name: okn-controller
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
   name: okn-agent
   namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: okn-controller
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - namespaces
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - networkpolicies
+    verbs:
+      - get
+      - watch
+      - list
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -57,6 +88,19 @@ rules:
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
+  name: okn-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: okn-controller
+subjects:
+  - kind: ServiceAccount
+    name: okn-controller
+    namespace: kube-system
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
   name: okn-agent
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -67,6 +111,94 @@ subjects:
     name: okn-agent
     namespace: kube-system
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: okn
+  namespace: kube-system
+  labels:
+    app: okn
+spec:
+  ports:
+    - port: 443
+      protocol: TCP
+      targetPort: 443
+  selector:
+    app: okn
+    component: okn-controller
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: okn-controller
+  namespace: kube-system
+  labels:
+    app: okn
+    component: okn-controller
+spec:
+  # Only a single active instance is supported for now.
+  replicas: 1
+  strategy:
+    # Ensure the existing Pod is killed before the new one is created.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: okn
+      component: okn-controller
+  template:
+    metadata:
+      labels:
+        app: okn
+        component: okn-controller
+    spec:
+      nodeSelector:
+        # Note: beta.kubernetes.io/os is targeted for removal in K8s v1.18, if running OKN with 1.18
+        # or higher uncomment the following line and remove beta.kubernetes.io/os.
+        #kubernetes.io/os: linux
+        beta.kubernetes.io/os: linux
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      tolerations:
+        # Mark it as a critical add-on.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        # Allow it to schedule onto master nodes.
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+      serviceAccountName: okn-controller
+      containers:
+        - name: okn-controller
+          image: okn-ubuntu
+          imagePullPolicy: IfNotPresent
+          command: ["okn-controller"]
+          args: ["--config", "/etc/okn/okn-controller.conf"]
+          env:
+            # Provide pod and node information for clusterinformation CRD.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - containerPort: 443
+              protocol: TCP
+          volumeMounts:
+            - name: okn-config
+              mountPath: /etc/okn/okn-controller.conf
+              subPath: okn-controller.conf
+              readOnly: true
+      volumes:
+        - name: okn-config
+          configMap:
+            name: okn-config
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -74,13 +206,11 @@ metadata:
   namespace: kube-system
   labels:
     app: okn
-    tier: node
     component: okn-agent
 spec:
   selector:
     matchLabels:
       app: okn
-      tier: node
       component: okn-agent
   updateStrategy:
     type: RollingUpdate
@@ -88,13 +218,22 @@ spec:
     metadata:
       labels:
         app: okn
-        tier: node
         component: okn-agent
     spec:
       hostNetwork: true
+      priorityClassName: system-node-critical
       tolerations:
-        - operator: Exists
-          effect: NoSchedule
+        # Mark it as a critical add-on.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        # Make sure it gets scheduled on all nodes.
+        - effect: NoSchedule
+          operator: Exists
+      nodeSelector:
+        # Note: beta.kubernetes.io/os is targeted for removal in K8s v1.18, if running OKN with 1.18
+        # or higher uncomment the following line and remove beta.kubernetes.io/os.
+        #kubernetes.io/os: linux
+        beta.kubernetes.io/os: linux
       serviceAccountName: okn-agent
       initContainers:
         - name: install-cni
@@ -117,6 +256,7 @@ spec:
           command: ["okn-agent"]
           args: ["--config", "/etc/okn/okn-agent.conf"]
           env:
+            # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME
               valueFrom:
                 fieldRef:
