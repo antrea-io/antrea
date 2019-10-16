@@ -21,7 +21,21 @@ go install k8s.io/code-generator/cmd/{defaulter-gen,client-gen,lister-gen,inform
 # re-generate both client and deepcopy for monitoring api
 # position generate client to its desired location
 export GOPATH=`go env GOPATH`
-$GOPATH/bin/client-gen --clientset-name "versioned" --input-base "" --input "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1"  --output-base .crdtmp  --output-package "github.com/vmware-tanzu/antrea/pkg/client/clientset" --go-header-file hack/boilerplate/license_header.go.txt
-$GOPATH/bin/deepcopy-gen --input-dirs "./pkg/apis/clusterinformation/crd/antrea/v1beta1" --bounding-dirs "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1" -O zz_generated.deepcopy --output-base ""  --go-header-file hack/boilerplate/license_header.go.txt
-cp -r .crdtmp/github.com/vmware-tanzu/antrea/* .
-rm -rf .crdtmp
+$GOPATH/bin/client-gen \
+  --clientset-name "versioned" \
+  --input-base "github.com/vmware-tanzu/antrea/pkg/apis/" \
+  --input "clusterinformation/crd/antrea/v1beta1,networkpolicy/v1beta1" \
+  --output-base "$(dirname "${BASH_SOURCE[0]}")/../../../../" \
+  --output-package "github.com/vmware-tanzu/antrea/pkg/client/clientset" \
+  --go-header-file hack/boilerplate/license_header.go.txt
+
+$GOPATH/bin/deepcopy-gen \
+  --input-dirs "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1,github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy,github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1" \
+  --bounding-dirs "github.com/vmware-tanzu/antrea/pkg/apis" \
+  -O zz_generated.deepcopy \
+  --go-header-file hack/boilerplate/license_header.go.txt
+
+$GOPATH/bin/conversion-gen  \
+  -i "github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1,github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/" \
+  -O zz_generated.conversion \
+  --go-header-file hack/boilerplate/license_header.go.txt

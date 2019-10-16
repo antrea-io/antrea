@@ -22,6 +22,8 @@ import (
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/antrea/v1beta1"
 	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/antrea/v1beta1/fake"
+	networkpolicyv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networkpolicy/v1beta1"
+	fakenetworkpolicyv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networkpolicy/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -74,4 +76,9 @@ var _ clientset.Interface = &Clientset{}
 // ClusterinformationV1beta1 retrieves the ClusterinformationV1beta1Client
 func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface {
 	return &fakeclusterinformationv1beta1.FakeClusterinformationV1beta1{Fake: &c.Fake}
+}
+
+// NetworkpolicyV1beta1 retrieves the NetworkpolicyV1beta1Client
+func (c *Clientset) NetworkpolicyV1beta1() networkpolicyv1beta1.NetworkpolicyV1beta1Interface {
+	return &fakenetworkpolicyv1beta1.FakeNetworkpolicyV1beta1{Fake: &c.Fake}
 }
