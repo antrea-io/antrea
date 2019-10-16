@@ -58,6 +58,7 @@ type Initializer struct {
 	ovsBridge       string
 	hostGateway     string
 	tunnelType      string
+	MTU             int
 	client          clientset.Interface
 	ifaceStore      InterfaceStore
 	nodeConfig      *NodeConfig
@@ -81,6 +82,7 @@ func NewInitializer(
 	ofClient openflow.Client,
 	k8sClient clientset.Interface,
 	ovsBridge, serviceCIDR, hostGateway, tunnelType string,
+	MTU int,
 	ifaceStore InterfaceStore) *Initializer {
 	// Parse service CIDR configuration. serviceCIDR is checked in option.validate, so
 	// it should be a valid configuration here.
@@ -90,6 +92,7 @@ func NewInitializer(
 		ovsBridge:       ovsBridge,
 		hostGateway:     hostGateway,
 		tunnelType:      tunnelType,
+		MTU:             MTU,
 		client:          k8sClient,
 		ifaceStore:      ifaceStore,
 		serviceCIDR:     serviceCIDRNet,
@@ -217,6 +220,11 @@ func (i *Initializer) setupGatewayInterface() error {
 	} else {
 		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
 	}
+	// Idempotent operation to set the gateway's MTU: we perform this operation regardless of
+	// whether or not the gateway interface already exists, as the desired MTU may change across
+	// restarts.
+	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.MTU)
+	i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.MTU)
 	// host link might not be queried at once after create OVS internal port, retry max 5 times with 1s
 	// delay each time to ensure the link is ready. If still failed after max retry return error.
 	link, err := func() (netlink.Link, error) {

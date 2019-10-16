@@ -46,11 +46,11 @@ type CNIServer struct {
 	ifaceStore           agent.InterfaceStore
 	hostProcPathPrefix   string
 	ofClient             openflow.Client
+	defaultMTU           int
 }
 
 const (
 	supportedCNIVersions = "0.1.0,0.2.0,0.3.0,0.3.1,0.4.0"
-	defaultMTU           = 1500
 )
 
 var supportedCNIVersionSet map[string]bool
@@ -59,6 +59,7 @@ type NetworkConfig struct {
 	CNIVersion string          `json:"cniVersion,omitempty"`
 	Name       string          `json:"name,omitempty"`
 	Type       string          `json:"type,omitempty"`
+	MTU        int             `json:"mtu,omitempty"`
 	DNS        types.DNS       `json:"dns"`
 	IPAM       ipam.IPAMConfig `json:"ipam,omitempty"`
 
@@ -112,6 +113,9 @@ func (s *CNIServer) loadNetworkConfig(request *cnimsg.CniCmdRequestMessage) (*CN
 		return cniConfig, err
 	}
 	s.updateLocalIPAMSubnet(cniConfig)
+	if cniConfig.MTU == 0 {
+		cniConfig.MTU = s.defaultMTU
+	}
 	klog.Infof("Load network configurations: %v", cniConfig)
 	return cniConfig, nil
 }
@@ -322,7 +326,19 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnimsg.CniCmdRequestMes
 	// Setup pod interfaces and connect to ovs bridge
 	podName := string(cniConfig.K8S_POD_NAME)
 	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
-	if err = configureInterface(s.ovsBridgeClient, s.ofClient, s.nodeConfig.Gateway, s.ifaceStore, podName, podNamespace, cniConfig.ContainerId, netNS, cniConfig.Ifname, result); err != nil {
+	if err = configureInterface(
+		s.ovsBridgeClient,
+		s.ofClient,
+		s.nodeConfig.Gateway,
+		s.ifaceStore,
+		podName,
+		podNamespace,
+		cniConfig.ContainerId,
+		netNS,
+		cniConfig.Ifname,
+		cniConfig.MTU,
+		result,
+	); err != nil {
 		klog.Errorf("Failed to configure container %s interface: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
@@ -398,6 +414,7 @@ func (s *CNIServer) CmdCheck(ctx context.Context, request *cnimsg.CniCmdRequestM
 
 func New(
 	cniSocket, hostProcPathPrefix string,
+	defaultMTU int,
 	nodeConfig *agent.NodeConfig,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
@@ -412,6 +429,7 @@ func New(
 		ifaceStore:           ifaceStore,
 		hostProcPathPrefix:   hostProcPathPrefix,
 		ofClient:             ofClient,
+		defaultMTU:           defaultMTU,
 	}
 }
 

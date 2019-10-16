@@ -10,7 +10,7 @@
 Use `okn-agent -h` to see complete options.
 
 ### Configuration
-```
+```yaml
 # clientConnection specifies the kubeconfig file and client connection settings for the agent
 # to communicate with the apiserver.
 clientConnection:
@@ -31,6 +31,11 @@ clientConnection:
 # - geneve
 #tunnelType: vxlan
 
+# Default MTU to use for the host gateway interface and the network interface of
+# each Pod. If omitted, okn-agent will default this value to 1450 to accomodate
+# for tunnel encapsulate overhead.
+#defaultMTU: 1450
+
 # Mount location of the /proc directory. The default is "/host", which is appropriate when
 # okn-agent is run as part of the OKN DaemonSet (and the host's /proc directory is mounted
 # as /host/proc in the okn-agent container). When running okn-agent as a process,
@@ -48,7 +53,7 @@ clientConnection:
 Use `okn-controller -h` to see complete options.
 
 ### Configuration
-```
+```yaml
 # clientConnection specifies the kubeconfig file and client connection settings for the 
 # controller to communicate with the apiserver.
 clientConnection:
@@ -56,3 +61,25 @@ clientConnection:
   # If not specified, InClusterConfig will be used, which handles API host discovery and authentication automatically.
   #kubeconfig: <PATH_TO_KUBE_CONF>
 ```
+
+## CNI configuration
+
+A typical CNI configuration looks like this:
+```json
+  {
+    "cniVersion":"0.3.0",
+    "name": "okn",
+    "type": "okn",
+    "ipam": {
+      "type": "host-local"
+    }
+  }
+```
+
+You can also set the MTU (for the Pod's network interface) in the CNI
+configuration using `"mtu": <MTU_SIZE>`. When using an `okn.yml` manifest, the
+MTU should be set with the `okn-agent` `defaultMTU` configuration parameter,
+which will apply to all Pods and the host gateway interface on every Node. It is
+strongly discouraged to set the `"mtu"` field in the CNI configuration to a
+value that does not match the `defaultMTU` parameter, as it may lead to
+performance degradation or packet drops.

@@ -35,6 +35,10 @@ type AgentConfig struct {
 	// - vxlan (default)
 	// - geneve
 	TunnelType string `yaml:"tunnelType,omitempty"`
+	// Default MTU to use for the host gateway interface and the network interface of each
+	// Pod. If omitted, okn-agent will default this value to 1450 to accomodate for tunnel
+	// encapsulate overhead.
+	DefaultMTU int `yaml:"defaultMTU,omitempty"`
 	// Mount location of the /proc directory. The default is "/host", which is appropriate when
 	// okn-agent is run as part of the OKN DaemonSet (and the host's /proc directory is mounted
 	// as /host/proc in the okn-agent container). When running okn-agent as a process,

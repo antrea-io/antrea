@@ -48,13 +48,13 @@ type k8sArgs struct {
 
 // setupInterface creates a veth pair: containerIface is in the container namespace and hostIface is
 // in the host namespace.
-func setupInterface(podName string, podNamespace string, ifname string, netns ns.NetNS) (hostIface *current.Interface, containerIface *current.Interface, err error) {
+func setupInterface(podName string, podNamespace string, ifname string, netns ns.NetNS, MTU int) (hostIface *current.Interface, containerIface *current.Interface, err error) {
 	hostVethName := agent.GenerateContainerInterfaceName(podName, podNamespace)
 	hostIface = &current.Interface{}
 	containerIface = &current.Interface{}
 
 	if err := netns.Do(func(hostNS ns.NetNS) error {
-		hostVeth, containerVeth, err := ip.SetupVethWithName(ifname, hostVethName, defaultMTU, hostNS)
+		hostVeth, containerVeth, err := ip.SetupVethWithName(ifname, hostVethName, MTU, hostNS)
 		if err != nil {
 			return err
 		}
@@ -197,7 +197,19 @@ func buildContainerConfig(containerID string, podName string, podNamespace strin
 	return agent.NewContainerInterface(containerID, podName, podNamespace, containerIface.Sandbox, containerMAC, containerIP)
 }
 
-func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ofClient openflow.Client, gateway *agent.Gateway, ifaceStore agent.InterfaceStore, podName string, podNameSpace string, containerID string, containerNetNS string, ifname string, result *current.Result) error {
+func configureInterface(
+	ovsBridge ovsconfig.OVSBridgeClient,
+	ofClient openflow.Client,
+	gateway *agent.Gateway,
+	ifaceStore agent.InterfaceStore,
+	podName string,
+	podNameSpace string,
+	containerID string,
+	containerNetNS string,
+	ifname string,
+	MTU int,
+	result *current.Result,
+) error {
 	netns, err := ns.GetNS(containerNetNS)
 	if err != nil {
 		klog.Errorf("Failed to open netns with %s: %v", containerNetNS, err)
@@ -205,7 +217,7 @@ func configureInterface(ovsBridge ovsconfig.OVSBridgeClient, ofClient openflow.C
 	}
 	defer netns.Close()
 	// Create veth pair and link up
-	hostIface, containerIface, err := setupInterface(podName, podNameSpace, ifname, netns)
+	hostIface, containerIface, err := setupInterface(podName, podNameSpace, ifname, netns, MTU)
 	if err != nil {
 		return err
 	}

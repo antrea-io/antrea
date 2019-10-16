@@ -63,13 +63,15 @@ func run(o *Options) error {
 	ifaceStore := agent.NewInterfaceStore()
 
 	// Initialize agent and node network.
-	agentInitializer := agent.NewInitializer(ovsBridgeClient,
+	agentInitializer := agent.NewInitializer(
+		ovsBridgeClient,
 		ofClient,
 		k8sClient,
 		o.config.OVSBridge,
 		o.config.ServiceCIDR,
 		o.config.HostGateway,
 		o.config.TunnelType,
+		o.config.DefaultMTU,
 		ifaceStore)
 	err = agentInitializer.Initialize()
 	if err != nil {
@@ -79,7 +81,14 @@ func run(o *Options) error {
 
 	nodeController := nodecontroller.NewNodeController(k8sClient, informerFactory, ofClient, nodeConfig)
 
-	cniServer := cniserver.New(o.config.CNISocket, o.config.HostProcPathPrefix, nodeConfig, ovsBridgeClient, ofClient, ifaceStore)
+	cniServer := cniserver.New(
+		o.config.CNISocket,
+		o.config.HostProcPathPrefix,
+		o.config.DefaultMTU,
+		nodeConfig,
+		ovsBridgeClient,
+		ofClient,
+		ifaceStore)
 
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program

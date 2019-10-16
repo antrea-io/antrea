@@ -210,3 +210,17 @@ func (mr *MockOVSBridgeClientMockRecorder) GetPortList() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPortList", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetPortList))
 }
+
+// SetInterfaceMTU mocks base method
+func (m *MockOVSBridgeClient) SetInterfaceMTU(arg0 string, arg1 int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetInterfaceMTU", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetInterfaceMTU indicates an expected call of SetInterfaceMTU
+func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceMTU(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceMTU", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceMTU), arg0, arg1)
+}

@@ -23,6 +23,11 @@ data:
     # - geneve
     #tunnelType: vxlan
 
+    # Default MTU to use for the host gateway interface and the network interface of each Pod. If
+    # omitted, okn-agent will default this value to 1450 to accomodate for tunnel encapsulate
+    # overhead.
+    #defaultMTU: 1450
+
     # CIDR Range for services in cluster. It's required to support egress network policy, should
     # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
     #serviceCIDR: 10.96.0.0/12

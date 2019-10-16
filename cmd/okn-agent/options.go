@@ -15,7 +15,7 @@
 package main
 
 import (
-	"errors"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"okn/pkg/ovs/ovsconfig"
@@ -31,6 +31,8 @@ const (
 	defaultHostGateway        = "gw0"
 	defaultHostProcPathPrefix = "/host"
 	defaultServiceCIDR        = "10.96.0.0/12"
+	defaultMTUVxlan           = 1450
+	defaultMTUGeneve          = 1450
 )
 
 type Options struct {
@@ -64,15 +66,18 @@ func (o *Options) complete(args []string) error {
 	return nil
 }
 
-// validate validates all the required options.
+// validate validates all the required options. It must be called after complete.
 func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
-		return errors.New("No arguments are supported")
+		return fmt.Errorf("An empty argument list is not supported")
 	}
 	// Validate service CIDR configuration
 	_, _, err := net.ParseCIDR(o.config.ServiceCIDR)
 	if err != nil {
-		return errors.New("Service CIDR configuration is invalid")
+		return fmt.Errorf("Service CIDR %s is invalid", o.config.ServiceCIDR)
+	}
+	if o.config.TunnelType != ovsconfig.VXLAN_TUNNEL && o.config.TunnelType != ovsconfig.GENEVE_TUNNEL {
+		return fmt.Errorf("Tunnel type %s is invalid", o.config.TunnelType)
 	}
 	return nil
 }
@@ -109,5 +114,12 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.ServiceCIDR == "" {
 		o.config.ServiceCIDR = defaultServiceCIDR
+	}
+	if o.config.DefaultMTU == 0 {
+		if o.config.TunnelType == ovsconfig.VXLAN_TUNNEL {
+			o.config.DefaultMTU = defaultMTUVxlan
+		} else if o.config.TunnelType == ovsconfig.GENEVE_TUNNEL {
+			o.config.DefaultMTU = defaultMTUGeneve
+		}
 	}
 }
