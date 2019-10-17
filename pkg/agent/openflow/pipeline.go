@@ -126,7 +126,7 @@ func (c *client) tunnelClassifierFlow(tunnelOFPort uint32) openflow.Flow {
 	return c.pipeline[classifierTable].BuildFlow().Priority(priorityNormal).
 		MatchField(inPortField, fmt.Sprint(tunnelOFPort)).
 		Action().LoadRange(marksReg.reg(), markTrafficFromTunnel, openflow.Range{0, 15}).
-		Action().Resubmit(emptyPlaceholderStr, conntrackStateTable).
+		Action().Resubmit(emptyPlaceholderStr, conntrackTable).
 		Done()
 }
 
