@@ -9,3 +9,6 @@ install -m 644 /etc/okn/okn-cni.conf /host/etc/cni/net.d/10-okn.conf
 
 # Install OKN binary file
 install -m 755 /usr/local/bin/okn-cni /host/opt/cni/bin/okn
+
+# Load the OVS kernel module
+modprobe openvswitch
