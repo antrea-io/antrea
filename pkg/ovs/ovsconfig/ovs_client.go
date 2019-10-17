@@ -21,7 +21,6 @@ import (
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/dbtransaction"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/helpers"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
-	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovshelper"
 	"k8s.io/klog"
 )
 
@@ -39,9 +38,14 @@ type OVSPortData struct {
 	OFPort      int32
 }
 
-const defaultUDSAddress = "/run/openvswitch/db.sock"
-
-const openvSwitchSchema = "Open_vSwitch"
+const (
+	defaultUDSAddress = "/run/openvswitch/db.sock"
+	openvSwitchSchema = "Open_vSwitch"
+	// Openflow protocol version 1.0.
+	openflowProtoVersion10 = "OpenFlow10"
+	// Openflow protocol version 1.3.
+	openflowProtoVersion13 = "OpenFlow13"
+)
 
 // Connects to the OVSDB server on the UNIX domain socket specified by address.
 // If address is set to "", the default UNIX domain socket path
@@ -86,8 +90,9 @@ func NewOVSBridge(bridgeName string, ovsdb *ovsdb.OVSDB) *OVSBridge {
 	return &OVSBridge{ovsdb, bridgeName, ""}
 }
 
-// Looks up or creates the bridge.
-// If the bridge with name bridgeName does not exist, it will be created.
+// Create looks up or creates the bridge. If the bridge with name bridgeName
+// does not exist, it will be created. Openflow protocol version 1.0 and 1.3
+// will be enabled for the bridge.
 func (br *OVSBridge) Create() Error {
 	if exists, err := br.lookupByName(); err != nil {
 		return err
@@ -125,8 +130,11 @@ func (br *OVSBridge) lookupByName() (bool, Error) {
 
 func (br *OVSBridge) create() Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
-	bridge := ovshelper.Bridge{
+	bridge := Bridge{
 		Name: br.name,
+		// Use Openflow protocol version 1.0 and 1.3.
+		Protocols: makeOVSDBSetFromList([]string{openflowProtoVersion10,
+			openflowProtoVersion13}),
 	}
 	namedUUID := tx.Insert(dbtransaction.Insert{
 		Table: "Bridge",
@@ -353,6 +361,10 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, Error) {
 
 	ofport := int32(res[1].Rows[0].(map[string]interface{})["ofport"].(float64))
 	return ofport, nil
+}
+
+func makeOVSDBSetFromList(list []string) []interface{} {
+	return []interface{}{"set", list}
 }
 
 func buildMapFromOVSDBMap(data []interface{}) map[string]string {
