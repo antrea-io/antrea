@@ -26,12 +26,14 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	ipamtest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam/testing"
 	cniservertest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/testing"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/apis/cni"
+	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
@@ -46,6 +48,8 @@ const (
 	testPodNamespace        = "test"
 	testPodName             = "test-1"
 	testPodInfraContainerID = "test-infra-11111111"
+	supportedCNIVersion     = "0.4.0"
+	unsupportedCNIVersion   = "0.5.1"
 )
 
 var routes = []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
@@ -57,132 +61,114 @@ var testNodeConfig *agent.NodeConfig
 var gwIP net.IP
 
 func TestLoadNetConfig(t *testing.T) {
+	assert := assert.New(t)
+
 	cniService := generateCNIServer(t)
-	var version = "0.5.1"
-	networkCfg := generateNetworkConfiguration("testCfg", version)
-	requestMsg, containerId := newRequest(version, args, networkCfg, "", t)
+	networkCfg := generateNetworkConfiguration("testCfg", supportedCNIVersion)
+	requestMsg, containerId := newRequest(args, networkCfg, "", t)
 	netCfg, err := cniService.loadNetworkConfig(&requestMsg)
-	if err != nil {
-		t.Errorf("Found error while parsing request message, %v", err)
-	}
-	reqVersion := netCfg.CNIVersion
-	if (reqVersion != version) || reqVersion != netCfg.CNIVersion {
-		t.Error("Failed to parse version from request")
-	}
-	if netCfg.ContainerId != containerId {
-		t.Error("Failed to parse ContainerId")
-	}
-	if netCfg.Netns != netns {
-		t.Error("Failed to parse netns")
-	}
-	if netCfg.Ifname != ifname {
-		t.Error("Failed to parse ifname")
-	}
-	if netCfg.Name != networkCfg.Name {
-		t.Error("Failed to parse network configuration")
-	}
-	if netCfg.IPAM.Type != networkCfg.IPAM.Type {
-		t.Error("Failed to parse network configuration")
-	}
-	if netCfg.IPAM.Subnet != cniService.nodeConfig.PodCIDR.String() {
-		t.Error("Failed to update local IPAM configuration")
-	}
-	if netCfg.IPAM.Gateway != testNodeConfig.Gateway.IP.String() {
-		t.Error("Failed to update local IPAM configuration")
-	}
+
+	// just make sure that cniService.nodeConfig matches the testNodeConfig.
+	require.Equal(t, testNodeConfig, cniService.nodeConfig)
+
+	assert.Nil(err, "Error while parsing request message, %v", err)
+	assert.Equal(supportedCNIVersion, netCfg.CNIVersion)
+	assert.Equal(containerId, netCfg.ContainerId)
+	assert.Equal(netns, netCfg.Netns)
+	assert.Equal(ifname, netCfg.Ifname)
+	assert.Equal(networkCfg.Name, netCfg.Name)
+	assert.Equal(networkCfg.IPAM.Type, netCfg.IPAM.Type)
+	assert.Equal(
+		netCfg.IPAM.Subnet, testNodeConfig.PodCIDR.String(),
+		"Network configuration (PodCIDR) was not updated",
+	)
+	assert.Equal(
+		netCfg.IPAM.Gateway, testNodeConfig.Gateway.IP.String(),
+		"Network configuration (Gateway IP) was not updated",
+	)
 }
 
 func TestRequestCheck(t *testing.T) {
 	cniService := generateCNIServer(t)
-	var version1 = "0.5.1"
-	valid := cniService.isCNIVersionSupported(version1)
+	valid := cniService.isCNIVersionSupported(unsupportedCNIVersion)
 	if valid {
-		t.Error("Failed to check version")
+		t.Error("Failed to return error for unsupported version")
 	}
-	var version2 = "0.4.0"
-	valid = cniService.isCNIVersionSupported(version2)
+	valid = cniService.isCNIVersionSupported(supportedCNIVersion)
 	if !valid {
-		t.Error("Failed to support version")
+		t.Error("Failed accept supported version")
 	}
 }
 
-func TestNewCNIServer(t *testing.T) {
+func checkErrorResponse(t *testing.T, resp *cnipb.CniCmdResponse, code cnipb.ErrorCode, message string) {
+	assert.NotNil(t, resp, "Response is nil")
+	assert.NotNil(t, resp.GetError(), "Error field is not set")
+	assert.Equalf(
+		t, code, resp.GetError().GetCode(),
+		// this will print the error code names and not just their integral values.
+		"Error code does not match: expected '%v' but got '%v'", code, resp.GetError().GetCode(),
+	)
+	if message != "" {
+		assert.Contains(t, resp.GetError().GetMessage(), message, "Error message does not match")
+	}
+}
+
+func TestIPAMService(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	_ = ipam.RegisterIPAMDriver(testIpamType, ipamMock)
-	testSupportedVersionStr := "0.3.0, 0.3.1, 0.4.0"
-	var supporteVersions = []string{"0.3.0", "0.3.1", "0.4.0"}
 	cniServer := generateCNIServer(t)
-	cniServer.supportedCNIVersions = buildVersionSet(testSupportedVersionStr)
-	for _, ver := range supporteVersions {
-		if !cniServer.isCNIVersionSupported(ver) {
-			t.Errorf("CniService init failed for wrong supportedCNIVersions")
-		}
-	}
-	isValid := ipam.IsIPAMTypeValid(testIpamType)
-	if !isValid {
-		t.Errorf("Failed to load Ipam service")
-	}
-	isValid = ipam.IsIPAMTypeValid("test1")
-	if isValid {
-		t.Errorf("Failed to register Ipam service")
-	}
+
+	require.True(t, ipam.IsIPAMTypeValid(testIpamType), "Failed to register IPAM service")
+	require.False(t, ipam.IsIPAMTypeValid("not_a_valid_IPAM_driver"))
 
 	// Test IPAM_Failure cases
 	cxt := context.Background()
 	networkCfg := generateNetworkConfiguration("testCfg", "0.4.0")
-	requestMsg, _ := newRequest(cni.AntreaVersion, args, networkCfg, "", t)
-	ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
-	// A rollback might be tried if add failed
-	ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(1)
-	response, _ := cniServer.CmdAdd(cxt, &requestMsg)
-	if response == nil || response.StatusCode != cnimsg.CniCmdResponseMessage_IPAM_FAILURE {
-		t.Errorf("Failed to return IPAM_Failure error")
-	}
+	requestMsg, _ := newRequest(args, networkCfg, "", t)
 
-	ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM delete error"))
-	response, _ = cniServer.CmdDel(cxt, &requestMsg)
-	if response == nil || response.StatusCode != cnimsg.CniCmdResponseMessage_IPAM_FAILURE {
-		t.Errorf("Failed to return IPAM_Failure error")
-	}
+	t.Run("Error on ADD", func(t *testing.T) {
+		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
+		// A rollback will be tried if add failed.
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(1)
+		response, err := cniServer.CmdAdd(cxt, &requestMsg)
+		require.Nil(t, err, "expected no rpc error")
+		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
+	})
 
-	ipamMock.EXPECT().Check(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM check error"))
-	response, _ = cniServer.CmdCheck(cxt, &requestMsg)
-	if response == nil || response.StatusCode != cnimsg.CniCmdResponseMessage_IPAM_FAILURE {
-		t.Errorf("Failed to return IPAM_Failure error")
-	}
+	t.Run("Error on DEL", func(t *testing.T) {
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM delete error"))
+		response, err := cniServer.CmdDel(cxt, &requestMsg)
+		require.Nil(t, err, "expected no rpc error")
+		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM delete error")
+	})
+
+	t.Run("Error on CHECK", func(t *testing.T) {
+		ipamMock.EXPECT().Check(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM check error"))
+		response, err := cniServer.CmdCheck(cxt, &requestMsg)
+		require.Nil(t, err, "expected no rpc error")
+		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM check error")
+	})
 }
 
 func TestCheckRequestMessage(t *testing.T) {
 	cniServer := generateCNIServer(t)
-	networkCfg := generateNetworkConfiguration("testCfg", "0.3.1")
-	requestMsg, _ := newRequest("2.0", args, networkCfg, "", t)
-	_, response := cniServer.checkRequestMessage(&requestMsg)
-	if response == nil {
-		t.Errorf("Failed to identify error request")
-	} else if response.StatusCode != cnimsg.CniCmdResponseMessage_INCOMPATIBLE_PROTO_VERSION {
-		t.Errorf("Failed to identify incompatible request version from client")
-	}
 
-	networkCfg = generateNetworkConfiguration("testCfg", "0.5.1")
-	requestMsg, _ = newRequest(cni.AntreaVersion, args, networkCfg, "", t)
-	_, response = cniServer.checkRequestMessage(&requestMsg)
-	if response == nil {
-		t.Errorf("Failed to identify error request")
-	} else if response.StatusCode != cnimsg.CniCmdResponseMessage_INCOMPATIBLE_CNI_VERSION {
-		t.Errorf("Failed to identify incompatible CNI version from request")
-	}
+	t.Run("Incompatible CNI version", func(t *testing.T) {
+		networkCfg := generateNetworkConfiguration("testCfg", unsupportedCNIVersion)
+		requestMsg, _ := newRequest(args, networkCfg, "", t)
+		_, response := cniServer.checkRequestMessage(&requestMsg)
+		checkErrorResponse(t, response, cnipb.ErrorCode_INCOMPATIBLE_CNI_VERSION, "")
+	})
 
-	networkCfg = generateNetworkConfiguration("testCfg", "0.3.1")
-	networkCfg.IPAM.Type = "unknown"
-	requestMsg, _ = newRequest(cni.AntreaVersion, args, networkCfg, "", t)
-	_, response = cniServer.checkRequestMessage(&requestMsg)
-	if response == nil {
-		t.Errorf("Failed to identify error request")
-	} else if response.StatusCode != cnimsg.CniCmdResponseMessage_UNSUPPORTED_NETWORK_CONFIGURATION {
-		t.Errorf("Failed to identify unsupported network configuration")
-	}
+	t.Run("Unknown IPAM type", func(t *testing.T) {
+		networkCfg := generateNetworkConfiguration("testCfg", supportedCNIVersion)
+		networkCfg.IPAM.Type = "unknown"
+		requestMsg, _ := newRequest(args, networkCfg, "", t)
+		_, response := cniServer.checkRequestMessage(&requestMsg)
+		checkErrorResponse(t, response, cnipb.ErrorCode_UNSUPPORTED_FIELD, "")
+	})
 }
 
 func TestValidatePrevResult(t *testing.T) {
@@ -198,164 +184,153 @@ func TestValidatePrevResult(t *testing.T) {
 	ipamResult := ipamtest.GenerateIPAMResult(cniVersion, ips, routes, dns)
 	networkCfg.RawPrevResult, _ = translateRawPrevResult(ipamResult, cniVersion)
 
-	cniConfig := &CNIConfig{NetworkConfig: networkCfg, CniCmdArgsMessage: &cnimsg.CniCmdArgsMessage{Args: args}}
-	cniConfig.Ifname = "eth1"
 	prevResult, _ := cniServer.parsePrevResultFromRequest(networkCfg)
-	containerID := uuid.New().String()
-	cniConfig.ContainerId = containerID
 	containerIface := &current.Interface{Name: ifname, Sandbox: netns}
 	hostIfaceName := agent.GenerateContainerInterfaceName(testPodName, testPodNamespace)
 	hostIface := &current.Interface{Name: hostIfaceName}
-	prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-	response, _ := cniServer.validatePrevResult(cniConfig.CniCmdArgsMessage, k8sPodArgs, prevResult)
-	if response == nil || response.StatusCode != cnimsg.CniCmdResponseMessage_UNKNOWN_CONTAINER {
-		t.Errorf("Failed to catch invalid container interface from request")
+
+	baseCNIConfig := func() *CNIConfig {
+		cniConfig := &CNIConfig{NetworkConfig: networkCfg, CniCmdArgs: &cnipb.CniCmdArgs{Args: args}}
+		containerID := uuid.New().String()
+		cniConfig.ContainerId = containerID
+		return cniConfig
 	}
 
-	cniConfig.Ifname = ifname
-	cniConfig.Netns = "invalid_netns"
-	response, _ = cniServer.validatePrevResult(cniConfig.CniCmdArgsMessage, k8sPodArgs, prevResult)
-	if response == nil || response.StatusCode != cnimsg.CniCmdResponseMessage_CHECK_INTERFACE_FAILURE {
-		t.Errorf("Failed to catch invalid container interface from request")
-	}
-	hostIface = &current.Interface{Name: "unknown_iface"}
-	prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-	response, _ = cniServer.validatePrevResult(cniConfig.CniCmdArgsMessage, k8sPodArgs, prevResult)
-	if response == nil || response.StatusCode != cnimsg.CniCmdResponseMessage_UNKNOWN_CONTAINER {
-		t.Errorf("Failed to catch invalid host interface from request")
-	}
+	t.Run("Invalid container interface", func(t *testing.T) {
+		cniConfig := baseCNIConfig()
+		cniConfig.Ifname = "invalid_iface" // invalid
+		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
+		response, _ := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult)
+		checkErrorResponse(
+			t, response, cnipb.ErrorCode_INVALID_NETWORK_CONFIG,
+			"prevResult does not match network configuration",
+		)
+	})
+
+	t.Run("Invalid host interface", func(t *testing.T) {
+		cniConfig := baseCNIConfig()
+		cniConfig.Ifname = ifname
+		hostIface := &current.Interface{Name: "unknown_iface"}
+		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
+		response, _ := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult)
+		checkErrorResponse(
+			t, response, cnipb.ErrorCode_INVALID_NETWORK_CONFIG,
+			"prevResult does not match network configuration",
+		)
+	})
+
+	t.Run("Interface check failure", func(t *testing.T) {
+		cniConfig := baseCNIConfig()
+		cniConfig.Ifname = ifname
+		cniConfig.Netns = "invalid_netns"
+		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
+		response, _ := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult)
+		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
+	})
 }
 
 func TestParsePrevResultFromRequest(t *testing.T) {
 	cniServer := generateCNIServer(t)
-	cniVersion := "0.4.0"
-	networkCfg := generateNetworkConfiguration("testCfg", cniVersion)
 
-	networkCfg.PrevResult = nil
-	networkCfg.RawPrevResult = nil
-	_, response := cniServer.parsePrevResultFromRequest(networkCfg)
-	if response == nil {
-		t.Errorf("Failed to catch invalid PrevResult from request")
-	} else if response.StatusCode != cnimsg.CniCmdResponseMessage_UNSUPPORTED_NETWORK_CONFIGURATION {
-		t.Errorf("Failed to catch invalid PrevResult from request")
+	getNetworkCfg := func(cniVersion string) *NetworkConfig {
+		networkCfg := generateNetworkConfiguration("testCfg", cniVersion)
+		networkCfg.PrevResult = nil
+		networkCfg.RawPrevResult = nil
+		return networkCfg
 	}
 
-	networkCfg1 := generateNetworkConfiguration("testCfg", cniVersion)
-	networkCfg1.PrevResult = nil
-	prevResult := ipamtest.GenerateIPAMResult(cniVersion, ips, routes, dns)
-	networkCfg1.RawPrevResult, _ = translateRawPrevResult(prevResult, cniVersion)
-	prevResult, response = cniServer.parsePrevResultFromRequest(networkCfg1)
-	if prevResult == nil {
-		t.Errorf("Failed to parse PrevResult from request")
-	}
+	t.Run("Correct prevResult", func(t *testing.T) {
+		networkCfg := getNetworkCfg(supportedCNIVersion)
+		prevResult := ipamtest.GenerateIPAMResult(supportedCNIVersion, ips, routes, dns)
+		var err error
+		networkCfg.RawPrevResult, err = translateRawPrevResult(prevResult, supportedCNIVersion)
+		require.Nil(t, err, "Cannot generate RawPrevResult for test")
+		parsedPrevResult, _ := cniServer.parsePrevResultFromRequest(networkCfg)
+		assert.NotNil(t, parsedPrevResult)
+		// TODO: check that parsedPrevResult matches prevResult
+	})
 
-	prevResult = ipamtest.GenerateIPAMResult("", ips, routes, dns)
-	networkCfg2 := generateNetworkConfiguration("testCfg", "0.5.1")
-	networkCfg2.RawPrevResult, _ = translateRawPrevResult(prevResult, cniVersion)
-	prevResult, response = cniServer.parsePrevResultFromRequest(networkCfg2)
-	if response == nil {
-		t.Errorf("Failed to catch invalid PrevResult from request")
-	} else if response.StatusCode != cnimsg.CniCmdResponseMessage_UNSUPPORTED_NETWORK_CONFIGURATION {
-		t.Errorf("Failed to catch invalid PrevResult from request")
-	}
+	t.Run("Missing prevResult", func(t *testing.T) {
+		networkCfg := getNetworkCfg(supportedCNIVersion)
+		_, response := cniServer.parsePrevResultFromRequest(networkCfg)
+		checkErrorResponse(t, response, cnipb.ErrorCode_UNSUPPORTED_FIELD, "prevResult")
+	})
+
+	t.Run("Unsupported CNI version", func(t *testing.T) {
+		networkCfg := getNetworkCfg(unsupportedCNIVersion)
+		prevResult := ipamtest.GenerateIPAMResult(supportedCNIVersion, ips, routes, dns)
+		var err error
+		networkCfg.RawPrevResult, err = translateRawPrevResult(prevResult, supportedCNIVersion)
+		require.Nil(t, err, "Cannot generate RawPrevResult for test")
+		_, response := cniServer.parsePrevResultFromRequest(networkCfg)
+		checkErrorResponse(t, response, cnipb.ErrorCode_DECODING_FAILURE, "prevResult")
+	})
 }
 
 func TestUpdateResultIfaceConfig(t *testing.T) {
-	cniVersion := "0.3.1"
+	require := require.New(t)
+
+	// TODO: it may be better to have a v4 address and a v6 address, as the IPAM plugin will not
+	// return a Result with 2 v4 addresses.
 	testIps := []string{"10.1.2.100/24, ,4", "192.168.1.100/24, 192.168.2.253, 4"}
-	result := ipamtest.GenerateIPAMResult(cniVersion, testIps, routes, dns)
-	updateResultIfaceConfig(result, gwIP)
-	if len(result.IPs) != 2 {
-		t.Errorf("Failed to construct result")
-	}
-	for _, ipc := range result.IPs {
-		if ipc.Address.IP.String() == "10.1.2.100" {
-			if ipc.Gateway == nil || ipc.Gateway.String() != "10.1.2.1" {
-				t.Errorf("Failed to calculate gateway")
-			}
-		} else if ipc.Address.IP.String() == "192.168.1.100" {
-			if ipc.Gateway == nil || ipc.Gateway.String() != "192.168.2.253" {
-				t.Errorf("Failed to calculate gateway")
-			}
-		} else {
-			t.Errorf("Failed to identify ip address from result")
-		}
-	}
-	emptyRoute := []string{}
-	result = ipamtest.GenerateIPAMResult(cniVersion, testIps, emptyRoute, dns)
-	updateResultIfaceConfig(result, testNodeConfig.Gateway.IP)
-	if result.Routes == nil || len(result.Routes) == 0 {
-		t.Error("Failed to add default route via node host gateway interface")
-	} else {
-		found := false
-		for _, route := range result.Routes {
-			if route.Dst.String() == "0.0.0.0/0" && route.GW.Equal(testNodeConfig.Gateway.IP) {
-				found = true
-				break
+
+	require.Equal(gwIP, testNodeConfig.Gateway.IP)
+
+	t.Run("Gateways updated", func(t *testing.T) {
+		assert := assert.New(t)
+
+		result := ipamtest.GenerateIPAMResult(supportedCNIVersion, testIps, routes, dns)
+		updateResultIfaceConfig(result, gwIP)
+
+		assert.Len(result.IPs, 2, "Failed to construct result")
+		for _, ipc := range result.IPs {
+			switch ipc.Address.IP.String() {
+			case "10.1.2.100":
+				assert.Equal("10.1.2.1", ipc.Gateway.String())
+			case "192.168.1.100":
+				assert.Equal("192.168.2.253", ipc.Gateway.String())
+			default:
+				t.Errorf("Unexpected IP address in CNI result")
 			}
 		}
-		if !found {
-			t.Error("Failed to add default route via node host gateway interface")
-		}
-	}
+	})
+
+	t.Run("Default route added", func(t *testing.T) {
+		emptyRoutes := []string{}
+		result := ipamtest.GenerateIPAMResult(supportedCNIVersion, testIps, emptyRoutes, dns)
+		updateResultIfaceConfig(result, gwIP)
+		require.NotEmpty(t, result.Routes)
+		defaultRoute := func() *types.Route {
+			for _, route := range result.Routes {
+				if route.Dst.String() == "0.0.0.0/0" {
+					return route
+				}
+			}
+			return nil
+		}()
+		assert.NotNil(t, defaultRoute.GW)
+	})
 }
 
-func TestOVSOperations(t *testing.T) {
+func TestValidateOVSPort(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
-	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	ifaceStore := agent.NewInterfaceStore()
-	cniVersion := "0.3.1"
 	containerID := uuid.New().String()
 	containerMACStr := "11:22:33:44:55:66"
-	containerMAC, _ := net.ParseMAC(containerMACStr)
 	containerIp := []string{"10.1.2.100/24,10.1.2.1,4"}
-	result := ipamtest.GenerateIPAMResult(cniVersion, containerIp, routes, dns)
+	result := ipamtest.GenerateIPAMResult(supportedCNIVersion, containerIp, routes, dns)
 	containerIface := &current.Interface{Name: ifname, Sandbox: netns, Mac: containerMACStr}
 	hostIfaceName := agent.GenerateContainerInterfaceName(testPodName, testPodNamespace)
 	hostIface := &current.Interface{Name: hostIfaceName}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
-	fakePortUUID := uuid.New().String()
+	portUUID := uuid.New().String()
 	containerConfig := buildContainerConfig(containerID, testPodName, testPodNamespace, containerIface, result.IPs)
+	containerConfig.OVSPortConfig = &agent.OVSPortConfig{PortUUID: portUUID, IfaceName: hostIfaceName}
 
-	// Test successful add/check OVS port operations
-	mockOVSBridgeClient.EXPECT().CreatePort(hostIfaceName, hostIfaceName, gomock.Any()).Return(fakePortUUID, nil)
-	portUUID, err := setupContainerOVSPort(mockOVSBridgeClient, containerConfig, hostIfaceName)
-	if err != nil {
-		t.Errorf("Failed to handle OVS success add")
-	} else {
-		containerConfig.OVSPortConfig = &agent.OVSPortConfig{PortUUID: portUUID, IfaceName: hostIfaceName}
-		ifaceStore.AddInterface(hostIfaceName, containerConfig)
-		if containerConfig.PortUUID != fakePortUUID {
-			t.Errorf("Failed to cache OVS port UUID")
-		}
-	}
-	err = validateOVSPort(ifaceStore, hostIfaceName, containerMACStr, containerID, result.IPs)
-	if err != nil {
-		t.Errorf("Failed to validate OVS port configuration")
-	}
-
-	// Test failed add OVS port and then remove local cache case
-	failedContainerID := uuid.New().String()
-	pod2 := "test-2"
-	containerIP := net.ParseIP("10.1.2.101")
-	failedOVSPortName := agent.GenerateContainerInterfaceName(pod2, testPodNamespace)
-	containerConfig2 := agent.NewContainerInterface(failedContainerID, testPodName, testPodNamespace, "", containerMAC, containerIP)
-	ifaceStore.AddInterface(failedOVSPortName, containerConfig2)
-	mockOVSBridgeClient.EXPECT().CreatePort(failedOVSPortName, failedOVSPortName, gomock.Any()).Return(
-		"", ovsconfig.NewTransactionError(fmt.Errorf("error while creating OVS port"), true))
-	failedhostIface := &current.Interface{Name: failedOVSPortName}
-	result.Interfaces = []*current.Interface{failedhostIface, containerIface}
-	_ = buildContainerConfig(failedContainerID, pod2, testPodNamespace, containerIface, result.IPs)
-	_, err = setupContainerOVSPort(mockOVSBridgeClient, containerConfig2, failedOVSPortName)
-	if err == nil {
-		t.Errorf("Failed to handle OVS failed operation")
-	}
-
-	err = validateOVSPort(ifaceStore, hostIfaceName, containerMACStr, containerID, result.IPs)
-	if err != nil {
-		t.Errorf("Failed to compare success result from OVS service")
-	}
+	ifaceStore.AddInterface(hostIfaceName, containerConfig)
+	err := validateOVSPort(ifaceStore, hostIfaceName, containerMACStr, containerID, result.IPs)
+	assert.Nil(t, err, "Failed to validate OVS port configuration")
 }
 
 func TestRemoveInterface(t *testing.T) {
@@ -364,72 +339,69 @@ func TestRemoveInterface(t *testing.T) {
 	ifaceStore := agent.NewInterfaceStore()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient := openflowtest.NewMockClient(controller)
-	cniVersion := "0.4.0"
-	netcfg := generateNetworkConfiguration("testCfg", cniVersion)
-	cniConfig := &CNIConfig{NetworkConfig: netcfg, CniCmdArgsMessage: &cnimsg.CniCmdArgsMessage{}}
-	cniConfig.Ifname = "eth0"
-	containerID := uuid.New().String()
-	pod1 := "test1"
-	hostIfaceName := agent.GenerateContainerInterfaceName(pod1, testPodNamespace)
-	cniConfig.ContainerId = containerID
-	cniConfig.Netns = ""
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	containerIP := net.ParseIP("1.1.1.1")
-	fakePortUUID := uuid.New().String()
-	containerConfig := agent.NewContainerInterface(containerID, pod1, testPodNamespace, "", containerMAC, containerIP)
-	containerConfig.OVSPortConfig = &agent.OVSPortConfig{hostIfaceName, fakePortUUID, 0}
-	mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
-	mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(nil)
-	ifaceStore.AddInterface(hostIfaceName, containerConfig)
 
-	err := removeInterfaces(mockOVSBridgeClient, mockOFClient, ifaceStore, pod1, testPodNamespace, containerID, cniConfig.Netns, cniConfig.Ifname)
-	if err != nil {
-		t.Errorf("Failed to remove interfaces")
-	} else {
-		_, found := ifaceStore.GetContainerInterface(pod1, testPodNamespace)
-		if found {
-			t.Errorf("Failed to remove from local cache")
-		}
+	var cniConfig *CNIConfig
+	var containerID string
+	var podName string
+	var hostIfaceName string
+	var fakePortUUID string
+	var containerConfig *agent.InterfaceConfig
+
+	setup := func(name string) {
+		containerID = uuid.New().String()
+		podName = name
+		hostIfaceName = agent.GenerateContainerInterfaceName(podName, testPodNamespace)
+		fakePortUUID = uuid.New().String()
+
+		netcfg := generateNetworkConfiguration("testCfg", supportedCNIVersion)
+		cniConfig = &CNIConfig{NetworkConfig: netcfg, CniCmdArgs: &cnipb.CniCmdArgs{}}
+		cniConfig.Ifname = "eth0"
+		cniConfig.ContainerId = containerID
+		cniConfig.Netns = ""
+
+		containerConfig = agent.NewContainerInterface(containerID, podName, testPodNamespace, "", containerMAC, containerIP)
+		containerConfig.OVSPortConfig = &agent.OVSPortConfig{hostIfaceName, fakePortUUID, 0}
 	}
 
-	containerID2 := uuid.New().String()
-	pod2 := "test2"
-	hostIfaceName2 := agent.GenerateContainerInterfaceName(pod2, testPodNamespace)
-	cniConfig.ContainerId = containerID2
-	fakePortUUID2 := uuid.New().String()
-	containerConfig2 := agent.NewContainerInterface(containerID2, pod2, testPodNamespace, "", containerMAC, containerIP)
-	containerConfig2.OVSPortConfig = &agent.OVSPortConfig{hostIfaceName2, fakePortUUID2, 0}
-	ifaceStore.AddInterface(hostIfaceName2, containerConfig2)
-	mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID2).Return(ovsconfig.NewTransactionError(fmt.Errorf("error while deleting OVS port"), true))
-	mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName2).Return(nil)
-	err = removeInterfaces(mockOVSBridgeClient, mockOFClient, ifaceStore, pod2, testPodNamespace, containerID, "", cniConfig.Ifname)
-	if err == nil {
-		t.Errorf("Failed delete port on OVS")
-	} else {
-		_, found := ifaceStore.GetContainerInterface(pod2, testPodNamespace)
-		if !found {
-			t.Errorf("Failed to return after OVS delete failure")
-		}
-	}
+	t.Run("Successful remove", func(t *testing.T) {
+		setup("test1")
+		ifaceStore.AddInterface(hostIfaceName, containerConfig)
 
-	containerID3 := uuid.New().String()
-	pod3 := "test3"
-	hostIfaceName3 := agent.GenerateContainerInterfaceName(pod3, testPodNamespace)
-	cniConfig.ContainerId = containerID3
-	fakePortUUID3 := uuid.New().String()
-	containerConfig3 := agent.NewContainerInterface(containerID3, pod3, testPodNamespace, "", containerMAC, containerIP)
-	containerConfig3.OVSPortConfig = &agent.OVSPortConfig{hostIfaceName3, fakePortUUID3, 0}
-	ifaceStore.AddInterface(hostIfaceName3, containerConfig3)
-	mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName3).Return(fmt.Errorf("failed to delete openflow entry"))
-	err = removeInterfaces(mockOVSBridgeClient, mockOFClient, ifaceStore, pod3, testPodNamespace, containerID3, "", cniConfig.Ifname)
-	if err == nil {
-		t.Errorf("Failed delete openflow entries on OVS")
-	} else {
-		_, found := ifaceStore.GetContainerInterface(pod3, testPodNamespace)
-		if !found {
-			t.Errorf("Failed to return after OVS delete failure")
-		}
-	}
+		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
+		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(nil)
+
+		err := removeInterfaces(mockOVSBridgeClient, mockOFClient, ifaceStore, podName, testPodNamespace, containerID, cniConfig.Netns, cniConfig.Ifname)
+		require.Nil(t, err, "Failed to remove interface")
+		_, found := ifaceStore.GetContainerInterface(podName, testPodNamespace)
+		assert.False(t, found, "Interface should not be in the local cache anymore")
+	})
+
+	t.Run("Error in OVS port delete", func(t *testing.T) {
+		setup("test2")
+		ifaceStore.AddInterface(hostIfaceName, containerConfig)
+
+		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(ovsconfig.NewTransactionError(fmt.Errorf("error while deleting OVS port"), true))
+		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
+
+		err := removeInterfaces(mockOVSBridgeClient, mockOFClient, ifaceStore, podName, testPodNamespace, containerID, "", cniConfig.Ifname)
+		require.NotNil(t, err, "Expected interface remove to fail")
+		_, found := ifaceStore.GetContainerInterface(podName, testPodNamespace)
+		assert.True(t, found, "Interface should still be in local cache because of port deletion failure")
+	})
+
+	t.Run("Error in Pod flows delete", func(t *testing.T) {
+		setup("test3")
+		ifaceStore.AddInterface(hostIfaceName, containerConfig)
+
+		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(fmt.Errorf("failed to delete openflow entry"))
+
+		err := removeInterfaces(mockOVSBridgeClient, mockOFClient, ifaceStore, podName, testPodNamespace, containerID, "", cniConfig.Ifname)
+		require.NotNil(t, err, "Expected interface remove to fail")
+		_, found := ifaceStore.GetContainerInterface(podName, testPodNamespace)
+		assert.True(t, found, "Interface should still be in local cache because of flow deletion failure")
+	})
 }
 
 func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[string]interface{}, error) {
@@ -452,7 +424,7 @@ func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[
 
 func generateCNIServer(t *testing.T) *CNIServer {
 	supportedVersions := "0.3.0,0.3.1,0.4.0"
-	cniServer := &CNIServer{cniSocket: testSocket, nodeConfig: testNodeConfig, serverVersion: cni.AntreaVersion}
+	cniServer := &CNIServer{cniSocket: testSocket, nodeConfig: testNodeConfig, serverVersion: cni.AntreaCNIVersion}
 	cniServer.supportedCNIVersions = buildVersionSet(supportedVersions)
 	return cniServer
 }
@@ -466,15 +438,15 @@ func generateNetworkConfiguration(name string, cniVersion string) *NetworkConfig
 	return netCfg
 }
 
-func newRequest(reqVersion string, args string, netCfg *NetworkConfig, path string, t *testing.T) (cnimsg.CniCmdRequestMessage, string) {
+func newRequest(args string, netCfg *NetworkConfig, path string, t *testing.T) (cnipb.CniCmdRequest, string) {
 	containerId := generateUUID(t)
 	networkConfig, err := json.Marshal(netCfg)
 	if err != nil {
 		t.Error("Failed to generate Network configuration")
 	}
 
-	cmdRequest := cnimsg.CniCmdRequestMessage{
-		CniArgs: &cnimsg.CniCmdArgsMessage{
+	cmdRequest := cnipb.CniCmdRequest{
+		CniArgs: &cnipb.CniCmdArgs{
 			ContainerId:          containerId,
 			Ifname:               ifname,
 			Args:                 args,
@@ -482,7 +454,6 @@ func newRequest(reqVersion string, args string, netCfg *NetworkConfig, path stri
 			NetworkConfiguration: networkConfig,
 			Path:                 path,
 		},
-		Version: reqVersion,
 	}
 	return cmdRequest, containerId
 }
@@ -497,7 +468,7 @@ func generateUUID(t *testing.T) string {
 
 func init() {
 	nodeName := "node1"
-	gwIP := net.ParseIP("192.168.1.1")
+	gwIP = net.ParseIP("192.168.1.1")
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 	gwMAC, _ := net.ParseMAC("00:00:00:00:00:01")
 	gateway := &agent.Gateway{Name: "gw", IP: gwIP, MAC: gwMAC}

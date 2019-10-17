@@ -36,6 +36,7 @@ test-unit:
 test-integration:
 	@echo
 	@echo "==> Running integration tests <=="
+	@echo "SOME TESTS WILL FAIL IF NOT RUN AS ROOT!"
 	$(GO) test github.com/vmware-tanzu/antrea/test/integration/...
 
 test-fmt:
@@ -56,7 +57,7 @@ lint:
 .PHONY: clean
 clean:
 	@rm -rf $(BINDIR)
-	@rm -f .mockgen
+	@rm -f .mockgen .protoc
 
 # Install a specific version of gomock to avoid generating different source code
 # for the mocks every time a new version of gomock is released. If a new version

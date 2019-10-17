@@ -19,11 +19,14 @@ import (
 	"testing"
 
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni"
+	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 )
 
 type testClient struct {
@@ -35,71 +38,49 @@ type testClientBehave int
 
 const (
 	normal testClientBehave = iota
-	badProtoVersion
+	invalidNetworkConfig
 	rpcError
+	rpcErrorTransient
+	rpcErrorUnimplemented
 )
 
-func (c *testClient) CmdAdd(ctx context.Context, requestMsg *cnipb.CniCmdRequestMessage, opts ...grpc.CallOption) (*cnipb.CniCmdResponseMessage, error) {
-	switch c.add {
+func makeErrorResponse(cniErrorCode cnipb.ErrorCode, cniErrorMsg string) *cnipb.CniCmdResponse {
+	return &cnipb.CniCmdResponse{
+		Error: &cnipb.Error{
+			Code:    cniErrorCode,
+			Message: cniErrorMsg,
+		},
+	}
+}
+
+func (c *testClient) cmdHandle(b testClientBehave, ctx context.Context, requestMsg *cnipb.CniCmdRequest) (*cnipb.CniCmdResponse, error) {
+	switch b {
 	case normal:
-		return &cnipb.CniCmdResponseMessage{
-			StatusCode: cnipb.CniCmdResponseMessage_SUCCESS,
-			CniResult:  []byte(`{"cniVersion": "0.3.1"}`),
-		}, nil
-	case badProtoVersion:
-		return &cnipb.CniCmdResponseMessage{
-			StatusCode:   cnipb.CniCmdResponseMessage_INCOMPATIBLE_PROTO_VERSION,
-			ErrorMessage: "determined test error",
-		}, nil
+		return &cnipb.CniCmdResponse{}, nil
+	case invalidNetworkConfig:
+		return makeErrorResponse(cnipb.ErrorCode_INVALID_NETWORK_CONFIG, "CNI error"), nil
 	case rpcError:
-		return nil, status.Error(codes.Unknown, "determined test error")
+		return nil, status.Error(codes.Unknown, "rpc error")
+	case rpcErrorTransient:
+		return nil, status.Error(codes.Unavailable, "transient rpc error")
+	case rpcErrorUnimplemented:
+		return nil, status.Error(codes.Unimplemented, "unimplemented rpc error")
 	default:
 		c.Fatalf("unexpected %+v action", c.add)
-		c.FailNow()
 		return nil, nil
 	}
 }
 
-func (c *testClient) CmdCheck(ctx context.Context, requestMsg *cnipb.CniCmdRequestMessage, opts ...grpc.CallOption) (*cnipb.CniCmdResponseMessage, error) {
-	switch c.check {
-	case normal:
-		return &cnipb.CniCmdResponseMessage{
-			StatusCode: cnipb.CniCmdResponseMessage_SUCCESS,
-			CniResult:  []byte(`{"cniVersion": "0.3.1"}`),
-		}, nil
-	case badProtoVersion:
-		return &cnipb.CniCmdResponseMessage{
-			StatusCode:   cnipb.CniCmdResponseMessage_INCOMPATIBLE_PROTO_VERSION,
-			ErrorMessage: "determined test error",
-		}, nil
-	case rpcError:
-		return nil, status.Error(codes.Unknown, "determined test error")
-	default:
-		c.Fatalf("unexpected %+v action", c.check)
-		c.FailNow()
-		return nil, nil
-	}
+func (c *testClient) CmdAdd(ctx context.Context, requestMsg *cnipb.CniCmdRequest, opts ...grpc.CallOption) (*cnipb.CniCmdResponse, error) {
+	return c.cmdHandle(c.add, ctx, requestMsg)
 }
 
-func (c *testClient) CmdDel(ctx context.Context, requestMsg *cnipb.CniCmdRequestMessage, opts ...grpc.CallOption) (*cnipb.CniCmdResponseMessage, error) {
-	switch c.del {
-	case normal:
-		return &cnipb.CniCmdResponseMessage{
-			StatusCode: cnipb.CniCmdResponseMessage_SUCCESS,
-			CniResult:  []byte(``),
-		}, nil
-	case badProtoVersion:
-		return &cnipb.CniCmdResponseMessage{
-			StatusCode:   cnipb.CniCmdResponseMessage_INCOMPATIBLE_PROTO_VERSION,
-			ErrorMessage: "determined test error",
-		}, nil
-	case rpcError:
-		return nil, status.Error(codes.Unknown, "determined test error")
-	default:
-		c.Fatalf("unexpected %+v action", c.del)
-		c.FailNow()
-		return nil, nil
-	}
+func (c *testClient) CmdCheck(ctx context.Context, requestMsg *cnipb.CniCmdRequest, opts ...grpc.CallOption) (*cnipb.CniCmdResponse, error) {
+	return c.cmdHandle(c.check, ctx, requestMsg)
+}
+
+func (c *testClient) CmdDel(ctx context.Context, requestMsg *cnipb.CniCmdRequest, opts ...grpc.CallOption) (*cnipb.CniCmdResponse, error) {
+	return c.cmdHandle(c.del, ctx, requestMsg)
 }
 
 func enableTestClient(t *testing.T, add, check, del testClientBehave) {
@@ -112,8 +93,15 @@ func disableTestClient() {
 	withClient = rpcClient
 }
 
-func TestMismatchVersionAdd(t *testing.T) {
-	enableTestClient(t, badProtoVersion, normal, normal)
+func checkCNIError(t *testing.T, err error, expectedCode cnipb.ErrorCode) {
+	e, ok := err.(*types.Error)
+	require.True(t, ok, "expected error of type types.Error")
+	// we need to use EqualValues (and not Equal) because the 2 values have different types
+	assert.EqualValues(t, expectedCode, e.Code)
+}
+
+func TestInvalidNetworkConfigAdd(t *testing.T) {
+	enableTestClient(t, invalidNetworkConfig, normal, normal)
 	defer disableTestClient()
 
 	stdinData := `{ "name":"antrea-cni", "some": "config", "cniVersion": "9.8.7" }`
@@ -125,26 +113,39 @@ func TestMismatchVersionAdd(t *testing.T) {
 		Path:        "/some/cni/path",
 		StdinData:   []byte(stdinData),
 	})
-	if err == nil {
-		t.Fatal("request passed unexpected")
-	}
+	require.NotNil(t, err)
+	checkCNIError(t, err, cnipb.ErrorCode_INVALID_NETWORK_CONFIG)
 }
 
-func TestMismatchVersionDel(t *testing.T) {
-	enableTestClient(t, normal, normal, badProtoVersion)
-	defer disableTestClient()
+func TestRpcErrorsCheck(t *testing.T) {
+	testCases := []struct {
+		behavior testClientBehave
+		cniCode  cnipb.ErrorCode
+	}{
+		{rpcError, cnipb.ErrorCode_UNKNOWN_RPC_ERROR},
+		{rpcErrorTransient, cnipb.ErrorCode_TRY_AGAIN_LATER},
+		{rpcErrorUnimplemented, cnipb.ErrorCode_INCOMPATIBLE_API_VERSION},
+	}
 
 	stdinData := `{ "name":"antrea-cni", "some": "config", "cniVersion": "9.8.7" }`
-	err := ActionDel.Request(&skel.CmdArgs{
-		ContainerID: "some-container-id",
-		Netns:       "/some/netns/path",
-		IfName:      "eth0",
-		Args:        "some;extra;args",
-		Path:        "/some/cni/path",
-		StdinData:   []byte(stdinData),
-	})
-	if err == nil {
-		t.Fatal("request passed unexpected")
+
+	for _, tc := range testCases {
+		t.Run(tc.cniCode.String(), func(t *testing.T) {
+			tc := tc
+			enableTestClient(t, tc.behavior, normal, normal)
+			defer disableTestClient()
+
+			err := ActionAdd.Request(&skel.CmdArgs{
+				ContainerID: "some-container-id",
+				Netns:       "/some/netns/path",
+				IfName:      "eth0",
+				Args:        "some;extra;args",
+				Path:        "/some/cni/path",
+				StdinData:   []byte(stdinData),
+			})
+			require.NotNil(t, err)
+			checkCNIError(t, err, tc.cniCode)
+		})
 	}
 }
 
@@ -161,9 +162,7 @@ func TestSuccessAdd(t *testing.T) {
 		Path:        "/some/cni/path",
 		StdinData:   []byte(stdinData),
 	})
-	if err != nil {
-		t.Fatal("request failed unexpected:", err)
-	}
+	require.Nil(t, err, "CNI ADD request failed")
 }
 
 func TestSuccessDel(t *testing.T) {
@@ -179,7 +178,5 @@ func TestSuccessDel(t *testing.T) {
 		Path:        "/some/cni/path",
 		StdinData:   []byte(stdinData),
 	})
-	if err != nil {
-		t.Fatal("request failed unexpected:", err)
-	}
+	require.Nil(t, err, "CNI DEL request failed")
 }
