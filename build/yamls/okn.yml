@@ -305,6 +305,11 @@ spec:
           - name: host-var-run-okn
             mountPath: /var/run/openvswitch
             subPath: openvswitch
+          # host-local IPAM stores allocated IP addresses as files in /var/lib/cni/networks/$NETWORK_NAME.
+          # Mount a sub-directory of host-var-run-okn to it for persistence of IP allocation.
+          - name: host-var-run-okn
+            mountPath: /var/lib/cni
+            subPath: cni
           # The host's /proc directory needs to be mounted in the container so that the network
           # namespace path can be opened and the container interface can be created by okn-agent in
           # that namespace.
