@@ -15,8 +15,12 @@
 package e2e
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
+
+	"okn/pkg/util"
 )
 
 // TestDeploy is a "no-op" test that simply performs setup and teardown.
@@ -59,6 +63,79 @@ func TestPodAssignIP(t *testing.T) {
 		} else {
 			t.Logf("Pod IP is valid!")
 		}
+	}
+}
+
+// TestDeletePod creates a Pod, then deletes it, and checks that the veth interface (in the Node
+// network namespace) and the OVS port for the container get removed.
+func TestDeletePod(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	nodeName := nodeName(0)
+	podName := randPodName("test-pod-")
+
+	t.Logf("Creating a busybox test Pod on '%s'", nodeName)
+	if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	if err := data.podWaitForRunning(defaultTimeout, podName); err != nil {
+		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
+	}
+
+	ifName := util.GenerateContainerInterfaceName(podName, testNamespace)
+	t.Logf("Host interface name for Pod is '%s'", ifName)
+
+	var OKNPodName string
+	if OKNPodName, err = data.getOKNPodOnNode(nodeName); err != nil {
+		t.Fatalf("Error when retrieving the name of the OKN Pod running on Node '%s': %v", nodeName, err)
+	}
+	t.Logf("The OKN Pod for Node '%s' is '%s'", nodeName, OKNPodName)
+
+	doesInterfaceExist := func() bool {
+		cmd := fmt.Sprintf("ip link show %s", ifName)
+		if rc, _, _, err := RunSSHCommandOnNode(nodeName, cmd); err != nil {
+			t.Fatalf("Error when running ip command on Node '%s': %v", nodeName, err)
+		} else {
+			return rc == 0
+		}
+		return false
+	}
+
+	doesOVSPortExist := func() bool {
+		cmd := []string{"ovs-vsctl", "port-to-br", ifName}
+		if _, stderr, err := data.runCommandFromPod("kube-system", OKNPodName, OVSContainerName, cmd); err == nil {
+			return true
+		} else if strings.Contains(stderr, "no port named") {
+			return false
+		} else {
+			t.Fatalf("Error when running ovs-vsctl command on Pod '%s': %v", OKNPodName, err)
+		}
+		return true
+	}
+
+	t.Logf("Checking that the veth interface and the OVS port exist")
+	if !doesInterfaceExist() {
+		t.Errorf("Interface '%s' does not exist on Node '%s'", ifName, nodeName)
+	}
+	if !doesOVSPortExist() {
+		t.Errorf("OVS port '%s' does not exist on Node '%s'", ifName, nodeName)
+	}
+
+	t.Logf("Deleting Pod '%s'", podName)
+	if err := data.deletePodAndWait(defaultTimeout, podName); err != nil {
+		t.Fatalf("Error when deleting Pod: %v", err)
+	}
+
+	t.Logf("Checking that the veth interface and the OVS port no longer exist")
+	if doesInterfaceExist() {
+		t.Errorf("Interface '%s' still exists on Node '%s' after Pod deletion", ifName, nodeName)
+	}
+	if doesOVSPortExist() {
+		t.Errorf("OVS port '%s' still exists on Node '%s' after Pod deletion", ifName, nodeName)
 	}
 }
 

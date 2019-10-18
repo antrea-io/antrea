@@ -15,9 +15,7 @@
 package agent
 
 import (
-	"fmt"
 	"net"
-	"strings"
 	"testing"
 
 	mock "github.com/golang/mock/gomock"
@@ -93,30 +91,5 @@ func TestParseContainerAttachInfo(t *testing.T) {
 	parsedID, existed := externalIds[OVSExternalIDContainerID]
 	if !existed || parsedID != containerID {
 		t.Errorf("Failed to parse container configuration")
-	}
-}
-
-func TestGenerateContainerInterfaceName(t *testing.T) {
-	podNamespace := "namespace1"
-	podName0 := "pod0"
-	iface0 := GenerateContainerInterfaceName(podName0, podNamespace)
-	if len(iface0) != hostVethLength {
-		t.Errorf("Failed to ensure length of interface name %s as %d", iface0, hostVethLength)
-	}
-	if !strings.HasPrefix(iface0, fmt.Sprintf("%s-", podName0)) {
-		t.Errorf("failed to use podName as prefix: %s", iface0)
-	}
-	podName1 := "pod1-abcde-12345"
-	iface1 := GenerateContainerInterfaceName(podName1, podNamespace)
-	if len(iface1) != hostVethLength {
-		t.Errorf("Failed to ensure length of interface name as %d", hostVethLength)
-	}
-	if !strings.HasPrefix(iface1, "pod1abcd") {
-		t.Errorf("failed to use first 8 valid characters")
-	}
-	podName2 := "pod1-abcde-54321"
-	iface2 := GenerateContainerInterfaceName(podName2, podNamespace)
-	if iface1 == iface2 {
-		t.Errorf("failed to differentiate interfaces with pods has the same prefix")
 	}
 }

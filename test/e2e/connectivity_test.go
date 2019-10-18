@@ -39,7 +39,7 @@ func (data *TestData) runPingMesh(t *testing.T, podNames []string) {
 			if podName1 == podName2 {
 				continue
 			}
-			if err := data.runPingCommandFromPod(podName1, podIPs[podName2], 10); err != nil {
+			if err := data.runPingCommandFromTestPod(podName1, podIPs[podName2], 10); err != nil {
 				t.Errorf("Ping '%s' -> '%s': ERROR (%v)", podName1, podName2, err)
 			} else {
 				t.Logf("Ping '%s' -> '%s': OK", podName1, podName2)

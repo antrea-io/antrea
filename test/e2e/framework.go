@@ -46,6 +46,8 @@ const defaultContainerName string = "busybox"
 
 const podNameSuffixLength int = 8
 
+const OVSContainerName string = "okn-ovs"
+
 type ClusterNode struct {
 	idx  int // 0 for master Node
 	name string
@@ -117,6 +119,16 @@ func initProvider() error {
 		return fmt.Errorf("unknown provider '%s'", testOptions.providerName)
 	}
 	return nil
+}
+
+// A convenience wrapper around RunSSHCommand which runs the provided command on the node with name
+// nodeName.
+func RunSSHCommandOnNode(nodeName string, cmd string) (code int, stdout string, stderr string, err error) {
+	host, config, err := provider.GetSSHConfig(nodeName)
+	if err != nil {
+		return 0, "", "", fmt.Errorf("error when retrieving SSH config for node '%s': %v", nodeName, err)
+	}
+	return RunSSHCommand(host, config, cmd)
 }
 
 func collectClusterInfo() error {
@@ -435,6 +447,29 @@ func (data *TestData) deletePod(name string) error {
 	return nil
 }
 
+// Deletes a Pod in the test namespace then waits us to timeout for the Pod not to be visible to the
+// client any more.
+func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error {
+	if err := data.deletePod(name); err != nil {
+		return err
+	}
+
+	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+		if _, err := data.clientset.CoreV1().Pods(testNamespace).Get(name, metav1.GetOptions{}); err != nil {
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, fmt.Errorf("error when getting Pod: %v", err)
+		}
+		// Keep trying
+		return false, nil
+	}); err == wait.ErrWaitTimeout {
+		return fmt.Errorf("Pod '%s' still visible to client after %v", name, timeout)
+	} else {
+		return err
+	}
+}
+
 type PodCondition func(*v1.Pod) (bool, error)
 
 // podWaitFor polls the K8s apiserver until the specified Pod is found (in the test Namespace) and
@@ -454,6 +489,15 @@ func (data *TestData) podWaitFor(timeout time.Duration, name string, condition P
 		return nil, err
 	}
 	return data.clientset.CoreV1().Pods(testNamespace).Get(name, metav1.GetOptions{})
+}
+
+// podWaitForRunning polls the k8s apiserver until the specified Pod is in the "running" state (or
+// until the provided timeout expires).
+func (data *TestData) podWaitForRunning(timeout time.Duration, name string) error {
+	_, err := data.podWaitFor(timeout, name, func(pod *v1.Pod) (bool, error) {
+		return pod.Status.Phase == v1.PodRunning, nil
+	})
+	return err
 }
 
 // podWaitForIP polls the K8s apiserver until the specified Pod is in the "running" state (or until
@@ -514,6 +558,22 @@ func (data *TestData) deleteOneOKNAgentPod(gracePeriodSeconds int64, timeout tim
 	return time.Since(start), nil
 }
 
+// getOKNPodOnNode retrieves the name of the OKN Pod (okn-agent-*) running on a specific Node.
+func (data *TestData) getOKNPodOnNode(nodeName string) (podName string, err error) {
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=okn",
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
+	}
+	pods, err := data.clientset.CoreV1().Pods("kube-system").List(listOptions)
+	if err != nil {
+		return "", fmt.Errorf("failed to list OKN Pods: %v", err)
+	}
+	if len(pods.Items) != 1 {
+		return "", fmt.Errorf("expected *exactly* one Pod")
+	}
+	return pods.Items[0].Name, nil
+}
+
 // validatePodIP checks that the provided IP address is in the Pod Network CIDR for the cluster.
 func validatePodIP(podNetworkCIDR, podIP string) (bool, error) {
 	ip := net.ParseIP(podIP)
@@ -543,15 +603,18 @@ func randPodName(prefix string) string {
 	return prefix + randSeq(podNameSuffixLength)
 }
 
-func (data *TestData) runPingCommandFromPod(podName string, targetIP string, count int) error {
+// Run the provided command in the specified Container for the give Pod and returns the contents of
+// stdout and stderr as strings. An error either indicates that the command couldn't be run or that
+// the command returned a non-zero error code.
+func (data *TestData) runCommandFromPod(podNamespace string, podName string, containerName string, cmd []string) (stdout string, stderr string, err error) {
 	request := data.clientset.CoreV1().RESTClient().Post().
-		Namespace(testNamespace).
+		Namespace(podNamespace).
 		Resource("pods").
 		Name(podName).
 		SubResource("exec").
-		Param("container", defaultContainerName).
+		Param("container", containerName).
 		VersionedParams(&v1.PodExecOptions{
-			Command: []string{"ping", "-c", strconv.Itoa(count), targetIP},
+			Command: cmd,
 			Stdin:   false,
 			Stdout:  true,
 			Stderr:  true,
@@ -559,14 +622,20 @@ func (data *TestData) runPingCommandFromPod(podName string, targetIP string, cou
 		}, scheme.ParameterCodec)
 	exec, err := remotecommand.NewSPDYExecutor(data.kubeConfig, "POST", request.URL())
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	var stdoutB, stderrB bytes.Buffer
 	if err := exec.Stream(remotecommand.StreamOptions{
 		Stdout: &stdoutB,
 		Stderr: &stderrB,
 	}); err != nil {
-		return err
+		return stdoutB.String(), stderrB.String(), err
 	}
-	return nil
+	return stdoutB.String(), stderrB.String(), nil
+}
+
+func (data *TestData) runPingCommandFromTestPod(podName string, targetIP string, count int) error {
+	cmd := []string{"ping", "-c", strconv.Itoa(count), targetIP}
+	_, _, err := data.runCommandFromPod(testNamespace, podName, defaultContainerName, cmd)
+	return err
 }
