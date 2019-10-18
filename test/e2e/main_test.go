@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"flag"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -23,14 +24,52 @@ import (
 	"time"
 )
 
-func TestMain(m *testing.M) {
+// setupLogging creates a temporary directory to export the test logs if necessary. If a directory
+// was provided by the user, it checks that the directory exists.
+func (tOptions *TestOptions) setupLogging() func() {
+	if tOptions.logsExportDir == "" {
+		name, err := ioutil.TempDir("", "okn-test-")
+		if err != nil {
+			log.Fatalf("Error when creating temporary directory to export logs: %v", err)
+		}
+		log.Printf("Test logs (if any) will be exported under the '%s' directory", name)
+		tOptions.logsExportDir = name
+		// we will delete the temporary directory if no logs are exported
+		return func() {
+			if empty, _ := IsDirEmpty(name); empty {
+				log.Printf("Removing empty logs directory '%s'", name)
+				_ = os.Remove(name)
+			} else {
+				log.Printf("Logs exported under '%s', it is your responsibility to delete the directory when you no longer need it", name)
+			}
+		}
+	} else {
+		fInfo, err := os.Stat(tOptions.logsExportDir)
+		if err != nil {
+			log.Fatalf("Cannot stat provided directory '%s': %v", tOptions.logsExportDir, err)
+		}
+		if !fInfo.Mode().IsDir() {
+			log.Fatalf("'%s' is not a valid directory", tOptions.logsExportDir)
+		}
+	}
+	// no-op cleanup function
+	return func() {}
+}
+
+// testMain is meant to be called by TestMain and enables the use of defer statements.
+func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.providerName, "provider", "vagrant", "K8s test cluster provider")
 	flag.StringVar(&testOptions.providerConfigPath, "provider-cfg-path", "", "Optional config file for provider")
+	flag.StringVar(&testOptions.logsExportDir, "logs-export-dir", "", "Export directory for test logs")
+	flag.BoolVar(&testOptions.logsExportOnSuccess, "logs-export-on-success", false, "Export logs even when a test is successful")
 	flag.Parse()
 
 	if err := initProvider(); err != nil {
 		log.Fatalf("Error when initializing provider: %v", err)
 	}
+
+	cleanupLogging := testOptions.setupLogging()
+	defer cleanupLogging()
 
 	log.Println("Collecting information about K8s cluster")
 	if err := collectClusterInfo(); err != nil {
@@ -41,5 +80,9 @@ func TestMain(m *testing.M) {
 	}
 
 	rand.Seed(time.Now().UnixNano())
-	os.Exit(m.Run())
+	return m.Run()
+}
+
+func TestMain(m *testing.M) {
+	os.Exit(testMain(m))
 }
