@@ -33,11 +33,8 @@ func withUnitTestExecutor(f func()) string {
 }
 
 func TestBasic(t *testing.T) {
-	dummyTable := &Table{
-		ID:     TableIDType(0),
-		Bridge: "ut0",
-		Next:   TableIDType(10),
-	}
+	dummyBridge := NewBridge("ut0")
+	dummyTable := dummyBridge.CreateTable(TableIDType(0), TableIDType(10), TableMissActionNext)
 
 	flow := dummyTable.BuildFlow().
 		MatchField("FIELD", "VALUE").

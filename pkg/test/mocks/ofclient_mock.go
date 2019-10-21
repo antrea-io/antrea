@@ -24,6 +24,7 @@ package mocks
 import (
 	gomock "github.com/golang/mock/gomock"
 	net "net"
+	openflow "okn/pkg/ovs/openflow"
 	reflect "reflect"
 )
 
@@ -48,6 +49,20 @@ func NewMockOFClient(ctrl *gomock.Controller) *MockOFClient {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockOFClient) EXPECT() *MockOFClientMockRecorder {
 	return m.recorder
+}
+
+// GetFlowTableStatus mocks base method
+func (m *MockOFClient) GetFlowTableStatus() []openflow.TableStatus {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFlowTableStatus")
+	ret0, _ := ret[0].([]openflow.TableStatus)
+	return ret0
+}
+
+// GetFlowTableStatus indicates an expected call of GetFlowTableStatus
+func (mr *MockOFClientMockRecorder) GetFlowTableStatus() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFlowTableStatus", reflect.TypeOf((*MockOFClient)(nil).GetFlowTableStatus))
 }
 
 // Initialize mocks base method
