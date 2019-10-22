@@ -50,17 +50,17 @@ func (m *MockBridge) EXPECT() *MockBridgeMockRecorder {
 }
 
 // Connect mocks base method
-func (m *MockBridge) Connect(arg0 int) error {
+func (m *MockBridge) Connect(arg0 int, arg1 chan struct{}) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Connect", arg0)
+	ret := m.ctrl.Call(m, "Connect", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Connect indicates an expected call of Connect
-func (mr *MockBridgeMockRecorder) Connect(arg0 interface{}) *gomock.Call {
+func (mr *MockBridgeMockRecorder) Connect(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockBridge)(nil).Connect), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockBridge)(nil).Connect), arg0, arg1)
 }
 
 // CreateTable mocks base method
@@ -842,7 +842,7 @@ func (mr *MockFlowBuilderMockRecorder) MatchARPTpa(arg0 interface{}) *gomock.Cal
 }
 
 // MatchCTMark mocks base method
-func (m *MockFlowBuilder) MatchCTMark(arg0 string) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTMark(arg0 uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MatchCTMark", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
@@ -855,18 +855,172 @@ func (mr *MockFlowBuilderMockRecorder) MatchCTMark(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTMark), arg0)
 }
 
-// MatchCTState mocks base method
-func (m *MockFlowBuilder) MatchCTState(arg0 string) openflow.FlowBuilder {
+// MatchCTStateEst mocks base method
+func (m *MockFlowBuilder) MatchCTStateEst() openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTState", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateEst")
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
-// MatchCTState indicates an expected call of MatchCTState
-func (mr *MockFlowBuilderMockRecorder) MatchCTState(arg0 interface{}) *gomock.Call {
+// MatchCTStateEst indicates an expected call of MatchCTStateEst
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateEst() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTState", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTState), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateEst", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateEst))
+}
+
+// MatchCTStateInv mocks base method
+func (m *MockFlowBuilder) MatchCTStateInv() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateInv")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateInv indicates an expected call of MatchCTStateInv
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateInv() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateInv", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateInv))
+}
+
+// MatchCTStateNew mocks base method
+func (m *MockFlowBuilder) MatchCTStateNew() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateNew")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateNew indicates an expected call of MatchCTStateNew
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateNew() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateNew", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateNew))
+}
+
+// MatchCTStateRel mocks base method
+func (m *MockFlowBuilder) MatchCTStateRel() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateRel")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateRel indicates an expected call of MatchCTStateRel
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateRel() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateRel", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateRel))
+}
+
+// MatchCTStateRpl mocks base method
+func (m *MockFlowBuilder) MatchCTStateRpl() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateRpl")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateRpl indicates an expected call of MatchCTStateRpl
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateRpl() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateRpl", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateRpl))
+}
+
+// MatchCTStateTrk mocks base method
+func (m *MockFlowBuilder) MatchCTStateTrk() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateTrk")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateTrk indicates an expected call of MatchCTStateTrk
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateTrk() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateTrk", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateTrk))
+}
+
+// MatchCTStateUnEst mocks base method
+func (m *MockFlowBuilder) MatchCTStateUnEst() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateUnEst")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateUnEst indicates an expected call of MatchCTStateUnEst
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateUnEst() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateUnEst", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateUnEst))
+}
+
+// MatchCTStateUnInv mocks base method
+func (m *MockFlowBuilder) MatchCTStateUnInv() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateUnInv")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateUnInv indicates an expected call of MatchCTStateUnInv
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateUnInv() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateUnInv", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateUnInv))
+}
+
+// MatchCTStateUnNew mocks base method
+func (m *MockFlowBuilder) MatchCTStateUnNew() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateUnNew")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateUnNew indicates an expected call of MatchCTStateUnNew
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateUnNew() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateUnNew", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateUnNew))
+}
+
+// MatchCTStateUnRel mocks base method
+func (m *MockFlowBuilder) MatchCTStateUnRel() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateUnRel")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateUnRel indicates an expected call of MatchCTStateUnRel
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateUnRel() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateUnRel", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateUnRel))
+}
+
+// MatchCTStateUnRpl mocks base method
+func (m *MockFlowBuilder) MatchCTStateUnRpl() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateUnRpl")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateUnRpl indicates an expected call of MatchCTStateUnRpl
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateUnRpl() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateUnRpl", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateUnRpl))
+}
+
+// MatchCTStateUnTrk mocks base method
+func (m *MockFlowBuilder) MatchCTStateUnTrk() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateUnTrk")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateUnTrk indicates an expected call of MatchCTStateUnTrk
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateUnTrk() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateUnTrk", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateUnTrk))
 }
 
 // MatchConjID mocks base method

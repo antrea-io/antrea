@@ -63,7 +63,7 @@ func (b *commandBridge) DumpTableStatus() []TableStatus {
 
 // Connect initiates connection to the OFSwitch. commandBridge executes command "ovs-ofctl show" to check if target
 // switch is connected or not.
-func (b *commandBridge) Connect(maxRetry int) error {
+func (b *commandBridge) Connect(maxRetry int, connectCh chan struct{}) error {
 	for retry := 0; retry < maxRetry; retry++ {
 		klog.V(2).Infof("Trying to connect to OpenFlow switch...")
 		cmd := exec.Command("ovs-ofctl", "show", b.name)

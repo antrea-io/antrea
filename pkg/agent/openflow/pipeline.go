@@ -197,35 +197,35 @@ func (c *client) connectionTrackFlows() (flows []binding.Flow) {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	gatewayReplyFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityHigh).
 		MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-		MatchCTMark(i2h(gatewayCTMark)).
-		MatchCTState("-new+trk").
+		MatchCTMark(gatewayCTMark).
+		MatchCTStateUnNew().MatchCTStateTrk().
 		Action().Resubmit(emptyPlaceholderStr, connectionTrackStateTable.GetNext()).
 		Done()
 	flows = append(flows, gatewayReplyFlow)
 
 	gatewaySendFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
 		MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-		MatchCTState("+new+trk").
+		MatchCTStateNew().MatchCTStateTrk().
 		Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).LoadToMark(gatewayCTMark).MoveToLabel(binding.NxmFieldSrcMAC, &binding.Range{0, 47}, &binding.Range{0, 47}).CTDone().
 		Done()
 	flows = append(flows, gatewaySendFlow)
 
 	podReplyGatewayFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
-		MatchCTMark(i2h(gatewayCTMark)).
-		MatchCTState("-new+trk").
+		MatchCTMark(gatewayCTMark).
+		MatchCTStateUnNew().MatchCTStateTrk().
 		Action().MoveRange(binding.NxmFieldCtLabel, binding.NxmFieldDstMAC, binding.Range{0, 47}, binding.Range{0, 47}).
 		Action().Resubmit(emptyPlaceholderStr, connectionTrackStateTable.GetNext()).
 		Done()
 	flows = append(flows, podReplyGatewayFlow)
 
 	nonGatewaySendFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityLow).
-		MatchCTState("+new+trk").
+		MatchCTStateNew().MatchCTStateTrk().
 		Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).CTDone().
 		Done()
 	flows = append(flows, nonGatewaySendFlow)
 
 	invCTFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
-		MatchCTState("+new+inv").
+		MatchCTStateNew().MatchCTStateInv().
 		Action().Drop().
 		Done()
 	flows = append(flows, invCTFlow)
@@ -391,14 +391,14 @@ func (c *client) establishedConnectionFlows() (flows []binding.Flow) {
 	// egressRuleTable or the egressDropTable.
 	egressDropTable := c.pipeline[egressDefaultTable]
 	egressEstFlow := c.pipeline[egressRuleTable].BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityHigh).
-		MatchCTState("-new+est").
+		MatchCTStateUnNew().MatchCTStateEst().
 		Action().Resubmit(emptyPlaceholderStr, egressDropTable.GetNext()).Done()
 	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
 	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
 	// ingressRuleTable or ingressDropTable.
 	ingressDropTable := c.pipeline[ingressDefaultTable]
 	ingressEstFlow := c.pipeline[ingressRuleTable].BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityHigh).
-		MatchCTState("-new+est").
+		MatchCTStateUnNew().MatchCTStateEst().
 		Action().Resubmit(emptyPlaceholderStr, ingressDropTable.GetNext()).Done()
 	return []binding.Flow{egressEstFlow, ingressEstFlow}
 }
@@ -454,7 +454,7 @@ func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey int, matc
 
 // NewClient is the constructor of the Client interface.
 func NewClient(bridgeName string) Client {
-	bridge := binding.NewBridge(bridgeName)
+	bridge := binding.NewOFBridge(bridgeName)
 	c := &client{
 		bridge: bridge,
 		pipeline: map[binding.TableIDType]binding.Table{

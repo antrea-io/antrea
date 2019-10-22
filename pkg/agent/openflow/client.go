@@ -199,7 +199,7 @@ func (c *client) InstallTunnelFlows(tunnelOFPort uint32) error {
 
 func (c *client) Initialize() error {
 	// Initiate connections to target OFswitch, and create tables on the switch.
-	if err := c.bridge.Connect(maxRetryForOFSwitch); err != nil {
+	if err := c.bridge.Connect(maxRetryForOFSwitch, make(chan struct{})); err != nil {
 		return err
 	}
 

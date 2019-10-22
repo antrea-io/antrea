@@ -68,9 +68,9 @@ type Bridge interface {
 	GetName() string
 	DeleteTable(id TableIDType) bool
 	DumpTableStatus() []TableStatus
-	// Connect initiates connection to the OFSwitch. It will block until the connection is established.
-	// If Bridge is not connected in maxRetry times, it will return error.
-	Connect(maxRetry int) error
+	// Connect initiates connection to the OFSwitch. It will block the connection is established. connectCh is used to
+	// send notification whenever the switch is connected or reconnected.
+	Connect(maxRetry int, connectCh chan struct{}) error
 	// Disconnect stops connection to the OFSwitch.
 	Disconnect() error
 }
@@ -108,7 +108,7 @@ type Flow interface {
 	String() string
 	MatchString() string
 	GetTable() Table
-	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not not copy the actions.
+	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions.
 	CopyToBuilder() FlowBuilder
 }
 
@@ -156,8 +156,19 @@ type FlowBuilder interface {
 	MatchARPSpa(ip net.IP) FlowBuilder
 	MatchARPTpa(ip net.IP) FlowBuilder
 	MatchARPOp(op uint16) FlowBuilder
-	MatchCTState(value string) FlowBuilder
-	MatchCTMark(value string) FlowBuilder
+	MatchCTStateNew() FlowBuilder
+	MatchCTStateUnNew() FlowBuilder
+	MatchCTStateRel() FlowBuilder
+	MatchCTStateUnRel() FlowBuilder
+	MatchCTStateRpl() FlowBuilder
+	MatchCTStateUnRpl() FlowBuilder
+	MatchCTStateEst() FlowBuilder
+	MatchCTStateUnEst() FlowBuilder
+	MatchCTStateTrk() FlowBuilder
+	MatchCTStateUnTrk() FlowBuilder
+	MatchCTStateInv() FlowBuilder
+	MatchCTStateUnInv() FlowBuilder
+	MatchCTMark(value uint32) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
 	MatchTCPDstPort(port uint16) FlowBuilder
 	MatchUDPDstPort(port uint16) FlowBuilder

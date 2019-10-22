@@ -46,13 +46,87 @@ func (b *commandBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBu
 	return b.MatchFieldRange(fmt.Sprintf("reg%d", regID), fmt.Sprintf("0x%x", data), rng)
 }
 
-func (b *commandBuilder) MatchCTState(value string) FlowBuilder {
+func (b *commandBuilder) addCTStateString(value string) {
+	for i, matcher := range b.matchers {
+		if strings.HasPrefix(matcher, "ct_state=") {
+			b.matchers[i] = fmt.Sprintf("%s%s", matcher, value)
+			return
+		}
+	}
 	b.matchers = append(b.matchers, fmt.Sprintf("ct_state=%s", value))
+}
+
+func (b *commandBuilder) MatchCTStateNew() FlowBuilder {
+	b.addCTStateString("+new")
 	return b
 }
 
-func (b *commandBuilder) MatchCTMark(value string) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("ct_mark=%s", value))
+func (b *commandBuilder) MatchCTStateUnNew() FlowBuilder {
+	b.addCTStateString("-new")
+	return b
+}
+
+func (b *commandBuilder) MatchCTStateRel() FlowBuilder {
+	b.addCTStateString("+rel")
+	return b
+}
+
+func (b *commandBuilder) MatchCTStateUnRel() FlowBuilder {
+	b.addCTStateString("-new")
+	return b
+}
+
+func (b *commandBuilder) MatchCTStateRpl() FlowBuilder {
+	b.addCTStateString("+rpl")
+	return b
+}
+
+func (b *commandBuilder) MatchCTStateUnRpl() FlowBuilder {
+	b.addCTStateString("-rpl")
+	return b
+}
+
+func (b *commandBuilder) MatchCTStateEst() FlowBuilder {
+	b.addCTStateString("+est")
+	return b
+}
+
+func (b *commandBuilder) MatchCTStateUnEst() FlowBuilder {
+	b.addCTStateString("-est")
+	return b
+}
+func (b *commandBuilder) MatchCTStateTrk() FlowBuilder {
+	b.addCTStateString("+trk")
+	return b
+}
+
+func (b *commandBuilder) MatchCTStateUnTrk() FlowBuilder {
+	b.addCTStateString("-trk")
+	return b
+}
+
+func (b *commandBuilder) MatchCTStateInv() FlowBuilder {
+	b.addCTStateString("+inv")
+	return b
+}
+
+func (b *commandBuilder) MatchCTStateUnInv() FlowBuilder {
+	b.addCTStateString("-inv")
+	return b
+}
+
+func (b *commandBuilder) MatchCTMark(value uint32) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("ct_mark=0x%x", value))
+	return b
+}
+
+func (b *commandBuilder) MatchCTMarkMask(mask uint32) FlowBuilder {
+	for i, data := range b.matchers {
+		if strings.HasPrefix(data, "ct_mark=") {
+			b.matchers[i] = fmt.Sprintf("%s/0x%x", data, mask)
+			break
+		}
+	}
 	return b
 }
 
