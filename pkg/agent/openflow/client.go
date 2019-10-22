@@ -27,6 +27,8 @@ import (
 
 const maxRetryForOFSwitch = 5
 
+//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -destination testing/mock_client.go -package=testing okn/pkg/agent/openflow Client
+
 // Client is the interface to program OVS flows for entity connectivity of OKN.
 // TODO: flow sync (e.g. at agent restart), retry at failure, garbage collection mechanisms
 type Client interface {
