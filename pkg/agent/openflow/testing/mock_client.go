@@ -52,7 +52,7 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // GetFlowTableStatus mocks base method
-func (m *MockOFClient) GetFlowTableStatus() []openflow.TableStatus {
+func (m *MockClient) GetFlowTableStatus() []openflow.TableStatus {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetFlowTableStatus")
 	ret0, _ := ret[0].([]openflow.TableStatus)
@@ -60,9 +60,9 @@ func (m *MockOFClient) GetFlowTableStatus() []openflow.TableStatus {
 }
 
 // GetFlowTableStatus indicates an expected call of GetFlowTableStatus
-func (mr *MockOFClientMockRecorder) GetFlowTableStatus() *gomock.Call {
+func (mr *MockClientMockRecorder) GetFlowTableStatus() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFlowTableStatus", reflect.TypeOf((*MockOFClient)(nil).GetFlowTableStatus))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFlowTableStatus", reflect.TypeOf((*MockClient)(nil).GetFlowTableStatus))
 }
 
 // Initialize mocks base method
