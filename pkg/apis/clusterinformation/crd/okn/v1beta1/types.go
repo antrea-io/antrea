@@ -22,37 +22,39 @@ import (
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type OKNAgentInfo struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Pod                  corev1.ObjectReference `json:"pod,omitempty"`  // The Pod that OKN Agent is running in
-	Node                 corev1.ObjectReference `json:"node,omitempty"` // The Node that OKN Agent is running in
-	NodeSubnet           []string               `json:"nodeSubnet,omitempty"`
-	ControllerConnection ConnectionStatus       `json:"controllerConnectionn,omitempty"` // Agent to Controller connection status
-	OVSInfo              OVSInfo                `json:"ovsInfo,omitempty"`               // OVS Information
-	PodNum               int32                  `json:"podNum,omitempty"`                // The number of Pods which the agent is in charge of
+	Version         string                 `json:"version,omitempty"`     // OKN binary version
+	PodRef          corev1.ObjectReference `json:"podRef,omitempty"`      // The Pod that OKN Agent is running in
+	NodeRef         corev1.ObjectReference `json:"nodeRef,omitempty"`     // The Node that OKN Agent is running in
+	NodeSubnet      []string               `json:"nodeSubnet,omitempty"`  // Node subnet
+	OVSInfo         OVSInfo                `json:"ovsInfo,omitempty"`     // OVS Information
+	LocalPodNum     int32                  `json:"localPodNum,omitempty"` // The number of Pods which the agent is in charge of
+	AgentConditions []AgentCondition       `json:"agentConditions,omitempty"`
 }
 
-type ConnectionStatus string
+type OVSInfo struct {
+	Version    string           `json:"version,omitempty"`
+	BridgeName string           `json:"bridgeName,omitempty"`
+	FlowTable  map[string]int32 `json:"flowTable,omitempty"` // Key: flow table name, Value: flow number
+}
+
+type AgentConditionType string
 
 const (
-	ConnectionStatusUp      ConnectionStatus = "UP"
-	ConnectionStatusDown    ConnectionStatus = "DOWN"
-	ConnectionStatusUnknown ConnectionStatus = "UNKNOWN"
+	ControllerConnectionUp AgentConditionType = "ControllerConnectionUp" // Status False is caused by the reasons: AgentControllerConnectionDown
 )
 
-type OVSInfo struct {
-	Version            string           `json:"version,omitempty"`
-	OVSDBConnection    ConnectionStatus `json:"ovsdbConnection,omitempty"`
-	OpenflowConnection ConnectionStatus `json:"openflowConnection,omitempty"`
-	Bridge             string           `json:"bridge,omitempty"`
-	FlowTable          map[string]int32 `json:"flowTable,omitempty"` // Key: flow table name, Value: flow number
+type AgentCondition struct {
+	Type    AgentConditionType     `json:"type"`              // One of the AgentConditionType listed above, ControllerConnectionUp
+	Status  corev1.ConditionStatus `json:"status"`            // Mark certain type status, one of True, False, Unknown
+	Reason  string                 `json:"reason,omitempty"`  // Brief reason
+	Message string                 `json:"message,omitempty"` // Human readable message indicating details
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type OKNAgentInfoList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -63,14 +65,14 @@ type OKNAgentInfoList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type OKNControllerInfo struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Pod                         corev1.ObjectReference      `json:"pod,omitempty"`                         // The Pod that OKN Controller is running in
-	PodCIDR                     string                      `json:"podCIDR,omitempty"`                     // Pod network CIDR
-	Node                        corev1.ObjectReference      `json:"node,omitempty"`                        // The Node that OKN Controller is running in
+	Version                     string                      `json:"version,omitempty"`                     // OKN binary version
+	PodRef                      corev1.ObjectReference      `json:"podRef,omitempty"`                      // The Pod that OKN Controller is running in
+	NodeRef                     corev1.ObjectReference      `json:"nodeRef,omitempty"`                     // The Node that OKN Controller is running in
+	ServiceRef                  corev1.ObjectReference      `json:"serviceRef, omitempty"`                 // OKN Controller Service
 	NetworkPolicyControllerInfo NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // NetworkPolicy information
 	ConnectedAgentNum           int32                       `json:"connectedAgentNum,omitempty"`           // Number of agents which are connected to this controller
 }
@@ -82,7 +84,6 @@ type NetworkPolicyControllerInfo struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type OKNControllerInfoList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
