@@ -228,7 +228,7 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
 		if !flowsAreInstalled { // then install flows
-			err = c.ofClient.InstallNodeFlows(nodeName, c.nodeConfig.Gateway.MAC, peerGatewayIP, *peerPodCIDR, peerNodeIP.String())
+			err = c.ofClient.InstallNodeFlows(nodeName, c.nodeConfig.Gateway.MAC, peerGatewayIP, *peerPodCIDR, peerNodeIP)
 			if err != nil {
 				return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 			}

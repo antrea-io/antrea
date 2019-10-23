@@ -17,10 +17,6 @@ package openflow
 import (
 	"fmt"
 	"net"
-	"os/exec"
-	"time"
-
-	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -45,7 +41,7 @@ type Client interface {
 	// InstallNodeFlows should be invoked when a connection to a remote Node is going to be set
 	// up. The hostname is used to identify the added flows. Calls to InstallNodeFlows are
 	// idempotent.
-	InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error
+	InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, tunnelPeerAddr net.IP) error
 
 	// UninstallNodeFlows removes the connection to the remote Node specified with the
 	// hostname. UninstallNodeFlows will do nothing if no connection to the host was established.
@@ -88,6 +84,9 @@ type Client interface {
 	// DeletePolicyRuleAddress removes addresses from the specified NetworkPolicy rule. If addrType is true, the addresses
 	// are removed from PolicyRule.From, else from PolicyRule.To.
 	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error
+
+	// Disconnect disconnects the connection between client and OFSwitch.
+	Disconnect() error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -118,10 +117,10 @@ func (c *client) addMissingFlows(cache map[string]flowCache, cacheKey string, fl
 	return nil
 }
 
-func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error {
+func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, tunnelPeerAddr net.IP) error {
 	flows := []binding.Flow{
-		c.arpResponderFlow(peerGatewayIP.String()),
-		c.l3FwdFlowToRemote(localGatewayMAC.String(), peerPodCIDR.String(), peerTunnelName),
+		c.arpResponderFlow(peerGatewayIP),
+		c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr),
 	}
 
 	return c.addMissingFlows(c.nodeFlowCache, hostname, flows)
@@ -140,10 +139,10 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
 	flows := []binding.Flow{
 		c.podClassifierFlow(ofPort),
-		c.podIPSpoofGuardFlow(podInterfaceIP.String(), podInterfaceMAC.String(), ofPort),
-		c.arpSpoofGuardFlow(podInterfaceIP.String(), podInterfaceMAC.String(), ofPort),
-		c.l2ForwardCalcFlow(podInterfaceMAC.String(), ofPort),
-		c.l3FlowsToPod(gatewayMAC.String(), podInterfaceIP.String(), podInterfaceMAC.String()),
+		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort),
+		c.arpSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort),
+		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort),
+		c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC),
 	}
 
 	return c.addMissingFlows(c.podFlowCache, containerID, flows)
@@ -184,9 +183,9 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 		return err
 	} else if err := c.flowOperations.Add(c.gatewayARPSpoofGuardFlow(gatewayOFPort)); err != nil {
 		return err
-	} else if err := c.flowOperations.Add(c.l3ToGatewayFlow(gatewayAddr.String(), gatewayMAC.String())); err != nil {
+	} else if err := c.flowOperations.Add(c.l3ToGatewayFlow(gatewayAddr, gatewayMAC)); err != nil {
 		return err
-	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(gatewayMAC.String(), gatewayOFPort)); err != nil {
+	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort)); err != nil {
 		return err
 	}
 	return nil
@@ -201,25 +200,9 @@ func (c *client) InstallTunnelFlows(tunnelOFPort uint32) error {
 	return nil
 }
 
-func waitForBridge(bridgeName string) error {
-	for retry := 0; retry < maxRetryForOFSwitch; retry++ {
-		klog.V(2).Infof("Trying to connect to OpenFlow switch...")
-		cmd := exec.Command("ovs-ofctl", "show", bridgeName)
-		if err := cmd.Run(); err != nil {
-			time.Sleep(1 * time.Second)
-		} else {
-			return nil
-		}
-	}
-	return fmt.Errorf("failed to connect to OpenFlow switch after %d tries", maxRetryForOFSwitch)
-}
-
 func (c *client) Initialize() error {
-	// Wait for the OpenFlow switch to be ready.
-	// Without this, the rest of the steps can fail with "<bridge> is not a bridge or a socket".
-	// TODO: this may not be needed any more after we transition to libopenflow and stop using
-	// ovs-ofctl directly
-	if err := waitForBridge(c.bridge.GetName()); err != nil {
+	// Initiate connections to target OFswitch, and create tables on the switch.
+	if err := c.bridge.Connect(maxRetryForOFSwitch); err != nil {
 		return err
 	}
 

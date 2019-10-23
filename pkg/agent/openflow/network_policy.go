@@ -83,7 +83,7 @@ func (a *OFPortAddress) GetMatchKey(addrType types.AddressType) string {
 	case types.SrcAddress:
 		return "in_port"
 	case types.DstAddress:
-		return fmt.Sprintf("%s[%d..%d]", portCacheReg.reg(), ofportRegRange[0], ofportRegRange[1])
+		return fmt.Sprintf("%s[%d..%d]", portCacheReg.reg(), ofPortRegRange[0], ofPortRegRange[1])
 	default:
 		klog.Errorf("unknown AddressType %d in OFPortAddress", addrType)
 		return ""
