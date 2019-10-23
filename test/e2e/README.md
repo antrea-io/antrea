@@ -81,8 +81,24 @@ therefore need the following steps:
 If you need to test an updated version of OKN, just run
 `./infra/vagrant/push_okn.sh` and then run the tests again.
 
+By default, if a test case fails, we write some useful debug information to a
+temporary directory on disk. This information includes the detailed description
+(obtained with `kubectl describe`) and the logs (obtained with `kubectl logs`)
+of each OKN Pod at the time the test case exited. When running the tests in
+verbose mode (i.e. with `-v`), the test logs will tell you the location of that
+temporary directory. You may also choose your own directory using
+`--logs-export-dir`. For example:
+
+```bash
+mkdir okn-test-logs
+go test -count=1 -v -run=TestDeletePod okn/test/e2e --logs-export-dir `pwd`/okn-test-logs
+```
+
+By default the description and logs for OKN Pods are only written to disk if a
+test fails. You can choose to dump this information unconditionally with
+`--logs-export-on-success`.
+
 ## Tests to be added
 
- * Connectivity tests
  * Network policy tests
- * ...
+ * Reconciliation on start-up tests

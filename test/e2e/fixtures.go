@@ -15,7 +15,11 @@
 package e2e
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func setupTest(t *testing.T) (*TestData, error) {
@@ -46,7 +50,130 @@ func setupTest(t *testing.T) (*TestData, error) {
 	return data, nil
 }
 
+func logsDirForTest(testName string) string {
+	// a filepath-friendly timestamp format.
+	const timeFormat = "Jan_2-15-04-05"
+	timeStamp := time.Now().Format(timeFormat)
+	logsDir := filepath.Join(testOptions.logsExportDir, fmt.Sprintf("%s.%s", testName, timeStamp))
+	return logsDir
+}
+
+func exportLogs(t *testing.T, data *TestData) {
+	if t.Skipped() {
+		return
+	}
+	// if test was successful and --logs-export-on-success was not provided, we do not export
+	// any logs.
+	if !t.Failed() && !testOptions.logsExportOnSuccess {
+		return
+	}
+	logsDir := logsDirForTest(t.Name())
+	t.Logf("Exporting test logs to '%s'", logsDir)
+	// remove directory if it already exists. This ensures that we start with an empty
+	// directory. Given that we append a timestamp at the end of the path it is very unlikely to
+	// happen.
+	_ = os.RemoveAll(logsDir)
+	if err := os.Mkdir(logsDir, 0700); err != nil {
+		t.Errorf("Error when creating logs directory '%s': %v", logsDir, err)
+		return
+	}
+
+	// for now we just retrieve the logs for the OKN Pods, but maybe we can find a good way to
+	// retrieve the logs for the test Pods in the future (before deleting them) if it is useful
+	// for debugging.
+
+	// getPodWriter creates the file with name nodeName-podName-suffix. It returns nil if the
+	// file cannot be created. File must be closed by the caller.
+	getPodWriter := func(nodeName, podName, suffix string) *os.File {
+		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s-%s", nodeName, podName, suffix))
+		f, err := os.Create(logFile)
+		if err != nil {
+			t.Errorf("Error when creating log file '%s': '%v'", logFile, err)
+			return nil
+		}
+		return f
+	}
+
+	// getNodeWriter creates the file with name nodeName-suffix. It returns nil if the file
+	// cannot be created. File must be closed by the caller.
+	getNodeWriter := func(nodeName, suffix string) *os.File {
+		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s", nodeName, suffix))
+		f, err := os.Create(logFile)
+		if err != nil {
+			t.Errorf("Error when creating log file '%s': '%v'", logFile, err)
+			return nil
+		}
+		return f
+	}
+
+	// runKubectl runs the provided kubectl command on the master Node and returns the
+	// output. It returns an empty string in case of error.
+	runKubectl := func(cmd string) string {
+		rc, stdout, _, err := RunSSHCommandOnNode(masterNodeName(), cmd)
+		if err != nil || rc != 0 {
+			t.Errorf("Error when running this kubectl command on master Node: %s", cmd)
+			return ""
+		}
+		return stdout
+	}
+
+	// dump the logs for OKN Pods to disk.
+	data.forAllOKNPods(func(nodeName, podName string) error {
+		w := getPodWriter(nodeName, podName, "logs")
+		if w == nil {
+			return nil
+		}
+		defer w.Close()
+		cmd := fmt.Sprintf("kubectl -n %s logs --all-containers %s", OKNNamespace, podName)
+		stdout := runKubectl(cmd)
+		if stdout == "" {
+			return nil
+		}
+		w.WriteString(stdout)
+		return nil
+	})
+
+	// dump the output of "kubectl describe" for OKN pods to disk.
+	data.forAllOKNPods(func(nodeName, podName string) error {
+		w := getPodWriter(nodeName, podName, "describe")
+		if w == nil {
+			return nil
+		}
+		defer w.Close()
+		cmd := fmt.Sprintf("kubectl -n %s describe pod %s", OKNNamespace, podName)
+		stdout := runKubectl(cmd)
+		if stdout == "" {
+			return nil
+		}
+		w.WriteString(stdout)
+		return nil
+	})
+
+	// export kubelet logs with journalctl for each Node. If the Nodes do not use journalctl we
+	// print a log message. If kubelet is not run with systemd, the log file will be empty.
+	if err := forAllNodes(func(nodeName string) error {
+		const numLines = 100
+		cmd := fmt.Sprintf("journalctl -u kubelet -n %d", numLines)
+		rc, stdout, _, err := RunSSHCommandOnNode(nodeName, cmd)
+		if err != nil || rc != 0 {
+			// return an error and skip subsequent Nodes
+			return fmt.Errorf("error when running journalctl on Node '%s', is it available?", nodeName)
+		}
+		w := getNodeWriter(nodeName, "kubelet")
+		if w == nil {
+			// move on to the next Node
+			return nil
+		}
+		defer w.Close()
+		w.WriteString(stdout)
+		return nil
+	}); err != nil {
+		t.Logf("Error when exporting kubelet logs: %v", err)
+	}
+}
+
 func teardownTest(t *testing.T, data *TestData) {
+	exportLogs(t, data)
 	t.Logf("Deleting '%s' K8s Namespace", testNamespace)
 	if err := data.deleteTestNamespace(defaultTimeout); err != nil {
 		t.Logf("Error when tearing down test: %v", err)

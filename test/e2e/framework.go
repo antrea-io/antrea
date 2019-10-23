@@ -48,6 +48,9 @@ const podNameSuffixLength int = 8
 
 const OVSContainerName string = "okn-ovs"
 
+// OKNNamespace is the K8s Namespace in which all OKN resources are running.
+const OKNNamespace string = "kube-system"
+
 type ClusterNode struct {
 	idx  int // 0 for master Node
 	name string
@@ -64,8 +67,10 @@ type ClusterInfo struct {
 var clusterInfo ClusterInfo
 
 type TestOptions struct {
-	providerName       string
-	providerConfigPath string
+	providerName        string
+	providerConfigPath  string
+	logsExportDir       string
+	logsExportOnSuccess bool
 }
 
 var testOptions TestOptions
@@ -172,15 +177,10 @@ func collectClusterInfo() error {
 	clusterInfo.numNodes = workerIdx
 	clusterInfo.numWorkerNodes = clusterInfo.numNodes - 1
 
-	host, config, err := provider.GetSSHConfig(masterNodeName())
-	if err != nil {
-		return fmt.Errorf("error when retrieving SSH config for master: %v", err)
-	}
-
 	// retrieve cluster CIDR
 	if err := func() error {
 		cmd := "kubectl cluster-info dump | grep cluster-cidr"
-		rc, stdout, _, err := RunSSHCommand(host, config, cmd)
+		rc, stdout, _, err := RunSSHCommandOnNode(clusterInfo.masterNodeName, cmd)
 		if err != nil || rc != 0 {
 			return fmt.Errorf("error when running the following command on master Node: %s", cmd)
 		}
@@ -269,7 +269,7 @@ func (data *TestData) deployOKN() error {
 // available, i.e. all the Nodes have one or more of the OKN daemon Pod running and available.
 func (data *TestData) waitForOKNDaemonSetPods(timeout time.Duration) error {
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		daemonSet, err := data.clientset.AppsV1().DaemonSets("kube-system").Get(OKNDaemonSet, metav1.GetOptions{})
+		daemonSet, err := data.clientset.AppsV1().DaemonSets(OKNNamespace).Get(OKNDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when getting OKN daemonset: %v", err)
 		}
@@ -293,7 +293,7 @@ func (data *TestData) waitForOKNDaemonSetPods(timeout time.Duration) error {
 // checkCoreDNSPods checks that all the Pods for the CoreDNS deployment are ready. If not, delete
 // all the Pods to force them to restart and waits up to timeout for the Pods to become ready.
 func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
-	if deployment, err := data.clientset.AppsV1().Deployments("kube-system").Get("coredns", metav1.GetOptions{}); err != nil {
+	if deployment, err := data.clientset.AppsV1().Deployments(OKNNamespace).Get("coredns", metav1.GetOptions{}); err != nil {
 		return fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
 	} else if deployment.Status.UnavailableReplicas == 0 {
 		// deployment ready, nothing to do
@@ -308,11 +308,11 @@ func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "k8s-app=kube-dns",
 	}
-	if err := data.clientset.CoreV1().Pods("kube-system").DeleteCollection(deleteOptions, listOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(OKNNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
 		return fmt.Errorf("error when deleting all CoreDNS Pods: %v", err)
 	}
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		deployment, err := data.clientset.AppsV1().Deployments("kube-system").Get("coredns", metav1.GetOptions{})
+		deployment, err := data.clientset.AppsV1().Deployments(OKNNamespace).Get("coredns", metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
 		}
@@ -367,7 +367,7 @@ func (data *TestData) deleteOKN(timeout time.Duration) error {
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-	if err := data.clientset.AppsV1().DaemonSets("kube-system").Delete("okn-agent", deleteOptions); err != nil {
+	if err := data.clientset.AppsV1().DaemonSets(OKNNamespace).Delete("okn-agent", deleteOptions); err != nil {
 		if errors.IsNotFound(err) {
 			// no OKN DaemonSet running, we return right away
 			return nil
@@ -375,7 +375,7 @@ func (data *TestData) deleteOKN(timeout time.Duration) error {
 		return fmt.Errorf("error when trying to delete OKN DaemonSet: %v", err)
 	}
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if _, err := data.clientset.AppsV1().DaemonSets("kube-system").Get(OKNDaemonSet, metav1.GetOptions{}); err != nil {
+		if _, err := data.clientset.AppsV1().DaemonSets(OKNNamespace).Get(OKNDaemonSet, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				// OKN DaemonSet does not exist any more, success
 				return true, nil
@@ -524,7 +524,7 @@ func (data *TestData) deleteOneOKNAgentPod(gracePeriodSeconds int64, timeout tim
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=okn,component=okn-agent",
 	}
-	pods, err := data.clientset.CoreV1().Pods("kube-system").List(listOptions)
+	pods, err := data.clientset.CoreV1().Pods(OKNNamespace).List(listOptions)
 	if err != nil {
 		return 0, fmt.Errorf("failed to list OKN Pods: %v", err)
 	}
@@ -538,12 +538,12 @@ func (data *TestData) deleteOneOKNAgentPod(gracePeriodSeconds int64, timeout tim
 	}
 
 	start := time.Now()
-	if err := data.clientset.CoreV1().Pods("kube-system").Delete(onePod, deleteOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(OKNNamespace).Delete(onePod, deleteOptions); err != nil {
 		return 0, fmt.Errorf("error when deleting Pod: %v", err)
 	}
 
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if _, err := data.clientset.CoreV1().Pods("kube-system").Get(onePod, metav1.GetOptions{}); err != nil {
+		if _, err := data.clientset.CoreV1().Pods(OKNNamespace).Get(onePod, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
 			}
@@ -561,10 +561,10 @@ func (data *TestData) deleteOneOKNAgentPod(gracePeriodSeconds int64, timeout tim
 // getOKNPodOnNode retrieves the name of the OKN Pod (okn-agent-*) running on a specific Node.
 func (data *TestData) getOKNPodOnNode(nodeName string) (podName string, err error) {
 	listOptions := metav1.ListOptions{
-		LabelSelector: "app=okn",
+		LabelSelector: "app=okn,component=okn-agent",
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	}
-	pods, err := data.clientset.CoreV1().Pods("kube-system").List(listOptions)
+	pods, err := data.clientset.CoreV1().Pods(OKNNamespace).List(listOptions)
 	if err != nil {
 		return "", fmt.Errorf("failed to list OKN Pods: %v", err)
 	}
@@ -632,6 +632,39 @@ func (data *TestData) runCommandFromPod(podNamespace string, podName string, con
 		return stdoutB.String(), stderrB.String(), err
 	}
 	return stdoutB.String(), stderrB.String(), nil
+}
+
+func forAllNodes(fn func(nodeName string) error) error {
+	for idx := 0; idx < clusterInfo.numNodes; idx++ {
+		name := nodeName(idx)
+		if name == "" {
+			return fmt.Errorf("unexpected empty name for Node %d", idx)
+		}
+		if err := fn(name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// forAllOKNPods invokes the provided function for every OKN Pod currently running on every Node.
+func (data *TestData) forAllOKNPods(fn func(nodeName, podName string) error) error {
+	for _, node := range clusterInfo.nodes {
+		listOptions := metav1.ListOptions{
+			LabelSelector: "app=okn",
+			FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.name),
+		}
+		pods, err := data.clientset.CoreV1().Pods(OKNNamespace).List(listOptions)
+		if err != nil {
+			return fmt.Errorf("failed to list OKN Pods on Node '%s': %v", node.name, err)
+		}
+		for _, pod := range pods.Items {
+			if err := fn(node.name, pod.Name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (data *TestData) runPingCommandFromTestPod(podName string, targetIP string, count int) error {

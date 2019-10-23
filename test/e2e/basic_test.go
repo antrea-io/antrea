@@ -107,7 +107,7 @@ func TestDeletePod(t *testing.T) {
 
 	doesOVSPortExist := func() bool {
 		cmd := []string{"ovs-vsctl", "port-to-br", ifName}
-		if _, stderr, err := data.runCommandFromPod("kube-system", OKNPodName, OVSContainerName, cmd); err == nil {
+		if _, stderr, err := data.runCommandFromPod(OKNNamespace, OKNPodName, OVSContainerName, cmd); err == nil {
 			return true
 		} else if strings.Contains(stderr, "no port named") {
 			return false
