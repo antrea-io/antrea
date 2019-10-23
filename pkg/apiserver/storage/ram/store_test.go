@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
 
-	oknstorage "okn/pkg/apiserver/storage"
+	antreastorage "github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 )
 
 // testEvent implements InternalEvent.
@@ -45,8 +45,8 @@ type testEvent struct {
 	ResourceVersion uint64
 }
 
-func (event *testEvent) ToWatchEvent(selectors *oknstorage.Selectors) *watch.Event {
-	filter := func(s *oknstorage.Selectors, key string, labels labels.Set, fields fields.Set) bool {
+func (event *testEvent) ToWatchEvent(selectors *antreastorage.Selectors) *watch.Event {
+	filter := func(s *antreastorage.Selectors, key string, labels labels.Set, fields fields.Set) bool {
 		if s.Key != "" && key != s.Key {
 			return false
 		}
@@ -86,7 +86,7 @@ func (event *testEvent) GetResourceVersion() uint64 {
 }
 
 // testGenEvent generates *testEvent
-func testGenEvent(key string, prevObj, obj runtime.Object, resourceVersion uint64) (oknstorage.InternalEvent, error) {
+func testGenEvent(key string, prevObj, obj runtime.Object, resourceVersion uint64) (antreastorage.InternalEvent, error) {
 	if reflect.DeepEqual(prevObj, obj) {
 		return nil, nil
 	}

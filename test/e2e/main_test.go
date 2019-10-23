@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import (
 // was provided by the user, it checks that the directory exists.
 func (tOptions *TestOptions) setupLogging() func() {
 	if tOptions.logsExportDir == "" {
-		name, err := ioutil.TempDir("", "okn-test-")
+		name, err := ioutil.TempDir("", "antrea-test-")
 		if err != nil {
 			log.Fatalf("Error when creating temporary directory to export logs: %v", err)
 		}

@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ const (
 	VXLAN_TUNNEL  = "vxlan"
 )
 
-//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -destination testing/mock_ovsconfig.go -package=testing okn/pkg/ovs/ovsconfig OVSBridgeClient
+//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -destination testing/mock_ovsconfig.go -package=testing github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig OVSBridgeClient
 
 type OVSBridgeClient interface {
 	Create() Error

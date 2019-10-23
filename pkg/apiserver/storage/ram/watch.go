@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog"
 
-	"okn/pkg/apiserver/storage"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 )
 
 // storeWatcher implements watch.Interface

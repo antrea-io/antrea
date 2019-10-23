@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,15 +34,15 @@ func setupTest(t *testing.T) (*TestData, error) {
 	if err := data.createTestNamespace(); err != nil {
 		return nil, err
 	}
-	t.Logf("Applying OKN YAML")
-	if err := data.deployOKN(); err != nil {
+	t.Logf("Applying Antrea YAML")
+	if err := data.deployAntrea(); err != nil {
 		return nil, err
 	}
-	t.Logf("Waiting for all OKN DaemonSet Pods")
-	if err := data.waitForOKNDaemonSetPods(defaultTimeout); err != nil {
+	t.Logf("Waiting for all Antrea DaemonSet Pods")
+	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
 		return nil, err
 	}
-	// TODO: CoreDNS keeps crashing at the moment, even when OKN is running fine.
+	// TODO: CoreDNS keeps crashing at the moment, even when Antrea is running fine.
 	// t.Logf("Checking CoreDNS deployment")
 	// if err := data.checkCoreDNSPods(defaultTimeout); err != nil {
 	// 	return nil, err
@@ -78,7 +78,7 @@ func exportLogs(t *testing.T, data *TestData) {
 		return
 	}
 
-	// for now we just retrieve the logs for the OKN Pods, but maybe we can find a good way to
+	// for now we just retrieve the logs for the Antrea Pods, but maybe we can find a good way to
 	// retrieve the logs for the test Pods in the future (before deleting them) if it is useful
 	// for debugging.
 
@@ -117,14 +117,14 @@ func exportLogs(t *testing.T, data *TestData) {
 		return stdout
 	}
 
-	// dump the logs for OKN Pods to disk.
-	data.forAllOKNPods(func(nodeName, podName string) error {
+	// dump the logs for Antrea Pods to disk.
+	data.forAllAntreaPods(func(nodeName, podName string) error {
 		w := getPodWriter(nodeName, podName, "logs")
 		if w == nil {
 			return nil
 		}
 		defer w.Close()
-		cmd := fmt.Sprintf("kubectl -n %s logs --all-containers %s", OKNNamespace, podName)
+		cmd := fmt.Sprintf("kubectl -n %s logs --all-containers %s", AntreaNamespace, podName)
 		stdout := runKubectl(cmd)
 		if stdout == "" {
 			return nil
@@ -133,14 +133,14 @@ func exportLogs(t *testing.T, data *TestData) {
 		return nil
 	})
 
-	// dump the output of "kubectl describe" for OKN pods to disk.
-	data.forAllOKNPods(func(nodeName, podName string) error {
+	// dump the output of "kubectl describe" for Antrea pods to disk.
+	data.forAllAntreaPods(func(nodeName, podName string) error {
 		w := getPodWriter(nodeName, podName, "describe")
 		if w == nil {
 			return nil
 		}
 		defer w.Close()
-		cmd := fmt.Sprintf("kubectl -n %s describe pod %s", OKNNamespace, podName)
+		cmd := fmt.Sprintf("kubectl -n %s describe pod %s", AntreaNamespace, podName)
 		stdout := runKubectl(cmd)
 		if stdout == "" {
 			return nil

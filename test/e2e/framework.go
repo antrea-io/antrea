@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,23 +33,23 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
 
-	"okn/test/e2e/providers"
+	"github.com/vmware-tanzu/antrea/test/e2e/providers"
 )
 
 const defaultTimeout time.Duration = 90 * time.Second
 
-const OKNDaemonSet string = "okn-agent"
+const AntreaDaemonSet string = "antrea-agent"
 
-const testNamespace string = "okn-test"
+const testNamespace string = "antrea-test"
 
 const defaultContainerName string = "busybox"
 
 const podNameSuffixLength int = 8
 
-const OVSContainerName string = "okn-ovs"
+const OVSContainerName string = "antrea-ovs"
 
-// OKNNamespace is the K8s Namespace in which all OKN resources are running.
-const OKNNamespace string = "kube-system"
+// AntreaNamespace is the K8s Namespace in which all Antrea resources are running.
+const AntreaNamespace string = "kube-system"
 
 type ClusterNode struct {
 	idx  int // 0 for master Node
@@ -249,29 +249,29 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 	return err
 }
 
-// deployOKN deploys the OKN DaemonSet using kubectl through an SSH session to the master node.
-func (data *TestData) deployOKN() error {
+// deployAntrea deploys the Antrea DaemonSet using kubectl through an SSH session to the master node.
+func (data *TestData) deployAntrea() error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
 	host, config, err := provider.GetSSHConfig(masterNodeName())
 	if err != nil {
 		return fmt.Errorf("error when retrieving SSH config for master: %v", err)
 	}
-	cmd := fmt.Sprintf("kubectl apply -f ~/okn.yml")
+	cmd := fmt.Sprintf("kubectl apply -f ~/antrea.yml")
 	rc, _, _, err := RunSSHCommand(host, config, cmd)
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deploying OKN; is okn.yml available on the master Node?")
+		return fmt.Errorf("error when deploying Antrea; is antrea.yml available on the master Node?")
 	}
 	return nil
 }
 
-// waitForOKNDaemonSetPods waits for the K8s apiserver to report that all the OKN Pods are
-// available, i.e. all the Nodes have one or more of the OKN daemon Pod running and available.
-func (data *TestData) waitForOKNDaemonSetPods(timeout time.Duration) error {
+// waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
+// available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
+func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		daemonSet, err := data.clientset.AppsV1().DaemonSets(OKNNamespace).Get(OKNDaemonSet, metav1.GetOptions{})
+		daemonSet, err := data.clientset.AppsV1().DaemonSets(AntreaNamespace).Get(AntreaDaemonSet, metav1.GetOptions{})
 		if err != nil {
-			return false, fmt.Errorf("error when getting OKN daemonset: %v", err)
+			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
 		}
 
 		if daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled {
@@ -283,7 +283,7 @@ func (data *TestData) waitForOKNDaemonSetPods(timeout time.Duration) error {
 		return false, nil
 	})
 	if err == wait.ErrWaitTimeout {
-		return fmt.Errorf("okn-agent DaemonSet not ready within %v", defaultTimeout)
+		return fmt.Errorf("antrea-agent DaemonSet not ready within %v", defaultTimeout)
 	} else if err != nil {
 		return err
 	}
@@ -293,7 +293,7 @@ func (data *TestData) waitForOKNDaemonSetPods(timeout time.Duration) error {
 // checkCoreDNSPods checks that all the Pods for the CoreDNS deployment are ready. If not, delete
 // all the Pods to force them to restart and waits up to timeout for the Pods to become ready.
 func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
-	if deployment, err := data.clientset.AppsV1().Deployments(OKNNamespace).Get("coredns", metav1.GetOptions{}); err != nil {
+	if deployment, err := data.clientset.AppsV1().Deployments(AntreaNamespace).Get("coredns", metav1.GetOptions{}); err != nil {
 		return fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
 	} else if deployment.Status.UnavailableReplicas == 0 {
 		// deployment ready, nothing to do
@@ -308,11 +308,11 @@ func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "k8s-app=kube-dns",
 	}
-	if err := data.clientset.CoreV1().Pods(OKNNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(AntreaNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
 		return fmt.Errorf("error when deleting all CoreDNS Pods: %v", err)
 	}
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		deployment, err := data.clientset.AppsV1().Deployments(OKNNamespace).Get("coredns", metav1.GetOptions{})
+		deployment, err := data.clientset.AppsV1().Deployments(AntreaNamespace).Get("coredns", metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
 		}
@@ -354,33 +354,33 @@ func (data *TestData) createClient() error {
 	return nil
 }
 
-// deleteOKN deletes the OKN DaemonSet; we use cascading deletion, which means all the Pods created
-// by OKN will be deleted. After issuing the deletion request, we poll the K8s apiserver to ensure
-// that the DaemonSet does not exist any more. This function is a no-op if the OKN DaemonSet does
+// deleteAntrea deletes the Antrea DaemonSet; we use cascading deletion, which means all the Pods created
+// by Antrea will be deleted. After issuing the deletion request, we poll the K8s apiserver to ensure
+// that the DaemonSet does not exist any more. This function is a no-op if the Antrea DaemonSet does
 // not exist at the time the function is called.
-func (data *TestData) deleteOKN(timeout time.Duration) error {
+func (data *TestData) deleteAntrea(timeout time.Duration) error {
 	var gracePeriodSeconds int64 = 5
 	// Foreground deletion policy ensures that by the time the DaemonSet is deleted, there are
-	// no OKN Pods left.
+	// no Antrea Pods left.
 	var propagationPolicy metav1.DeletionPropagation = metav1.DeletePropagationForeground
 	deleteOptions := &metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-	if err := data.clientset.AppsV1().DaemonSets(OKNNamespace).Delete("okn-agent", deleteOptions); err != nil {
+	if err := data.clientset.AppsV1().DaemonSets(AntreaNamespace).Delete("antrea-agent", deleteOptions); err != nil {
 		if errors.IsNotFound(err) {
-			// no OKN DaemonSet running, we return right away
+			// no Antrea DaemonSet running, we return right away
 			return nil
 		}
-		return fmt.Errorf("error when trying to delete OKN DaemonSet: %v", err)
+		return fmt.Errorf("error when trying to delete Antrea DaemonSet: %v", err)
 	}
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if _, err := data.clientset.AppsV1().DaemonSets(OKNNamespace).Get(OKNDaemonSet, metav1.GetOptions{}); err != nil {
+		if _, err := data.clientset.AppsV1().DaemonSets(AntreaNamespace).Get(AntreaDaemonSet, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
-				// OKN DaemonSet does not exist any more, success
+				// Antrea DaemonSet does not exist any more, success
 				return true, nil
 			}
-			return false, fmt.Errorf("error when trying to get OKN DaemonSet after deletion: %v", err)
+			return false, fmt.Errorf("error when trying to get Antrea DaemonSet after deletion: %v", err)
 		}
 
 		// Keep trying
@@ -518,15 +518,15 @@ func (data *TestData) podWaitForIP(timeout time.Duration, name string) (string, 
 	return pod.Status.PodIP, nil
 }
 
-// deleteOneOKNPod deletes one "random" Pod belonging to the OKN DaemonSet and measure how long it
+// deleteOneAntreaPod deletes one "random" Pod belonging to the Antrea DaemonSet and measure how long it
 // takes for the Pod not to be visible to the client any more.
-func (data *TestData) deleteOneOKNAgentPod(gracePeriodSeconds int64, timeout time.Duration) (time.Duration, error) {
+func (data *TestData) deleteOneAntreaAgentPod(gracePeriodSeconds int64, timeout time.Duration) (time.Duration, error) {
 	listOptions := metav1.ListOptions{
-		LabelSelector: "app=okn,component=okn-agent",
+		LabelSelector: "app=antrea,component=antrea-agent",
 	}
-	pods, err := data.clientset.CoreV1().Pods(OKNNamespace).List(listOptions)
+	pods, err := data.clientset.CoreV1().Pods(AntreaNamespace).List(listOptions)
 	if err != nil {
-		return 0, fmt.Errorf("failed to list OKN Pods: %v", err)
+		return 0, fmt.Errorf("failed to list Antrea Pods: %v", err)
 	}
 	if len(pods.Items) == 0 {
 		return 0, fmt.Errorf("no available Pods")
@@ -538,12 +538,12 @@ func (data *TestData) deleteOneOKNAgentPod(gracePeriodSeconds int64, timeout tim
 	}
 
 	start := time.Now()
-	if err := data.clientset.CoreV1().Pods(OKNNamespace).Delete(onePod, deleteOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(AntreaNamespace).Delete(onePod, deleteOptions); err != nil {
 		return 0, fmt.Errorf("error when deleting Pod: %v", err)
 	}
 
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if _, err := data.clientset.CoreV1().Pods(OKNNamespace).Get(onePod, metav1.GetOptions{}); err != nil {
+		if _, err := data.clientset.CoreV1().Pods(AntreaNamespace).Get(onePod, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
 			}
@@ -558,15 +558,15 @@ func (data *TestData) deleteOneOKNAgentPod(gracePeriodSeconds int64, timeout tim
 	return time.Since(start), nil
 }
 
-// getOKNPodOnNode retrieves the name of the OKN Pod (okn-agent-*) running on a specific Node.
-func (data *TestData) getOKNPodOnNode(nodeName string) (podName string, err error) {
+// getAntreaPodOnNode retrieves the name of the Antrea Pod (antrea-agent-*) running on a specific Node.
+func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err error) {
 	listOptions := metav1.ListOptions{
-		LabelSelector: "app=okn,component=okn-agent",
+		LabelSelector: "app=antrea,component=antrea-agent",
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	}
-	pods, err := data.clientset.CoreV1().Pods(OKNNamespace).List(listOptions)
+	pods, err := data.clientset.CoreV1().Pods(AntreaNamespace).List(listOptions)
 	if err != nil {
-		return "", fmt.Errorf("failed to list OKN Pods: %v", err)
+		return "", fmt.Errorf("failed to list Antrea Pods: %v", err)
 	}
 	if len(pods.Items) != 1 {
 		return "", fmt.Errorf("expected *exactly* one Pod")
@@ -647,16 +647,16 @@ func forAllNodes(fn func(nodeName string) error) error {
 	return nil
 }
 
-// forAllOKNPods invokes the provided function for every OKN Pod currently running on every Node.
-func (data *TestData) forAllOKNPods(fn func(nodeName, podName string) error) error {
+// forAllAntreaPods invokes the provided function for every Antrea Pod currently running on every Node.
+func (data *TestData) forAllAntreaPods(fn func(nodeName, podName string) error) error {
 	for _, node := range clusterInfo.nodes {
 		listOptions := metav1.ListOptions{
-			LabelSelector: "app=okn",
+			LabelSelector: "app=antrea",
 			FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.name),
 		}
-		pods, err := data.clientset.CoreV1().Pods(OKNNamespace).List(listOptions)
+		pods, err := data.clientset.CoreV1().Pods(AntreaNamespace).List(listOptions)
 		if err != nil {
-			return fmt.Errorf("failed to list OKN Pods on Node '%s': %v", node.name, err)
+			return fmt.Errorf("failed to list Antrea Pods on Node '%s': %v", node.name, err)
 		}
 		for _, pod := range pods.Items {
 			if err := fn(node.name, pod.Name); err != nil {

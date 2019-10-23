@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package controller contains the libraries that drive the okn-controller binary.
-// okn-controller is responsible for Network Policy translation and distribution to okn-agent.
+// Package controller contains the libraries that drive the antrea-controller binary.
+// antrea-controller is responsible for Network Policy translation and distribution to antrea-agent.
 package controller

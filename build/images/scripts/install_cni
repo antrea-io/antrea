@@ -4,11 +4,11 @@ set -euo pipefail
 
 # Todo: check version and continue installation only for a newer version
 
-# Install OKN configuration file
-install -m 644 /etc/okn/okn-cni.conf /host/etc/cni/net.d/10-okn.conf
+# Install Antrea configuration file
+install -m 644 /etc/antrea/antrea-cni.conf /host/etc/cni/net.d/10-antrea.conf
 
-# Install OKN binary file
-install -m 755 /usr/local/bin/okn-cni /host/opt/cni/bin/okn
+# Install Antrea binary file
+install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
 
 # Load the OVS kernel module
 modprobe openvswitch

@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ import (
 	mock "github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 
-	"okn/pkg/ovs/ovsconfig"
-	ovsconfigtest "okn/pkg/ovs/ovsconfig/testing"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
 )
 
 func TestInitCache(t *testing.T) {

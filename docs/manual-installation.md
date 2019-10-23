@@ -2,15 +2,15 @@
 
 ## Overview
 
-There are four components which need to be deployed in order to run OKN:
+There are four components which need to be deployed in order to run Antrea:
 
 * The OpenVSwitch daemons `ovs-vswitchd` and `ovsdb-server`
 
-* The agent `okn-agent`
+* The agent `antrea-agent`
 
-* The CNI plugin `okn-cni`
+* The CNI plugin `antrea-cni`
 
-* **Optional** The controller `okn-controller`
+* **Optional** The controller `antrea-controller`
 
 ## Instructions
 
@@ -19,48 +19,48 @@ There are four components which need to be deployed in order to run OKN:
 Open vSwitch >= 2.8.0 userspace daemon `ovs-vswitchd` and `ovsdb-server` should run on all worker nodes. See
 [Installing Open vSwitch](https://docs.openvswitch.org/en/latest/intro/install/#installation-from-packages) for details.
 
-### okn-agent
+### antrea-agent
 
-`okn-agent` must run all worker nodes.
+`antrea-agent` must run all worker nodes.
 
-1. Grant `okn-agent` user or ServiceAccount necessary permissions to Kubernetes APIs. You can follow the `ClusterRole`
-and `ClusterRoleBinding` sections in the [Deployment yaml](/build/yamls/okn.yml) to configure
+1. Grant `antrea-agent` user or ServiceAccount necessary permissions to Kubernetes APIs. You can follow the `ClusterRole`
+and `ClusterRoleBinding` sections in the [Deployment yaml](/build/yamls/antrea.yml) to configure
 Kubernetes RBAC to do it.
 
 2. Create the kubeconfig file that contains the tokens or certificates of ServiceAccount or user created in the above
 step. See [Configure Access to Multiple Clusters](
 https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/) for more information.
 
-3. Create the okn-agent config file, see [Configuration](configuration.md) for details.
+3. Create the antrea-agent config file, see [Configuration](configuration.md) for details.
 ```
-cat >okn-agent.conf <<EOF
+cat >antrea-agent.conf <<EOF
 clientConnection:
   kubeconfig: <PATH_TO_KUBE_CONF>
 hostProcPathPrefix: "/"
 EOF
 ```
 
-4. Install `okn-agent` to `/usr/local/bin/okn-agent`.
+4. Install `antrea-agent` to `/usr/local/bin/antrea-agent`.
 ```
-cp bin/okn-agent /usr/local/bin/okn-agent
-```
-
-5. Start `okn-agent`.
-```
-okn-agent --config okn-agent.conf
+cp bin/antrea-agent /usr/local/bin/antrea-agent
 ```
 
-### okn-cni
-`okn-cni` should be installed on all worker nodes.
+5. Start `antrea-agent`.
+```
+antrea-agent --config antrea-agent.conf
+```
+
+### antrea-cni
+`antrea-cni` should be installed on all worker nodes.
 
 1. Create the cni config file on all worker nodes.
 ```
 mkdir -p /etc/cni/net.d
-cat >/etc/cni/net.d/10-okn.conf <<EOF
+cat >/etc/cni/net.d/10-antrea.conf <<EOF
 {
   "cniVersion":"0.3.0",
-  "name": "okn",
-  "type": "okn",
+  "name": "antrea",
+  "type": "antrea",
   "ipam": {
     "type": "host-local"
   }
@@ -68,32 +68,32 @@ cat >/etc/cni/net.d/10-okn.conf <<EOF
 EOF
 ```
 
-2. Install `okn-cni` to `/opt/cni/bin/okn`.
+2. Install `antrea-cni` to `/opt/cni/bin/antrea`.
 ```
-cp bin/okn-cni /opt/cni/bin/okn
+cp bin/antrea-cni /opt/cni/bin/antrea
 ```
 
-### okn-controller
+### antrea-controller
 
-`okn-controller` is required to implement Kubernetes Network Policies. At any time, there should be only a single active replica of `okn-controller`. Deploying `okn-controller` may be skipped, if only basic Pod connectivity is desired.
+`antrea-controller` is required to implement Kubernetes Network Policies. At any time, there should be only a single active replica of `antrea-controller`. Deploying `antrea-controller` may be skipped, if only basic Pod connectivity is desired.
 
-1. Grant `okn-controller` user or ServiceAccount necessary permissions to Kubernetes APIs. You can follow the `ClusterRole`
-and `ClusterRoleBinding` sections in the [Deployment yaml](/build/yamls/okn.yml) to configure
+1. Grant `antrea-controller` user or ServiceAccount necessary permissions to Kubernetes APIs. You can follow the `ClusterRole`
+and `ClusterRoleBinding` sections in the [Deployment yaml](/build/yamls/antrea.yml) to configure
 Kubernetes RBAC to do it.
 
 2. Create the kubeconfig file that contains the tokens or certificates of ServiceAccount or user created in the above
 step. See [Configure Access to Multiple Clusters](
 https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/) for more information.
 
-3. Create the `okn-controller` config file, see [Configuration](configuration.md) for details.
+3. Create the `antrea-controller` config file, see [Configuration](configuration.md) for details.
 ```
-cat >okn-controller.conf <<EOF
+cat >antrea-controller.conf <<EOF
 clientConnection:
   kubeconfig: <PATH_TO_KUBE_CONF>
 EOF
 ```
 
-4. Start `okn-controller`.
+4. Start `antrea-controller`.
 ```
-okn-controller --config okn-controller.conf
+antrea-controller --config antrea-controller.conf
 ```

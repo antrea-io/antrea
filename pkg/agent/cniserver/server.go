@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,14 +27,14 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/apis/cni"
+	"github.com/vmware-tanzu/antrea/pkg/cni"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"google.golang.org/grpc"
 	"k8s.io/klog"
-	"okn/pkg/agent"
-	"okn/pkg/agent/cniserver/ipam"
-	"okn/pkg/agent/openflow"
-	"okn/pkg/apis/cni"
-	"okn/pkg/cni"
-	"okn/pkg/ovs/ovsconfig"
 )
 
 type CNIServer struct {
@@ -423,7 +423,7 @@ func New(
 	return &CNIServer{
 		cniSocket:            cniSocket,
 		supportedCNIVersions: supportedCNIVersionSet,
-		serverVersion:        cni.OKNVersion,
+		serverVersion:        cni.AntreaVersion,
 		nodeConfig:           nodeConfig,
 		ovsBridgeClient:      ovsBridgeClient,
 		ifaceStore:           ifaceStore,

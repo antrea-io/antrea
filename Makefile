@@ -15,7 +15,7 @@ LDFLAGS += $(VERSION_LDFLAGS)
 
 .PHONY: bin
 bin:
-	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' okn/cmd/...
+	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
 
 .PHONY: build
 build: bin
@@ -30,13 +30,13 @@ test: test-fmt
 test-unit:
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -cover $$(go list okn/pkg/... | grep -E -v "okn/pkg/ovs/ovsconfig")
+	$(GO) test -cover $$(go list github.com/vmware-tanzu/antrea/pkg/... | grep -E -v "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig")
 
 .PHONY: test-integration
 test-integration:
 	@echo
 	@echo "==> Running integration tests <=="
-	$(GO) test okn/test/integration/...
+	$(GO) test github.com/vmware-tanzu/antrea/test/integration/...
 
 test-fmt:
 	@echo
@@ -83,6 +83,6 @@ crd-gen:
 
 .PHONY: ubuntu
 ubuntu:
-	@echo "===> Building okn-ubuntu Docker image <==="
-	docker build -t okn-ubuntu -f build/images/Dockerfile.ubuntu .
-	docker tag okn-ubuntu okn-ubuntu:$(DOCKER_IMG_VERSION)
+	@echo "===> Building antrea-ubuntu Docker image <==="
+	docker build -t antrea-ubuntu -f build/images/Dockerfile.ubuntu .
+	docker tag antrea-ubuntu antrea-ubuntu:$(DOCKER_IMG_VERSION)

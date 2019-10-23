@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,14 +22,14 @@ import (
 
 	"k8s.io/klog"
 
-	binding "okn/pkg/ovs/openflow"
+	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
 const maxRetryForOFSwitch = 5
 
-//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -destination testing/mock_client.go -package=testing okn/pkg/agent/openflow Client
+//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -destination testing/mock_client.go -package=testing github.com/vmware-tanzu/antrea/pkg/agent/openflow Client
 
-// Client is the interface to program OVS flows for entity connectivity of OKN.
+// Client is the interface to program OVS flows for entity connectivity of Antrea.
 // TODO: flow sync (e.g. at agent restart), retry at failure, garbage collection mechanisms
 type Client interface {
 	// Initialize sets up all basic flows on the specific OVS bridge.

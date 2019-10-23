@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cni contains the libraries that drive the okn-cni binary.
-// okn-cni is invoked by Kubelet and is responsible for requesting the okn-agent to set up networking for Pods.
+// Package cni contains the libraries that drive the antrea-cni binary.
+// antrea-cni is invoked by Kubelet and is responsible for requesting the antrea-agent to set up networking for Pods.
 package cni

@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@ package agent
 import (
 	"net"
 
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"github.com/vmware-tanzu/antrea/pkg/util"
 	"k8s.io/klog"
-	"okn/pkg/ovs/ovsconfig"
-	"okn/pkg/util"
 )
 
 const (

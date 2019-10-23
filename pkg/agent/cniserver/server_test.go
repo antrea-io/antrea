@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,15 +26,15 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 
-	"okn/pkg/agent"
-	"okn/pkg/agent/cniserver/ipam"
-	ipamtest "okn/pkg/agent/cniserver/ipam/testing"
-	cniservertest "okn/pkg/agent/cniserver/testing"
-	openflowtest "okn/pkg/agent/openflow/testing"
-	"okn/pkg/apis/cni"
-	"okn/pkg/cni"
-	"okn/pkg/ovs/ovsconfig"
-	ovsconfigtest "okn/pkg/ovs/ovsconfig/testing"
+	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
+	ipamtest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam/testing"
+	cniservertest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/testing"
+	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
+	"github.com/vmware-tanzu/antrea/pkg/apis/cni"
+	"github.com/vmware-tanzu/antrea/pkg/cni"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
 )
 
 const (
@@ -132,7 +132,7 @@ func TestNewCNIServer(t *testing.T) {
 	// Test IPAM_Failure cases
 	cxt := context.Background()
 	networkCfg := generateNetworkConfiguration("testCfg", "0.4.0")
-	requestMsg, _ := newRequest(cni.OKNVersion, args, networkCfg, "", t)
+	requestMsg, _ := newRequest(cni.AntreaVersion, args, networkCfg, "", t)
 	ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
 	// A rollback might be tried if add failed
 	ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(1)
@@ -166,7 +166,7 @@ func TestCheckRequestMessage(t *testing.T) {
 	}
 
 	networkCfg = generateNetworkConfiguration("testCfg", "0.5.1")
-	requestMsg, _ = newRequest(cni.OKNVersion, args, networkCfg, "", t)
+	requestMsg, _ = newRequest(cni.AntreaVersion, args, networkCfg, "", t)
 	_, response = cniServer.checkRequestMessage(&requestMsg)
 	if response == nil {
 		t.Errorf("Failed to identify error request")
@@ -176,7 +176,7 @@ func TestCheckRequestMessage(t *testing.T) {
 
 	networkCfg = generateNetworkConfiguration("testCfg", "0.3.1")
 	networkCfg.IPAM.Type = "unknown"
-	requestMsg, _ = newRequest(cni.OKNVersion, args, networkCfg, "", t)
+	requestMsg, _ = newRequest(cni.AntreaVersion, args, networkCfg, "", t)
 	_, response = cniServer.checkRequestMessage(&requestMsg)
 	if response == nil {
 		t.Errorf("Failed to identify error request")
@@ -452,7 +452,7 @@ func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[
 
 func generateCNIServer(t *testing.T) *CNIServer {
 	supportedVersions := "0.3.0,0.3.1,0.4.0"
-	cniServer := &CNIServer{cniSocket: testSocket, nodeConfig: testNodeConfig, serverVersion: cni.OKNVersion}
+	cniServer := &CNIServer{cniSocket: testSocket, nodeConfig: testNodeConfig, serverVersion: cni.AntreaVersion}
 	cniServer.supportedCNIVersions = buildVersionSet(supportedVersions)
 	return cniServer
 }
@@ -461,7 +461,7 @@ func generateNetworkConfiguration(name string, cniVersion string) *NetworkConfig
 	netCfg := new(NetworkConfig)
 	netCfg.Name = name
 	netCfg.CNIVersion = cniVersion
-	netCfg.Type = "okn"
+	netCfg.Type = "antrea"
 	netCfg.IPAM = ipam.IPAMConfig{Type: testIpamType}
 	return netCfg
 }

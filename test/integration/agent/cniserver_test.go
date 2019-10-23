@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,16 +34,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 
-	"okn/pkg/agent"
-	"okn/pkg/agent/cniserver"
-	"okn/pkg/agent/cniserver/ipam"
-	ipamtest "okn/pkg/agent/cniserver/ipam/testing"
-	cniservertest "okn/pkg/agent/cniserver/testing"
-	openflowtest "okn/pkg/agent/openflow/testing"
-	cnimsg "okn/pkg/apis/cni"
-	"okn/pkg/cni"
-	"okn/pkg/ovs/ovsconfig"
-	ovsconfigtest "okn/pkg/ovs/ovsconfig/testing"
+	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
+	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
+	ipamtest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam/testing"
+	cniservertest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/testing"
+	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
+	cnimsg "github.com/vmware-tanzu/antrea/pkg/apis/cni"
+	"github.com/vmware-tanzu/antrea/pkg/cni"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
 )
 
 const (
@@ -60,7 +60,7 @@ const (
 	netConfStr = `
 	"cniVersion": "%s",
 	"name": "testConfig",
-	"type": "okn"`
+	"type": "antrea"`
 
 	vlan = `,
 	"vlan": %d`
@@ -199,7 +199,7 @@ func (tc testCase) expectedCIDRs() ([]*net.IPNet, []*net.IPNet) {
 
 func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *cnimsg.CniCmdRequestMessage {
 	conf := tc.netConfJSON(dataDir)
-	reqVersion := cni.OKNVersion
+	reqVersion := cni.AntreaVersion
 	return &cnimsg.CniCmdRequestMessage{
 		CniArgs: &cnimsg.CniCmdArgsMessage{
 			ContainerId:          CONTAINERID,
@@ -216,7 +216,7 @@ func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir st
 	conf, err := json.Marshal(config)
 	require.Nil(tc.t, err)
 
-	reqVersion := cni.OKNVersion
+	reqVersion := cni.AntreaVersion
 	return &cnimsg.CniCmdRequestMessage{
 		CniArgs: &cnimsg.CniCmdArgsMessage{
 			ContainerId:          CONTAINERID,
@@ -514,7 +514,7 @@ func getContainerIPMacConfig(ipamResult *current.Result) (string, string) {
 	return containerIP, containerMAC
 }
 
-func TestOknServerFunc(t *testing.T) {
+func TestAntreaServerFunc(t *testing.T) {
 	controller := mock.NewController(t)
 	defer controller.Finish()
 	ipamMock = ipamtest.NewMockIPAMDriver(controller)
@@ -531,7 +531,7 @@ func TestOknServerFunc(t *testing.T) {
 		originalNS, err = testutils.NewNS()
 		require.Nil(t, err)
 
-		dataDir, err = ioutil.TempDir("", "okn_server_test")
+		dataDir, err = ioutil.TempDir("", "antrea_server_test")
 		require.Nil(t, err)
 
 		ipamMock.EXPECT().Del(mock.Any(), mock.Any()).Return(nil).AnyTimes()

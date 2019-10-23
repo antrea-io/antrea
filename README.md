@@ -1,17 +1,17 @@
-# OKN
+# Antrea
 
 ## Getting started
 
-OKN is super easy to install. All the OKN components are containerized and can
+Antrea is super easy to install. All the Antrea components are containerized and can
 be installed using the Kubernetes deployment manifest.
 
 ### Requirements
 
-OKN requires that `NodeIPAMController` and `CNI` network plugin are enabled for
+Antrea requires that `NodeIPAMController` and `CNI` network plugin are enabled for
 the Kubernetes cluster, and it also requires that the Open vSwitch kernel module
 >= version 2.6.0 is installed on all the Kubernetes worker Nodes (which should
-be the case for most popular Linux distributions). OKN packages the Open vSwitch
-agents in the OKN Docker image and runs them in the OKN Agent DaemonSet, and
+be the case for most popular Linux distributions). Antrea packages the Open vSwitch
+agents in the Antrea Docker image and runs them in the Antrea Agent DaemonSet, and
 thus does not require the Open vSwitch agents to be installed on the worker
 Nodes in advance.
 
@@ -36,17 +36,17 @@ vSwitch](https://docs.openvswitch.org/en/latest/intro/install).
 
 ### Installation
 
-To deploy OKN in your Kubernetes cluster, run the following command:
+To deploy Antrea in your Kubernetes cluster, run the following command:
 ```
-kubectl apply -f build/yamls/okn.yml
+kubectl apply -f build/yamls/antrea.yml
 ```
 
-OKN components can also be run manually for development purpose. See [Manual Installation](docs/manual-installation.md)
+Antrea components can also be run manually for development purpose. See [Manual Installation](docs/manual-installation.md)
 for information.
 
 ## Building and testing
 
-The OKN project uses the [Go modules
+The Antrea project uses the [Go modules
 support](https://github.com/golang/go/wiki/Modules) which was introduced in Go
 1.11. It facilitates dependency tracking and no longer requires projects to live
 inside the `$GOPATH`.

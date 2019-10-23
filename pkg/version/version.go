@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ func GetGitSHA() string {
 	return GitSHA
 }
 
-// GetFullVersion returns the version string to be displayed by OKN binaries. It will look like
+// GetFullVersion returns the version string to be displayed by Antrea binaries. It will look like
 // "<major>.<minor>.<patch>" for released versions and "<major>.<minor>.<patch>-<SHA>[.dirty]" for
 // unreleased versions.
 func GetFullVersion() string {

@@ -3,7 +3,7 @@
 source logging
 source daemon_status
 
-CONTAINER_NAME="okn-ovs"
+CONTAINER_NAME="antrea-ovs"
 OVS_DB_FILE="/var/run/openvswitch/conf.db"
 
 set -euo pipefail

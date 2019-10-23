@@ -1,5 +1,5 @@
 /*
-Copyright 2019 OKN Authors
+Copyright 2019 Antrea Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,8 +19,7 @@ limitations under the License.
 package scheme
 
 import (
-	clusterinformationv1beta1 "okn/pkg/apis/clusterinformation/crd/okn/v1beta1"
-
+	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

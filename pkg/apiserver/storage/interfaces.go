@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ type InternalEvent interface {
 type GenEventFunc func(key string, prevObj, obj runtime.Object, resourceVersion uint64) (InternalEvent, error)
 
 // Interface offers a common storage interface for runtime.Object.
-// It's provided for Network Policy controller to store the translated Network Policy resources, then OKN apiserver can
+// It's provided for Network Policy controller to store the translated Network Policy resources, then Antrea apiserver can
 // dispatch events to clients that watch them via the Watch function.
 type Interface interface {
 	// Create adds a new object unless it already exists.

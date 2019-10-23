@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"okn/pkg/util"
+	"github.com/vmware-tanzu/antrea/pkg/util"
 )
 
 // TestDeploy is a "no-op" test that simply performs setup and teardown.
@@ -32,7 +32,7 @@ func TestDeploy(t *testing.T) {
 	defer teardownTest(t, data)
 }
 
-// TestPodAssignIP verifies that OKN allocates IP addresses properly to new Pods. It does this by
+// TestPodAssignIP verifies that Antrea allocates IP addresses properly to new Pods. It does this by
 // deploying a busybox Pod, then waiting for the K8s apiserver to report the new IP address for that
 // Pod, and finally verifying that the IP address is in the Pod Network CIDR for the cluster.
 func TestPodAssignIP(t *testing.T) {
@@ -89,11 +89,11 @@ func TestDeletePod(t *testing.T) {
 	ifName := util.GenerateContainerInterfaceName(podName, testNamespace)
 	t.Logf("Host interface name for Pod is '%s'", ifName)
 
-	var OKNPodName string
-	if OKNPodName, err = data.getOKNPodOnNode(nodeName); err != nil {
-		t.Fatalf("Error when retrieving the name of the OKN Pod running on Node '%s': %v", nodeName, err)
+	var AntreaPodName string
+	if AntreaPodName, err = data.getAntreaPodOnNode(nodeName); err != nil {
+		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
-	t.Logf("The OKN Pod for Node '%s' is '%s'", nodeName, OKNPodName)
+	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, AntreaPodName)
 
 	doesInterfaceExist := func() bool {
 		cmd := fmt.Sprintf("ip link show %s", ifName)
@@ -107,12 +107,12 @@ func TestDeletePod(t *testing.T) {
 
 	doesOVSPortExist := func() bool {
 		cmd := []string{"ovs-vsctl", "port-to-br", ifName}
-		if _, stderr, err := data.runCommandFromPod(OKNNamespace, OKNPodName, OVSContainerName, cmd); err == nil {
+		if _, stderr, err := data.runCommandFromPod(AntreaNamespace, AntreaPodName, OVSContainerName, cmd); err == nil {
 			return true
 		} else if strings.Contains(stderr, "no port named") {
 			return false
 		} else {
-			t.Fatalf("Error when running ovs-vsctl command on Pod '%s': %v", OKNPodName, err)
+			t.Fatalf("Error when running ovs-vsctl command on Pod '%s': %v", AntreaPodName, err)
 		}
 		return true
 	}
@@ -139,8 +139,8 @@ func TestDeletePod(t *testing.T) {
 	}
 }
 
-// TestOKNGracefulExit verifies that OKN Pods can terminate gracefully.
-func TestOKNGracefulExit(t *testing.T) {
+// TestAntreaGracefulExit verifies that Antrea Pods can terminate gracefully.
+func TestAntreaGracefulExit(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -148,11 +148,11 @@ func TestOKNGracefulExit(t *testing.T) {
 	defer teardownTest(t, data)
 
 	var gracePeriodSeconds int64 = 60
-	t.Logf("Deleting one OKN Pod")
-	if timeToDelete, err := data.deleteOneOKNAgentPod(gracePeriodSeconds, defaultTimeout); err != nil {
-		t.Fatalf("Error when deleting OKN Pod: %v", err)
+	t.Logf("Deleting one Antrea Pod")
+	if timeToDelete, err := data.deleteOneAntreaAgentPod(gracePeriodSeconds, defaultTimeout); err != nil {
+		t.Fatalf("Error when deleting Antrea Pod: %v", err)
 	} else if timeToDelete > 20*time.Second {
-		t.Errorf("OKN Pod took too long to delete: %v", timeToDelete)
+		t.Errorf("Antrea Pod took too long to delete: %v", timeToDelete)
 	}
 	// At the moment we only check that the Pod terminates in a reasonable amout of time (less
 	// than the grace period), which means that all containers "honor" the SIGTERM signal.

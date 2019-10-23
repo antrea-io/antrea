@@ -1,13 +1,13 @@
 # Configuration
 
-## okn-agent
+## antrea-agent
 
 ### Command line options
 ```
 --config string                    The path to the configuration file
 --v Level                          number for the log level verbosity
 ```
-Use `okn-agent -h` to see complete options.
+Use `antrea-agent -h` to see complete options.
 
 ### Configuration
 ```yaml
@@ -18,11 +18,11 @@ clientConnection:
   # If not specified, InClusterConfig will be used.
   #kubeconfig: <PATH_TO_KUBE_CONF>
 
-# Name of the OpenVSwitch bridge okn-agent will create and use.
+# Name of the OpenVSwitch bridge antrea-agent will create and use.
 # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
 #ovsBridge: br-int
 
-# Name of the gateway interface for the local Pod subnet. okn-agent will create the interface on the OVS bridge.
+# Name of the gateway interface for the local Pod subnet. antrea-agent will create the interface on the OVS bridge.
 # Make sure it doesn't conflict with your existing interfaces.
 #hostGateway: gw0
 
@@ -32,25 +32,25 @@ clientConnection:
 #tunnelType: vxlan
 
 # Default MTU to use for the host gateway interface and the network interface of
-# each Pod. If omitted, okn-agent will default this value to 1450 to accomodate
+# each Pod. If omitted, antrea-agent will default this value to 1450 to accomodate
 # for tunnel encapsulate overhead.
 #defaultMTU: 1450
 
 # Mount location of the /proc directory. The default is "/host", which is appropriate when
-# okn-agent is run as part of the OKN DaemonSet (and the host's /proc directory is mounted
-# as /host/proc in the okn-agent container). When running okn-agent as a process,
+# antrea-agent is run as part of the Antrea DaemonSet (and the host's /proc directory is mounted
+# as /host/proc in the antrea-agent container). When running antrea-agent as a process,
 # hostProcPathPrefix should be set to "/" in the YAML config.
 #hostProcPathPrefix: /host
 ```
 
-## okn-controller
+## antrea-controller
 
 ### Command line options
 ```
 --config string                    The path to the configuration file
 --v Level                          number for the log level verbosity
 ```
-Use `okn-controller -h` to see complete options.
+Use `antrea-controller -h` to see complete options.
 
 ### Configuration
 ```yaml
@@ -68,8 +68,8 @@ A typical CNI configuration looks like this:
 ```json
   {
     "cniVersion":"0.3.0",
-    "name": "okn",
-    "type": "okn",
+    "name": "antrea",
+    "type": "antrea",
     "ipam": {
       "type": "host-local"
     }
@@ -77,8 +77,8 @@ A typical CNI configuration looks like this:
 ```
 
 You can also set the MTU (for the Pod's network interface) in the CNI
-configuration using `"mtu": <MTU_SIZE>`. When using an `okn.yml` manifest, the
-MTU should be set with the `okn-agent` `defaultMTU` configuration parameter,
+configuration using `"mtu": <MTU_SIZE>`. When using an `antrea.yml` manifest, the
+MTU should be set with the `antrea-agent` `defaultMTU` configuration parameter,
 which will apply to all Pods and the host gateway interface on every Node. It is
 strongly discouraged to set the `"mtu"` field in the CNI configuration to a
 value that does not match the `defaultMTU` parameter, as it may lead to
