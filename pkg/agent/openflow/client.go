@@ -27,7 +27,7 @@ import (
 
 const maxRetryForOFSwitch = 5
 
-//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -destination testing/mock_client.go -package=testing github.com/vmware-tanzu/antrea/pkg/agent/openflow Client
+//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.raw.txt -destination testing/mock_client.go -package=testing github.com/vmware-tanzu/antrea/pkg/agent/openflow Client
 
 // Client is the interface to program OVS flows for entity connectivity of Antrea.
 // TODO: flow sync (e.g. at agent restart), retry at failure, garbage collection mechanisms
