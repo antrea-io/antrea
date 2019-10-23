@@ -30,7 +30,7 @@ test: test-fmt
 test-unit:
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -cover $$(go list github.com/vmware-tanzu/antrea/pkg/... | grep -E -v "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig")
+	$(GO) test -cover github.com/vmware-tanzu/antrea/pkg/...
 
 .PHONY: test-integration
 test-integration:

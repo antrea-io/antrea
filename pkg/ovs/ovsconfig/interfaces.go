@@ -28,6 +28,8 @@ type OVSBridgeClient interface {
 	CreateGenevePort(name string, ofPortRequest int32, remoteIP string) (string, Error)
 	CreateInternalPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error)
 	CreateVXLANPort(name string, ofPortRequest int32, remoteIP string) (string, Error)
+	// DeletePort deletes the port with the provided portUUID. It does not return an error if
+	// the port does not exist.
 	DeletePort(portUUID string) Error
 	DeletePorts(portUUIDList []string) Error
 	GetOFPort(ifName string) (int32, Error)
