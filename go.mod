@@ -43,6 +43,5 @@ require (
 	k8s.io/code-generator v0.0.0-20190612205613-18da4a14b22b // indirect
 	k8s.io/component-base v0.0.0-20190620085130-185d68e6e6ea
 	k8s.io/klog v0.3.3
-	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d // indirect
 	k8s.io/utils v0.0.0-20190607212802-c55fbcfc754a // indirect
 )
