@@ -149,7 +149,7 @@ func TestAntreaGracefulExit(t *testing.T) {
 
 	var gracePeriodSeconds int64 = 60
 	t.Logf("Deleting one Antrea Pod")
-	if timeToDelete, err := data.deleteOneAntreaAgentPod(gracePeriodSeconds, defaultTimeout); err != nil {
+	if timeToDelete, err := data.deleteAntreaAgentOnNode(nodeName(0), gracePeriodSeconds, defaultTimeout); err != nil {
 		t.Fatalf("Error when deleting Antrea Pod: %v", err)
 	} else if timeToDelete > 20*time.Second {
 		t.Errorf("Antrea Pod took too long to delete: %v", timeToDelete)
@@ -157,4 +157,67 @@ func TestAntreaGracefulExit(t *testing.T) {
 	// At the moment we only check that the Pod terminates in a reasonable amout of time (less
 	// than the grace period), which means that all containers "honor" the SIGTERM signal.
 	// TODO: ideally we would be able to also check the exit code but it may not be possible.
+}
+
+// TestIPAMRestart checks that when the Antrea agent is restarted the information about which IP
+// address is already allocated is not lost. It does that by creating a first Pod and retrieving
+// its IP address, restarting the Antrea agent, then creating a second Pod and retrieving its IP
+// address. If the 2 IP addresses match, then it is an error. This is not a perfect test, as it
+// assumes that IP addresses are assigned in-order and not randomly.
+func TestIPAMRestart(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	nodeName := nodeName(0)
+	podName1 := randPodName("test-pod-")
+	podName2 := randPodName("test-pod-")
+	pods := make([]string, 0, 2)
+	var podIP1, podIP2 string
+
+	defer func() {
+		for _, pod := range pods {
+			deletePodWrapper(t, data, pod)
+		}
+	}()
+
+	createPodAndGetIP := func(podName string) (string, error) {
+		t.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
+		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
+			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
+			return "", err
+		}
+		pods = append(pods, podName)
+		if podIP, err := data.podWaitForIP(defaultTimeout, podName); err != nil {
+			return "", err
+		} else {
+			return podIP, nil
+		}
+	}
+
+	if podIP1, err = createPodAndGetIP(podName1); err != nil {
+		t.Fatalf("Failed to retrieve IP for Pod '%s': %v", podName1, err)
+	}
+	t.Logf("Pod '%s' has IP address %s", podName1, podIP1)
+
+	t.Logf("Restarting okn-agent on Node '%s'", nodeName)
+	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
+		t.Fatalf("Error when restarting okn-agent on Node '%s': %v", nodeName, err)
+	}
+
+	t.Logf("Checking that all Antrea DaemonSet Pods are running")
+	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
+		t.Fatalf("Error when waiting for Antrea Pods: %v", err)
+	}
+
+	if podIP2, err = createPodAndGetIP(podName2); err != nil {
+		t.Fatalf("Failed to retrieve IP for Pod '%s': %v", podName2, err)
+	}
+	t.Logf("Pod '%s' has IP address %s", podName2, podIP2)
+
+	if podIP1 == podIP2 {
+		t.Errorf("Pods '%s' and '%s' were assigned the same IP %s", podName1, podName2, podIP1)
+	}
 }
