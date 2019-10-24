@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package apis contains API definitions used to interface with the different OKN components,
+// Package apis contains API definitions used to interface with the different Antrea components,
 // along with files auto-generated from these API definitions.
 package apis

@@ -1,4 +1,4 @@
-module okn
+module github.com/vmware-tanzu/antrea
 
 go 1.12
 
@@ -44,7 +44,6 @@ require (
 	k8s.io/apimachinery v0.0.0-20190313205120-d7deff9243b1
 	k8s.io/apiserver v0.0.0-20190313205120-8b27c41bdbb1
 	k8s.io/client-go v11.0.0+incompatible
-	k8s.io/code-generator v0.0.0-20190704094409-6c2a4329ac29 // indirect
 	k8s.io/component-base v0.0.0-20190314000054-4a91899592f4
 	k8s.io/klog v0.3.3
 	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d // indirect

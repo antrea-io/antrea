@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,5 +13,5 @@
 // limitations under the License.
 
 // Package version provides information about the current semantic version for
-// the OKN project.
+// the Antrea project.
 package version

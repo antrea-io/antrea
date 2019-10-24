@@ -26,3 +26,11 @@ mocks:
   stage: test
   script:
     - find . -name '*_mock.go' -delete && make mocks && test -z "$(git status --porcelain pkg)"
+
+# a one liner that checks that there is no occurence of "okn" in any version controlled file or in
+# any filepath. We exclude the go.sum from the first check since we got "unlucky" and one of the
+# checksums includes "okN".
+okn-rename:
+  stage: test
+  script:
+    - ! git grep -q -i okn -- './*' ':!go.sum' && ! git ls-files | grep -i -q okn

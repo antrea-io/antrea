@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package apiserver contains code to create kubernetes-like API server for okn-controller.
-// The API server provides REST APIs supporting listing and watching OKN resources.
+// Package apiserver contains code to create kubernetes-like API server for antrea-controller.
+// The API server provides REST APIs supporting listing and watching Antrea resources.
 package apiserver

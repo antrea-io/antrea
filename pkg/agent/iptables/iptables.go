@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,23 +29,23 @@ const (
 	MasqueradeTarget = "MASQUERADE"
 	MarkTarget       = "MARK"
 
-	ForwardChain        = "FORWARD"
-	PostRoutingChain    = "POSTROUTING"
-	OKNForwardChain     = "OKN-FORWARD"
-	OKNPostRoutingChain = "OKN-POSTROUTING"
+	ForwardChain           = "FORWARD"
+	PostRoutingChain       = "POSTROUTING"
+	AntreaForwardChain     = "ANTREA-FORWARD"
+	AntreaPostRoutingChain = "ANTREA-POSTROUTING"
 )
 
 var (
 	// The bit of the mark space to mark packets requiring SNAT. It must be within the
 	// range [0, 31] and be different from other mark bits that are used by Kubernetes.
 	// Kubernetes uses 14th for SNAT and 15th for dropping by default.
-	// OKN uses 10th for SNAT.
+	// Antrea uses 10th for SNAT.
 	masqueradeBit   = uint(10)
 	masqueradeValue = 1 << masqueradeBit
 	masqueradeMark  = fmt.Sprintf("%#08x/%#08x", masqueradeValue, masqueradeValue)
 )
 
-// Client knows how to set up host iptables rules OKN requires.
+// Client knows how to set up host iptables rules Antrea requires.
 type Client struct {
 	ipt         *iptables.IPTables
 	hostGateway string
@@ -79,24 +79,24 @@ type rule struct {
 	comment string
 }
 
-// SetupRules ensures the iptables rules OKN requires are set up.
+// SetupRules ensures the iptables rules Antrea requires are set up.
 // It's idempotent and can be safely called on every startup.
 func (c *Client) SetupRules() error {
 	rules := []rule{
-		// Append OKN-FORWARD chain which contains OKN related forwarding rules to FORWARD chain.
-		{FilterTable, ForwardChain, nil, OKNForwardChain, nil, "okn: jump to okn forwarding rules"},
+		// Append ANTREA-FORWARD chain which contains Antrea related forwarding rules to FORWARD chain.
+		{FilterTable, ForwardChain, nil, AntreaForwardChain, nil, "Antrea: jump to Antrea forwarding rules"},
 		// Accept inter-Pod traffic which is received and sent via host gateway interface.
 		// Note: Since L3 forwarding flows are installed, direct inter-Pod traffic won't go through host gateway interface,
 		// only Pod-Service-Pod traffic will go through it.
-		{FilterTable, OKNForwardChain, []string{"-i", c.hostGateway, "-o", c.hostGateway}, AcceptTarget, nil, "okn: accept inter pod traffic"},
+		{FilterTable, AntreaForwardChain, []string{"-i", c.hostGateway, "-o", c.hostGateway}, AcceptTarget, nil, "Antrea: accept inter pod traffic"},
 		// Mark Pod-to-external traffic which are received via host gateway interface but not sent via it for later masquerading in NAT table.
-		{FilterTable, OKNForwardChain, []string{"-i", c.hostGateway, "!", "-o", c.hostGateway}, MarkTarget, []string{"--set-xmark", masqueradeMark}, "okn: mark pod to external traffic"},
+		{FilterTable, AntreaForwardChain, []string{"-i", c.hostGateway, "!", "-o", c.hostGateway}, MarkTarget, []string{"--set-xmark", masqueradeMark}, "Antrea: mark pod to external traffic"},
 		// Accept Pod-to-external traffic which are received via host gateway interface but not sent via it.
-		{FilterTable, OKNForwardChain, []string{"-i", c.hostGateway, "!", "-o", c.hostGateway}, AcceptTarget, nil, "okn: accept pod to external traffic"},
-		// Append OKN-POSTROUTING chain which contains OKN related postrouting rules to POSTROUTING chain.
-		{NATTable, PostRoutingChain, nil, OKNPostRoutingChain, nil, "okn: jump to okn postrouting rules"},
+		{FilterTable, AntreaForwardChain, []string{"-i", c.hostGateway, "!", "-o", c.hostGateway}, AcceptTarget, nil, "Antrea: accept pod to external traffic"},
+		// Append ANTREA-POSTROUTING chain which contains Antrea related postrouting rules to POSTROUTING chain.
+		{NATTable, PostRoutingChain, nil, AntreaPostRoutingChain, nil, "Antrea: jump to Antrea postrouting rules"},
 		// Masquerade traffic requiring SNAT (has masqueradeMark set).
-		{NATTable, OKNPostRoutingChain, []string{"-m", "mark", "--mark", masqueradeMark}, MasqueradeTarget, nil, "okn: masquerade traffic requiring SNAT"},
+		{NATTable, AntreaPostRoutingChain, []string{"-m", "mark", "--mark", masqueradeMark}, MasqueradeTarget, nil, "Antrea: masquerade traffic requiring SNAT"},
 	}
 
 	// Ensure all the chains involved exist.

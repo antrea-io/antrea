@@ -1,5 +1,5 @@
 /*
-Copyright 2019 OKN Authors
+Copyright 2019 Antrea Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,10 +19,9 @@ limitations under the License.
 package fake
 
 import (
-	clientset "okn/pkg/client/clientset/versioned"
-	clusterinformationv1beta1 "okn/pkg/client/clientset/versioned/typed/okn/v1beta1"
-	fakeclusterinformationv1beta1 "okn/pkg/client/clientset/versioned/typed/okn/v1beta1/fake"
-
+	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/antrea/v1beta1"
+	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/antrea/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

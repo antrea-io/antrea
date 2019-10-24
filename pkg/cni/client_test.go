@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	cnipb "okn/pkg/apis/cni"
+	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni"
 )
 
 type testClient struct {
@@ -116,7 +116,7 @@ func TestMismatchVersionAdd(t *testing.T) {
 	enableTestClient(t, badProtoVersion, normal, normal)
 	defer disableTestClient()
 
-	stdinData := `{ "name":"okn-cni", "some": "config", "cniVersion": "9.8.7" }`
+	stdinData := `{ "name":"antrea-cni", "some": "config", "cniVersion": "9.8.7" }`
 	err := ActionAdd.Request(&skel.CmdArgs{
 		ContainerID: "some-container-id",
 		Netns:       "/some/netns/path",
@@ -134,7 +134,7 @@ func TestMismatchVersionDel(t *testing.T) {
 	enableTestClient(t, normal, normal, badProtoVersion)
 	defer disableTestClient()
 
-	stdinData := `{ "name":"okn-cni", "some": "config", "cniVersion": "9.8.7" }`
+	stdinData := `{ "name":"antrea-cni", "some": "config", "cniVersion": "9.8.7" }`
 	err := ActionDel.Request(&skel.CmdArgs{
 		ContainerID: "some-container-id",
 		Netns:       "/some/netns/path",
@@ -152,7 +152,7 @@ func TestSuccessAdd(t *testing.T) {
 	enableTestClient(t, normal, normal, normal)
 	defer disableTestClient()
 
-	stdinData := `{ "name":"okn-cni", "some": "config", "cniVersion": "9.8.7" }`
+	stdinData := `{ "name":"antrea-cni", "some": "config", "cniVersion": "9.8.7" }`
 	err := ActionAdd.Request(&skel.CmdArgs{
 		ContainerID: "some-container-id",
 		Netns:       "/some/netns/path",
@@ -170,7 +170,7 @@ func TestSuccessDel(t *testing.T) {
 	enableTestClient(t, normal, normal, normal)
 	defer disableTestClient()
 
-	stdinData := `{ "name":"okn-cni", "some": "config", "cniVersion": "9.8.7" }`
+	stdinData := `{ "name":"antrea-cni", "some": "config", "cniVersion": "9.8.7" }`
 	err := ActionDel.Request(&skel.CmdArgs{
 		ContainerID: "some-container-id",
 		Netns:       "/some/netns/path",

@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"google.golang.org/grpc"
 
-	cnipb "okn/pkg/apis/cni"
+	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni"
 )
 
 type Action int
@@ -35,8 +35,8 @@ const (
 )
 
 const (
-	OKNCNISocketAddr = "/var/run/okn/cni.sock"
-	OKNVersion       = "1.0.0"
+	AntreaCNISocketAddr = "/var/run/antrea/cni.sock"
+	AntreaVersion       = "1.0.0"
 )
 
 // To allow for testing with a fake client.
@@ -44,7 +44,7 @@ var withClient = rpcClient
 
 func rpcClient(f func(client cnipb.CniClient) error) error {
 	conn, err := grpc.Dial(
-		OKNCNISocketAddr,
+		AntreaCNISocketAddr,
 		grpc.WithInsecure(),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (conn net.Conn, e error) {
 			return net.Dial("unix", addr)
@@ -57,7 +57,7 @@ func rpcClient(f func(client cnipb.CniClient) error) error {
 	return f(cnipb.NewCniClient(conn))
 }
 
-// Request requests the okn-agent to execute the specified action with the provided arguments via RPC.
+// Request requests the antrea-agent to execute the specified action with the provided arguments via RPC.
 // If successful, it outputs the result to stdout and returns nil. Otherwise types.Error is returned.
 func (a Action) Request(arg *skel.CmdArgs) error {
 	return withClient(func(client cnipb.CniClient) error {
@@ -70,7 +70,7 @@ func (a Action) Request(arg *skel.CmdArgs) error {
 				NetworkConfiguration: arg.StdinData,
 				Path:                 arg.Path,
 			},
-			Version: OKNVersion,
+			Version: AntreaVersion,
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

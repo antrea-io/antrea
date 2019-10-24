@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
-	oknstorage "okn/pkg/apiserver/storage"
+	antreastorage "github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 )
 
 type watchersMap map[int]*storeWatcher
@@ -42,14 +42,14 @@ type store struct {
 	// It records the maximum number of events backed up in incoming channel that have been seen.
 	incomingHWM storage.HighWaterMark
 	// incoming stores the incoming events that should be dispatched to watchers.
-	incoming chan oknstorage.InternalEvent
+	incoming chan antreastorage.InternalEvent
 
 	// storage is the underlying storage.
 	storage cache.Indexer
 	// keyFunc is used to get a key in the underlying storage for a given object.
 	keyFunc cache.KeyFunc
 	// genEventFunc is used to generate InternalEvent from update of an object.
-	genEventFunc oknstorage.GenEventFunc
+	genEventFunc antreastorage.GenEventFunc
 
 	// resourceVersion up to which the store has generated.
 	resourceVersion uint64
@@ -66,11 +66,11 @@ type store struct {
 // KeyFunc decides how to get the key from an object.
 // Indexers decides how to build indices for an object.
 // GenEventFunc decides how to generate InternalEvent for an update of an object.
-func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc oknstorage.GenEventFunc) *store {
+func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc) *store {
 	stopCh := make(chan struct{})
 	storage := cache.NewIndexer(keyFunc, indexers)
 	s := &store{
-		incoming:     make(chan oknstorage.InternalEvent, 100),
+		incoming:     make(chan antreastorage.InternalEvent, 100),
 		storage:      storage,
 		stopCh:       stopCh,
 		watchers:     make(map[int]*storeWatcher),
@@ -89,7 +89,7 @@ func (s *store) nextResourceVersion() uint64 {
 	return s.resourceVersion
 }
 
-func (s *store) processEvent(event oknstorage.InternalEvent) {
+func (s *store) processEvent(event antreastorage.InternalEvent) {
 	if curLen := int64(len(s.incoming)); s.incomingHWM.Update(curLen) {
 		// Monitor if this gets backed up, and how much.
 		klog.V(1).Infof("%v objects queued in incoming channel", curLen)
@@ -209,7 +209,7 @@ func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Sele
 	s.eventMutex.RLock()
 	defer s.eventMutex.RUnlock()
 	allObjects := s.storage.List()
-	initEvents := make([]oknstorage.InternalEvent, len(allObjects))
+	initEvents := make([]antreastorage.InternalEvent, len(allObjects))
 	for i, obj := range allObjects {
 		// Objects retrieved from storage have been verified with keyFunc when they are inserted.
 		key, _ := s.keyFunc(obj)
@@ -224,7 +224,7 @@ func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Sele
 		s.watcherMutex.Lock()
 		defer s.watcherMutex.Unlock()
 
-		w := newStoreWatcher(10, &oknstorage.Selectors{key, labelSelector, fieldSelector}, forgetWatcher(s, s.watcherIdx))
+		w := newStoreWatcher(10, &antreastorage.Selectors{key, labelSelector, fieldSelector}, forgetWatcher(s, s.watcherIdx))
 		s.watchers[s.watcherIdx] = w
 		s.watcherIdx++
 		return w
@@ -259,7 +259,7 @@ func (s *store) dispatchEvents() {
 	}
 }
 
-func (s *store) dispatchEvent(event oknstorage.InternalEvent) {
+func (s *store) dispatchEvent(event antreastorage.InternalEvent) {
 	s.watcherMutex.Lock()
 	defer s.watcherMutex.Unlock()
 	// TODO: Optimize this to dispatch the event based on watchers' selector.

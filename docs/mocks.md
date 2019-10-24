@@ -1,15 +1,15 @@
 # Mocks
 
-OKN uses the [GoMock](https://github.com/golang/mock) framework for its unit
+Antrea uses the [GoMock](https://github.com/golang/mock) framework for its unit
 tests.
 
 The following interfaces are mocked at the moment:
- * `okn/pkg/ovs/ovsconfig.OVSBridgeClient` is mocked as
-   `okn/pkg/ovs/ovsconfig/testing.MockOVSBridgeClient`
- * `okn/pkg/agent/cniserver/ipam.IPAMDriver` is mocked as
-   `okn/pkg/agent/cniserver/ipam/testing.MockIPAMDriver`
- * `okn/pkg/agent/openflow.Client` is mocked as
-   `okn/pkg/agent/openflow/testing.MockClient`
+ * `github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig.OVSBridgeClient` is mocked as
+   `github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing.MockOVSBridgeClient`
+ * `github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam.IPAMDriver` is mocked as
+   `github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam/testing.MockIPAMDriver`
+ * `github.com/vmware-tanzu/antrea/pkg/agent/openflow.Client` is mocked as
+   `github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing.MockClient`
 
 If you add or modify interfaces that need to be mocked, please add or update
 the `go:generate` comment (to invoke mockgen) right above the interface
@@ -19,7 +19,7 @@ sub-package called `testing`. For example, to mock interface `Iface` defined in
 definition:
 
 ```
-//go:generate mockgen -copyright_file <RELATIVE PATH TO>/hack/boilerplate/license_header.go.txt -destination testing/mock_example.go -package=testing okn/pkg/foo Iface
+//go:generate mockgen -copyright_file <RELATIVE PATH TO>/hack/boilerplate/license_header.go.txt -destination testing/mock_example.go -package=testing github.com/vmware-tanzu/antrea/pkg/foo Iface
 ```
 
 You can then re-generate the mock source code (with `mockgen`) by invoking

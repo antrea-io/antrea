@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"net"
 
-	binding "okn/pkg/ovs/openflow"
+	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
 const (

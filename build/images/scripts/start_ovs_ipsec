@@ -3,7 +3,7 @@
 source logging
 source daemon_status
 
-CONTAINER_NAME="okn-ovs-ipsec"
+CONTAINER_NAME="antrea-ovs-ipsec"
 
 set -euo pipefail
 

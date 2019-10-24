@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2019 OKN Authors
+# Copyright 2019 Antrea Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,5 +21,7 @@ go install k8s.io/code-generator/cmd/{defaulter-gen,client-gen,lister-gen,inform
 # re-generate both client and deepcopy for monitoring api
 # position generate client to its desired location
 export GOPATH=`go env GOPATH`
-$GOPATH/bin/client-gen --clientset-name "versioned" --input-base "" --input "okn/pkg/apis/clusterinformation/crd/okn/v1beta1"  --output-base "$(dirname "${BASH_SOURCE[0]}")/../../"  --output-package "okn/pkg/client/clientset" --go-header-file hack/boilerplate/license_header.go.txt
-$GOPATH/bin/deepcopy-gen --input-dirs "./pkg/apis/clusterinformation/crd/okn/v1beta1" --bounding-dirs "okn/pkg/apis/clusterinformation/crd/okn/v1beta1" -O zz_generated.deepcopy --output-base ""  --go-header-file hack/boilerplate/license_header.go.txt
+$GOPATH/bin/client-gen --clientset-name "versioned" --input-base "" --input "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1"  --output-base .crdtmp  --output-package "github.com/vmware-tanzu/antrea/pkg/client/clientset" --go-header-file hack/boilerplate/license_header.go.txt
+$GOPATH/bin/deepcopy-gen --input-dirs "./pkg/apis/clusterinformation/crd/antrea/v1beta1" --bounding-dirs "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1" -O zz_generated.deepcopy --output-base ""  --go-header-file hack/boilerplate/license_header.go.txt
+cp -r .crdtmp/github.com/vmware-tanzu/antrea/* .
+rm -rf .crdtmp

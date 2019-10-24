@@ -1,4 +1,4 @@
-// Copyright 2019 OKN Authors
+// Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types/current"
-	"okn/pkg/apis/cni"
+	"github.com/vmware-tanzu/antrea/pkg/apis/cni"
 )
 
 var ipamDrivers map[string]IPAMDriver
@@ -30,7 +30,7 @@ type IPAMConfig struct {
 	Gateway string `json:"gateway,omitempty"`
 }
 
-//go:generate mockgen -copyright_file ../../../../hack/boilerplate/license_header.go.txt -destination testing/mock_ipam.go -package=testing okn/pkg/agent/cniserver/ipam IPAMDriver
+//go:generate mockgen -copyright_file ../../../../hack/boilerplate/license_header.go.txt -destination testing/mock_ipam.go -package=testing github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam IPAMDriver
 
 type IPAMDriver interface {
 	Add(args *invoke.Args, networkConfig []byte) (*current.Result, error)

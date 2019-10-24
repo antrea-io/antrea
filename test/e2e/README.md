@@ -1,4 +1,4 @@
-# Running the OKN end-to-end tests
+# Running the Antrea end-to-end tests
 
 ## Creating the test Kubernetes cluster
 
@@ -45,8 +45,8 @@ messages.
 Use the following Bash scripts to manage the Kubernetes nodes with Vagrant:
 
  * `./infra/vagrant/provision.sh`: create the required VMs and provision them
- * `./infra/vagrant/push_okn.sh`: load the okn-ubuntu Docker image to each node,
-   along with the OKN deployment YAML
+ * `./infra/vagrant/push_antrea.sh`: load the antrea-ubuntu Docker image to each node,
+   along with the Antrea deployment YAML
  * `./infra/vagrant/suspend.sh`: suspend all node VMs
  * `./infra/vagrant/resume.sh`: resume all node VMs
  * `./infra/vagrant/destroy.sh`: destoy all node VMs, you will need to run
@@ -65,9 +65,9 @@ all the nodes.
 
 ## Running the tests
 
-Make sure that your cluster was provisioned and that the OKN build artifacts
+Make sure that your cluster was provisioned and that the Antrea build artifacts
 were pushed to all the nodes. You can then run the tests from the top-level
-directory with `go test -v okn/test/e2e` (the `-v` enables verbose output).
+directory with `go test -v github.com/vmware-tanzu/antrea/test/e2e` (the `-v` enables verbose output).
 
 If you are running the test for the first time and are using the scripts we
 provide under `infra/vagrant` to provision your Kubernetes cluster, you will
@@ -75,26 +75,26 @@ therefore need the following steps:
 
 1. `./infra/vagrant/provision.sh`
 2. `make`
-3. `./infra/vagrant/push_okn.sh`
-4. `go test -v okn/test/e2e`
+3. `./infra/vagrant/push_antrea.sh`
+4. `go test -v github.com/vmware-tanzu/antrea/test/e2e`
 
-If you need to test an updated version of OKN, just run
-`./infra/vagrant/push_okn.sh` and then run the tests again.
+If you need to test an updated version of Antrea, just run
+`./infra/vagrant/push_antrea.sh` and then run the tests again.
 
 By default, if a test case fails, we write some useful debug information to a
 temporary directory on disk. This information includes the detailed description
 (obtained with `kubectl describe`) and the logs (obtained with `kubectl logs`)
-of each OKN Pod at the time the test case exited. When running the tests in
+of each Antrea Pod at the time the test case exited. When running the tests in
 verbose mode (i.e. with `-v`), the test logs will tell you the location of that
 temporary directory. You may also choose your own directory using
 `--logs-export-dir`. For example:
 
 ```bash
-mkdir okn-test-logs
-go test -count=1 -v -run=TestDeletePod okn/test/e2e --logs-export-dir `pwd`/okn-test-logs
+mkdir antrea-test-logs
+go test -count=1 -v -run=TestDeletePod github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs
 ```
 
-By default the description and logs for OKN Pods are only written to disk if a
+By default the description and logs for Antrea Pods are only written to disk if a
 test fails. You can choose to dump this information unconditionally with
 `--logs-export-on-success`.
 

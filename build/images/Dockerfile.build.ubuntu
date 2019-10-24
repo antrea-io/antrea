@@ -23,19 +23,19 @@ RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-2.11.1.tar.gz 
        openvswitch-ipsec_*.deb ovs-debs/
 
 
-FROM golang:1.12 as okn-build
+FROM golang:1.12 as antrea-build
 
-COPY . /okn
+COPY . /antrea
 
-WORKDIR /okn
+WORKDIR /antrea
 
 RUN make bin
 
 
 FROM ubuntu:18.04
 
-LABEL maintainer="OKN <okn@github.com>"
-LABEL description="A docker image to deploy the OKN CNI. Takes care of building the OKN binaries as part of building the image."
+LABEL maintainer="Antrea <dev@antrea.io>"
+LABEL description="A docker image to deploy the Antrea CNI. Takes care of building the Antrea binaries as part of building the image."
 
 USER root
 
@@ -53,5 +53,5 @@ RUN apt-get update && \
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
 
-COPY --from=okn-build /okn/build/images/scripts/* /usr/local/bin/
-COPY --from=okn-build /okn/bin/* /usr/local/bin/
+COPY --from=antrea-build /antrea/build/images/scripts/* /usr/local/bin/
+COPY --from=antrea-build /antrea/bin/* /usr/local/bin/
