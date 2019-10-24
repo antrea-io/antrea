@@ -202,9 +202,9 @@ func TestIPAMRestart(t *testing.T) {
 	}
 	t.Logf("Pod '%s' has IP address %s", podName1, podIP1)
 
-	t.Logf("Restarting okn-agent on Node '%s'", nodeName)
+	t.Logf("Restarting antrea-agent on Node '%s'", nodeName)
 	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
-		t.Fatalf("Error when restarting okn-agent on Node '%s': %v", nodeName, err)
+		t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
 	}
 
 	t.Logf("Checking that all Antrea DaemonSet Pods are running")
