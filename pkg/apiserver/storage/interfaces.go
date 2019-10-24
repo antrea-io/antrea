@@ -19,7 +19,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
@@ -54,26 +53,26 @@ type InternalEvent interface {
 // GenEventFunc generates InternalEvent from the add/update/delete of an object.
 // Only a single InternalEvent will be generated for each add/update/delete, and the InternalEvent itself should be
 // immutable during its conversion to *watch.Event.
-type GenEventFunc func(key string, prevObj, obj runtime.Object, resourceVersion uint64) (InternalEvent, error)
+type GenEventFunc func(key string, prevObj, obj interface{}, resourceVersion uint64) (InternalEvent, error)
 
 // Interface offers a common storage interface for runtime.Object.
 // It's provided for Network Policy controller to store the translated Network Policy resources, then Antrea apiserver can
 // dispatch events to clients that watch them via the Watch function.
 type Interface interface {
 	// Create adds a new object unless it already exists.
-	Create(obj runtime.Object) error
+	Create(obj interface{}) error
 
 	// Update updates an object unless it doesn't exist.
-	Update(obj runtime.Object) error
+	Update(obj interface{}) error
 
 	// Get gets an object that has the specified key.
-	Get(key string) (runtime.Object, bool, error)
+	Get(key string) (interface{}, bool, error)
 
 	// GetByIndex gets a list of objects that has the specified index.
-	GetByIndex(indexName, indexKey string) ([]runtime.Object, error)
+	GetByIndex(indexName, indexKey string) ([]interface{}, error)
 
 	// List gets a list of all objects.
-	List() []runtime.Object
+	List() []interface{}
 
 	// Delete removes an object that has specified key.
 	Delete(key string) error

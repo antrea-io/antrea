@@ -86,26 +86,26 @@ func (event *testEvent) GetResourceVersion() uint64 {
 }
 
 // testGenEvent generates *testEvent
-func testGenEvent(key string, prevObj, obj runtime.Object, resourceVersion uint64) (antreastorage.InternalEvent, error) {
+func testGenEvent(key string, prevObj, obj interface{}, resourceVersion uint64) (antreastorage.InternalEvent, error) {
 	if reflect.DeepEqual(prevObj, obj) {
 		return nil, nil
 	}
 	event := &testEvent{Key: key, ResourceVersion: resourceVersion}
 	if prevObj != nil {
-		prevObjLabels, prevObjFields, err := storage.DefaultClusterScopedAttr(prevObj)
+		prevObjLabels, prevObjFields, err := storage.DefaultClusterScopedAttr(prevObj.(runtime.Object))
 		if err != nil {
 			return nil, err
 		}
-		event.PrevObject = prevObj
+		event.PrevObject = prevObj.(runtime.Object)
 		event.PrevObjLabels = prevObjLabels
 		event.PrevObjFields = prevObjFields
 	}
 	if obj != nil {
-		objLabels, objFields, err := storage.DefaultClusterScopedAttr(obj)
+		objLabels, objFields, err := storage.DefaultClusterScopedAttr(obj.(runtime.Object))
 		if err != nil {
 			return nil, err
 		}
-		event.Object = obj
+		event.Object = obj.(runtime.Object)
 		event.ObjLabels = objLabels
 		event.ObjFields = objFields
 	}
@@ -150,7 +150,7 @@ func TestRamStoreCRUD(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, nil)
 
 		testCase.operations(store)
 		obj, _, err := store.Get(key)
@@ -223,8 +223,8 @@ func TestRamStoreGetByIndex(t *testing.T) {
 		if err != nil {
 			t.Errorf("%d: failed to get object by index: %v", i, err)
 		}
-		if !reflect.DeepEqual(objs, testCase.expected) {
-			t.Errorf("%d: get unexpected object: %v", i, objs)
+		if !assert.ElementsMatch(t, testCase.expected, objs) {
+			t.Errorf("%d: Expected objects:\n %v\n do not match objects retrieved from GetByIndex operation:\n %v", i, testCase.expected, objs)
 		}
 	}
 }
@@ -268,7 +268,7 @@ func TestRamStoreList(t *testing.T) {
 			t.Errorf("%d: Unexpected number of objects returned for List operation. %d != %d", i, len(objs), len(testCase.expected))
 		}
 		if !assert.ElementsMatch(t, testCase.expected, objs) {
-			t.Errorf("%d: Expected objects %v do not match objects retrieved from List operation: %v", i, testCase.expected, objs)
+			t.Errorf("%d: Expected objects:\n %v\n do not match objects retrieved from List operation:\n %v", i, testCase.expected, objs)
 		}
 	}
 }
