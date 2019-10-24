@@ -1,10 +1,11 @@
 # go options
-GO          ?= go
-LDFLAGS     :=
-GOFLAGS     :=
-BINDIR      := $(CURDIR)/bin
-GO_FILES := $(shell find . -name '*.go')
-GOPATH      ?= $$(go env GOPATH)
+GO              ?= go
+LDFLAGS         :=
+GOFLAGS         :=
+BINDIR          := $(CURDIR)/bin
+GO_FILES        := $(shell find . -name '*.go')
+GOPATH          ?= $$(go env GOPATH)
+DOCKER_CACHE    := $(CURDIR)/.cache
 
 .PHONY: all
 all: bin build
@@ -13,9 +14,21 @@ include versioning.mk
 
 LDFLAGS += $(VERSION_LDFLAGS)
 
-.PHONY: bin
+UNAME_S := $(shell uname -s)
+.PHONY: bin test-unit test-integration
+
+ifeq ($(UNAME_S),Linux)
+bin: .linux-bin
+test-unit: .linux-test-unit
+test-integration: .linux-test-integration
+else
 bin:
-	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
+	$(error Cannot use target 'bin' on a non-Linux OS, but you can build Antrea with 'docker-bin')
+test-unit:
+	$(error Cannot use target 'test-unit' on a non-Linux OS, but you can run unit tests with 'docker-test-unit')
+test-integration:
+	$(error Cannot use target 'test-integration' on a non-Linux OS)
+endif
 
 .PHONY: build
 build: bin
@@ -26,14 +39,48 @@ test: build
 test: test-unit
 test: test-fmt
 
-.PHONY: test-unit
-test-unit:
+$(DOCKER_CACHE):
+	@mkdir -p $@/gopath
+	@mkdir -p $@/gocache
+
+DOCKER_ENV := \
+	@docker run --rm \
+		-e "GOCACHE=/tmp/gocache" \
+		-e "GOPATH=/tmp/gopath" \
+		-w /usr/src/github.com/vmware-tanzu/antrea \
+		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
+		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
+		-v $(CURDIR):/usr/src/github.com/vmware-tanzu/antrea \
+		golang:1.12
+
+.PHONY: docker-bin
+docker-bin: $(DOCKER_CACHE)
+	$(DOCKER_ENV) make bin
+
+.PHONY: docker-test-unit
+docker-test-unit: $(DOCKER_CACHE)
+	@$(DOCKER_ENV) make test-unit
+
+.PHONY: docker-tidy
+docker-tidy: $(DOCKER_CACHE)
+	@$(DOCKER_ENV) go mod tidy
+
+.PHONY: .linux-bin
+.linux-bin:
+	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
+
+.PHONY: .linux-test-unit
+.linux-test-unit:
 	@echo
 	@echo "==> Running unit tests <=="
 	$(GO) test -cover github.com/vmware-tanzu/antrea/pkg/...
 
-.PHONY: test-integration
-test-integration:
+.PHONY: tidy
+tidy:
+	@$(GO) mod tidy
+
+.PHONY: .linux-test-integration
+.linux-test-integration:
 	@echo
 	@echo "==> Running integration tests <=="
 	@echo "SOME TESTS WILL FAIL IF NOT RUN AS ROOT!"
@@ -57,6 +104,7 @@ lint:
 .PHONY: clean
 clean:
 	@rm -rf $(BINDIR)
+	@rm -rf $(DOCKER_CACHE)
 	@rm -f .mockgen .protoc
 
 # Install a specific version of gomock to avoid generating different source code
