@@ -9,11 +9,16 @@ be installed using the Kubernetes deployment manifest.
 
 Antrea requires that `NodeIPAMController` and `CNI` network plugin are enabled for
 the Kubernetes cluster, and it also requires that the Open vSwitch kernel module
->= version 2.6.0 is installed on all the Kubernetes worker Nodes (which should
-be the case for most popular Linux distributions). Antrea packages the Open vSwitch
-agents in the Antrea Docker image and runs them in the Antrea Agent DaemonSet, and
-thus does not require the Open vSwitch agents to be installed on the worker
-Nodes in advance.
+is installed on all the Kubernetes worker Nodes. Most popular Linux distros
+should already include the OVS module good for Antrea. If the OVS module is from
+the Linux upstream, a version >= 4.4 is required (Red Hat Enterprise Linux 7.x
+and CentOS 7.x use kernel 3.10, but they back port OVS modules changes and
+should work with Antrea since version 7.4); if the OVS module is built from the
+OVS source tree, a version >= 2.6.0 is required.
+
+Antrea packages the OVS daemons in the Antrea Docker image and runs them in the
+Antrea Agent DaemonSet, and thus does not require the OVS daemons to be
+installed on the worker Nodes in advance.
 
 * To enable `NodeIPAMController`, `kube-controller-manager` should be started
 with the following flags:
@@ -30,9 +35,8 @@ with the following flags:
 
   If `kubeadm` is used, `CNI` network plugin is enabled by default.
 
-* In case a Node does not have the Open vSwitch kernel module >= version 2.6.0
-installed, you can install it following the instructions at: [Installing Open
-vSwitch](https://docs.openvswitch.org/en/latest/intro/install).
+* In case a Node does not have the OVS module of a supported version installed,
+you can install it following the instructions at: [Installing Open vSwitch](https://docs.openvswitch.org/en/latest/intro/install).
 
 ### Installation
 
