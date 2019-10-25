@@ -170,7 +170,7 @@ func (br *OVSBridge) Delete() Error {
 }
 
 // Return UUIDs of all ports on the bridge
-func (br *OVSBridge) getPortUUIDList() ([]string, Error) {
+func (br *OVSBridge) GetPortUUIDList() ([]string, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	tx.Select(dbtransaction.Select{
 		Table:   "Bridge",
