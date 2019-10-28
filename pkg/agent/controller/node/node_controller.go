@@ -123,7 +123,6 @@ func (c *NodeController) enqueueNode(obj interface{}) {
 	if node.Name != c.nodeConfig.Name {
 		c.queue.Add(node.Name)
 	}
-
 }
 
 func (c *NodeController) Run(stopCh <-chan struct{}) {

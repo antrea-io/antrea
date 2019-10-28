@@ -67,6 +67,7 @@ type InterfaceStore interface {
 	GetInterface(ifaceID string) (*InterfaceConfig, bool)
 	GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool)
 	Len() int
+	GetInterfaceIDs() []string
 }
 
 // Local cache for interfaces created on node, including container, host gateway, and tunnel
@@ -179,6 +180,14 @@ func (c *interfaceCache) GetInterface(ifaceID string) (*InterfaceConfig, bool) {
 
 func (c *interfaceCache) Len() int {
 	return len(c.cache)
+}
+
+func (c *interfaceCache) GetInterfaceIDs() []string {
+	IDs := make([]string, 0, len(c.cache))
+	for ID := range c.cache {
+		IDs = append(IDs, ID)
+	}
+	return IDs
 }
 
 // GenerateContainerInterfaceName calculates OVS port name using pod name and pod namespace.
