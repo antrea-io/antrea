@@ -1,3 +1,17 @@
+// Copyright 2019 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package openflow
 
 import (
@@ -5,52 +19,20 @@ import (
 	"net"
 	"sync"
 
-	"k8s.io/api/networking/v1"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
-
-type AddressCategory uint8
-
-const (
-	IPAddr AddressCategory = iota
-	IPNetAddr
-	OFPortAddr
-)
-
-type AddressType int
-
-const (
-	SrcAddress AddressType = iota
-	DstAddress
-)
-
-// ConjunctionNotFound is an error response when the specified conjunction is not found from the local cache.
-type ConjunctionNotFound uint32
-
-func (e *ConjunctionNotFound) Error() string {
-	return fmt.Sprintf("conjunction with ID %d not found", uint32(*e))
-}
-
-func newConjunctionNotFound(conjunctionID uint32) *ConjunctionNotFound {
-	err := ConjunctionNotFound(conjunctionID)
-	return &err
-}
-
-type Address interface {
-	GetMatchValue() string
-	GetMatchKey(addrType AddressType) string
-}
 
 // IP address calculated from Pod's address.
 type IPAddress net.IP
 
-func (a *IPAddress) GetMatchKey(addrType AddressType) string {
+func (a *IPAddress) GetMatchKey(addrType types.AddressType) string {
 	switch addrType {
-	case SrcAddress:
+	case types.SrcAddress:
 		return "nw_src"
-	case DstAddress:
+	case types.DstAddress:
 		return "nw_dst"
 	default:
 		klog.Errorf("unknown AddressType %d in IPAddress", addrType)
@@ -71,11 +53,11 @@ func NewIPAddress(addr net.IP) *IPAddress {
 // IP block calculated from Pod's address.
 type IPNetAddress net.IPNet
 
-func (a *IPNetAddress) GetMatchKey(addrType AddressType) string {
+func (a *IPNetAddress) GetMatchKey(addrType types.AddressType) string {
 	switch addrType {
-	case SrcAddress:
+	case types.SrcAddress:
 		return "nw_src"
-	case DstAddress:
+	case types.DstAddress:
 		return "nw_dst"
 	default:
 		klog.Errorf("unknown AddressType %d in IPNetAddress", addrType)
@@ -96,11 +78,11 @@ func NewIPNetAddress(addr net.IPNet) *IPNetAddress {
 // OFPortAddress is the Openflow port of an interface.
 type OFPortAddress int32
 
-func (a *OFPortAddress) GetMatchKey(addrType AddressType) string {
+func (a *OFPortAddress) GetMatchKey(addrType types.AddressType) string {
 	switch addrType {
-	case SrcAddress:
+	case types.SrcAddress:
 		return "in_port"
-	case DstAddress:
+	case types.DstAddress:
 		return fmt.Sprintf("%s[%d..%d]", portCacheReg.reg(), ofportRegRange[0], ofportRegRange[1])
 	default:
 		klog.Errorf("unknown AddressType %d in OFPortAddress", addrType)
@@ -117,15 +99,16 @@ func NewOFPortAddress(addr int32) *OFPortAddress {
 	return &a
 }
 
-// PolicyRule groups configurations to set up conjunctive match for egress/ingress policy rules.
-type PolicyRule struct {
-	ID         uint32
-	Direction  v1.PolicyType
-	From       []Address
-	ExceptFrom []Address
-	To         []Address
-	ExceptTo   []Address
-	Service    []*v1.NetworkPolicyPort
+// ConjunctionNotFound is an error response when the specified conjunction is not found from the local cache.
+type ConjunctionNotFound uint32
+
+func (e *ConjunctionNotFound) Error() string {
+	return fmt.Sprintf("conjunction with ID %d not found", uint32(*e))
+}
+
+func newConjunctionNotFound(conjunctionID uint32) *ConjunctionNotFound {
+	err := ConjunctionNotFound(conjunctionID)
+	return &err
 }
 
 // TODO: change matchKey/matchValue to efficient types after switching to OF Gobinding.
@@ -190,7 +173,7 @@ type clause struct {
 // NetworkPolicy rule. Each ingress/egress policy rule installs Openflow entries on two tables, one for
 // ruleTable and the other for dropTable. If a packet does not pass the ruleTable, it will be dropped by the
 // dropTable.
-func (c *client) InstallPolicyRuleFlows(rule *PolicyRule) error {
+func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
 	// TODO: 1. create conjunction object, and add it into c.policyCache.
 	//       2. Install action flow.
 	//       3. Install conjunctive match flows if exists in rule.Form/To/Service
@@ -210,7 +193,7 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
 
 // AddPolicyRuleAddress adds one or multiple addresses to the specified NetworkPolicy rule. If addrType is srcAddress, the
 // addresses are added to PolicyRule.From, else to PolicyRule.To.
-func (c *client) AddPolicyRuleAddress(ruleID uint32, addrType AddressType, addresses []Address) error {
+func (c *client) AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error {
 	// TODO: 1. Check if conjunction exists in c.policyCache, if not exist, return not found error.
 	//  	 2. Add conjunction to actions of conjunctive match using specific address.
 	//  	 3. Check if need to install default drop flow for specific address
@@ -220,7 +203,7 @@ func (c *client) AddPolicyRuleAddress(ruleID uint32, addrType AddressType, addre
 
 // DeletePolicyRuleAddress removes addresses from the specified NetworkPolicy rule. If addrType is srcAddress, the addresses
 // are removed from PolicyRule.From, else from PolicyRule.To.
-func (c *client) DeletePolicyRuleAddress(ruleID uint32, addrType AddressType, addresses []Address) error {
+func (c *client) DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error {
 	// TODO: 1. Check if conjunction exists in c.policyCache, if false, return not found error.
 	//  	 2. Remove conjunction to actions of conjunctive match using specific address.
 	//  	 3. Check if there is no actions left for target flow match. If true, remove conjunctive match

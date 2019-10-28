@@ -96,11 +96,34 @@ const (
 	globalVirtualMAC = "aa:bb:cc:dd:ee:ff"
 )
 
+//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -package=testing -destination testing/mock_operations.go github.com/vmware-tanzu/antrea/pkg/agent/openflow FlowOperations
+
+type FlowOperations interface {
+	Add(flow binding.Flow) error
+	Modify(flow binding.Flow) error
+	Delete(flow binding.Flow) error
+}
+
+type flowCache map[string]binding.Flow
+
 type client struct {
 	bridge                                    binding.Bridge
 	pipeline                                  map[binding.TableIDType]binding.Table
-	nodeFlowCache, podFlowCache, serviceCache map[string][]binding.Flow // cache for correspond deletions
-	policyCache                               map[uint32]*conjunction   // cache for conjunction
+	nodeFlowCache, podFlowCache, serviceCache map[string]flowCache    // cache for correspond deletions
+	policyCache                               map[uint32]*conjunction // cache for conjunction
+	flowOperations                            FlowOperations
+}
+
+func (c *client) Add(flow binding.Flow) error {
+	return flow.Add()
+}
+
+func (c *client) Modify(flow binding.Flow) error {
+	return flow.Modify()
+}
+
+func (c *client) Delete(flow binding.Flow) error {
+	return flow.Delete()
 }
 
 // defaultFlows generates the default flows of all tables.
@@ -372,10 +395,11 @@ func NewClient(bridgeName string) Client {
 			ingressRuleTable:      bridge.CreateTable(ingressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
 			ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, l2ForwardingOutTable, binding.TableMissActionNext),
 		},
-		nodeFlowCache: map[string][]binding.Flow{},
-		podFlowCache:  map[string][]binding.Flow{},
-		serviceCache:  map[string][]binding.Flow{},
+		nodeFlowCache: map[string]flowCache{},
+		podFlowCache:  map[string]flowCache{},
+		serviceCache:  map[string]flowCache{},
 		policyCache:   map[uint32]*conjunction{},
 	}
+	c.flowOperations = c
 	return c
 }

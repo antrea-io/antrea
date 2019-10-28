@@ -74,3 +74,7 @@ func (f *commandFlow) Delete() error {
 func (f *commandFlow) String() string {
 	return f.format(true)
 }
+
+func (f *commandFlow) MatchString() string {
+	return f.format(false)
+}

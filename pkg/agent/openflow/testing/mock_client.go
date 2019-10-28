@@ -21,8 +21,8 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	openflow "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	openflow0 "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
+	openflow "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	net "net"
 	reflect "reflect"
 )
@@ -51,7 +51,7 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // AddPolicyRuleAddress mocks base method
-func (m *MockClient) AddPolicyRuleAddress(arg0 uint32, arg1 openflow.AddressType, arg2 []openflow.Address) error {
+func (m *MockClient) AddPolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddPolicyRuleAddress", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -65,7 +65,7 @@ func (mr *MockClientMockRecorder) AddPolicyRuleAddress(arg0, arg1, arg2 interfac
 }
 
 // DeletePolicyRuleAddress mocks base method
-func (m *MockClient) DeletePolicyRuleAddress(arg0 uint32, arg1 openflow.AddressType, arg2 []openflow.Address) error {
+func (m *MockClient) DeletePolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeletePolicyRuleAddress", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -79,10 +79,10 @@ func (mr *MockClientMockRecorder) DeletePolicyRuleAddress(arg0, arg1, arg2 inter
 }
 
 // GetFlowTableStatus mocks base method
-func (m *MockClient) GetFlowTableStatus() []openflow0.TableStatus {
+func (m *MockClient) GetFlowTableStatus() []openflow.TableStatus {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetFlowTableStatus")
-	ret0, _ := ret[0].([]openflow0.TableStatus)
+	ret0, _ := ret[0].([]openflow.TableStatus)
 	return ret0
 }
 
@@ -149,7 +149,7 @@ func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3, arg4 i
 }
 
 // InstallPolicyRuleFlows mocks base method
-func (m *MockClient) InstallPolicyRuleFlows(arg0 *openflow.PolicyRule) error {
+func (m *MockClient) InstallPolicyRuleFlows(arg0 *types.PolicyRule) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallPolicyRuleFlows", arg0)
 	ret0, _ := ret[0].(error)
