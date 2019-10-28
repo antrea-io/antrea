@@ -10,7 +10,7 @@ require (
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
-	github.com/gogo/protobuf v0.0.0-20171007142547-342cbe0a0415 // indirect
+	github.com/gogo/protobuf v1.2.1
 	github.com/golang/groupcache v0.0.0-20160516000752-02826c3e7903 // indirect
 	github.com/golang/mock v1.3.1-0.20190508161146-9fa652df1129
 	github.com/golang/protobuf v1.3.2
@@ -44,6 +44,7 @@ require (
 	k8s.io/apimachinery v0.0.0-20190313205120-d7deff9243b1
 	k8s.io/apiserver v0.0.0-20190313205120-8b27c41bdbb1
 	k8s.io/client-go v11.0.0+incompatible
+	k8s.io/code-generator v0.0.0-20190704094409-6c2a4329ac29 // indirect
 	k8s.io/component-base v0.0.0-20190314000054-4a91899592f4
 	k8s.io/klog v0.3.3
 	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d // indirect
