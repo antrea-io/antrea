@@ -19,7 +19,7 @@ sub-package called `testing`. For example, to mock interface `Iface` defined in
 definition:
 
 ```
-//go:generate mockgen -copyright_file <RELATIVE PATH TO>/hack/boilerplate/license_header.go.txt -destination testing/mock_example.go -package=testing github.com/vmware-tanzu/antrea/pkg/foo Iface
+//go:generate mockgen -copyright_file <RELATIVE PATH TO>/hack/boilerplate/license_header.raw.txt -destination testing/mock_example.go -package=testing github.com/vmware-tanzu/antrea/pkg/foo Iface
 ```
 
 You can then re-generate the mock source code (with `mockgen`) by invoking

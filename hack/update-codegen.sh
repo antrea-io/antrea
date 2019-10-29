@@ -16,7 +16,7 @@
 
 # get and install specific version of code-generator which is compatible with apimachinery
 go get -m k8s.io/code-generator@release-1.14
-go install k8s.io/code-generator/cmd/{defaulter-gen,client-gen,lister-gen,informer-gen,deepcopy-gen}
+go install k8s.io/code-generator/cmd/{client-gen,deepcopy-gen,conversion-gen}
 
 # re-generate both client and deepcopy for monitoring api
 # position generate client to its desired location
@@ -25,17 +25,24 @@ $GOPATH/bin/client-gen \
   --clientset-name "versioned" \
   --input-base "github.com/vmware-tanzu/antrea/pkg/apis/" \
   --input "clusterinformation/crd/antrea/v1beta1,networkpolicy/v1beta1" \
-  --output-base "$(dirname "${BASH_SOURCE[0]}")/../../../../" \
+  --output-base .crdtmp \
   --output-package "github.com/vmware-tanzu/antrea/pkg/client/clientset" \
   --go-header-file hack/boilerplate/license_header.go.txt
+cp -r .crdtmp/github.com/vmware-tanzu/antrea/* .
+rm -rf .crdtmp
 
 $GOPATH/bin/deepcopy-gen \
   --input-dirs "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1,github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy,github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1" \
-  --bounding-dirs "github.com/vmware-tanzu/antrea/pkg/apis" \
+  --output-base .crdtmp \
   -O zz_generated.deepcopy \
   --go-header-file hack/boilerplate/license_header.go.txt
+cp -r .crdtmp/github.com/vmware-tanzu/antrea/* .
+rm -rf .crdtmp
 
 $GOPATH/bin/conversion-gen  \
-  -i "github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1,github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/" \
+  --input-dirs "github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1,github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/" \
+  --output-base .crdtmp \
   -O zz_generated.conversion \
   --go-header-file hack/boilerplate/license_header.go.txt
+cp -r .crdtmp/github.com/vmware-tanzu/antrea/* .
+rm -rf .crdtmp
