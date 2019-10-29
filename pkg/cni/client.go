@@ -18,12 +18,15 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
-	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni"
+	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 )
 
 type Action int
@@ -34,10 +37,48 @@ const (
 	ActionDel
 )
 
-const (
-	AntreaCNISocketAddr = "/var/run/antrea/cni.sock"
-	AntreaVersion       = "1.0.0"
-)
+// AntreaCNISocketAddr is the UNIX socket used by the CNI Protobuf / gRPC service.
+const AntreaCNISocketAddr = "/var/run/antrea/cni.sock"
+
+// AntreaCNIVersion is the full semantic version (https://semver.org/) of our CNI Protobuf / gRPC
+// service.
+//
+// We follow these best practices (https://cloud.google.com/apis/design/versioning) for the
+// versioning of the CNI Protobuf / gRPC service. The major version number is encoded as the last
+// component of the proto package name. For pre-GA releases, the last component also includes the
+// pre-release version name (e.g. beta) and the pre-release version number. As the API evolves, the
+// major version number (and therefore the proto package name) will change if and only if API
+// backwards-compatibility is broken.
+//
+// Here are some potential scenarios we need to accomodate:
+//   * major API refactor that breaks backwards-compatibility: in this case we would increase the
+//     major version number.
+//   * support for a new CNI version:
+//       - introduction of a new RPC (e.g. when the CHECK command was added in version 0.4.0 of the
+//         CNI spec). In such a case we would increment the minor version number (backwards-
+//         compatibility is not broken). If antrea-cni does not support this new version, it will
+//         not list the new CNI spec version as supported and there will be no issue. If antrea-cni
+//         supports it but not the antrea-agent, the gRPC server will return an UNIMPLEMENTED error
+//         which we can propagate to the runtime. There is no way to handle this last case better
+//         with the current design unless we introduce a different RPC (e.g. Capabilities) early to
+//         query the server for the supported API version. This would also require an additional RPC
+//         for each CNI binary invocation.
+//       - introduction of a new field to a proto message: highly unlikely because we just send the
+//         CNI input / output as bytes.
+//       - no changes are needed if only the CNI parameters or CNI result format changed. In this
+//         case either antrea-cni or antrea-agent will reject the CNI request by validating the
+//         cniVersion against the list of supported versions. This is independent of which version
+//         of the gRPC service is used by either antrea-cni or antrea-agent.
+//
+// The gRPC server will return UNIMPLEMENTED if the service is unknown (mismatch in package name,
+// i.e. mismatch in major version number) or if the method is unknown. In both cases we return an
+// INCOMPATIBLE_API_VERSION error to the container runtime.
+//
+// To limit incompatibility cases, we can strive to support multiple releases (and in particular all
+// pre-GA releases of a major version, along with that major version release itself) in the
+// server. This is harder to do on the client side (need to fallback to a previous version when
+// getting an UNIMPLEMENTED error).
+const AntreaCNIVersion = "1.0.0-beta.1"
 
 // To allow for testing with a fake client.
 var withClient = rpcClient
@@ -61,8 +102,8 @@ func rpcClient(f func(client cnipb.CniClient) error) error {
 // If successful, it outputs the result to stdout and returns nil. Otherwise types.Error is returned.
 func (a Action) Request(arg *skel.CmdArgs) error {
 	return withClient(func(client cnipb.CniClient) error {
-		cmdRequest := cnipb.CniCmdRequestMessage{
-			CniArgs: &cnipb.CniCmdArgsMessage{
+		cmdRequest := cnipb.CniCmdRequest{
+			CniArgs: &cnipb.CniCmdArgs{
 				ContainerId:          arg.ContainerID,
 				Ifname:               arg.IfName,
 				Args:                 arg.Args,
@@ -70,12 +111,11 @@ func (a Action) Request(arg *skel.CmdArgs) error {
 				NetworkConfiguration: arg.StdinData,
 				Path:                 arg.Path,
 			},
-			Version: AntreaVersion,
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		var resp *cnipb.CniCmdResponseMessage
+		var resp *cnipb.CniCmdResponse
 		var err error
 
 		switch a {
@@ -87,21 +127,34 @@ func (a Action) Request(arg *skel.CmdArgs) error {
 			resp, err = client.CmdDel(ctx, &cmdRequest)
 		}
 
-		// The error indicates issues during rpc.
-		if err != nil {
+		// Handle gRPC errors.
+		if status.Code(err) == codes.Unimplemented {
 			return &types.Error{
-				Code: uint(cnipb.CniCmdResponseMessage_TRY_AGAIN_LATER),
+				Code:    uint(cnipb.ErrorCode_INCOMPATIBLE_API_VERSION),
+				Msg:     fmt.Sprintf("incompatible CNI API version between client (antrea-cni) and server (antrea-agent), client is using version %s", AntreaCNIVersion),
+				Details: fmt.Sprintf("service or method unimplemented by gRPC server: %v", err.Error()),
+			}
+		} else if status.Code(err) == codes.Unavailable || status.Code(err) == codes.DeadlineExceeded {
+			// network errors, could be transient.
+			return &types.Error{
+				Code: uint(cnipb.ErrorCode_TRY_AGAIN_LATER),
+				Msg:  err.Error(),
+			}
+		} else if err != nil { // all other RPC errors.
+			return &types.Error{
+				Code: uint(cnipb.ErrorCode_UNKNOWN_RPC_ERROR),
 				Msg:  err.Error(),
 			}
 		}
-		// The error indicates issues during cni procedure.
-		if resp.StatusCode != cnipb.CniCmdResponseMessage_SUCCESS {
+
+		// Handle errors during CNI execution.
+		if resp.Error != nil {
 			return &types.Error{
-				Code: uint(resp.StatusCode),
-				Msg:  resp.ErrorMessage,
+				Code: uint(resp.Error.Code),
+				Msg:  resp.Error.Message,
 			}
 		}
-		fmt.Print(string(resp.CniResult))
+		os.Stdout.Write(resp.CniResult)
 		return nil
 	})
 }

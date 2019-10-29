@@ -40,8 +40,7 @@ import (
 	ipamtest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam/testing"
 	cniservertest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/testing"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	cnimsg "github.com/vmware-tanzu/antrea/pkg/apis/cni"
-	"github.com/vmware-tanzu/antrea/pkg/cni"
+	cnimsg "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
 )
@@ -197,35 +196,31 @@ func (tc testCase) expectedCIDRs() ([]*net.IPNet, []*net.IPNet) {
 	return cidrsV4, cidrsV6
 }
 
-func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *cnimsg.CniCmdRequestMessage {
+func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *cnimsg.CniCmdRequest {
 	conf := tc.netConfJSON(dataDir)
-	reqVersion := cni.AntreaVersion
-	return &cnimsg.CniCmdRequestMessage{
-		CniArgs: &cnimsg.CniCmdArgsMessage{
+	return &cnimsg.CniCmdRequest{
+		CniArgs: &cnimsg.CniCmdArgs{
 			ContainerId:          CONTAINERID,
 			Ifname:               IFNAME,
 			Netns:                targetNS.Path(),
 			NetworkConfiguration: []byte(conf),
 			Args:                 cniservertest.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContaner),
 		},
-		Version: reqVersion,
 	}
 }
 
-func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir string) *cnimsg.CniCmdRequestMessage {
+func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir string) *cnimsg.CniCmdRequest {
 	conf, err := json.Marshal(config)
 	require.Nil(tc.t, err)
 
-	reqVersion := cni.AntreaVersion
-	return &cnimsg.CniCmdRequestMessage{
-		CniArgs: &cnimsg.CniCmdArgsMessage{
+	return &cnimsg.CniCmdRequest{
+		CniArgs: &cnimsg.CniCmdArgs{
 			ContainerId:          CONTAINERID,
 			Ifname:               IFNAME,
 			Netns:                targetNS.Path(),
 			NetworkConfiguration: conf,
 			Args:                 cniservertest.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContaner),
 		},
-		Version: reqVersion,
 	}
 }
 
@@ -242,7 +237,7 @@ type cmdAddDelTester struct {
 	ctx      context.Context
 	testNS   ns.NetNS
 	targetNS ns.NetNS
-	request  *cnimsg.CniCmdRequestMessage
+	request  *cnimsg.CniCmdRequest
 	vethName string
 }
 
@@ -312,7 +307,7 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 	tester.request = tc.createCmdArgs(tester.targetNS, dataDir)
 
 	// Execute cmdADD on the plugin.
-	var response *cnimsg.CniCmdResponseMessage
+	var response *cnimsg.CniCmdResponse
 	err = tester.testNS.Do(func(ns.NetNS) error {
 		response, err = tester.server.CmdAdd(tester.ctx, tester.request)
 		return err
