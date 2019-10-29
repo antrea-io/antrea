@@ -14,6 +14,11 @@
 
 package ovsconfig
 
+type Bridge struct {
+	Name      string        `json:"name"`
+	Protocols []interface{} `json:"protocols,omitempty"`
+}
+
 type Port struct {
 	Name        string        `json:"name"`
 	Interfaces  []interface{} `json:"interfaces"`
