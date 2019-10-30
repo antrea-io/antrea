@@ -47,7 +47,8 @@ const (
 	openflowProtoVersion13 = "OpenFlow13"
 )
 
-// Connects to the OVSDB server on the UNIX domain socket specified by address.
+// NewOVSDBConnectionUDS connects to the OVSDB server on the UNIX domain socket
+// specified by address.
 // If address is set to "", the default UNIX domain socket path
 // "/run/openvswitch/db.sock" will be used.
 // Returns the OVSDB struct on success.
@@ -85,7 +86,7 @@ func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 	return db, nil
 }
 
-// Creates and returns a new OVSBridge struct.
+// NewOVSBridge creates and returns a new OVSBridge struct.
 func NewOVSBridge(bridgeName string, ovsdb *ovsdb.OVSDB) *OVSBridge {
 	return &OVSBridge{ovsdb, bridgeName, ""}
 }
@@ -177,7 +178,7 @@ func (br *OVSBridge) Delete() Error {
 	return nil
 }
 
-// Return UUIDs of all ports on the bridge
+// GetPortUUIDList returns UUIDs of all ports on the bridge.
 func (br *OVSBridge) GetPortUUIDList() ([]string, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	tx.Select(dbtransaction.Select{
@@ -196,7 +197,7 @@ func (br *OVSBridge) GetPortUUIDList() ([]string, Error) {
 	return helpers.GetIdListFromOVSDBSet(portRes), nil
 }
 
-// Delete ports in portUUIDList on the bridge
+// DeletePorts deletes ports in portUUIDList on the bridge
 func (br *OVSBridge) DeletePorts(portUUIDList []string) Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	mutateSet := helpers.MakeOVSDBSet(map[string]interface{}{
@@ -215,6 +216,8 @@ func (br *OVSBridge) DeletePorts(portUUIDList []string) Error {
 	return nil
 }
 
+// DeletePort deletes the port with the provided portUUID.
+// If the port does not exist no change will be done.
 func (br *OVSBridge) DeletePort(portUUID string) Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	mutateSet := helpers.MakeOVSDBSet(map[string]interface{}{
@@ -233,7 +236,8 @@ func (br *OVSBridge) DeletePort(portUUID string) Error {
 	return nil
 }
 
-// Creates an internal port with the specified name on the bridge.
+// CreateInternalPort creates an internal port with the specified name on the
+// bridge.
 // If externalIDs is not empty, the map key/value pairs will be set to the
 // port's external_ids.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
@@ -241,7 +245,8 @@ func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, extern
 	return br.createPort(name, name, "internal", ofPortRequest, externalIDs, nil)
 }
 
-// Creates a VXLAN tunnel port with the specified name on the bridge.
+// CreateVXLANPort creates a VXLAN tunnel port with the specified name on the
+// bridge.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 // If remoteIP is not empty, it will be set to the tunnel port interface
 // options; otherwise flow based tunneling will be configured.
@@ -249,7 +254,8 @@ func (br *OVSBridge) CreateVXLANPort(name string, ofPortRequest int32, remoteIP 
 	return br.createTunnelPort(name, "vxlan", ofPortRequest, remoteIP)
 }
 
-// Creates a Geneve tunnel port with the specified name on the bridge.
+// CreateGenevePort creates a Geneve tunnel port with the specified name on the
+// bridge.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 // If remoteIP is not empty, it will be set to the tunnel port interface
 // options; otherwise flow based tunneling will be configured.
@@ -267,8 +273,8 @@ func (br *OVSBridge) createTunnelPort(name, ifType string, ofPortRequest int32, 
 	return br.createPort(name, name, ifType, ofPortRequest, nil, options)
 }
 
-// Creates a port with the specified name on the bridge, and connects interface
-// specified by ifDev to the port.
+// CreatePort creates a port with the specified name on the bridge, and connects
+// the interface specified by ifDev to the port.
 // If externalIDs is not empty, the map key/value pairs will be set to the
 // port's external_ids.
 func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error) {
@@ -329,7 +335,7 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 	return res[1].UUID[1], nil
 }
 
-// Retrieves the ofport value of an interface given the interface name.
+// GetOFPort retrieves the ofport value of an interface given the interface name.
 // The function will invoke OVSDB "wait" operation with 1 second timeout to wait
 // the ofport is set on the interface, and so could be blocked for 1 second. If
 // the "wait" operation timeout, value 0 will be returned.
@@ -389,7 +395,7 @@ func buildPortDataCommon(port, intf map[string]interface{}, portData *OVSPortDat
 	}
 }
 
-// Retrieves port data given the OVS port UUID and interface name.
+// GetPortData retrieves port data given the OVS port UUID and interface name.
 // nil is returned, if the port or interface could not be found, or the
 // interface is not attached to the port.
 // The port's OFPort will be set to 0, if its ofport is not assigned by OVS yet.
@@ -442,7 +448,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) 
 	return &portData, nil
 }
 
-// Return all ports on the bridge.
+// GetPortList returns all ports on the bridge.
 // A port's OFPort will be set to 0, if its ofport is not assigned by OVS yet.
 func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
