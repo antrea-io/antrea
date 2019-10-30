@@ -1,5 +1,37 @@
 # Antrea
 
+Antrea is a [Kubernetes](https://kubernetes.io) networking solution that is intended to be
+Kubernetes-centric and Kubernetes-native. It implements and is highly optimized
+for networking and security of a Kubernetes cluster, leveraging Kubernetes and
+Kubernetes native solutions as much as possible. It supports any compute
+platform that Kubernetes runs on and will support both Linux and Windows Nodes.
+
+Antrea leverages [Open vSwitch](https://www.openvswitch.org/) as the networking data plane in every Kubernetes
+Node. Open vSwitch is a high-performance programmable virtual switch. It is an
+extensively adopted Linux vSwitch. As of Linux 3.3 the OVS kernel module is part
+of the mainline kernel. It also works on Windows. Open vSwitch enables Antrea to
+implement Kuberentes Network Policies in a high-performance and efficient
+manner. Due to the "programmable" characteristic of Open vSwitch, Antrea is able
+to implement an extensive set of networking and security features and services
+on top of Open vSwitch for both Linux and Windows.
+
+## Features
+
+The first version of Antrea will offer the following features and
+functionalities:
+
+* IPv4 overlay network for a Kubernetes cluster. Either VXLAN or Geneve can
+be chosen as the encapsulation protocol.
+* Kubernetes [Network Policy](https://kubernetes.io/docs/concepts/services-networking/network-policies) (coming soon).
+* Encryption of Pod traffic with [IPSec ESP](https://tools.ietf.org/html/rfc2406) (coming soon).
+* CLI for debugging (coming soon).
+* [Octant](https://github.com/vmware-tanzu/octant) UI plugin for monitoring the Antrea components health status and runtime
+information (coming soon).
+
+Some of these features are still under development now and will be available
+soon. Check out [Antrea ROADMAP](ROADMAP.md) for more information about the
+features that are coming and the features planned for future releases.
+
 ## Getting started
 
 Antrea is super easy to install. All the Antrea components are containerized and can
