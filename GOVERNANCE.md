@@ -31,7 +31,7 @@ The Antrea community abides by this [code of conduct](CODE_OF_CONDUCT.md).
 
 ### Contributors
 
-Anyone can contribute to the poject (e.g. open a PR) as long as they follow the
+Anyone can contribute to the project (e.g. open a PR) as long as they follow the
 guidelines in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Maintainers
