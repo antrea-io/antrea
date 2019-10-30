@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
+	k8sFake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
@@ -441,7 +442,7 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := agent.NewInterfaceStore()
-	tester.server = cniserver.New(testSock, "", 1450, testNodeConfig, ovsServiceMock, ofServiceMock, ifaceStore)
+	tester.server = cniserver.New(testSock, "", 1450, testNodeConfig, ovsServiceMock, ofServiceMock, ifaceStore, k8sFake.NewSimpleClientset())
 	ctx, _ := context.WithCancel(context.Background())
 	tester.ctx = ctx
 	return tester
