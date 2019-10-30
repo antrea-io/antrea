@@ -63,7 +63,7 @@ func (in *AddressGroup) DeepCopyObject() runtime.Object {
 func (in *AddressGroupList) DeepCopyInto(out *AddressGroupList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]AddressGroup, len(*in))
@@ -175,7 +175,7 @@ func (in *AppliedToGroup) DeepCopyObject() runtime.Object {
 func (in *AppliedToGroupList) DeepCopyInto(out *AppliedToGroupList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]AppliedToGroup, len(*in))
@@ -347,7 +347,7 @@ func (in *NetworkPolicy) DeepCopyObject() runtime.Object {
 func (in *NetworkPolicyList) DeepCopyInto(out *NetworkPolicyList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]NetworkPolicy, len(*in))

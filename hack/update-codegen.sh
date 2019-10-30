@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # get and install specific version of code-generator which is compatible with apimachinery
-go get -m k8s.io/code-generator@release-1.14
+go get -d k8s.io/code-generator@kubernetes-1.15.0
 go install k8s.io/code-generator/cmd/{client-gen,deepcopy-gen,conversion-gen}
 
 # re-generate both client and deepcopy for monitoring api
