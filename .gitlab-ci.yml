@@ -33,4 +33,4 @@ mocks:
 okn-rename:
   stage: test
   script:
-    - bash -c "! git grep -q -i okn -- './*' ':!go.sum' ':!.gitlab-ci.yml' && ! git ls-files | grep -i -q okn"
+    - bash -c "! git grep -q -i okn -- './*' ':!go.sum' ':!.gitlab-ci.yml' ':!docs/assets/*' && ! git ls-files | grep -i -q okn"
