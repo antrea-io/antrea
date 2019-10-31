@@ -8,7 +8,7 @@ GOPATH          ?= $$(go env GOPATH)
 DOCKER_CACHE    := $(CURDIR)/.cache
 
 .PHONY: all
-all: bin build
+all: build
 
 include versioning.mk
 
@@ -31,8 +31,7 @@ test-integration:
 endif
 
 .PHONY: build
-build: bin
-build: ubuntu
+build: build-ubuntu
 
 .PHONY: test
 test: build
@@ -134,4 +133,11 @@ crd-gen:
 ubuntu:
 	@echo "===> Building antrea-ubuntu Docker image <==="
 	docker build -t antrea-ubuntu -f build/images/Dockerfile.ubuntu .
+	docker tag antrea-ubuntu antrea-ubuntu:$(DOCKER_IMG_VERSION)
+
+# Build bins in a golang container, and build the antrea-ubuntu Docker image.
+.PHONY: build-ubuntu
+build-ubuntu:
+	@echo "===> Building Antrea bins and antrea-ubuntu Docker image <==="
+	docker build -t antrea-ubuntu -f build/images/Dockerfile.build.ubuntu .
 	docker tag antrea-ubuntu antrea-ubuntu:$(DOCKER_IMG_VERSION)

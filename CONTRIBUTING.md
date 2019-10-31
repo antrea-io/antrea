@@ -95,9 +95,20 @@ To make it easier for reviewers to review your PR, consider the following:
 
 ### Building and testing your change
 
-The Antrea project uses the [Go modules support](https://github.com/golang/go/wiki/Modules)
-which was introduced in Go 1.11. It facilitates dependency tracking and no
-longer requires projects to live inside the `$GOPATH`.
+To build the Antrea Docker image together with all Antrea bits, you can simply
+do:
+
+1. Checkout your feature branch and `cd` into it.
+2. Run `make`
+
+The second step will compile the Antrea code in a `golang` container, and build
+a `Ubuntu 18.04` Docker image that includes all the generated binaries. [`Docker`](https://docs.docker.com/install)
+must be installed on your local machine in advance.
+
+Alternatively, you can build the Antrea code in your local Go environment. The
+Antrea project uses the [Go modules support](https://github.com/golang/go/wiki/Modules) which was introduced in Go 1.11. It
+facilitates dependency tracking and no longer requires projects to live inside
+the `$GOPATH`.
 
 To develop locally, you can follow these steps:
 

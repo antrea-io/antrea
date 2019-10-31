@@ -72,10 +72,17 @@ you can install it following the instructions at: [Installing Open vSwitch](http
 
 ### Installation
 
-To deploy Antrea in your Kubernetes cluster, run the following command:
+Antrea is deployed with the [deployment yaml](build/yamls/antrea.yml). You need to update the `image` field
+of the container specs in the yaml file to point to the Antrea Docker image in
+your Docker registry, and run the following command to apply the deployment yaml
+to your Kubernetes cluster:
+
 ```
-kubectl apply -f build/yamls/antrea.yml
+kubectl apply -f antrea.yml
 ```
+
+At the moment the Antrea Docker image is not published to a public registry yet.
+You can follow the instructions in the [Contributor Guide](CONTRIBUTING.md#building-and-testing-your-change) to build the image.
 
 Antrea components can also be run manually for development purpose. See [Manual Installation](docs/manual-installation.md)
 for information.
