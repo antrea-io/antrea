@@ -1,5 +1,6 @@
 bin
 .mockgen
+.cache
 
 .DS_Store
 
