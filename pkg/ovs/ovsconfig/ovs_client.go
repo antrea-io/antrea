@@ -99,6 +99,10 @@ func (br *OVSBridge) Create() Error {
 		return err
 	} else if exists {
 		klog.Info("Bridge exists: ", br.uuid)
+		// Update OpenFlow protocol versions on existent bridge.
+		if err := br.updateProtocols(); err != nil {
+			return err
+		}
 	} else if err = br.create(); err != nil {
 		return err
 	} else {
@@ -127,6 +131,25 @@ func (br *OVSBridge) lookupByName() (bool, Error) {
 
 	br.uuid = res[0].Rows[0].(map[string]interface{})["_uuid"].([]interface{})[1].(string)
 	return true, nil
+}
+
+func (br *OVSBridge) updateProtocols() Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	// Use Openflow protocol version 1.0 and 1.3.
+	tx.Update(dbtransaction.Update{
+		Table: "Bridge",
+		Where: [][]interface{}{{"name", "==", br.name}},
+		Row: map[string]interface{}{
+			"protocols": makeOVSDBSetFromList([]string{openflowProtoVersion10,
+				openflowProtoVersion13}),
+		},
+	})
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
 }
 
 func (br *OVSBridge) create() Error {
