@@ -81,7 +81,7 @@ func (in *AntreaAgentInfo) DeepCopyObject() runtime.Object {
 func (in *AntreaAgentInfoList) DeepCopyInto(out *AntreaAgentInfoList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]AntreaAgentInfo, len(*in))
@@ -144,7 +144,7 @@ func (in *AntreaControllerInfo) DeepCopyObject() runtime.Object {
 func (in *AntreaControllerInfoList) DeepCopyInto(out *AntreaControllerInfoList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]AntreaControllerInfo, len(*in))
