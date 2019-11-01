@@ -255,6 +255,14 @@ func linkByName(netNS ns.NetNS, name string) (link netlink.Link, err error) {
 	return link, err
 }
 
+func addrList(netNS ns.NetNS, link netlink.Link, family int) (addrs []netlink.Addr, err error) {
+	err = netNS.Do(func(ns.NetNS) error {
+		addrs, err = netlink.AddrList(link, family)
+		return err
+	})
+	return addrs, err
+}
+
 func routeList(netNS ns.NetNS, link netlink.Link) (routes []netlink.Route, err error) {
 	err = netNS.Do(func(ns.NetNS) error {
 		routes, err = netlink.RouteList(link, netlink.FAMILY_ALL)
@@ -280,15 +288,30 @@ func matchRoute(expectedCIDR string, routes []netlink.Route) (*netlink.Route, er
 // container namespace and checks for the presence of a default route through the Pod CIDR gateway.
 func (tester *cmdAddDelTester) checkContainerNetworking(tc testCase) {
 	require := require.New(tc.t)
+	assert := assert.New(tc.t)
+
 	link, err := linkByName(tester.targetNS, IFNAME)
 	require.Nil(err)
 	require.Equal(IFNAME, link.Attrs().Name)
 	require.IsType(&netlink.Veth{}, link)
 
 	expCIDRsV4, _ := tc.expectedCIDRs()
-	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	addrs, err := addrList(tester.targetNS, link, netlink.FAMILY_V4)
 	require.Nil(err)
+	// make sure that the IP addresses were correctly assigned to the container's interface
 	require.Len(addrs, len(expCIDRsV4))
+	for _, expAddr := range expCIDRsV4 {
+		findAddr := func() bool {
+			for _, addr := range addrs {
+				if expAddr.Contains(addr.IP) {
+					return true
+				}
+			}
+			return false
+		}
+		found := findAddr()
+		assert.Truef(found, "No IP address assigned from subnet %v", expAddr)
+	}
 
 	// Check that default route exsists.
 	routes, err := routeList(tester.targetNS, link)
