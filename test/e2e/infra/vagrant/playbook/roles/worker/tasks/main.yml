@@ -11,7 +11,7 @@
     dest: /tmp/kubeconfig
 
 - name: Compare kubeconfig with existing one
-  command: diff /tmp/kubeconfig /home/vagrant/.kube/config
+  command: diff /tmp/kubeconfig /home/{{ test_user }}/.kube/config
   failed_when: False
   register: kubeconfig_diff
   changed_when: kubeconfig_diff.rc != 0
@@ -27,15 +27,15 @@
 
 # We copy the config file last, as we use it to determine whether the join was
 # succesful in future runs.
-- name: Setup kubeconfig for vagrant user
+- name: Setup kubeconfig for test user
   block:
-    - name: Create /home/vagrant/.kube directory
+    - name: Create .kube directory in test user home
       file:
-        path: /home/vagrant/.kube
+        path: /home/{{ test_user }}/.kube
         state: directory
-    - name: Copy kubeconfig file to /home/vagrant/.kube
+    - name: Copy kubeconfig file to .kube
       copy:
         src: kube/config
-        dest: /home/vagrant/.kube/config
-        owner: vagrant
-        group: vagrant
+        dest: /home/{{ test_user }}/.kube/config
+        owner: "{{ test_user }}"
+        group: "{{ test_user }}"

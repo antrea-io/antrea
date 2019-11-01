@@ -4,14 +4,14 @@
     dest: /tmp/kubeadm.conf
 
 - name: Compare kubeadmin configuration with existing one
-  command: diff /tmp/kubeadm.conf /home/vagrant/kubeadm.conf
+  command: diff /tmp/kubeadm.conf /home/{{ test_user }}/kubeadm.conf
   failed_when: False
   register: kubeadm_conf_diff
   changed_when: kubeadm_conf_diff.rc != 0
 
 - name: Check cluster status
   # specify kubeconfig since we are logged in as root
-  command: kubectl --kubeconfig /home/vagrant/.kube/config cluster-info
+  command: kubectl --kubeconfig /home/{{ test_user }}/.kube/config cluster-info
   register: cluster_status
   failed_when: False
   changed_when: False
@@ -31,19 +31,19 @@
   when: kubeadm_conf_diff.changed or (cluster_status.rc != 0)
   register: kubeadm_init
 
-- name: Setup kubeconfig for vagrant user
+- name: Setup kubeconfig for test user
   block:
-    - name: Create /home/vagrant/.kube directory
+    - name: Create /home/{{ test_user }}/.kube directory
       file:
-        path: /home/vagrant/.kube
+        path: /home/{{ test_user }}/.kube
         state: directory
-    - name: Copy kubeconfig file to /home/vagrant/.kube
+    - name: Copy kubeconfig file to /home/{{ test_user }}/.kube
       copy:
         src: /etc/kubernetes/admin.conf
         remote_src: true
-        dest: /home/vagrant/.kube/config
-        owner: vagrant
-        group: vagrant
+        dest: /home/{{ test_user }}/.kube/config
+        owner: "{{ test_user }}"
+        group: "{{ test_user }}"
 
 # We currently copy the kube config and join command to the host so that it can
 # be copied to all the worker nodes when provisioning them. An alternative is to
@@ -68,16 +68,16 @@
 
 # We copy the config file last, as we use it to determine whether the cluster
 # was setup correctly and with the appropriate configguration in future runs.
-- name: Copy kubeadm configuration to /home/vagrant
+- name: Copy kubeadm configuration to test user's home
   copy:
     src: /tmp/kubeadm.conf
     remote_src: true
-    dest: /home/vagrant/kubeadm.conf
-    owner: vagrant
-    group: vagrant
+    dest: /home/{{ test_user }}/kubeadm.conf
+    owner: "{{ test_user }}"
+    group: "{{ test_user }}"
 
 - name: Copy kubeconfig to host
   fetch:
-    src: /home/vagrant/.kube/config
+    src: /home/{{ test_user }}/.kube/config
     dest: kube/config
     flat: yes

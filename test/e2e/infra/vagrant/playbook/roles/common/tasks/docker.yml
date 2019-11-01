@@ -27,9 +27,9 @@
   notify:
     - docker status
 
-- name: Add vagrant user to docker group
+- name: Add test user to docker group
   user:
-    name: vagrant
+    name: "{{ test_user }}"
     groups: docker
     append: yes
     create_home: yes
