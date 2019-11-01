@@ -30,7 +30,9 @@
 - name: Add vagrant user to docker group
   user:
     name: vagrant
-    group: docker
+    groups: docker
+    append: yes
+    create_home: yes
 
 # Install docker-py so that docker images can be pulled
 - pip:
