@@ -2,10 +2,8 @@
 - hosts: master
   become: true
   roles:
-    - common
     - master
 - hosts: workers
   become: true
   roles:
-    - common
     - worker
