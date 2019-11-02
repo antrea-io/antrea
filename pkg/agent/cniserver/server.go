@@ -27,16 +27,18 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
-	"github.com/vmware-tanzu/antrea/pkg/agent"
-	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/cni"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"google.golang.org/grpc"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/cni"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 type CNIServer struct {
@@ -266,7 +268,7 @@ func (s *CNIServer) hostNetNsPath(netNS string) string {
 
 func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8sArgs, prevResult *current.Result) (*cnipb.CniCmdResponse, error) {
 	var containerIntf, hostIntf *current.Interface
-	hostVethName := agent.GenerateContainerInterfaceName(string(k8sCNIArgs.K8S_POD_NAME), string(k8sCNIArgs.K8S_POD_NAMESPACE))
+	hostVethName := util.GenerateContainerInterfaceName(string(k8sCNIArgs.K8S_POD_NAME), string(k8sCNIArgs.K8S_POD_NAMESPACE))
 	containerID := cfgArgs.ContainerId
 	netNS := s.hostNetNsPath(cfgArgs.Netns)
 

@@ -2,11 +2,11 @@ package openflow
 
 import (
 	"fmt"
-	"k8s.io/klog"
 	"net"
 	"sync"
 
 	"k8s.io/api/networking/v1"
+	"k8s.io/klog"
 
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
