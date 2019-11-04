@@ -221,6 +221,6 @@ func (n *NetworkPolicyController) syncNetworkPolicy(key string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get NetworkPolicy %s: %v", key, err)
 	}
-	klog.Infof("Syncing NetworkPolicy %s: %v", key, networkPolicy.Spec.PodSelector)
+	klog.V(1).Infof("Syncing NetworkPolicy %s: %v", key, networkPolicy.Spec.PodSelector)
 	return nil
 }

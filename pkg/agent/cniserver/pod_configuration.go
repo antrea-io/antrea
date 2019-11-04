@@ -58,7 +58,7 @@ func setupInterface(podName string, podNamespace string, ifname string, netns ns
 		if err != nil {
 			return err
 		}
-		klog.Infof("Setup interfaces host: %s, container %s", hostVeth.Name, containerVeth.Name)
+		klog.V(2).Infof("Setup interfaces host: %s, container %s", hostVeth.Name, containerVeth.Name)
 		containerIface.Name = containerVeth.Name
 		containerIface.Mac = containerVeth.HardwareAddr.String()
 		containerIface.Sandbox = netns.Path()
@@ -152,7 +152,7 @@ func validateContainerPeerInterface(hostIntf *current.Interface, containerVeth *
 	}
 	_, isVeth := link.(*netlink.Veth)
 	if !isVeth {
-		klog.Infof("Link %s is not created by CNI", hostIntf.Name)
+		klog.V(2).Infof("Link %s is not created by CNI", hostIntf.Name)
 		return hostVeth, nil
 	}
 	linkName := link.Attrs().Name
@@ -290,7 +290,7 @@ func removeContainerLink(containerID string, containerNetns string, ifname strin
 		_, err = ip.DelLinkByNameAddr(ifname)
 		if err != nil && err == ip.ErrLinkNotFound {
 			// Not found link should return success for deletion
-			klog.Infof("Interface %s not found in netns %s", ifname, containerNetns)
+			klog.V(2).Infof("Interface %s not found in netns %s", ifname, containerNetns)
 			return nil
 		}
 		return err
@@ -321,18 +321,18 @@ func removeInterfaces(
 		// many resources as possible (e.g. releasing IPAM allocations) and return a
 		// successful response.
 		// In our case it means deleting the OVS port.
-		klog.Infof("Target netns not specified, not removing veth pair")
+		klog.V(2).Infof("Target netns not specified, not removing veth pair")
 	}
 
 	containerConfig, found := ifaceStore.GetContainerInterface(podName, podNamespace)
 	if !found {
-		klog.Infof("Did not find the port for container %s in local cache", containerID)
+		klog.V(2).Infof("Did not find the port for container %s in local cache", containerID)
 		return nil
 	}
 
 	portUUID := containerConfig.PortUUID
 	ovsPortName := containerConfig.IfaceName
-	klog.Infof("Delete OVS port with UUID %s peer container %s", portUUID, containerID)
+	klog.V(2).Infof("Delete OVS port with UUID %s peer container %s", portUUID, containerID)
 	// Remove openflow entries of target container
 	if err := ofClient.UninstallPodFlows(ovsPortName); err != nil {
 		klog.Errorf("Failed to delete Openflow entries for container %s: %v", containerID, err)
@@ -429,7 +429,7 @@ func validateOVSPort(ifaceStore agent.InterfaceStore, ovsPortName string, contai
 		}
 		return fmt.Errorf("failed to find a valid IP equal to attached address")
 	} else {
-		klog.Infof("Not found container %s config from local cache", containerID)
+		klog.V(2).Infof("Not found container %s config from local cache", containerID)
 		return fmt.Errorf("not found OVS port %s", ovsPortName)
 	}
 }
