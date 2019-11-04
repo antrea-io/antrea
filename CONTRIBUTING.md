@@ -11,6 +11,7 @@ Before getting started, go through the following:
 3. Familiarize yourself with the basic concepts of project Antrea.
 4. Set up necessary [accounts](#accounts-setup).
 5. Set up your [development environment](docs/manual-installation.md)
+6. Check out the [Architecture document](/docs/architecture.md) for the Antrea architecture and design.
 
 ## Accounts setup
 
