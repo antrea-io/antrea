@@ -27,10 +27,12 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
+	"k8s.io/klog"
+
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	"k8s.io/klog"
 )
 
 type vethPair struct {
@@ -49,7 +51,7 @@ type k8sArgs struct {
 // setupInterface creates a veth pair: containerIface is in the container namespace and hostIface is
 // in the host namespace.
 func setupInterface(podName string, podNamespace string, ifname string, netns ns.NetNS, MTU int) (hostIface *current.Interface, containerIface *current.Interface, err error) {
-	hostVethName := agent.GenerateContainerInterfaceName(podName, podNamespace)
+	hostVethName := util.GenerateContainerInterfaceName(podName, podNamespace)
 	hostIface = &current.Interface{}
 	containerIface = &current.Interface{}
 
