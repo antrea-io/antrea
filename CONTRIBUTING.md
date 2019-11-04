@@ -8,10 +8,9 @@ how to effectively get it merged upstream.
 Before getting started, go through the following:
 1. Read and observe the [code of conduct](CODE_OF_CONDUCT.md).
 2. Sign the CLA.
-3. Familiarize yourself with the basic concepts of project Antrea.
+3. Check out the [Architecture document](/docs/architecture.md) for the Antrea architecture and design.
 4. Set up necessary [accounts](#accounts-setup).
 5. Set up your [development environment](docs/manual-installation.md)
-6. Check out the [Architecture document](/docs/architecture.md) for the Antrea architecture and design.
 
 ## Accounts setup
 
