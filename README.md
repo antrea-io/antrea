@@ -95,3 +95,5 @@ and propose new ideas. We are waiting for your PRs!
 
 Check out the [Contributor Guide](CONTRIBUTING.md) for detailed
 information on how to effectively contribute to this project.
+
+Also check the [Architecture document](/docs/architecture.md) for the Antrea architecture and design.
