@@ -135,6 +135,11 @@ rules:
   - subjectaccessreviews
   verbs:
   - create
+- nonResourceURLs:
+  - /apis/antctl.antrea.io/v1
+  - /apis/antctl.antrea.io/v1/*
+  verbs:
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -312,6 +317,22 @@ spec:
       - configMap:
           name: antrea-config-fh9t4g64dc
         name: antrea-config
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    app: antrea
+  name: v1.antctl.antrea.io
+spec:
+  group: antctl.antrea.io
+  groupPriorityMinimum: 1000
+  insecureSkipTLSVerify: true
+  service:
+    name: antrea
+    namespace: kube-system
+  version: v1
+  versionPriority: 15
 ---
 apiVersion: apps/v1
 kind: DaemonSet

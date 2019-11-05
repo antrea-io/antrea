@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pkg/errors"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/antctl"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -127,7 +129,16 @@ func run(o *Options) error {
 
 	go agentMonitor.Run(stopCh)
 
+	serverOpt, err := antctl.NewServerOptions(antctl.Definition, agentMonitor, nil, antctl.DefaultAgentLocalPort)
+	if err != nil {
+		return errors.Wrap(err, "error initializing antctl server")
+	}
+	serverStoppedCh := antctl.StartLocalServer(serverOpt, stopCh)
+
 	<-stopCh
+
 	klog.Info("Stopping Antrea agent")
+	<-serverStoppedCh // check if the antctl server stopped
+
 	return nil
 }

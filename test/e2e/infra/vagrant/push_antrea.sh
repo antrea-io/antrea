@@ -4,36 +4,38 @@
 SAVED_IMG=/tmp/antrea-ubuntu.tar
 IMG_NAME=antrea/antrea-ubuntu:latest
 
-THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 pushd $THIS_DIR
 
-ANTREA_YML=$THIS_DIR/../../../../build/yamls/antrea.yml
+ROOT_DIR=$THIS_DIR/../../../..
+ANTREA_YML=$ROOT_DIR/build/yamls/antrea.yml
+ANTCTL=$ROOT_DIR/bin/antctl
 
 if [ ! -f ssh-config ]; then
-    echo "File ssh-config does not exist in current directory"
-    echo "Did you run ./provision.sh?"
-    exit 1
+  echo "File ssh-config does not exist in current directory"
+  echo "Did you run ./provision.sh?"
+  exit 1
 fi
 
-docker inspect $IMG_NAME > /dev/null
+docker inspect $IMG_NAME >/dev/null
 if [ $? -ne 0 ]; then
-    echo "Docker image $IMG_NAME was not found"
-    exit 1
+  echo "Docker image $IMG_NAME was not found"
+  exit 1
 fi
 
 echo "Saving $IMG_NAME image to $SAVED_IMG"
 docker save -o $SAVED_IMG $IMG_NAME
 
-function waitForNodes {
-    pids=("$@")
-    for pid in "${pids[@]}"; do
-        if ! wait $pid; then
-            echo "Command failed for one or more node"
-            wait # wait for all remaining processes
-            exit 2
-        fi
-    done
+function waitForNodes() {
+  pids=("$@")
+  for pid in "${pids[@]}"; do
+    if ! wait $pid; then
+      echo "Command failed for one or more node"
+      wait # wait for all remaining processes
+      exit 2
+    fi
+  done
 }
 
 echo "Copying $IMG_NAME image to every node..."
@@ -41,10 +43,10 @@ echo "Copying $IMG_NAME image to every node..."
 scp -F ssh-config $SAVED_IMG k8s-node-master:/tmp/antrea-ubuntu.tar &
 pids[0]=$!
 # Loop over all worker nodes and copy image to each one
-for ((i=1; i<=$NUM_WORKERS; i++)); do
-    name="k8s-node-worker-$i"
-    scp -F ssh-config $SAVED_IMG $name:/tmp/antrea-ubuntu.tar &
-    pids[$i]=$!
+for ((i = 1; i <= $NUM_WORKERS; i++)); do
+  name="k8s-node-worker-$i"
+  scp -F ssh-config $SAVED_IMG $name:/tmp/antrea-ubuntu.tar &
+  pids[$i]=$!
 done
 # Wait for all child processes to complete
 waitForNodes "${pids[@]}"
@@ -54,10 +56,10 @@ echo "Loading $IMG_NAME image in every node..."
 ssh -F ssh-config k8s-node-master docker load -i /tmp/antrea-ubuntu.tar &
 pids[0]=$!
 # Loop over all worker nodes and copy image to each one
-for ((i=1; i<=$NUM_WORKERS; i++)); do
-    name="k8s-node-worker-$i"
-    ssh -F ssh-config $name docker load -i /tmp/antrea-ubuntu.tar &
-    pids[$i]=$!
+for ((i = 1; i <= $NUM_WORKERS; i++)); do
+  name="k8s-node-worker-$i"
+  ssh -F ssh-config $name docker load -i /tmp/antrea-ubuntu.tar &
+  pids[$i]=$!
 done
 # Wait for all child processes to complete
 waitForNodes "${pids[@]}"
@@ -67,10 +69,23 @@ echo "Copying Antrea deployment YAML to every node..."
 scp -F ssh-config $ANTREA_YML k8s-node-master:~/ &
 pids[0]=$!
 # Loop over all worker nodes and copy image to each one
-for ((i=1; i<=$NUM_WORKERS; i++)); do
-    name="k8s-node-worker-$i"
-    scp -F ssh-config $ANTREA_YML $name:~/ &
-    pids[$i]=$!
+for ((i = 1; i <= $NUM_WORKERS; i++)); do
+  name="k8s-node-worker-$i"
+  scp -F ssh-config $ANTREA_YML $name:~/ &
+  pids[$i]=$!
+done
+# Wait for all child processes to complete
+waitForNodes "${pids[@]}"
+echo "Done!"
+
+echo "Copying antctl to every node..."
+scp -F ssh-config "$ANTCTL" k8s-node-master:~ &
+pids[0]=$!
+# Loop over all worker nodes and copy antctl to each one
+for ((i = 1; i <= NUM_WORKERS; i++)); do
+  name="k8s-node-worker-$i"
+  scp -F ssh-config "$ANTCTL" $name:~/ &
+  pids[$i]=$!
 done
 # Wait for all child processes to complete
 waitForNodes "${pids[@]}"

@@ -1,8 +1,10 @@
+SHELL			:= /bin/bash
 # go options
 GO              ?= go
 LDFLAGS         :=
 GOFLAGS         :=
 BINDIR          := $(CURDIR)/bin
+ANTCTL_BINDIR   := $(CURDIR)/antctl-bin
 GO_FILES        := $(shell find . -type d -name '.cache' -prune -o -type f -name '*.go' -print)
 GOPATH          ?= $$(go env GOPATH)
 DOCKER_CACHE    := $(CURDIR)/.cache
@@ -75,6 +77,19 @@ docker-tidy: $(DOCKER_CACHE)
 .linux-bin:
 	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
 
+# TODO: strip binary when building realses
+ANTCTL_BINARIES := antctl-darwin antctl-linux antctl-windows
+$(ANTCTL_BINARIES): antctl-%:
+	@GOOS=$* $(GO) build -o $(ANTCTL_BINDIR)/$@ $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
+	@if [[ $@ != *windows ]]; then \
+	  chmod 0755 $(ANTCTL_BINDIR)/$@; \
+	else \
+	  mv $(ANTCTL_BINDIR)/$@ $(ANTCTL_BINDIR)/$@.exe; \
+	fi
+
+.PHONY: antctl
+antctl: $(ANTCTL_BINARIES)
+
 .PHONY: .linux-test-unit
 .linux-test-unit:
 	@echo
@@ -113,7 +128,7 @@ fmt:
 .linter:
 	@if ! PATH=$$PATH:$(GOPATH)/bin command -v golint > /dev/null; then \
 	  echo "===> Installing Golint <==="; \
-	  go get -u golang.org/x/lint/golint; \
+	  $(GO) get -u golang.org/x/lint/golint; \
 	fi
 
 .PHONY: lint
@@ -124,6 +139,7 @@ lint: .linter
 .PHONY: clean
 clean:
 	@rm -rf $(BINDIR)
+	@rm -rf $(ANTCTL_BINDIR)
 	@rm -rf $(DOCKER_CACHE)
 	@rm -f .mockgen .protoc
 

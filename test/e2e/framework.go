@@ -618,6 +618,21 @@ func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err e
 	return pods.Items[0].Name, nil
 }
 
+// getAntreaController retrieves the name of the Antrea Controller (antrea-controller-*) running in the k8s cluster.
+func (data *TestData) getAntreaController() (podName string, err error) {
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=antrea,component=antrea-controller",
+	}
+	pods, err := data.clientset.CoreV1().Pods(AntreaNamespace).List(listOptions)
+	if err != nil {
+		return "", fmt.Errorf("failed to list Antrea Controller: %v", err)
+	}
+	if len(pods.Items) != 1 {
+		return "", fmt.Errorf("expected *exactly* one Pod")
+	}
+	return pods.Items[0].Name, nil
+}
+
 // validatePodIP checks that the provided IP address is in the Pod Network CIDR for the cluster.
 func validatePodIP(podNetworkCIDR, podIP string) (bool, error) {
 	ip := net.ParseIP(podIP)

@@ -18,21 +18,24 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/vmware-tanzu/antrea/pkg/version"
+
 	"k8s.io/api/core/v1"
 	"k8s.io/klog"
 )
 
 const (
-	SERVICE_NAME  = "antrea"
-	POD_NAME      = "POD_NAME"
-	POD_NAMESPACE = "POD_NAMESPACE"
-	NODE_NAME     = "NODE_NAME"
+	serviceName  = "antrea"
+	podName      = "POD_NAME"
+	podNamespace = "POD_NAMESPACE"
+	nodeName     = "NODE_NAME"
 )
 
 // Querier provides interface for both monitor CRD and CLI to consume controller and agent status.
 type Querier interface {
 	GetSelfPod() v1.ObjectReference
 	GetSelfNode() v1.ObjectReference
+	GetVersion() string
 }
 
 type AgentQuerier interface {
@@ -47,10 +50,10 @@ type ControllerQuerier interface {
 }
 
 func (monitor *agentMonitor) GetSelfPod() v1.ObjectReference {
-	if os.Getenv(POD_NAME) == "" || os.Getenv(POD_NAMESPACE) == "" {
+	if os.Getenv(podName) == "" || os.Getenv(podNamespace) == "" {
 		return v1.ObjectReference{}
 	}
-	return v1.ObjectReference{Kind: "Pod", Name: os.Getenv(POD_NAME), Namespace: os.Getenv(POD_NAMESPACE)}
+	return v1.ObjectReference{Kind: "Pod", Name: os.Getenv(podName), Namespace: os.Getenv(podNamespace)}
 }
 
 func (monitor *agentMonitor) GetSelfNode() v1.ObjectReference {
@@ -83,20 +86,28 @@ func (monitor *agentMonitor) GetLocalPodNum() int32 {
 	return int32(monitor.interfaceStore.GetContainerInterfaceNum())
 }
 
+func (monitor *agentMonitor) GetVersion() string {
+	return version.GetFullVersion()
+}
+
 func (monitor *controllerMonitor) GetSelfPod() v1.ObjectReference {
-	if os.Getenv(POD_NAME) == "" || os.Getenv(POD_NAMESPACE) == "" {
+	if os.Getenv(podName) == "" || os.Getenv(podNamespace) == "" {
 		return v1.ObjectReference{}
 	}
-	return v1.ObjectReference{Kind: "Pod", Name: os.Getenv(POD_NAME), Namespace: os.Getenv(POD_NAMESPACE)}
+	return v1.ObjectReference{Kind: "Pod", Name: os.Getenv(podName), Namespace: os.Getenv(podNamespace)}
 }
 
 func (monitor *controllerMonitor) GetSelfNode() v1.ObjectReference {
-	if os.Getenv(NODE_NAME) == "" {
+	if os.Getenv(nodeName) == "" {
 		return v1.ObjectReference{}
 	}
-	return v1.ObjectReference{Kind: "Node", Name: os.Getenv(NODE_NAME)}
+	return v1.ObjectReference{Kind: "Node", Name: os.Getenv(nodeName)}
 }
 
 func (monitor *controllerMonitor) GetService() v1.ObjectReference {
-	return v1.ObjectReference{Kind: "Service", Name: SERVICE_NAME}
+	return v1.ObjectReference{Kind: "Service", Name: serviceName}
+}
+
+func (monitor *controllerMonitor) GetVersion() string {
+	return version.GetFullVersion()
 }

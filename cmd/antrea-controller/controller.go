@@ -19,11 +19,13 @@ import (
 	"net"
 	"time"
 
+	"github.com/pkg/errors"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/antctl"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
@@ -71,6 +73,7 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
+
 	apiServer, err := apiServerConfig.Complete(informerFactory).New()
 	if err != nil {
 		return fmt.Errorf("error creating API server: %v", err)
@@ -88,10 +91,22 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
-	go apiServer.GenericAPIServer.PrepareRun().Run(stopCh)
+	readyAPIServer := apiServer.GenericAPIServer.PrepareRun()
+	antctl.Definition.ApplyToAPIServer(readyAPIServer.GenericAPIServer, controllerMonitor)
+	go readyAPIServer.Run(stopCh)
+
+	// Start the local server
+	antctlServerOpt, err := antctl.NewServerOptions(antctl.Definition, nil, controllerMonitor, antctl.DefaultControllerLocalPort)
+	if err != nil {
+		return errors.Wrap(err, "error initializing antctl server")
+	}
+	serverStoppedCh := antctl.StartLocalServer(antctlServerOpt, stopCh)
 
 	<-stopCh
+
 	klog.Info("Stopping Antrea controller")
+	<-serverStoppedCh // check if the antctl server stopped
+
 	return nil
 }
 

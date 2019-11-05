@@ -1,4 +1,5 @@
 bin
+antctl-bin/
 .mockgen
 .cache
 
