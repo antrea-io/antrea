@@ -22,6 +22,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
@@ -45,7 +46,18 @@ func run(o *Options) error {
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 
-	networkPolicyController := networkpolicy.NewNetworkPolicyController(client, podInformer, namespaceInformer, networkPolicyInformer)
+	// Create Antrea object storage.
+	addressGroupStore := store.NewAddressGroupStore()
+	appliedToGroupStore := store.NewAppliedToGroupStore()
+	networkPolicyStore := store.NewNetworkPolicyStore()
+
+	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
+		podInformer,
+		namespaceInformer,
+		networkPolicyInformer,
+		addressGroupStore,
+		appliedToGroupStore,
+		networkPolicyStore)
 
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
