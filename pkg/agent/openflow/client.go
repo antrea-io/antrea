@@ -22,6 +22,7 @@ import (
 
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -41,28 +42,30 @@ type Client interface {
 	// InstallTunnelFlows sets up flows related to an OVS tunnel port, the tunnel port must exist.
 	InstallTunnelFlows(tunnelOFPort uint32) error
 
-	// InstallNodeFlows should be invoked when a connection to a remote node is going to be set up.
-	// The hostname is used to identify the added flows.
+	// InstallNodeFlows should be invoked when a connection to a remote Node is going to be set
+	// up. The hostname is used to identify the added flows. Calls to InstallNodeFlows are
+	// idempotent.
 	InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error
 
-	// UninstallNodeFlows removes the connection to the remote node specified with the hostname. UninstallNodeFlows will
-	// do nothing if no connection to the host was established.
+	// UninstallNodeFlows removes the connection to the remote Node specified with the
+	// hostname. UninstallNodeFlows will do nothing if no connection to the host was established.
 	UninstallNodeFlows(hostname string) error
 
-	// InstallPodFlows should be invoked when a connection to a pod on current node.
-	// The containerID is used to identify the added flows.
+	// InstallPodFlows should be invoked when a connection to a Pod on current Node. The
+	// containerID is used to identify the added flows. Calls to InstallPodFlows are idempotent.
 	InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error
 
-	// UninstallPodFlows removes the connection to the local pod specified with the containerID. UninstallPodFlows will
-	// do nothing if no connection to the pod was established.
+	// UninstallPodFlows removes the connection to the local Pod specified with the
+	// containerID. UninstallPodFlows will do nothing if no connection to the Pod was established.
 	UninstallPodFlows(containerID string) error
 
-	// InstallServiceFlows should be invoked when a connection to a kubernetes service is going to be connected, all
-	// arguments should be filled. The serviceName is used to identify the added flows.
+	// InstallServiceFlows should be invoked when a connection to a Kubernetes service is going
+	// to be connected, all arguments should be filled. The serviceName is used to identify the
+	// added flows. Calls to InstallServiceFlows are idempotent.
 	InstallServiceFlows(serviceName string, serviceNet *net.IPNet, gatewayOFPort uint32) error
 
-	// UninstallServiceFlows removes the connection to the Service specified with the serviceName. UninstallServiceFlows
-	// will do nothing if no connection to the service was established.
+	// UninstallServiceFlows removes the connection to the Service specified with the
+	// serviceName. UninstallServiceFlows will do nothing if no connection to the service was established.
 	UninstallServiceFlows(serviceName string) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
@@ -72,7 +75,7 @@ type Client interface {
 	// NetworkPolicy rule. Each ingress/egress policy rule installs Openflow entries on two tables, one for
 	// ruleTable and the other for dropTable. If a packet does not pass the ruleTable, it will be dropped by the
 	// dropTable.
-	InstallPolicyRuleFlows(rule *PolicyRule) error
+	InstallPolicyRuleFlows(rule *types.PolicyRule) error
 
 	// UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
 	// UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
@@ -80,11 +83,11 @@ type Client interface {
 
 	// AddPolicyRuleAddress adds one or multiple addresses to the specified NetworkPolicy rule. If addrType is true, the
 	// addresses are added to PolicyRule.From, else to PolicyRule.To.
-	AddPolicyRuleAddress(ruleID uint32, addrType AddressType, addresses []Address) error
+	AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error
 
 	// DeletePolicyRuleAddress removes addresses from the specified NetworkPolicy rule. If addrType is true, the addresses
 	// are removed from PolicyRule.From, else from PolicyRule.To.
-	DeletePolicyRuleAddress(ruleID uint32, addrType AddressType, addresses []Address) error
+	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -92,25 +95,42 @@ func (c *client) GetFlowTableStatus() []binding.TableStatus {
 	return c.bridge.DumpTableStatus()
 }
 
-func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error {
-	flow := c.arpResponderFlow(peerGatewayIP.String())
-	if err := flow.Add(); err != nil {
-		return err
+// addMissingFlows adds any flow from flows which is not currently in the flow cache. The function
+// returns immediately in case of error when adding a flow. If a flow is added succesfully, it is
+// added to the flow cache. If the flow cache has not been initialized yet (i.e. there is no
+// cacheKey key in the cache map), we create it first.
+func (c *client) addMissingFlows(cache map[string]flowCache, cacheKey string, flows []binding.Flow) error {
+	// initialize flow cache if needed
+	if _, ok := cache[cacheKey]; !ok {
+		cache[cacheKey] = flowCache{}
 	}
-	c.nodeFlowCache[hostname] = append(c.nodeFlowCache[hostname], flow)
-
-	flow = c.l3FwdFlowToRemote(localGatewayMAC.String(), peerPodCIDR.String(), peerTunnelName)
-	if err := flow.Add(); err != nil {
-		return err
+	flowCache := cache[cacheKey]
+	for _, flow := range flows {
+		flowKey := flow.MatchString()
+		if _, ok := flowCache[flowKey]; ok {
+			continue
+		}
+		if err := c.flowOperations.Add(flow); err != nil {
+			return err
+		}
+		flowCache[flow.MatchString()] = flow
 	}
-	c.nodeFlowCache[hostname] = append(c.nodeFlowCache[hostname], flow)
 	return nil
+}
+
+func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, peerTunnelName string) error {
+	flows := []binding.Flow{
+		c.arpResponderFlow(peerGatewayIP.String()),
+		c.l3FwdFlowToRemote(localGatewayMAC.String(), peerPodCIDR.String(), peerTunnelName),
+	}
+
+	return c.addMissingFlows(c.nodeFlowCache, hostname, flows)
 }
 
 func (c *client) UninstallNodeFlows(hostname string) error {
 	defer delete(c.nodeFlowCache, hostname)
 	for _, flow := range c.nodeFlowCache[hostname] {
-		if err := flow.Delete(); err != nil {
+		if err := c.flowOperations.Delete(flow); err != nil {
 			return err
 		}
 	}
@@ -118,43 +138,21 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 }
 
 func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
-	flow := c.podClassifierFlow(ofPort)
-	if err := flow.Add(); err != nil {
-		return err
+	flows := []binding.Flow{
+		c.podClassifierFlow(ofPort),
+		c.podIPSpoofGuardFlow(podInterfaceIP.String(), podInterfaceMAC.String(), ofPort),
+		c.arpSpoofGuardFlow(podInterfaceIP.String(), podInterfaceMAC.String(), ofPort),
+		c.l2ForwardCalcFlow(podInterfaceMAC.String(), ofPort),
+		c.l3FlowsToPod(gatewayMAC.String(), podInterfaceIP.String(), podInterfaceMAC.String()),
 	}
-	c.podFlowCache[containerID] = append(c.podFlowCache[containerID], flow)
 
-	flow = c.podIPSpoofGuardFlow(podInterfaceIP.String(), podInterfaceMAC.String(), ofPort)
-	if err := flow.Add(); err != nil {
-		return err
-	}
-	c.podFlowCache[containerID] = append(c.podFlowCache[containerID], flow)
-
-	flow = c.arpSpoofGuardFlow(podInterfaceIP.String(), podInterfaceMAC.String(), ofPort)
-	if err := flow.Add(); err != nil {
-		return err
-	}
-	c.podFlowCache[containerID] = append(c.podFlowCache[containerID], flow)
-
-	flow = c.l2ForwardCalcFlow(podInterfaceMAC.String(), ofPort)
-	if err := flow.Add(); err != nil {
-		return err
-	}
-	c.podFlowCache[containerID] = append(c.podFlowCache[containerID], flow)
-
-	flow = c.l3FlowsToPod(gatewayMAC.String(), podInterfaceIP.String(), podInterfaceMAC.String())
-	if err := flow.Add(); err != nil {
-		return err
-	}
-	c.podFlowCache[containerID] = append(c.podFlowCache[containerID], flow)
-
-	return nil
+	return c.addMissingFlows(c.podFlowCache, containerID, flows)
 }
 
 func (c *client) UninstallPodFlows(containerID string) error {
 	defer delete(c.podFlowCache, containerID)
 	for _, flow := range c.podFlowCache[containerID] {
-		if err := flow.Delete(); err != nil {
+		if err := c.flowOperations.Delete(flow); err != nil {
 			return err
 		}
 	}
@@ -162,18 +160,17 @@ func (c *client) UninstallPodFlows(containerID string) error {
 }
 
 func (c *client) InstallServiceFlows(serviceName string, serviceNet *net.IPNet, gatewayOFPort uint32) error {
-	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort)
-	if err := flow.Add(); err != nil {
-		return err
+	flows := []binding.Flow{
+		c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort),
 	}
-	c.serviceCache[serviceName] = append(c.serviceCache[serviceName], flow)
-	return nil
+
+	return c.addMissingFlows(c.serviceCache, serviceName, flows)
 }
 
 func (c *client) UninstallServiceFlows(serviceName string) error {
 	defer delete(c.serviceCache, serviceName)
 	for _, flow := range c.serviceCache[serviceName] {
-		if err := flow.Delete(); err != nil {
+		if err := c.flowOperations.Delete(flow); err != nil {
 			return err
 		}
 	}
@@ -181,24 +178,24 @@ func (c *client) UninstallServiceFlows(serviceName string) error {
 }
 
 func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
-	if err := c.gatewayClassifierFlow(gatewayOFPort).Add(); err != nil {
+	if err := c.flowOperations.Add(c.gatewayClassifierFlow(gatewayOFPort)); err != nil {
 		return err
-	} else if err := c.gatewayIPSpoofGuardFlow(gatewayOFPort).Add(); err != nil {
+	} else if err := c.flowOperations.Add(c.gatewayIPSpoofGuardFlow(gatewayOFPort)); err != nil {
 		return err
-	} else if err := c.gatewayARPSpoofGuardFlow(gatewayOFPort).Add(); err != nil {
+	} else if err := c.flowOperations.Add(c.gatewayARPSpoofGuardFlow(gatewayOFPort)); err != nil {
 		return err
-	} else if err := c.l3ToGatewayFlow(gatewayAddr.String(), gatewayMAC.String()).Add(); err != nil {
+	} else if err := c.flowOperations.Add(c.l3ToGatewayFlow(gatewayAddr.String(), gatewayMAC.String())); err != nil {
 		return err
-	} else if err := c.l2ForwardCalcFlow(gatewayMAC.String(), gatewayOFPort).Add(); err != nil {
+	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(gatewayMAC.String(), gatewayOFPort)); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (c *client) InstallTunnelFlows(tunnelOFPort uint32) error {
-	if err := c.tunnelClassifierFlow(tunnelOFPort).Add(); err != nil {
+	if err := c.flowOperations.Add(c.tunnelClassifierFlow(tunnelOFPort)); err != nil {
 		return err
-	} else if err := c.l2ForwardCalcFlow(globalVirtualMAC, tunnelOFPort).Add(); err != nil {
+	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(globalVirtualMAC, tunnelOFPort)); err != nil {
 		return err
 	}
 	return nil
@@ -227,18 +224,18 @@ func (c *client) Initialize() error {
 	}
 
 	for _, flow := range c.defaultFlows() {
-		if err := flow.Add(); err != nil {
+		if err := c.flowOperations.Add(flow); err != nil {
 			return fmt.Errorf("failed to install default flows: %v", err)
 		}
 	}
-	if err := c.arpNormalFlow().Add(); err != nil {
+	if err := c.flowOperations.Add(c.arpNormalFlow()); err != nil {
 		return fmt.Errorf("failed to install arp normal flow: %v", err)
 	}
-	if err := c.l2ForwardOutputFlow().Add(); err != nil {
+	if err := c.flowOperations.Add(c.l2ForwardOutputFlow()); err != nil {
 		return fmt.Errorf("failed to install l2 forward output flows: %v", err)
 	}
 	for _, flow := range c.connectionTrackFlows() {
-		if err := flow.Add(); err != nil {
+		if err := c.flowOperations.Add(flow); err != nil {
 			return fmt.Errorf("failed to install connection track flows: %v", err)
 		}
 	}

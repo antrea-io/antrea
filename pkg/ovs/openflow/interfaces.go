@@ -80,6 +80,7 @@ type Flow interface {
 	Modify() error
 	Delete() error
 	String() string
+	MatchString() string
 	Table() Table
 }
 
