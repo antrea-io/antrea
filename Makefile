@@ -106,6 +106,11 @@ clean:
 	@rm -rf $(DOCKER_CACHE)
 	@rm -f .mockgen .protoc
 
+# Check if the antctl definitions are valid.
+.PHONY: cli-definitions
+cli-definitions:
+	@go generate ./pkg/antctl/definitions.go
+
 # Install a specific version of gomock to avoid generating different source code
 # for the mocks every time a new version of gomock is released. If a new version
 # of gomock is desired, this file should be updated.
