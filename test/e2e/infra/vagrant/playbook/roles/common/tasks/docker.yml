@@ -27,12 +27,21 @@
   notify:
     - docker status
 
-- name: Add test user to docker group
+- name: Add test user to docker group (Ansible >= 2.5.0)
   user:
     name: "{{ test_user }}"
     groups: docker
     append: yes
     create_home: yes
+  when: ansible_version.full >= "2.5.0"
+
+- name: Add test user to docker group (Ansible < 2.5.0)
+  user:
+    name: "{{ test_user }}"
+    groups: docker
+    append: yes
+    createhome: yes
+  when: ansible_version.full < "2.5.0"
 
 # Install docker-py so that docker images can be pulled
 - pip:
