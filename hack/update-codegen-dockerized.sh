@@ -25,26 +25,6 @@ ANTREA_PKG="github.com/vmware-tanzu/antrea"
 # Generate protobuf code for CNI gRPC service with protoc.
 protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
 
-
-# Generate mocks for testing with mockgen.
-MOCKGEN_TARGETS=(
-  "pkg/agent/cniserver/ipam IPAMDriver"
-  "pkg/agent/openflow Client,FlowOperations"
-  "pkg/ovs/openflow Bridge,Table,Flow,Action,FlowBuilder"
-  "pkg/ovs/ovsconfig OVSBridgeClient"
-)
-
-for target in "${MOCKGEN_TARGETS[@]}"; do
-  read -r package interfaces <<<"${target}"
-  package_name=$(basename "${package}")
-  $GOPATH/bin/mockgen \
-    -copyright_file hack/boilerplate/license_header.raw.txt \
-    -destination "${package}/testing/mock_${package_name}.go" \
-    -package=testing \
-    "${ANTREA_PKG}/${package}" "${interfaces}"
-done
-
-
 # Generate clientset and apis code with K8s codegen tools.
 $GOPATH/bin/client-gen \
   --clientset-name versioned \
@@ -62,6 +42,25 @@ $GOPATH/bin/conversion-gen  \
   --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1,${ANTREA_PKG}/pkg/apis/networking/" \
   -O zz_generated.conversion \
   --go-header-file hack/boilerplate/license_header.go.txt
+
+# Generate mocks for testing with mockgen.
+MOCKGEN_TARGETS=(
+  "pkg/agent/cniserver/ipam IPAMDriver"
+  "pkg/agent/openflow Client,FlowOperations"
+  "pkg/ovs/openflow Bridge,Table,Flow,Action,FlowBuilder"
+  "pkg/ovs/ovsconfig OVSBridgeClient"
+  "pkg/monitor AgentQuerier,ControllerQuerier"
+)
+
+for target in "${MOCKGEN_TARGETS[@]}"; do
+  read -r package interfaces <<<"${target}"
+  package_name=$(basename "${package}")
+  $GOPATH/bin/mockgen \
+    -copyright_file hack/boilerplate/license_header.raw.txt \
+    -destination "${package}/testing/mock_${package_name}.go" \
+    -package=testing \
+    "${ANTREA_PKG}/${package}" "${interfaces}"
+done
 
 # Download vendored modules to the vendor directory so it's easier to
 # specify the search path of required protobuf files.
