@@ -15,9 +15,9 @@ Before getting started, go through the following:
 ## Accounts setup
 
 At minimum, you need the following accounts for effective participation:
-1. Github : Committing any change requires you to have a [github account](https://github.com/join).
-2. Slack: Please join antrea-dev [Slack channel](https://projectantrea.slack.com/) to participate in discussions.
-3. Google: Join our [mailing list](https://groups.google.com/forum/#!forum/antrea-dev).
+1. **Github** : Committing any change requires you to have a [github account](https://github.com/join).
+2. **Slack**: Please join the [#antrea-dev](https://projectantrea.slack.com/messages/antrea-dev) channel to participate in discussions.
+3. **Google**: Join our [mailing list](https://groups.google.com/forum/#!forum/projectantrea-dev).
 
 ## Contribute
 
