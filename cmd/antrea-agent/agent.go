@@ -59,7 +59,7 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
-	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsdbConnection)
+	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 
 	ofClient := openflow.NewClient(o.config.OVSBridge)
 

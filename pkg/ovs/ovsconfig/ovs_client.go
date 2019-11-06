@@ -25,9 +25,10 @@ import (
 )
 
 type OVSBridge struct {
-	ovsdb *ovsdb.OVSDB
-	name  string
-	uuid  string
+	ovsdb        *ovsdb.OVSDB
+	name         string
+	datapathType string
+	uuid         string
 }
 
 type OVSPortData struct {
@@ -87,8 +88,8 @@ func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 }
 
 // NewOVSBridge creates and returns a new OVSBridge struct.
-func NewOVSBridge(bridgeName string, ovsdb *ovsdb.OVSDB) *OVSBridge {
-	return &OVSBridge{ovsdb, bridgeName, ""}
+func NewOVSBridge(bridgeName string, ovsDatapathType string, ovsdb *ovsdb.OVSDB) *OVSBridge {
+	return &OVSBridge{ovsdb, bridgeName, ovsDatapathType, ""}
 }
 
 // Create looks up or creates the bridge. If the bridge with name bridgeName
@@ -159,6 +160,7 @@ func (br *OVSBridge) create() Error {
 		// Use Openflow protocol version 1.0 and 1.3.
 		Protocols: makeOVSDBSetFromList([]string{openflowProtoVersion10,
 			openflowProtoVersion13}),
+		DatapathType: br.datapathType,
 	}
 	namedUUID := tx.Insert(dbtransaction.Insert{
 		Table: "Bridge",
