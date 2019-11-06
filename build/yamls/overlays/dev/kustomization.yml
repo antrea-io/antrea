@@ -1,0 +1,15 @@
+bases:
+- ../../base
+images:
+- name: antrea
+  newName: antrea-ubuntu
+  newTag: latest
+patches:
+- path: controllerImagePullPolicy.yml
+  target:
+    kind: Deployment
+    name: antrea-controller
+- path: agentImagePullPolicy.yml
+  target:
+    kind: DaemonSet
+    name: antrea-agent

@@ -30,6 +30,12 @@ type AgentConfig struct {
 	// Make sure it doesn't conflict with your existing OpenVSwitch bridges.
 	// Defaults to br-int.
 	OVSBridge string `yaml:"ovsBridge,omitempty"`
+	// Datapath type to use for the OpenVSwitch bridge created by Antrea. Supported values are:
+	// - system
+	// - netdev
+	// 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
+	// OVS in userspace mode. Userspace mode requires the tun device driver to be available.
+	OVSDatapathType string `yaml:"ovsDatapathType,omitempty"`
 	// Name of the interface antrea-agent will create and use for host <--> pod communication.
 	// Make sure it doesn't conflict with your existing interfaces.
 	// Defaults to gw0.

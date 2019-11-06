@@ -87,6 +87,11 @@ You can follow the instructions in the [Contributor Guide](CONTRIBUTING.md#build
 Antrea components can also be run manually for development purpose. See [Manual Installation](docs/manual-installation.md)
 for information.
 
+### Deploying Antrea in Kind
+
+To deploy Antrea in a [Kind](https://github.com/kubernetes-sigs/kind) cluster, please refer to this
+[guide](/docs/kind.md).
+
 ### Contribute
 
 The Antrea community welcomes new contributors. Please join our

@@ -31,7 +31,7 @@ ifndef VERSION
         VERSION := $(shell head -n 1 VERSION)
         DOCKER_IMG_VERSION := $(VERSION)-$(VERSION_SUFFIX)
 else
-        DOCKER__IMG_VERSION := $(VERSION)
+        DOCKER_IMG_VERSION := $(VERSION)
 endif
 
 VERSION_LDFLAGS = -X github.com/vmware-tanzu/antrea/pkg/version.Version=$(VERSION)

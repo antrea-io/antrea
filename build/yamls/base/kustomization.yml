@@ -1,0 +1,19 @@
+resources:
+- crds.yml
+- controller.yml
+- agent.yml
+configMapGenerator:
+- files:
+  - conf/antrea-controller.conf
+  - conf/antrea-agent.conf
+  - conf/antrea-cni.conf
+  name: antrea-config
+commonLabels:
+  app: antrea
+namespace: kube-system
+  # Only a single active instance is supported for now.
+replicas:
+- count: 1
+  name: antrea-controller
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization

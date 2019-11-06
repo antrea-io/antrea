@@ -69,15 +69,18 @@ func (o *Options) complete(args []string) error {
 // validate validates all the required options. It must be called after complete.
 func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
-		return fmt.Errorf("An empty argument list is not supported")
+		return fmt.Errorf("an empty argument list is not supported")
 	}
 	// Validate service CIDR configuration
 	_, _, err := net.ParseCIDR(o.config.ServiceCIDR)
 	if err != nil {
-		return fmt.Errorf("Service CIDR %s is invalid", o.config.ServiceCIDR)
+		return fmt.Errorf("service CIDR %s is invalid", o.config.ServiceCIDR)
 	}
 	if o.config.TunnelType != ovsconfig.VXLAN_TUNNEL && o.config.TunnelType != ovsconfig.GENEVE_TUNNEL {
-		return fmt.Errorf("Tunnel type %s is invalid", o.config.TunnelType)
+		return fmt.Errorf("tunnel type %s is invalid", o.config.TunnelType)
+	}
+	if o.config.OVSDatapathType != ovsconfig.OVSDatapathSystem && o.config.OVSDatapathType != ovsconfig.OVSDatapathNetdev {
+		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
 	}
 	return nil
 }
@@ -102,6 +105,9 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.OVSBridge == "" {
 		o.config.OVSBridge = defaultOVSBridge
+	}
+	if o.config.OVSDatapathType == "" {
+		o.config.OVSDatapathType = ovsconfig.OVSDatapathSystem
 	}
 	if o.config.HostGateway == "" {
 		o.config.HostGateway = defaultHostGateway
