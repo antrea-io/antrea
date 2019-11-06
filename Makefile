@@ -141,3 +141,8 @@ build-ubuntu:
 	@echo "===> Building Antrea bins and antrea-ubuntu Docker image <==="
 	docker build -t antrea-ubuntu -f build/images/Dockerfile.build.ubuntu .
 	docker tag antrea-ubuntu antrea-ubuntu:$(DOCKER_IMG_VERSION)
+
+.PHONY: manifest
+manifest:
+	@echo "===> Generating dev manifest for Antrea <==="
+	$(CURDIR)/hack/generate-manifest.sh --mode dev > build/yamls/antrea.yml

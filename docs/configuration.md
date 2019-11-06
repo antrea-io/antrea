@@ -22,6 +22,13 @@ clientConnection:
 # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
 #ovsBridge: br-int
 
+# Datapath type to use for the OpenVSwitch bridge created by Antrea. Supported values are:
+# - system
+# - netdev
+# 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
+# OVS in userspace mode. Userspace mode requires the tun device driver to be available.
+#ovsDatapathType: system
+
 # Name of the gateway interface for the local Pod subnet. antrea-agent will create the interface on the OVS bridge.
 # Make sure it doesn't conflict with your existing interfaces.
 #hostGateway: gw0
