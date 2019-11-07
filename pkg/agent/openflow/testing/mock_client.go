@@ -78,6 +78,20 @@ func (mr *MockClientMockRecorder) DeletePolicyRuleAddress(arg0, arg1, arg2 inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).DeletePolicyRuleAddress), arg0, arg1, arg2)
 }
 
+// Disconnect mocks base method
+func (m *MockClient) Disconnect() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Disconnect")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Disconnect indicates an expected call of Disconnect
+func (mr *MockClientMockRecorder) Disconnect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Disconnect", reflect.TypeOf((*MockClient)(nil).Disconnect))
+}
+
 // GetFlowTableStatus mocks base method
 func (m *MockClient) GetFlowTableStatus() []openflow.TableStatus {
 	m.ctrl.T.Helper()
@@ -121,7 +135,7 @@ func (mr *MockClientMockRecorder) InstallGatewayFlows(arg0, arg1, arg2 interface
 }
 
 // InstallNodeFlows mocks base method
-func (m *MockClient) InstallNodeFlows(arg0 string, arg1 net.HardwareAddr, arg2 net.IP, arg3 net.IPNet, arg4 string) error {
+func (m *MockClient) InstallNodeFlows(arg0 string, arg1 net.HardwareAddr, arg2 net.IP, arg3 net.IPNet, arg4 net.IP) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallNodeFlows", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)

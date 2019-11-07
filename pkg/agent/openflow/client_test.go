@@ -31,7 +31,7 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	hostName := cacheKey
 	gwMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:FF")
 	IP, IPNet, _ := net.ParseCIDR("10.0.1.1/24")
-	peerNodeIP := "192.168.1.1"
+	peerNodeIP := net.ParseIP("192.168.1.1")
 	err := ofClient.InstallNodeFlows(hostName, gwMAC, IP, *IPNet, peerNodeIP)
 	client := ofClient.(*client)
 	return len(client.nodeFlowCache[hostName]), err
