@@ -24,6 +24,8 @@ const (
 type OVSBridgeClient interface {
 	Create() Error
 	Delete() Error
+	GetExternalIDs() (map[string]string, Error)
+	SetExternalIDs(externalIDs map[string]interface{}) Error
 	CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error)
 	CreateGenevePort(name string, ofPortRequest int32, remoteIP string) (string, Error)
 	CreateInternalPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error)

@@ -201,6 +201,44 @@ func (br *OVSBridge) Delete() Error {
 	return nil
 }
 
+// GetExternalIDs returns the external IDs of the bridge.
+func (br *OVSBridge) GetExternalIDs() (map[string]string, Error) {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Select(dbtransaction.Select{
+		Table:   "Bridge",
+		Columns: []string{"external_ids"},
+		Where:   [][]interface{}{{"name", "==", br.name}},
+	})
+
+	res, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return nil, NewTransactionError(err, temporary)
+	}
+
+	extIDRes := res[0].Rows[0].(map[string]interface{})["external_ids"].([]interface{})
+	return buildMapFromOVSDBMap(extIDRes), nil
+}
+
+// SetExternalIDs sets the provided external IDs to the bridge.
+func (br *OVSBridge) SetExternalIDs(externalIDs map[string]interface{}) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Update(dbtransaction.Update{
+		Table: "Bridge",
+		Where: [][]interface{}{{"name", "==", br.name}},
+		Row: map[string]interface{}{
+			"external_ids": helpers.MakeOVSDBMap(externalIDs),
+		},
+	})
+
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}
+
 // GetPortUUIDList returns UUIDs of all ports on the bridge.
 func (br *OVSBridge) GetPortUUIDList() ([]string, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
