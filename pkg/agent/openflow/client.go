@@ -40,7 +40,8 @@ type Client interface {
 
 	// InstallNodeFlows should be invoked when a connection to a remote Node is going to be set
 	// up. The hostname is used to identify the added flows. Calls to InstallNodeFlows are
-	// idempotent.
+	// idempotent. Concurrent calls to InstallNodeFlows and / or UninstallNodeFlows are
+	// supported as long as they are all for different hostnames.
 	InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, tunnelPeerAddr net.IP) error
 
 	// UninstallNodeFlows removes the connection to the remote Node specified with the
@@ -48,7 +49,9 @@ type Client interface {
 	UninstallNodeFlows(hostname string) error
 
 	// InstallPodFlows should be invoked when a connection to a Pod on current Node. The
-	// containerID is used to identify the added flows. Calls to InstallPodFlows are idempotent.
+	// containerID is used to identify the added flows. Calls to InstallPodFlows are
+	// idempotent. Concurrent calls to InstallPodFlows and / or UninstallPodFlows are
+	// supported as long as they are all for different containerIDs.
 	InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error
 
 	// UninstallPodFlows removes the connection to the local Pod specified with the
@@ -57,7 +60,9 @@ type Client interface {
 
 	// InstallServiceFlows should be invoked when a connection to a Kubernetes service is going
 	// to be connected, all arguments should be filled. The serviceName is used to identify the
-	// added flows. Calls to InstallServiceFlows are idempotent.
+	// added flows. Calls to InstallServiceFlows are idempotent. Concurrent calls to
+	// InstallServiceFlows and / or UninstallServiceFlows are supported as long as they are all
+	// for different serviceNames.
 	InstallServiceFlows(serviceName string, serviceNet *net.IPNet, gatewayOFPort uint32) error
 
 	// UninstallServiceFlows removes the connection to the Service specified with the
@@ -97,22 +102,46 @@ func (c *client) GetFlowTableStatus() []binding.TableStatus {
 // addMissingFlows adds any flow from flows which is not currently in the flow cache. The function
 // returns immediately in case of error when adding a flow. If a flow is added succesfully, it is
 // added to the flow cache. If the flow cache has not been initialized yet (i.e. there is no
-// cacheKey key in the cache map), we create it first.
-func (c *client) addMissingFlows(cache map[string]flowCache, cacheKey string, flows []binding.Flow) error {
+// flowCacheKey key in the cache map), we create it first.
+func (c *client) addMissingFlows(cache *flowCategoryCache, flowCacheKey string, flows []binding.Flow) error {
 	// initialize flow cache if needed
-	if _, ok := cache[cacheKey]; !ok {
-		cache[cacheKey] = flowCache{}
-	}
-	flowCache := cache[cacheKey]
+	fCacheI, _ := cache.LoadOrStore(flowCacheKey, flowCache{})
+	fCache := fCacheI.(flowCache)
+
 	for _, flow := range flows {
 		flowKey := flow.MatchString()
-		if _, ok := flowCache[flowKey]; ok {
+		if _, ok := fCache[flowKey]; ok {
 			continue
 		}
 		if err := c.flowOperations.Add(flow); err != nil {
 			return err
 		}
-		flowCache[flow.MatchString()] = flow
+		fCache[flow.MatchString()] = flow
+	}
+	return nil
+}
+
+// deleteFlows deletes all the flows in the flow cache indexed by the provided flowCacheKey.
+func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) error {
+	fCacheI, ok := cache.Load(flowCacheKey)
+	if !ok {
+		// no matching flows found in the cache
+		return nil
+	}
+	fCache := fCacheI.(flowCache)
+
+	// delete flowCache from the top-level cache if all flows were successfully deleted
+	defer func() {
+		if len(fCache) == 0 {
+			cache.Delete(flowCacheKey)
+		}
+	}()
+
+	for flowKey, flow := range fCache {
+		if err := c.flowOperations.Delete(flow); err != nil {
+			return err
+		}
+		delete(fCache, flowKey)
 	}
 	return nil
 }
@@ -127,13 +156,7 @@ func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareA
 }
 
 func (c *client) UninstallNodeFlows(hostname string) error {
-	defer delete(c.nodeFlowCache, hostname)
-	for _, flow := range c.nodeFlowCache[hostname] {
-		if err := c.flowOperations.Delete(flow); err != nil {
-			return err
-		}
-	}
-	return nil
+	return c.deleteFlows(c.nodeFlowCache, hostname)
 }
 
 func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
@@ -149,13 +172,7 @@ func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podI
 }
 
 func (c *client) UninstallPodFlows(containerID string) error {
-	defer delete(c.podFlowCache, containerID)
-	for _, flow := range c.podFlowCache[containerID] {
-		if err := c.flowOperations.Delete(flow); err != nil {
-			return err
-		}
-	}
-	return nil
+	return c.deleteFlows(c.podFlowCache, containerID)
 }
 
 func (c *client) InstallServiceFlows(serviceName string, serviceNet *net.IPNet, gatewayOFPort uint32) error {
@@ -167,13 +184,7 @@ func (c *client) InstallServiceFlows(serviceName string, serviceNet *net.IPNet, 
 }
 
 func (c *client) UninstallServiceFlows(serviceName string) error {
-	defer delete(c.serviceCache, serviceName)
-	for _, flow := range c.serviceCache[serviceName] {
-		if err := c.flowOperations.Delete(flow); err != nil {
-			return err
-		}
-	}
-	return nil
+	return c.deleteFlows(c.serviceCache, serviceName)
 }
 
 func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {

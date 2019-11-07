@@ -201,6 +201,10 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 		klog.V(4).Infof("Finished syncing Node Route for %s. (%v)", nodeName, time.Since(startTime))
 	}()
 
+	// The work queue guarantees that concurrent goroutines cannot call syncNodeRoute on the
+	// same Node, which is required by the InstallNodeFlows / UninstallNodeFlows OF Client
+	// methods.
+
 	if node, err := c.nodeLister.Get(nodeName); err != nil {
 		klog.Infof("Deleting routes and flow entries to Node %s", nodeName)
 		route, flowsAreInstalled := c.installedNodes.Load(nodeName)
