@@ -56,18 +56,18 @@ func NewAgentMonitor(client clientset.Interface, ovsBridge string, nodeName stri
 // Then updates AntreaControllerInfo CRD every 60 seconds if there is any change.
 func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting Antrea Controller Monitor")
-	var controllerCRD *v1beta1.AntreaControllerInfo = nil
+	controllerCRD := monitor.getControllerCRD()
 	var err error = nil
 	for {
 		if controllerCRD == nil {
-			controllerCRD, err = monitor.createControllerCRD(controllerCRD)
+			controllerCRD, err = monitor.createControllerCRD()
 			if err != nil {
-				klog.Errorf("Failed to create controller monitor CRD %v : %v", controllerCRD, err)
+				klog.Errorf("Failed to create controller monitoring CRD %v : %v", controllerCRD, err)
 			}
 		} else {
 			controllerCRD, err = monitor.updateControllerCRD(controllerCRD)
 			if err != nil {
-				klog.Errorf("Failed to update controller monitor CRD %v : %v", controllerCRD, err)
+				klog.Errorf("Failed to update controller monitoring CRD %v : %v", controllerCRD, err)
 			}
 		}
 		time.Sleep(60 * time.Second)
@@ -79,19 +79,19 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 // Then updates AntreaAgentInfo CRD every 60 seconds.
 func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting Antrea Agent Monitor")
-	var agentCRD *v1beta1.AntreaAgentInfo = nil
+	agentCRD := monitor.getAgentCRD()
 	var err error = nil
 	for {
 		if agentCRD == nil {
-			agentCRD, err = monitor.createAgentCRD(agentCRD)
+			agentCRD, err = monitor.createAgentCRD()
 			if err != nil {
-				klog.Errorf("Failed to create agent monitor CRD %v : %v", agentCRD, err)
+				klog.Errorf("Failed to create agent monitoring CRD %v : %v", agentCRD, err)
 				break
 			}
 		} else {
 			agentCRD, err = monitor.updateAgentCRD(agentCRD)
 			if err != nil {
-				klog.Errorf("Failed to update agent monitor CRD %v : %v", agentCRD, err)
+				klog.Errorf("Failed to update agent monitoring CRD %v : %v", agentCRD, err)
 				break
 			}
 		}
@@ -100,8 +100,20 @@ func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
-func (monitor *controllerMonitor) createControllerCRD(controllerCRD *v1beta1.AntreaControllerInfo) (*v1beta1.AntreaControllerInfo, error) {
-	controllerCRD = &v1beta1.AntreaControllerInfo{
+// getControllerCRD is used to check the existence of controller monitoring CRD.
+// So when the pod restarts, it will update this monitoring CRD instead of creating a new one.
+func (monitor *controllerMonitor) getControllerCRD() *v1beta1.AntreaControllerInfo {
+	podName := monitor.GetSelfPod().Name
+	controllerCRD, err := monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Get(podName, metav1.GetOptions{})
+	if err != nil {
+		klog.V(2).Infof("Controller monitoring CRD named %v doesn't exist, will create one", podName)
+		return nil
+	}
+	return controllerCRD
+}
+
+func (monitor *controllerMonitor) createControllerCRD() (*v1beta1.AntreaControllerInfo, error) {
+	controllerCRD := &v1beta1.AntreaControllerInfo{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: monitor.GetSelfPod().Name,
 		},
@@ -110,18 +122,30 @@ func (monitor *controllerMonitor) createControllerCRD(controllerCRD *v1beta1.Ant
 		NodeRef:    monitor.GetSelfNode(),
 		ServiceRef: monitor.GetService(),
 	}
-	klog.Infof("Creating controller monitor CRD %v", controllerCRD)
+	klog.Infof("Creating controller monitoring CRD %v", controllerCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Create(controllerCRD)
 }
 
 // TODO: Update network policy related fields when the upstreaming is ready
 func (monitor *controllerMonitor) updateControllerCRD(controllerCRD *v1beta1.AntreaControllerInfo) (*v1beta1.AntreaControllerInfo, error) {
-	klog.Infof("Updating controller monitor CRD %v", controllerCRD)
+	klog.Infof("Updating controller monitoring CRD %v", controllerCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Update(controllerCRD)
 }
 
-func (monitor *agentMonitor) createAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (*v1beta1.AntreaAgentInfo, error) {
-	agentCRD = &v1beta1.AntreaAgentInfo{
+// getAgentCRD is used to check the existence of agent monitoring CRD.
+// So when the pod restarts, it will update this monitoring CRD instead of creating a new one.
+func (monitor *agentMonitor) getAgentCRD() *v1beta1.AntreaAgentInfo {
+	podName := monitor.GetSelfPod().Name
+	agentCRD, err := monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Get(podName, metav1.GetOptions{})
+	if err != nil {
+		klog.V(2).Infof("Agent monitoring CRD named %v doesn't exist, will create one", podName)
+		return nil
+	}
+	return agentCRD
+}
+
+func (monitor *agentMonitor) createAgentCRD() (*v1beta1.AntreaAgentInfo, error) {
+	agentCRD := &v1beta1.AntreaAgentInfo{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: monitor.GetSelfPod().Name,
 		},
@@ -132,7 +156,7 @@ func (monitor *agentMonitor) createAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (
 		OVSInfo:     v1beta1.OVSInfo{BridgeName: monitor.ovsBridge, FlowTable: monitor.GetOVSFlowTable()},
 		LocalPodNum: monitor.GetLocalPodNum(),
 	}
-	klog.Infof("Creating agent monitor CRD %v", agentCRD)
+	klog.Infof("Creating agent monitoring CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Create(agentCRD)
 }
 
@@ -140,6 +164,6 @@ func (monitor *agentMonitor) updateAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (
 	// LocalPodNum and FlowTable can be changed, so reset these fields.
 	agentCRD.LocalPodNum = monitor.GetLocalPodNum()
 	agentCRD.OVSInfo.FlowTable = monitor.GetOVSFlowTable()
-	klog.Infof("Updating agent monitor CRD %v", agentCRD)
+	klog.Infof("Updating agent monitoring CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
 }
