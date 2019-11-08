@@ -219,8 +219,15 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 	} else if route, flowsAreInstalled := c.installedNodes.Load(nodeName); route == nil {
 		klog.Infof("Adding routes and flows to Node %s, podCIDR: %s, addresses: %v",
 			nodeName, node.Spec.PodCIDR, node.Status.Addresses)
+		if node.Spec.PodCIDR == "" {
+			klog.V(1).Infof("PodCIDR is empty for peer node %s", nodeName)
+			return nil
+		}
 
-		peerPodCIDRAddr, peerPodCIDR, _ := net.ParseCIDR(node.Spec.PodCIDR)
+		peerPodCIDRAddr, peerPodCIDR, err := net.ParseCIDR(node.Spec.PodCIDR)
+		if err != nil {
+			return fmt.Errorf("failed to parse PodCIDR %s", node.Spec.PodCIDR)
+		}
 		peerNodeIP, err := getNodeAddr(node)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve IP address of Node %s: %v", nodeName, err)

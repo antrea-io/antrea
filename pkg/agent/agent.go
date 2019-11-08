@@ -343,10 +343,15 @@ func (i *Initializer) initNodeLocalConfig() error {
 		klog.Errorf("Failed to get node from K8s with name %s: %v", nodeName, err)
 		return err
 	}
-	localCidr := node.Spec.PodCIDR
-	_, localSubnet, err := net.ParseCIDR(localCidr)
+	// Spec.PodCIDR can be empty due to misconfiguration
+	if node.Spec.PodCIDR == "" {
+		klog.Errorf("Spec.PodCIDR is empty for Node %s. Please make sure --allocate-node-cidrs is enabled "+
+			"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", nodeName)
+		return fmt.Errorf("CIDR string is empty for node %s", nodeName)
+	}
+	_, localSubnet, err := net.ParseCIDR(node.Spec.PodCIDR)
 	if err != nil {
-		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", localCidr, err)
+		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
 		return err
 	}
 
