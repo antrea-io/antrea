@@ -57,13 +57,13 @@ type Controller struct {
 	ofClient         openflow.Client
 	nodeConfig       *agent.NodeConfig
 	gatewayLink      netlink.Link
-	// connectedNodes records routes and flows installation states of Nodes.
+	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the route to the Node.
-	// If the flows of the Node are installed, the connectedNodes must contains a key which is the host name.
+	// If the flows of the Node are installed, the installedNodes must contains a key which is the host name.
 	// If the route of the Node are installed, the flows of the Node must be installed first and the value of host name
 	// key must not be nil.
 	// TODO: handle agent restart cases.
-	connectedNodes *sync.Map
+	installedNodes *sync.Map
 }
 
 func NewNodeRouteController(
@@ -84,7 +84,7 @@ func NewNodeRouteController(
 		ofClient:         client,
 		nodeConfig:       config,
 		gatewayLink:      link,
-		connectedNodes:   &sync.Map{},
+		installedNodes:   &sync.Map{},
 	}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -203,20 +203,20 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 
 	if node, err := c.nodeLister.Get(nodeName); err != nil {
 		klog.Infof("Deleting routes and flow entries to Node %s", nodeName)
-		route, flowsAreInstalled := c.connectedNodes.Load(nodeName)
+		route, flowsAreInstalled := c.installedNodes.Load(nodeName)
 		if route != nil {
 			if err = netlink.RouteDel(route.(*netlink.Route)); err != nil {
 				return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 			}
-			c.connectedNodes.Store(nodeName, nil)
+			c.installedNodes.Store(nodeName, nil)
 		}
 		if flowsAreInstalled {
 			if err = c.ofClient.UninstallNodeFlows(nodeName); err != nil {
 				return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
 			}
 		}
-		c.connectedNodes.Delete(nodeName)
-	} else if route, flowsAreInstalled := c.connectedNodes.Load(nodeName); route == nil {
+		c.installedNodes.Delete(nodeName)
+	} else if route, flowsAreInstalled := c.installedNodes.Load(nodeName); route == nil {
 		klog.Infof("Adding routes and flows to Node %s, podCIDR: %s, addresses: %v",
 			nodeName, node.Spec.PodCIDR, node.Status.Addresses)
 
@@ -232,7 +232,7 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 			if err != nil {
 				return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 			}
-			c.connectedNodes.Store(nodeName, nil)
+			c.installedNodes.Store(nodeName, nil)
 		}
 		// install route
 		route := &netlink.Route{
@@ -253,7 +253,7 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 		if err != nil {
 			return fmt.Errorf("failed to install route to Node %s with netlink: %v", nodeName, err)
 		}
-		c.connectedNodes.Store(nodeName, route)
+		c.installedNodes.Store(nodeName, route)
 	}
 	return nil
 }
