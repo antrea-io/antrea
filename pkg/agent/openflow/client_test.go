@@ -15,9 +15,12 @@
 package openflow
 
 import (
+	"context"
 	"errors"
 	"net"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +37,8 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	peerNodeIP := net.ParseIP("192.168.1.1")
 	err := ofClient.InstallNodeFlows(hostName, gwMAC, IP, *IPNet, peerNodeIP)
 	client := ofClient.(*client)
-	return len(client.nodeFlowCache[hostName]), err
+	fCacheI, _ := client.nodeFlowCache.Load(hostName)
+	return len(fCacheI.(flowCache)), err
 }
 
 func installPodFlows(ofClient Client, cacheKey string) (int, error) {
@@ -45,7 +49,8 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	ofPort := uint32(10)
 	err := ofClient.InstallPodFlows(containerID, podIP, podMAC, gwMAC, ofPort)
 	client := ofClient.(*client)
-	return len(client.podFlowCache[containerID]), err
+	fCacheI, _ := client.podFlowCache.Load(containerID)
+	return len(fCacheI.(flowCache)), err
 }
 
 func installServiceFlows(ofClient Client, cacheKey string) (int, error) {
@@ -54,7 +59,8 @@ func installServiceFlows(ofClient Client, cacheKey string) (int, error) {
 	ofPort := uint32(1)
 	err := ofClient.InstallServiceFlows(serviceName, IPNet, ofPort)
 	client := ofClient.(*client)
-	return len(client.serviceCache[serviceName]), err
+	fCacheI, _ := client.serviceCache.Load(serviceName)
+	return len(fCacheI.(flowCache)), err
 }
 
 // TestIdempotentFlowInstallation checks that InstallNodeFlows, InstallPodFlows
@@ -131,6 +137,86 @@ func TestFlowInstallationPartialSuccess(t *testing.T) {
 			numCached, err = tc.installFn(ofClient, tc.cacheKey)
 			require.Nil(t, err, "Error when installing Node flows")
 			assert.Equal(t, tc.numAddCalls, numCached)
+		})
+	}
+}
+
+// TestConcurrentFlowInstallation checks that flow installation for a given flow category (e.g. Node
+// flows) and for different cache keys (e.g. different Node hostnames) can happen concurrently.
+func TestConcurrentFlowInstallation(t *testing.T) {
+	testCases := []struct {
+		name        string
+		cacheKey    string
+		numAddCalls int
+		installFn   func(ofClient Client, cacheKey string) (int, error)
+	}{
+		{"NodeFlows", "host", 2, installNodeFlows},
+		{"PodFlows", "aaaa-bbbb-cccc-dddd", 5, installPodFlows},
+		{"ServiceFlows", "kubernetes", 1, installServiceFlows},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			m := oftest.NewMockFlowOperations(ctrl)
+			ofClient := NewClient(bridgeName)
+			client := ofClient.(*client)
+			client.flowOperations = m
+
+			var wg sync.WaitGroup
+			var counter int32        // tracks the number of concurrent Add calls at any given time
+			var callIdx int32        // used to distinguish between the first Add call and subsequent calls
+			var concurrentCalls bool // set to true if we observe concurrent calls
+			var stop bool
+			var mutex sync.Mutex
+			cond := sync.NewCond(&mutex)
+
+			m.EXPECT().Add(gomock.Any()).DoAndReturn(func(args ...interface{}) error {
+				cond.L.Lock()
+				defer cond.L.Unlock()
+				counter += 1
+				callIdx += 1
+				if callIdx == 1 { // first call
+					// we wait until we need to stop
+					// we stop when one of these conditions is met:
+					// 1) we detected concurrent Add calls (test is a success), or
+					// 2) the test timed out
+					for !stop {
+						cond.Wait()
+					}
+				} else if counter > 1 {
+					concurrentCalls = true
+					stop = true
+					cond.Signal()
+				}
+				return nil
+			}).AnyTimes()
+
+			wg.Add(2)
+			go func() {
+				tc.installFn(ofClient, tc.cacheKey)
+				wg.Done()
+			}()
+			go func() {
+				tc.installFn(ofClient, tc.cacheKey)
+				wg.Done()
+			}()
+
+			// enforce a timeout of one second for the test
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			go func() {
+				<-ctx.Done()
+				cond.L.Lock()
+				defer cond.L.Unlock()
+				stop = true
+			}()
+
+			wg.Wait()
+			cancel()
+
+			assert.True(t, concurrentCalls)
 		})
 	}
 }

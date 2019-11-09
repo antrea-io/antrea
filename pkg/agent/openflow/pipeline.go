@@ -17,6 +17,7 @@ package openflow
 import (
 	"fmt"
 	"net"
+	"sync"
 
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
@@ -102,10 +103,14 @@ type FlowOperations interface {
 
 type flowCache map[string]binding.Flow
 
+type flowCategoryCache struct {
+	sync.Map
+}
+
 type client struct {
 	bridge                                    binding.Bridge
 	pipeline                                  map[binding.TableIDType]binding.Table
-	nodeFlowCache, podFlowCache, serviceCache map[string]flowCache    // cache for correspond deletions
+	nodeFlowCache, podFlowCache, serviceCache *flowCategoryCache      // cache for correspond deletions
 	policyCache                               map[uint32]*conjunction // cache for conjunction
 	flowOperations                            FlowOperations
 }
@@ -368,6 +373,10 @@ func (c *client) Disconnect() error {
 	return c.bridge.Disconnect()
 }
 
+func newFlowCategoryCache() *flowCategoryCache {
+	return &flowCategoryCache{}
+}
+
 // NewClient is the constructor of the Client interface.
 func NewClient(bridgeName string) Client {
 	bridge := binding.NewBridge(bridgeName)
@@ -388,9 +397,9 @@ func NewClient(bridgeName string) Client {
 			ingressRuleTable:      bridge.CreateTable(ingressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
 			ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, l2ForwardingOutTable, binding.TableMissActionNext),
 		},
-		nodeFlowCache: map[string]flowCache{},
-		podFlowCache:  map[string]flowCache{},
-		serviceCache:  map[string]flowCache{},
+		nodeFlowCache: newFlowCategoryCache(),
+		podFlowCache:  newFlowCategoryCache(),
+		serviceCache:  newFlowCategoryCache(),
 		policyCache:   map[uint32]*conjunction{},
 	}
 	c.flowOperations = c
