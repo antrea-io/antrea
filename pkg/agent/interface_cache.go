@@ -110,7 +110,7 @@ func (c *interfaceCache) Initialize(ovsBridgeClient ovsconfig.OVSBridgeClient, g
 			intf = &InterfaceConfig{Type: TunnelInterface, OVSPortConfig: ovsPort, ID: tunnelPort}
 		default:
 			if port.ExternalIDs == nil {
-				klog.Infof("OVS port %s has no external_ids, continue to next", port.Name)
+				klog.V(2).Infof("OVS port %s has no external_ids, continue to next", port.Name)
 				continue
 			}
 
