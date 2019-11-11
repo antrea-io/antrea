@@ -365,12 +365,19 @@ spec:
           - name: host-var-run-antrea
             mountPath: /var/lib/cni
             subPath: cni
-          # The host's /proc directory needs to be mounted in the container so that the network
-          # namespace path can be opened and the container interface can be created by antrea-agent in
-          # that namespace.
+          # We need to mount both the /proc directory and the /var/run/netns directory so that
+          # antrea-agent can open the network namespace path when setting up Pod
+          # networking. Different container runtimes may use /proc or /var/run/netns when invoking
+          # the CNI commands. Docker uses /proc and containerd uses /var/run/netns.
           - name: host-proc
             mountPath: /host/proc
             readOnly: true
+          - name: host-var-run-netns
+            mountPath: /host/var/run/netns
+            readOnly: true
+            # When a container is created, a mount point for the network namespace is added under
+            # /var/run/netns on the host, which needs to be propagated to the antrea-agent container.
+            mountPropagation: HostToContainer
         - name: antrea-ovs
           image: antrea-ubuntu
           imagePullPolicy: IfNotPresent
@@ -411,6 +418,9 @@ spec:
         - name: host-proc
           hostPath:
             path: /proc
+        - name: host-var-run-netns
+          hostPath:
+            path: /var/run/netns
         - name: host-var-run-antrea
           hostPath:
             path: /var/run/antrea

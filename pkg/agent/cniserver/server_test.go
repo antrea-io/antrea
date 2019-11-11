@@ -25,14 +25,15 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	ipamtest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam/testing"
 	cniservertest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/testing"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -186,7 +187,7 @@ func TestValidatePrevResult(t *testing.T) {
 
 	prevResult, _ := cniServer.parsePrevResultFromRequest(networkCfg)
 	containerIface := &current.Interface{Name: ifname, Sandbox: netns}
-	hostIfaceName := agent.GenerateContainerInterfaceName(testPodName, testPodNamespace)
+	hostIfaceName := util.GenerateContainerInterfaceName(testPodName, testPodNamespace)
 	hostIface := &current.Interface{Name: hostIfaceName}
 
 	baseCNIConfig := func() *CNIConfig {
@@ -321,7 +322,7 @@ func TestValidateOVSPort(t *testing.T) {
 	containerIp := []string{"10.1.2.100/24,10.1.2.1,4"}
 	result := ipamtest.GenerateIPAMResult(supportedCNIVersion, containerIp, routes, dns)
 	containerIface := &current.Interface{Name: ifname, Sandbox: netns, Mac: containerMACStr}
-	hostIfaceName := agent.GenerateContainerInterfaceName(testPodName, testPodNamespace)
+	hostIfaceName := util.GenerateContainerInterfaceName(testPodName, testPodNamespace)
 	hostIface := &current.Interface{Name: hostIfaceName}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 	portUUID := uuid.New().String()
@@ -352,7 +353,7 @@ func TestRemoveInterface(t *testing.T) {
 	setup := func(name string) {
 		containerID = uuid.New().String()
 		podName = name
-		hostIfaceName = agent.GenerateContainerInterfaceName(podName, testPodNamespace)
+		hostIfaceName = util.GenerateContainerInterfaceName(podName, testPodNamespace)
 		fakePortUUID = uuid.New().String()
 
 		netcfg := generateNetworkConfiguration("testCfg", supportedCNIVersion)
@@ -424,7 +425,12 @@ func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[
 
 func generateCNIServer(t *testing.T) *CNIServer {
 	supportedVersions := "0.3.0,0.3.1,0.4.0"
-	cniServer := &CNIServer{cniSocket: testSocket, nodeConfig: testNodeConfig, serverVersion: cni.AntreaCNIVersion}
+	cniServer := &CNIServer{
+		cniSocket:       testSocket,
+		nodeConfig:      testNodeConfig,
+		serverVersion:   cni.AntreaCNIVersion,
+		containerAccess: newContainerAccessArbitrator(),
+	}
 	cniServer.supportedCNIVersions = buildVersionSet(supportedVersions)
 	return cniServer
 }

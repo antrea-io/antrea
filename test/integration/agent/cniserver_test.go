@@ -41,6 +41,7 @@ import (
 	ipamtest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam/testing"
 	cniservertest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/testing"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnimsg "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
@@ -255,6 +256,14 @@ func linkByName(netNS ns.NetNS, name string) (link netlink.Link, err error) {
 	return link, err
 }
 
+func addrList(netNS ns.NetNS, link netlink.Link, family int) (addrs []netlink.Addr, err error) {
+	err = netNS.Do(func(ns.NetNS) error {
+		addrs, err = netlink.AddrList(link, family)
+		return err
+	})
+	return addrs, err
+}
+
 func routeList(netNS ns.NetNS, link netlink.Link) (routes []netlink.Route, err error) {
 	err = netNS.Do(func(ns.NetNS) error {
 		routes, err = netlink.RouteList(link, netlink.FAMILY_ALL)
@@ -280,15 +289,30 @@ func matchRoute(expectedCIDR string, routes []netlink.Route) (*netlink.Route, er
 // container namespace and checks for the presence of a default route through the Pod CIDR gateway.
 func (tester *cmdAddDelTester) checkContainerNetworking(tc testCase) {
 	require := require.New(tc.t)
+	assert := assert.New(tc.t)
+
 	link, err := linkByName(tester.targetNS, IFNAME)
 	require.Nil(err)
 	require.Equal(IFNAME, link.Attrs().Name)
 	require.IsType(&netlink.Veth{}, link)
 
 	expCIDRsV4, _ := tc.expectedCIDRs()
-	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	addrs, err := addrList(tester.targetNS, link, netlink.FAMILY_V4)
 	require.Nil(err)
+	// make sure that the IP addresses were correctly assigned to the container's interface
 	require.Len(addrs, len(expCIDRsV4))
+	for _, expAddr := range expCIDRsV4 {
+		findAddr := func() bool {
+			for _, addr := range addrs {
+				if expAddr.Contains(addr.IP) {
+					return true
+				}
+			}
+			return false
+		}
+		found := findAddr()
+		assert.Truef(found, "No IP address assigned from subnet %v", expAddr)
+	}
 
 	// Check that default route exsists.
 	routes, err := routeList(tester.targetNS, link)
@@ -328,7 +352,7 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 	require.Equal(tester.targetNS.Path(), result.Interfaces[1].Sandbox)
 
 	// Check for the veth link in the test namespace.
-	hostIfaceName := agent.GenerateContainerInterfaceName(testPod, testPodNamespace)
+	hostIfaceName := util.GenerateContainerInterfaceName(testPod, testPodNamespace)
 	require.Equal(hostIfaceName, result.Interfaces[0].Name)
 	require.Len(result.Interfaces[0].Mac, 17)
 
@@ -465,7 +489,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	ipamMock.EXPECT().Add(mock.Any(), mock.Any()).Return(ipamResult, nil).AnyTimes()
 
 	// Mock ovs output while get ovs port external configuration
-	ovsPortname := agent.GenerateContainerInterfaceName(testPod, testPodNamespace)
+	ovsPortname := util.GenerateContainerInterfaceName(testPod, testPodNamespace)
 	ovsPortUUID := uuid.New().String()
 	ovsServiceMock.EXPECT().CreatePort(ovsPortname, ovsPortname, mock.Any()).Return(ovsPortUUID, nil).AnyTimes()
 	ovsServiceMock.EXPECT().GetOFPort(ovsPortname).Return(int32(10), nil).AnyTimes()

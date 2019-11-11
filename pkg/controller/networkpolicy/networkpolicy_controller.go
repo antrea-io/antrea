@@ -31,6 +31,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 )
 
 const (
@@ -78,12 +80,27 @@ type NetworkPolicyController struct {
 	// networkPolicyListerSynced is a function which returns true if the Network Policy shared informer has been synced at least once.
 	networkPolicyListerSynced cache.InformerSynced
 
+	// addressGroupStore is the storage where the populated Address Groups are stored.
+	addressGroupStore storage.Interface
+
+	// appliedToGroupStore is the storage where the populated AppliedTo Groups are stored.
+	appliedToGroupStore storage.Interface
+
+	// antreaNetworkPolicyStore is the storage where the populated Antrea Network Policy are stored.
+	antreaNetworkPolicyStore storage.Interface
+
 	// queue maintains the Network Policies that need to be synced.
 	queue workqueue.RateLimitingInterface
 }
 
 // NewNetworkPolicyController returns a new *NetworkPolicyController.
-func NewNetworkPolicyController(kubeClient clientset.Interface, podInformer coreinformers.PodInformer, namespaceInformer coreinformers.NamespaceInformer, networkPolicyInformer networkinginformers.NetworkPolicyInformer) *NetworkPolicyController {
+func NewNetworkPolicyController(kubeClient clientset.Interface,
+	podInformer coreinformers.PodInformer,
+	namespaceInformer coreinformers.NamespaceInformer,
+	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
+	addressGroupStore storage.Interface,
+	appliedToGroupStore storage.Interface,
+	antreaNetworkPolicyStore storage.Interface) *NetworkPolicyController {
 	n := &NetworkPolicyController{
 		kubeClient:                kubeClient,
 		podInformer:               podInformer,
@@ -95,6 +112,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface, podInformer core
 		networkPolicyInformer:     networkPolicyInformer,
 		networkPolicyLister:       networkPolicyInformer.Lister(),
 		networkPolicyListerSynced: networkPolicyInformer.Informer().HasSynced,
+		addressGroupStore:         addressGroupStore,
+		appliedToGroupStore:       appliedToGroupStore,
+		antreaNetworkPolicyStore:  antreaNetworkPolicyStore,
 		queue:                     workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicy"),
 	}
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(
@@ -221,6 +241,6 @@ func (n *NetworkPolicyController) syncNetworkPolicy(key string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get NetworkPolicy %s: %v", key, err)
 	}
-	klog.Infof("Syncing NetworkPolicy %s: %v", key, networkPolicy.Spec.PodSelector)
+	klog.V(1).Infof("Syncing NetworkPolicy %s: %v", key, networkPolicy.Spec.PodSelector)
 	return nil
 }

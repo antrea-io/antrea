@@ -22,22 +22,68 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
-	"github.com/vmware-tanzu/antrea/pkg/agent"
-	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/cni"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"google.golang.org/grpc"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/cni"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
+
+// containerAccessArbitrator is used to ensure that concurrent goroutines cannot perfom operations
+// on the same containerID. Other parts of the code make this assumption (in particular the
+// InstallPodFlows / UninstallPodFlows methods of the OpenFlow client, which are invoked
+// respectively by CmdAdd and CmdDel). The idea is to simply the locking requirements for the rest
+// of the code by ensuring that all the requests for a given container are serialized.
+type containerAccessArbitrator struct {
+	mutex            sync.Mutex
+	cond             *sync.Cond
+	busyContainerIDs map[string]bool // used as a set of container IDs
+}
+
+func newContainerAccessArbitrator() *containerAccessArbitrator {
+	arbitrator := &containerAccessArbitrator{
+		busyContainerIDs: make(map[string]bool),
+	}
+	arbitrator.cond = sync.NewCond(&arbitrator.mutex)
+	return arbitrator
+}
+
+// lockContainer prevents other goroutines from accessing containerID. If containerID is already
+// locked by another goroutine, this function will block until the container is available. Every
+// call to lockContainer must be followed by a call to unlockContainer on the same containerID.
+func (arbitrator *containerAccessArbitrator) lockContainer(containerID string) {
+	arbitrator.cond.L.Lock()
+	defer arbitrator.cond.L.Unlock()
+	for {
+		_, ok := arbitrator.busyContainerIDs[containerID]
+		if !ok {
+			break
+		}
+		arbitrator.cond.Wait()
+	}
+	arbitrator.busyContainerIDs[containerID] = true
+}
+
+// unlockContainer releases access to containerID.
+func (arbitrator *containerAccessArbitrator) unlockContainer(containerID string) {
+	arbitrator.cond.L.Lock()
+	defer arbitrator.cond.L.Unlock()
+	delete(arbitrator.busyContainerIDs, containerID)
+	arbitrator.cond.Broadcast()
+}
 
 type CNIServer struct {
 	cniSocket            string
@@ -50,6 +96,7 @@ type CNIServer struct {
 	ofClient             openflow.Client
 	defaultMTU           int
 	kubeClient           clientset.Interface
+	containerAccess      *containerAccessArbitrator
 }
 
 const (
@@ -266,7 +313,7 @@ func (s *CNIServer) hostNetNsPath(netNS string) string {
 
 func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8sArgs, prevResult *current.Result) (*cnipb.CniCmdResponse, error) {
 	var containerIntf, hostIntf *current.Interface
-	hostVethName := agent.GenerateContainerInterfaceName(string(k8sCNIArgs.K8S_POD_NAME), string(k8sCNIArgs.K8S_POD_NAMESPACE))
+	hostVethName := util.GenerateContainerInterfaceName(string(k8sCNIArgs.K8S_POD_NAME), string(k8sCNIArgs.K8S_POD_NAMESPACE))
 	containerID := cfgArgs.ContainerId
 	netNS := s.hostNetNsPath(cfgArgs.Netns)
 
@@ -321,6 +368,9 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (
 		}
 	}()
 
+	s.containerAccess.lockContainer(cniConfig.ContainerId)
+	defer s.containerAccess.unlockContainer(cniConfig.ContainerId)
+
 	// Request IP Address from IPAM driver
 	ipamResult, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type)
 	if err != nil {
@@ -370,6 +420,9 @@ func (s *CNIServer) CmdDel(ctx context.Context, request *cnipb.CniCmdRequest) (
 		return response, nil
 	}
 
+	s.containerAccess.lockContainer(cniConfig.ContainerId)
+	defer s.containerAccess.unlockContainer(cniConfig.ContainerId)
+
 	// Release IP to IPAM driver
 	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.IPAM.Type); err != nil {
 		klog.Errorf("Failed to delete IP addresses by IPAM driver: %v", err)
@@ -396,12 +449,16 @@ func (s *CNIServer) CmdCheck(ctx context.Context, request *cnipb.CniCmdRequest) 
 	if response != nil {
 		return response, nil
 	}
-	cniVersion := cniConfig.CNIVersion
+
+	s.containerAccess.lockContainer(cniConfig.ContainerId)
+	defer s.containerAccess.unlockContainer(cniConfig.ContainerId)
+
 	if err := ipam.ExecIPAMCheck(cniConfig.CniCmdArgs, cniConfig.IPAM.Type); err != nil {
 		klog.Errorf("Failed to check IPAM configuration: %v", err)
 		return s.ipamFailureResponse(err), nil
 	}
 
+	cniVersion := cniConfig.CNIVersion
 	if valid, _ := version.GreaterThanOrEqualTo(cniVersion, "0.4.0"); valid {
 		if prevResult, response := s.parsePrevResultFromRequest(cniConfig.NetworkConfig); response != nil {
 			return response, nil
@@ -435,6 +492,7 @@ func New(
 		ofClient:             ofClient,
 		defaultMTU:           defaultMTU,
 		kubeClient:           kubeClient,
+		containerAccess:      newContainerAccessArbitrator(),
 	}
 }
 

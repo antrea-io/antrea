@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vmware-tanzu/antrea/pkg/util"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 )
 
 // TestDeploy is a "no-op" test that simply performs setup and teardown.

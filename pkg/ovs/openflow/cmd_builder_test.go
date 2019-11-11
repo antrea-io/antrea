@@ -36,7 +36,7 @@ func TestBasic(t *testing.T) {
 	dummyBridge := NewBridge("ut0")
 	dummyTable := dummyBridge.CreateTable(TableIDType(0), TableIDType(10), TableMissActionNext)
 
-	flow := dummyTable.BuildFlow().
+	flow := dummyTable.BuildFlow().(*commandBuilder).
 		MatchField("FIELD", "VALUE").
 		Action().Resubmit("", TableIDType(10)).
 		Done()

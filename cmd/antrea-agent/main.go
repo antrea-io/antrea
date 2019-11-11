@@ -21,15 +21,16 @@ import (
 	"flag"
 	"os"
 
-	"github.com/vmware-tanzu/antrea/pkg/version"
-
 	"github.com/spf13/cobra"
+	"k8s.io/component-base/logs"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
 func main() {
-	klog.InitFlags(flag.CommandLine)
-	defer klog.Flush()
+	logs.InitLogs()
+	defer logs.FlushLogs()
 
 	command := newAgentCommand()
 

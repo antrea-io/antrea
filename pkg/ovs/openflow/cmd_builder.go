@@ -16,6 +16,7 @@ package openflow
 
 import (
 	"fmt"
+	"net"
 	"strings"
 )
 
@@ -42,6 +43,14 @@ func (b *commandBuilder) MatchFieldRange(name, value string, rng Range) FlowBuil
 	return b
 }
 
+func (b *commandBuilder) MatchReg(regID int, data uint32) FlowBuilder {
+	return b.MatchField(fmt.Sprintf("reg%d", regID), fmt.Sprintf("0x%x", data))
+}
+
+func (b *commandBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBuilder {
+	return b.MatchFieldRange(fmt.Sprintf("reg%d", regID), fmt.Sprintf("0x%x", data), rng)
+}
+
 func (b *commandBuilder) CTState(value string) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("ct_state=%s", value))
 	return b
@@ -52,8 +61,56 @@ func (b *commandBuilder) CTMark(value string) FlowBuilder {
 	return b
 }
 
-func (b *commandBuilder) MatchInPort(inPort int) FlowBuilder {
+func (b *commandBuilder) MatchInPort(inPort uint32) FlowBuilder {
 	return b.MatchField("in_port", fmt.Sprint(inPort))
+}
+
+func (b *commandBuilder) MatchDstIP(ip net.IP) FlowBuilder {
+	return b.MatchField("nw_dst", ip.String())
+}
+
+func (b *commandBuilder) MatchDstIPNet(ipNet net.IPNet) FlowBuilder {
+	return b.MatchField("nw_dst", ipNet.String())
+}
+
+func (b *commandBuilder) MatchSrcIP(ip net.IP) FlowBuilder {
+	return b.MatchField("nw_src", ip.String())
+}
+
+func (b *commandBuilder) MatchSrcIPNet(ipNet net.IPNet) FlowBuilder {
+	return b.MatchField("nw_src", ipNet.String())
+}
+
+func (b *commandBuilder) MatchDstMAC(mac net.HardwareAddr) FlowBuilder {
+	return b.MatchField("dl_dst", mac.String())
+}
+
+func (b *commandBuilder) MatchSrcMAC(mac net.HardwareAddr) FlowBuilder {
+	return b.MatchField("dl_src", mac.String())
+}
+
+func (b *commandBuilder) MatchARPSha(mac net.HardwareAddr) FlowBuilder {
+	return b.MatchField("arp_sha", mac.String())
+}
+
+func (b *commandBuilder) MatchARPTha(mac net.HardwareAddr) FlowBuilder {
+	return b.MatchField("arp_tha", mac.String())
+}
+
+func (b *commandBuilder) MatchARPSpa(ip net.IP) FlowBuilder {
+	return b.MatchField("arp_spa", ip.String())
+}
+
+func (b *commandBuilder) MatchARPTpa(ip net.IP) FlowBuilder {
+	return b.MatchField("arp_tpa", ip.String())
+}
+
+func (b *commandBuilder) MatchARPOp(op uint16) FlowBuilder {
+	return b.MatchField("arp_op", fmt.Sprintf("%d", op))
+}
+
+func (b *commandBuilder) MatchConjID(value uint32) FlowBuilder {
+	return b.MatchField("conj_id", fmt.Sprintf("%d", value))
 }
 
 func (b *commandBuilder) Priority(priority uint32) FlowBuilder {
@@ -61,9 +118,25 @@ func (b *commandBuilder) Priority(priority uint32) FlowBuilder {
 	return b
 }
 
+func (b *commandBuilder) MatchTCPDstPort(port uint16) FlowBuilder {
+	return b.MatchField("tcp_dst", fmt.Sprintf("%d", port))
+}
+
+func (b *commandBuilder) MatchUDPDstPort(port uint16) FlowBuilder {
+	return b.MatchField("udp_dst", fmt.Sprintf("%d", port))
+}
+
+func (b *commandBuilder) MatchSCTPDstPort(port uint16) FlowBuilder {
+	return b.MatchField("sct_dst", fmt.Sprintf("%d", port))
+}
+
 func (b *commandBuilder) MatchProtocol(protocol protocol) FlowBuilder {
 	b.matchers = append(b.matchers, strings.ToLower(protocol))
 	return b
+}
+
+func (b *commandBuilder) Cookie(cookieID uint64) FlowBuilder {
+	return b.MatchField("cookie", fmt.Sprintf("%d", cookieID))
 }
 
 func (b *commandBuilder) Action() Action {

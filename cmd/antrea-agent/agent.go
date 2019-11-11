@@ -24,7 +24,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	_ "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
-	nodecontroller "github.com/vmware-tanzu/antrea/pkg/agent/controller/node"
+	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
@@ -80,7 +80,7 @@ func run(o *Options) error {
 	}
 	nodeConfig := agentInitializer.GetNodeConfig()
 
-	nodeController := nodecontroller.NewNodeController(k8sClient,
+	nodeRouteController := noderoute.NewNodeRouteController(k8sClient,
 		informerFactory,
 		ofClient,
 		nodeConfig)
@@ -108,7 +108,7 @@ func run(o *Options) error {
 
 	informerFactory.Start(stopCh)
 
-	go nodeController.Run(stopCh)
+	go nodeRouteController.Run(stopCh)
 
 	agentMonitor := monitor.NewAgentMonitor(crdClient, o.config.OVSBridge, nodeConfig.Name, nodeConfig.PodCIDR.String(), ifaceStore, ofClient)
 
