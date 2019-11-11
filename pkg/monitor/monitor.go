@@ -122,13 +122,13 @@ func (monitor *controllerMonitor) createControllerCRD() (*v1beta1.AntreaControll
 		NodeRef:    monitor.GetSelfNode(),
 		ServiceRef: monitor.GetService(),
 	}
-	klog.Infof("Creating controller monitoring CRD %v", controllerCRD)
+	klog.V(2).Infof("Creating controller monitor CRD %v", controllerCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Create(controllerCRD)
 }
 
 // TODO: Update network policy related fields when the upstreaming is ready
 func (monitor *controllerMonitor) updateControllerCRD(controllerCRD *v1beta1.AntreaControllerInfo) (*v1beta1.AntreaControllerInfo, error) {
-	klog.Infof("Updating controller monitoring CRD %v", controllerCRD)
+	klog.V(2).Infof("Updating controller monitor CRD %v", controllerCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Update(controllerCRD)
 }
 
@@ -156,7 +156,7 @@ func (monitor *agentMonitor) createAgentCRD() (*v1beta1.AntreaAgentInfo, error) 
 		OVSInfo:     v1beta1.OVSInfo{BridgeName: monitor.ovsBridge, FlowTable: monitor.GetOVSFlowTable()},
 		LocalPodNum: monitor.GetLocalPodNum(),
 	}
-	klog.Infof("Creating agent monitoring CRD %v", agentCRD)
+	klog.V(2).Infof("Creating agent monitor CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Create(agentCRD)
 }
 
@@ -164,6 +164,6 @@ func (monitor *agentMonitor) updateAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (
 	// LocalPodNum and FlowTable can be changed, so reset these fields.
 	agentCRD.LocalPodNum = monitor.GetLocalPodNum()
 	agentCRD.OVSInfo.FlowTable = monitor.GetOVSFlowTable()
-	klog.Infof("Updating agent monitoring CRD %v", agentCRD)
+	klog.V(2).Infof("Updating agent monitor CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
 }
