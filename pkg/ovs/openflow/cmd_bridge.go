@@ -14,7 +14,14 @@
 
 package openflow
 
-import "sync"
+import (
+	"fmt"
+	"os/exec"
+	"sync"
+	"time"
+
+	"k8s.io/klog"
+)
 
 type commandBridge struct {
 	sync.Mutex
@@ -52,4 +59,24 @@ func (b *commandBridge) DumpTableStatus() []TableStatus {
 		r = append(r, t.Status())
 	}
 	return r
+}
+
+// Connect initiates connection to the OFSwitch. commandBridge executes command "ovs-ofctl show" to check if target
+// switch is connected or not.
+func (b *commandBridge) Connect(maxRetry int) error {
+	for retry := 0; retry < maxRetry; retry++ {
+		klog.V(2).Infof("Trying to connect to OpenFlow switch...")
+		cmd := exec.Command("ovs-ofctl", "show", b.name)
+		if err := cmd.Run(); err != nil {
+			time.Sleep(1 * time.Second)
+		} else {
+			return nil
+		}
+	}
+	return fmt.Errorf("failed to connect to OpenFlow switch after %d tries", maxRetry)
+}
+
+// Disconnect stops connection to the OFSwitch. commandBridge has no handling in Disconnect method.
+func (b *commandBridge) Disconnect() error {
+	return nil
 }

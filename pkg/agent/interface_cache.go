@@ -17,9 +17,10 @@ package agent
 import (
 	"net"
 
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	"github.com/vmware-tanzu/antrea/pkg/util"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
@@ -109,7 +110,7 @@ func (c *interfaceCache) Initialize(ovsBridgeClient ovsconfig.OVSBridgeClient, g
 			intf = &InterfaceConfig{Type: TunnelInterface, OVSPortConfig: ovsPort, ID: tunnelPort}
 		default:
 			if port.ExternalIDs == nil {
-				klog.Infof("OVS port %s has no external_ids, continue to next", port.Name)
+				klog.V(2).Infof("OVS port %s has no external_ids, continue to next", port.Name)
 				continue
 			}
 
@@ -201,14 +202,9 @@ func (c *interfaceCache) GetInterfaceIDs() []string {
 	return IDs
 }
 
-// GenerateContainerInterfaceName calculates OVS port name using pod name and pod namespace.
-func GenerateContainerInterfaceName(podName string, podNamespace string) string {
-	return util.GenerateContainerInterfaceName(podName, podNamespace)
-}
-
-// GetPodInterface retrieve interface for Pod filtered by pod name and pod namespace
+// GetPodInterface retrieves interface for Pod filtered by Pod name and Pod namespace.
 func (c *interfaceCache) GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool) {
-	ovsPortName := GenerateContainerInterfaceName(podName, podNamespace)
+	ovsPortName := util.GenerateContainerInterfaceName(podName, podNamespace)
 	iface, found := c.cache[ovsPortName]
 	return iface, found
 }

@@ -16,12 +16,18 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"time"
 
+	genericapiserver "k8s.io/apiserver/pkg/server"
+	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/apiserver"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
@@ -45,7 +51,27 @@ func run(o *Options) error {
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 
-	networkPolicyController := networkpolicy.NewNetworkPolicyController(client, podInformer, namespaceInformer, networkPolicyInformer)
+	// Create Antrea object storage.
+	addressGroupStore := store.NewAddressGroupStore()
+	appliedToGroupStore := store.NewAppliedToGroupStore()
+	networkPolicyStore := store.NewNetworkPolicyStore()
+
+	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
+		podInformer,
+		namespaceInformer,
+		networkPolicyInformer,
+		addressGroupStore,
+		appliedToGroupStore,
+		networkPolicyStore)
+
+	apiServerConfig, err := createAPIServerConfig(addressGroupStore, appliedToGroupStore, networkPolicyStore)
+	if err != nil {
+		return fmt.Errorf("error creating API server config: %v", err)
+	}
+	apiServer, err := apiServerConfig.Complete(informerFactory).New()
+	if err != nil {
+		return fmt.Errorf("error creating API server: %v", err)
+	}
 
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
@@ -59,7 +85,31 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
+	go apiServer.GenericAPIServer.PrepareRun().Run(stopCh)
+
 	<-stopCh
 	klog.Info("Stopping Antrea controller")
 	return nil
+}
+
+func createAPIServerConfig(addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface) (*apiserver.Config, error) {
+	// TODO:
+	// 1. Support user-provided certificate.
+	// 2. Support delegating authentication and authorization.
+	// 3. Support configurable http port.
+	// 4. Persist generated certs.
+	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
+	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
+	}
+
+	serverConfig := genericapiserver.NewConfig(apiserver.Codecs)
+	if err := secureServing.ApplyTo(&serverConfig.SecureServing, &serverConfig.LoopbackClientConfig); err != nil {
+		return nil, err
+	}
+
+	return &apiserver.Config{
+		GenericConfig: serverConfig,
+		ExtraConfig:   apiserver.ExtraConfig{addressGroupStore, appliedToGroupStore, networkPolicyStore},
+	}, nil
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package node
+package noderoute
 
 import (
 	"fmt"
@@ -47,7 +47,8 @@ const (
 	defaultWorkers = 4
 )
 
-type NodeController struct {
+// Controller is responsible for setting up necessary IP routes and Openflow entries for inter-node traffic.
+type Controller struct {
 	kubeClient       clientset.Interface
 	nodeInformer     coreinformers.NodeInformer
 	nodeLister       corelisters.NodeLister
@@ -56,34 +57,34 @@ type NodeController struct {
 	ofClient         openflow.Client
 	nodeConfig       *agent.NodeConfig
 	gatewayLink      netlink.Link
-	// connectedNodes records routes and flows installation states of Nodes.
+	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the route to the Node.
-	// If the flows of the Node are installed, the connectedNodes must contains a key which is the host name.
+	// If the flows of the Node are installed, the installedNodes must contains a key which is the host name.
 	// If the route of the Node are installed, the flows of the Node must be installed first and the value of host name
 	// key must not be nil.
 	// TODO: handle agent restart cases.
-	connectedNodes *sync.Map
+	installedNodes *sync.Map
 }
 
-func NewNodeController(
+func NewNodeRouteController(
 	kubeClient clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
 	client openflow.Client,
 	config *agent.NodeConfig,
-) *NodeController {
+) *Controller {
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	link, _ := netlink.LinkByName(config.Gateway.Name)
 
-	controller := &NodeController{
+	controller := &Controller{
 		kubeClient:       kubeClient,
 		nodeInformer:     nodeInformer,
 		nodeLister:       nodeInformer.Lister(),
 		nodeListerSynced: nodeInformer.Informer().HasSynced,
-		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "node"),
+		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
 		ofClient:         client,
 		nodeConfig:       config,
 		gatewayLink:      link,
-		connectedNodes:   &sync.Map{},
+		installedNodes:   &sync.Map{},
 	}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -104,7 +105,7 @@ func NewNodeController(
 
 // enqueueNode adds an object to the controller work queue
 // obj could be an *v1.Node, or a DeletionFinalStateUnknown item.
-func (c *NodeController) enqueueNode(obj interface{}) {
+func (c *Controller) enqueueNode(obj interface{}) {
 	node, isNode := obj.(*v1.Node)
 	if !isNode {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -119,24 +120,24 @@ func (c *NodeController) enqueueNode(obj interface{}) {
 		}
 	}
 
-	// ignore notifications for this Node, no need to establish connectivity to ourselves...
+	// Ignore notifications for this Node, no need to establish connectivity to itself.
 	if node.Name != c.nodeConfig.Name {
 		c.queue.Add(node.Name)
 	}
 }
 
-func (c *NodeController) Run(stopCh <-chan struct{}) {
+func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 
-	klog.Info("Starting Node controller")
-	defer klog.Info("Shutting down Node controller")
+	klog.Info("Starting Node Route controller")
+	defer klog.Info("Shutting down Node Route controller")
 
-	klog.Info("Waiting for caches to sync for Node controller")
+	klog.Info("Waiting for caches to sync for Node Route controller")
 	if !cache.WaitForCacheSync(stopCh, c.nodeListerSynced) {
-		klog.Error("Unable to sync caches for Node controller")
+		klog.Error("Unable to sync caches for Node Route controller")
 		return
 	}
-	klog.Info("Caches are synced for Node controller")
+	klog.Info("Caches are synced for Node Route controller")
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
@@ -144,17 +145,17 @@ func (c *NodeController) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
-func (c *NodeController) worker() {
+func (c *Controller) worker() {
 	for c.processNextWorkItem() {
 	}
 }
 
-// Processes an item in the "node" work queue, by calling syncNode after casting the item to a
-// string (Node name). If syncNode returns an error, this function handles it by requeueing the item
-// so that it can be processed again later. If syncNode is successful, the Node is removed from the
+// Processes an item in the "node" work queue, by calling syncNodeRoute after casting the item to a
+// string (Node name). If syncNodeRoute returns an error, this function handles it by requeueing the item
+// so that it can be processed again later. If syncNodeRoute is successful, the Node is removed from the
 // queue until we get notify of a new change. This function return false if and only if the work
 // queue was shutdown (no more items will be processed).
-func (c *NodeController) processNextWorkItem() bool {
+func (c *Controller) processNextWorkItem() bool {
 	obj, quit := c.queue.Get()
 	if quit {
 		return false
@@ -173,7 +174,7 @@ func (c *NodeController) processNextWorkItem() bool {
 		c.queue.Forget(obj)
 		klog.Errorf("Expected string in work queue but got %#v", obj)
 		return true
-	} else if err := c.syncNode(key); err == nil {
+	} else if err := c.syncNodeRoute(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
 		c.queue.Forget(key)
@@ -194,32 +195,43 @@ func (c *NodeController) processNextWorkItem() bool {
 //   peerPodCIDR goes through the correct L3 tunnel.
 // If the Node no longer exists (cannot be retrieved by name from nodeLister) we delete the route
 // and OpenFlow flows associated with it.
-func (c *NodeController) syncNode(nodeName string) error {
+func (c *Controller) syncNodeRoute(nodeName string) error {
 	startTime := time.Now()
 	defer func() {
-		klog.V(4).Infof("Finished syncing node %s. (%v)", nodeName, time.Since(startTime))
+		klog.V(4).Infof("Finished syncing Node Route for %s. (%v)", nodeName, time.Since(startTime))
 	}()
+
+	// The work queue guarantees that concurrent goroutines cannot call syncNodeRoute on the
+	// same Node, which is required by the InstallNodeFlows / UninstallNodeFlows OF Client
+	// methods.
 
 	if node, err := c.nodeLister.Get(nodeName); err != nil {
 		klog.Infof("Deleting routes and flow entries to Node %s", nodeName)
-		route, flowsAreInstalled := c.connectedNodes.Load(nodeName)
+		route, flowsAreInstalled := c.installedNodes.Load(nodeName)
 		if route != nil {
 			if err = netlink.RouteDel(route.(*netlink.Route)); err != nil {
 				return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 			}
-			c.connectedNodes.Store(nodeName, nil)
+			c.installedNodes.Store(nodeName, nil)
 		}
 		if flowsAreInstalled {
 			if err = c.ofClient.UninstallNodeFlows(nodeName); err != nil {
 				return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
 			}
 		}
-		c.connectedNodes.Delete(nodeName)
-	} else if route, flowsAreInstalled := c.connectedNodes.Load(nodeName); route == nil {
+		c.installedNodes.Delete(nodeName)
+	} else if route, flowsAreInstalled := c.installedNodes.Load(nodeName); route == nil {
 		klog.Infof("Adding routes and flows to Node %s, podCIDR: %s, addresses: %v",
 			nodeName, node.Spec.PodCIDR, node.Status.Addresses)
+		if node.Spec.PodCIDR == "" {
+			klog.V(1).Infof("PodCIDR is empty for peer node %s", nodeName)
+			return nil
+		}
 
-		peerPodCIDRAddr, peerPodCIDR, _ := net.ParseCIDR(node.Spec.PodCIDR)
+		peerPodCIDRAddr, peerPodCIDR, err := net.ParseCIDR(node.Spec.PodCIDR)
+		if err != nil {
+			return fmt.Errorf("failed to parse PodCIDR %s", node.Spec.PodCIDR)
+		}
 		peerNodeIP, err := getNodeAddr(node)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve IP address of Node %s: %v", nodeName, err)
@@ -227,11 +239,11 @@ func (c *NodeController) syncNode(nodeName string) error {
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
 		if !flowsAreInstalled { // then install flows
-			err = c.ofClient.InstallNodeFlows(nodeName, c.nodeConfig.Gateway.MAC, peerGatewayIP, *peerPodCIDR, peerNodeIP.String())
+			err = c.ofClient.InstallNodeFlows(nodeName, c.nodeConfig.Gateway.MAC, peerGatewayIP, *peerPodCIDR, peerNodeIP)
 			if err != nil {
 				return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 			}
-			c.connectedNodes.Store(nodeName, nil)
+			c.installedNodes.Store(nodeName, nil)
 		}
 		// install route
 		route := &netlink.Route{
@@ -252,7 +264,7 @@ func (c *NodeController) syncNode(nodeName string) error {
 		if err != nil {
 			return fmt.Errorf("failed to install route to Node %s with netlink: %v", nodeName, err)
 		}
-		c.connectedNodes.Store(nodeName, route)
+		c.installedNodes.Store(nodeName, route)
 	}
 	return nil
 }

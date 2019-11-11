@@ -123,6 +123,32 @@ func TestOVSDeletePortIdempotent(t *testing.T) {
 	testDeletePort(t, data.br, uuid)
 }
 
+// TestOVSBridgeExternalIDs tests getting and setting external IDs of the OVS
+// bridge.
+func TestOVSBridgeExternalIDs(t *testing.T) {
+	data := &testData{}
+	data.setup(t)
+	defer data.teardown(t)
+
+	returnedIDs, err := data.br.GetExternalIDs()
+	require.Nil(t, err, "Failed to get external IDs of the bridge")
+	assert.Empty(t, returnedIDs)
+
+	providedIDs := map[string]interface{}{"k1": "v1", "k2": "v2"}
+	err = data.br.SetExternalIDs(providedIDs)
+	require.Nil(t, err, "Failed to set external IDs to the bridge")
+
+	returnedIDs, err = data.br.GetExternalIDs()
+	require.Nil(t, err, "Failed to get external IDs of the bridge")
+	for k, v := range providedIDs {
+		rv, ok := returnedIDs[k]
+		if !assert.Truef(t, ok, "Returned external IDs do not include the expected ID: %s:%s", k, v) {
+			continue
+		}
+		assert.Equalf(t, v.(string), rv, "Returned external IDs include an ID with an unexpected value: %s:%s", k, v)
+	}
+}
+
 func deleteAllPorts(t *testing.T, br *ovsconfig.OVSBridge) {
 	portList, err := br.GetPortUUIDList()
 	require.Nil(t, err, "Error when retrieving port list")
@@ -178,7 +204,7 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 		if !assert.Truef(t, ok, "Returned port does not include the expected external id: %s:%s", k, v) {
 			continue
 		}
-		assert.Equalf(t, v.(string), rv, "Returned port has an external id with an unexpetced value: %s:%s", k, v)
+		assert.Equalf(t, v.(string), rv, "Returned port has an external id with an unexpected value: %s:%s", k, v)
 	}
 
 	portList, err := br.GetPortList()

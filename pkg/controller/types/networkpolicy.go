@@ -31,6 +31,36 @@ type SpanMeta struct {
 // PodSet is a set of Pod references.
 type PodSet map[networkpolicy.PodReference]sets.Empty
 
+// Difference returns a set of Pod references that are not in s2.
+func (s PodSet) Difference(s2 PodSet) PodSet {
+	result := PodSet{}
+	for key := range s {
+		if _, contained := s2[key]; !contained {
+			result[key] = sets.Empty{}
+		}
+	}
+	return result
+}
+
+// Union returns a new set which includes items in either s1 or s2.
+func (s PodSet) Union(o PodSet) PodSet {
+	result := PodSet{}
+	for key := range s {
+		result.Insert(key)
+	}
+	for key := range o {
+		result.Insert(key)
+	}
+	return result
+}
+
+// Insert adds items to the set.
+func (s PodSet) Insert(items ...networkpolicy.PodReference) {
+	for _, item := range items {
+		s[item] = sets.Empty{}
+	}
+}
+
 // GroupSelector describes how to select pods.
 type GroupSelector struct {
 	// The normalized name is calculated from Namespace, PodSelector, and NamespaceSelector.

@@ -99,6 +99,10 @@ func (br *OVSBridge) Create() Error {
 		return err
 	} else if exists {
 		klog.Info("Bridge exists: ", br.uuid)
+		// Update OpenFlow protocol versions on existent bridge.
+		if err := br.updateProtocols(); err != nil {
+			return err
+		}
 	} else if err = br.create(); err != nil {
 		return err
 	} else {
@@ -127,6 +131,25 @@ func (br *OVSBridge) lookupByName() (bool, Error) {
 
 	br.uuid = res[0].Rows[0].(map[string]interface{})["_uuid"].([]interface{})[1].(string)
 	return true, nil
+}
+
+func (br *OVSBridge) updateProtocols() Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	// Use Openflow protocol version 1.0 and 1.3.
+	tx.Update(dbtransaction.Update{
+		Table: "Bridge",
+		Where: [][]interface{}{{"name", "==", br.name}},
+		Row: map[string]interface{}{
+			"protocols": makeOVSDBSetFromList([]string{openflowProtoVersion10,
+				openflowProtoVersion13}),
+		},
+	})
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
 }
 
 func (br *OVSBridge) create() Error {
@@ -168,6 +191,44 @@ func (br *OVSBridge) Delete() Error {
 	tx.Mutate(dbtransaction.Mutate{
 		Table:     "Open_vSwitch",
 		Mutations: [][]interface{}{{"bridges", "delete", mutateSet}},
+	})
+
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}
+
+// GetExternalIDs returns the external IDs of the bridge.
+func (br *OVSBridge) GetExternalIDs() (map[string]string, Error) {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Select(dbtransaction.Select{
+		Table:   "Bridge",
+		Columns: []string{"external_ids"},
+		Where:   [][]interface{}{{"name", "==", br.name}},
+	})
+
+	res, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return nil, NewTransactionError(err, temporary)
+	}
+
+	extIDRes := res[0].Rows[0].(map[string]interface{})["external_ids"].([]interface{})
+	return buildMapFromOVSDBMap(extIDRes), nil
+}
+
+// SetExternalIDs sets the provided external IDs to the bridge.
+func (br *OVSBridge) SetExternalIDs(externalIDs map[string]interface{}) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Update(dbtransaction.Update{
+		Table: "Bridge",
+		Where: [][]interface{}{{"name", "==", br.name}},
+		Row: map[string]interface{}{
+			"external_ids": helpers.MakeOVSDBMap(externalIDs),
+		},
 	})
 
 	_, err, temporary := tx.Commit()
