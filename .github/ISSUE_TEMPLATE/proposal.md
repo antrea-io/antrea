@@ -14,7 +14,7 @@ A description of the current limitation/problem/challenge that you are experienc
 A clear and concise description of what you want to happen.
 
 **Describe how your solution impacts user flows**
-Does your solution impact how users interact with Antrea? If your proposal introduces a new user-facing feature, decribe how it can be consumed.
+Does your solution impact how users interact with Antrea? If your proposal introduces a new user-facing feature, describe how it can be consumed.
 
 **Describe the main design/architecture of your solution**
 A clear and concise description of what does your solution look like. Rich text and diagrams are preferred.
