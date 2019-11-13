@@ -34,7 +34,7 @@ RUN make bin
 
 FROM ubuntu:18.04
 
-LABEL maintainer="Antrea <dev@antrea.io>"
+LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A docker image to deploy the Antrea CNI. Takes care of building the Antrea binaries as part of building the image."
 
 USER root
