@@ -25,7 +25,7 @@ RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-2.11.1.tar.gz 
 
 FROM ubuntu:18.04
 
-LABEL maintainer="Antrea <dev@antrea.io>"
+LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A docker image to deploy the Antrea CNI. Requires the Antrea binaries to be built prior to building the image."
 
 USER root
