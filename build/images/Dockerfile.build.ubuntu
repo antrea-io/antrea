@@ -7,22 +7,6 @@ RUN mkdir -p /opt/cni/bin && \
     wget -q -O - https://dl.k8s.io/network-plugins/cni-plugins-amd64-v0.7.5.tgz | tar xz -C /opt/cni/bin ./host-local
 
 
-FROM ubuntu:18.04 as ovs-debs
-
-# Install dependencies for building OVS deb packages
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends wget ca-certificates build-essential fakeroot graphviz \
-            bzip2 autoconf automake debhelper dh-autoreconf libssl-dev libtool openssl procps \
-            python-all python-twisted-conch python-zopeinterface python-six libunbound-dev
-
-# Download OVS source code and build debs
-RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-2.11.1.tar.gz  | tar xz -C /tmp && \
-    cd /tmp/openvswitch* && DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary && \
-    cd /tmp && mkdir ovs-debs && \
-    mv libopenvswitch_*.deb openvswitch-common_*.deb openvswitch-switch_*.deb python-openvswitch_*.deb \
-       openvswitch-ipsec_*.deb ovs-debs/
-
-
 FROM golang:1.12 as antrea-build
 
 COPY . /antrea
@@ -32,24 +16,12 @@ WORKDIR /antrea
 RUN make bin
 
 
-FROM ubuntu:18.04
+FROM antrea/openvswitch:2.11.1
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A docker image to deploy the Antrea CNI. Takes care of building the Antrea binaries as part of building the image."
+LABEL description="A Docker image to deploy the Antrea CNI. Takes care of building the Antrea binaries as part of building the image."
 
 USER root
-
-COPY --from=ovs-debs /tmp/ovs-debs/* /tmp/ovs-debs/
-
-# We clean-up apt cache after installing packages to reduce the size of the
-# final image
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends iptables libstrongswan-standard-plugins && \
-    (dpkg -i /tmp/ovs-debs/*.deb || apt-get -f -y --no-install-recommends install) && \
-    rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
-    rm -rf /tmp/ovs-debs && \
-    CHARON_FILELOG_CONFIG="\ \ \ \ \ \ \ \ /var/log/strongswan/charon.log {\n\ \ \ \ \ \ \ \ }" && \
-    sed -i "/^.*filelog.*{/a $CHARON_FILELOG_CONFIG" /etc/strongswan.d/charon-logging.conf
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
 
