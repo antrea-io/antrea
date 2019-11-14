@@ -64,7 +64,10 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore)
 
-	apiServerConfig, err := createAPIServerConfig(addressGroupStore, appliedToGroupStore, networkPolicyStore)
+	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
+		addressGroupStore,
+		appliedToGroupStore,
+		networkPolicyStore)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
@@ -92,19 +95,38 @@ func run(o *Options) error {
 	return nil
 }
 
-func createAPIServerConfig(addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface) (*apiserver.Config, error) {
+func createAPIServerConfig(kubeconfig string,
+	addressGroupStore storage.Interface,
+	appliedToGroupStore storage.Interface,
+	networkPolicyStore storage.Interface) (*apiserver.Config, error) {
 	// TODO:
 	// 1. Support user-provided certificate.
-	// 2. Support delegating authentication and authorization.
-	// 3. Support configurable http port.
-	// 4. Persist generated certs.
+	// 2. Support configurable https port.
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
+	authentication := genericoptions.NewDelegatingAuthenticationOptions()
+	authorization := genericoptions.NewDelegatingAuthorizationOptions()
+
+	// Set the PairName but leave certificate directory blank to generate in-memory by default
+	secureServing.ServerCert.CertDirectory = ""
+	secureServing.ServerCert.PairName = "antrea-apiserver"
+	// kubeconfig file is useful when antrea-controller isn't not running as a pod, like during development.
+	if len(kubeconfig) > 0 {
+		authentication.RemoteKubeConfigFile = kubeconfig
+		authorization.RemoteKubeConfigFile = kubeconfig
+	}
+
 	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 
 	serverConfig := genericapiserver.NewConfig(apiserver.Codecs)
 	if err := secureServing.ApplyTo(&serverConfig.SecureServing, &serverConfig.LoopbackClientConfig); err != nil {
+		return nil, err
+	}
+	if err := authentication.ApplyTo(&serverConfig.Authentication, serverConfig.SecureServing, nil); err != nil {
+		return nil, err
+	}
+	if err := authorization.ApplyTo(&serverConfig.Authorization); err != nil {
 		return nil, err
 	}
 
