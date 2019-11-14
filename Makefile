@@ -167,3 +167,9 @@ build-ubuntu:
 manifest:
 	@echo "===> Generating dev manifest for Antrea <==="
 	$(CURDIR)/hack/generate-manifest.sh --mode dev > build/yamls/antrea.yml
+
+.PHONY: octant-antrea-ubuntu
+octant-antrea-ubuntu:
+	@echo "===> Building octant-antrea-ubuntu Docker image <==="
+	docker build -t octant-antrea-ubuntu -f build/images/Dockerfile.octant.ubuntu .
+	docker tag octant-antrea-ubuntu octant-antrea-ubuntu:$(DOCKER_IMG_VERSION)
