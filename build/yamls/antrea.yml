@@ -112,7 +112,7 @@ rules:
       - watch
       - list
   - apiGroups:
-      - "clusterinformation.crd.antrea.io"
+      - clusterinformation.crd.antrea.io
     resources:
       - antreacontrollerinfos
     verbs:
@@ -120,6 +120,18 @@ rules:
       - create
       - update
       - delete
+  - apiGroups:
+      - authentication.k8s.io
+    resources:
+      - tokenreviews
+    verbs:
+      - create
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - subjectaccessreviews
+    verbs:
+      - create
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -136,7 +148,7 @@ rules:
       - watch
       - list
   - apiGroups:
-      - "clusterinformation.crd.antrea.io"
+      - clusterinformation.crd.antrea.io
     resources:
       - antreaagentinfos
     verbs:
@@ -144,6 +156,16 @@ rules:
       - create
       - update
       - delete
+  - apiGroups:
+      - networkpolicy.antrea.io
+    resources:
+      - networkpolicies
+      - appliedtogroups
+      - addressgroups
+    verbs:
+      - get
+      - watch
+      - list
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -153,6 +175,20 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: antrea-controller
+subjects:
+  - kind: ServiceAccount
+    name: antrea-controller
+    namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: antrea-controller-authentication-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
 subjects:
   - kind: ServiceAccount
     name: antrea-controller
