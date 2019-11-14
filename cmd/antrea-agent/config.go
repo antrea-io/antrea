@@ -23,6 +23,9 @@ type AgentConfig struct {
 	// clientConnection specifies the kubeconfig file and client connection settings for the agent
 	// to communicate with the apiserver.
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration `yaml:"clientConnection"`
+	// AntreaClientConnection specifies the kubeconfig file and client connection settings for the
+	// agent to communicate with the Antrea Controller apiserver.
+	AntreaClientConnection componentbaseconfig.ClientConnectionConfiguration `yaml:"antreaClientConnection"`
 	// Name of the OpenVSwitch bridge antrea-agent will create and use.
 	// Make sure it doesn't conflict with your existing OpenVSwitch bridges.
 	// Defaults to br-int.

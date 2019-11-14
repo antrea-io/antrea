@@ -1,0 +1,394 @@
+// Copyright 2019 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package networkpolicy
+
+import (
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net"
+	"sync"
+
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1"
+)
+
+const (
+	RuleIDLength        = 16
+	appliedToGroupIndex = "appliedToGroup"
+	addressGroupIndex   = "addressGroup"
+	policyIndex         = "policy"
+)
+
+// rule is the struct stored in ruleCache, it contains necessary information
+// to construct a complete rule that can be used by reconciler to enforce.
+// The K8s NetworkPolicy object doesn't provide ID for its rule, here we
+// calculate an ID based on the rule's fields. That means:
+// 1. If a rule's selector/services/direction changes, it becomes "another" rule.
+// 2. If inserting rules before a rule or shuffling rules in a NetworkPolicy, we
+//    can know the existing rules don't change and skip processing them.
+type rule struct {
+	// ID is calculated from the hash value of all other fields.
+	ID string
+	// Direction of this rule.
+	Direction v1beta1.Direction
+	// Source Address of this rule, can't coexist with To.
+	From v1beta1.NetworkPolicyPeer
+	// Destination Address of this rule, can't coexist with From.
+	To v1beta1.NetworkPolicyPeer
+	// Protocols and Ports of this rule.
+	Services []v1beta1.Service
+	// Targets of this rule.
+	AppliedToGroups []string
+	// The parent Policy ID. Used to identify rules belong to a specified
+	// policy for deletion.
+	PolicyUID types.UID
+}
+
+// hashRule calculates a string based on the rule's content.
+func hashRule(r *rule) string {
+	hash := sha1.New()
+	b, _ := json.Marshal(r)
+	hash.Write(b)
+	hashValue := hex.EncodeToString(hash.Sum(nil))
+	return hashValue[:RuleIDLength]
+}
+
+// CompletedRule contains IPAddresses and Pods flattened from AddressGroups and AppliedToGroups.
+// It's the struct used by reconciler.
+type CompletedRule struct {
+	*rule
+	FromAddresses sets.String
+	ToAddresses   sets.String
+	Pods          podSet
+}
+
+// ruleCache caches Antrea AddressGroups, AppliedToGroups and NetworkPolicies,
+// can construct complete rules that can be used by reconciler to enforce.
+type ruleCache struct {
+	podSetLock sync.RWMutex
+	// podSetByGroup is a mapping from AppliedToGroup name to a set of Pods.
+	podSetByGroup map[string]podSet
+
+	addressSetLock sync.RWMutex
+	// addressSetByGroup is a mapping from AddressGroup name to a set of IP addresses.
+	addressSetByGroup map[string]sets.String
+
+	// rules is a storage that supports listing rules using multiple indexing functions.
+	// rules is thread-safe.
+	rules cache.Indexer
+	// dirtyRuleHandler is a callback that is run upon finding a rule out-of-sync.
+	dirtyRuleHandler func(string)
+}
+
+// ruleKeyFunc knows how to get key of a *rule.
+func ruleKeyFunc(obj interface{}) (string, error) {
+	rule := obj.(*rule)
+	return rule.ID, nil
+}
+
+// addressGroupIndexFunc knows how to get addressGroups of a *rule.
+// It's provided to cache.Indexer to build an index of addressGroups.
+func addressGroupIndexFunc(obj interface{}) ([]string, error) {
+	rule := obj.(*rule)
+	addressGroups := make([]string, 0, len(rule.From.AddressGroups)+len(rule.To.AddressGroups))
+	addressGroups = append(addressGroups, rule.From.AddressGroups...)
+	addressGroups = append(addressGroups, rule.To.AddressGroups...)
+	return addressGroups, nil
+}
+
+// appliedToGroupIndexFunc knows how to get appliedToGroups of a *rule.
+// It's provided to cache.Indexer to build an index of appliedToGroups.
+func appliedToGroupIndexFunc(obj interface{}) ([]string, error) {
+	rule := obj.(*rule)
+	return rule.AppliedToGroups, nil
+}
+
+// policyIndexFunc knows how to get NetworkPolicy UID of a *rule.
+// It's provided to cache.Indexer to build an index of NetworkPolicy.
+func policyIndexFunc(obj interface{}) ([]string, error) {
+	rule := obj.(*rule)
+	return []string{string(rule.PolicyUID)}, nil
+}
+
+// newRuleCache returns a new *ruleCache.
+func newRuleCache(dirtyRuleHandler func(string)) *ruleCache {
+	rules := cache.NewIndexer(
+		ruleKeyFunc,
+		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc},
+	)
+	return &ruleCache{
+		podSetByGroup:     make(map[string]podSet),
+		addressSetByGroup: make(map[string]sets.String),
+		rules:             rules,
+		dirtyRuleHandler:  dirtyRuleHandler,
+	}
+}
+
+// AddAddressGroup adds a new *v1beta1.AddressGroup to the cache. The rules
+// referencing it will be regarded as dirty.
+// It's safe to add an AddressGroup multiple times as it only overrides the
+// map, this could happen when the watcher reconnects to the Apiserver.
+func (c *ruleCache) AddAddressGroup(group *v1beta1.AddressGroup) error {
+	c.addressSetLock.Lock()
+	defer c.addressSetLock.Unlock()
+
+	ipAddressSet := sets.NewString()
+	for _, ip := range group.IPAddresses {
+		ipAddressSet.Insert(ipAddressToIPStr(ip))
+	}
+	c.addressSetByGroup[group.Name] = ipAddressSet
+	c.onAddressGroupUpdate(group.Name)
+	return nil
+}
+
+// PatchAddressGroup updates a cached *v1beta1.AddressGroup.
+// The rules referencing it will be regarded as dirty.
+func (c *ruleCache) PatchAddressGroup(patch *v1beta1.AddressGroupPatch) error {
+	c.addressSetLock.Lock()
+	defer c.addressSetLock.Unlock()
+
+	addressSet, exists := c.addressSetByGroup[patch.Name]
+	if !exists {
+		return fmt.Errorf("AddressGroup %v doesn't exist in cache, can't be patched", patch.Name)
+	}
+	for _, ip := range patch.AddedIPAddresses {
+		addressSet.Insert(ipAddressToIPStr(ip))
+	}
+	for _, ip := range patch.RemovedIPAddresses {
+		addressSet.Delete(ipAddressToIPStr(ip))
+	}
+	c.onAddressGroupUpdate(patch.Name)
+	return nil
+}
+
+// DeleteAddressGroup deletes a cached *v1beta1.AddressGroup.
+// It should only happen when a group is no longer referenced by any rule, so
+// no need to mark dirty rules.
+func (c *ruleCache) DeleteAddressGroup(group *v1beta1.AddressGroup) error {
+	c.addressSetLock.Lock()
+	defer c.addressSetLock.Unlock()
+
+	delete(c.addressSetByGroup, group.Name)
+	return nil
+}
+
+// AddAppliedToGroup adds a new *v1beta1.AppliedToGroup to the cache. The rules
+// referencing it will be regarded as dirty.
+// It's safe to add an AppliedToGroup multiple times as it only overrides the
+// map, this could happen when the watcher reconnects to the Apiserver.
+func (c *ruleCache) AddAppliedToGroup(group *v1beta1.AppliedToGroup) error {
+	c.podSetLock.Lock()
+	defer c.podSetLock.Unlock()
+
+	c.podSetByGroup[group.Name] = newPodSet(group.Pods...)
+	c.onAppliedToGroupUpdate(group.Name)
+	return nil
+}
+
+// PatchAppliedToGroup updates a cached *v1beta1.AppliedToGroupPatch.
+// The rules referencing it will be regarded as dirty.
+func (c *ruleCache) PatchAppliedToGroup(patch *v1beta1.AppliedToGroupPatch) error {
+	c.podSetLock.Lock()
+	defer c.podSetLock.Unlock()
+
+	group, exists := c.podSetByGroup[patch.Name]
+	if !exists {
+		return fmt.Errorf("AppliedToGroup %v doesn't exist in cache, can't be patched", patch.Name)
+	}
+	for _, added := range patch.AddedPods {
+		group[added] = sets.Empty{}
+	}
+	for _, removed := range patch.RemovedPods {
+		delete(group, removed)
+	}
+	c.onAppliedToGroupUpdate(patch.Name)
+	return nil
+}
+
+// DeleteAppliedToGroup deletes a cached *v1beta1.AppliedToGroup.
+// It should only happen when a group is no longer referenced by any rule, so
+// no need to mark dirty rules.
+func (c *ruleCache) DeleteAppliedToGroup(group *v1beta1.AppliedToGroup) error {
+	c.podSetLock.Lock()
+	defer c.podSetLock.Unlock()
+
+	delete(c.podSetByGroup, group.Name)
+	return nil
+}
+
+// toRule converts v1beta1.NetworkPolicyRule to *rule.
+func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
+	rule := &rule{
+		Direction:       r.Direction,
+		From:            r.From,
+		To:              r.To,
+		Services:        r.Services,
+		AppliedToGroups: policy.AppliedToGroups,
+		PolicyUID:       policy.UID,
+	}
+	rule.ID = hashRule(rule)
+	return rule
+}
+
+// AddNetworkPolicy adds a new *v1beta1.NetworkPolicy to the cache.
+// It could happen that an existing NetworkPolicy is "added" again when the
+// watcher reconnects to the Apiserver, we use the same processing as
+// UpdateNetworkPolicy to ensure orphan rules are removed.
+func (c *ruleCache) AddNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
+	return c.UpdateNetworkPolicy(policy)
+}
+
+// UpdateNetworkPolicy updates a cached *v1beta1.NetworkPolicy.
+// The added rules and removed rules will be regarded as dirty.
+func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
+	existingRules, _ := c.rules.ByIndex(policyIndex, string(policy.UID))
+	ruleByID := map[string]interface{}{}
+	for _, r := range existingRules {
+		ruleByID[r.(*rule).ID] = r
+	}
+
+	for _, r := range policy.Rules {
+		rule := toRule(&r, policy)
+		if _, exists := ruleByID[rule.ID]; exists {
+			// If rule already exists, remove it from the map so the ones left finally are orphaned.
+			klog.V(2).Infof("Rule %v was not changed", rule.ID)
+			delete(ruleByID, rule.ID)
+		} else {
+			// If rule doesn't exist, add it to cache, mark it as dirty.
+			c.rules.Add(rule)
+			c.dirtyRuleHandler(rule.ID)
+		}
+	}
+
+	// At this moment, the remaining rules are orphaned, remove them from store and mark them as dirty.
+	for ruleID, rule := range ruleByID {
+		c.rules.Delete(rule)
+		c.dirtyRuleHandler(ruleID)
+	}
+	return nil
+}
+
+// DeleteNetworkPolicy deletes a cached *v1beta1.NetworkPolicy.
+// All its rules will be regarded as dirty.
+func (c *ruleCache) DeleteNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
+	existingRules, _ := c.rules.ByIndex(policyIndex, string(policy.UID))
+	for _, r := range existingRules {
+		ruleID := r.(*rule).ID
+		c.rules.Delete(r)
+		c.dirtyRuleHandler(ruleID)
+	}
+	return nil
+}
+
+// GetCompletedRule constructs a *CompletedRule for the provided ruleID.
+// If the rule is not found or not completed due to missing group data,
+// the return value will indicate it.
+func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRule, exists bool, completed bool) {
+	obj, exists, _ := c.rules.GetByKey(ruleID)
+	if !exists {
+		return nil, false, false
+	}
+
+	r := obj.(*rule)
+	var fromAddresses, toAddresses sets.String
+	if r.Direction == v1beta1.DirectionIn {
+		fromAddresses, completed = c.unionAddressGroups(r.From.AddressGroups)
+	} else {
+		toAddresses, completed = c.unionAddressGroups(r.To.AddressGroups)
+	}
+	if !completed {
+		return nil, true, false
+	}
+
+	pods, completed := c.unionAppliedToGroups(r.AppliedToGroups)
+	if !completed {
+		return nil, true, false
+	}
+
+	completedRule = &CompletedRule{
+		rule:          r,
+		FromAddresses: fromAddresses,
+		ToAddresses:   toAddresses,
+		Pods:          pods,
+	}
+	return completedRule, true, true
+}
+
+// onAppliedToGroupUpdate gets rules referencing to the provided AppliedToGroup
+// and mark them as dirty.
+func (c *ruleCache) onAppliedToGroupUpdate(groupName string) {
+	ruleIDs, _ := c.rules.IndexKeys(appliedToGroupIndex, groupName)
+	for _, ruleID := range ruleIDs {
+		c.dirtyRuleHandler(ruleID)
+	}
+}
+
+// onAddressGroupUpdate gets rules referencing to the provided AddressGroup
+// and mark them as dirty.
+func (c *ruleCache) onAddressGroupUpdate(groupName string) {
+	ruleIDs, _ := c.rules.IndexKeys(addressGroupIndex, groupName)
+	for _, ruleID := range ruleIDs {
+		c.dirtyRuleHandler(ruleID)
+	}
+}
+
+// unionAddressGroups gets the union of addresses of the provided address groups.
+// If any group is not found, nil and false will be returned to indicate the
+// set is not complete yet.
+func (c *ruleCache) unionAddressGroups(groupNames []string) (sets.String, bool) {
+	c.addressSetLock.RLock()
+	defer c.addressSetLock.RUnlock()
+
+	set := sets.NewString()
+	for _, groupName := range groupNames {
+		curSet, exists := c.addressSetByGroup[groupName]
+		if !exists {
+			klog.V(2).Infof("AddressGroup %v was not found", groupName)
+			return nil, false
+		}
+		set = set.Union(curSet)
+	}
+	return set, true
+}
+
+// unionAppliedToGroups gets the union of pods of the provided appliedTo groups.
+// If any group is not found, nil and false will be returned to indicate the
+// set is not complete yet.
+func (c *ruleCache) unionAppliedToGroups(groupNames []string) (podSet, bool) {
+	c.podSetLock.RLock()
+	defer c.podSetLock.RUnlock()
+
+	set := podSet{}
+	for _, groupName := range groupNames {
+		curSet, exists := c.podSetByGroup[groupName]
+		if !exists {
+			klog.V(2).Infof("AppliedToGroup %v was not found", groupName)
+			return nil, false
+		}
+		set = set.Union(curSet)
+	}
+	return set, true
+}
+
+// ipAddressToIPStr converts v1beta1.IPAddress to an IP string.
+func ipAddressToIPStr(ipAddress v1beta1.IPAddress) string {
+	return net.IP(ipAddress).String()
+}

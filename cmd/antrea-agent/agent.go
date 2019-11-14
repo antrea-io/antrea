@@ -24,6 +24,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	_ "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
+	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
@@ -46,6 +47,9 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
+
+	// Create Antrea Clientset for the given config.
+	antreaClient, err := agent.CreateAntreaClient(o.config.AntreaClientConnection)
 
 	// Create ovsdb and openflow clients.
 	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS("")
@@ -85,6 +89,8 @@ func run(o *Options) error {
 		ofClient,
 		nodeConfig)
 
+	networkPolicyController := networkpolicy.NewNetworkPolicyController(antreaClient, ofClient, ifaceStore, nodeConfig.Name)
+
 	cniServer := cniserver.New(
 		o.config.CNISocket,
 		o.config.HostProcPathPrefix,
@@ -109,6 +115,8 @@ func run(o *Options) error {
 	informerFactory.Start(stopCh)
 
 	go nodeRouteController.Run(stopCh)
+
+	go networkPolicyController.Run(stopCh)
 
 	agentMonitor := monitor.NewAgentMonitor(crdClient, o.config.OVSBridge, nodeConfig.Name, nodeConfig.PodCIDR.String(), ifaceStore, ofClient)
 
