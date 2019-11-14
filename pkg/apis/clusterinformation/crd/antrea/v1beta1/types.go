@@ -26,13 +26,13 @@ type AntreaAgentInfo struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Version         string                 `json:"version,omitempty"`     // Antrea binary version
-	PodRef          corev1.ObjectReference `json:"podRef,omitempty"`      // The Pod that Antrea Agent is running in
-	NodeRef         corev1.ObjectReference `json:"nodeRef,omitempty"`     // The Node that Antrea Agent is running in
-	NodeSubnet      []string               `json:"nodeSubnet,omitempty"`  // Node subnet
-	OVSInfo         OVSInfo                `json:"ovsInfo,omitempty"`     // OVS Information
-	LocalPodNum     int32                  `json:"localPodNum,omitempty"` // The number of Pods which the agent is in charge of
-	AgentConditions []AgentCondition       `json:"agentConditions,omitempty"`
+	Version         string                 `json:"version,omitempty"`         // Antrea binary version
+	PodRef          corev1.ObjectReference `json:"podRef,omitempty"`          // The Pod that Antrea Agent is running in
+	NodeRef         corev1.ObjectReference `json:"nodeRef,omitempty"`         // The Node that Antrea Agent is running in
+	NodeSubnet      []string               `json:"nodeSubnet,omitempty"`      // Node subnet
+	OVSInfo         OVSInfo                `json:"ovsInfo,omitempty"`         // OVS Information
+	LocalPodNum     int32                  `json:"localPodNum,omitempty"`     // The number of Pods which the agent is in charge of
+	AgentConditions []AgentCondition       `json:"agentConditions,omitempty"` // Agent condition contains types like AgentHealthy
 }
 
 type OVSInfo struct {
@@ -44,14 +44,16 @@ type OVSInfo struct {
 type AgentConditionType string
 
 const (
+	AgentHealthy           AgentConditionType = "AgentHealthy"           // Status is always set to be True and LastHeartbeatTime is used to check Agent health status.
 	ControllerConnectionUp AgentConditionType = "ControllerConnectionUp" // Status False is caused by the reasons: AgentControllerConnectionDown
 )
 
 type AgentCondition struct {
-	Type    AgentConditionType     `json:"type"`              // One of the AgentConditionType listed above, ControllerConnectionUp
-	Status  corev1.ConditionStatus `json:"status"`            // Mark certain type status, one of True, False, Unknown
-	Reason  string                 `json:"reason,omitempty"`  // Brief reason
-	Message string                 `json:"message,omitempty"` // Human readable message indicating details
+	Type              AgentConditionType     `json:"type"`              // One of the AgentConditionType listed above, AgentHealthy or ControllerConnectionUp
+	Status            corev1.ConditionStatus `json:"status"`            // Mark certain type status, one of True, False, Unknown
+	LastHeartbeatTime metav1.Time            `json:"lastHeartbeatTime"` // The timestamp when AntreaAgentInfo is created/updated, ideally heartbeat interval is 60s
+	Reason            string                 `json:"reason,omitempty"`  // Brief reason
+	Message           string                 `json:"message,omitempty"` // Human readable message indicating details
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -75,6 +77,7 @@ type AntreaControllerInfo struct {
 	ServiceRef                  corev1.ObjectReference      `json:"serviceRef, omitempty"`                 // Antrea Controller Service
 	NetworkPolicyControllerInfo NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // NetworkPolicy information
 	ConnectedAgentNum           int32                       `json:"connectedAgentNum,omitempty"`           // Number of agents which are connected to this controller
+	ControllerConditions        []ControllerCondition       `json:"controllerConditions,omitempty"`        // Controller condition contains types like ControllerHealthy
 }
 
 type NetworkPolicyControllerInfo struct {
@@ -89,4 +92,18 @@ type AntreaControllerInfoList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []AntreaControllerInfo `json:"items"`
+}
+
+type ControllerConditionType string
+
+const (
+	ControllerHealthy ControllerConditionType = "ControllerHealthy" // Status is always set to be True and LastHeartbeatTime is used to check Controller health status.
+)
+
+type ControllerCondition struct {
+	Type              ControllerConditionType `json:"type"`              // One of the ControllerConditionType listed above, controllerHealthy
+	Status            corev1.ConditionStatus  `json:"status"`            // Mark certain type status, one of True, False, Unknown
+	LastHeartbeatTime metav1.Time             `json:"lastHeartbeatTime"` // The timestamp when AntreaControllerInfo is created/updated, ideally heartbeat interval is 60s
+	Reason            string                  `json:"reason,omitempty"`  // Brief reason
+	Message           string                  `json:"message,omitempty"` // Human readable message indicating details
 }

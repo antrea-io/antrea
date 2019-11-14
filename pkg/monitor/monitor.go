@@ -17,6 +17,7 @@ package monitor
 import (
 	"time"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
 
@@ -121,6 +122,13 @@ func (monitor *controllerMonitor) createControllerCRD() (*v1beta1.AntreaControll
 		PodRef:     monitor.GetSelfPod(),
 		NodeRef:    monitor.GetSelfNode(),
 		ServiceRef: monitor.GetService(),
+		ControllerConditions: []v1beta1.ControllerCondition{
+			{
+				Type:              v1beta1.ControllerHealthy,
+				Status:            v1.ConditionTrue,
+				LastHeartbeatTime: metav1.Now(),
+			},
+		},
 	}
 	klog.V(2).Infof("Creating controller monitor CRD %v", controllerCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Create(controllerCRD)
@@ -129,6 +137,13 @@ func (monitor *controllerMonitor) createControllerCRD() (*v1beta1.AntreaControll
 // TODO: Update network policy related fields when the upstreaming is ready
 func (monitor *controllerMonitor) updateControllerCRD(controllerCRD *v1beta1.AntreaControllerInfo) (*v1beta1.AntreaControllerInfo, error) {
 	klog.V(2).Infof("Updating controller monitor CRD %v", controllerCRD)
+	controllerCRD.ControllerConditions = []v1beta1.ControllerCondition{
+		{
+			Type:              v1beta1.ControllerHealthy,
+			Status:            v1.ConditionTrue,
+			LastHeartbeatTime: metav1.Now(),
+		},
+	}
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Update(controllerCRD)
 }
 
@@ -155,6 +170,13 @@ func (monitor *agentMonitor) createAgentCRD() (*v1beta1.AntreaAgentInfo, error) 
 		NodeSubnet:  []string{monitor.nodeSubnet},
 		OVSInfo:     v1beta1.OVSInfo{BridgeName: monitor.ovsBridge, FlowTable: monitor.GetOVSFlowTable()},
 		LocalPodNum: monitor.GetLocalPodNum(),
+		AgentConditions: []v1beta1.AgentCondition{
+			{
+				Type:              v1beta1.AgentHealthy,
+				Status:            v1.ConditionTrue,
+				LastHeartbeatTime: metav1.Now(),
+			},
+		},
 	}
 	klog.V(2).Infof("Creating agent monitor CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Create(agentCRD)
@@ -164,6 +186,13 @@ func (monitor *agentMonitor) updateAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (
 	// LocalPodNum and FlowTable can be changed, so reset these fields.
 	agentCRD.LocalPodNum = monitor.GetLocalPodNum()
 	agentCRD.OVSInfo.FlowTable = monitor.GetOVSFlowTable()
+	agentCRD.AgentConditions = []v1beta1.AgentCondition{
+		{
+			Type:              v1beta1.AgentHealthy,
+			Status:            v1.ConditionTrue,
+			LastHeartbeatTime: metav1.Now(),
+		},
+	}
 	klog.V(2).Infof("Updating agent monitor CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
 }
