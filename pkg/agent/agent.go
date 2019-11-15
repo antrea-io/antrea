@@ -198,19 +198,20 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		return err
 	}
 
-	// Setup flow entries for tunnel port Interface, including classifier and L2 Forwarding(match
-	// vMAC as dst)
+	// Setup flow entries for tunnel port Interface, including classifier and L2 Forwarding
+	// (match vMAC as dst)
 	if err := i.ofClient.InstallTunnelFlows(tunOFPort); err != nil {
 		klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
 		return err
 	}
 
 	// Setup flow entries to enable service connectivity. Upstream kube-proxy is leveraged to
-	// provide service feature, and this flow entry is to ensure traffic sent from pod to service
-	// address could be forwarded to host gateway interface correctly. Otherwise packets might be
-	// dropped by egress rules before they are DNATed to backend Pods.
-	if err := i.ofClient.InstallServiceFlows(i.serviceCIDR.String(), i.serviceCIDR, gatewayOFPort); err != nil {
-		klog.Errorf("Failed to setup openflow entries for serviceCIDR %s: %v", i.serviceCIDR, err)
+	// provide load-balaancing, and the flows installed by this method ensure that traffic sent
+	// from local Pods to any Service address can be forwarded to the host gateway interface
+	// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
+	// backend Pods.
+	if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gatewayOFPort); err != nil {
+		klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
 		return err
 	}
 	return nil
