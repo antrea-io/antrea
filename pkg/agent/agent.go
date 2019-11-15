@@ -206,7 +206,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	}
 
 	// Setup flow entries to enable service connectivity. Upstream kube-proxy is leveraged to
-	// provide load-balaancing, and the flows installed by this method ensure that traffic sent
+	// provide load-balancing, and the flows installed by this method ensure that traffic sent
 	// from local Pods to any Service address can be forwarded to the host gateway interface
 	// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
 	// backend Pods.
