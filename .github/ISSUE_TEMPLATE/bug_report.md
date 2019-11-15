@@ -9,6 +9,7 @@ assignees: ''
 
 **Describe the bug**
 A clear and concise description of what the bug is.
+If you believe this bug is a security issue, please don't use this template and follow our [security guidelines](/SECURITY.md)
 
 **To Reproduce**
 Steps to reproduce the behavior.
