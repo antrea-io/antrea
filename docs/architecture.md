@@ -1,5 +1,17 @@
 # Antrea Architecture
 
+Antrea is designed to be Kubernetes-centric and Kubernetes-native. It focuses on
+and is optimized for networking and security of a Kubernetes cluster. Its
+implementation leverages Kubernetes and Kubernetes native solutions as much as
+possible.
+
+Antrea leverages Open vSwitch as the networking data plane. Open vSwitch is a
+high-performance programmable virtual switch that supports both Linux and
+Windows. Open vSwitch enables Antrea to implement Kubernetes Network Policies
+in a high-performance and efficient manner. Thanks to the "programmable"
+characteristic of Open vSwitch, Antrea is able to implement an extensive set
+of networking and security features and services on top of Open vSwitch.
+
 ## Components
 
 In a Kubernetes cluster, Antrea creates a Deployment that runs Antrea
@@ -25,21 +37,48 @@ However, in the future, Antrea might support more features that require Antrea
 Controller.
 
 Antrea Controller leverages the [Kubernetes apiserver library](https://github.com/kubernetes/apiserver)
-to communicate updates to Antrea Agent. Antrea Agent connects to the Controller
-apiserver and watches the computed NetworkPolicy objects. Antrea Controller also
-leverages Kubernetes Service for:
-- API service discovery, and
-- API authentication and authorization.
+to implement the communication channel to Antrea Agents. Each Antrea Agent
+connects to the Controller API server and watches the computed NetworkPolicy
+objects. Controller also exposes a REST API for `antctl` on the same HTTP
+endpoint. See more information about the Controller API server implementation
+in the [Controller API server section](#Controller API server).
+
+#### Controller API server
+
+Antrea Controller leverages the Kubernetes apiserver library to implement its
+own API server. The API server implementation is customized and optimized for
+publishing the computed NetworkPolicies to Agents:
+- The API server keeps all the state in in-memory caches and does not require a
+datastore to persist the data.
+- It sends the NetworkPolicy objects to only those Nodes that need to apply the
+NetworkPolicies locally. A Node receives a NetworkPolicy if and only if the
+NetworkPolicy is applied to at least one Pod on the Node.
+- It supports sending incremental updates to the NetworkPolicy objects to
+Agents.
+- Messages between Controller and Agent are serialized using the Protobuf format
+for reduced size and higher efficiency.
+
+The Antrea Controller API server also leverages Kubernetes Service for:
+- service discovery, and
+- authentication and authorization.
 
 The Controller API endpoint is exposed through a Kubernetes ClusterIP type
 Service. Antrea Agent gets the Service's ClusterIP from the Service environment
-variable and connects to the Controller apiserver using the ClusterIP. Antrea
-Controller delegates authentication and authorization to the Kubernetes API -
-the Agent uses a Kubernetes ServiceAccount token to authenticate to the
-Controller and the Controller validates the token with the Kubernetes API.
+variable and connects to the Controller API server using the ClusterIP. The
+Controller API server delegates authentication and authorization to the
+Kubernetes API - the Antrea Agent uses a Kubernetes ServiceAccount token to
+authenticate to the Controller, and the Controller API server validates the
+token and whether the ServiceAccount is authorized for the API request with the
+Kubernetes API.
 
-Antrea Controller also exposes REST API for `antctl` using the same HTTP
-endpoint as the API to Antrea Agent. See more information in the [`antctl` section](#antctl).
+Antrea Controller also exposes a REST API for `antctl` using the API server HTTP
+endpoint. It leverages [Kubernetes API aggregation](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/)
+to enable `antctl` to reach the Antrea Controller API through the Kubernetes
+API - `antctl` connects and authenticates to the Kubernetes API, which will
+proxy the `antctl` API requests to the Antrea Controller. In this way, `antctl`
+can be executed on any machine that can reach the Kubernetes API, and it can
+also leverage the `kubectl` configuration (`kubeconfig` file) to discover the
+Kubernetes API and authentication information. See also the [`antctl` section](#antctl).
 
 ### Antrea Agent
 
@@ -59,7 +98,7 @@ creates an OVS (VXLAN or Geneve) tunnel to each remote Node.
 Antrea Controller API, and installs OVS flows to implement the NetworkPolicies
 for the local Pods.
 
-Antrea Agent also exposes REST API on a local HTTP endpoint for `antctl`.
+Antrea Agent also exposes a REST API on a local HTTP endpoint for `antctl`.
 
 ### OVS daemons
 
@@ -81,14 +120,10 @@ runtime information for both Antrea Controller and Antrea Agent, for debugging
 purposes.
 
 When accessing the Controller, `antctl` invokes the Controller API to query the
-required information. Antrea leverages [Kubernetes API aggregation](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/)
-to enable `antctl` to reach the Antrea Controller API through the Kubernetes
-API - `antctl` connects and authenticates to the Kubernetes API, which will
-proxy the `antctl` API requests to the Antrea Controller. In this way, `antctl`
-can be executed on any machine that can reach the Kubernetes API, and it can
-also leverage the `kubectl` configuration (`kubeconfig` file) to discover the
-Kubernetes API and authentication information. `antctl` can be executed through
-`kubectl` as a `kubectl` plugin as well.
+required information. As described earlier, `antctl` can reach the Controller
+API through the Kubernetes API, and have the Kubernetes API authenticate,
+authorize, and proxy the API requests to the Controller. `antctl` can be
+executed through `kubectl` as a `kubectl` plugin as well.
 
 When accessing the Agent, `antctl` connects to the Agent's local REST endpoint,
 and can only be executed locally in the Agent's container.
@@ -182,6 +217,7 @@ which the NetworkPolicy is applied) will be translated to member Pods.
 define the ingress and egress traffic allowed by this policy) will be mapped to
 Pod IP addresses / IP address ranges.
 
+Antrea Controller also computes which Nodes need to receive a NetworkPolicy.
 Each Antrea Agent receives only the computed policies which affect Pods running
 locally on its Node, and directly uses the IP addresses computed by the
 Controller to create OVS flows enforcing the specified NetworkPolicies.
@@ -203,11 +239,4 @@ much easier to achieve consistency among Nodes and easier to debug the
 NetworkPolicy implementation.
 
 As described earlier, Antrea Controller leverages the Kubernetes apiserver
-library to build the API and communication channels to Agents. The apiserver
-implementation is customized and optimized for publishing the computed
-NetworkPolicies to Agents. Antrea Controller keeps all the state in in-memory
-caches and does not require a datastore to persist the data. It supports sending
-incremental updates to the computed NetworkPolicy objects to Agents, and sending
-the NetworkPolicy objects to only those Nodes that need to apply the
-NetworkPolicies locally. Messages between Controller and Agent are serialized
-using the Protobuf format for reduced size and higher efficiency.
+library to build the API and communication channel to Agents.
