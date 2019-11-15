@@ -90,7 +90,6 @@ for information.
 ### Contribute
 
 The Antrea community welcomes new contributors. Please join our
-[#antrea-dev](https://projectantrea.slack.com/messages/antrea-dev) Slack channel and
 [projectantrea-dev](https://groups.google.com/forum/#!forum/projectantrea-dev) mailing list to stay
 updated, get help to get started, start conversations and propose new ideas. We are waiting for your
 PRs!
@@ -105,9 +104,7 @@ Also check the [Architecture document](/docs/architecture.md) for the Antrea arc
 * **Twitter**: [@ProjectAntrea](https://twitter.com/ProjectAntrea)
 * **Announcements mailing list**: Join the [projectantrea-announce](https://groups.google.com/forum/#!forum/projectantrea-announce)
   mailing list for important announcements about Antrea (e.g. new releases).
-* **User groups**: Join the [#antrea-users](https://projectantrea.slack.com/messages/antrea-users)
-  Slack channel or the [projectantrea](https://groups.google.com/forum/#!forum/projectantrea)
+* **User groups**: Join the [projectantrea](https://groups.google.com/forum/#!forum/projectantrea)
   mailing list to get updates about Antrea or provide feedback.
-* **Developer groups**: Join the [#antrea-dev](https://projectantrea.slack.com/messages/antrea-dev)
-  Slack channel or the [projectantrea-dev](https://groups.google.com/forum/#!forum/projectantrea-dev)
+* **Developer groups**: Join the [projectantrea-dev](https://groups.google.com/forum/#!forum/projectantrea-dev)
   mailing list to participate in discussions on Antrea development.
