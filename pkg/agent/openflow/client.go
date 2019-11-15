@@ -35,6 +35,11 @@ type Client interface {
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
 
+	// InstallClusterServiceCIDRFlows sets up the appropriate flows so that traffic can reach
+	// the different Services running in the Cluster. This method needs to be invoked once with
+	// the Cluster Service CIDR as a parameter.
+	InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOFPort uint32) error
+
 	// InstallTunnelFlows sets up flows related to an OVS tunnel port, the tunnel port must exist.
 	InstallTunnelFlows(tunnelOFPort uint32) error
 
@@ -57,17 +62,6 @@ type Client interface {
 	// UninstallPodFlows removes the connection to the local Pod specified with the
 	// containerID. UninstallPodFlows will do nothing if no connection to the Pod was established.
 	UninstallPodFlows(containerID string) error
-
-	// InstallServiceFlows should be invoked when a connection to a Kubernetes service is going
-	// to be connected, all arguments should be filled. The serviceName is used to identify the
-	// added flows. Calls to InstallServiceFlows are idempotent. Concurrent calls to
-	// InstallServiceFlows and / or UninstallServiceFlows are supported as long as they are all
-	// for different serviceNames.
-	InstallServiceFlows(serviceName string, serviceNet *net.IPNet, gatewayOFPort uint32) error
-
-	// UninstallServiceFlows removes the connection to the Service specified with the
-	// serviceName. UninstallServiceFlows will do nothing if no connection to the service was established.
-	UninstallServiceFlows(serviceName string) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
@@ -175,16 +169,8 @@ func (c *client) UninstallPodFlows(containerID string) error {
 	return c.deleteFlows(c.podFlowCache, containerID)
 }
 
-func (c *client) InstallServiceFlows(serviceName string, serviceNet *net.IPNet, gatewayOFPort uint32) error {
-	flows := []binding.Flow{
-		c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort),
-	}
-
-	return c.addMissingFlows(c.serviceCache, serviceName, flows)
-}
-
-func (c *client) UninstallServiceFlows(serviceName string) error {
-	return c.deleteFlows(c.serviceCache, serviceName)
+func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOFPort uint32) error {
+	return c.flowOperations.Add(c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort))
 }
 
 func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {

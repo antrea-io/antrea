@@ -53,18 +53,7 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	return len(fCacheI.(flowCache)), err
 }
 
-func installServiceFlows(ofClient Client, cacheKey string) (int, error) {
-	serviceName := cacheKey
-	_, IPNet, _ := net.ParseCIDR("10.96.0.0/16")
-	ofPort := uint32(1)
-	err := ofClient.InstallServiceFlows(serviceName, IPNet, ofPort)
-	client := ofClient.(*client)
-	fCacheI, _ := client.serviceCache.Load(serviceName)
-	return len(fCacheI.(flowCache)), err
-}
-
-// TestIdempotentFlowInstallation checks that InstallNodeFlows, InstallPodFlows
-// and InstallServiceFlows are idempotent.
+// TestIdempotentFlowInstallation checks that InstallNodeFlows and InstallPodFlows are idempotent.
 func TestIdempotentFlowInstallation(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -74,7 +63,6 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 	}{
 		{"NodeFlows", "host", 2, installNodeFlows},
 		{"PodFlows", "aaaa-bbbb-cccc-dddd", 5, installPodFlows},
-		{"ServiceFlows", "kubernetes", 1, installServiceFlows},
 	}
 
 	for _, tc := range testCases {
@@ -152,7 +140,6 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 	}{
 		{"NodeFlows", "host", 2, installNodeFlows},
 		{"PodFlows", "aaaa-bbbb-cccc-dddd", 5, installPodFlows},
-		{"ServiceFlows", "kubernetes", 1, installServiceFlows},
 	}
 
 	for _, tc := range testCases {
