@@ -71,7 +71,7 @@ func NewNetworkPolicyController(antreaClient versioned.Interface, ofClient openf
 		antreaClient: antreaClient,
 		nodeName:     nodeName,
 		queue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
-		reconciler:   &NoopReconciler{},
+		reconciler:   newReconciler(ofClient, ifaceStore),
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule)
 	return c
@@ -243,6 +243,7 @@ func (c *Controller) watchAddressGroups() {
 					klog.Errorf("Cannot convert to *v1beta1.AddressGroup: %v", event.Object)
 					return
 				}
+				klog.V(2).Infof("Added AddressGroup (%#v)", event.Object)
 				c.ruleCache.AddAddressGroup(group)
 			case watch.Modified:
 				patch, ok := event.Object.(*v1beta1.AddressGroupPatch)
@@ -250,6 +251,7 @@ func (c *Controller) watchAddressGroups() {
 					klog.Errorf("Cannot convert to *v1beta1.AddressGroupPatch: %v", event.Object)
 					return
 				}
+				klog.V(2).Infof("Patched AddressGroup (%#v)", event.Object)
 				c.ruleCache.PatchAddressGroup(patch)
 			case watch.Deleted:
 				group, ok := event.Object.(*v1beta1.AddressGroup)
@@ -257,6 +259,7 @@ func (c *Controller) watchAddressGroups() {
 					klog.Errorf("Cannot convert to *v1beta1.AddressGroup: %v", event.Object)
 					return
 				}
+				klog.V(2).Infof("Removed AddressGroup (%#v)", event.Object)
 				c.ruleCache.DeleteAddressGroup(group)
 			}
 			eventCount++
@@ -293,6 +296,7 @@ func (c *Controller) watchNetworkPolicies() {
 					klog.Errorf("Cannot convert to *v1beta1.NetworkPolicy: %v", event.Object)
 					return
 				}
+				klog.V(2).Infof("Added NetworkPolicy (%#v)", event.Object)
 				c.ruleCache.AddNetworkPolicy(policy)
 			case watch.Modified:
 				policy, ok := event.Object.(*v1beta1.NetworkPolicy)
@@ -300,6 +304,7 @@ func (c *Controller) watchNetworkPolicies() {
 					klog.Errorf("Cannot convert to *v1beta1.NetworkPolicy: %v", event.Object)
 					return
 				}
+				klog.V(2).Infof("Updated NetworkPolicy (%#v)", event.Object)
 				c.ruleCache.UpdateNetworkPolicy(policy)
 			case watch.Deleted:
 				policy, ok := event.Object.(*v1beta1.NetworkPolicy)
@@ -307,6 +312,7 @@ func (c *Controller) watchNetworkPolicies() {
 					klog.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", event.Object)
 					return
 				}
+				klog.V(2).Infof("Removed NetworkPolicy (%#v)", event.Object)
 				c.ruleCache.DeleteNetworkPolicy(policy)
 			}
 			eventCount++

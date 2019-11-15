@@ -35,6 +35,22 @@ func (s podSet) Union(o podSet) podSet {
 	return result
 }
 
+// Difference returns a set of objects that are not in s2
+// For example:
+// s1 = {a1, a2, a3}
+// s2 = {a1, a2, a4, a5}
+// s1.Difference(s2) = {a3}
+// s2.Difference(s1) = {a4, a5}
+func (s podSet) Difference(s2 podSet) podSet {
+	result := newPodSet()
+	for key := range s {
+		if _, contained := s2[key]; !contained {
+			result.Insert(key)
+		}
+	}
+	return result
+}
+
 // Insert adds items to the set.
 func (s podSet) Insert(items ...v1beta1.PodReference) {
 	for _, item := range items {
