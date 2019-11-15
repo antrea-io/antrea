@@ -3,7 +3,7 @@ GO              ?= go
 LDFLAGS         :=
 GOFLAGS         :=
 BINDIR          := $(CURDIR)/bin
-GO_FILES        := $(shell find . -name '*.go')
+GO_FILES        := $(shell find . -type d -name '.cache' -prune -o -type f -name '*.go' -print)
 GOPATH          ?= $$(go env GOPATH)
 DOCKER_CACHE    := $(CURDIR)/.cache
 
