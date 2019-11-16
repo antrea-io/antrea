@@ -30,7 +30,7 @@ type commandBridge struct {
 	tableCache map[TableIDType]Table
 }
 
-func (b *commandBridge) CreateTable(id, next TableIDType, missAction missActionType) Table {
+func (b *commandBridge) CreateTable(id, next TableIDType, missAction MissActionType) Table {
 	t := &commandTable{
 		bridge:     b.name,
 		id:         id,

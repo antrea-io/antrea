@@ -35,7 +35,8 @@ const (
 
 type Address interface {
 	GetMatchValue() string
-	GetMatchKey(addrType AddressType) string
+	GetMatchKey(addrType AddressType) int
+	GetValue() interface{}
 }
 
 // PolicyRule groups configurations to set up conjunctive match for egress/ingress policy rules.

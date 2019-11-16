@@ -57,7 +57,7 @@ func (data *testData) setup(t *testing.T) {
 		t.Fatalf("Could not establish connection to %s after %s", UDSAddress, defaultConnectTimeout)
 	}
 
-	data.br = ovsconfig.NewOVSBridge(bridgeName, data.ovsdb)
+	data.br = ovsconfig.NewOVSBridge(bridgeName, "system", data.ovsdb)
 	err = data.br.Create()
 	require.Nil(t, err, "Failed to create bridge %s", bridgeName)
 }

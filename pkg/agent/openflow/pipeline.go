@@ -110,9 +110,15 @@ type flowCategoryCache struct {
 type client struct {
 	bridge                                    binding.Bridge
 	pipeline                                  map[binding.TableIDType]binding.Table
-	nodeFlowCache, podFlowCache, serviceCache *flowCategoryCache      // cache for correspond deletions
-	policyCache                               map[uint32]*conjunction // cache for conjunction
+	nodeFlowCache, podFlowCache, serviceCache *flowCategoryCache // cache for corresponding deletions
 	flowOperations                            FlowOperations
+	// policyCache is a map from PolicyRule ID to policyRuleConjunction. It's guaranteed that one policyRuleConjunction
+	// is processed by at most one goroutine at any given time.
+	policyCache       sync.Map
+	conjMatchFlowLock sync.Mutex // Lock for access globalConjMatchFlowCache
+	// globalConjMatchFlowCache is a global map for conjMatchFlowContext. The key is a string generated from the
+	// conjMatchFlowContext.
+	globalConjMatchFlowCache map[string]*conjMatchFlowContext
 }
 
 func (c *client) Add(flow binding.Flow) error {
@@ -191,35 +197,35 @@ func (c *client) connectionTrackFlows() (flows []binding.Flow) {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	gatewayReplyFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityHigh).
 		MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-		CTMark(i2h(gatewayCTMark)).
-		CTState("-new+trk").
+		MatchCTMark(i2h(gatewayCTMark)).
+		MatchCTState("-new+trk").
 		Action().Resubmit(emptyPlaceholderStr, connectionTrackStateTable.GetNext()).
 		Done()
 	flows = append(flows, gatewayReplyFlow)
 
 	gatewaySendFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
 		MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-		CTState("+new+trk").
+		MatchCTState("+new+trk").
 		Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).LoadToMark(gatewayCTMark).MoveToLabel(binding.NxmFieldSrcMAC, &binding.Range{0, 47}, &binding.Range{0, 47}).CTDone().
 		Done()
 	flows = append(flows, gatewaySendFlow)
 
 	podReplyGatewayFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
-		CTMark(i2h(gatewayCTMark)).
-		CTState("-new+trk").
+		MatchCTMark(i2h(gatewayCTMark)).
+		MatchCTState("-new+trk").
 		Action().MoveRange(binding.NxmFieldCtLabel, binding.NxmFieldDstMAC, binding.Range{0, 47}, binding.Range{0, 47}).
 		Action().Resubmit(emptyPlaceholderStr, connectionTrackStateTable.GetNext()).
 		Done()
 	flows = append(flows, podReplyGatewayFlow)
 
 	nonGatewaySendFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityLow).
-		CTState("+new+trk").
+		MatchCTState("+new+trk").
 		Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).CTDone().
 		Done()
 	flows = append(flows, nonGatewaySendFlow)
 
 	invCTFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
-		CTState("+new+inv").
+		MatchCTState("+new+inv").
 		Action().Drop().
 		Done()
 	flows = append(flows, invCTFlow)
@@ -361,7 +367,8 @@ func (c *client) arpNormalFlow() binding.Flow {
 		Action().Normal().Done()
 }
 
-// conjunctionActionFlow generates the flow to resubmit to a specific table if conjunction ID is matched. Priority of conjunctionActionFlow is "priorityLow"
+// conjunctionActionFlow generates the flow to resubmit to a specific table if policyRuleConjunction ID is matched. Priority of
+// conjunctionActionFlow is priorityLow.
 func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType) binding.Flow {
 	return c.pipeline[tableID].BuildFlow().
 		MatchProtocol(binding.ProtocolIP).Priority(priorityLow).
@@ -375,6 +382,74 @@ func (c *client) Disconnect() error {
 
 func newFlowCategoryCache() *flowCategoryCache {
 	return &flowCategoryCache{}
+}
+
+// establishedConnectionFlows generates flows to ensure established connections skip the NetworkPolicy rules.
+func (c *client) establishedConnectionFlows() (flows []binding.Flow) {
+	// egressDropTable checks the source address of packets, and drops packets sent from the AppliedToGroup but not
+	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
+	// egressRuleTable or the egressDropTable.
+	egressDropTable := c.pipeline[egressDefaultTable]
+	egressEstFlow := c.pipeline[egressRuleTable].BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityHigh).
+		MatchCTState("-new+est").
+		Action().Resubmit(emptyPlaceholderStr, egressDropTable.GetNext()).Done()
+	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
+	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
+	// ingressRuleTable or ingressDropTable.
+	ingressDropTable := c.pipeline[ingressDefaultTable]
+	ingressEstFlow := c.pipeline[ingressRuleTable].BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityHigh).
+		MatchCTState("-new+est").
+		Action().Resubmit(emptyPlaceholderStr, ingressDropTable.GetNext()).Done()
+	return []binding.Flow{egressEstFlow, ingressEstFlow}
+}
+
+func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue interface{}) binding.FlowBuilder {
+	switch matchType {
+	case MatchDstIP:
+		fb = fb.MatchProtocol(binding.ProtocolIP).MatchDstIP(matchValue.(net.IP))
+	case MatchDstIPNet:
+		fb = fb.MatchProtocol(binding.ProtocolIP).MatchDstIPNet(matchValue.(net.IPNet))
+	case MatchSrcIP:
+		fb = fb.MatchProtocol(binding.ProtocolIP).MatchSrcIP(matchValue.(net.IP))
+	case MatchSrcIPNet:
+		fb = fb.MatchProtocol(binding.ProtocolIP).MatchSrcIPNet(matchValue.(net.IPNet))
+	case MatchDstOFPort:
+		// ofport number in NXM_NX_REG1 is used in ingress rule to match packets sent to local Pod.
+		fb = fb.MatchProtocol(binding.ProtocolIP).MatchRegRange(int(portCacheReg), uint32(matchValue.(int32)), ofPortRegRange)
+	case MatchSrcOFPort:
+		fb = fb.MatchProtocol(binding.ProtocolIP).MatchInPort(uint32(matchValue.(int32)))
+	case MatchTCPDstPort:
+		fb = fb.MatchProtocol(binding.ProtocolTCP).MatchTCPDstPort(matchValue.(uint16))
+	case MatchUDPDstPort:
+		fb = fb.MatchProtocol(binding.ProtocolUDP).MatchUDPDstPort(matchValue.(uint16))
+	case MatchSCTPDstPort:
+		fb = fb.MatchProtocol(binding.ProtocolSCTP).MatchSCTPDstPort(matchValue.(uint16))
+	}
+	return fb
+}
+
+// conjunctionExceptionFlow generates the flow to resubmit to a specific table if both policyRuleConjunction ID and except address are matched.
+func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, matchKey int, matchValue interface{}) binding.Flow {
+	fb := c.pipeline[tableID].BuildFlow().Priority(priorityNormal).MatchConjID(conjunctionID)
+	return c.addFlowMatch(fb, matchKey, matchValue).
+		Action().Resubmit(emptyPlaceholderStr, nextTable).Done()
+}
+
+// conjunctiveMatchFlow generates the flow to set conjunctive actions if the match condition is matched.
+func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey int, matchValue interface{}, actions ...*conjunctiveAction) binding.Flow {
+	fb := c.pipeline[tableID].BuildFlow().Priority(priorityNormal)
+	fb = c.addFlowMatch(fb, matchKey, matchValue)
+	for _, act := range actions {
+		fb.Action().Conjunction(act.conjID, act.clauseID, act.nClause)
+	}
+	return fb.Done()
+}
+
+// defaultDropFlow generates the flow to drop packets if the match condition is matched.
+func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey int, matchValue interface{}) binding.Flow {
+	fb := c.pipeline[tableID].BuildFlow().Priority(priorityNormal)
+	return c.addFlowMatch(fb, matchKey, matchValue).
+		Action().Drop().Done()
 }
 
 // NewClient is the constructor of the Client interface.
@@ -397,10 +472,11 @@ func NewClient(bridgeName string) Client {
 			ingressRuleTable:      bridge.CreateTable(ingressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
 			ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, l2ForwardingOutTable, binding.TableMissActionNext),
 		},
-		nodeFlowCache: newFlowCategoryCache(),
-		podFlowCache:  newFlowCategoryCache(),
-		serviceCache:  newFlowCategoryCache(),
-		policyCache:   map[uint32]*conjunction{},
+		nodeFlowCache:            newFlowCategoryCache(),
+		podFlowCache:             newFlowCategoryCache(),
+		serviceCache:             newFlowCategoryCache(),
+		policyCache:              sync.Map{},
+		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 	}
 	c.flowOperations = c
 	return c
