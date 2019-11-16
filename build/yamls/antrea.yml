@@ -227,7 +227,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-config-khktk4mf7c
+  name: antrea-config-fh9t4g64dc
   namespace: kube-system
 ---
 apiVersion: v1
@@ -310,7 +310,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-khktk4mf7c
+          name: antrea-config-fh9t4g64dc
         name: antrea-config
 ---
 apiVersion: apps/v1
@@ -435,6 +435,7 @@ spec:
           name: host-cni-bin
         - mountPath: /lib/modules
           name: host-lib-modules
+          readOnly: true
         - mountPath: /sbin/depmod
           name: host-depmod
           readOnly: true
@@ -449,7 +450,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-khktk4mf7c
+          name: antrea-config-fh9t4g64dc
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
