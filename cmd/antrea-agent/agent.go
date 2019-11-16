@@ -50,6 +50,9 @@ func run(o *Options) error {
 
 	// Create Antrea Clientset for the given config.
 	antreaClient, err := agent.CreateAntreaClient(o.config.AntreaClientConnection)
+	if err != nil {
+		return fmt.Errorf("error creating Antrea client: %v", err)
+	}
 
 	// Create ovsdb and openflow clients.
 	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS("")
