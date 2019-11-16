@@ -103,6 +103,7 @@ spec:
           # For loading the OVS kernel module.
           - name: host-lib-modules
             mountPath: /lib/modules
+            readOnly: true
           # depmod is required by modprobe when the Node OS is different from
           # that of the Antrea Docker image.
           - name: host-depmod
