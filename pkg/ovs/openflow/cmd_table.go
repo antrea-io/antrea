@@ -25,7 +25,7 @@ type commandTable struct {
 	bridge     string
 	id         TableIDType
 	next       TableIDType
-	missAction missActionType
+	missAction MissActionType
 	flowCount  uint
 	updateTime time.Time
 }
@@ -37,7 +37,8 @@ func (t *commandTable) GetID() TableIDType {
 func (t *commandTable) BuildFlow() FlowBuilder {
 	fb := new(commandBuilder)
 	fb.table = t
-	return fb.Switch(t.bridge)
+	fb.bridge = t.bridge
+	return fb
 }
 
 func (t *commandTable) Status() TableStatus {
@@ -48,7 +49,7 @@ func (t *commandTable) Status() TableStatus {
 	}
 }
 
-func (t *commandTable) GetMissAction() missActionType {
+func (t *commandTable) GetMissAction() MissActionType {
 	return t.missAction
 }
 
@@ -56,7 +57,7 @@ func (t *commandTable) GetNext() TableIDType {
 	return t.next
 }
 
-func (t *commandTable) updateStatus(flowCountDelta int) {
+func (t *commandTable) UpdateStatus(flowCountDelta int) {
 	t.Lock()
 	defer t.Unlock()
 
