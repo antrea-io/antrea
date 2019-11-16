@@ -16,6 +16,7 @@ package agent
 
 import (
 	"net"
+	"sync"
 
 	"k8s.io/klog"
 
@@ -88,10 +89,9 @@ type InterfaceStore interface {
 // Todo: add periodic task to sync local cache with container veth pair
 
 type interfaceCache struct {
+	sync.RWMutex
 	cache map[string]*InterfaceConfig
 }
-
-var ifaceCache *interfaceCache
 
 func (c *interfaceCache) Initialize(ovsBridgeClient ovsconfig.OVSBridgeClient, gatewayPort string, tunnelPort string) error {
 	ovsPorts, err := ovsBridgeClient.GetPortList()
@@ -166,22 +166,30 @@ func BuildOVSPortExternalIDs(containerConfig *InterfaceConfig) map[string]interf
 
 // AddInterface adds interfaceConfig into localCache
 func (c *interfaceCache) AddInterface(ifaceID string, interfaceConfig *InterfaceConfig) {
+	c.Lock()
+	defer c.Unlock()
 	c.cache[ifaceID] = interfaceConfig
 }
 
 // DeleteInterface deletes interface from local cache
 func (c *interfaceCache) DeleteInterface(ifaceID string) {
+	c.Lock()
+	defer c.Unlock()
 	delete(c.cache, ifaceID)
 }
 
 // GetInterface retrieves interface from local cache
 func (c *interfaceCache) GetInterface(ifaceID string) (*InterfaceConfig, bool) {
+	c.RLock()
+	defer c.RUnlock()
 	iface, found := c.cache[ifaceID]
 	return iface, found
 }
 
 func (c *interfaceCache) GetContainerInterfaceNum() int {
 	num := 0
+	c.RLock()
+	defer c.RUnlock()
 	for _, v := range c.cache {
 		if v.Type == ContainerInterface {
 			num++
@@ -191,27 +199,30 @@ func (c *interfaceCache) GetContainerInterfaceNum() int {
 }
 
 func (c *interfaceCache) Len() int {
+	c.RLock()
+	defer c.RUnlock()
 	return len(c.cache)
 }
 
 func (c *interfaceCache) GetInterfaceIDs() []string {
-	IDs := make([]string, 0, len(c.cache))
-	for ID := range c.cache {
-		IDs = append(IDs, ID)
+	c.RLock()
+	defer c.RUnlock()
+	ids := make([]string, 0, len(c.cache))
+	for id := range c.cache {
+		ids = append(ids, id)
 	}
-	return IDs
+	return ids
 }
 
 // GetPodInterface retrieves interface for Pod filtered by Pod name and Pod namespace.
 func (c *interfaceCache) GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool) {
 	ovsPortName := util.GenerateContainerInterfaceName(podName, podNamespace)
-	iface, found := c.cache[ovsPortName]
-	return iface, found
+	c.RLock()
+	defer c.RUnlock()
+	iface, ok := c.cache[ovsPortName]
+	return iface, ok
 }
 
 func NewInterfaceStore() InterfaceStore {
-	if ifaceCache == nil {
-		ifaceCache = &interfaceCache{cache: map[string]*InterfaceConfig{}}
-	}
-	return ifaceCache
+	return &interfaceCache{cache: map[string]*InterfaceConfig{}}
 }
