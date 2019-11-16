@@ -15,7 +15,10 @@
 package store
 
 import (
+	"fmt"
 	"net"
+	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -42,4 +45,23 @@ func filter(selectors *storage.Selectors, key string, nodeNames sets.String) boo
 // nil will returned if the IP string is not valid.
 func IPStrToIPAddress(ip string) networkpolicy.IPAddress {
 	return networkpolicy.IPAddress(net.ParseIP(ip))
+}
+
+// CIDRStrToIPNet converts a CIDR (eg. 10.0.0.0/16) to a *networkpolicy.IPNet.
+func CIDRStrToIPNet(cidr string) (*networkpolicy.IPNet, error) {
+	// Split the cidr to retrieve the IP and prefix.
+	s := strings.Split(cidr, "/")
+	if len(s) != 2 {
+		return nil, fmt.Errorf("invalid format for IPBlock CIDR: %s", cidr)
+	}
+	// Convert prefix length to int32
+	prefixLen64, err := strconv.ParseInt(s[1], 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid prefix length: %s", s[1])
+	}
+	ipNet := &networkpolicy.IPNet{
+		IP:           IPStrToIPAddress(s[0]),
+		PrefixLength: int32(prefixLen64),
+	}
+	return ipNet, nil
 }
