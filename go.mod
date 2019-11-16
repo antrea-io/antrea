@@ -41,7 +41,9 @@ require (
 	k8s.io/utils v0.0.0-20190607212802-c55fbcfc754a // indirect
 )
 
-// Octant is renamed from vmware/octant to vmware-tanzu/octant since v0.9.0
-// However Octant v0.9.0 K8s API is not compatible with Antrea K8s API version
-// Will remove this and upgrade Octant version after finding another compatible Octant release
-replace github.com/vmware/octant => github.com/vmware-tanzu/octant v0.8.0
+// Octant is renamed from vmware/octant to vmware-tanzu/octant since v0.9.0.
+// However, Octant v0.9.0 K8s API is not compatible with Antrea K8s API version.
+// Furthermore, octant v0.8 and v0.9 do not check-in some generated code required for testing
+// (mocks), which breaks "go mod". This has been fixed in master.
+// Will remove this and upgrade Octant version after finding another compatible Octant release.
+replace github.com/vmware/octant => github.com/antoninbas/octant v0.8.1-0.20191116223915-811df1acc59f
