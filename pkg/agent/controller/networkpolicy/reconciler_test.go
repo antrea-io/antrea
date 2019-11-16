@@ -154,7 +154,6 @@ func TestReconcilerReconcile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
-			ifaceStore := agent.NewInterfaceStore()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Eq(tt.expectedOFRule))
 			r := newReconciler(mockOFClient, ifaceStore)
