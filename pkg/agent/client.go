@@ -31,8 +31,8 @@ func CreateAntreaClient(config config.ClientConnectionConfiguration) (versioned.
 		return nil, err
 	}
 
-	kubeConfig.AcceptContentTypes = config.AcceptContentTypes
-	kubeConfig.ContentType = config.ContentType
+	// ContentType will be used to define the Accept header if AcceptContentTypes is not set.
+	kubeConfig.ContentType = "application/vnd.kubernetes.protobuf"
 	kubeConfig.QPS = config.QPS
 	kubeConfig.Burst = int(config.Burst)
 
