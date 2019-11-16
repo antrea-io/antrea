@@ -8,7 +8,6 @@ import (
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/cert"
 	"k8s.io/component-base/config"
 	"k8s.io/klog"
 
@@ -21,8 +20,8 @@ func CreateAntreaClient(config config.ClientConnectionConfiguration) (versioned.
 	var err error
 
 	if len(config.Kubeconfig) == 0 {
-		klog.Info("No kubeconfig file was specified. Falling back to in-cluster config")
-		kubeConfig, err = rest.InClusterConfig()
+		klog.Info("No antrea kubeconfig file was specified. Falling back to in-cluster config")
+		kubeConfig, err = inClusterConfig()
 	} else {
 		kubeConfig, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 			&clientcmd.ClientConfigLoadingRules{ExplicitPath: config.Kubeconfig},
@@ -50,10 +49,7 @@ func CreateAntreaClient(config config.ClientConnectionConfiguration) (versioned.
 // running inside a pod running on kubernetes. It will return error
 // if called from a process not running in a kubernetes environment.
 func inClusterConfig() (*rest.Config, error) {
-	const (
-		tokenFile  = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-		rootCAFile = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-	)
+	const tokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	host, port := os.Getenv("ANTREA_SERVICE_HOST"), os.Getenv("ANTREA_SERVICE_PORT")
 	if len(host) == 0 || len(port) == 0 {
 		return nil, fmt.Errorf("unable to load in-cluster configuration, ANTREA_SERVICE_HOST and ANTREA_SERVICE_PORT must be defined")
@@ -64,13 +60,9 @@ func inClusterConfig() (*rest.Config, error) {
 		return nil, err
 	}
 
-	tlsClientConfig := rest.TLSClientConfig{}
-
-	if _, err := cert.NewPool(rootCAFile); err != nil {
-		klog.Errorf("Expected to load root CA config from %s, but got err: %v", rootCAFile, err)
-	} else {
-		tlsClientConfig.CAFile = rootCAFile
-	}
+	// Agent is not able to verify Controller's cert as it's generated in-memory with loopback address.
+	// Use Insecure for now.
+	tlsClientConfig := rest.TLSClientConfig{Insecure: true}
 
 	return &rest.Config{
 		Host:            "https://" + net.JoinHostPort(host, port),
