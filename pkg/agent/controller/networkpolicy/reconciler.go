@@ -165,6 +165,12 @@ func (r *reconciler) add(rule *CompletedRule) error {
 }
 
 func servicesToNetworkPolicyPort(in []v1beta1.Service) []*networkingv1.NetworkPolicyPort {
+	// If services is empty or missing, this rule matches all ports (traffic not restricted by port).
+	// See https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#networkpolicyegressrule-v1-networking-k8s-io.
+	// nil represents "not restricted by port" in Openflow PolicyRule.
+	if len(in) == 0 {
+		return nil
+	}
 	var out []*networkingv1.NetworkPolicyPort
 	for _, s := range in {
 		service := &networkingv1.NetworkPolicyPort{}
