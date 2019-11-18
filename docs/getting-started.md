@@ -37,9 +37,16 @@ you can install it following the instructions at:
 
 ## Installation
 
+To deploy a released version of Antrea, pick a deployment manifest from the
+[list of releases](https://github.com/vmware-tanzu/antrea/releases). For any
+given release `<TAG>` (e.g. `v0.1.0`), you can deploy Antrea as follows:
+```bash
+kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml
+```
+
 To deploy the latest version of Antrea (built from the mater branch), use the
 checked-in [deployment yaml](/build/yamls/antrea.yml):
-```
+```bash
 kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea.yml
 ```
 
