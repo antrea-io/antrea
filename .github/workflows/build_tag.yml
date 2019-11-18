@@ -16,6 +16,6 @@ jobs:
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         TAG: ${{ github.ref }}
       run: |
-        VERSION="$TAG" make
+        VERSION="${TAG:10}" make
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/antrea-ubuntu:"$TAG"
+        docker push antrea/antrea-ubuntu:"${TAG:10}"
