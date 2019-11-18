@@ -14,7 +14,9 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v0.1.0`).
  * Make the release on Github with the release branch as the target: copy the
    relevant section of the [CHANGELOG](/CHANGELOG.md) for the release
    description and upload the deployment manifest generated in the previous step
-   (as antrea.yml!). Check the `pre-release` box if applicable.
+   (as antrea.yml, otherwise the manifest link advertised in
+   [getting-started.md](getting-started.md) will not work!). Check the
+   `pre-release` box if applicable.
 
  * Check that:
     1. after a while (time for the Github workflows to complete) the docker
@@ -22,7 +24,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v0.1.0`).
      the correct tag.
     2. the following link works: `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml`
 
- * Open a PR against the master branch which the following commits:
+ * Open a PR against the master branch with the following commits:
     1. the commit updating the [CHANGELOG](/CHANGELOG.md), cherry-picked from
        the release branch.
     2. a commit to update [VERSION](/VERSION) to the next minor version (+
