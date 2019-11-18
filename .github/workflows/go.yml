@@ -1,5 +1,5 @@
 name: Go
-on: 
+on:
   pull_request:
     branches:
     - master
@@ -15,8 +15,7 @@ jobs:
       uses: actions/setup-go@v1
       with:
         go-version: 1.12
-      id: go
-      
+
     - name: Check-out code
       uses: actions/checkout@v1
 
@@ -33,8 +32,7 @@ jobs:
       uses: actions/setup-go@v1
       with:
         go-version: 1.12
-      id: go
-      
+
     - name: Check-out code
       uses: actions/checkout@v1
 
@@ -51,8 +49,7 @@ jobs:
       uses: actions/setup-go@v1
       with:
         go-version: 1.12
-      id: go
-      
+
     - name: Check-out code
       uses: actions/checkout@v1
 
@@ -69,11 +66,26 @@ jobs:
       uses: actions/setup-go@v1
       with:
         go-version: 1.12
-      id: go
-      
+
     - name: Check-out code
       uses: actions/checkout@v1
 
     - name: Check mock generation
-      run: find . -name '*_mock.go' -delete && make mocks && test -z "$(git status --porcelain pkg)"
+      run: ./ci/check-mocks.sh
 
+
+  manifest:
+    name: Check manifest
+    runs-on: [ubuntu-18.04]
+    steps:
+
+    - name: Set up Go 1.12
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.12
+
+    - name: Check-out code
+      uses: actions/checkout@v1
+
+    - name: Check manifest
+      run: ./ci/check-manifest.sh
