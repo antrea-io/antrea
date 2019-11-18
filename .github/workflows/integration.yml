@@ -1,0 +1,27 @@
+name: Integration
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Run integration test
+      run: |
+        echo "====== Building Running Checks for the Following Commit ======"
+
+        git show --numstat
+
+        export GO111MODULE=on
+        export GOPATH=/var/lib/jenkins/go
+        export GOROOT=/usr/local/go
+        export GOCACHE="${WORKSPACE}/gocache"
+        export PATH=$GOROOT/bin:$PATH
+
+
+        go mod download
+
+        make test-integration
