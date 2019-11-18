@@ -2,7 +2,7 @@
 
 : "${NUM_WORKERS:=1}"
 SAVED_IMG=/tmp/antrea-ubuntu.tar
-IMG_NAME=antrea-ubuntu:latest
+IMG_NAME=antrea/antrea-ubuntu:latest
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
