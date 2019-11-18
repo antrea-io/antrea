@@ -13,8 +13,8 @@ jobs:
     
     - name: Prepare ovs
       run: |
-        sudo apt install openvswitch-switch
-        sudo ovs-vswitchd
+#        sudo apt install openvswitch-switch
+#        sudo ovs-vswitchd
       
     - name: Run integration test
-      run: sudo make test-integration
+#      run: sudo make test-integration
