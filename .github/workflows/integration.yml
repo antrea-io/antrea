@@ -10,6 +10,11 @@ jobs:
     steps:
     - name: Check out code
       uses: actions/checkout@v1
+    
+    - name: Prepare ovs
+      run: |
+        sudo apt install openvswitch-switch
+        sudo ovs-vswitchd
       
     - name: Run integration test
-      run: make test-integration
+      run: sudo make test-integration
