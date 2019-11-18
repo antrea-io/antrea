@@ -23,8 +23,18 @@ type commandFlow struct {
 	table    Table
 	bridge   string
 	priority uint32
+	cookie   uint64
 	matchers []string
 	actions  []string
+}
+
+func (f *commandFlow) SetCookie(id uint64) Flow {
+	f.cookie = id
+	return f
+}
+
+func (f *commandFlow) Cookie() uint64 {
+	return f.cookie
 }
 
 func (f *commandFlow) GetTable() Table {
@@ -38,6 +48,7 @@ func (f *commandFlow) format(withActions bool) string {
 		repr += fmt.Sprintf(",priority=%d", f.priority)
 	}
 	if len(f.matchers) > 0 {
+		repr += fmt.Sprintf(",cookie=%d", f.cookie)
 		repr += fmt.Sprintf(",%s", strings.Join(f.matchers, ","))
 	}
 	if withActions && len(f.actions) > 0 {

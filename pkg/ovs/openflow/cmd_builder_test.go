@@ -46,7 +46,7 @@ func TestBasic(t *testing.T) {
 			t.Fatalf("Flow <%s> adding failed, err: %s", flow.String(), err)
 		}
 	})
-	expectedCommand := "ovs-ofctl add-flow ut0 -OOpenflow13 table=0,priority=0,FIELD=VALUE,actions=resubmit(,10)"
+	expectedCommand := "ovs-ofctl add-flow ut0 -OOpenflow13 table=0,priority=0,cookie=0,FIELD=VALUE,actions=resubmit(,10)"
 	if executedCommand != expectedCommand {
 		t.Fatalf("Expected running <%s>, got <%s>", expectedCommand, executedCommand)
 	}

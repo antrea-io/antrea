@@ -105,6 +105,8 @@ type Flow interface {
 	Add() error
 	Modify() error
 	Delete() error
+	SetCookie(id uint64) Flow
+	Cookie() uint64
 	String() string
 	MatchString() string
 	GetTable() Table

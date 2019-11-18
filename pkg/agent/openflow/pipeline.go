@@ -16,10 +16,18 @@ package openflow
 
 import (
 	"fmt"
+	"math"
+	"math/rand"
 	"net"
+	"strconv"
+	"time"
+
+	"k8s.io/klog"
 	"sync"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
@@ -87,6 +95,9 @@ const (
 
 	portFoundMark = 0x1
 	gatewayCTMark = 0x20
+
+	// round number key in externalIDs
+	roundNumKey = "roundNum"
 )
 
 var (
@@ -108,6 +119,7 @@ type flowCategoryCache struct {
 }
 
 type client struct {
+	cookieAllocator                           cookie.Allocator
 	bridge                                    binding.Bridge
 	pipeline                                  map[binding.TableIDType]binding.Table
 	nodeFlowCache, podFlowCache, serviceCache *flowCategoryCache // cache for corresponding deletions
@@ -453,10 +465,11 @@ func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey int, matc
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName string) Client {
-	bridge := binding.NewBridge(bridgeName)
+func NewClient(bridgeClient ovsconfig.OVSBridgeClient) Client {
+	bridge := binding.NewBridge(bridgeClient.Name())
 	c := &client{
-		bridge: bridge,
+		bridge:          bridge,
+		cookieAllocator: cookie.NewAllocator(roundNum(bridgeClient)),
 		pipeline: map[binding.TableIDType]binding.Table{
 			classifierTable:       bridge.CreateTable(classifierTable, spoofGuardTable, binding.TableMissActionNext),
 			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, conntrackTable, binding.TableMissActionDrop),
@@ -480,4 +493,45 @@ func NewClient(bridgeName string) Client {
 	}
 	c.flowOperations = c
 	return c
+}
+
+func roundNum(bridgeClient ovsconfig.OVSBridgeClient) uint64 {
+	var num uint64
+	rand.Seed(time.Now().UnixNano())
+
+	// read the round number
+	extIDs, ovsErr := bridgeClient.GetExternalIDs()
+	if ovsErr != nil {
+		klog.Warningf("Getting last round number failed: %s", ovsErr.Error())
+		num = rand.Uint64()
+	} else if roundNumValue, ok := extIDs[roundNumKey]; ok {
+		var err error
+		num, err = strconv.ParseUint(roundNumValue, 10, 64)
+		if err != nil {
+			klog.Warningf("Parsing last round number failed: %v", err)
+			num = rand.Uint64()
+		}
+		if num == math.MaxUint64 {
+			num = 0
+		} else {
+			num += 1
+		}
+	} else {
+		klog.Infoln("No round number found in OVSDB, using a random value")
+		num = rand.Uint64()
+	}
+
+	klog.Infof("Using round number %d", num)
+
+	// write back
+	extIDs[roundNumKey] = fmt.Sprint(num)
+	updatedExtIDs := make(map[string]interface{})
+	for k, v := range extIDs {
+		extIDs[k] = v
+	}
+	if err := bridgeClient.SetExternalIDs(updatedExtIDs); err != nil {
+		klog.Errorf("Writing round number failed: %v", err)
+	}
+
+	return num
 }

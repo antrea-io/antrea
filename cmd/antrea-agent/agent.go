@@ -64,7 +64,7 @@ func run(o *Options) error {
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 
-	ofClient := openflow.NewClient(o.config.OVSBridge)
+	ofClient := openflow.NewClient(ovsBridgeClient)
 
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := agent.NewInterfaceStore()

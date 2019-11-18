@@ -315,9 +315,9 @@ func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
 	var err error
 	var tunnelPortUUID string
 	switch i.tunnelType {
-	case ovsconfig.GENEVE_TUNNEL:
+	case ovsconfig.GeneveTunnel:
 		tunnelPortUUID, err = i.ovsBridgeClient.CreateGenevePort(tunnelPortName, tunOFPort, "")
-	case ovsconfig.VXLAN_TUNNEL:
+	case ovsconfig.VXLANTunnel:
 		tunnelPortUUID, err = i.ovsBridgeClient.CreateVXLANPort(tunnelPortName, tunOFPort, "")
 	default:
 		err = fmt.Errorf("unsupported tunnel type %s", i.tunnelType)

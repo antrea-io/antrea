@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
@@ -94,7 +95,7 @@ func (c *client) GetFlowTableStatus() []binding.TableStatus {
 }
 
 // addMissingFlows adds any flow from flows which is not currently in the flow cache. The function
-// returns immediately in case of error when adding a flow. If a flow is added succesfully, it is
+// returns immediately in case of error when adding a flow. If a flow is added successfully, it is
 // added to the flow cache. If the flow cache has not been initialized yet (i.e. there is no
 // flowCacheKey key in the cache map), we create it first.
 func (c *client) addMissingFlows(cache *flowCategoryCache, flowCacheKey string, flows []binding.Flow) error {
@@ -141,9 +142,10 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 }
 
 func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, tunnelPeerAddr net.IP) error {
+	id := c.cookieAllocator.Request(cookie.Node).Raw()
 	flows := []binding.Flow{
-		c.arpResponderFlow(peerGatewayIP),
-		c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr),
+		c.arpResponderFlow(peerGatewayIP).SetCookie(id),
+		c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr).SetCookie(id),
 	}
 
 	return c.addMissingFlows(c.nodeFlowCache, hostname, flows)
@@ -154,12 +156,13 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 }
 
 func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
+	id := c.cookieAllocator.Request(cookie.Pod).Raw()
 	flows := []binding.Flow{
-		c.podClassifierFlow(ofPort),
-		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort),
-		c.arpSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort),
-		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort),
-		c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC),
+		c.podClassifierFlow(ofPort).SetCookie(id),
+		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort).SetCookie(id),
+		c.arpSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort).SetCookie(id),
+		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort).SetCookie(id),
+		c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC).SetCookie(id),
 	}
 
 	return c.addMissingFlows(c.podFlowCache, containerID, flows)
@@ -170,28 +173,31 @@ func (c *client) UninstallPodFlows(containerID string) error {
 }
 
 func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOFPort uint32) error {
-	return c.flowOperations.Add(c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort))
+	id := c.cookieAllocator.Request(cookie.Service).Raw()
+	return c.flowOperations.Add(c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort).SetCookie(id))
 }
 
 func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
-	if err := c.flowOperations.Add(c.gatewayClassifierFlow(gatewayOFPort)); err != nil {
+	id := c.cookieAllocator.Request(cookie.Default).Raw()
+	if err := c.flowOperations.Add(c.gatewayClassifierFlow(gatewayOFPort).SetCookie(id)); err != nil {
 		return err
-	} else if err := c.flowOperations.Add(c.gatewayIPSpoofGuardFlow(gatewayOFPort)); err != nil {
+	} else if err := c.flowOperations.Add(c.gatewayIPSpoofGuardFlow(gatewayOFPort).SetCookie(id)); err != nil {
 		return err
-	} else if err := c.flowOperations.Add(c.gatewayARPSpoofGuardFlow(gatewayOFPort)); err != nil {
+	} else if err := c.flowOperations.Add(c.gatewayARPSpoofGuardFlow(gatewayOFPort).SetCookie(id)); err != nil {
 		return err
-	} else if err := c.flowOperations.Add(c.l3ToGatewayFlow(gatewayAddr, gatewayMAC)); err != nil {
+	} else if err := c.flowOperations.Add(c.l3ToGatewayFlow(gatewayAddr, gatewayMAC).SetCookie(id)); err != nil {
 		return err
-	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort)); err != nil {
+	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort).SetCookie(id)); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (c *client) InstallTunnelFlows(tunnelOFPort uint32) error {
-	if err := c.flowOperations.Add(c.tunnelClassifierFlow(tunnelOFPort)); err != nil {
+	id := c.cookieAllocator.Request(cookie.Default).Raw()
+	if err := c.flowOperations.Add(c.tunnelClassifierFlow(tunnelOFPort).SetCookie(id)); err != nil {
 		return err
-	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(globalVirtualMAC, tunnelOFPort)); err != nil {
+	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(globalVirtualMAC, tunnelOFPort).SetCookie(id)); err != nil {
 		return err
 	}
 	return nil
@@ -203,23 +209,27 @@ func (c *client) Initialize() error {
 		return err
 	}
 
+	id := c.cookieAllocator.Request(cookie.Default)
 	for _, flow := range c.defaultFlows() {
+		flow = flow.SetCookie(id.Raw())
 		if err := c.flowOperations.Add(flow); err != nil {
 			return fmt.Errorf("failed to install default flows: %v", err)
 		}
 	}
-	if err := c.flowOperations.Add(c.arpNormalFlow()); err != nil {
+	if err := c.flowOperations.Add(c.arpNormalFlow().SetCookie(id.Raw())); err != nil {
 		return fmt.Errorf("failed to install arp normal flow: %v", err)
 	}
-	if err := c.flowOperations.Add(c.l2ForwardOutputFlow()); err != nil {
+	if err := c.flowOperations.Add(c.l2ForwardOutputFlow().SetCookie(id.Raw())); err != nil {
 		return fmt.Errorf("failed to install l2 forward output flows: %v", err)
 	}
 	for _, flow := range c.connectionTrackFlows() {
+		flow = flow.SetCookie(id.Raw())
 		if err := c.flowOperations.Add(flow); err != nil {
 			return fmt.Errorf("failed to install connection track flows: %v", err)
 		}
 	}
 	for _, flow := range c.establishedConnectionFlows() {
+		flow = flow.SetCookie(id.Raw())
 		if err := flow.Add(); err != nil {
 			return fmt.Errorf("failed to install flows to skip established connections: %v", err)
 		}

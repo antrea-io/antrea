@@ -92,6 +92,11 @@ func NewOVSBridge(bridgeName string, ovsDatapathType string, ovsdb *ovsdb.OVSDB)
 	return &OVSBridge{ovsdb, bridgeName, ovsDatapathType, ""}
 }
 
+// Name returns the name of the OVSBridge.
+func (br *OVSBridge) Name() string {
+	return br.name
+}
+
 // Create looks up or creates the bridge. If the bridge with name bridgeName
 // does not exist, it will be created. Openflow protocol version 1.0 and 1.3
 // will be enabled for the bridge.

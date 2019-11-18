@@ -263,6 +263,20 @@ func (mr *MockFlowMockRecorder) Add() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockFlow)(nil).Add))
 }
 
+// Cookie mocks base method
+func (m *MockFlow) Cookie() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Cookie")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// Cookie indicates an expected call of Cookie
+func (mr *MockFlowMockRecorder) Cookie() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cookie", reflect.TypeOf((*MockFlow)(nil).Cookie))
+}
+
 // CopyToBuilder mocks base method
 func (m *MockFlow) CopyToBuilder() openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -331,6 +345,20 @@ func (m *MockFlow) Modify() error {
 func (mr *MockFlowMockRecorder) Modify() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Modify", reflect.TypeOf((*MockFlow)(nil).Modify))
+}
+
+// SetCookie mocks base method
+func (m *MockFlow) SetCookie(arg0 uint64) openflow.Flow {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetCookie", arg0)
+	ret0, _ := ret[0].(openflow.Flow)
+	return ret0
+}
+
+// SetCookie indicates an expected call of SetCookie
+func (mr *MockFlowMockRecorder) SetCookie(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCookie", reflect.TypeOf((*MockFlow)(nil).SetCookie), arg0)
 }
 
 // String mocks base method
