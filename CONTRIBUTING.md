@@ -65,17 +65,19 @@ self explanatory and has enough information for an assignee to get started.
     git add <modifiedFile>
     git commit
     ```
-5. Keeping branch in sync with upstream.
+5. Update the "Unreleased" section of the [CHANGELOG](CHANGELOG.md) for any
+   significant change that impacts users.
+6. Keeping branch in sync with upstream.
     ```
     git checkout branchName
     git fetch upstream
     git rebase upstream/master
     ```
-6. Push local branch to your forked repository.
+7. Push local branch to your forked repository.
     ```
     git push -f $remoteBranchName branchName
     ```
-7. Create a Pull request on GitHub.
+8. Create a Pull request on GitHub.
    Visit your fork at `https://github.com/vmware-tanzu-private/antrea` and click
    `Compare & Pull Request` button next to your `remoteBranchName` branch.
 
