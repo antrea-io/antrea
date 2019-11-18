@@ -96,6 +96,10 @@ type ruleCache struct {
 	rules cache.Indexer
 	// dirtyRuleHandler is a callback that is run upon finding a rule out-of-sync.
 	dirtyRuleHandler func(string)
+
+	// defaultFromAddresses is a list of addresses which will be in the FromAddresses of
+	// all Ingress rules.
+	defaultFromAddresses []string
 }
 
 // ruleKeyFunc knows how to get key of a *rule.
@@ -129,16 +133,17 @@ func policyIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string)) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), defaultFromAddresses []string) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc},
 	)
 	return &ruleCache{
-		podSetByGroup:     make(map[string]podSet),
-		addressSetByGroup: make(map[string]sets.String),
-		rules:             rules,
-		dirtyRuleHandler:  dirtyRuleHandler,
+		podSetByGroup:        make(map[string]podSet),
+		addressSetByGroup:    make(map[string]sets.String),
+		rules:                rules,
+		dirtyRuleHandler:     dirtyRuleHandler,
+		defaultFromAddresses: defaultFromAddresses,
 	}
 }
 
@@ -311,6 +316,12 @@ func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRul
 	var fromAddresses, toAddresses sets.String
 	if r.Direction == v1beta1.DirectionIn {
 		fromAddresses, completed = c.unionAddressGroups(r.From.AddressGroups)
+
+		if completed {
+			for _, address := range c.defaultFromAddresses {
+				fromAddresses.Insert(address)
+			}
+		}
 	} else {
 		toAddresses, completed = c.unionAddressGroups(r.To.AddressGroups)
 	}
