@@ -25,32 +25,32 @@ code in the form of new features or bug-fixes or non-code contributions like
 helping with code reviews, triaging of bugs, documentation updates, filing
 new issues or writing blogs/manuals etc.
 
-In order to help you get your hands "dirty", there is a list of [starter](https://github.com/vmware-tanzu-private/antrea/labels/Good%20first%20issue)
+In order to help you get your hands "dirty", there is a list of [starter](https://github.com/vmware-tanzu/antrea/labels/Good%20first%20issue)
 issues from which you can choose.
 
 ## Developer workflow
 
-Before picking up a task, go through the existing [issues](https://github.com/vmware-tanzu-private/antrea/issues)
+Before picking up a task, go through the existing [issues](https://github.com/vmware-tanzu/antrea/issues)
 and make sure that your change is not already being worked on. If it does not
 exist, please create a new issue and discuss it with other members.
 
 ## Filing an issue
 
 Help is always appreciated. If you find something that needs fixing, please
-file an issue [here](https://github.com/vmware-tanzu-private/antrea/issues). Please ensure that the issue is
+file an issue [here](https://github.com/vmware-tanzu/antrea/issues). Please ensure that the issue is
 self explanatory and has enough information for an assignee to get started.
 
 ### GitHub workflow
 
 1. Fork your own copy of the repository to your GitHub account by clicking on
-   `Fork` button on [Antrea's GitHub repository](https://github.com/vmware-tanzu-private/antrea).
+   `Fork` button on [Antrea's GitHub repository](https://github.com/vmware-tanzu/antrea).
 2. Clone the forked repository on your local setup.
     ```
-    git clone https://github.com/$user/vmware-tanzu-private/antrea
+    git clone https://github.com/$user/antrea
     ```
     Add a remote upstream to track upstream Antrea repository.
     ```
-    git remote add upstream https://github.com/vmware-tanzu-private/antrea
+    git remote add upstream https://github.com/vmware-tanzu/antrea
     ```
     Never push to upstream master
     ```
@@ -78,7 +78,7 @@ self explanatory and has enough information for an assignee to get started.
     git push -f $remoteBranchName branchName
     ```
 8. Create a Pull request on GitHub.
-   Visit your fork at `https://github.com/vmware-tanzu-private/antrea` and click
+   Visit your fork at `https://github.com/vmware-tanzu/antrea` and click
    `Compare & Pull Request` button next to your `remoteBranchName` branch.
 
 ### Getting reviewers
@@ -145,5 +145,5 @@ including how to setup a local Kubernetes cluster, can be found in
     git push $remoteRevertName revertName
     ```
 5. Create a Pull Request on GitHub.
-   Visit your fork at `https://github.com/vmware-tanzu-private/antrea` and click
+   Visit your fork at `https://github.com/vmware-tanzu/antrea` and click
    `Compare & Pull Request` button next to your `remoteRevertName` branch.
