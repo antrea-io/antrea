@@ -16,7 +16,9 @@ us through Issues and / or Google Group!
 The following features are being actively developed and will be available soon:
 
 * **Kubernetes NetworkPolicy**
-Kubernetes NetworkPolicy implementation with Open vSwitch.
+Antrea already supports Kubernetes NetworkPolicy, but we are still stablizing
+the implementation, improving the policy computation performance, and adding
+end-to-end tests.
 
 * **libOpenflow and ofnet for Openflow programming**
 The current Antrea implementation uses the `ovs-ofctl` command to manipulate OVS
@@ -30,14 +32,12 @@ debugging purposes in the first version. The Controller CLI can be executed from
 a remote host and can also be executed through `kubectl`. The Agent CLI can just
 be executed locally on the Agent's Node.
 
-* **Monitoring CRD**
-Both Antrea Controller and Agent will support creating a Kubernetes CRD (Custom
-Resource Definition) to expose their health status and runtime information, for
-troubleshooting and monitoring purposes.
-
 * **Octant UI plugin**
-We will also build an [Octant](https://github.com/vmware-tanzu/octant) plugin which shows the Antrea information
-obtained from the Antrea Controller and Agent monitoring CRDs.
+Antrea will have an [Octant](https://github.com/vmware-tanzu/octant) plugin
+which shows the Antrea information obtained from the Antrea Controller and Agent
+monitoring CRDs. Right now an Octant plugin that shows some basic Antrea
+Controller and Agent information is already implemented, but we are still working
+on the installation guide and support for displaying more information.
 
 * **IPSec encryption**
 Enable IPSec (ESP) on the OVS VXLAN or Geneve tunnels to encrypt Pod traffic
@@ -52,6 +52,10 @@ only IPv4.
 
 * **Windows Kubernetes Node**
 Support Windows Kubernetes Nodes. At the moment Antrea supports only Linux Nodes.
+
+* **Network and NetworkPolicy troubleshooting**
+We want to focus on troubleshooting, and will add more mechanisms to simplify
+troubleshooting Antrea network and the NetworkPolicy implementation.
 
 * **No-encapsulation mode**
 Route Pod traffic across Nodes without overlay tunneling.
