@@ -34,6 +34,7 @@ verify_kustomize() {
         >&2 echo "Installing kustomize"
         local kustomize_url="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${_MIN_KUSTOMIZE_VERSION}/kustomize_${_MIN_KUSTOMIZE_VERSION}_${ostype}_amd64.tar.gz"
         curl -sLo kustomize.tar.gz "${kustomize_url}" || return 1
+        mkdir -p "$_GOPATH_BIN" || return 1
         tar -xzf kustomize.tar.gz -C "$_GOPATH_BIN" || return 1
         rm -f kustomize.tar.gz
         kustomize="$_GOPATH_BIN/kustomize"
