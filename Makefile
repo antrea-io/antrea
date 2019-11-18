@@ -131,16 +131,16 @@ crd-gen:
 
 .PHONY: ubuntu
 ubuntu:
-	@echo "===> Building antrea-ubuntu Docker image <==="
-	docker build -t antrea-ubuntu -f build/images/Dockerfile.ubuntu .
-	docker tag antrea-ubuntu antrea-ubuntu:$(DOCKER_IMG_VERSION)
+	@echo "===> Building antrea/antrea-ubuntu Docker image <==="
+	docker build -t antrea/antrea-ubuntu -f build/images/Dockerfile.ubuntu .
+	docker tag antrea/antrea-ubuntu antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION)
 
 # Build bins in a golang container, and build the antrea-ubuntu Docker image.
 .PHONY: build-ubuntu
 build-ubuntu:
-	@echo "===> Building Antrea bins and antrea-ubuntu Docker image <==="
-	docker build -t antrea-ubuntu -f build/images/Dockerfile.build.ubuntu .
-	docker tag antrea-ubuntu antrea-ubuntu:$(DOCKER_IMG_VERSION)
+	@echo "===> Building Antrea bins and antrea/antrea-ubuntu Docker image <==="
+	docker build -t antrea/antrea-ubuntu -f build/images/Dockerfile.build.ubuntu .
+	docker tag antrea/antrea-ubuntu antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION)
 
 .PHONY: manifest
 manifest:
