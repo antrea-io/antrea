@@ -112,15 +112,14 @@ type NetworkPolicyController struct {
 	// appliedToGroupQueue maintains the networkpolicy.AppliedToGroup objects that
 	// need to be synced.
 	appliedToGroupQueue workqueue.RateLimitingInterface
+
 	// addressGroupQueue maintains the networkpolicy.AddressGroup objects that
 	// need to be synced.
 	addressGroupQueue workqueue.RateLimitingInterface
-	// networkPolicyQueue maintains the networkpolicy.NetworkPolicy objects that
-	// need to be synced.
-	networkPolicyQueue workqueue.RateLimitingInterface
 
-	// queue maintains the Network Policies that need to be synced.
-	queue workqueue.RateLimitingInterface
+	// internalNetworkPolicyQueue maintains the networkpolicy.NetworkPolicy objects that
+	// need to be synced.
+	internalNetworkPolicyQueue workqueue.RateLimitingInterface
 
 	// internalNetworkPolicyMutex protects the internalNetworkPolicyStore from
 	// concurrent access during updates to the internal NetworkPolicy object.
@@ -151,8 +150,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		internalNetworkPolicyStore: internalNetworkPolicyStore,
 		appliedToGroupQueue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "appliedToGroup"),
 		addressGroupQueue:          workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "addressGroup"),
-		networkPolicyQueue:         workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalNetworkPolicy"),
-		queue:                      workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicy"),
+		internalNetworkPolicyQueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalNetworkPolicy"),
 	}
 	// Add handlers for Pod events.
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(
@@ -166,12 +164,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	// Add handlers for Namespace events.
 	namespaceInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(cur interface{}) {
-			},
-			UpdateFunc: func(old, cur interface{}) {
-			},
-			DeleteFunc: func(old interface{}) {
-			},
+			AddFunc:    n.addNamespace,
+			UpdateFunc: n.updateNamespace,
+			DeleteFunc: n.deleteNamespace,
 		},
 		syncPeriod,
 	)
@@ -188,7 +183,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 }
 
 // toGroupSelector converts the podSelector and namespaceSelector
-// and NetworkPolicy Namespace to a GroupSelector
+// and NetworkPolicy Namespace to a networkpolicy.GroupSelector object.
 func toGroupSelector(namespace string, podSelector, nsSelector *metav1.LabelSelector) *antreatypes.GroupSelector {
 	groupSelector := antreatypes.GroupSelector{
 		PodSelector: podSelector,
@@ -205,7 +200,7 @@ func toGroupSelector(namespace string, podSelector, nsSelector *metav1.LabelSele
 	return &groupSelector
 }
 
-// normalizeExpr converts an expression in the form of "key1 OP [value1...]".
+// normalizeExpr converts an expression to the form "key1 OP [value1...]".
 func normalizeExpr(key string, operator metav1.LabelSelectorOperator, values []string) string {
 	if len(values) == 0 {
 		return fmt.Sprintf("%s %s", key, operator)
@@ -215,12 +210,12 @@ func normalizeExpr(key string, operator metav1.LabelSelectorOperator, values []s
 }
 
 // selectorToString creates a string corresponding to a labelSelector in the form of
-// "key1 IN [value1,...] AND key2 NotIn [value2,...] AND ..."
+// "key1 IN [value1,...] And key2 NotIn [value2,...] And ...".
 func selectorToString(selector *metav1.LabelSelector) string {
 	selSlice := make([]string, 0, len(selector.MatchLabels)+len(selector.MatchExpressions))
-	// emptyValue is a placeholder empty slice to send to normalizeExpr for Exists, NotExist operators
+	// emptyValue is a placeholder empty slice to send to normalizeExpr for Exists, NotExist operators.
 	var emptyValue []string
-	// Append labels in matchLabels as "key In [value]"
+	// Append labels in matchLabels as "key In [value]".
 	for key, value := range selector.MatchLabels {
 		valueSlice := []string{value}
 		selSlice = append(selSlice, normalizeExpr(key, metav1.LabelSelectorOpIn, valueSlice))
@@ -237,7 +232,6 @@ func selectorToString(selector *metav1.LabelSelector) string {
 			selSlice = append(selSlice, normalizeExpr(expr.Key, metav1.LabelSelectorOpDoesNotExist, emptyValue))
 		}
 	}
-	// Sort the slice
 	sort.Strings(selSlice)
 	normalizedStr := strings.Join(selSlice, " And ")
 	return normalizedStr
@@ -251,8 +245,8 @@ func getNormalizedUID(name string) string {
 }
 
 // generateNormalizedName generates a string, based on the selectors, in
-// the following format: "namespace=NamespaceName AND podSelector=normalizedPodSelector".
-// Note: namespace and nsSelector may or may not be set depending on the
+// the following format: "namespace=NamespaceName And podSelector=normalizedPodSelector".
+// Note: Namespace and nsSelector may or may not be set depending on the
 // selector. However, they cannot be set simulataneously.
 func generateNormalizedName(namespace string, podSelector, nsSelector *metav1.LabelSelector) string {
 	normalizedName := []string{}
@@ -290,43 +284,84 @@ func (n *NetworkPolicyController) createAppliedToGroup(np *networkingv1.NetworkP
 	return appliedToGroupUID
 }
 
-// labelsMatchGroupSelector matches a given resource's labels to the
+// labelsMatchGroupSelector matches a Pod's labels to the
 // GroupSelector object and returns true, if and only if the labels
 // match any of the selector criteria present in the GroupSelector.
-func (n *NetworkPolicyController) labelsMatchGroupSelector(resLabels map[string]string, resNS *v1.Namespace, sel antreatypes.GroupSelector) bool {
+func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v1.Namespace, sel antreatypes.GroupSelector) bool {
 	if sel.Namespace != "" {
-		if sel.Namespace != resNS.Name {
+		if sel.Namespace != pod.Namespace {
 			// Pods must be matched within the same Namespace.
+			klog.V(4).Infof("Pod's Namespace %s does not match selector Namespace %s", pod.Namespace, sel.Namespace)
 			return false
 		}
 		// Convert labelSelector to a Selector.
 		selector, _ := metav1.LabelSelectorAsSelector(sel.PodSelector)
-		if !selector.Matches(labels.Set(resLabels)) {
+		if !selector.Matches(labels.Set(pod.Labels)) {
 			// podSelector does not match the Pod's labels.
 			return false
 		}
 		// podSelector matches the Pod's labels.
+		klog.V(4).Infof("Pod labels %v match PodSelector", pod.Labels)
 		return true
-	} else {
+	} else if sel.NamespaceSelector != nil && sel.PodSelector != nil {
 		// Selector is a multi-selector where Pods must be selected if namespaceSelector matches Pod's Namespace.
 		// Convert Namespace labelSelector to a Selector.
 		nSelector, _ := metav1.LabelSelectorAsSelector(sel.NamespaceSelector)
-		// Check whether Pods Namespace matches nsSelector of AddressGroup.
-		if !nSelector.Matches(labels.Set(resNS.Labels)) {
+		// Pod event may arrive before Pod's Namespace event. In this case, we must
+		// ensure that the Pod Namespace is not nil.
+		if podNS == nil || !nSelector.Matches(labels.Set(podNS.Labels)) {
 			// Pod's Namespace do not match namespaceSelector.
 			return false
 		}
+		klog.V(4).Infof("Namespace labels match NamespaceSelector. Evaluating Pods in Namespace %s", podNS.Name)
 		// Convert Pod labelSelector to a Selector.
 		pSelector, _ := metav1.LabelSelectorAsSelector(sel.PodSelector)
-		if !pSelector.Matches(labels.Set(resLabels)) {
+		if !pSelector.Matches(labels.Set(pod.Labels)) {
 			// Pod's Namespace matches namespaceSelector but Pod's labels do not match
 			// the podSelector.
 			return false
 		}
 		// Pod's Namespace matches namespaceSelector and Pod's labels matches
 		// podSelector.
+		klog.V(4).Infof("Pod labels %v match PodSelector", pod.Labels)
+		return true
+	} else if sel.NamespaceSelector != nil {
+		// Selector only has a NamespaceSelector.
+		nSelector, _ := metav1.LabelSelectorAsSelector(sel.NamespaceSelector)
+		// Pod event may arrive before Pod's Namespace event. In this case, we must
+		// ensure that the Pod Namespace is not nil.
+		if podNS == nil || !nSelector.Matches(labels.Set(podNS.Labels)) {
+			// Namespace labels do not match namespaceSelector.
+			return false
+		}
+		// Namespace labels match namespaceSelector.
+		klog.V(4).Infof("Namespace labels %v match NamespaceSelector", podNS.Labels)
 		return true
 	}
+	return false
+}
+
+// filterAddressGroupsForNamespace computes a list of AddressGroup keys which
+// match the Namespace's labels.
+func (n *NetworkPolicyController) filterAddressGroupsForNamespace(namespace *v1.Namespace) sets.String {
+	matchingKeys := sets.String{}
+	addressGroups := n.addressGroupStore.List()
+	for _, group := range addressGroups {
+		addrGroup := group.(*antreatypes.AddressGroup)
+		if addrGroup.Selector.NamespaceSelector == nil {
+			// This addressGroup selector does not have a namespaceSelector,
+			// skip processing.
+			continue
+		}
+		nSelector, _ := metav1.LabelSelectorAsSelector(addrGroup.Selector.NamespaceSelector)
+		if nSelector.Matches(labels.Set(namespace.Labels)) {
+			matchingKeys.Insert(addrGroup.Name)
+			klog.V(2).Infof("Namespace %s appended to AddressGroup %s", namespace.Name, addrGroup.Name)
+			continue
+		}
+		klog.V(4).Infof("Namespace %s labels do not match AddressGroup %s", namespace.Name, addrGroup.Name)
+	}
+	return matchingKeys
 }
 
 // filterAddressGroupsForPod computes a list of AddressGroup keys which
@@ -337,7 +372,7 @@ func (n *NetworkPolicyController) filterAddressGroupsForPod(pod *v1.Pod) sets.St
 	podNS, _ := n.namespaceLister.Get(pod.Namespace)
 	for _, group := range addressGroups {
 		addrGroup := group.(*antreatypes.AddressGroup)
-		if n.labelsMatchGroupSelector(pod.Labels, podNS, addrGroup.Selector) {
+		if n.labelsMatchGroupSelector(pod, podNS, addrGroup.Selector) {
 			matchingKeySet.Insert(addrGroup.Name)
 			klog.V(2).Infof("Pod %s/%s appended to AddressGroup %s", pod.Namespace, pod.Name, addrGroup.Name)
 			continue
@@ -355,7 +390,7 @@ func (n *NetworkPolicyController) filterAppliedToGroupsForPod(pod *v1.Pod) sets.
 	podNS, _ := n.namespaceLister.Get(pod.Namespace)
 	for _, group := range appliedToGroups {
 		appGroup := group.(*antreatypes.AppliedToGroup)
-		if n.labelsMatchGroupSelector(pod.Labels, podNS, appGroup.Selector) {
+		if n.labelsMatchGroupSelector(pod, podNS, appGroup.Selector) {
 			matchingKeySet.Insert(appGroup.Name)
 			klog.V(2).Infof("Pod %s/%s appended to AppliedToGroup %s", pod.Namespace, pod.Name, appGroup.Name)
 			continue
@@ -372,12 +407,12 @@ func (n *NetworkPolicyController) filterAppliedToGroupsForPod(pod *v1.Pod) sets.
 func (n *NetworkPolicyController) createAddressGroup(peer networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy) string {
 	groupSelector := toGroupSelector(np.ObjectMeta.Namespace, peer.PodSelector, peer.NamespaceSelector)
 	normalizedUID := getNormalizedUID(groupSelector.NormalizedName)
-	// Get or create a AddressGroup for the generated UID
+	// Get or create an AddressGroup for the generated UID.
 	_, found, _ := n.addressGroupStore.Get(normalizedUID)
 	if found {
 		return normalizedUID
 	}
-	// Create a AddressGroup object per Peer object
+	// Create an AddressGroup object per Peer object.
 	addressGroup := &antreatypes.AddressGroup{
 		UID:      types.UID(normalizedUID),
 		Name:     normalizedUID,
@@ -418,12 +453,14 @@ func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) []networkpolicy.
 
 // toAntreaIPBlock converts a networkingv1.IPBlock to an Antrea IPBlock.
 func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networkpolicy.IPBlock, error) {
+	// Convert the allowed IPBlock to networkpolicy.IPNet.
 	ipNet, err := store.CIDRStrToIPNet(ipBlock.CIDR)
 	if err != nil {
 		return nil, err
 	}
 	exceptNets := []networkpolicy.IPNet{}
 	for _, exc := range ipBlock.Except {
+		// Convert the except IPBlock to networkpolicy.IPNet.
 		exceptNet, err := store.CIDRStrToIPNet(exc)
 		if err != nil {
 			return nil, err
@@ -443,7 +480,6 @@ func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networkpolicy.IPBlock, err
 // wherein, it will be either stored as a new Object in case of ADD event or
 // modified and store the updated instance, in case of an UPDATE event.
 func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkPolicy) *antreatypes.NetworkPolicy {
-	// Process the NetworkPolicy spec.podSelector and create a corresponding AppliedToGroup.
 	appliedToGroupKey := n.createAppliedToGroup(np)
 	appliedToGroupNames := []string{appliedToGroupKey}
 	inAddressGroupNames, outAddressGroupNames := []string{}, []string{}
@@ -476,6 +512,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 			Services:  toAntreaServices(ingressRule.Ports),
 		})
 	}
+	// Compute NetworkPolicyRule for Egress Rule.
 	for _, egressRule := range np.Spec.Egress {
 		ipBlocks := []networkpolicy.IPBlock{}
 		for _, peer := range egressRule.To {
@@ -514,7 +551,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 }
 
 // addNetworkPolicy receives NetworkPolicy ADD events and creates resources
-// which can be consumed by agents to configure corresponding rules on the nodes.
+// which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) addNetworkPolicy(obj interface{}) {
 	np := obj.(*networkingv1.NetworkPolicy)
 	defer klog.V(2).Infof("Finished processing NetworkPolicy %s/%s ADD event", np.ObjectMeta.Namespace, np.ObjectMeta.Name)
@@ -528,7 +565,7 @@ func (n *NetworkPolicyController) addNetworkPolicy(obj interface{}) {
 }
 
 // updateNetworkPolicy receives NetworkPolicy UPDATE events and updates resources
-// which can be consumed by agents to configure corresponding rules on the nodes.
+// which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) updateNetworkPolicy(old, cur interface{}) {
 	np := cur.(*networkingv1.NetworkPolicy)
 	defer klog.V(2).Infof("Finished processing NetworkPolicy %s/%s UPDATE event", np.ObjectMeta.Namespace, np.ObjectMeta.Name)
@@ -555,6 +592,15 @@ func (n *NetworkPolicyController) updateNetworkPolicy(old, cur interface{}) {
 	n.internalNetworkPolicyStore.Update(curInternalNP)
 	// Unlock the internal NetworkPolicy store.
 	n.internalNetworkPolicyMutex.Unlock()
+	// Enqueue addressGroup keys to update their Node span.
+	for _, rule := range curInternalNP.Rules {
+		for _, addrGroupName := range rule.From.AddressGroups {
+			n.enqueueAddressGroup(addrGroupName)
+		}
+		for _, addrGroupName := range rule.To.AddressGroups {
+			n.enqueueAddressGroup(addrGroupName)
+		}
+	}
 	n.enqueueInternalNetworkPolicy(key)
 	// AppliedToGroups currently only supports a single member.
 	curAppliedToGroupUID := curInternalNP.AppliedToGroups[0]
@@ -567,7 +613,7 @@ func (n *NetworkPolicyController) updateNetworkPolicy(old, cur interface{}) {
 }
 
 // deleteNetworkPolicy receives NetworkPolicy DELETED events and deletes resources
-// which can be consumed by agents to delete corresponding rules on the nodes.
+// which can be consumed by agents to delete corresponding rules on the Nodes.
 func (n *NetworkPolicyController) deleteNetworkPolicy(old interface{}) {
 	np := old.(*networkingv1.NetworkPolicy)
 	defer klog.V(2).Infof("Finished processing NetworkPolicy %s/%s DELETE event", np.ObjectMeta.Namespace, np.ObjectMeta.Name)
@@ -627,9 +673,9 @@ func (n *NetworkPolicyController) updatePod(oldObj, curObj interface{}) {
 	// Create set to hold the group keys to enqueue.
 	var appliedToGroupKeys sets.String
 	var addressGroupKeys sets.String
-	// AppliedToGroup keys must be enqueued only if the Pod's Node has changed or
+	// AppliedToGroup keys must be enqueued only if the Pod's Node or IP has changed or
 	// if Pod's label change causes it to match new Groups.
-	if oldPod.Spec.NodeName != curPod.Spec.NodeName {
+	if oldPod.Status.PodIP != curPod.Status.PodIP || oldPod.Spec.NodeName != curPod.Spec.NodeName {
 		appliedToGroupKeys = oldAppliedToGroupKeySet.Union(curAppliedToGroupKeySet)
 	} else if !labelsEqual {
 		// No need to enqueue common AppliedToGroups as they already have latest Pod
@@ -666,6 +712,55 @@ func (n *NetworkPolicyController) deletePod(old interface{}) {
 	for group := range appliedToGroupKeys {
 		n.enqueueAppliedToGroup(group)
 	}
+	for group := range addressGroupKeys {
+		n.enqueueAddressGroup(group)
+	}
+}
+
+// addNamespace retrieves all AddressGroups which match the Namespace
+// labels and enqueues the group keys for further processing.
+func (n *NetworkPolicyController) addNamespace(obj interface{}) {
+	namespace := obj.(*v1.Namespace)
+	klog.V(2).Infof("Processing NetworkPolicies for new Namespace %s with labels %v", namespace.Name, namespace.Labels)
+	addressGroupKeys := n.filterAddressGroupsForNamespace(namespace)
+	for group := range addressGroupKeys {
+		n.enqueueAddressGroup(group)
+	}
+}
+
+// updateNamespace retrieves all AddressGroups which match the current and old
+// Namespace labels and enqueues the group keys for further processing.
+func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
+	oldNamespace := oldObj.(*v1.Namespace)
+	curNamespace := curObj.(*v1.Namespace)
+	klog.V(2).Infof("Processing NetworkPolicies for updated Namespace %s with labels %v", curNamespace.Name, curNamespace.Labels)
+	// No need to trigger processing of groups if there is no change in the
+	// Namespace labels.
+	if labels.Equals(labels.Set(oldNamespace.Labels), labels.Set(curNamespace.Labels)) {
+		klog.V(4).Infof("No change in Namespace %s labels", curNamespace.Name)
+		return
+	}
+	// Find groups matching the new Namespace's labels.
+	curAddressGroupKeySet := n.filterAddressGroupsForNamespace(curNamespace)
+	// Find groups matching the old Namespace's labels.
+	oldAddressGroupKeySet := n.filterAddressGroupsForNamespace(oldNamespace)
+	addressGroupKeys := sets.String{}
+	// No need to enqueue common AddressGroups as they already have latest
+	// Namespace information.
+	addressGroupKeys = oldAddressGroupKeySet.Difference(curAddressGroupKeySet).Union(curAddressGroupKeySet.Difference(oldAddressGroupKeySet))
+	for group := range addressGroupKeys {
+		n.enqueueAddressGroup(group)
+	}
+}
+
+// deleteNamespace retrieves all AddressGroups which match the Namespace's
+// labels and enqueues the group keys for further processing.
+func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
+	namespace := old.(*v1.Namespace)
+	klog.V(2).Infof("Processing NetworkPolicies for deleted Namespace %s with labels %v", namespace.Name, namespace.Labels)
+	// Find groups matching deleted Namespace's labels and enqueue them
+	// for further processing.
+	addressGroupKeys := n.filterAddressGroupsForNamespace(namespace)
 	for group := range addressGroupKeys {
 		n.enqueueAddressGroup(group)
 	}
@@ -732,24 +827,14 @@ func (n *NetworkPolicyController) enqueueAddressGroup(key string) {
 
 func (n *NetworkPolicyController) enqueueInternalNetworkPolicy(key string) {
 	klog.V(4).Infof("Adding new key %s to internal NetworkPolicy queue", key)
-	n.networkPolicyQueue.Add(key)
-}
-
-// enqueueNetworkPolicy adds an object to the controller work queue
-// obj could be an *v1.NetworkPolicy, or a DeletionFinalStateUnknown item.
-func (n *NetworkPolicyController) enqueueNetworkPolicy(obj interface{}) {
-	key, err := keyFunc(obj)
-	if err != nil {
-		klog.Errorf("Couldn't get key for object %+v: %v", obj, err)
-		return
-	}
-
-	n.queue.Add(key)
+	n.internalNetworkPolicyQueue.Add(key)
 }
 
 // Run begins watching and syncing of a NetworkPolicyController.
 func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
-	defer n.queue.ShutDown()
+	defer n.appliedToGroupQueue.ShutDown()
+	defer n.addressGroupQueue.ShutDown()
+	defer n.internalNetworkPolicyQueue.ShutDown()
 
 	klog.Info("Starting NetworkPolicy controller")
 	defer klog.Info("Shutting down NetworkPolicy controller")
@@ -762,64 +847,321 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	klog.Info("Caches are synced for NetworkPolicy controller")
 
 	for i := 0; i < defaultWorkers; i++ {
-		go wait.Until(n.worker, time.Second, stopCh)
+		go wait.Until(n.appliedToGroupWorker, time.Second, stopCh)
+		go wait.Until(n.addressGroupWorker, time.Second, stopCh)
+		go wait.Until(n.internalNetworkPolicyWorker, time.Second, stopCh)
 	}
 	<-stopCh
 }
 
-// worker runs a worker thread that just dequeues items, processes them, and marks them done.
-// It enforces that the syncNetworkPolicy is never invoked concurrently with the same key.
-func (n *NetworkPolicyController) worker() {
-	for n.processNextWorkItem() {
+func (n *NetworkPolicyController) appliedToGroupWorker() {
+	for n.processNextAppliedToGroupWorkItem() {
 	}
 }
 
-// processNextWorkItem retrieves a NetworkPolicy object from the WorkQueue until a shutdown signal is received.
-func (n *NetworkPolicyController) processNextWorkItem() bool {
-	obj, quit := n.queue.Get()
+func (n *NetworkPolicyController) addressGroupWorker() {
+	for n.processNextAddressGroupWorkItem() {
+	}
+}
+
+func (n *NetworkPolicyController) internalNetworkPolicyWorker() {
+	for n.processNextInternalNetworkPolicyWorkItem() {
+	}
+}
+
+// Processes an item in the "internalNetworkPolicy" work queue, by calling
+// syncInternalNetworkPolicy after casting the item to a string
+// (NetworkPolicy key). If syncInternalNetworkPolicy returns an error, this
+// function handles it by requeueing the item so that it can be processed again
+// later. If syncInternalNetworkPolicy is successful, the NetworkPolicy is
+// removed from the queue until we get notify of a new change. This function
+// return false if and only if the work queue was shutdown (no more items will
+// be processed).
+func (n *NetworkPolicyController) processNextInternalNetworkPolicyWorkItem() bool {
+	key, quit := n.internalNetworkPolicyQueue.Get()
 	if quit {
 		return false
 	}
-	// We defer the call to Done so that the workqueue knows we have finished processing this item. We also
+	// We call Done here so the workqueue knows we have finished processing this item. We also
 	// must remember to call Forget if we do not want this work item being re-queued. For
 	// example, we do not call Forget if a transient error occurs, instead the item is put back
 	// on the workqueue and attempted again after a back-off period.
-	defer n.queue.Done(obj)
+	defer n.internalNetworkPolicyQueue.Done(key)
 
-	// We expect strings ("NamespaceName/NetworkPolicyName") to come off the workqueue.
-	key, ok := obj.(string)
-	if !ok {
-		// As the item in the workqueue is actually invalid, we call Forget here else we'd
-		// go into a loop of attempting to process a work item that is invalid.
-		// This should not happen: enqueueNetworkPolicy only enqueues strings.
-		n.queue.Forget(obj)
-		klog.Errorf("Expected string in work queue but got %#v", obj)
-		return true
-	}
-	err := n.syncNetworkPolicy(key)
+	err := n.syncInternalNetworkPolicy(key.(string))
 	if err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
-		n.queue.AddRateLimited(key)
-		klog.Errorf("Error syncing NetworkPolicy %s, requeuing. Error: %v", key, err)
+		n.internalNetworkPolicyQueue.AddRateLimited(key)
+		klog.Errorf("Failed to sync internal NetworkPolicy %s: %v", key, err)
 		return true
 	}
 	// If no error occurs we Forget this item so it does not get queued again until
 	// another change happens.
-	n.queue.Forget(key)
+	n.internalNetworkPolicyQueue.Forget(key)
 	return true
 }
 
-func (n *NetworkPolicyController) syncNetworkPolicy(key string) error {
+// Processes an item in the "addressGroup" work queue, by calling
+// syncAddressGroup after casting the item to a string (addressGroup key).
+// If syncAddressGroup returns an error, this function handles it by requeueing
+// the item so that it can be processed again later. If syncAddressGroup is
+// successful, the AddressGroup is removed from the queue until we get notify
+// of a new change. This function return false if and only if the work queue
+// was shutdown (no more items will be processed).
+func (n *NetworkPolicyController) processNextAddressGroupWorkItem() bool {
+	key, quit := n.addressGroupQueue.Get()
+	if quit {
+		return false
+	}
+	defer n.addressGroupQueue.Done(key)
+
+	err := n.syncAddressGroup(key.(string))
+	if err != nil {
+		// Put the item back on the workqueue to handle any transient errors.
+		n.addressGroupQueue.AddRateLimited(key)
+		klog.Errorf("Failed to sync AddressGroup %s: %v", key, err)
+		return true
+	}
+	// If no error occurs we Forget this item so it does not get queued again until
+	// another change happens.
+	n.addressGroupQueue.Forget(key)
+	return true
+}
+
+// Processes an item in the "appliedToGroup" work queue, by calling
+// syncAppliedToGroup after casting the item to a string (appliedToGroup key).
+// If syncAppliedToGroup returns an error, this function handles it by
+// requeueing the item so that it can be processed again later. If
+// syncAppliedToGroup is successful, the AppliedToGroup is removed from the
+// queue until we get notify of a new change. This function return false if
+// and only if the work queue was shutdown (no more items will be processed).
+func (n *NetworkPolicyController) processNextAppliedToGroupWorkItem() bool {
+	key, quit := n.appliedToGroupQueue.Get()
+	if quit {
+		return false
+	}
+	defer n.appliedToGroupQueue.Done(key)
+
+	err := n.syncAppliedToGroup(key.(string))
+	if err != nil {
+		// Put the item back on the workqueue to handle any transient errors.
+		n.appliedToGroupQueue.AddRateLimited(key)
+		klog.Errorf("Failed to sync AppliedToGroup %s: %v", key, err)
+		return true
+	}
+	// If no error occurs we Forget this item so it does not get queued again until
+	// another change happens.
+	n.appliedToGroupQueue.Forget(key)
+	return true
+}
+
+// syncAddressGroup retrieves all the internal NetworkPolicies which have a
+// reference to this AddressGroup and updates it's Pod IPAddresses set to
+// reflect the current state of affected Pods based on the GroupSelector.
+func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	startTime := time.Now()
 	defer func() {
-		klog.V(2).Infof("Finished syncing NetworkPolicy %s. (%v)", key, time.Since(startTime))
+		klog.V(2).Infof("Finished syncing AddressGroup %s. (%v)", key, time.Since(startTime))
 	}()
-
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	networkPolicy, err := n.networkPolicyLister.NetworkPolicies(namespace).Get(name)
+	// Get all internal NetworkPolicy objects that refers this AddressGroup.
+	nps, err := n.internalNetworkPolicyStore.GetByIndex(store.AddressGroupIndex, key)
 	if err != nil {
-		return fmt.Errorf("failed to get NetworkPolicy %s: %v", key, err)
+		return fmt.Errorf("unable to filter internal NetworkPolicies for AddressGroup %s: %v", key, err)
 	}
-	klog.V(2).Infof("Syncing NetworkPolicy %s: %v", key, networkPolicy.Spec.PodSelector)
+	addressGroupObj, found, err := n.addressGroupStore.Get(key)
+	if !found {
+		// AddressGroup was already deleted. No need to process further.
+		klog.V(2).Infof("AddressGroup %s not found.", key)
+		return nil
+	}
+	addressGroup := addressGroupObj.(*antreatypes.AddressGroup)
+	var pods []*v1.Pod
+	// NodeNames set must be considered immutable once generated and updated
+	// in the store. If any change is needed, the set must be regenerated with
+	// the new NodeNames and the store must be updated.
+	addrGroupNodeNames := sets.String{}
+	for _, internalNPObj := range nps {
+		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
+		addrGroupNodeNames = addrGroupNodeNames.Union(internalNP.SpanMeta.NodeNames)
+	}
+	spanMeta := antreatypes.SpanMeta{
+		NodeNames: addrGroupNodeNames,
+	}
+	// Find all Pods matching its selectors and update store.
+	groupSelector := addressGroup.Selector
+	pSelector, _ := metav1.LabelSelectorAsSelector(groupSelector.PodSelector)
+	nSelector, _ := metav1.LabelSelectorAsSelector(groupSelector.NamespaceSelector)
+	if groupSelector.Namespace != "" {
+		// Namespace presence indicates Pods must be selected from the same Namespace.
+		pods, _ = n.podLister.Pods(groupSelector.Namespace).List(pSelector)
+	} else if groupSelector.NamespaceSelector != nil && groupSelector.PodSelector != nil {
+		// Pods must be selected from Namespaces matching nsSelector.
+		namespaces, _ := n.namespaceLister.List(nSelector)
+		for _, ns := range namespaces {
+			nsPods, _ := n.podLister.Pods(ns.Name).List(pSelector)
+			pods = append(pods, nsPods...)
+		}
+	} else if groupSelector.NamespaceSelector != nil {
+		// All the Pods from Namespaces matching the nsSelector must be selected.
+		namespaces, _ := n.namespaceLister.List(nSelector)
+		for _, ns := range namespaces {
+			nsPods, _ := n.podLister.Pods(ns.Name).List(labels.Everything())
+			pods = append(pods, nsPods...)
+		}
+	}
+	addresses := sets.String{}
+	for _, pod := range pods {
+		if pod.Status.PodIP == "" {
+			// No need to insert Pod IPAdddress when it is unset.
+			continue
+		}
+		addresses.Insert(pod.Status.PodIP)
+	}
+	updatedAddressGroup := &antreatypes.AddressGroup{
+		Name:      addressGroup.Name,
+		UID:       addressGroup.UID,
+		Selector:  addressGroup.Selector,
+		Addresses: addresses,
+		SpanMeta:  spanMeta,
+	}
+	klog.V(2).Infof("Updated AddressGroup %s with addresses %v and Node names %v", key, addresses, addrGroupNodeNames)
+	// Update the store of AddressGroup.
+	n.addressGroupStore.Update(updatedAddressGroup)
+	return nil
+}
+
+// syncAppliedToGroup enqueues all the internal NetworkPolicy keys that
+// refer this AppliedToGroup and update the AppliedToGroup Pod
+// references by Node to reflect the latest set of affected Pods based
+// on it's GroupSelector.
+func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
+	startTime := time.Now()
+	defer func() {
+		klog.V(2).Infof("Finished syncing AppliedToGroup %s. (%v)", key, time.Since(startTime))
+	}()
+	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
+	nps, err := n.internalNetworkPolicyStore.GetByIndex(store.AppliedToGroupIndex, key)
+	if err != nil {
+		return fmt.Errorf("unable to filter internal NetworkPolicies for AppliedToGroup %s: %v", key, err)
+	}
+	podsByNodes := make(map[string]antreatypes.PodSet)
+	var pods []*v1.Pod
+	appGroupNodeNames := sets.String{}
+	appliedToGroupObj, found, err := n.appliedToGroupStore.Get(key)
+	if !found {
+		klog.V(2).Infof("AppliedToGroup %s not found.", key)
+		return nil
+	}
+	appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
+	// AppliedToGroup will not have NamespaceSelector.
+	podSelector := appliedToGroup.Selector.PodSelector
+	selector, _ := metav1.LabelSelectorAsSelector(podSelector)
+	// Retrieve all Pods matching the podSelector.
+	pods, err = n.podLister.Pods(appliedToGroup.Selector.Namespace).List(selector)
+	for _, pod := range pods {
+		if pod.Status.PodIP == "" {
+			// No need to process Pod when IPAddress is unset.
+			continue
+		}
+		podSet := podsByNodes[pod.Spec.NodeName]
+		if podSet == nil {
+			podSet = make(map[networkpolicy.PodReference]sets.Empty)
+		}
+		podRef := networkpolicy.PodReference{
+			Name:      pod.Name,
+			Namespace: pod.Namespace,
+		}
+		podSet[podRef] = sets.Empty{}
+		// Update the Pod references by Node.
+		podsByNodes[pod.Spec.NodeName] = podSet
+		// Update the NodeNames in order to set the SpanMeta for AppliedToGroup.
+		appGroupNodeNames.Insert(pod.Spec.NodeName)
+	}
+	spanMeta := antreatypes.SpanMeta{
+		NodeNames: appGroupNodeNames,
+	}
+	updatedAppliedToGroup := &antreatypes.AppliedToGroup{
+		UID:        appliedToGroup.UID,
+		Name:       appliedToGroup.Name,
+		Selector:   appliedToGroup.Selector,
+		PodsByNode: podsByNodes,
+		SpanMeta:   spanMeta,
+	}
+	klog.V(2).Infof("Updating existing AppliedToGroup in store %s with Pods %v and Nodes %v", key, podsByNodes, updatedAppliedToGroup.SpanMeta)
+	n.appliedToGroupStore.Update(updatedAppliedToGroup)
+	// Enqueue syncInternalNetworkPolicy for each affected internal NetworkPolicy so
+	// that corresponding Node spans are updated.
+	for _, npObj := range nps {
+		// Error can be ignored as npObj is of type antreatypes.NetworkPolicy.
+		npKey, _ := store.NetworkPolicyKeyFunc(npObj)
+		n.enqueueInternalNetworkPolicy(npKey)
+	}
+	return nil
+}
+
+// syncInternalNetworkPolicy retrieves all the AppliedToGroups associated with
+// itself in order to calculate the Node span for this policy.
+func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
+	startTime := time.Now()
+	defer func() {
+		klog.V(2).Infof("Finished syncing internal NetworkPolicy %s. (%v)", key, time.Since(startTime))
+	}()
+	klog.V(2).Infof("Syncing internal NetworkPolicy %s", key)
+	nodeNames := sets.String{}
+	// Lock the internal NetworkPolicy store as we may have a case where in the
+	// same internal NetworkPolicy is being updated in the NetworkPolicy UPDATE
+	// handler.
+	n.internalNetworkPolicyMutex.Lock()
+	internalNPObj, found, err := n.internalNetworkPolicyStore.Get(key)
+	if !found {
+		// Make sure to unlock the store before returning.
+		n.internalNetworkPolicyMutex.Unlock()
+		return fmt.Errorf("Internal NetworkPolicy %s not found: %v", key, err)
+	}
+	internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
+	// Maintain a copy of old SpanMeta Nodenames so we can later enqueue Groups
+	// only if it is updated.
+	oldNodeNames := internalNP.SpanMeta.NodeNames
+	// Calculate the set of Node names based on the span of the
+	// AppliedToGroups referenced by this NetworkPolicy.
+	for _, appliedToGroupName := range internalNP.AppliedToGroups {
+		appGroupObj, found, _ := n.appliedToGroupStore.Get(appliedToGroupName)
+		if !found {
+			continue
+		}
+		appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
+		nodeNames = nodeNames.Union(appGroup.SpanMeta.NodeNames)
+	}
+	spanMeta := antreatypes.SpanMeta{
+		NodeNames: nodeNames,
+	}
+	updatedNetworkPolicy := &antreatypes.NetworkPolicy{
+		UID:             internalNP.UID,
+		Name:            internalNP.Name,
+		Namespace:       internalNP.Namespace,
+		Rules:           internalNP.Rules,
+		AppliedToGroups: internalNP.AppliedToGroups,
+		SpanMeta:        spanMeta,
+	}
+	n.internalNetworkPolicyStore.Update(updatedNetworkPolicy)
+	// Internal NetworkPolicy update is complete. Safe to unlock the
+	// critical section.
+	n.internalNetworkPolicyMutex.Unlock()
+	klog.V(4).Infof("Updated internal NetworkPolicy %s with new Node names %v", key, nodeNames)
+	if nodeNames.Equal(oldNodeNames) {
+		// Node span for internal NetworkPolicy was not modified. No need to enqueue
+		// AddressGroups.
+		klog.V(4).Infof("Internal NetworkPolicy %s Node span remains unchanged. No need to enqueue AddressGroups.", key)
+		return nil
+	}
+	// Enqueue addressGroup keys to update their Node span.
+	for _, rule := range internalNP.Rules {
+		for _, addrGroupName := range rule.From.AddressGroups {
+			n.enqueueAddressGroup(addrGroupName)
+		}
+		for _, addrGroupName := range rule.To.AddressGroups {
+			n.enqueueAddressGroup(addrGroupName)
+		}
+	}
 	return nil
 }
