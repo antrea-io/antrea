@@ -81,9 +81,12 @@ func NewNetworkPolicyController(antreaClient versioned.Interface, ofClient openf
 // and NetworkPolicies, and spawns workers that reconciles NetworkPolicy rules.
 // Run will not return until stopCh is closed.
 func (c *Controller) Run(stopCh <-chan struct{}) error {
-	go wait.Until(c.watchAppliedToGroups, 5*time.Second, stopCh)
-	go wait.Until(c.watchAddressGroups, 5*time.Second, stopCh)
-	go wait.Until(c.watchNetworkPolicies, 5*time.Second, stopCh)
+	// Use NonSlidingUntil so that normal reconnection (disconnected after
+	// running a while) can reconnect immediately while abnormal reconnection
+	// won't be too aggressive.
+	go wait.NonSlidingUntil(c.watchAppliedToGroups, 5*time.Second, stopCh)
+	go wait.NonSlidingUntil(c.watchAddressGroups, 5*time.Second, stopCh)
+	go wait.NonSlidingUntil(c.watchNetworkPolicies, 5*time.Second, stopCh)
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
