@@ -1,0 +1,79 @@
+name: Go
+on: 
+  pull_request:
+    branches:
+    - master
+jobs:
+
+
+  test-unit:
+    name: Unit test
+    runs-on: [ubuntu-18.04]
+    steps:
+
+    - name: Set up Go 1.12
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.12
+      id: go
+      
+    - name: Check-out code
+      uses: actions/checkout@v1
+
+    - name: Run unit tests
+      run: make test-unit
+
+
+  check-fmt:
+    name: Check format
+    runs-on: [ubuntu-18.04]
+    steps:
+
+    - name: Set up Go 1.12
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.12
+      id: go
+      
+    - name: Check-out code
+      uses: actions/checkout@v1
+
+    - name: Check format of Go code
+      run: make test-fmt
+
+
+  bin:
+    name: Build Antrea binaries
+    runs-on: [ubuntu-18.04]
+    steps:
+
+    - name: Set up Go 1.12
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.12
+      id: go
+      
+    - name: Check-out code
+      uses: actions/checkout@v1
+
+    - name: Build Antrea binaries
+      run: make bin
+
+
+  mocks:
+    name: Check mock generation
+    runs-on: [ubuntu-18.04]
+    steps:
+
+    - name: Set up Go 1.12
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.12
+      id: go
+      
+    - name: Check-out code
+      uses: actions/checkout@v1
+
+    - name: Check mock generation
+      run: find . -name '*_mock.go' -delete && make mocks && test -z "$(git status --porcelain pkg)"
+
