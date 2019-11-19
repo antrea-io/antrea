@@ -51,6 +51,17 @@ to participate in discussions on Antrea development.
 
 Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
 
+## Features
+
+Antrea currently supports the following features:
+* IPv4 overlay network for a Kubernetes cluster. Either VXLAN or Geneve can
+be used as the encapsulation protocol.
+* [Kubernetes Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies)
+implementation.
+* [Octant](https://github.com/vmware-tanzu/octant) UI plugin for monitoring
+Antrea components, which publish runtime information as
+[CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
+
 ## Roadmap
 
 Antrea is a very young project. There is a very exciting list of features and
