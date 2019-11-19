@@ -1,0 +1,21 @@
+name: Update the antrea/openvswitch image every 6 hours
+
+on:
+  schedule:
+    # every 6 hours
+    - cron: '0 */6 * * *'
+
+jobs:
+  build:
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v1
+    - name: Build antrea/openvswitch Docker image and push to registry
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        OVS_VERSION: 2.11.1
+      run: |
+        cd build/images/ovs/
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        ./build_and_push.sh
