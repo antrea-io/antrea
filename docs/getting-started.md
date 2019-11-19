@@ -61,20 +61,3 @@ information.
 
 To deploy Antrea in a [Kind](https://github.com/kubernetes-sigs/kind) cluster,
 please refer to this [guide](/docs/kind.md).
-
-## Features
-
-The first version of Antrea will offer the following features and
-functionalities:
-
-* IPv4 overlay network for a Kubernetes cluster. Either VXLAN or Geneve can
-be chosen as the encapsulation protocol.
-* Kubernetes [Network Policy](https://kubernetes.io/docs/concepts/services-networking/network-policies) (coming soon).
-* Encryption of Pod traffic with [IPSec ESP](https://tools.ietf.org/html/rfc2406) (coming soon).
-* CLI for debugging (coming soon).
-* [Octant](https://github.com/vmware-tanzu/octant) UI plugin for monitoring
-the Antrea components health status and runtime information (coming soon).
-
-Some of these features are still under development now and will be available
-soon. Check out [Antrea ROADMAP](/ROADMAP.md) for more information about the
-features that are coming and the features planned for future releases.
