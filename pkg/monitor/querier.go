@@ -18,7 +18,8 @@ import (
 	"os"
 	"strconv"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
+	"k8s.io/klog"
 )
 
 const (
@@ -57,6 +58,15 @@ func (monitor *agentMonitor) GetSelfNode() v1.ObjectReference {
 		return v1.ObjectReference{}
 	}
 	return v1.ObjectReference{Kind: "Node", Name: monitor.nodeName}
+}
+
+func (monitor *agentMonitor) GetOVSVersion() string {
+	version, err := monitor.ovsBridgeClient.GetOVSVersion()
+	if err != nil {
+		klog.Errorf("Failed to get OVS client version: %v", err)
+		return ""
+	}
+	return version
 }
 
 func (monitor *agentMonitor) GetOVSFlowTable() map[string]int32 {

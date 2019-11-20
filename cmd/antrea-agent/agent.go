@@ -121,7 +121,7 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
-	agentMonitor := monitor.NewAgentMonitor(crdClient, o.config.OVSBridge, nodeConfig.Name, nodeConfig.PodCIDR.String(), ifaceStore, ofClient)
+	agentMonitor := monitor.NewAgentMonitor(crdClient, o.config.OVSBridge, nodeConfig.Name, nodeConfig.PodCIDR.String(), ifaceStore, ofClient, ovsBridgeClient)
 
 	go agentMonitor.Run(stopCh)
 

@@ -39,4 +39,5 @@ type OVSBridgeClient interface {
 	GetPortData(portUUID, ifName string) (*OVSPortData, Error)
 	GetPortList() ([]OVSPortData, Error)
 	SetInterfaceMTU(name string, MTU int) error
+	GetOVSVersion() (string, Error)
 }
