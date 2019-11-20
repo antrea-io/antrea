@@ -9,9 +9,13 @@ RUN mkdir -p /opt/cni/bin && \
 
 FROM golang:1.12 as antrea-build
 
-COPY . /antrea
-
 WORKDIR /antrea
+
+COPY go.mod /antrea/go.mod
+
+RUN go mod download
+
+COPY . /antrea
 
 RUN make bin
 
