@@ -75,13 +75,6 @@ type Bridge interface {
 	Disconnect() error
 }
 
-func NewBridge(name string) Bridge {
-	return &commandBridge{
-		name:       name,
-		tableCache: map[TableIDType]Table{},
-	}
-}
-
 // TableStatus represents the status of a specific flow table. The status is useful for debugging.
 type TableStatus struct {
 	ID         uint      `json:"id"`
