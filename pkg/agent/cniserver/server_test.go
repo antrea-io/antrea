@@ -64,7 +64,7 @@ var gwIP net.IP
 func TestLoadNetConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	cniService := generateCNIServer(t)
+	cniService := newCNIServer(t)
 	networkCfg := generateNetworkConfiguration("testCfg", supportedCNIVersion)
 	requestMsg, containerId := newRequest(args, networkCfg, "", t)
 	netCfg, err := cniService.loadNetworkConfig(&requestMsg)
@@ -90,7 +90,7 @@ func TestLoadNetConfig(t *testing.T) {
 }
 
 func TestRequestCheck(t *testing.T) {
-	cniService := generateCNIServer(t)
+	cniService := newCNIServer(t)
 	valid := cniService.isCNIVersionSupported(unsupportedCNIVersion)
 	if valid {
 		t.Error("Failed to return error for unsupported version")
@@ -119,7 +119,7 @@ func TestIPAMService(t *testing.T) {
 	defer controller.Finish()
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	_ = ipam.RegisterIPAMDriver(testIpamType, ipamMock)
-	cniServer := generateCNIServer(t)
+	cniServer := newCNIServer(t)
 
 	require.True(t, ipam.IsIPAMTypeValid(testIpamType), "Failed to register IPAM service")
 	require.False(t, ipam.IsIPAMTypeValid("not_a_valid_IPAM_driver"))
@@ -154,7 +154,7 @@ func TestIPAMService(t *testing.T) {
 }
 
 func TestCheckRequestMessage(t *testing.T) {
-	cniServer := generateCNIServer(t)
+	cniServer := newCNIServer(t)
 
 	t.Run("Incompatible CNI version", func(t *testing.T) {
 		networkCfg := generateNetworkConfiguration("testCfg", unsupportedCNIVersion)
@@ -173,7 +173,7 @@ func TestCheckRequestMessage(t *testing.T) {
 }
 
 func TestValidatePrevResult(t *testing.T) {
-	cniServer := generateCNIServer(t)
+	cniServer := newCNIServer(t)
 	cniVersion := "0.4.0"
 	networkCfg := generateNetworkConfiguration("testCfg", cniVersion)
 	k8sPodArgs := &k8sArgs{}
@@ -231,7 +231,7 @@ func TestValidatePrevResult(t *testing.T) {
 }
 
 func TestParsePrevResultFromRequest(t *testing.T) {
-	cniServer := generateCNIServer(t)
+	cniServer := newCNIServer(t)
 
 	getNetworkCfg := func(cniVersion string) *NetworkConfig {
 		networkCfg := generateNetworkConfiguration("testCfg", cniVersion)
@@ -317,6 +317,7 @@ func TestValidateOVSPort(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 	ifaceStore := agent.NewInterfaceStore()
+	podConfigurator := &podConfigurator{ifaceStore: ifaceStore}
 	containerID := uuid.New().String()
 	containerMACStr := "11:22:33:44:55:66"
 	containerIp := []string{"10.1.2.100/24,10.1.2.1,4"}
@@ -330,16 +331,21 @@ func TestValidateOVSPort(t *testing.T) {
 	containerConfig.OVSPortConfig = &agent.OVSPortConfig{PortUUID: portUUID, IfaceName: hostIfaceName}
 
 	ifaceStore.AddInterface(hostIfaceName, containerConfig)
-	err := validateOVSPort(ifaceStore, hostIfaceName, containerMACStr, containerID, result.IPs)
+	err := podConfigurator.validateOVSPort(hostIfaceName, containerMACStr, containerID, result.IPs)
 	assert.Nil(t, err, "Failed to validate OVS port configuration")
 }
 
 func TestRemoveInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
-	ifaceStore := agent.NewInterfaceStore()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient := openflowtest.NewMockClient(controller)
+	ifaceStore := agent.NewInterfaceStore()
+	podConfigurator := &podConfigurator{
+		ovsBridgeClient: mockOVSBridgeClient,
+		ofClient:        mockOFClient,
+		ifaceStore:      ifaceStore,
+	}
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	containerIP := net.ParseIP("1.1.1.1")
 
@@ -373,7 +379,7 @@ func TestRemoveInterface(t *testing.T) {
 		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
 		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(nil)
 
-		err := removeInterfaces(mockOVSBridgeClient, mockOFClient, ifaceStore, podName, testPodNamespace, containerID, cniConfig.Netns, cniConfig.Ifname)
+		err := podConfigurator.removeInterfaces(podName, testPodNamespace, containerID, cniConfig.Netns, cniConfig.Ifname)
 		require.Nil(t, err, "Failed to remove interface")
 		_, found := ifaceStore.GetContainerInterface(podName, testPodNamespace)
 		assert.False(t, found, "Interface should not be in the local cache anymore")
@@ -386,7 +392,7 @@ func TestRemoveInterface(t *testing.T) {
 		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(ovsconfig.NewTransactionError(fmt.Errorf("error while deleting OVS port"), true))
 		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
 
-		err := removeInterfaces(mockOVSBridgeClient, mockOFClient, ifaceStore, podName, testPodNamespace, containerID, "", cniConfig.Ifname)
+		err := podConfigurator.removeInterfaces(podName, testPodNamespace, containerID, "", cniConfig.Ifname)
 		require.NotNil(t, err, "Expected interface remove to fail")
 		_, found := ifaceStore.GetContainerInterface(podName, testPodNamespace)
 		assert.True(t, found, "Interface should still be in local cache because of port deletion failure")
@@ -398,7 +404,7 @@ func TestRemoveInterface(t *testing.T) {
 
 		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(fmt.Errorf("failed to delete openflow entry"))
 
-		err := removeInterfaces(mockOVSBridgeClient, mockOFClient, ifaceStore, podName, testPodNamespace, containerID, "", cniConfig.Ifname)
+		err := podConfigurator.removeInterfaces(podName, testPodNamespace, containerID, "", cniConfig.Ifname)
 		require.NotNil(t, err, "Expected interface remove to fail")
 		_, found := ifaceStore.GetContainerInterface(podName, testPodNamespace)
 		assert.True(t, found, "Interface should still be in local cache because of flow deletion failure")
@@ -423,7 +429,7 @@ func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[
 	return conf.RawPrevResult, nil
 }
 
-func generateCNIServer(t *testing.T) *CNIServer {
+func newCNIServer(t *testing.T) *CNIServer {
 	supportedVersions := "0.3.0,0.3.1,0.4.0"
 	cniServer := &CNIServer{
 		cniSocket:       testSocket,
