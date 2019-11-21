@@ -26,7 +26,8 @@ import (
 )
 
 const (
-	IPAM_HOST_LOCAL = "host-local"
+	ipamHostLocal  = "host-local"
+	defaultCNIPath = "/opt/cni/bin"
 )
 
 type IPAMDelegator struct {
@@ -80,7 +81,17 @@ var defaultExec = &invoke.DefaultExec{
 }
 
 func delegateCommon(delegatePlugin string, exec invoke.Exec, cniPath string) (string, invoke.Exec, error) {
-	paths := filepath.SplitList(cniPath)
+	// The CNI searching paths passed from kubelet.
+	configuredPaths := filepath.SplitList(cniPath)
+	paths := make([]string, len(configuredPaths)+1)
+	// When Antrea agent runs as a Pod, the IPAM plugin is always installed in
+	// defaultCNIPath, but kubelet can be configured to use different paths to
+	// search for CNI plugins. So here we always add defaultCNIPath to the CNI
+	// plugin searching paths to make sure the IPAM plugin installed in the agent
+	// Pod can be found.
+	paths[0] = defaultCNIPath
+	copy(paths[1:], configuredPaths)
+
 	pluginPath, err := exec.FindInPath(delegatePlugin, paths)
 	if err != nil {
 		return "", nil, err
@@ -110,7 +121,7 @@ func delegateNoResult(delegatePlugin string, networkConfig []byte, args *invoke.
 }
 
 func init() {
-	if err := RegisterIPAMDriver(IPAM_HOST_LOCAL, &IPAMDelegator{pluginType: IPAM_HOST_LOCAL}); err != nil {
-		klog.Errorf("Failed to register IPAM plugin on type %s", IPAM_HOST_LOCAL)
+	if err := RegisterIPAMDriver(ipamHostLocal, &IPAMDelegator{pluginType: ipamHostLocal}); err != nil {
+		klog.Errorf("Failed to register IPAM plugin on type %s", ipamHostLocal)
 	}
 }
