@@ -1,9 +1,9 @@
-name: Update the antrea/openvswitch image every 6 hours
+name: Update the antrea/openvswitch image every 12 hours
 
 on:
   schedule:
-    # every 6 hours
-    - cron: '0 */6 * * *'
+    # every 12 hours
+    - cron: '0 */12 * * *'
 
 jobs:
   build:
@@ -17,5 +17,7 @@ jobs:
         OVS_VERSION: 2.11.1
       run: |
         cd build/images/ovs/
+        docker pull antrea/openvswitch-debs:$OVS_VERSION || true
+        docker pull antrea/openvswitch:$OVS_VERSION || true
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         ./build_and_push.sh
