@@ -194,6 +194,21 @@ func (mr *MockOVSBridgeClientMockRecorder) GetOFPort(arg0 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOFPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetOFPort), arg0)
 }
 
+// GetOVSVersion mocks base method
+func (m *MockOVSBridgeClient) GetOVSVersion() (string, ovsconfig.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOVSVersion")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(ovsconfig.Error)
+	return ret0, ret1
+}
+
+// GetOVSVersion indicates an expected call of GetOVSVersion
+func (mr *MockOVSBridgeClientMockRecorder) GetOVSVersion() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOVSVersion", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetOVSVersion))
+}
+
 // GetPortData mocks base method
 func (m *MockOVSBridgeClient) GetPortData(arg0, arg1 string) (*ovsconfig.OVSPortData, ovsconfig.Error) {
 	m.ctrl.T.Helper()

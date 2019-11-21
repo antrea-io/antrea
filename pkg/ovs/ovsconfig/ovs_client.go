@@ -586,3 +586,25 @@ func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
 
 	return nil
 }
+
+func (br *OVSBridge) GetOVSVersion() (string, Error) {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+
+	tx.Select(dbtransaction.Select{
+		Table:   openvSwitchSchema,
+		Columns: []string{"ovs_version"},
+	})
+
+	res, err, temporary := tx.Commit()
+
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return "", NewTransactionError(err, temporary)
+	}
+	if len(res[0].Rows) == 0 {
+		klog.Warning("Could not find ovs_version")
+		return "", nil
+	}
+
+	return res[0].Rows[0].(map[string]interface{})["ovs_version"].(string), nil
+}
