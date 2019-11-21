@@ -49,6 +49,7 @@ const (
 	subnetCol       = "NodeSubnet"
 	bridgeCol       = "OVS Bridge"
 	podNumCol       = "Local Pod Num"
+	heartbeatCol    = "Last Heartbeat Time"
 )
 
 func main() {
@@ -111,8 +112,8 @@ func handleNavigation(request *service.NavigationRequest) (navigation.Navigation
 
 // initRoutes routes for Antrea plugin.
 func initRoutes(router *service.Router) {
-	controllerCols := component.NewTableCols(versionCol, podCol, nodeCol, serviceCol, crdCol)
-	agentCols := component.NewTableCols(versionCol, podCol, nodeCol, subnetCol, bridgeCol, podNumCol, crdCol)
+	controllerCols := component.NewTableCols(versionCol, podCol, nodeCol, serviceCol, crdCol, heartbeatCol)
+	agentCols := component.NewTableCols(versionCol, podCol, nodeCol, subnetCol, bridgeCol, podNumCol, crdCol, heartbeatCol)
 
 	// Click on navigation bar named Antrea Information to display Antrea components (both Controller and Agent) information.
 	router.HandleFunc("/components", func(request *service.Request) (component.ContentResponse, error) {
@@ -174,6 +175,7 @@ func getControllerRows() []component.TableRow {
 				"/overview/namespace/"+controller.PodRef.Namespace+"/discovery-and-load-balancing/services/"+controller.ServiceRef.Name),
 			crdCol: component.NewLink(controller.Name, controller.Name,
 				"/cluster-overview/custom-resources/antreacontrollerinfos.clusterinformation.crd.antrea.io/"+controller.Name),
+			heartbeatCol: component.NewText(controller.ControllerConditions[0].LastHeartbeatTime.String()),
 		})
 	}
 	return controllerRows
@@ -198,6 +200,7 @@ func getAgentRows() []component.TableRow {
 			podNumCol: component.NewText(strconv.Itoa(int(agent.LocalPodNum))),
 			crdCol: component.NewLink(agent.Name, agent.Name,
 				"/cluster-overview/custom-resources/antreaagentinfos.clusterinformation.crd.antrea.io/"+agent.Name),
+			heartbeatCol: component.NewText(agent.AgentConditions[0].LastHeartbeatTime.String()),
 		})
 	}
 	return agentRows
