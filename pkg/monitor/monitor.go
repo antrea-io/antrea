@@ -25,6 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1"
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
@@ -37,20 +38,21 @@ type controllerMonitor struct {
 }
 
 type agentMonitor struct {
-	client         clientset.Interface
-	ovsBridge      string
-	nodeName       string
-	nodeSubnet     string
-	interfaceStore agent.InterfaceStore
-	ofClient       openflow.Client
+	client          clientset.Interface
+	ovsBridge       string
+	nodeName        string
+	nodeSubnet      string
+	interfaceStore  agent.InterfaceStore
+	ofClient        openflow.Client
+	ovsBridgeClient ovsconfig.OVSBridgeClient
 }
 
 func NewControllerMonitor(client clientset.Interface) *controllerMonitor {
 	return &controllerMonitor{client: client}
 }
 
-func NewAgentMonitor(client clientset.Interface, ovsBridge string, nodeName string, nodeSubnet string, interfaceStore agent.InterfaceStore, ofClient openflow.Client) *agentMonitor {
-	return &agentMonitor{client: client, ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient}
+func NewAgentMonitor(client clientset.Interface, ovsBridge string, nodeName string, nodeSubnet string, interfaceStore agent.InterfaceStore, ofClient openflow.Client, ovsBridgeClient ovsconfig.OVSBridgeClient) *agentMonitor {
+	return &agentMonitor{client: client, ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient}
 }
 
 // Run creates AntreaControllerInfo CRD first after controller is running.
@@ -168,7 +170,7 @@ func (monitor *agentMonitor) createAgentCRD() (*v1beta1.AntreaAgentInfo, error) 
 		PodRef:      monitor.GetSelfPod(),
 		NodeRef:     monitor.GetSelfNode(),
 		NodeSubnet:  []string{monitor.nodeSubnet},
-		OVSInfo:     v1beta1.OVSInfo{BridgeName: monitor.ovsBridge, FlowTable: monitor.GetOVSFlowTable()},
+		OVSInfo:     v1beta1.OVSInfo{Version: monitor.GetOVSVersion(), BridgeName: monitor.ovsBridge, FlowTable: monitor.GetOVSFlowTable()},
 		LocalPodNum: monitor.GetLocalPodNum(),
 		AgentConditions: []v1beta1.AgentCondition{
 			{
