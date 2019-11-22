@@ -11,10 +11,10 @@ func TestCopyToBuilder(t *testing.T) {
 		id:   0,
 		next: 1,
 	}
-	oriFlow := table.BuildFlow().MatchProtocol(ProtocolIP).Priority(100).
+	oriFlow := table.BuildFlow(uint16(100)).MatchProtocol(ProtocolIP).
 		Cookie(uint64(1004)).
 		MatchRegRange(1, 0x101, Range{0, 15}).
-		MatchCTStateNew().MatchCTStateTrk().
+		MatchCTStateNew(true).MatchCTStateTrk(true).
 		Action().CT(
 		true,
 		1,

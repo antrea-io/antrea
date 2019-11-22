@@ -110,7 +110,7 @@ func (a *ofCTAction) LoadToLabelRange(value uint64, rng *Range) CTAction {
 }
 
 func (a *ofCTAction) load(field *openflow13.MatchField, value uint64, rng *Range) {
-	action := openflow13.NewNXActionRegLoad(rng.ToNxRange().ToOfsBits(), field, value)
+	action := openflow13.NewNXActionRegLoad(rng.ToNXRange().ToOfsBits(), field, value)
 	a.actions = append(a.actions, action)
 }
 
@@ -214,7 +214,7 @@ func (a *ofFlowAction) LoadARPOperation(value uint16) FlowBuilder {
 
 // LoadRange is an action to Load data to the target field at specified range.
 func (a *ofFlowAction) LoadRange(name string, value uint32, rng Range) FlowBuilder {
-	a.builder.ofFlow.LoadReg(name, uint64(value), rng.ToNxRange())
+	a.builder.ofFlow.LoadReg(name, uint64(value), rng.ToNXRange())
 	return a.builder
 }
 
@@ -222,12 +222,12 @@ func (a *ofFlowAction) LoadRange(name string, value uint32, rng Range) FlowBuild
 func (a *ofFlowAction) LoadRegRange(regID int, value uint32, rng Range) FlowBuilder {
 	a.builder.actions = append(a.builder.actions, fmt.Sprintf("load:0x%x->NXM_NX_REG%d[%d..%d]", value, regID, rng[0], rng[1]))
 	name := fmt.Sprintf("%s%d", NxmFieldReg, regID)
-	a.builder.ofFlow.LoadReg(name, uint64(value), rng.ToNxRange())
+	a.builder.ofFlow.LoadReg(name, uint64(value), rng.ToNXRange())
 	return a.builder
 }
 
 // Move is an action to copy all data from "fromField" to "toField". Fields with name "fromField" and "fromField" should
-// have the same data length, otherwise there will be error when realize the flow on OFSwitch.
+// have the same data length, otherwise there will be error when realizing the flow on OFSwitch.
 func (a *ofFlowAction) Move(fromField, toField string) FlowBuilder {
 	a.builder.actions = append(a.builder.actions, fmt.Sprintf("move:%s[]->%s[]", fromField, toField))
 	_, fromRange, _ := getFieldRange(fromField)
@@ -238,22 +238,26 @@ func (a *ofFlowAction) Move(fromField, toField string) FlowBuilder {
 // MoveRange is an action to move data from "fromField" at "fromRange" to "toField" at "toRange".
 func (a *ofFlowAction) MoveRange(fromField, toField string, fromRange, toRange Range) FlowBuilder {
 	a.builder.actions = append(a.builder.actions, fmt.Sprintf("move:%s[%d..%d]->%s[%d..%d]", fromField, fromRange[0], fromRange[1], toField, toRange[0], toRange[1]))
-	a.builder.ofFlow.MoveRegs(fromField, toField, fromRange.ToNxRange(), toRange.ToNxRange())
+	a.builder.ofFlow.MoveRegs(fromField, toField, fromRange.ToNXRange(), toRange.ToNXRange())
 	return a.builder
 }
 
 // Resubmit is an action to resubmit packet to the specified table with the port as new in_port. If port is empty string,
 // the in_port field is not changed.
-func (a *ofFlowAction) Resubmit(port string, table TableIDType) FlowBuilder {
-	a.builder.actions = append(a.builder.actions, fmt.Sprintf("resubmit(%s,%d)", port, table))
-	inport := 0
-	var ofPort uint16 = 0xfff8
-	if port != "" {
-		inport, _ = strconv.Atoi(port)
-		ofPort = uint16(inport)
-	}
+func (a *ofFlowAction) Resubmit(ofPort uint16, table TableIDType) FlowBuilder {
+	a.builder.actions = append(a.builder.actions, fmt.Sprintf("resubmit(%s,%d)", strconv.Itoa(int(ofPort)), table))
+
 	ofTableID := uint8(table)
 	resubmit := ofctrl.NewResubmit(&ofPort, &ofTableID)
+	a.builder.ofFlow.lastAction = resubmit
+	return a.builder
+}
+
+func (a *ofFlowAction) ResubmitToTable(table TableIDType) FlowBuilder {
+	a.builder.actions = append(a.builder.actions, fmt.Sprintf("resubmit(,%d)", table))
+
+	ofTableID := uint8(table)
+	resubmit := ofctrl.NewResubmit(nil, &ofTableID)
 	a.builder.ofFlow.lastAction = resubmit
 	return a.builder
 }

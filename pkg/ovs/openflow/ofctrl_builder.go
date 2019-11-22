@@ -47,7 +47,7 @@ func (b *ofFlowBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBui
 	reg := &ofctrl.NXRegister{
 		ID:    regID,
 		Data:  regData,
-		Range: rng.ToNxRange(),
+		Range: rng.ToNXRange(),
 	}
 	b.Match.NxRegs = append(b.Match.NxRegs, reg)
 	return b
@@ -61,110 +61,87 @@ func (b *ofFlowBuilder) addCTStateString(value string) {
 	}
 }
 
-func (b *ofFlowBuilder) MatchCTStateNew() FlowBuilder {
+func (b *ofFlowBuilder) MatchCTStateNew(set bool) FlowBuilder {
 	if b.ctStates == nil {
 		b.ctStates = openflow13.NewCTStates()
 	}
-	b.ctStates.SetNew()
-	b.addCTStateString("+new")
+	if set {
+		b.ctStates.SetNew()
+		b.addCTStateString("+new")
+	} else {
+		b.ctStates.UnsetNew()
+		b.addCTStateString("-trk")
+	}
 	return b
 }
 
-func (b *ofFlowBuilder) MatchCTStateUnNew() FlowBuilder {
+func (b *ofFlowBuilder) MatchCTStateRel(set bool) FlowBuilder {
 	if b.ctStates == nil {
 		b.ctStates = openflow13.NewCTStates()
 	}
-	b.ctStates.UnsetNew()
-	b.addCTStateString("-new")
+	if set {
+		b.ctStates.SetRel()
+		b.addCTStateString("+rel")
+	} else {
+		b.ctStates.UnsetRel()
+		b.addCTStateString("-rel")
+	}
 	return b
 }
 
-func (b *ofFlowBuilder) MatchCTStateRel() FlowBuilder {
+func (b *ofFlowBuilder) MatchCTStateRpl(set bool) FlowBuilder {
 	if b.ctStates == nil {
 		b.ctStates = openflow13.NewCTStates()
 	}
-	b.ctStates.SetRel()
-	b.addCTStateString("+rel")
+	if set {
+		b.ctStates.SetRpl()
+		b.addCTStateString("+rpl")
+	} else {
+		b.ctStates.UnsetRpl()
+		b.addCTStateString("-rpl")
+	}
 	return b
 }
 
-func (b *ofFlowBuilder) MatchCTStateUnRel() FlowBuilder {
+func (b *ofFlowBuilder) MatchCTStateEst(set bool) FlowBuilder {
 	if b.ctStates == nil {
 		b.ctStates = openflow13.NewCTStates()
 	}
-	b.ctStates.UnsetRel()
-	b.addCTStateString("-rel")
+	if set {
+		b.ctStates.SetEst()
+		b.addCTStateString("+est")
+	} else {
+		b.ctStates.UnsetEst()
+		b.addCTStateString("-est")
+	}
 	return b
 }
 
-func (b *ofFlowBuilder) MatchCTStateRpl() FlowBuilder {
+func (b *ofFlowBuilder) MatchCTStateTrk(set bool) FlowBuilder {
 	if b.ctStates == nil {
 		b.ctStates = openflow13.NewCTStates()
 	}
-	b.ctStates.SetRpl()
-	b.addCTStateString("+rpl")
+	if set {
+		b.ctStates.SetTrk()
+		b.addCTStateString("+trk")
+	} else {
+		b.ctStates.UnsetTrk()
+		b.addCTStateString("-trk")
+	}
 	return b
 }
 
-func (b *ofFlowBuilder) MatchCTStateUnRpl() FlowBuilder {
+func (b *ofFlowBuilder) MatchCTStateInv(set bool) FlowBuilder {
 	if b.ctStates == nil {
 		b.ctStates = openflow13.NewCTStates()
 	}
-	b.ctStates.UnsetRpl()
-	b.addCTStateString("-rpl")
-	return b
-}
-
-func (b *ofFlowBuilder) MatchCTStateEst() FlowBuilder {
-	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
+	if set {
+		b.ctStates.SetInv()
+		b.addCTStateString("+inv")
+	} else {
+		b.ctStates.UnsetInv()
+		b.addCTStateString("-inv")
 	}
-	b.ctStates.SetEst()
-	b.addCTStateString("+est")
-	return b
-}
-
-func (b *ofFlowBuilder) MatchCTStateUnEst() FlowBuilder {
-	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
-	}
-	b.ctStates.UnsetEst()
-	b.addCTStateString("-est")
-	return b
-}
-func (b *ofFlowBuilder) MatchCTStateTrk() FlowBuilder {
-	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
-	}
-	b.ctStates.SetTrk()
-	b.addCTStateString("+trk")
-	return b
-}
-
-func (b *ofFlowBuilder) MatchCTStateUnTrk() FlowBuilder {
-	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
-	}
-	b.ctStates.UnsetTrk()
-	b.addCTStateString("-trk")
-	return b
-}
-
-func (b *ofFlowBuilder) MatchCTStateInv() FlowBuilder {
-	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
-	}
-	b.ctStates.SetInv()
-	b.addCTStateString("+inv")
-	return b
-}
-
-func (b *ofFlowBuilder) MatchCTStateUnInv() FlowBuilder {
-	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
-	}
-	b.ctStates.UnsetInv()
-	b.addCTStateString("-inv")
 	return b
 }
 
@@ -175,7 +152,7 @@ func (b *ofFlowBuilder) MatchCTMark(value uint32) FlowBuilder {
 	return b
 }
 
-// MatchCTMarkMask sets the mask of ct_mark. The mask is used only if ct_mark is set,
+// MatchCTMarkMask sets the mask of ct_mark. The mask is used only if ct_mark is set.
 func (b *ofFlowBuilder) MatchCTMarkMask(mask uint32) FlowBuilder {
 	if b.Flow.Match.CtMark > 0 {
 		b.ofFlow.Match.CtMarkMask = &mask
@@ -284,12 +261,6 @@ func (b *ofFlowBuilder) MatchARPOp(op uint16) FlowBuilder {
 func (b *ofFlowBuilder) MatchConjID(value uint32) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("conj_id=%d", value))
 	b.Match.ConjunctionID = &value
-	return b
-}
-
-// MatchConjID sets priority for the flow entry.
-func (b *ofFlowBuilder) Priority(priority uint32) FlowBuilder {
-	b.Match.Priority = uint16(priority)
 	return b
 }
 

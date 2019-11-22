@@ -60,24 +60,24 @@ func (t *ofTable) UpdateStatus(flowCountDelta int) {
 }
 
 // BuildFlow returns FlowBuilder object to help construct Openflow entry.
-func (t *ofTable) BuildFlow() FlowBuilder {
+func (t *ofTable) BuildFlow(priority uint16) FlowBuilder {
 	fb := new(ofFlowBuilder)
 	fb.table = t
 	// Set ofctl.Table to Flow, otherwise the flow can't find OFSwitch to install.
-	fb.Flow = ofctrl.Flow{Table: t.Table}
+	fb.Flow = ofctrl.Flow{Table: t.Table, Match: ofctrl.FlowMatch{Priority: priority}}
 	return fb
 }
 
-// DumpFlows dumps all existent Openflow entries from OFSwitch using cookie ID and table ID as filters
-func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStats {
+// DumpFlows dumps all existing Openflow entries from OFSwitch using cookie ID and table ID as filters.
+func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates {
 	ofStats := t.Table.Switch.DumpFlowStats(cookieID, cookieMask, nil, &t.TableId)
 	if ofStats == nil {
 		return nil
 	}
-	flowStats := make(map[uint64]*FlowStats)
+	flowStats := make(map[uint64]*FlowStates)
 	for _, stat := range ofStats {
 		cookie := stat.Cookie
-		s := &FlowStats{
+		s := &FlowStates{
 			TableID:         stat.TableId,
 			PacketCount:     stat.PacketCount,
 			DurationNSecond: stat.DurationNSec,
@@ -99,10 +99,10 @@ func newOFTable(id, next TableIDType, missAction MissActionType) *ofTable {
 type OFBridge struct {
 	sync.Mutex
 	bridgeName string
-	// tableCache is used to cache ofTables
+	// tableCache is used to cache ofTables.
 	tableCache map[TableIDType]*ofTable
 
-	// ofSwitch is the target OFSwitch
+	// ofSwitch is the target OFSwitch.
 	ofSwitch *ofctrl.OFSwitch
 	// controller helps maintain connections to remote OFSwitch.
 	controller *ofctrl.Controller
@@ -111,9 +111,9 @@ type OFBridge struct {
 	// maxRetrySec is the seconds waiting for connection to the OFSwitch.
 	maxRetrySec int
 
-	// channel to notify agent OFSwitch is connected
+	// channel to notify agent OFSwitch is connected.
 	connCh chan struct{}
-	// connected is an internal channel to notify if connected to the OFSwitch or not. It is used only in Connect method
+	// connected is an internal channel to notify if connected to the OFSwitch or not. It is used only in Connect method.
 	connected chan bool
 }
 
@@ -124,10 +124,6 @@ func (b *OFBridge) CreateTable(id, next TableIDType, missAction MissActionType) 
 
 	b.tableCache[id] = t
 	return t
-}
-
-func (b *OFBridge) GetName() string {
-	return b.bridgeName
 }
 
 // DeleteTable removes the table from ofctrl.OFSwitch, and remove from local cache.
@@ -182,7 +178,7 @@ func (b *OFBridge) SwitchDisconnected(sw *ofctrl.OFSwitch) {
 	klog.Infof("OFSwitch is disconnected: %v", sw.DPID())
 }
 
-// Initialize creates ofctrl.Table for each table in the tableCache
+// Initialize creates ofctrl.Table for each table in the tableCache.
 func (b *OFBridge) initialize() {
 	for id, table := range b.tableCache {
 		if id == 0 {
@@ -232,15 +228,15 @@ func (b *OFBridge) Disconnect() error {
 
 // DumpFlows queries the Openflow entries from OFSwitch, the filter of the query is Openflow cookieID. The result is
 // a map from flow cookieID to FlowStates.
-func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStats {
+func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates {
 	ofStats := b.ofSwitch.DumpFlowStats(cookieID, cookieMask, nil, nil)
 	if ofStats == nil {
 		return nil
 	}
-	flowStats := make(map[uint64]*FlowStats)
+	flowStats := make(map[uint64]*FlowStates)
 	for _, stat := range ofStats {
 		cookie := stat.Cookie
-		s := &FlowStats{
+		s := &FlowStates{
 			TableID:         stat.TableId,
 			PacketCount:     stat.PacketCount,
 			DurationNSecond: stat.DurationNSec,
@@ -263,6 +259,11 @@ func (b *OFBridge) DeleteFlowsByCookie(cookieID, cookieMask uint64) error {
 	return nil
 }
 
+func (b *OFBridge) IsOFBridgeConnected() bool {
+	return b.ofSwitch.IsReady()
+
+}
+
 // MaxRetry is a callback from OFController. It sets the max retry count that OFController attempts to connect to OFSwitch.
 func (b *OFBridge) MaxRetry() int {
 	return b.maxRetrySec
@@ -274,7 +275,7 @@ func (b *OFBridge) RetryInterval() time.Duration {
 	return b.retryInterval
 }
 
-func NewOFBridge(br string) *OFBridge {
+func NewOFBridge(br string) Bridge {
 	s := &OFBridge{
 		bridgeName:    br,
 		tableCache:    make(map[TableIDType]*ofTable),

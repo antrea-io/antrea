@@ -8,7 +8,7 @@ import (
 	"github.com/contiv/ofnet/ofctrl"
 )
 
-type FlowStats struct {
+type FlowStates struct {
 	TableID         uint8
 	PacketCount     uint64
 	DurationNSecond uint32
@@ -64,10 +64,6 @@ func (f *ofFlow) Delete() error {
 	return nil
 }
 
-func (f *ofFlow) GetTable() Table {
-	return f.table
-}
-
 func (f *ofFlow) MatchString() string {
 	repr := fmt.Sprintf("table=%d,priority=%d", f.table.GetID(), f.Flow.Match.Priority)
 	if f.protocol != "" {
@@ -105,7 +101,7 @@ func (f *ofFlow) String() string {
 	return repr
 }
 
-func (r *Range) ToNxRange() *openflow13.NXRange {
+func (r *Range) ToNXRange() *openflow13.NXRange {
 	return openflow13.NewNXRange(int(r[0]), int(r[1]))
 }
 
