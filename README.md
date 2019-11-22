@@ -1,4 +1,8 @@
 # Antrea
+![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/vmware-tanzu/antrea)](https://goreportcard.com/report/github.com/vmware-tanzu/antrea)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+![GitHub release](https://img.shields.io/github/release/vmware-tanzu/antrea.svg?include_prereleases)
 
 ## Overview
 
