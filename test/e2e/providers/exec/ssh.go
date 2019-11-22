@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package e2e
+package exec
 
 import (
 	"bytes"
@@ -21,9 +21,9 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// Run the provided SSH command on the specified host. Returns the exit code of the command, along
-// with the contents of stdout and stderr as strings. Note that if the command returns a non-zero
-// error code, this function does not report it as an error.
+// RunSSHCommand runs the provided SSH command on the specified host. Returns the exit code of the
+// command, along with the contents of stdout and stderr as strings. Note that if the command
+// returns a non-zero error code, this function does not report it as an error.
 func RunSSHCommand(host string, config *ssh.ClientConfig, cmd string) (code int, stdout string, stderr string, err error) {
 	client, err := ssh.Dial("tcp", host, config)
 	if err != nil {

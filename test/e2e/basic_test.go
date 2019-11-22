@@ -97,7 +97,7 @@ func TestDeletePod(t *testing.T) {
 
 	doesInterfaceExist := func() bool {
 		cmd := fmt.Sprintf("ip link show %s", ifName)
-		if rc, _, _, err := RunSSHCommandOnNode(nodeName, cmd); err != nil {
+		if rc, _, _, err := RunCommandOnNode(nodeName, cmd); err != nil {
 			t.Fatalf("Error when running ip command on Node '%s': %v", nodeName, err)
 		} else {
 			return rc == 0
