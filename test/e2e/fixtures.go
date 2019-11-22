@@ -109,7 +109,7 @@ func exportLogs(t *testing.T, data *TestData) {
 	// runKubectl runs the provided kubectl command on the master Node and returns the
 	// output. It returns an empty string in case of error.
 	runKubectl := func(cmd string) string {
-		rc, stdout, _, err := RunSSHCommandOnNode(masterNodeName(), cmd)
+		rc, stdout, _, err := RunCommandOnNode(masterNodeName(), cmd)
 		if err != nil || rc != 0 {
 			t.Errorf("Error when running this kubectl command on master Node: %s", cmd)
 			return ""
@@ -153,8 +153,9 @@ func exportLogs(t *testing.T, data *TestData) {
 	// print a log message. If kubelet is not run with systemd, the log file will be empty.
 	if err := forAllNodes(func(nodeName string) error {
 		const numLines = 100
-		cmd := fmt.Sprintf("journalctl -u kubelet -n %d", numLines)
-		rc, stdout, _, err := RunSSHCommandOnNode(nodeName, cmd)
+		// --no-pager ensures the command does not hang.
+		cmd := fmt.Sprintf("journalctl -u kubelet -n %d --no-pager", numLines)
+		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)
 		if err != nil || rc != 0 {
 			// return an error and skip subsequent Nodes
 			return fmt.Errorf("error when running journalctl on Node '%s', is it available?", nodeName)

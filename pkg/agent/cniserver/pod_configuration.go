@@ -33,6 +33,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/ethtool"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -57,6 +58,24 @@ const (
 	ovsExternalIDPodNamespace = "pod-namespace"
 )
 
+type podConfigurator struct {
+	ovsBridgeClient ovsconfig.OVSBridgeClient
+	ofClient        openflow.Client
+	ifaceStore      interfacestore.InterfaceStore
+	gatewayMAC      net.HardwareAddr
+	ovsDatapathType string
+}
+
+func newPodConfigurator(
+	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	ofClient openflow.Client,
+	ifaceStore interfacestore.InterfaceStore,
+	gatewayMAC net.HardwareAddr,
+	ovsDatapathType string,
+) *podConfigurator {
+	return &podConfigurator{ovsBridgeClient, ofClient, ifaceStore, gatewayMAC, ovsDatapathType}
+}
+
 // setupInterfaces creates a veth pair: containerIface is in the container
 // network namespace and hostIface is in the host network namespace.
 func (pc *podConfigurator) setupInterfaces(
@@ -78,6 +97,13 @@ func (pc *podConfigurator) setupInterfaces(
 		containerIface.Sandbox = netns.Path()
 		hostIface.Name = hostVeth.Name
 		hostIface.Mac = hostVeth.HardwareAddr.String()
+		// OVS netdev datapath doesn't support TX checksum offloading, i.e. if packet
+		// arrives with bad/no checksum it will be sent to the output port with same bad/no checksum.
+		if pc.ovsDatapathType == ovsconfig.OVSDatapathNetdev {
+			if err := ethtool.EthtoolTXHWCsumOff(containerVeth.Name); err != nil {
+				return fmt.Errorf("error when disabling TX checksum offload on container veth: %v", err)
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, nil, err
@@ -262,21 +288,6 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 		MAC:           containerMAC,
 		PodName:       podName,
 		PodNamespace:  podNamespace}
-}
-
-type podConfigurator struct {
-	ovsBridgeClient ovsconfig.OVSBridgeClient
-	ofClient        openflow.Client
-	ifaceStore      interfacestore.InterfaceStore
-	gatewayMAC      net.HardwareAddr
-}
-
-func newPodConfigurator(
-	ovsBridgeClient ovsconfig.OVSBridgeClient,
-	ofClient openflow.Client,
-	ifaceStore interfacestore.InterfaceStore,
-	gatewayMAC net.HardwareAddr) *podConfigurator {
-	return &podConfigurator{ovsBridgeClient, ofClient, ifaceStore, gatewayMAC}
 }
 
 func (pc *podConfigurator) configureInterface(
