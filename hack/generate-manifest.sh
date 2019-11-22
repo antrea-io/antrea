@@ -131,6 +131,9 @@ if $KIND; then
     $KUSTOMIZE edit add patch tunDevice.yml
     # edit antrea Agent configuration to use the netdev datapath
     $KUSTOMIZE edit add patch ovsDatapath.yml
+    # antrea-ovs should use start_ovs_netdev instead of start_ovs to ensure that the br_phy bridge
+    # is created.
+    $KUSTOMIZE edit add patch startOvs.yml
     # change initContainer script and remove SYS_MODULE capability
     $KUSTOMIZE edit add patch installCni.yml
 fi

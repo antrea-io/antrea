@@ -481,6 +481,7 @@ func (s *CNIServer) CmdCheck(ctx context.Context, request *cnipb.CniCmdRequest) 
 func New(
 	cniSocket, hostProcPathPrefix string,
 	defaultMTU int,
+	ovsDatapathType string,
 	nodeConfig *types.NodeConfig,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
@@ -496,7 +497,7 @@ func New(
 		defaultMTU:           defaultMTU,
 		kubeClient:           kubeClient,
 		containerAccess:      newContainerAccessArbitrator(),
-		podConfigurator:      newPodConfigurator(ovsBridgeClient, ofClient, ifaceStore, nodeConfig.GatewayConfig.MAC),
+		podConfigurator:      newPodConfigurator(ovsBridgeClient, ofClient, ifaceStore, nodeConfig.GatewayConfig.MAC, ovsDatapathType),
 	}
 }
 
