@@ -99,6 +99,7 @@ func run(o *Options) error {
 		o.config.CNISocket,
 		o.config.HostProcPathPrefix,
 		o.config.DefaultMTU,
+		o.config.OVSDatapathType,
 		nodeConfig,
 		ovsBridgeClient,
 		ofClient,

@@ -1,5 +1,8 @@
 # Deploying Antrea on a Kind cluster
 
+At the moment Kind is only supported on Linux hosts. We are working on
+supporting macOS hosts as well.
+
 ## Create a Kind cluster and deploy Antrea in a few seconds
 
 ### Create a Kind cluster
@@ -31,6 +34,8 @@ These instructions assume that you have built the `antrea/antrea-ubuntu` Docker
 image locally (e.g. by running `make` from the root of the repository).
 
 ```bash
+# "fix" the host's veth interfaces (for the different Kind Nodes)
+kind get nodes | xargs ./hack/kind-linux.sh
 # load the Antrea Docker image in the Nodes
 kind load docker-image antrea/antrea-ubuntu:latest
 # deploy Antrea
@@ -39,7 +44,7 @@ kind load docker-image antrea/antrea-ubuntu:latest
 
 ### Check that everything is working
 
-After a few seconds you sould be able to observe the following when running
+After a few seconds you should be able to observe the following when running
 `kubectl get -n kube-system pods -l app=antrea`:
 ```bash
 NAME                                 READY   STATUS    RESTARTS   AGE
@@ -65,3 +70,15 @@ requires some changes to the way Antrea is deployed. Most notably:
    (`netdev`) OVS datapath type is used
  * the Antrea agent's Init Container no longer needs to load the `openvswitch`
    kernel module
+ * the `start_ovs` script used by the `antrea-ovs` container needs to be
+   replaced with the `start_ovs_netdev` script, which creates an additional
+   bridge (`br-phy`) as required for [OVS userspace
+   tunneling](http://docs.openvswitch.org/en/latest/howto/userspace-tunneling/)
+
+### Why do I need to run the `hack/kind-linux.sh` script on my host?
+
+The script is required for Antrea to work properly in a Kind cluster on
+Linux. It takes care of disabling TX hardware checksum offload for the veth
+interface (in the host's network namespace) of each Kind Node. This is required
+when using OVS in userspace mode. Refer to this [Antrea Github issue
+#14](https://github.com/vmware-tanzu/antrea/issues/14) for more information.

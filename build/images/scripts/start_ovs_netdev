@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+
+source logging
+source daemon_status
+
+CONTAINER_NAME="antrea-ovs"
+OVS_DB_FILE="/var/run/openvswitch/conf.db"
+
+set -euo pipefail
+
+hwaddr=$(ip link show eth0 | grep link/ether | awk '{print $2}')
+inet=$(ip addr show eth0 | grep "inet " | awk '{ print $2 }')
+gw=$(ip route | grep default | awk '{ print $3 }')
+
+# Modify ovs-ctl so that the kernel module is no longer loaded since it is not
+# needed when using OVS in userspace mode. It also enables running OVS with the
+# netdev datapath type on platforms which do not have the OVS kernel module.
+# This is easier than starting daemons manually...
+function fix_ovs_ctl {
+    sed -i 's/\(\w*\)\(insert_mod_if_required || return 1\)/\1# \2/' /usr/share/openvswitch/scripts/ovs-ctl
+}
+
+# See http://docs.openvswitch.org/en/latest/howto/userspace-tunneling/
+function add_br_phy {
+    log_info $CONTAINER_NAME "Creating OVS br-phy bridge for netdev datapath type"
+    ovs-vsctl --may-exist add-br br-phy \
+              -- set Bridge br-phy datapath_type=netdev \
+              -- br-set-external-id br-phy bridge-id br-phy \
+              -- set bridge br-phy fail-mode=standalone \
+              other_config:hwaddr="$hwaddr"
+
+    ovs-vsctl --timeout 10 add-port br-phy eth0
+    ip addr add "$inet" dev br-phy
+    ip link set br-phy up
+    ip addr flush dev eth0 2>/dev/null
+    ip link set eth0 up
+    ip route add default via "$gw" dev br-phy
+}
+
+function del_br_phy {
+    log_info $CONTAINER_NAME "Deleting OVS br-phy bridge"
+    ovs-vsctl del-port br-phy eth0
+    ovs-vsctl del-br br-phy
+    ip addr add "$inet" dev eth0
+    ip link set eth0 up
+    ip route add default via "$gw" dev eth0
+}
+
+function start_ovs {
+    log_info $CONTAINER_NAME "Starting OVS"
+    /usr/share/openvswitch/scripts/ovs-ctl --system-id=random start --db-file=$OVS_DB_FILE
+}
+
+function stop_ovs {
+    log_info $CONTAINER_NAME "Stopping OVS"
+    /usr/share/openvswitch/scripts/ovs-ctl stop
+}
+
+SLEEP_PID=
+
+function quit {
+    log_info $CONTAINER_NAME "Stopping OVS before quit"
+    # delete the bridge and move IP address back to eth0 to restore connectivity
+    # when OVS is stopped.
+    del_br_phy
+    stop_ovs
+    # kill background sleep process
+    if [ "$SLEEP_PID" != "" ]; then kill $SLEEP_PID > /dev/null 2>&1 || true; fi
+    exit 0
+}
+
+# Do not trap EXIT as it would then ignore the "exit 0" statement in quit and
+# exit with code 128 + SIGNAL
+trap "quit" INT TERM
+
+fix_ovs_ctl
+
+start_ovs
+add_br_phy
+
+log_info $CONTAINER_NAME "Started the loop that checks OVS status every 30 seconds"
+while true; do
+    # we run sleep in the background so that we can immediately exit when we
+    # receive SIGINT / SIGTERM
+    # see https://stackoverflow.com/questions/32041674/linux-how-to-kill-sleep
+    sleep 30 &
+    SLEEP_PID=$!
+    wait $SLEEP_PID
+
+    if ! check_ovs_status ; then
+        # OVS was stopped in the container.
+        log_warning $CONTAINER_NAME "OVS was stopped. Starting it again"
+
+        start_ovs
+    fi
+done
