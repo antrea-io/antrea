@@ -7,7 +7,7 @@ how to effectively get it merged upstream.
 
 Before getting started, go through the following:
 1. Read and observe the [code of conduct](CODE_OF_CONDUCT.md).
-2. Sign the CLA.
+2. Sign the [CLA](#cla).
 3. Check out the [Architecture document](/docs/architecture.md) for the Antrea architecture and design.
 4. Set up necessary [accounts](#accounts-setup).
 5. Set up your [development environment](docs/manual-installation.md)
@@ -27,6 +27,15 @@ new issues or writing blogs/manuals etc.
 
 In order to help you get your hands "dirty", there is a list of [starter](https://github.com/vmware-tanzu/antrea/labels/Good%20first%20issue)
 issues from which you can choose.
+
+## CLA
+
+We welcome contributions from everyone but we can only accept them if you sign
+our Contributor License Agreement (CLA). If you would like to contribute and you
+have not signed it, our CLA-bot will walk you through the process when you open
+a Pull Request. For questions about the CLA process, see the
+[FAQ](https://cla.vmware.com/faq) or submit a question through the GitHub issue
+tracker.
 
 ## Developer workflow
 
