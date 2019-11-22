@@ -113,6 +113,7 @@ func nodeName(idx int) string {
 func initProvider() error {
 	providerFactory := map[string]func(string) (providers.ProviderInterface, error){
 		"vagrant": providers.NewVagrantProvider,
+		"kind":    providers.NewKindProvider,
 	}
 	if fn, ok := providerFactory[testOptions.providerName]; ok {
 		if newProvider, err := fn(testOptions.providerConfigPath); err != nil {
@@ -126,14 +127,9 @@ func initProvider() error {
 	return nil
 }
 
-// A convenience wrapper around RunSSHCommand which runs the provided command on the node with name
-// nodeName.
-func RunSSHCommandOnNode(nodeName string, cmd string) (code int, stdout string, stderr string, err error) {
-	host, config, err := provider.GetSSHConfig(nodeName)
-	if err != nil {
-		return 0, "", "", fmt.Errorf("error when retrieving SSH config for node '%s': %v", nodeName, err)
-	}
-	return RunSSHCommand(host, config, cmd)
+// RunCommandOnNode is a convenience wrapper around the Provider interface RunCommandOnNode method.
+func RunCommandOnNode(nodeName string, cmd string) (code int, stdout string, stderr string, err error) {
+	return provider.RunCommandOnNode(nodeName, cmd)
 }
 
 func collectClusterInfo() error {
@@ -180,9 +176,9 @@ func collectClusterInfo() error {
 	// retrieve cluster CIDR
 	if err := func() error {
 		cmd := "kubectl cluster-info dump | grep cluster-cidr"
-		rc, stdout, _, err := RunSSHCommandOnNode(clusterInfo.masterNodeName, cmd)
+		rc, stdout, _, err := RunCommandOnNode(clusterInfo.masterNodeName, cmd)
 		if err != nil || rc != 0 {
-			return fmt.Errorf("error when running the following command on master Node: %s", cmd)
+			return fmt.Errorf("error when running the following command on master Node: %s", stdout)
 		}
 		re := regexp.MustCompile(`cluster-cidr=([^"]+)`)
 		if matches := re.FindStringSubmatch(stdout); len(matches) == 0 {
@@ -249,16 +245,11 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 	return err
 }
 
-// deployAntrea deploys the Antrea DaemonSet using kubectl through an SSH session to the master node.
+// deployAntrea deploys the Antrea DaemonSet using kubectl on the master node.
 func (data *TestData) deployAntrea() error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
-	host, config, err := provider.GetSSHConfig(masterNodeName())
-	if err != nil {
-		return fmt.Errorf("error when retrieving SSH config for master: %v", err)
-	}
-	cmd := fmt.Sprintf("kubectl apply -f ~/antrea.yml")
-	rc, _, _, err := RunSSHCommand(host, config, cmd)
+	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), "kubectl apply -f antrea.yml")
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deploying Antrea; is antrea.yml available on the master Node?")
 	}

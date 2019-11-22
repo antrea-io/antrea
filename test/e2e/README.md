@@ -98,6 +98,18 @@ By default the description and logs for Antrea Pods are only written to disk if 
 test fails. You can choose to dump this information unconditionally with
 `--logs-export-on-success`.
 
+## Running the e2e tests on a Kind cluster
+
+Refer to this [document](/docs/antrea.md) for instructions on how to create a
+Kind cluster and use Antrea as the CNI. You need at least one control-plane
+(master) Node and one worker Node. Before running the Go e2e tests, you will
+also need to copy the Antrea manifest to the master Docker container:
+
+```bash
+./hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
+go test -v github.com/vmware-tanzu/antrea/test/e2e -provider=kind
+```
+
 ## Tests to be added
 
  * Network policy tests
