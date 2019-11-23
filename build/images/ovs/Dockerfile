@@ -10,10 +10,12 @@ RUN apt-get update && \
 
 # Download OVS source code and build debs
 RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-$OVS_VERSION.tar.gz  | tar xz -C /tmp && \
+    rm -rf openvswitch-$OVS_VERSION.tar.gz && \
     cd /tmp/openvswitch* && DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary && \
     cd /tmp && mkdir ovs-debs && \
     mv libopenvswitch_*.deb openvswitch-common_*.deb openvswitch-switch_*.deb python-openvswitch_*.deb \
-       openvswitch-ipsec_*.deb ovs-debs/
+       openvswitch-ipsec_*.deb ovs-debs/ && \
+    cd / && rm -rf /tmp/openvswitch*
 
 
 FROM ubuntu:18.04

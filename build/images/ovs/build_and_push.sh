@@ -32,7 +32,27 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 pushd $THIS_DIR > /dev/null
 
-docker build -t antrea/openvswitch:$OVS_VERSION --build-arg OVS_VERSION=$OVS_VERSION .
+# This is a bit complicated but we make sure that we only build OVS if
+# necessary, and at the moment --cache-from does not play nicely with multistage
+# builds: we need to push the intermediate image to the registry. Note that the
+# --cache-from option will have no effect if the image doesn't exist
+# locally.
+# See https://github.com/moby/moby/issues/34715.
+
+docker pull ubuntu:18.04
+
+docker build --target ovs-debs \
+       --cache-from antrea/openvswitch-debs:$OVS_VERSION \
+       -t antrea/openvswitch-debs:$OVS_VERSION \
+       --build-arg OVS_VERSION=$OVS_VERSION .
+
+docker build \
+       --cache-from antrea/openvswitch-debs:$OVS_VERSION \
+       --cache-from antrea/openvswitch:$OVS_VERSION \
+       -t antrea/openvswitch:$OVS_VERSION \
+       --build-arg OVS_VERSION=$OVS_VERSION .
+
+docker push antrea/openvswitch-debs:$OVS_VERSION
 docker push antrea/openvswitch:$OVS_VERSION
 
 popd > /dev/null
