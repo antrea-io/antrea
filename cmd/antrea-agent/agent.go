@@ -79,8 +79,8 @@ func run(o *Options) error {
 		o.config.OVSBridge,
 		o.config.ServiceCIDR,
 		o.config.HostGateway,
-		o.config.TunnelType,
 		o.config.DefaultMTU,
+		ovsconfig.TunnelType(o.config.TunnelType),
 		o.config.EnableIPSecTunnel)
 	err = agentInitializer.Initialize()
 	if err != nil {

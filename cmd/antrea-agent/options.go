@@ -31,7 +31,7 @@ const (
 	defaultHostGateway        = "gw0"
 	defaultHostProcPathPrefix = "/host"
 	defaultServiceCIDR        = "10.96.0.0/12"
-	defaultMTUVxlan           = 1450
+	defaultMTUVXLAN           = 1450
 	defaultMTUGeneve          = 1450
 )
 
@@ -76,7 +76,7 @@ func (o *Options) validate(args []string) error {
 	if err != nil {
 		return fmt.Errorf("service CIDR %s is invalid", o.config.ServiceCIDR)
 	}
-	if o.config.TunnelType != ovsconfig.VXLAN_TUNNEL && o.config.TunnelType != ovsconfig.GENEVE_TUNNEL {
+	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel {
 		return fmt.Errorf("tunnel type %s is invalid", o.config.TunnelType)
 	}
 	if o.config.OVSDatapathType != ovsconfig.OVSDatapathSystem && o.config.OVSDatapathType != ovsconfig.OVSDatapathNetdev {
@@ -113,7 +113,7 @@ func (o *Options) setDefaults() {
 		o.config.HostGateway = defaultHostGateway
 	}
 	if o.config.TunnelType == "" {
-		o.config.TunnelType = ovsconfig.VXLAN_TUNNEL
+		o.config.TunnelType = ovsconfig.VXLANTunnel
 	}
 	if o.config.HostProcPathPrefix == "" {
 		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
@@ -122,9 +122,9 @@ func (o *Options) setDefaults() {
 		o.config.ServiceCIDR = defaultServiceCIDR
 	}
 	if o.config.DefaultMTU == 0 {
-		if o.config.TunnelType == ovsconfig.VXLAN_TUNNEL {
-			o.config.DefaultMTU = defaultMTUVxlan
-		} else if o.config.TunnelType == ovsconfig.GENEVE_TUNNEL {
+		if o.config.TunnelType == ovsconfig.VXLANTunnel {
+			o.config.DefaultMTU = defaultMTUVXLAN
+		} else if o.config.TunnelType == ovsconfig.GeneveTunnel {
 			o.config.DefaultMTU = defaultMTUGeneve
 		}
 	}

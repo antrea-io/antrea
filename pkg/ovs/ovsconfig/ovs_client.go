@@ -16,6 +16,7 @@ package ovsconfig
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/dbtransaction"
@@ -34,9 +35,10 @@ type OVSBridge struct {
 type OVSPortData struct {
 	UUID        string
 	Name        string
-	ExternalIDs map[string]string
 	IFName      string
 	OFPort      int32
+	ExternalIDs map[string]string
+	Options     map[string]string
 }
 
 const (
@@ -46,6 +48,8 @@ const (
 	openflowProtoVersion10 = "OpenFlow10"
 	// Openflow protocol version 1.3.
 	openflowProtoVersion13 = "OpenFlow13"
+	// Maximum allowed value of ofPortRequest.
+	ofPortRequestMax = 65279
 )
 
 // NewOVSDBConnectionUDS connects to the OVSDB server on the UNIX domain socket
@@ -305,37 +309,71 @@ func (br *OVSBridge) DeletePort(portUUID string) Error {
 // port's external_ids.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error) {
+	if ofPortRequest < 0 || ofPortRequest > ofPortRequestMax {
+		return "", newInvalidArgumentsError(fmt.Sprint("invalid ofPortRequest value: ", ofPortRequest))
+	}
 	return br.createPort(name, name, "internal", ofPortRequest, externalIDs, nil)
 }
 
-// CreateVXLANPort creates a VXLAN tunnel port with the specified name on the
-// bridge.
+// CreateTunnelPort creates a tunnel port with the specified name and type on
+// the bridge.
+// If ofPortRequest is not zero, it will be passed to the OVS port creation.
+func (br *OVSBridge) CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32) (string, Error) {
+	return br.createTunnelPort(name, tunnelType, ofPortRequest, "", "", nil)
+}
+
+// CreateTunnelPortExt creates a tunnel port with the specified name and type
+// on the bridge.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 // If remoteIP is not empty, it will be set to the tunnel port interface
 // options; otherwise flow based tunneling will be configured.
 // psk is for the pre-shared key of IPSec ESP tunnel. If it is not empty, it
-// will be set to the tunnel port interface options.
-func (br *OVSBridge) CreateVXLANPort(name string, ofPortRequest int32, remoteIP string, psk string, externalIDs map[string]interface{}) (string, Error) {
-	return br.createTunnelPort(name, "vxlan", ofPortRequest, remoteIP, psk, externalIDs)
-}
-
-// CreateGenevePort creates a Geneve tunnel port with the specified name on the
-// bridge.
-// If ofPortRequest is not zero, it will be passed to the OVS port creation.
-// If remoteIP is not empty, it will be set to the tunnel port interface
-// options; otherwise flow based tunneling will be configured.
-func (br *OVSBridge) CreateGenevePort(name string, ofPortRequest int32, remoteIP string, psk string, externalIDs map[string]interface{}) (string, Error) {
-	return br.createTunnelPort(name, "geneve", ofPortRequest, remoteIP, psk, externalIDs)
-}
-
-func (br *OVSBridge) createTunnelPort(name, ifType string, ofPortRequest int32, remoteIP string) (string, Error) {
-	var options map[string]interface{}
-	if remoteIP != "" {
-		options = map[string]interface{}{"remote_ip": remoteIP}
-	} else {
-		options = map[string]interface{}{"key": "flow", "remote_ip": "flow"}
+// will be set to the tunnel port interface options. Flow based IPSec tunnel is
+// not supported, so remoteIP must be provided too when psk is not empty.
+// If externalIDs is not nill, the IDs in it will be added to the port's
+// external_ids.
+func (br *OVSBridge) CreateTunnelPortExt(
+	name string,
+	tunnelType TunnelType,
+	ofPortRequest int32,
+	remoteIP string,
+	psk string,
+	externalIDs map[string]interface{}) (string, Error) {
+	if psk != "" && remoteIP != "" {
+		return "", newInvalidArgumentsError("IPSec tunnel can not be flow based. remoteIP must not be set")
 	}
-	return br.createPort(name, name, ifType, ofPortRequest, nil, options)
+	return br.createTunnelPort(name, tunnelType, ofPortRequest, remoteIP, psk, externalIDs)
+}
+
+func (br *OVSBridge) createTunnelPort(
+	name string,
+	tunnelType TunnelType,
+	ofPortRequest int32,
+	remoteIP string,
+	psk string,
+	externalIDs map[string]interface{}) (string, Error) {
+
+	if tunnelType != VXLANTunnel && tunnelType != GeneveTunnel {
+		return "", newInvalidArgumentsError("unsupported tunnel type: " + string(tunnelType))
+	}
+	if ofPortRequest < 0 || ofPortRequest > ofPortRequestMax {
+		return "", newInvalidArgumentsError(fmt.Sprint("invalid ofPortRequest value: ", ofPortRequest))
+	}
+
+	options := make(map[string]interface{}, 2)
+	if remoteIP != "" {
+		options["remote_ip"] = remoteIP
+	} else {
+		// Flow based tunnel.
+		options["key"] = "flow"
+		options["remote_ip"] = "flow"
+	}
+
+	if psk != "" {
+		options["psk"] = psk
+	}
+
+	return br.createPort(name, name, string(tunnelType), ofPortRequest, externalIDs, options)
 }
 
 // CreatePort creates a port with the specified name on the bridge, and connects
@@ -453,6 +491,7 @@ func buildMapFromOVSDBMap(data []interface{}) map[string]string {
 func buildPortDataCommon(port, intf map[string]interface{}, portData *OVSPortData) {
 	portData.Name = port["name"].(string)
 	portData.ExternalIDs = buildMapFromOVSDBMap(port["external_ids"].([]interface{}))
+	portData.Options = buildMapFromOVSDBMap(intf["options"].([]interface{}))
 	if ofPort, ok := intf["ofport"].(float64); ok {
 		portData.OFPort = int32(ofPort)
 	} else { // ofport not assigned by OVS yet
@@ -473,7 +512,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) 
 	})
 	tx.Select(dbtransaction.Select{
 		Table:   "Interface",
-		Columns: []string{"_uuid", "ofport"},
+		Columns: []string{"_uuid", "ofport", "options"},
 		Where:   [][]interface{}{{"name", "==", ifName}},
 	})
 
@@ -528,7 +567,7 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	})
 	tx.Select(dbtransaction.Select{
 		Table:   "Interface",
-		Columns: []string{"_uuid", "name", "ofport"},
+		Columns: []string{"_uuid", "name", "ofport", "options"},
 	})
 
 	res, err, temporary := tx.Commit()

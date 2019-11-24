@@ -48,7 +48,7 @@ const (
 type Initializer struct {
 	ovsBridge         string
 	hostGateway       string
-	tunnelType        string
+	tunnelType        ovsconfig.TunnelType
 	mtu               int
 	enableIPSecTunnel bool
 	client            clientset.Interface
@@ -75,8 +75,9 @@ func NewInitializer(
 	ofClient openflow.Client,
 	k8sClient clientset.Interface,
 	ifaceStore interfacestore.InterfaceStore,
-	ovsBridge, serviceCIDR, hostGateway, tunnelType string,
+	ovsBridge, serviceCIDR, hostGateway string,
 	mtu int,
+	tunnelType ovsconfig.TunnelType,
 	enableIPSecTunnel bool) *Initializer {
 	// Parse service CIDR configuration. serviceCIDR is checked in option.validate, so
 	// it should be a valid configuration here.
@@ -343,16 +344,7 @@ func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
 		klog.V(2).Infof("Tunnel port %s already exists on OVS", tunnelPortName)
 		return nil
 	}
-	var err error
-	var tunnelPortUUID string
-	switch i.tunnelType {
-	case ovsconfig.GeneveTunnel:
-		tunnelPortUUID, err = i.ovsBridgeClient.CreateGenevePort(tunnelPortName, tunOFPort, "")
-	case ovsconfig.VXLANTunnel:
-		tunnelPortUUID, err = i.ovsBridgeClient.CreateVXLANPort(tunnelPortName, tunOFPort, "")
-	default:
-		err = fmt.Errorf("unsupported tunnel type %s", i.tunnelType)
-	}
+	tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPort(tunnelPortName, i.tunnelType, tunOFPort)
 	if err != nil {
 		klog.Errorf("Failed to add tunnel port %s type %s on OVS: %v", tunnelPortName, i.tunnelType, err)
 		return err
