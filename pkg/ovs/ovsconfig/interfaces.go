@@ -14,9 +14,11 @@
 
 package ovsconfig
 
+type TunnelType string
+
 const (
-	GENEVE_TUNNEL = "geneve"
-	VXLAN_TUNNEL  = "vxlan"
+	GeneveTunnel = "geneve"
+	VXLANTunnel  = "vxlan"
 
 	OVSDatapathSystem = "system"
 	OVSDatapathNetdev = "netdev"
@@ -30,9 +32,8 @@ type OVSBridgeClient interface {
 	GetExternalIDs() (map[string]string, Error)
 	SetExternalIDs(externalIDs map[string]interface{}) Error
 	CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error)
-	CreateGenevePort(name string, ofPortRequest int32, remoteIP string) (string, Error)
 	CreateInternalPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error)
-	CreateVXLANPort(name string, ofPortRequest int32, remoteIP string) (string, Error)
+	CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32, remoteIP string, psk string, externalIDs map[string]interface{}) (string, Error)
 	DeletePort(portUUID string) Error
 	DeletePorts(portUUIDList []string) Error
 	GetOFPort(ifName string) (int32, Error)
