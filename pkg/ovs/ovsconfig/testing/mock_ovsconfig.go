@@ -62,21 +62,6 @@ func (mr *MockOVSBridgeClientMockRecorder) Create() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockOVSBridgeClient)(nil).Create))
 }
 
-// CreateGenevePort mocks base method
-func (m *MockOVSBridgeClient) CreateGenevePort(arg0 string, arg1 int32, arg2 string) (string, ovsconfig.Error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateGenevePort", arg0, arg1, arg2)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(ovsconfig.Error)
-	return ret0, ret1
-}
-
-// CreateGenevePort indicates an expected call of CreateGenevePort
-func (mr *MockOVSBridgeClientMockRecorder) CreateGenevePort(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGenevePort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateGenevePort), arg0, arg1, arg2)
-}
-
 // CreateInternalPort mocks base method
 func (m *MockOVSBridgeClient) CreateInternalPort(arg0 string, arg1 int32, arg2 map[string]interface{}) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
@@ -107,19 +92,34 @@ func (mr *MockOVSBridgeClientMockRecorder) CreatePort(arg0, arg1, arg2 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreatePort), arg0, arg1, arg2)
 }
 
-// CreateVXLANPort mocks base method
-func (m *MockOVSBridgeClient) CreateVXLANPort(arg0 string, arg1 int32, arg2 string) (string, ovsconfig.Error) {
+// CreateTunnelPort mocks base method
+func (m *MockOVSBridgeClient) CreateTunnelPort(arg0 string, arg1 ovsconfig.TunnelType, arg2 int32) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateVXLANPort", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateTunnelPort", arg0, arg1, arg2)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
-// CreateVXLANPort indicates an expected call of CreateVXLANPort
-func (mr *MockOVSBridgeClientMockRecorder) CreateVXLANPort(arg0, arg1, arg2 interface{}) *gomock.Call {
+// CreateTunnelPort indicates an expected call of CreateTunnelPort
+func (mr *MockOVSBridgeClientMockRecorder) CreateTunnelPort(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVXLANPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateVXLANPort), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTunnelPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateTunnelPort), arg0, arg1, arg2)
+}
+
+// CreateTunnelPortExt mocks base method
+func (m *MockOVSBridgeClient) CreateTunnelPortExt(arg0 string, arg1 ovsconfig.TunnelType, arg2 int32, arg3, arg4 string, arg5 map[string]interface{}) (string, ovsconfig.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTunnelPortExt", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(ovsconfig.Error)
+	return ret0, ret1
+}
+
+// CreateTunnelPortExt indicates an expected call of CreateTunnelPortExt
+func (mr *MockOVSBridgeClientMockRecorder) CreateTunnelPortExt(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTunnelPortExt", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateTunnelPortExt), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // Delete mocks base method

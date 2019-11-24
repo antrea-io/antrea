@@ -40,3 +40,21 @@ func (e *TransactionError) Temporary() bool {
 func (e *TransactionError) Timeout() bool {
 	return strings.HasPrefix(e.Error(), "timed out:")
 }
+
+type InvalidArgumentsError string
+
+func newInvalidArgumentsError(err string) InvalidArgumentsError {
+	return InvalidArgumentsError(err)
+}
+
+func (e InvalidArgumentsError) Error() string {
+	return string(e)
+}
+
+func (e InvalidArgumentsError) Temporary() bool {
+	return false
+}
+
+func (e InvalidArgumentsError) Timeout() bool {
+	return false
+}
