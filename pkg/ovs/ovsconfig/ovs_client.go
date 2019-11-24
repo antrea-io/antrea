@@ -313,8 +313,10 @@ func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, extern
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 // If remoteIP is not empty, it will be set to the tunnel port interface
 // options; otherwise flow based tunneling will be configured.
-func (br *OVSBridge) CreateVXLANPort(name string, ofPortRequest int32, remoteIP string) (string, Error) {
-	return br.createTunnelPort(name, "vxlan", ofPortRequest, remoteIP)
+// psk is for the pre-shared key of IPSec ESP tunnel. If it is not empty, it
+// will be set to the tunnel port interface options.
+func (br *OVSBridge) CreateVXLANPort(name string, ofPortRequest int32, remoteIP string, psk string, externalIDs map[string]interface{}) (string, Error) {
+	return br.createTunnelPort(name, "vxlan", ofPortRequest, remoteIP, psk, externalIDs)
 }
 
 // CreateGenevePort creates a Geneve tunnel port with the specified name on the
@@ -322,8 +324,8 @@ func (br *OVSBridge) CreateVXLANPort(name string, ofPortRequest int32, remoteIP 
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 // If remoteIP is not empty, it will be set to the tunnel port interface
 // options; otherwise flow based tunneling will be configured.
-func (br *OVSBridge) CreateGenevePort(name string, ofPortRequest int32, remoteIP string) (string, Error) {
-	return br.createTunnelPort(name, "geneve", ofPortRequest, remoteIP)
+func (br *OVSBridge) CreateGenevePort(name string, ofPortRequest int32, remoteIP string, psk string, externalIDs map[string]interface{}) (string, Error) {
+	return br.createTunnelPort(name, "geneve", ofPortRequest, remoteIP, psk, externalIDs)
 }
 
 func (br *OVSBridge) createTunnelPort(name, ifType string, ofPortRequest int32, remoteIP string) (string, Error) {
