@@ -173,10 +173,10 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 		uuid, err = br.CreateInternalPort(name, ofPortRequest, externalIDs)
 	case "vxlan":
 		externalIDs = map[string]interface{}{}
-		uuid, err = br.CreateVXLANPort(name, ofPortRequest, "")
+		uuid, err = br.CreateTunnelPort(name, ovsconfig.VXLANTunnel, ofPortRequest)
 	case "geneve":
 		externalIDs = map[string]interface{}{}
-		uuid, err = br.CreateGenevePort(name, ofPortRequest, "")
+		uuid, err = br.CreateTunnelPort(name, ovsconfig.GeneveTunnel, ofPortRequest)
 	}
 
 	require.Nilf(t, err, "Failed to create %s port: %s", ifType, err)
