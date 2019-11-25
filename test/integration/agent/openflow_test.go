@@ -327,7 +327,7 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 	for _, tableStatus := range tableStatus {
 		if tableStatus.ID == uint(ruleTable) {
 			assert.Equal(t, tableStatus.FlowCount, uint(len(flowList)),
-				fmt.Sprintf("Cached table status in %d is incorect, expect: %d, actual %d", tableStatus.ID, tableStatus.FlowCount, len(flowList)))
+				fmt.Sprintf("Cached table status in %d is incorrect, expect: %d, actual %d", tableStatus.ID, tableStatus.FlowCount, len(flowList)))
 		}
 	}
 }
@@ -353,7 +353,7 @@ func checkDeleteAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint
 	for _, tableStatus := range tableStatus {
 		if tableStatus.ID == uint(ruleTable) {
 			assert.Equal(t, tableStatus.FlowCount, uint(len(flowList)),
-				fmt.Sprintf("Cached table status in %d is incorect, expect: %d, actual %d", tableStatus.ID, tableStatus.FlowCount, len(flowList)))
+				fmt.Sprintf("Cached table status in %d is incorrect, expect: %d, actual %d", tableStatus.ID, tableStatus.FlowCount, len(flowList)))
 		}
 	}
 }
@@ -406,7 +406,7 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 	for _, tableStatus := range tablesStatus {
 		if tableStatus.ID == uint(ruleTable) {
 			assert.Equal(t, tableStatus.FlowCount, uint(len(flowList)),
-				fmt.Sprintf("Cached table status in %d is incorect, expect: %d, actual %d", tableStatus.ID, tableStatus.FlowCount, len(flowList)))
+				fmt.Sprintf("Cached table status in %d is incorrect, expect: %d, actual %d", tableStatus.ID, tableStatus.FlowCount, len(flowList)))
 		}
 	}
 }

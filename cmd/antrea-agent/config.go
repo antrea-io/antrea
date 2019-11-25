@@ -45,7 +45,7 @@ type AgentConfig struct {
 	// - geneve
 	TunnelType string `yaml:"tunnelType,omitempty"`
 	// Default MTU to use for the host gateway interface and the network interface of each
-	// Pod. If omitted, antrea-agent will default this value to 1450 to accomodate for tunnel
+	// Pod. If omitted, antrea-agent will default this value to 1450 to accommodate for tunnel
 	// encapsulate overhead.
 	DefaultMTU int `yaml:"defaultMTU,omitempty"`
 	// Mount location of the /proc directory. The default is "/host", which is appropriate when

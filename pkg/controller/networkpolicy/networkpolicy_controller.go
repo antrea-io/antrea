@@ -580,7 +580,7 @@ func (n *NetworkPolicyController) updateNetworkPolicy(old, cur interface{}) {
 	// Lock access to internal NetworkPolicy store such that concurrent access
 	// to an internal NetworkPolicy is not allowed. This will avoid the
 	// case in which an Update to an internal NetworkPolicy object may
-	// cause the SpanMeta member to be overriden with stale SpanMeta members
+	// cause the SpanMeta member to be overridden with stale SpanMeta members
 	// from an older internal NetworkPolicy.
 	n.internalNetworkPolicyMutex.Lock()
 	oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
