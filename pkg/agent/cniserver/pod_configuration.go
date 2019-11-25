@@ -87,8 +87,7 @@ func configureContainerAddr(netns ns.NetNS, containerInterface *current.Interfac
 			return err
 		}
 		// Send gratuitous ARP to network in case of stale mappings for this IP address
-		// (e.g. if a previous - deleted - Pod was using the same IP). The GARP is sent to
-		// every Pod in the sunet (all local to this Node).
+		// (e.g. if a previous - deleted - Pod was using the same IP).
 		for _, ipc := range result.IPs {
 			if ipc.Version == "4" {
 				// Ignore error
@@ -233,7 +232,6 @@ func configureInterface(
 
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 
-	// build container configuration
 	containerConfig := buildContainerConfig(containerID, podName, podNameSpace, containerIface, result.IPs)
 
 	// create OVS Port and add attach container configuration into external_ids
@@ -251,26 +249,33 @@ func configureInterface(
 		}
 	}()
 
-	// Configure IP for container
-	klog.V(2).Infof("Configuring IP address for container %s", containerID)
-	if err = configureContainerAddr(netns, containerIface, result); err != nil {
-		klog.Errorf("Failed to configure IP address on container %s:%v", containerID, err)
-		return fmt.Errorf("failed to configure container ip")
-	}
-
 	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
 	ofPort, err := ovsBridge.GetOFPort(ovsPortName)
 	if err != nil {
 		klog.Errorf("Failed to get of_port of OVS interface %s: %v", ovsPortName, err)
 		return err
 	}
-	// Setup openflow entries for OVS interface
-	klog.V(2).Infof("Setting up openflow entries for container %s", containerID)
+	klog.V(2).Infof("Setting up Openflow entries for container %s", containerID)
 	err = ofClient.InstallPodFlows(ovsPortName, containerConfig.IP, containerConfig.MAC, gateway.MAC, uint32(ofPort))
 	if err != nil {
-		klog.Errorf("Failed to add openflow entries for container %s: %v", containerID, err)
+		klog.Errorf("Failed to add Openflow entries for container %s: %v", containerID, err)
 		return err
 	}
+	defer func() {
+		if !success {
+			ofClient.UninstallPodFlows(ovsPortName)
+		}
+	}()
+
+	// Note that configuring IP will send gratuitous ARP, it must be executed
+	// after Pod Openflow entries are installed, otherwise gratuitous ARP would
+	// be dropped.
+	klog.V(2).Infof("Configuring IP address for container %s", containerID)
+	if err = configureContainerAddr(netns, containerIface, result); err != nil {
+		klog.Errorf("Failed to configure IP address for container %s: %v", containerID, err)
+		return fmt.Errorf("failed to configure container ip")
+	}
+
 	containerConfig.OVSPortConfig = &agent.OVSPortConfig{PortUUID: portUUID, IfaceName: ovsPortName, OFPort: ofPort}
 	// Add containerConfig into local cache
 	ifaceStore.AddInterface(ovsPortName, containerConfig)
