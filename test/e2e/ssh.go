@@ -49,6 +49,6 @@ func RunSSHCommand(host string, config *ssh.ClientConfig, cmd string) (code int,
 			return 0, "", "", fmt.Errorf("unknown error when executing SSH command: %v", err)
 		}
 	}
-	// command is succesful
+	// command is successful
 	return 0, stdoutB.String(), stderrB.String(), nil
 }
