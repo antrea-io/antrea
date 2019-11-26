@@ -44,7 +44,7 @@ $(DOCKER_CACHE):
 	@mkdir -p $@/gocache
 
 # Since the WORKDIR is mounted from host, the $(id -u):$(id -g) user could operate it.
-# The $(id -u):$(id -g) user is nameless and does not have home directory.
+# Inside the docker, the user is nameless and does not have a home directory. This is ok for our use case.
 DOCKER_ENV := \
 	@docker run --rm -u $$(id -u):$$(id -g) \
 		-e "GOCACHE=/tmp/gocache" \
