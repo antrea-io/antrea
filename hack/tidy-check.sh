@@ -19,7 +19,7 @@ set +e
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 PROJECT_DIR=$(dirname "$THIS_DIR")
 
-pushd "$THIS_DIR" >/dev/null || exit 1
+pushd "$THIS_DIR" >/dev/null || exit
 
 MOD_FILE="$PROJECT_DIR/go.mod"
 SUM_FILE="$PROJECT_DIR/go.sum"
