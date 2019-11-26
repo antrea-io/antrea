@@ -103,7 +103,7 @@ func TestConnectivityFlows(t *testing.T) {
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
-	if err := c.Initialize(); err != nil {
+	if err := c.Initialize(0); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows() {
@@ -184,7 +184,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
-	err = c.Initialize()
+	err = c.Initialize(0)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
