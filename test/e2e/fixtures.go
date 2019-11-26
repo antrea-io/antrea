@@ -22,23 +22,23 @@ import (
 	"time"
 )
 
-func setupTest(t *testing.T) (*TestData, error) {
+func setupTest(tb testing.TB) (*TestData, error) {
 	data := &TestData{}
-	t.Logf("Creating K8s clientset")
+	tb.Logf("Creating K8s clientset")
 	// TODO: it is probably not needed to re-create the clientset in each test, maybe we could
 	// just keep it in clusterInfo?
 	if err := data.createClient(); err != nil {
 		return nil, err
 	}
-	t.Logf("Creating '%s' K8s Namespace", testNamespace)
+	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
 	if err := data.createTestNamespace(); err != nil {
 		return nil, err
 	}
-	t.Logf("Applying Antrea YAML")
+	tb.Logf("Applying Antrea YAML")
 	if err := data.deployAntrea(); err != nil {
 		return nil, err
 	}
-	t.Logf("Waiting for all Antrea DaemonSet Pods")
+	tb.Logf("Waiting for all Antrea DaemonSet Pods")
 	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
 		return nil, err
 	}
@@ -58,23 +58,23 @@ func logsDirForTest(testName string) string {
 	return logsDir
 }
 
-func exportLogs(t *testing.T, data *TestData) {
-	if t.Skipped() {
+func exportLogs(tb testing.TB, data *TestData) {
+	if tb.Skipped() {
 		return
 	}
 	// if test was successful and --logs-export-on-success was not provided, we do not export
 	// any logs.
-	if !t.Failed() && !testOptions.logsExportOnSuccess {
+	if !tb.Failed() && !testOptions.logsExportOnSuccess {
 		return
 	}
-	logsDir := logsDirForTest(t.Name())
-	t.Logf("Exporting test logs to '%s'", logsDir)
+	logsDir := logsDirForTest(tb.Name())
+	tb.Logf("Exporting test logs to '%s'", logsDir)
 	// remove directory if it already exists. This ensures that we start with an empty
 	// directory. Given that we append a timestamp at the end of the path it is very unlikely to
 	// happen.
 	_ = os.RemoveAll(logsDir)
 	if err := os.Mkdir(logsDir, 0700); err != nil {
-		t.Errorf("Error when creating logs directory '%s': %v", logsDir, err)
+		tb.Errorf("Error when creating logs directory '%s': %v", logsDir, err)
 		return
 	}
 
@@ -88,7 +88,7 @@ func exportLogs(t *testing.T, data *TestData) {
 		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s-%s", nodeName, podName, suffix))
 		f, err := os.Create(logFile)
 		if err != nil {
-			t.Errorf("Error when creating log file '%s': '%v'", logFile, err)
+			tb.Errorf("Error when creating log file '%s': '%v'", logFile, err)
 			return nil
 		}
 		return f
@@ -100,7 +100,7 @@ func exportLogs(t *testing.T, data *TestData) {
 		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s", nodeName, suffix))
 		f, err := os.Create(logFile)
 		if err != nil {
-			t.Errorf("Error when creating log file '%s': '%v'", logFile, err)
+			tb.Errorf("Error when creating log file '%s': '%v'", logFile, err)
 			return nil
 		}
 		return f
@@ -111,7 +111,7 @@ func exportLogs(t *testing.T, data *TestData) {
 	runKubectl := func(cmd string) string {
 		rc, stdout, _, err := RunCommandOnNode(masterNodeName(), cmd)
 		if err != nil || rc != 0 {
-			t.Errorf("Error when running this kubectl command on master Node: %s", cmd)
+			tb.Errorf("Error when running this kubectl command on master Node: %s", cmd)
 			return ""
 		}
 		return stdout
@@ -169,21 +169,21 @@ func exportLogs(t *testing.T, data *TestData) {
 		w.WriteString(stdout)
 		return nil
 	}); err != nil {
-		t.Logf("Error when exporting kubelet logs: %v", err)
+		tb.Logf("Error when exporting kubelet logs: %v", err)
 	}
 }
 
-func teardownTest(t *testing.T, data *TestData) {
-	exportLogs(t, data)
-	t.Logf("Deleting '%s' K8s Namespace", testNamespace)
+func teardownTest(tb testing.TB, data *TestData) {
+	exportLogs(tb, data)
+	tb.Logf("Deleting '%s' K8s Namespace", testNamespace)
 	if err := data.deleteTestNamespace(defaultTimeout); err != nil {
-		t.Logf("Error when tearing down test: %v", err)
+		tb.Logf("Error when tearing down test: %v", err)
 	}
 }
 
-func deletePodWrapper(t *testing.T, data *TestData, name string) {
-	t.Logf("Deleting Pod '%s'", name)
+func deletePodWrapper(tb testing.TB, data *TestData, name string) {
+	tb.Logf("Deleting Pod '%s'", name)
 	if err := data.deletePod(name); err != nil {
-		t.Logf("Error when deleting Pod: %v", err)
+		tb.Logf("Error when deleting Pod: %v", err)
 	}
 }

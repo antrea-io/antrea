@@ -35,10 +35,12 @@ require (
 	github.com/stretchr/testify v1.3.0
 	github.com/vishvananda/netlink v1.0.0
 	github.com/vmware/octant v0.8.0
-	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
-	golang.org/x/net v0.0.0-20190628185345-da137c7871d7 // indirect
+	golang.org/x/crypto v0.0.0-20191128160524-b544559bb6d1
+	golang.org/x/exp v0.0.0-20190121172915-509febef88a4
+	golang.org/x/net v0.0.0-20191126235420-ef20fe5d7933 // indirect
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
-	golang.org/x/sys v0.0.0-20190710143415-6ec70d6a5542
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
+	golang.org/x/sys v0.0.0-20191128015809-6d18c012aee9
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
 	google.golang.org/grpc v1.22.0
 	gopkg.in/yaml.v2 v2.2.2
