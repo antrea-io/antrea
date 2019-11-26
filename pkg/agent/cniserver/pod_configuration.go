@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/containernetworking/cni/pkg/types"
+	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -30,7 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -43,24 +43,32 @@ type vethPair struct {
 }
 
 type k8sArgs struct {
-	types.CommonArgs
-	K8S_POD_NAME               types.UnmarshallableString
-	K8S_POD_NAMESPACE          types.UnmarshallableString
-	K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString
+	cnitypes.CommonArgs
+	K8S_POD_NAME               cnitypes.UnmarshallableString
+	K8S_POD_NAMESPACE          cnitypes.UnmarshallableString
+	K8S_POD_INFRA_CONTAINER_ID cnitypes.UnmarshallableString
 }
+
+const (
+	ovsExternalIDMAC          = "attached-mac"
+	ovsExternalIDIP           = "ip-address"
+	ovsExternalIDContainerID  = "container-id"
+	ovsExternalIDPodName      = "pod-name"
+	ovsExternalIDPodNamespace = "pod-namespace"
+)
 
 // setupInterfaces creates a veth pair: containerIface is in the container
 // network namespace and hostIface is in the host network namespace.
 func (pc *podConfigurator) setupInterfaces(
 	podName, podNamespace, ifname string,
 	netns ns.NetNS,
-	MTU int) (hostIface *current.Interface, containerIface *current.Interface, err error) {
+	mtu int) (hostIface *current.Interface, containerIface *current.Interface, err error) {
 	hostVethName := util.GenerateContainerInterfaceName(podName, podNamespace)
 	hostIface = &current.Interface{}
 	containerIface = &current.Interface{}
 
 	if err := netns.Do(func(hostNS ns.NetNS) error {
-		hostVeth, containerVeth, err := ip.SetupVethWithName(ifname, hostVethName, MTU, hostNS)
+		hostVeth, containerVeth, err := ip.SetupVethWithName(ifname, hostVethName, mtu, hostNS)
 		if err != nil {
 			return err
 		}
@@ -195,14 +203,14 @@ func parseContainerIP(ips []*current.IPConfig) (net.IP, error) {
 func buildContainerConfig(
 	containerID, podName, podNamespace string,
 	containerIface *current.Interface,
-	ips []*current.IPConfig) *agent.InterfaceConfig {
+	ips []*current.IPConfig) *interfacestore.InterfaceConfig {
 	containerIP, err := parseContainerIP(ips)
 	if err != nil {
 		klog.Errorf("Failed to find container %s IP", containerID)
 	}
 	// containerIface.Mac should be a valid MAC string, otherwise it should throw error before
 	containerMAC, _ := net.ParseMAC(containerIface.Mac)
-	return agent.NewContainerInterface(
+	return interfacestore.NewContainerInterface(
 		containerID,
 		podName,
 		podNamespace,
@@ -211,17 +219,62 @@ func buildContainerConfig(
 		containerIP)
 }
 
+// BuildOVSPortExternalIDs parses OVS port external_ids from InterfaceConfig.
+// external_ids are used to compare and sync container interface configuration.
+func BuildOVSPortExternalIDs(containerConfig *interfacestore.InterfaceConfig) map[string]interface{} {
+	externalIDs := make(map[string]interface{})
+	externalIDs[ovsExternalIDMAC] = containerConfig.MAC.String()
+	externalIDs[ovsExternalIDContainerID] = containerConfig.ID
+	externalIDs[ovsExternalIDIP] = containerConfig.IP.String()
+	externalIDs[ovsExternalIDPodName] = containerConfig.PodName
+	externalIDs[ovsExternalIDPodNamespace] = containerConfig.PodNamespace
+	return externalIDs
+}
+
+// ParseOVSPortInterfaceConfig reads the Pod properties saved in the OVS port
+// external_ids, initializes and returns an InterfaceConfig struct.
+// nill will be returned, if the OVS port does not have external IDs or it is
+// not created for a Pod interface.
+func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) *interfacestore.InterfaceConfig {
+	if portData.ExternalIDs == nil {
+		klog.V(2).Infof("OVS port %s has no external_ids", portData.Name)
+		return nil
+	}
+
+	containerID, found := portData.ExternalIDs[ovsExternalIDContainerID]
+	if !found {
+		klog.V(2).Infof("OVS port %s has no %s in external_ids", portData.Name, ovsExternalIDContainerID)
+		return nil
+	}
+	containerIP := net.ParseIP(portData.ExternalIDs[ovsExternalIDIP])
+	containerMAC, err := net.ParseMAC(portData.ExternalIDs[ovsExternalIDMAC])
+	if err != nil {
+		klog.Errorf("Failed to parse MAC address from OVS external config %s: %v",
+			portData.ExternalIDs[ovsExternalIDMAC], err)
+	}
+	podName, _ := portData.ExternalIDs[ovsExternalIDPodName]
+	podNamespace, _ := portData.ExternalIDs[ovsExternalIDPodNamespace]
+	return &interfacestore.InterfaceConfig{
+		Type:          interfacestore.ContainerInterface,
+		OVSPortConfig: portConfig,
+		ID:            containerID,
+		IP:            containerIP,
+		MAC:           containerMAC,
+		PodName:       podName,
+		PodNamespace:  podNamespace}
+}
+
 type podConfigurator struct {
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 	ofClient        openflow.Client
-	ifaceStore      agent.InterfaceStore
+	ifaceStore      interfacestore.InterfaceStore
 	gatewayMAC      net.HardwareAddr
 }
 
 func newPodConfigurator(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
-	ifaceStore agent.InterfaceStore,
+	ifaceStore interfacestore.InterfaceStore,
 	gatewayMAC net.HardwareAddr) *podConfigurator {
 	return &podConfigurator{ovsBridgeClient, ofClient, ifaceStore, gatewayMAC}
 }
@@ -232,7 +285,7 @@ func (pc *podConfigurator) configureInterface(
 	containerID string,
 	containerNetNS string,
 	ifname string,
-	MTU int,
+	mtu int,
 	result *current.Result,
 ) error {
 	netns, err := ns.GetNS(containerNetNS)
@@ -242,7 +295,7 @@ func (pc *podConfigurator) configureInterface(
 	}
 	defer netns.Close()
 	// Create veth pair and link up
-	hostIface, containerIface, err := pc.setupInterfaces(podName, podNameSpace, ifname, netns, MTU)
+	hostIface, containerIface, err := pc.setupInterfaces(podName, podNameSpace, ifname, netns, mtu)
 	if err != nil {
 		return err
 	}
@@ -307,7 +360,7 @@ func (pc *podConfigurator) configureInterface(
 		return fmt.Errorf("failed to configure container ip")
 	}
 
-	containerConfig.OVSPortConfig = &agent.OVSPortConfig{PortUUID: portUUID, IfaceName: ovsPortName, OFPort: ofPort}
+	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, IfaceName: ovsPortName, OFPort: ofPort}
 	// Add containerConfig into local cache
 	pc.ifaceStore.AddInterface(ovsPortName, containerConfig)
 	// Mark the manipulation as success to cancel defer deletion
@@ -317,9 +370,9 @@ func (pc *podConfigurator) configureInterface(
 }
 
 func (pc *podConfigurator) setupContainerOVSPort(
-	containerConfig *agent.InterfaceConfig,
+	containerConfig *interfacestore.InterfaceConfig,
 	ovsPortName string) (string, error) {
-	ovsAttchInfo := agent.BuildOVSPortExternalIDs(containerConfig)
+	ovsAttchInfo := BuildOVSPortExternalIDs(containerConfig)
 	if portUUID, err := pc.ovsBridgeClient.CreatePort(ovsPortName, ovsPortName, ovsAttchInfo); err != nil {
 		klog.Errorf("Failed to add OVS port %s, remove from local cache: %v", ovsPortName, err)
 		return "", err

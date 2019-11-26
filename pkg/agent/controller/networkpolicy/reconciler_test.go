@@ -22,7 +22,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
@@ -57,7 +57,7 @@ func TestReconcilerForget(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
-			ifaceStore := agent.NewInterfaceStore()
+			ifaceStore := interfacestore.NewInterfaceStore()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			if tt.expectedOFRuleID == 0 {
 				mockOFClient.EXPECT().UninstallPolicyRuleFlows(gomock.Any()).Times(0)
@@ -79,9 +79,9 @@ func TestReconcilerReconcile(t *testing.T) {
 	addressGroup1 := sets.NewString("1.1.1.1")
 	appliedToGroup1 := newPodSet(v1beta1.PodReference{"pod1", "ns1"})
 	appliedToGroup2 := newPodSet(v1beta1.PodReference{"pod2", "ns1"})
-	ifaceStore := agent.NewInterfaceStore()
+	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(util.GenerateContainerInterfaceName("pod1", "ns1"),
-		&agent.InterfaceConfig{IP: net.ParseIP("2.2.2.2"), OVSPortConfig: &agent.OVSPortConfig{OFPort: 1}})
+		&interfacestore.InterfaceConfig{IP: net.ParseIP("2.2.2.2"), OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 1}})
 	protocolTCP := v1beta1.ProtocolTCP
 	port80 := int32(80)
 	service1 := v1beta1.Service{Protocol: &protocolTCP, Port: &port80}
