@@ -50,7 +50,7 @@ const AntreaCNISocketAddr = "/var/run/antrea/cni.sock"
 // major version number (and therefore the proto package name) will change if and only if API
 // backwards-compatibility is broken.
 //
-// Here are some potential scenarios we need to accomodate:
+// Here are some potential scenarios we need to accommodate:
 //   * major API refactor that breaks backwards-compatibility: in this case we would increase the
 //     major version number.
 //   * support for a new CNI version:

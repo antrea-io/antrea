@@ -94,7 +94,7 @@ func (c *client) GetFlowTableStatus() []binding.TableStatus {
 }
 
 // addMissingFlows adds any flow from flows which is not currently in the flow cache. The function
-// returns immediately in case of error when adding a flow. If a flow is added succesfully, it is
+// returns immediately in case of error when adding a flow. If a flow is added successfully, it is
 // added to the flow cache. If the flow cache has not been initialized yet (i.e. there is no
 // flowCacheKey key in the cache map), we create it first.
 func (c *client) addMissingFlows(cache *flowCategoryCache, flowCacheKey string, flows []binding.Flow) error {

@@ -61,8 +61,8 @@ func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 	}
 
 	// For the sake of debugging, we keep logging messages until the
-	// connection is succesful. We use exponential backoff to determine the
-	// sleep  duration between two successive log messages (up to
+	// connection is successful. We use exponential backoff to determine the
+	// sleep duration between two successive log messages (up to
 	// maxBackoffTime).
 	const maxBackoffTime = 8 * time.Second
 	success := make(chan bool, 1)

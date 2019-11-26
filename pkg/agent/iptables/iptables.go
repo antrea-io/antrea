@@ -124,7 +124,7 @@ func (c *Client) SetupRules() error {
 func (c *Client) ensureChain(table string, chain string) error {
 	oriChains, err := c.ipt.ListChains(table)
 	if err != nil {
-		return fmt.Errorf("error listing exsiting chains in table %s: %v", table, err)
+		return fmt.Errorf("error listing existing chains in table %s: %v", table, err)
 	}
 	if contains(oriChains, chain) {
 		return nil
