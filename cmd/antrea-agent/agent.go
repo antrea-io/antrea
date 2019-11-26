@@ -26,6 +26,7 @@ import (
 	_ "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
@@ -67,7 +68,7 @@ func run(o *Options) error {
 	ofClient := openflow.NewClient(o.config.OVSBridge)
 
 	// Create an ifaceStore that caches network interfaces managed by this node.
-	ifaceStore := agent.NewInterfaceStore()
+	ifaceStore := interfacestore.NewInterfaceStore()
 
 	// Initialize agent and node network.
 	agentInitializer := agent.NewInitializer(

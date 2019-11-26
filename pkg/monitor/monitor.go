@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1"
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
@@ -41,7 +41,7 @@ type agentMonitor struct {
 	ovsBridge      string
 	nodeName       string
 	nodeSubnet     string
-	interfaceStore agent.InterfaceStore
+	interfaceStore interfacestore.InterfaceStore
 	ofClient       openflow.Client
 }
 
@@ -49,7 +49,7 @@ func NewControllerMonitor(client clientset.Interface) *controllerMonitor {
 	return &controllerMonitor{client: client}
 }
 
-func NewAgentMonitor(client clientset.Interface, ovsBridge string, nodeName string, nodeSubnet string, interfaceStore agent.InterfaceStore, ofClient openflow.Client) *agentMonitor {
+func NewAgentMonitor(client clientset.Interface, ovsBridge string, nodeName string, nodeSubnet string, interfaceStore interfacestore.InterfaceStore, ofClient openflow.Client) *agentMonitor {
 	return &agentMonitor{client: client, ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient}
 }
 

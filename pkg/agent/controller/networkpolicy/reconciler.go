@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1"
@@ -58,7 +58,7 @@ type reconciler struct {
 	ofClient openflow.Client
 
 	// ofClient is the Openflow interface.
-	ifaceStore agent.InterfaceStore
+	ifaceStore interfacestore.InterfaceStore
 
 	// lastRealizeds caches the last realized rules.
 	// It's a mapping from ruleID to *lastRealized.
@@ -69,7 +69,7 @@ type reconciler struct {
 }
 
 // newReconciler returns a new *reconciler.
-func newReconciler(ofClient openflow.Client, ifaceStore agent.InterfaceStore) *reconciler {
+func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore) *reconciler {
 	reconciler := &reconciler{
 		ofClient:      ofClient,
 		ifaceStore:    ifaceStore,

@@ -24,7 +24,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
@@ -66,7 +66,7 @@ type Controller struct {
 }
 
 // NewNetworkPolicyController returns a new *Controller.
-func NewNetworkPolicyController(antreaClient versioned.Interface, ofClient openflow.Client, ifaceStore agent.InterfaceStore, nodeName string, gatewayIP string) *Controller {
+func NewNetworkPolicyController(antreaClient versioned.Interface, ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, nodeName string, gatewayIP string) *Controller {
 	c := &Controller{
 		antreaClient: antreaClient,
 		nodeName:     nodeName,
