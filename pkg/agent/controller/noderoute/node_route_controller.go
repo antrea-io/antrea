@@ -33,8 +33,8 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 )
 
 const (
@@ -55,7 +55,7 @@ type Controller struct {
 	nodeListerSynced cache.InformerSynced
 	queue            workqueue.RateLimitingInterface
 	ofClient         openflow.Client
-	nodeConfig       *agent.NodeConfig
+	nodeConfig       *types.NodeConfig
 	gatewayLink      netlink.Link
 	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the route to the Node.
@@ -70,10 +70,10 @@ func NewNodeRouteController(
 	kubeClient clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
 	client openflow.Client,
-	config *agent.NodeConfig,
+	config *types.NodeConfig,
 ) *Controller {
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	link, _ := netlink.LinkByName(config.Gateway.Name)
+	link, _ := netlink.LinkByName(config.GatewayConfig.Name)
 
 	controller := &Controller{
 		kubeClient:       kubeClient,
@@ -239,7 +239,7 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
 		if !flowsAreInstalled { // then install flows
-			err = c.ofClient.InstallNodeFlows(nodeName, c.nodeConfig.Gateway.MAC, peerGatewayIP, *peerPodCIDR, peerNodeIP)
+			err = c.ofClient.InstallNodeFlows(nodeName, c.nodeConfig.GatewayConfig.MAC, peerGatewayIP, *peerPodCIDR, peerNodeIP)
 			if err != nil {
 				return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 			}

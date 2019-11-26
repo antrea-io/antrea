@@ -27,8 +27,11 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -41,29 +44,16 @@ const (
 	IPSecPSKEnvKey      = "ANTREA_IPSEC_PSK"
 )
 
-type NodeConfig struct {
-	Bridge  string
-	Name    string
-	PodCIDR *net.IPNet
-	*Gateway
-}
-
-type Gateway struct {
-	IP   net.IP
-	MAC  net.HardwareAddr
-	Name string
-}
-
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
 	ovsBridge         string
 	hostGateway       string
 	tunnelType        string
-	MTU               int
+	mtu               int
 	enableIPSecTunnel bool
 	client            clientset.Interface
-	ifaceStore        InterfaceStore
-	nodeConfig        *NodeConfig
+	ifaceStore        interfacestore.InterfaceStore
+	nodeConfig        *types.NodeConfig
 	ovsBridgeClient   ovsconfig.OVSBridgeClient
 	serviceCIDR       *net.IPNet
 	ofClient          openflow.Client
@@ -84,9 +74,9 @@ func NewInitializer(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
 	k8sClient clientset.Interface,
-	ifaceStore InterfaceStore,
+	ifaceStore interfacestore.InterfaceStore,
 	ovsBridge, serviceCIDR, hostGateway, tunnelType string,
-	MTU int,
+	mtu int,
 	enableIPSecTunnel bool) *Initializer {
 	// Parse service CIDR configuration. serviceCIDR is checked in option.validate, so
 	// it should be a valid configuration here.
@@ -96,7 +86,7 @@ func NewInitializer(
 		ovsBridge:         ovsBridge,
 		hostGateway:       hostGateway,
 		tunnelType:        tunnelType,
-		MTU:               MTU,
+		mtu:               mtu,
 		enableIPSecTunnel: enableIPSecTunnel,
 		client:            k8sClient,
 		ifaceStore:        ifaceStore,
@@ -106,7 +96,7 @@ func NewInitializer(
 }
 
 // GetNodeConfig returns the NodeConfig.
-func (i *Initializer) GetNodeConfig() *NodeConfig {
+func (i *Initializer) GetNodeConfig() *types.NodeConfig {
 	return i.nodeConfig
 }
 
@@ -123,7 +113,7 @@ func (i *Initializer) setupOVSBridge() error {
 	}
 
 	// Initialize interface cache
-	if err := i.ifaceStore.Initialize(i.ovsBridgeClient, i.hostGateway, TunPortName); err != nil {
+	if err := i.initInterfaceStore(); err != nil {
 		return err
 	}
 
@@ -147,6 +137,47 @@ func (i *Initializer) setupOVSBridge() error {
 	if err := disableICMPSendRedirects(i.hostGateway); err != nil {
 		return err
 	}
+	return nil
+}
+
+// initInterfaceStore initializes InterfaceStore with all OVS ports retrieved
+// from the OVS bridge.
+func (i *Initializer) initInterfaceStore() error {
+	ovsPorts, err := i.ovsBridgeClient.GetPortList()
+	if err != nil {
+		klog.Errorf("Failed to list OVS ports: %v", err)
+		return err
+	}
+
+	ifaceList := make([]*interfacestore.InterfaceConfig, 0, len(ovsPorts))
+	for index := range ovsPorts {
+		port := &ovsPorts[index]
+		ovsPort := &interfacestore.OVSPortConfig{
+			IfaceName: port.Name,
+			PortUUID:  port.UUID,
+			OFPort:    port.OFPort}
+		var intf *interfacestore.InterfaceConfig
+		switch {
+		case port.Name == i.hostGateway:
+			intf = &interfacestore.InterfaceConfig{
+				Type:          interfacestore.GatewayInterface,
+				OVSPortConfig: ovsPort,
+				ID:            i.hostGateway}
+		case port.Name == TunPortName:
+			intf = &interfacestore.InterfaceConfig{
+				Type:          interfacestore.TunnelInterface,
+				OVSPortConfig: ovsPort,
+				ID:            TunPortName}
+		default:
+			// The port should be for a container interface.
+			intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
+		}
+		if intf != nil {
+			ifaceList = append(ifaceList, intf)
+		}
+	}
+
+	i.ifaceStore.Initialize(ifaceList)
 	return nil
 }
 
@@ -229,8 +260,8 @@ func (i *Initializer) setupGatewayInterface() error {
 			klog.Errorf("Failed to add host interface %s on OVS: %v", i.hostGateway, err)
 			return err
 		}
-		gatewayIface = NewGatewayInterface(i.hostGateway)
-		gatewayIface.OVSPortConfig = &OVSPortConfig{i.hostGateway, gwPortUUID, hostGatewayOFPort}
+		gatewayIface = interfacestore.NewGatewayInterface(i.hostGateway)
+		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{i.hostGateway, gwPortUUID, hostGatewayOFPort}
 		i.ifaceStore.AddInterface(i.hostGateway, gatewayIface)
 	} else {
 		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
@@ -238,8 +269,8 @@ func (i *Initializer) setupGatewayInterface() error {
 	// Idempotent operation to set the gateway's MTU: we perform this operation regardless of
 	// whether or not the gateway interface already exists, as the desired MTU may change across
 	// restarts.
-	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.MTU)
-	i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.MTU)
+	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.mtu)
+	i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.mtu)
 	// host link might not be queried at once after create OVS internal port, retry max 5 times with 1s
 	// delay each time to ensure the link is ready. If still failed after max retry return error.
 	link, err := func() (netlink.Link, error) {
@@ -274,7 +305,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
 	gwAddr := &netlink.Addr{IPNet: gwIP, Label: ""}
 	gwMAC := link.Attrs().HardwareAddr
-	i.nodeConfig.Gateway = &Gateway{Name: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
+	i.nodeConfig.GatewayConfig = &types.GatewayConfig{Name: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
 	gatewayIface.IP = gwIP.IP
 	gatewayIface.MAC = gwMAC
 
@@ -326,8 +357,8 @@ func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
 		klog.Errorf("Failed to add tunnel port %s type %s on OVS: %v", tunnelPortName, i.tunnelType, err)
 		return err
 	}
-	tunnelIface = NewTunnelInterface(tunnelPortName)
-	tunnelIface.OVSPortConfig = &OVSPortConfig{tunnelPortName, tunnelPortUUID, tunOFPort}
+	tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName)
+	tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{tunnelPortName, tunnelPortUUID, tunOFPort}
 	i.ifaceStore.AddInterface(tunnelPortName, tunnelIface)
 	return nil
 }
@@ -356,7 +387,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return err
 	}
 
-	i.nodeConfig = &NodeConfig{Name: nodeName, PodCIDR: localSubnet}
+	i.nodeConfig = &types.NodeConfig{Name: nodeName, PodCIDR: localSubnet}
 	return nil
 }
 
