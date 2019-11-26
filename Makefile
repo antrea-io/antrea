@@ -5,6 +5,7 @@ GOFLAGS         :=
 BINDIR          := $(CURDIR)/bin
 GO_FILES        := $(shell find . -type d -name '.cache' -prune -o -type f -name '*.go' -print)
 GOPATH          ?= $$(go env GOPATH)
+GOPROXY         ?= $$(go env GOPROXY)
 DOCKER_CACHE    := $(CURDIR)/.cache
 
 .PHONY: all
@@ -42,10 +43,13 @@ $(DOCKER_CACHE):
 	@mkdir -p $@/gopath
 	@mkdir -p $@/gocache
 
+# Since the WORKDIR is mounted from host, the $(id -u):$(id -g) user can access it.
+# Inside the docker, the user is nameless and does not have a home directory. This is ok for our use case.
 DOCKER_ENV := \
-	@docker run --rm \
+	@docker run --rm -u $$(id -u):$$(id -g) \
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
+		-e "GOPROXY=$(GOPROXY)" \
 		-w /usr/src/github.com/vmware-tanzu/antrea \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
@@ -55,14 +59,19 @@ DOCKER_ENV := \
 .PHONY: docker-bin
 docker-bin: $(DOCKER_CACHE)
 	$(DOCKER_ENV) make bin
+	@chmod -R 0755 $<
 
 .PHONY: docker-test-unit
 docker-test-unit: $(DOCKER_CACHE)
 	@$(DOCKER_ENV) make test-unit
+	@chmod -R 0755 $<
 
 .PHONY: docker-tidy
 docker-tidy: $(DOCKER_CACHE)
+	@rm -f go.sum
 	@$(DOCKER_ENV) go mod tidy
+	@chmod -R 0755 $<
+	@chmod 0644 go.sum
 
 .PHONY: .linux-bin
 .linux-bin:
@@ -76,6 +85,7 @@ docker-tidy: $(DOCKER_CACHE)
 
 .PHONY: tidy
 tidy:
+	@rm -f go.sum
 	@$(GO) mod tidy
 
 .PHONY: .linux-test-integration
@@ -89,6 +99,11 @@ test-fmt:
 	@echo
 	@echo "===> Checking format of Go files <==="
 	@test -z "$$(gofmt -s -l -d $(GO_FILES) | tee /dev/stderr)"
+
+test-tidy:
+	@echo
+	@echo "===> Checking go.mod tidiness <==="
+	@GO=$(GO) $(CURDIR)/hack/tidy-check.sh
 
 .PHONY: fmt
 fmt:
