@@ -61,12 +61,12 @@ const (
 var (
 	keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
 
-	// UUIDNamespace is a uuid.UUID type generated from a string to be
+	// uuidNamespace is a uuid.UUID type generated from a string to be
 	// used to generate uuid.UUID for internal Antrea objects like
 	// AppliedToGroup, AddressGroup etc.
 	// 5a5e7dd9-e3fb-49bb-b263-9bab25c95841 was generated using
 	// uuid.NewV4() function.
-	UUIDNamespace = uuid.FromStringOrNil("5a5e7dd9-e3fb-49bb-b263-9bab25c95841")
+	uuidNamespace = uuid.FromStringOrNil("5a5e7dd9-e3fb-49bb-b263-9bab25c95841")
 )
 
 // NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
@@ -241,7 +241,7 @@ func selectorToString(selector *metav1.LabelSelector) string {
 // For example, it can be used to generate keys using normalized selectors
 // unique within the Namespace by adding the constant UID.
 func getNormalizedUID(name string) string {
-	return uuid.NewV5(UUIDNamespace, name).String()
+	return uuid.NewV5(uuidNamespace, name).String()
 }
 
 // generateNormalizedName generates a string, based on the selectors, in
