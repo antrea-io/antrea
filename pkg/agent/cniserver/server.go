@@ -24,7 +24,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/containernetworking/cni/pkg/types"
+	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -33,9 +33,10 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
@@ -89,7 +90,7 @@ type CNIServer struct {
 	cniSocket            string
 	supportedCNIVersions map[string]bool
 	serverVersion        string
-	nodeConfig           *agent.NodeConfig
+	nodeConfig           *types.NodeConfig
 	hostProcPathPrefix   string
 	defaultMTU           int
 	kubeClient           clientset.Interface
@@ -108,11 +109,11 @@ type NetworkConfig struct {
 	Name       string          `json:"name,omitempty"`
 	Type       string          `json:"type,omitempty"`
 	MTU        int             `json:"mtu,omitempty"`
-	DNS        types.DNS       `json:"dns"`
+	DNS        cnitypes.DNS    `json:"dns"`
 	IPAM       ipam.IPAMConfig `json:"ipam,omitempty"`
 
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
-	PrevResult    types.Result           `json:"-"`
+	PrevResult    cnitypes.Result        `json:"-"`
 }
 
 type CNIConfig struct {
@@ -147,11 +148,11 @@ func updateResultIfaceConfig(result *current.Result, defaultV4Gateway net.IP) {
 			}
 		}
 	} else {
-		result.Routes = []*types.Route{}
+		result.Routes = []*cnitypes.Route{}
 	}
 	if !foundDefaultRoute {
 		_, defaultRouteDstNet, _ := net.ParseCIDR(defaultRouteDst)
-		result.Routes = append(result.Routes, &types.Route{Dst: *defaultRouteDstNet, GW: defaultV4Gateway})
+		result.Routes = append(result.Routes, &cnitypes.Route{Dst: *defaultRouteDstNet, GW: defaultV4Gateway})
 	}
 }
 
@@ -162,7 +163,7 @@ func (s *CNIServer) loadNetworkConfig(request *cnipb.CniCmdRequest) (*CNIConfig,
 		return cniConfig, err
 	}
 	cniConfig.k8sArgs = &k8sArgs{}
-	if err := types.LoadArgs(request.CniArgs.Args, cniConfig.k8sArgs); err != nil {
+	if err := cnitypes.LoadArgs(request.CniArgs.Args, cniConfig.k8sArgs); err != nil {
 		return cniConfig, err
 	}
 	s.updateLocalIPAMSubnet(cniConfig)
@@ -201,7 +202,7 @@ func (s *CNIServer) checkRequestMessage(request *cnipb.CniCmdRequest) (*CNIConfi
 }
 
 func (s *CNIServer) updateLocalIPAMSubnet(cniConfig *CNIConfig) {
-	cniConfig.NetworkConfig.IPAM.Gateway = s.nodeConfig.Gateway.IP.String()
+	cniConfig.NetworkConfig.IPAM.Gateway = s.nodeConfig.GatewayConfig.IP.String()
 	cniConfig.NetworkConfig.IPAM.Subnet = s.nodeConfig.PodCIDR.String()
 	cniConfig.NetworkConfiguration, _ = json.Marshal(cniConfig.NetworkConfig)
 }
@@ -385,7 +386,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (
 	result.IPs = ipamResult.IPs
 	result.Routes = ipamResult.Routes
 	// Ensure interface gateway setting and mapping relations between result.Interfaces and result.IPs
-	updateResultIfaceConfig(result, s.nodeConfig.Gateway.IP)
+	updateResultIfaceConfig(result, s.nodeConfig.GatewayConfig.IP)
 	// Setup pod interfaces and connect to ovs bridge
 	podName := string(cniConfig.K8S_POD_NAME)
 	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
@@ -480,10 +481,10 @@ func (s *CNIServer) CmdCheck(ctx context.Context, request *cnipb.CniCmdRequest) 
 func New(
 	cniSocket, hostProcPathPrefix string,
 	defaultMTU int,
-	nodeConfig *agent.NodeConfig,
+	nodeConfig *types.NodeConfig,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
-	ifaceStore agent.InterfaceStore,
+	ifaceStore interfacestore.InterfaceStore,
 	kubeClient clientset.Interface,
 ) *CNIServer {
 	return &CNIServer{
@@ -495,7 +496,7 @@ func New(
 		defaultMTU:           defaultMTU,
 		kubeClient:           kubeClient,
 		containerAccess:      newContainerAccessArbitrator(),
-		podConfigurator:      newPodConfigurator(ovsBridgeClient, ofClient, ifaceStore, nodeConfig.Gateway.MAC),
+		podConfigurator:      newPodConfigurator(ovsBridgeClient, ofClient, ifaceStore, nodeConfig.GatewayConfig.MAC),
 	}
 }
 
