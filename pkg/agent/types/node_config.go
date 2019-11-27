@@ -18,6 +18,12 @@ import (
 	"net"
 )
 
+const (
+	DefaultTunPortName = "tun0"
+	DefaultTunOFPort   = 1
+	HostGatewayOFPort  = 2
+)
+
 type GatewayConfig struct {
 	IP   net.IP
 	MAC  net.HardwareAddr

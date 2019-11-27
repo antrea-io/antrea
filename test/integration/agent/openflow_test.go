@@ -112,7 +112,7 @@ func testInitialize(t *testing.T, config *testConfig) {
 }
 
 func testInstallTunnelFlows(t *testing.T, config *testConfig) {
-	err := c.InstallTunnelFlows(config.tunnelOFPort)
+	err := c.InstallDefaultTunnelFlows(config.tunnelOFPort)
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries for tunnel port: %v", err)
 	}
@@ -133,11 +133,11 @@ func testInstallServiceFlows(t *testing.T, config *testConfig) {
 
 func testInstallNodeFlows(t *testing.T, config *testConfig) {
 	for _, node := range config.peers {
-		err := c.InstallNodeFlows("peer", config.localGateway.mac, node.gateway, node.subnet, node.nodeAddress)
+		err := c.InstallNodeFlows(node.name, config.localGateway.mac, node.gateway, node.subnet, node.nodeAddress, config.tunnelOFPort)
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for node connectivity: %v", err)
 		}
-		for _, tableFlow := range prepareNodeFlows(node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac) {
+		for _, tableFlow := range prepareNodeFlows(config.tunnelOFPort, node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac) {
 			ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
 		}
 	}
@@ -149,8 +149,8 @@ func testUninstallNodeFlows(t *testing.T, config *testConfig) {
 		if err != nil {
 			t.Fatalf("Failed to uninstall Openflow entries for node connectivity: %v", err)
 		}
-		for _, tableFlow := range prepareNodeFlows(node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac) {
-			ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
+		for _, tableFlow := range prepareNodeFlows(config.tunnelOFPort, node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac) {
+			ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, false, tableFlow.flows)
 		}
 	}
 }
@@ -549,18 +549,10 @@ func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableF
 				{fmt.Sprintf("priority=200,in_port=%d", tunnelPort), "load:0->NXM_NX_REG0[0..15],resubmit(,30)"},
 			},
 		},
-		{
-			uint8(80),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					fmt.Sprintf("priority=200,dl_dst=%s", vMAC.String()),
-					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)", tunnelPort)},
-			},
-		},
 	}
 }
 
-func prepareNodeFlows(peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, localGwMAC net.HardwareAddr) []expectTableFlows {
+func prepareNodeFlows(tunnelPort uint32, peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, localGwMAC net.HardwareAddr) []expectTableFlows {
 	return []expectTableFlows{
 		{
 			uint8(20),
@@ -574,7 +566,7 @@ func prepareNodeFlows(peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, l
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,ip,nw_dst=%s", peerSubnet.String()),
-					fmt.Sprintf("dec_ttl,set_field:%s->eth_src,set_field:%s->eth_dst,set_field:%s->tun_dst,resubmit(,80)", localGwMAC.String(), vMAC.String(), peerNodeIP.String())},
+					fmt.Sprintf("dec_ttl,set_field:%s->eth_src,set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],set_field:%s->tun_dst,resubmit(,105)", localGwMAC.String(), vMAC.String(), tunnelPort, peerNodeIP.String())},
 			},
 		},
 	}
