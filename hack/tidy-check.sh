@@ -38,7 +38,11 @@ function echoerr {
 
 function general_help {
   echoerr "Please run the following command to generate a new go.mod & go.sum:"
-  echoerr "  \$ make tidy"
+  if [ -n "$GO" ] && [[ "$($GO version|awk '{print $3}')" == $TARGET_GO_VERSION_PATTERN ]]; then
+    echoerr "  \$ make tidy"
+  else
+    echoerr "  \$ make docker-tidy"
+  fi
 }
 
 function precheck {
