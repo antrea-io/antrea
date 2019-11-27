@@ -10,7 +10,7 @@ evolve. This document lists some features as the potential features of future
 Antrea releases, but the list is not finalized. A feature that is not listed now
 does not  mean it will not be considered for Antrea. We definitely welcome
 suggestions and ideas from everyone about the roadmap and Antrea features. Reach
-us through Issues and / or Google Group!
+us through Issues, Slack and / or Google Group!
 
 # Features under Development
 The following features are being actively developed and will be available soon:
