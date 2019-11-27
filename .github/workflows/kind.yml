@@ -4,6 +4,10 @@ on:
     branches:
     - master
     - release-*
+  push:
+    branches:
+    - master
+    - release-*
 jobs:
   test-unit:
     name: E2e tests on a Kind cluster on Linux
