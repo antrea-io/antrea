@@ -21,7 +21,7 @@ The Antrea community abides by this [code of conduct](CODE_OF_CONDUCT.md).
 ## Community Roles
 
 * **Users:** Members that engage with the Antrea community via any medium
-  (GitHub, mailing lists, etc.).
+  (Slack, GitHub, mailing lists, etc.).
 * **Contributors:** Do regular contributions to the Antrea project
   (documentation, code reviews, responding to issues, participating in proposal
   discussions, contributing code, etc.).
