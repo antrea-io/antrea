@@ -101,10 +101,10 @@ func TestInitstore(t *testing.T) {
 
 	ovsPort1 := ovsconfig.OVSPortData{UUID: uuid1, Name: "p1", IFName: "p1", OFPort: 1,
 		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
-			interfacestore.NewContainerInterface(uuid1, "pod1", "ns1", "netns1", p1NetMAC, p1NetIP)))}
+			interfacestore.NewContainerInterface("p1", uuid1, "pod1", "ns1", p1NetMAC, p1NetIP)))}
 	ovsPort2 := ovsconfig.OVSPortData{UUID: uuid2, Name: "p2", IFName: "p2", OFPort: 2,
 		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
-			interfacestore.NewContainerInterface(uuid2, "pod2", "ns2", "netns2", p2NetMAC, p2NetIP)))}
+			interfacestore.NewContainerInterface("p2", uuid2, "pod2", "ns2", p2NetMAC, p2NetIP)))}
 	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
 
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, ovsconfig.NewTransactionError(fmt.Errorf("Failed to list OVS ports"), true))
@@ -121,7 +121,7 @@ func TestInitstore(t *testing.T) {
 	container1, found1 := store.GetInterface("p1")
 	if !found1 {
 		t.Errorf("Failed to load OVS port into local store")
-	} else if container1.OFPort != 1 || container1.IP.String() != p1IP || container1.MAC.String() != p1MAC || container1.IfaceName != "p1" {
+	} else if container1.OFPort != 1 || container1.IP.String() != p1IP || container1.MAC.String() != p1MAC || container1.InterfaceName != "p1" {
 		t.Errorf("Failed to load OVS port configuration into local store")
 	}
 	_, found2 := store.GetInterface("p2")

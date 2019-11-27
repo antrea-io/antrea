@@ -15,8 +15,8 @@
 package ovsconfig
 
 import (
-	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/dbtransaction"
@@ -33,8 +33,10 @@ type OVSBridge struct {
 }
 
 type OVSPortData struct {
-	UUID        string
-	Name        string
+	UUID string
+	Name string
+	// Interface type.
+	IFType      string
 	IFName      string
 	OFPort      int32
 	ExternalIDs map[string]string
@@ -339,8 +341,8 @@ func (br *OVSBridge) CreateTunnelPortExt(
 	remoteIP string,
 	psk string,
 	externalIDs map[string]interface{}) (string, Error) {
-	if psk != "" && remoteIP != "" {
-		return "", newInvalidArgumentsError("IPSec tunnel can not be flow based. remoteIP must not be set")
+	if psk != "" && remoteIP == "" {
+		return "", newInvalidArgumentsError("IPSec tunnel can not be flow based. remoteIP must be set")
 	}
 	return br.createTunnelPort(name, tunnelType, ofPortRequest, remoteIP, psk, externalIDs)
 }
@@ -374,6 +376,27 @@ func (br *OVSBridge) createTunnelPort(
 	}
 
 	return br.createPort(name, name, string(tunnelType), ofPortRequest, externalIDs, options)
+}
+
+// ParseTunnelInterfaceOptions reads remote IP and IPSec PSK from the tunnel
+// interface options and returns them.
+func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, string) {
+	if portData.Options == nil {
+		return nil, ""
+	}
+
+	var ok bool
+	var remoteIPStr, psk string
+	var remoteIP net.IP
+
+	if remoteIPStr, ok = portData.Options["remote_ip"]; ok {
+		if remoteIPStr != "flow" {
+			remoteIP = net.ParseIP(remoteIPStr)
+		}
+	}
+
+	psk = portData.Options["psk"]
+	return remoteIP, psk
 }
 
 // CreatePort creates a port with the specified name on the bridge, and connects
@@ -447,7 +470,7 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, Error) {
 
 	tx.Wait(dbtransaction.Wait{
 		Table:   "Interface",
-		Timeout: 1000,
+		Timeout: 1000, // Wait up to 1 second.
 		Columns: []string{"ofport"},
 		Until:   "!=",
 		Rows: []interface{}{map[string]interface{}{
@@ -463,11 +486,13 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, Error) {
 
 	res, err, temporary := tx.Commit()
 	if err != nil {
-		// TODO: differentiate timeout error
 		klog.Error("Transaction failed: ", err)
 		return 0, NewTransactionError(err, temporary)
 	}
 
+	if len(res) < 2 || len(res[1].Rows) == 0 {
+		return 0, NewTransactionError(fmt.Errorf("interface %s not found", ifName), false)
+	}
 	ofport := int32(res[1].Rows[0].(map[string]interface{})["ofport"].(float64))
 	return ofport, nil
 }
@@ -492,6 +517,7 @@ func buildPortDataCommon(port, intf map[string]interface{}, portData *OVSPortDat
 	portData.Name = port["name"].(string)
 	portData.ExternalIDs = buildMapFromOVSDBMap(port["external_ids"].([]interface{}))
 	portData.Options = buildMapFromOVSDBMap(intf["options"].([]interface{}))
+	portData.IFType = intf["type"].(string)
 	if ofPort, ok := intf["ofport"].(float64); ok {
 		portData.OFPort = int32(ofPort)
 	} else { // ofport not assigned by OVS yet
@@ -512,7 +538,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) 
 	})
 	tx.Select(dbtransaction.Select{
 		Table:   "Interface",
-		Columns: []string{"_uuid", "ofport", "options"},
+		Columns: []string{"_uuid", "type", "ofport", "options"},
 		Where:   [][]interface{}{{"name", "==", ifName}},
 	})
 
@@ -522,12 +548,10 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) 
 		return nil, NewTransactionError(err, temporary)
 	}
 	if len(res[0].Rows) == 0 {
-		klog.Warning("Could not find port ", portUUID)
-		return nil, nil
+		return nil, NewTransactionError(fmt.Errorf("port %s not found", portUUID), false)
 	}
 	if len(res[1].Rows) == 0 {
-		klog.Warning("Could not find interface ", ifName)
-		return nil, NewTransactionError(errors.New("Interface not exists"), false)
+		return nil, NewTransactionError(fmt.Errorf("interface %s not found", ifName), false)
 	}
 
 	port := res[0].Rows[0].(map[string]interface{})
@@ -543,8 +567,8 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) 
 		}
 	}
 	if !found {
-		klog.Errorf("Interface %s is not attached to the port %s", ifName, portUUID)
-		return nil, NewTransactionError(errors.New("Interface is not attached to the port"), false)
+		return nil, NewTransactionError(fmt.Errorf("interface %s not attached to port %s", ifName, portUUID),
+			false)
 	}
 
 	portData := OVSPortData{UUID: portUUID, IFName: ifName}
@@ -567,7 +591,7 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	})
 	tx.Select(dbtransaction.Select{
 		Table:   "Interface",
-		Columns: []string{"_uuid", "name", "ofport", "options"},
+		Columns: []string{"_uuid", "type", "name", "ofport", "options"},
 	})
 
 	res, err, temporary := tx.Commit()

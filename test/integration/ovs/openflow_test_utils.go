@@ -55,13 +55,13 @@ func CheckFlowExists(t *testing.T, br string, tableID uint8, exist bool, flows [
 	if exist {
 		for _, flow := range flows {
 			if !OfctlFlowMatch(flowList, tableID, flow) {
-				t.Errorf("Failed to install flow on table %d with match='%s', actions='%s'", tableID, flow.MatchStr, flow.ActStr)
+				t.Errorf("Failed to install flow:\n%v\nExisting flows:\n%v", flow, flowList)
 			}
 		}
 	} else {
 		for _, flow := range flows {
 			if OfctlFlowMatch(flowList, tableID, flow) {
-				t.Errorf("Failed to uninstall flow on table %d with match='%s', actions='%s'", tableID, flow.MatchStr, flow.ActStr)
+				t.Errorf("Failed to uninstall flow:\n%v\nExisting flows:\n%v", flow, flowList)
 			}
 		}
 	}

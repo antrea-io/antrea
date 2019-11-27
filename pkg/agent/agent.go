@@ -30,6 +30,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
+	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
@@ -39,9 +40,6 @@ import (
 )
 
 const (
-	TunPortName         = "tun0"
-	tunOFPort           = 1
-	hostGatewayOFPort   = 2
 	maxRetryForHostLink = 5
 	NodeNameEnvKey      = "NODE_NAME"
 	IPSecPSKEnvKey      = "ANTREA_IPSEC_PSK"
@@ -122,10 +120,12 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
-	// Setup Tunnel port on OVS
-	if err := i.setupTunnelInterface(TunPortName); err != nil {
-		return err
+	if !i.enableIPSecTunnel {
+		if err := i.setupTunnelInterface(types.DefaultTunPortName); err != nil {
+			return err
+		}
 	}
+
 	// Setup host gateway interface
 	err := i.setupGatewayInterface()
 	if err != nil {
@@ -158,21 +158,23 @@ func (i *Initializer) initInterfaceStore() error {
 	for index := range ovsPorts {
 		port := &ovsPorts[index]
 		ovsPort := &interfacestore.OVSPortConfig{
-			IfaceName: port.Name,
-			PortUUID:  port.UUID,
-			OFPort:    port.OFPort}
+			PortUUID: port.UUID,
+			OFPort:   port.OFPort}
 		var intf *interfacestore.InterfaceConfig
 		switch {
 		case port.Name == i.hostGateway:
 			intf = &interfacestore.InterfaceConfig{
 				Type:          interfacestore.GatewayInterface,
-				OVSPortConfig: ovsPort,
-				ID:            i.hostGateway}
-		case port.Name == TunPortName:
-			intf = &interfacestore.InterfaceConfig{
-				Type:          interfacestore.TunnelInterface,
-				OVSPortConfig: ovsPort,
-				ID:            TunPortName}
+				InterfaceName: port.Name,
+				OVSPortConfig: ovsPort}
+		case port.IFType == ovsconfig.VXLANTunnel:
+			fallthrough
+		case port.IFType == ovsconfig.GeneveTunnel:
+			fallthrough
+		case port.IFType == ovsconfig.GRETunnel:
+			fallthrough
+		case port.IFType == ovsconfig.STTTunnel:
+			intf = noderoute.ParseTunnelInterfaceConfig(port, ovsPort)
 		default:
 			// The port should be for a container interface.
 			intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
@@ -235,11 +237,13 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		return err
 	}
 
-	// Setup flow entries for tunnel port Interface, including classifier and L2 Forwarding
-	// (match vMAC as dst)
-	if err := i.ofClient.InstallTunnelFlows(tunOFPort); err != nil {
-		klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
-		return err
+	// When IPSec encyption is enabled, no flow is needed for the default tunnel interface.
+	if !i.enableIPSecTunnel {
+		// Setup flow entries for the default tunnel port interface.
+		if err := i.ofClient.InstallDefaultTunnelFlows(types.DefaultTunOFPort); err != nil {
+			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
+			return err
+		}
 	}
 
 	// Setup flow entries to enable service connectivity. Upstream kube-proxy is leveraged to
@@ -261,14 +265,14 @@ func (i *Initializer) setupGatewayInterface() error {
 	gatewayIface, portExists := i.ifaceStore.GetInterface(i.hostGateway)
 	if !portExists {
 		klog.V(2).Infof("Creating gateway port %s on OVS bridge", i.hostGateway)
-		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, hostGatewayOFPort, nil)
+		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, types.HostGatewayOFPort, nil)
 		if err != nil {
 			klog.Errorf("Failed to add host interface %s on OVS: %v", i.hostGateway, err)
 			return err
 		}
 		gatewayIface = interfacestore.NewGatewayInterface(i.hostGateway)
-		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{i.hostGateway, gwPortUUID, hostGatewayOFPort}
-		i.ifaceStore.AddInterface(i.hostGateway, gatewayIface)
+		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{gwPortUUID, types.HostGatewayOFPort}
+		i.ifaceStore.AddInterface(gatewayIface)
 	} else {
 		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
 	}
@@ -349,14 +353,14 @@ func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
 		klog.V(2).Infof("Tunnel port %s already exists on OVS", tunnelPortName)
 		return nil
 	}
-	tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPort(tunnelPortName, i.tunnelType, tunOFPort)
+	tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPort(tunnelPortName, i.tunnelType, types.DefaultTunOFPort)
 	if err != nil {
 		klog.Errorf("Failed to add tunnel port %s type %s on OVS: %v", tunnelPortName, i.tunnelType, err)
 		return err
 	}
-	tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName)
-	tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{tunnelPortName, tunnelPortUUID, tunOFPort}
-	i.ifaceStore.AddInterface(tunnelPortName, tunnelIface)
+	tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.tunnelType)
+	tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{tunnelPortUUID, types.DefaultTunOFPort}
+	i.ifaceStore.AddInterface(tunnelIface)
 	return nil
 }
 

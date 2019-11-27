@@ -288,16 +288,33 @@ func (c *client) l3ToGatewayFlow(localGatewayIP net.IP, localGatewayMAC net.Hard
 }
 
 // l3FwdFlowToRemote generates the L3 forward flow on source node to support traffic to remote pods/gateway.
-func (c *client) l3FwdFlowToRemote(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP, category cookie.Category) binding.Flow {
+// For a flow based tunnel tunnelPeer must be provided.
+func (c *client) l3FwdFlowToRemote(
+	localGatewayMAC net.HardwareAddr,
+	peerSubnet net.IPNet,
+	tunnelPeer net.IP,
+	tunOFPort uint32,
+	category cookie.Category) binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
-	// Rewrite src MAC to local gateway MAC and rewrite dst MAC to virtual MAC
-	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+	flowBuilder := l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstIPNet(peerSubnet).
 		Action().DecTTL().
+		// Rewrite src MAC to local gateway MAC and rewrite dst MAC to virtual MAC.
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(globalVirtualMAC).
-		Action().SetTunnelDst(tunnelPeer).
-		Action().ResubmitToTable(l3FwdTable.GetNext()).
+		// Load ofport of the tunnel interface.
+		Action().LoadRegRange(int(portCacheReg), tunOFPort, ofPortRegRange).
+		// Set MAC-known.
+		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange)
+
+	if tunnelPeer != nil {
+		// Flow based tunnel. Set tunnel destination.
+		flowBuilder = flowBuilder.Action().SetTunnelDst(tunnelPeer)
+	}
+
+	// Bypass l2ForwardingCalcTable and tables for ingress rules (which won't
+	// apply to packets to remote Nodes).
+	return flowBuilder.Action().ResubmitToTable(conntrackCommitTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }

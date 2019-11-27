@@ -246,7 +246,7 @@ func parseContainerIP(ips []*current.IPConfig) (net.IP, error) {
 }
 
 func buildContainerConfig(
-	containerID, podName, podNamespace string,
+	interfaceName, containerID, podName, podNamespace string,
 	containerIface *current.Interface,
 	ips []*current.IPConfig) *interfacestore.InterfaceConfig {
 	containerIP, err := parseContainerIP(ips)
@@ -256,10 +256,10 @@ func buildContainerConfig(
 	// containerIface.Mac should be a valid MAC string, otherwise it should throw error before
 	containerMAC, _ := net.ParseMAC(containerIface.Mac)
 	return interfacestore.NewContainerInterface(
+		interfaceName,
 		containerID,
 		podName,
 		podNamespace,
-		containerIface.Sandbox,
 		containerMAC,
 		containerIP)
 }
@@ -269,7 +269,7 @@ func buildContainerConfig(
 func BuildOVSPortExternalIDs(containerConfig *interfacestore.InterfaceConfig) map[string]interface{} {
 	externalIDs := make(map[string]interface{})
 	externalIDs[ovsExternalIDMAC] = containerConfig.MAC.String()
-	externalIDs[ovsExternalIDContainerID] = containerConfig.ID
+	externalIDs[ovsExternalIDContainerID] = containerConfig.ContainerID
 	externalIDs[ovsExternalIDIP] = containerConfig.IP.String()
 	externalIDs[ovsExternalIDPodName] = containerConfig.PodName
 	externalIDs[ovsExternalIDPodNamespace] = containerConfig.PodNamespace
@@ -299,14 +299,16 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 	}
 	podName, _ := portData.ExternalIDs[ovsExternalIDPodName]
 	podNamespace, _ := portData.ExternalIDs[ovsExternalIDPodNamespace]
-	return &interfacestore.InterfaceConfig{
-		Type:          interfacestore.ContainerInterface,
-		OVSPortConfig: portConfig,
-		ID:            containerID,
-		IP:            containerIP,
-		MAC:           containerMAC,
-		PodName:       podName,
-		PodNamespace:  podNamespace}
+
+	interfaceConfig := interfacestore.NewContainerInterface(
+		portData.Name,
+		containerID,
+		podName,
+		podNamespace,
+		containerMAC,
+		containerIP)
+	interfaceConfig.OVSPortConfig = portConfig
+	return interfaceConfig
 }
 
 func (pc *podConfigurator) configureInterface(
@@ -314,7 +316,7 @@ func (pc *podConfigurator) configureInterface(
 	podNameSpace string,
 	containerID string,
 	containerNetNS string,
-	ifname string,
+	containerIFDev string,
 	mtu int,
 	result *current.Result,
 ) error {
@@ -325,7 +327,7 @@ func (pc *podConfigurator) configureInterface(
 	}
 	defer netns.Close()
 	// Create veth pair and link up
-	hostIface, containerIface, err := pc.setupInterfaces(podName, podNameSpace, ifname, netns, mtu)
+	hostIface, containerIface, err := pc.setupInterfaces(podName, podNameSpace, containerIFDev, netns, mtu)
 	if err != nil {
 		return err
 	}
@@ -333,16 +335,17 @@ func (pc *podConfigurator) configureInterface(
 	success := false
 	defer func() {
 		if !success {
-			removeContainerLink(containerID, containerNetNS, ifname)
+			removeContainerLink(containerID, containerNetNS, containerIFDev)
 		}
 	}()
 
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 
-	containerConfig := buildContainerConfig(containerID, podName, podNameSpace, containerIface, result.IPs)
+	// Use the outer veth interface name as the OVS port name.
+	ovsPortName := hostIface.Name
+	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNameSpace, containerIface, result.IPs)
 
 	// create OVS Port and add attach container configuration into external_ids
-	ovsPortName := hostIface.Name
 	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
 	portUUID, err := pc.setupContainerOVSPort(containerConfig, ovsPortName)
 	if err != nil {
@@ -390,9 +393,9 @@ func (pc *podConfigurator) configureInterface(
 		return fmt.Errorf("failed to configure container ip")
 	}
 
-	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, IfaceName: ovsPortName, OFPort: ofPort}
+	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}
 	// Add containerConfig into local cache
-	pc.ifaceStore.AddInterface(ovsPortName, containerConfig)
+	pc.ifaceStore.AddInterface(containerConfig)
 	// Mark the manipulation as success to cancel defer deletion
 	success = true
 	klog.Infof("Interface added successfully for container %s", containerID)
@@ -449,7 +452,7 @@ func (pc *podConfigurator) removeInterfaces(podName, podNamespace, containerID, 
 	}
 
 	portUUID := containerConfig.PortUUID
-	ovsPortName := containerConfig.IfaceName
+	ovsPortName := containerConfig.InterfaceName
 	klog.V(2).Infof("Deleting OVS port with UUID %s peer container %s", portUUID, containerID)
 	// Remove Openflow entries of target container
 	if err := pc.ofClient.UninstallPodFlows(ovsPortName); err != nil {
@@ -623,9 +626,9 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod) error {
 			klog.Warningf("Interface for Pod %s/%s not found in the interface store", pod.Namespace, pod.Name)
 			continue
 		}
-		klog.V(4).Infof("Syncing interface %s for Pod %s/%s", containerConfig.IfaceName, pod.Namespace, pod.Name)
+		klog.V(4).Infof("Syncing interface %s for Pod %s/%s", containerConfig.InterfaceName, pod.Namespace, pod.Name)
 		if err := pc.ofClient.InstallPodFlows(
-			containerConfig.IfaceName,
+			containerConfig.InterfaceName,
 			containerConfig.IP,
 			containerConfig.MAC,
 			pc.gatewayMAC,
@@ -634,7 +637,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod) error {
 			klog.Errorf("Error when re-installing flows for Pod %s/%s", pod.Namespace, pod.Name)
 			continue
 		}
-		desiredInterfaces[containerConfig.IfaceName] = true
+		desiredInterfaces[containerConfig.InterfaceName] = true
 	}
 
 	for _, ifaceID := range knownInterfaces {
@@ -650,7 +653,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod) error {
 			klog.Errorf("Interface %s can no longer be found in the interface store", ifaceID)
 			continue
 		}
-		if containerConfig.PodName == "" {
+		if containerConfig.Type != interfacestore.ContainerInterface {
 			// not a container interface, skipping.
 			continue
 		}
@@ -659,7 +662,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod) error {
 		_ = pc.removeInterfaces(
 			containerConfig.PodName,
 			containerConfig.PodNamespace,
-			containerConfig.ID,
+			containerConfig.ContainerID,
 			"",
 			"",
 		)
