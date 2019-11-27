@@ -419,8 +419,13 @@ func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error
 		podSpec.Tolerations = []v1.Toleration{noScheduleToleration}
 	}
 	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec:       podSpec,
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"antrea-e2e": name,
+			},
+		},
+		Spec: podSpec,
 	}
 	if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(pod); err != nil {
 		return err
