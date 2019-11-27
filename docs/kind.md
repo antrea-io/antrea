@@ -39,7 +39,7 @@ kind load docker-image antrea/antrea-ubuntu:latest
 
 ### Check that everything is working
 
-After a few seconds you sould be able to observe the following when running
+After a few seconds you should be able to observe the following when running
 `kubectl get -n kube-system pods -l app=antrea`:
 ```bash
 NAME                                 READY   STATUS    RESTARTS   AGE
