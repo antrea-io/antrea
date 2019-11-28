@@ -42,7 +42,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 }
 
 // mockReconciler implements Reconciler. It simply records the latest states of rules
-// it have been asked to reconcile, and provide two channels to receive its notification
+// it has been asked to reconcile, and provides two channels to receive its notifications
 // for testing.
 type mockReconciler struct {
 	sync.Mutex
