@@ -100,7 +100,6 @@ type Flow interface {
 	Add() error
 	Modify() error
 	Delete() error
-	String() string
 	MatchString() string
 	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions.
 	CopyToBuilder() FlowBuilder

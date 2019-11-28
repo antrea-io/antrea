@@ -120,9 +120,8 @@ type OFBridge struct {
 func (b *OFBridge) CreateTable(id, next TableIDType, missAction MissActionType) Table {
 	t := newOFTable(id, next, missAction)
 	b.Lock()
-	defer b.Unlock()
-
 	b.tableCache[id] = t
+	b.Unlock()
 	return t
 }
 
@@ -134,8 +133,8 @@ func (b *OFBridge) DeleteTable(id TableIDType) bool {
 	}
 
 	b.Lock()
-	defer b.Unlock()
 	delete(b.tableCache, id)
+	b.Unlock()
 	return true
 }
 

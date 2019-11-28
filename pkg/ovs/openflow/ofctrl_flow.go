@@ -20,8 +20,6 @@ type ofFlow struct {
 
 	// matchers is string slice, it is used to generate a readable match string of the Flow.
 	matchers []string
-	// actions is string slice, it is used to generate a readable actions string of the Flow.
-	actions []string
 	// protocol adds a readable protocol type in the match string of ofFlow.
 	protocol protocol
 	// ctStateString is a temporary variable for the readable ct_state configuration. Its value is changed when the client
@@ -91,14 +89,6 @@ func (f *ofFlow) CopyToBuilder() FlowBuilder {
 		protocol: f.protocol,
 	}
 	return &ofFlowBuilder{newFlow}
-}
-
-func (f *ofFlow) String() string {
-	repr := fmt.Sprintf("cookie=%d,%s", f.Flow.CookieID, f.MatchString())
-	if len(f.actions) > 0 {
-		repr += fmt.Sprintf(",actions=%s", strings.Join(f.actions, ","))
-	}
-	return repr
 }
 
 func (r *Range) ToNXRange() *openflow13.NXRange {

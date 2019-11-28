@@ -333,20 +333,6 @@ func (mr *MockFlowMockRecorder) Modify() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Modify", reflect.TypeOf((*MockFlow)(nil).Modify))
 }
 
-// String mocks base method
-func (m *MockFlow) String() string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "String")
-	ret0, _ := ret[0].(string)
-	return ret0
-}
-
-// String indicates an expected call of String
-func (mr *MockFlowMockRecorder) String() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "String", reflect.TypeOf((*MockFlow)(nil).String))
-}
-
 // MockAction is a mock of Action interface
 type MockAction struct {
 	ctrl     *gomock.Controller
