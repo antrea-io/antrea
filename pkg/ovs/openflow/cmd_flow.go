@@ -32,11 +32,7 @@ func (f *commandFlow) GetTable() Table {
 }
 
 func (f *commandFlow) format(withActions bool) string {
-	repr := fmt.Sprintf("table=%d", f.table.GetID())
-
-	if withActions {
-		repr += fmt.Sprintf(",priority=%d", f.priority)
-	}
+	repr := fmt.Sprintf("table=%d,priority=%d", f.table.GetID(), f.priority)
 	if len(f.matchers) > 0 {
 		repr += fmt.Sprintf(",%s", strings.Join(f.matchers, ","))
 	}
@@ -60,7 +56,7 @@ func (f *commandFlow) Modify() error {
 	type a interface {
 		UpdateStatus(delta int)
 	}
-	if output, err := executor("ovs-ofctl", "mod-flows", f.bridge, "-O"+Version13, f.format(true)).CombinedOutput(); err != nil {
+	if output, err := executor("ovs-ofctl", "--strict", "mod-flows", f.bridge, "-O"+Version13, f.format(true)).CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to modify flow %q: %v (%q)", f.format(true), err, output)
 	}
 
@@ -69,7 +65,7 @@ func (f *commandFlow) Modify() error {
 }
 
 func (f *commandFlow) Delete() error {
-	if output, err := executor("ovs-ofctl", "del-flows", f.bridge, "-O"+Version13, f.format(false)).CombinedOutput(); err != nil {
+	if output, err := executor("ovs-ofctl", "--strict", "del-flows", f.bridge, "-O"+Version13, f.format(false)).CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to delete flow %q: %v (%q)", f.format(false), err, output)
 	}
 	f.updateTableStatus(-1)
