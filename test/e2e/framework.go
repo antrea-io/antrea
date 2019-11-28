@@ -115,6 +115,7 @@ func initProvider() error {
 	providerFactory := map[string]func(string) (providers.ProviderInterface, error){
 		"vagrant": providers.NewVagrantProvider,
 		"kind":    providers.NewKindProvider,
+		"remote":  providers.NewRemoteProvider,
 	}
 	if fn, ok := providerFactory[testOptions.providerName]; ok {
 		if newProvider, err := fn(testOptions.providerConfigPath); err != nil {
@@ -179,7 +180,7 @@ func collectClusterInfo() error {
 		cmd := "kubectl cluster-info dump | grep cluster-cidr"
 		rc, stdout, _, err := RunCommandOnNode(clusterInfo.masterNodeName, cmd)
 		if err != nil || rc != 0 {
-			return fmt.Errorf("error when running the following command on master Node: %s", stdout)
+			return fmt.Errorf("error when running the following command `%s` on master Node: %v, %s", cmd, err, stdout)
 		}
 		re := regexp.MustCompile(`cluster-cidr=([^"]+)`)
 		if matches := re.FindStringSubmatch(stdout); len(matches) == 0 {
