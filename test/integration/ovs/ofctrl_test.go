@@ -15,12 +15,13 @@
 package ovs
 
 import (
+	"fmt"
 	"net"
 	"sync/atomic"
 	"testing"
 
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	ofTestUtils "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
+	openflowtest "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
 )
 
 var (
@@ -61,13 +62,93 @@ var (
 	vMAC, _          = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 )
 
-func TestOFctrlFlow(t *testing.T) {
-	err := ofTestUtils.PrepareOVSBridge(br)
+func TestDeleteFlowStrict(t *testing.T) {
+	err := openflowtest.PrepareOVSBridge(br)
 	if err != nil {
 		t.Fatalf("Failed to prepare OVS bridge: %v", br)
 	}
 	defer func() {
-		err = ofTestUtils.DeleteOVSBridge(br)
+		err = openflowtest.DeleteOVSBridge(br)
+		if err != nil {
+			t.Errorf("error while deleting OVS bridge: %v", err)
+		}
+	}()
+
+	bridge := binding.NewOFBridge(br)
+	table = bridge.CreateTable(tableID, nextTable, binding.TableMissActionNext)
+
+	err = bridge.Connect(maxRetry, make(chan struct{}))
+	if err != nil {
+		t.Fatal("Failed to start OFService")
+	}
+	defer bridge.Disconnect()
+
+	flows, expectFlows := prepareOverlapFlows("1.1.1.1", true)
+	testDeleteSingleFlow(t, flows, expectFlows)
+
+	flows2, expectFlows2 := prepareOverlapFlows("2.2.2.2", false)
+	testDeleteSingleFlow(t, flows2, expectFlows2)
+}
+
+func prepareOverlapFlows(ipStr string, sameCookie bool) ([]binding.Flow, []*openflowtest.ExpectFlow) {
+	srcIP := net.ParseIP(ipStr)
+	cookie1 := getCookieID()
+	var cookie2 uint64
+	if sameCookie {
+		cookie2 = cookie1
+	} else {
+		cookie2 = getCookieID()
+	}
+	flows := []binding.Flow{
+		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			Cookie(cookie1).
+			Action().Drop().
+			Done(),
+		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			Cookie(cookie2).
+			MatchSrcIP(srcIP).
+			Action().ResubmitToTable(nextTable).
+			Done(),
+	}
+	expectFlows := []*openflowtest.ExpectFlow{
+		{"priority=200,ip", "drop"},
+		{fmt.Sprintf("priority=200,ip,nw_src=%s", ipStr), "resubmit(,2)"},
+	}
+	return flows, expectFlows
+}
+
+func testDeleteSingleFlow(t *testing.T, flows []binding.Flow, expectFlows []*openflowtest.ExpectFlow) {
+	for id, flow := range flows {
+		if err := flow.Add(); err != nil {
+			t.Fatalf("Failed to install flow%d: %v", id, err)
+		}
+	}
+	dumpTable := uint8(tableID)
+	openflowtest.CheckFlowExists(t, br, dumpTable, true, expectFlows)
+
+	err := flows[0].Delete()
+	if err != nil {
+		t.Fatalf("Failed to delete 'match-all' flow")
+	}
+	openflowtest.CheckFlowExists(t, br, dumpTable, false, []*openflowtest.ExpectFlow{expectFlows[0]})
+	flowList := openflowtest.CheckFlowExists(t, br, dumpTable, true, []*openflowtest.ExpectFlow{expectFlows[1]})
+	if len(flowList) != 1 {
+		t.Errorf("Failed to delete flow with strict mode")
+	}
+	err = flows[1].Delete()
+	if err != nil {
+		t.Fatalf("Failed to delete 'match-all' flow")
+	}
+	openflowtest.CheckFlowExists(t, br, dumpTable, false, []*openflowtest.ExpectFlow{expectFlows[1]})
+}
+
+func TestOFctrlFlow(t *testing.T) {
+	err := openflowtest.PrepareOVSBridge(br)
+	if err != nil {
+		t.Fatalf("Failed to prepare OVS bridge: %v", br)
+	}
+	defer func() {
+		err = openflowtest.DeleteOVSBridge(br)
 		if err != nil {
 			t.Errorf("error while deleting OVS bridge: %v", err)
 		}
@@ -90,7 +171,7 @@ func TestOFctrlFlow(t *testing.T) {
 	}
 
 	dumpTable := uint8(tableID)
-	flowList := ofTestUtils.CheckFlowExists(t, br, dumpTable, true, expectflows)
+	flowList := openflowtest.CheckFlowExists(t, br, dumpTable, true, expectflows)
 
 	// Test: DumpTableStatus
 	for _, tableStates := range bridge.DumpTableStatus() {
@@ -114,20 +195,20 @@ func TestOFctrlFlow(t *testing.T) {
 			t.Errorf("Failed to uninstall flow1 %v", err)
 		}
 	}
-	ofTestUtils.CheckFlowExists(t, br, dumpTable, false, expectflows[0:4])
+	openflowtest.CheckFlowExists(t, br, dumpTable, false, expectflows[0:4])
 
 	// Test: DeleteFlowsByCookie
 	err = bridge.DeleteFlowsByCookie(dumpCookieID, dumpCookieMask)
 	if err != nil {
 		t.Errorf("Failed to DeleteFlowsByCookie: %v", err)
 	}
-	flowList, _ = ofTestUtils.OfctlDumpFlows(br, uint8(tableID))
+	flowList, _ = openflowtest.OfctlDumpFlows(br, uint8(tableID))
 	if len(flowList) > 0 {
 		t.Errorf("Failed to delete flows by CookieID")
 	}
 }
 
-func prepareFlows(table binding.Table) ([]binding.Flow, []*ofTestUtils.ExpectFlow) {
+func prepareFlows(table binding.Table) ([]binding.Flow, []*openflowtest.ExpectFlow) {
 	var flows []binding.Flow
 	_, AllIPs, _ := net.ParseCIDR("0.0.0.0/0")
 	_, conjSrcIPNet, _ := net.ParseCIDR("192.168.3.0/24")
@@ -264,32 +345,32 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ofTestUtils.ExpectFlo
 			Action().ResubmitToTable(nextTable).Done(),
 	)
 
-	var flowStrs []*ofTestUtils.ExpectFlow
+	var flowStrs []*openflowtest.ExpectFlow
 	flowStrs = append(flowStrs,
-		&ofTestUtils.ExpectFlow{"priority=190,in_port=3", "load:0x2->NXM_NX_REG0[0..15],resubmit(,2)"},
-		&ofTestUtils.ExpectFlow{"priority=200,arp,in_port=3,arp_spa=192.168.1.3,arp_sha=aa:aa:aa:aa:aa:13", "resubmit(,2)"},
-		&ofTestUtils.ExpectFlow{"priority=200,ip,in_port=3,dl_src=aa:aa:aa:aa:aa:13,nw_src=192.168.1.3", "resubmit(,2)"},
-		&ofTestUtils.ExpectFlow{"priority=200,arp,arp_tpa=192.168.2.1,arp_op=1", "move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,load:0x2->NXM_OF_ARP_OP[],move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:192.168.2.1->arp_spa,IN_PORT"},
-		&ofTestUtils.ExpectFlow{"priority=190,arp", "NORMAL"},
-		&ofTestUtils.ExpectFlow{"priority=200,ip", "ct(table=2,zone=65520)"},
-		&ofTestUtils.ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "resubmit(,2)"},
-		&ofTestUtils.ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=2,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[],move:NXM_OF_ETH_SRC[]->NXM_NX_CT_LABEL[0..47]))"},
-		&ofTestUtils.ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x20,ip", "move:NXM_NX_CT_LABEL[0..47]->NXM_OF_ETH_DST[],resubmit(,2)"},
-		&ofTestUtils.ExpectFlow{"priority=200,ct_state=+new+inv,ip", "drop"},
-		&ofTestUtils.ExpectFlow{"priority=190,ct_state=+new+trk,ip", "ct(commit,table=2,zone=65520)"},
-		&ofTestUtils.ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", "set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,resubmit(,2)"},
-		&ofTestUtils.ExpectFlow{"priority=200,ip,nw_dst=192.168.2.0/24", "dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:10.1.1.2->tun_dst,resubmit(,2)"},
-		&ofTestUtils.ExpectFlow{"priority=200,ip,nw_dst=192.168.1.1", "set_field:aa:aa:aa:aa:aa:11->eth_dst,resubmit(,2)"},
-		&ofTestUtils.ExpectFlow{"priority=200,dl_dst=aa:aa:aa:aa:aa:13", "load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,2)"},
-		&ofTestUtils.ExpectFlow{"priority=200,ip,reg0=0x10000/0x10000", "output:NXM_NX_REG1[]"},
-		&ofTestUtils.ExpectFlow{"priority=200,ip,nw_dst=172.16.0.0/16", "output:1"},
-		&ofTestUtils.ExpectFlow{"priority=220,tcp,tp_dst=8080", "conjunction(1001,3/3)"},
-		&ofTestUtils.ExpectFlow{"priority=220,ip,nw_src=192.168.1.3", "conjunction(1001,1/3)"},
-		&ofTestUtils.ExpectFlow{"priority=220,ip,nw_dst=192.168.3.0/24", "conjunction(1001,2/3)"},
-		&ofTestUtils.ExpectFlow{"priority=220,ip", "conjunction(1001,1/3)"},
-		&ofTestUtils.ExpectFlow{"priority=220,ip,reg1=0x3", "conjunction(1001,2/3)"},
-		&ofTestUtils.ExpectFlow{"priority=220,conj_id=1001,ip", "resubmit(,2)"},
-		&ofTestUtils.ExpectFlow{"priority=220,conj_id=1001,ip,nw_src=192.168.1.1", "resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=190,in_port=3", "load:0x2->NXM_NX_REG0[0..15],resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=200,arp,in_port=3,arp_spa=192.168.1.3,arp_sha=aa:aa:aa:aa:aa:13", "resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=200,ip,in_port=3,dl_src=aa:aa:aa:aa:aa:13,nw_src=192.168.1.3", "resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=200,arp,arp_tpa=192.168.2.1,arp_op=1", "move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,load:0x2->NXM_OF_ARP_OP[],move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:192.168.2.1->arp_spa,IN_PORT"},
+		&openflowtest.ExpectFlow{"priority=190,arp", "NORMAL"},
+		&openflowtest.ExpectFlow{"priority=200,ip", "ct(table=2,zone=65520)"},
+		&openflowtest.ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=2,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[],move:NXM_OF_ETH_SRC[]->NXM_NX_CT_LABEL[0..47]))"},
+		&openflowtest.ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x20,ip", "move:NXM_NX_CT_LABEL[0..47]->NXM_OF_ETH_DST[],resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=200,ct_state=+new+inv,ip", "drop"},
+		&openflowtest.ExpectFlow{"priority=190,ct_state=+new+trk,ip", "ct(commit,table=2,zone=65520)"},
+		&openflowtest.ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", "set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=200,ip,nw_dst=192.168.2.0/24", "dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:10.1.1.2->tun_dst,resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=200,ip,nw_dst=192.168.1.1", "set_field:aa:aa:aa:aa:aa:11->eth_dst,resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=200,dl_dst=aa:aa:aa:aa:aa:13", "load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=200,ip,reg0=0x10000/0x10000", "output:NXM_NX_REG1[]"},
+		&openflowtest.ExpectFlow{"priority=200,ip,nw_dst=172.16.0.0/16", "output:1"},
+		&openflowtest.ExpectFlow{"priority=220,tcp,tp_dst=8080", "conjunction(1001,3/3)"},
+		&openflowtest.ExpectFlow{"priority=220,ip,nw_src=192.168.1.3", "conjunction(1001,1/3)"},
+		&openflowtest.ExpectFlow{"priority=220,ip,nw_dst=192.168.3.0/24", "conjunction(1001,2/3)"},
+		&openflowtest.ExpectFlow{"priority=220,ip", "conjunction(1001,1/3)"},
+		&openflowtest.ExpectFlow{"priority=220,ip,reg1=0x3", "conjunction(1001,2/3)"},
+		&openflowtest.ExpectFlow{"priority=220,conj_id=1001,ip", "resubmit(,2)"},
+		&openflowtest.ExpectFlow{"priority=220,conj_id=1001,ip,nw_src=192.168.1.1", "resubmit(,2)"},
 	)
 
 	return flows, flowStrs
