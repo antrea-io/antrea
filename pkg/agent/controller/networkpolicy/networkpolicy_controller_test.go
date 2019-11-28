@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -40,25 +41,45 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	return controller, clientset, reconciler
 }
 
+// mockReconciler implements Reconciler. It simply records the latest states of rules
+// it has been asked to reconcile, and provides two channels to receive its notifications
+// for testing.
 type mockReconciler struct {
+	sync.Mutex
 	lastRealized map[string]*CompletedRule
 	updated      chan string
+	deleted      chan string
 }
 
 func newMockReconciler() *mockReconciler {
-	return &mockReconciler{map[string]*CompletedRule{}, make(chan string, 3)}
+	return &mockReconciler{
+		lastRealized: map[string]*CompletedRule{},
+		updated:      make(chan string, 10),
+		deleted:      make(chan string, 10),
+	}
 }
 
 func (r *mockReconciler) Reconcile(rule *CompletedRule) error {
+	r.Lock()
+	defer r.Unlock()
 	r.lastRealized[rule.ID] = rule
 	r.updated <- rule.ID
 	return nil
 }
 
 func (r *mockReconciler) Forget(ruleID string) error {
+	r.Lock()
+	defer r.Unlock()
 	delete(r.lastRealized, ruleID)
-	r.updated <- ruleID
+	r.deleted <- ruleID
 	return nil
+}
+
+func (r *mockReconciler) getLastRealized(ruleID string) (*CompletedRule, bool) {
+	r.Lock()
+	defer r.Unlock()
+	lastRealized, exists := r.lastRealized[ruleID]
+	return lastRealized, exists
 }
 
 var _ Reconciler = &mockReconciler{}
@@ -133,7 +154,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup1", []v1beta1.PodReference{{"pod1", "ns1"}}))
 	select {
 	case ruleID := <-reconciler.updated:
-		actualRule := reconciler.lastRealized[ruleID]
+		actualRule, _ := reconciler.getLastRealized(ruleID)
 		if actualRule.Direction != desiredRule.Direction {
 			t.Errorf("Expected Direction %v, got %v", actualRule.Direction, desiredRule.Direction)
 		}
@@ -200,7 +221,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup2", []v1beta1.PodReference{{"pod2", "ns2"}}))
 	select {
 	case ruleID := <-reconciler.updated:
-		actualRule := reconciler.lastRealized[ruleID]
+		actualRule, _ := reconciler.getLastRealized(ruleID)
 		if actualRule.Direction != desiredRule.Direction {
 			t.Errorf("Expected Direction %v, got %v", actualRule.Direction, desiredRule.Direction)
 		}
@@ -242,7 +263,7 @@ func TestDeleteRule(t *testing.T) {
 	networkPolicyWatcher.Add(getNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services))
 	select {
 	case ruleID := <-reconciler.updated:
-		_, exists := reconciler.lastRealized[ruleID]
+		_, exists := reconciler.getLastRealized(ruleID)
 		if !exists {
 			t.Fatalf("Expected rule %s, got none", ruleID)
 		}
@@ -252,8 +273,8 @@ func TestDeleteRule(t *testing.T) {
 
 	networkPolicyWatcher.Delete(getNetworkPolicy("policy1", []string{}, []string{}, []string{}, nil))
 	select {
-	case ruleID := <-reconciler.updated:
-		actualRule, exists := reconciler.lastRealized[ruleID]
+	case ruleID := <-reconciler.deleted:
+		actualRule, exists := reconciler.getLastRealized(ruleID)
 		if exists {
 			t.Errorf("Expected no rule, got %v", actualRule)
 		}
