@@ -5,7 +5,6 @@ GOFLAGS         :=
 BINDIR          := $(CURDIR)/bin
 GO_FILES        := $(shell find . -type d -name '.cache' -prune -o -type f -name '*.go' -print)
 GOPATH          ?= $$(go env GOPATH)
-GOPROXY         ?= $$(go env GOPROXY)
 DOCKER_CACHE    := $(CURDIR)/.cache
 
 .PHONY: all
@@ -49,7 +48,6 @@ DOCKER_ENV := \
 	@docker run --rm -u $$(id -u):$$(id -g) \
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
-		-e "GOPROXY=$(GOPROXY)" \
 		-w /usr/src/github.com/vmware-tanzu/antrea \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
