@@ -9,6 +9,14 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 
 ## Unreleased
 
+## 0.1.1 - 2019-11-27
+
+### Fixed
+
+- Find host-local IPAM plugin even when kubelet is started with custom cni-bin-dir.
+- Ensure that the Gratuitous ARP sent after adding container interface is not dropped. This ensures we can pass Kubernetes conformance tests reliably.
+- Fix Kind support on Linux hosts.
+
 ## 0.1.0 - 2019-11-18
 
 ### Added
