@@ -147,6 +147,20 @@ func (mr *MockBridgeMockRecorder) DumpTableStatus() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableStatus", reflect.TypeOf((*MockBridge)(nil).DumpTableStatus))
 }
 
+// IsConnected mocks base method
+func (m *MockBridge) IsConnected() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsConnected")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsConnected indicates an expected call of IsConnected
+func (mr *MockBridgeMockRecorder) IsConnected() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockBridge)(nil).IsConnected))
+}
+
 // MockTable is a mock of Table interface
 type MockTable struct {
 	ctrl     *gomock.Controller

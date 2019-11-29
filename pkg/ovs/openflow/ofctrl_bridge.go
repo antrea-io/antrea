@@ -258,9 +258,8 @@ func (b *OFBridge) DeleteFlowsByCookie(cookieID, cookieMask uint64) error {
 	return nil
 }
 
-func (b *OFBridge) IsOFBridgeConnected() bool {
+func (b *OFBridge) IsConnected() bool {
 	return b.ofSwitch.IsReady()
-
 }
 
 // MaxRetry is a callback from OFController. It sets the max retry count that OFController attempts to connect to OFSwitch.

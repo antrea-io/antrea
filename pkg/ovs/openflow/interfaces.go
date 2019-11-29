@@ -75,6 +75,8 @@ type Bridge interface {
 	Connect(maxRetrySec int, connectCh chan struct{}) error
 	// Disconnect stops connection to the OFSwitch.
 	Disconnect() error
+	// IsConnected returns the OFSwitch's connection status. The result is true if the OFSwitch is connected.
+	IsConnected() bool
 }
 
 // TableStatus represents the status of a specific flow table. The status is useful for debugging.
