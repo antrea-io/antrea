@@ -16,7 +16,7 @@ us through Issues, Slack and / or Google Group!
 The following features are being actively developed and will be available soon:
 
 * **Kubernetes NetworkPolicy**
-Antrea already supports Kubernetes NetworkPolicy, but we are still stablizing
+Antrea already supports Kubernetes NetworkPolicy, but we are still stabilizing
 the implementation, improving the policy computation performance, and adding
 end-to-end tests.
 

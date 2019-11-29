@@ -39,7 +39,7 @@ clientConnection:
 #tunnelType: vxlan
 
 # Default MTU to use for the host gateway interface and the network interface of
-# each Pod. If omitted, antrea-agent will default this value to 1450 to accomodate
+# each Pod. If omitted, antrea-agent will default this value to 1450 to accommodate
 # for tunnel encapsulate overhead.
 #defaultMTU: 1450
 
