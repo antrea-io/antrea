@@ -60,7 +60,7 @@ func TestPodConnectivitySameNode(t *testing.T) {
 	numPods := 2 // can be increased
 	podNames := make([]string, numPods)
 	for idx := range podNames {
-		podNames[idx] = randPodName(fmt.Sprintf("test-pod-%d-", idx))
+		podNames[idx] = randName(fmt.Sprintf("test-pod-%d-", idx))
 	}
 	workerNode := workerNodeName(1)
 
@@ -88,7 +88,7 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, numPods int) (podN
 	}
 
 	for idx := 0; idx < numPods; idx++ {
-		podName := randPodName(fmt.Sprintf("test-pod-%d-", idx))
+		podName := randName(fmt.Sprintf("test-pod-%d-", idx))
 		nodeName := nodeName(idx % clusterInfo.numNodes)
 		t.Logf("Creating busybox test Pods '%s' on '%s'", podName, nodeName)
 		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
