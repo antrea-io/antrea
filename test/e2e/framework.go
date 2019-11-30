@@ -26,6 +26,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -44,7 +45,7 @@ const testNamespace string = "antrea-test"
 
 const defaultContainerName string = "busybox"
 
-const podNameSuffixLength int = 8
+const nameSuffixLength int = 8
 
 const OVSContainerName string = "antrea-ovs"
 
@@ -380,15 +381,15 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 	return err
 }
 
-// createBusyboxPodOnNode creates a Pod in the test namespace with a single busybox container. The
+// createPodOnNode creates a pod in the test namespace with a container whose type is decided by imageName.
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error {
+func (data *TestData) createPodOnNode(name string, nodeName string, imageName string) error {
 	sleepDuration := 3600 // seconds
 	podSpec := v1.PodSpec{
 		Containers: []v1.Container{
 			{
 				Name:            defaultContainerName,
-				Image:           "busybox",
+				Image:           imageName,
 				ImagePullPolicy: v1.PullIfNotPresent,
 				Command:         []string{"sleep", strconv.Itoa(sleepDuration)},
 			},
@@ -414,6 +415,7 @@ func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error
 			Name: name,
 			Labels: map[string]string{
 				"antrea-e2e": name,
+				"app":        imageName,
 			},
 		},
 		Spec: podSpec,
@@ -424,9 +426,26 @@ func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error
 	return nil
 }
 
+// createBusyboxPodOnNode creates a Pod in the test namespace with a single busybox container. The
+// Pod will be scheduled on the specified Node (if nodeName is not empty).
+func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error {
+	return data.createPodOnNode(name, nodeName, "busybox")
+}
+
 // createBusyboxPod creates a Pod in the test namespace with a single busybox container.
 func (data *TestData) createBusyboxPod(name string) error {
 	return data.createBusyboxPodOnNode(name, "")
+}
+
+// createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
+// Pod will be scheduled on the specified Node (if nodeName is not empty).
+func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
+	return data.createPodOnNode(name, nodeName, "nginx")
+}
+
+// createNginxPod creates a Pod in the test namespace with a single nginx container.
+func (data *TestData) createNginxPod(name string) error {
+	return data.createNginxPodOnNode(name, "")
 }
 
 // deletePod deletes a Pod in the test namespace.
@@ -611,6 +630,45 @@ func validatePodIP(podNetworkCIDR, podIP string) (bool, error) {
 	return cidr.Contains(ip), nil
 }
 
+// createServiceOnNode creates a service with port and targetPort.
+func (data *TestData) createService(name string, service string, port int, targetPort int) error {
+	_, err := data.clientset.CoreV1().Services(testNamespace).Create(&v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"antrea-e2e": name,
+				"app":        service,
+			},
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{{
+				Port: int32(port),
+				TargetPort: intstr.IntOrString{
+					Type:   0,
+					IntVal: int32(targetPort),
+				},
+			}},
+			Selector: map[string]string{
+				"app": service,
+			},
+		},
+	})
+	return err
+}
+
+// createNginxServiceOnNode create a nginx service on node.
+func (data *TestData) createNginxServiceOnNode(name string) error {
+	return data.createService(name, "nginx", 80, 80)
+}
+
+// deleteService deletes the service.
+func (data *TestData) deleteService(name string) error {
+	if err := data.clientset.CoreV1().Services(testNamespace).Delete(name, nil); err != nil {
+		return fmt.Errorf("unable to cleanup service %v: %v", name, err)
+	}
+	return nil
+}
+
 // A DNS-1123 subdomain must consist of lower case alphanumeric characters
 var lettersAndDigits = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
@@ -623,8 +681,8 @@ func randSeq(n int) string {
 	return string(b)
 }
 
-func randPodName(prefix string) string {
-	return prefix + randSeq(podNameSuffixLength)
+func randName(prefix string) string {
+	return prefix + randSeq(nameSuffixLength)
 }
 
 // Run the provided command in the specified Container for the give Pod and returns the contents of
