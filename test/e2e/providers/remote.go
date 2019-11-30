@@ -65,7 +65,7 @@ func (p *RemoteProvider) GetKubeconfigPath() (string, error) {
 	return *remoteKubeconfig, nil
 }
 
-NewRemoteProvider returns an implementation of ProviderInterface which enables tests to run on a remote cluster.
+// NewRemoteProvider returns an implementation of ProviderInterface which enables tests to run on a remote cluster.
 // configPath is unused for the remote provider
 //noinspection GoUnusedParameter
 func NewRemoteProvider(configPath string) (ProviderInterface, error) {
