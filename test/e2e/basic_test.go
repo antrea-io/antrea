@@ -42,7 +42,7 @@ func TestPodAssignIP(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	podName := randPodName("test-pod-")
+	podName := randName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod")
 	if err := data.createBusyboxPod(podName); err != nil {
@@ -76,7 +76,7 @@ func TestDeletePod(t *testing.T) {
 	defer teardownTest(t, data)
 
 	nodeName := nodeName(0)
-	podName := randPodName("test-pod-")
+	podName := randName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod on '%s'", nodeName)
 	if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
@@ -172,8 +172,8 @@ func TestIPAMRestart(t *testing.T) {
 	defer teardownTest(t, data)
 
 	nodeName := nodeName(0)
-	podName1 := randPodName("test-pod-")
-	podName2 := randPodName("test-pod-")
+	podName1 := randName("test-pod-")
+	podName2 := randName("test-pod-")
 	pods := make([]string, 0, 2)
 	var podIP1, podIP2 string
 
