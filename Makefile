@@ -109,9 +109,16 @@ fmt:
 	@echo "===> Formatting Go files <==="
 	@gofmt -s -l -w $(GO_FILES)
 
+.PHONY: .linter
+.linter:
+	@if ! command golint; then \
+	  go get -u golang.org/x/lint/golint; \
+	fi
+
 .PHONY: lint
-lint:
-	golint $$(go list ./...)
+lint: export GOOS=linux
+lint: .linter
+	@golint ./cmd/... ./pkg/...
 
 .PHONY: clean
 clean:
