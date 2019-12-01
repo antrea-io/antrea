@@ -109,6 +109,24 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 	}
 }
 
+func TestAntctlAgentFlowTable(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	podName, err := data.getAntreaPodOnNode(masterNodeName())
+	if err != nil {
+		t.Fatalf("Error when getting on antrea agent %s: %v", podName, err)
+	}
+	if _, _, err := runAntctl(podName, []string{"get", "flow-table"}, data, t); err != nil {
+		t.Fatalf("Error when running `antctl get flow-table` from %s: %v", podName, err)
+	}
+	if _, _, err := runAntctl(podName, []string{"get", "flow-table", "20"}, data, t); err != nil {
+		t.Fatalf("Error when running `antctl get flow-table 20` from %s: %v", podName, err)
+	}
+}
+
 // TestAntctlVerboseMode ensures no unexpected outputs during the execution of
 // the antctl client.
 func TestAntctlVerboseMode(t *testing.T) {

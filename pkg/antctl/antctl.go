@@ -76,6 +76,16 @@ var CommandList = &commandList{
 			CommandGroup:        flat,
 			AddonTransform:      versionTransform,
 		},
+		{
+			Use:                 "flow-table",
+			Short:               "Get all flow tables status",
+			Long:                "Get all flow tables status of current antrea agent",
+			HandlerFactory:      new(handlers.FlowTable),
+			GroupVersion:        &systemGroup,
+			TransformedResponse: reflect.TypeOf(handlers.FlowTableResponse{}),
+			Agent:               true,
+			CommandGroup:        get,
+		},
 	},
 	codec: scheme.Codecs,
 }
