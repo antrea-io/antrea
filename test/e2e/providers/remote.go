@@ -29,24 +29,23 @@ import (
 var (
 	homedir, _       = os.UserHomeDir()
 	sshConfig        = flag.String("remote.sshconfig", path.Join(homedir, ".ssh", "config"), "Path of the sshconfig")
-	remoteKubeconfig = flag.String("remote.kubeconfig", path.Join(homedir, ".kube", "config"), "Path of the kubeconfig of the cluster in local")
+	remoteKubeconfig = flag.String("remote.kubeconfig", path.Join(homedir, ".kube", "config"), "Path of the kubeconfig of the cluster")
 )
 
 func getSSHConfig() (*ssh_config.Config, error) {
-	if info, err := os.Stat(*sshConfig); err != nil {
+	info, err := os.Stat(*sshConfig)
+	if err != nil {
 		return nil, err
-	} else if info.IsDir() {
-		return nil, errors.New(fmt.Sprintf("%s is not a file", *sshConfig))
-	} else if f, err := os.Open(*sshConfig); err != nil {
-		return nil, err
-	} else {
-		defer f.Close()
-		if config, err := ssh_config.Decode(f); err != nil {
-			return nil, err
-		} else {
-			return config, nil
-		}
 	}
+	if info.IsDir() {
+		return nil, errors.New(fmt.Sprintf("%s is not a file", *sshConfig))
+	}
+	f, err := os.Open(*sshConfig)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return ssh_config.Decode(f)
 }
 
 type RemoteProvider struct {
@@ -67,12 +66,10 @@ func (p *RemoteProvider) GetKubeconfigPath() (string, error) {
 
 // NewRemoteProvider returns an implementation of ProviderInterface which enables tests to run on a remote cluster.
 // configPath is unused for the remote provider
-//noinspection GoUnusedParameter
 func NewRemoteProvider(configPath string) (ProviderInterface, error) {
 	sshConfig, err := getSSHConfig()
 	if err != nil {
 		return nil, err
-	} else {
-		return &RemoteProvider{sshConfig: sshConfig}, nil
 	}
+	return &RemoteProvider{sshConfig: sshConfig}, nil
 }
