@@ -47,6 +47,8 @@ Your feedback is more than welcome!
 * Check out Open Issues.
 * Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
 [#antrea](https://kubernetes.slack.com/messages/CR2J23M0X) channel.
+* Attend the [project weekly meeting](https://VMware.zoom.us/j/823654111),
+every Wednesday at 9AM PST (5PM GMT).
 * Join our mailing lists to always stay up-to-date with Antrea development:
   + [projectantrea-announce](https://groups.google.com/forum/#!forum/projectantrea-announce)
 for important project announcements.
