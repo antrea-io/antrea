@@ -35,12 +35,13 @@ import (
 	"github.com/vishvananda/netlink"
 	k8sFake "k8s.io/client-go/kubernetes/fake"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	ipamtest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam/testing"
 	cniservertest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/testing"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
+	agenttypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnimsg "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -48,13 +49,13 @@ import (
 )
 
 const (
-	IFNAME               = "eth0"
-	CONTAINERID          = "dummy-0"
-	testSock             = "/tmp/test.sock"
-	testPod              = "test-1"
-	testPodNamespace     = "t1"
-	testPodInfraContaner = "test-111111"
-	bridge               = "br0"
+	IFName                = "eth0"
+	ContainerID           = "dummy-0"
+	testSock              = "/tmp/test.sock"
+	testPod               = "test-1"
+	testPodNamespace      = "t1"
+	testPodInfraContainer = "test-111111"
+	bridge                = "br0"
 )
 
 const (
@@ -62,9 +63,6 @@ const (
 	"cniVersion": "%s",
 	"name": "testConfig",
 	"type": "antrea"`
-
-	vlan = `,
-	"vlan": %d`
 
 	netDefault = `,
 	"isDefaultGateway": true`
@@ -104,7 +102,7 @@ const (
 var ipamMock *ipamtest.MockIPAMDriver
 var ovsServiceMock *ovsconfigtest.MockOVSBridgeClient
 var ofServiceMock *openflowtest.MockClient
-var testNodeConfig *agent.NodeConfig
+var testNodeConfig *agenttypes.NodeConfig
 
 type Net struct {
 	Name          string                 `json:"name"`
@@ -202,11 +200,11 @@ func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *cnimsg.CniC
 	conf := tc.netConfJSON(dataDir)
 	return &cnimsg.CniCmdRequest{
 		CniArgs: &cnimsg.CniCmdArgs{
-			ContainerId:          CONTAINERID,
-			Ifname:               IFNAME,
+			ContainerId:          ContainerID,
+			Ifname:               IFName,
 			Netns:                targetNS.Path(),
 			NetworkConfiguration: []byte(conf),
-			Args:                 cniservertest.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContaner),
+			Args:                 cniservertest.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContainer),
 		},
 	}
 }
@@ -217,11 +215,11 @@ func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir st
 
 	return &cnimsg.CniCmdRequest{
 		CniArgs: &cnimsg.CniCmdArgs{
-			ContainerId:          CONTAINERID,
-			Ifname:               IFNAME,
+			ContainerId:          ContainerID,
+			Ifname:               IFName,
 			Netns:                targetNS.Path(),
 			NetworkConfiguration: conf,
-			Args:                 cniservertest.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContaner),
+			Args:                 cniservertest.GenerateCNIArgs(testPod, testPodNamespace, testPodInfraContainer),
 		},
 	}
 }
@@ -285,22 +283,22 @@ func matchRoute(expectedCIDR string, routes []netlink.Route) (*netlink.Route, er
 	return nil, nil
 }
 
-// checkContainerNetworking checks for the presence of the interface called IFNAME inside the
+// checkContainerNetworking checks for the presence of the interface called IFName inside the
 // container namespace and checks for the presence of a default route through the Pod CIDR gateway.
 func (tester *cmdAddDelTester) checkContainerNetworking(tc testCase) {
-	require := require.New(tc.t)
-	assert := assert.New(tc.t)
+	testRequire := require.New(tc.t)
+	testAssert := assert.New(tc.t)
 
-	link, err := linkByName(tester.targetNS, IFNAME)
-	require.Nil(err)
-	require.Equal(IFNAME, link.Attrs().Name)
-	require.IsType(&netlink.Veth{}, link)
+	link, err := linkByName(tester.targetNS, IFName)
+	testRequire.Nil(err)
+	testRequire.Equal(IFName, link.Attrs().Name)
+	testRequire.IsType(&netlink.Veth{}, link)
 
 	expCIDRsV4, _ := tc.expectedCIDRs()
 	addrs, err := addrList(tester.targetNS, link, netlink.FAMILY_V4)
-	require.Nil(err)
+	testRequire.Nil(err)
 	// make sure that the IP addresses were correctly assigned to the container's interface
-	require.Len(addrs, len(expCIDRsV4))
+	testRequire.Len(addrs, len(expCIDRsV4))
 	for _, expAddr := range expCIDRsV4 {
 		findAddr := func() bool {
 			for _, addr := range addrs {
@@ -311,21 +309,21 @@ func (tester *cmdAddDelTester) checkContainerNetworking(tc testCase) {
 			return false
 		}
 		found := findAddr()
-		assert.Truef(found, "No IP address assigned from subnet %v", expAddr)
+		testAssert.Truef(found, "No IP address assigned from subnet %v", expAddr)
 	}
 
-	// Check that default route exsists.
+	// Check that default route exists.
 	routes, err := routeList(tester.targetNS, link)
-	require.Nil(err)
+	testRequire.Nil(err)
 	for _, cidr := range tc.expGatewayCIDRs {
 		expectedRoute, err := matchRoute(cidr, routes)
-		require.Nil(err)
-		require.NotNil(expectedRoute)
+		testRequire.Nil(err)
+		testRequire.NotNil(expectedRoute)
 	}
 }
 
 func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current.Result, error) {
-	require := require.New(tc.t)
+	testRequire := require.New(tc.t)
 	var err error
 
 	// Generate network config and command arguments.
@@ -337,39 +335,39 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 		response, err = tester.server.CmdAdd(tester.ctx, tester.request)
 		return err
 	})
-	require.Nil(err)
+	testRequire.Nil(err)
 
 	r, err := current.NewResult(response.CniResult)
-	require.Nil(err)
+	testRequire.Nil(err)
 
 	result, err := current.GetResult(r)
-	require.Nil(err)
+	testRequire.Nil(err)
 
-	require.Len(result.Interfaces, 2)
+	testRequire.Len(result.Interfaces, 2)
 
-	require.Equal(IFNAME, result.Interfaces[1].Name)
-	require.Len(result.Interfaces[1].Mac, 17) // mac is random
-	require.Equal(tester.targetNS.Path(), result.Interfaces[1].Sandbox)
+	testRequire.Equal(IFName, result.Interfaces[1].Name)
+	testRequire.Len(result.Interfaces[1].Mac, 17) // mac is random
+	testRequire.Equal(tester.targetNS.Path(), result.Interfaces[1].Sandbox)
 
 	// Check for the veth link in the test namespace.
 	hostIfaceName := util.GenerateContainerInterfaceName(testPod, testPodNamespace)
-	require.Equal(hostIfaceName, result.Interfaces[0].Name)
-	require.Len(result.Interfaces[0].Mac, 17)
+	testRequire.Equal(hostIfaceName, result.Interfaces[0].Name)
+	testRequire.Len(result.Interfaces[0].Mac, 17)
 
 	link, err := linkByName(tester.testNS, result.Interfaces[0].Name)
-	require.Nil(err)
+	testRequire.Nil(err)
 
-	require.IsType(&netlink.Veth{}, link)
-	require.Equal(hostIfaceName, link.Attrs().Name)
-	require.Equal(result.Interfaces[0].Mac, link.Attrs().HardwareAddr.String())
+	testRequire.IsType(&netlink.Veth{}, link)
+	testRequire.Equal(hostIfaceName, link.Attrs().Name)
+	testRequire.Equal(result.Interfaces[0].Mac, link.Attrs().HardwareAddr.String())
 
 	var linkList []netlink.Link
 	err = tester.targetNS.Do(func(ns.NetNS) error {
 		linkList, err = netlink.LinkList()
 		return err
 	})
-	require.Nil(err)
-	require.Len(linkList, 2)
+	testRequire.Nil(err)
+	testRequire.Len(linkList, 2)
 
 	// Find the veth peer in the container namespace and the default route.
 	tester.checkContainerNetworking(tc)
@@ -420,7 +418,7 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 }
 
 func (tester *cmdAddDelTester) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
-	require := require.New(tc.t)
+	testRequire := require.New(tc.t)
 	var err error
 
 	// Generate network config and command arguments.
@@ -431,14 +429,14 @@ func (tester *cmdAddDelTester) cmdCheckTest(tc testCase, conf *Net, dataDir stri
 		_, err = tester.server.CmdCheck(tester.ctx, tester.request)
 		return err
 	})
-	require.Nil(err)
+	testRequire.Nil(err)
 
 	// Find the veth peer in the container namespace and the default route.
 	tester.checkContainerNetworking(tc)
 }
 
 func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
-	require := require.New(tc.t)
+	testRequire := require.New(tc.t)
 	var err error
 
 	tester.request = tc.createCmdArgs(tester.targetNS, dataDir)
@@ -448,40 +446,40 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 		_, err := tester.server.CmdDel(tester.ctx, tester.request)
 		return err
 	})
-	require.Nil(err)
+	testRequire.Nil(err)
 
 	var link netlink.Link
 
 	// Make sure the host veth has been deleted.
-	link, err = netlink.LinkByName(IFNAME)
-	require.NotNil(err)
-	require.Nil(link)
+	link, err = netlink.LinkByName(IFName)
+	testRequire.NotNil(err)
+	testRequire.Nil(link)
 
 	// Make sure the container veth has been deleted
 	link, err = netlink.LinkByName(tester.vethName)
-	require.NotNil(err)
-	require.Nil(link)
+	testRequire.NotNil(err)
+	testRequire.Nil(link)
 }
 
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
-	ifaceStore := agent.NewInterfaceStore()
-	tester.server = cniserver.New(testSock, "", 1450, testNodeConfig, ovsServiceMock, ofServiceMock, ifaceStore, k8sFake.NewSimpleClientset())
+	ifaceStore := interfacestore.NewInterfaceStore()
+	tester.server = cniserver.New(testSock, "", 1450, "", testNodeConfig, ovsServiceMock, ofServiceMock, ifaceStore, k8sFake.NewSimpleClientset())
 	ctx, _ := context.WithCancel(context.Background())
 	tester.ctx = ctx
 	return tester
 }
 
 func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
-	require := require.New(tc.t)
+	testRequire := require.New(tc.t)
 
-	require.Equal("0.4.0", tc.cniVersion)
+	testRequire.Equal("0.4.0", tc.cniVersion)
 
 	// Get a Add/Del tester based on test case version
 	tester := newTester()
 
 	targetNS, err := testutils.NewNS()
-	require.Nil(err)
+	testRequire.Nil(err)
 	defer targetNS.Close()
 	tester.setNS(testNS, targetNS)
 
@@ -497,21 +495,21 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 
 	// Test ip allocation
 	prevResult, err := tester.cmdAddTest(tc, dataDir)
-	require.Nil(err)
+	testRequire.Nil(err)
 
-	require.NotNil(prevResult)
+	testRequire.NotNil(prevResult)
 
 	confString := tc.netConfJSON(dataDir)
 
 	conf := &Net{}
 	err = json.Unmarshal([]byte(confString), &conf)
-	require.Nil(err)
+	testRequire.Nil(err)
 
 	conf.IPAM, _, err = allocator.LoadIPAMConfig([]byte(confString), "")
-	require.Nil(err)
+	testRequire.Nil(err)
 
 	newConf, err := buildOneConfig("testConfig", tc.cniVersion, conf, prevResult)
-	require.Nil(err)
+	testRequire.Nil(err)
 
 	// Test CHECK
 	tester.cmdCheckTest(tc, newConf, dataDir)
@@ -592,8 +590,8 @@ func init() {
 	nodeName := "node1"
 	gwIP := net.ParseIP("192.168.1.1")
 	gwMAC, _ := net.ParseMAC("11:11:11:11:11:11")
-	nodeGateway := &agent.Gateway{IP: gwIP, MAC: gwMAC, Name: "gw"}
-	_, nodePodeCIDR, _ := net.ParseCIDR("192.168.1.0/24")
+	nodeGateway := &agenttypes.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: "gw"}
+	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 
-	testNodeConfig = &agent.NodeConfig{bridge, nodeName, nodePodeCIDR, nodeGateway}
+	testNodeConfig = &agenttypes.NodeConfig{Bridge: bridge, Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: nodeGateway}
 }

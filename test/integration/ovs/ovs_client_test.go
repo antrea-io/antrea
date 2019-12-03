@@ -23,6 +23,7 @@ import (
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -42,7 +43,7 @@ type testData struct {
 
 func (data *testData) setup(t *testing.T) {
 	var err error
-	// ensure that we timeout after a reasonnable time duration if we cannot connect to the Unix
+	// ensure that we timeout after a reasonable time duration if we cannot connect to the Unix
 	// socket.
 	connectErrorCh := make(chan error, 0)
 	connect := func() {
@@ -162,7 +163,7 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 	var err error
 	var uuid string
 	var externalIDs map[string]interface{}
-	var ifName string = name
+	var ifName = name
 
 	switch ifType {
 	case "":
