@@ -135,7 +135,7 @@ func createPerformanceNginx(data *TestData, b *testing.B) (string, error) {
 	return data.podWaitForIP(defaultTimeout, benchNginxPodName)
 }
 
-// createPerformanceAB creates the apache-bench Pod and wait it to be ready.
+// createPerformanceAB creates the apache-bench Pod and waits for it to be ready.
 func createPerformanceAB(data *TestData, b *testing.B) (string, error) {
 	b.Logf("Creating an apache-bench test Pod")
 	sleepDuration := "3600" // seconds
