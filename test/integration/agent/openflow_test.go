@@ -193,7 +193,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	}()
 
 	err = c.Initialize()
-	require.Nil(t, err, "Failed to ininitalize OFClient")
+	require.Nil(t, err, "Failed to initialize OFClient")
 
 	ruleID := uint32(100)
 	fromList := []string{"192.168.1.3", "192.168.1.25", "192.168.2.4"}
@@ -230,7 +230,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	flowList, err := ofTestUtils.OfctlDumpFlows(br, ingressRuleTable)
 	require.Nil(t, err, "Failed to dump flows")
 	conjMatch := fmt.Sprintf("priority=%d,ip,reg1=0x%x", priorityNormal, ofport)
-	flow := &ofTestUtils.ExpectFlow{conjMatch, fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
+	flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
 	assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow), "Failed to install conjunctive match flow")
 
 	// Verify multiple conjunctions share the same match conditions.
@@ -253,8 +253,8 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	flowList, err = ofTestUtils.OfctlDumpFlows(br, ingressRuleTable)
 	require.Nil(t, err, "Failed to dump flows")
 	conjMatch = fmt.Sprintf("priority=%d,ip,nw_dst=192.168.3.4", priorityNormal)
-	flow1 := &ofTestUtils.ExpectFlow{conjMatch, fmt.Sprintf("conjunction(%d,2/3),conjunction(%d,1/2)", ruleID, ruleID2)}
-	flow2 := &ofTestUtils.ExpectFlow{conjMatch, fmt.Sprintf("conjunction(%d,1/2),conjunction(%d,2/3)", ruleID2, ruleID)}
+	flow1 := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3),conjunction(%d,1/2)", ruleID, ruleID2)}
+	flow2 := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,1/2),conjunction(%d,2/3)", ruleID2, ruleID)}
 	if !ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow1) && !ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow2) {
 		t.Errorf("Failed to install conjunctive match flow")
 	}
@@ -276,7 +276,7 @@ func checkDefaultDropFlows(t *testing.T, table uint8, priority int, addrType typ
 	}
 	for _, addr := range addresses {
 		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(addrType)), addr.GetMatchValue())
-		flow := &ofTestUtils.ExpectFlow{conjMatch, "drop"}
+		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: "drop"}
 		if add {
 			assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, table, flow), "Failed to install conjunctive match flow")
 		} else {
@@ -309,7 +309,7 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// dump flows
-	flowList, err := ofTestUtils.OfctlDumpFlows(br, uint8(ruleTable))
+	flowList, err := ofTestUtils.OfctlDumpFlows(br, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
 
 	action := fmt.Sprintf("conjunction(%d,1/3)", ruleID)
@@ -319,7 +319,7 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 
 	for _, addr := range addedAddress {
 		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(addrType)), addr.GetMatchValue())
-		flow := &ofTestUtils.ExpectFlow{conjMatch, action}
+		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: action}
 		assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow")
 	}
 
@@ -335,7 +335,7 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 func checkDeleteAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32, addedAddress []types.Address, addrType types.AddressType) {
 	err := c.DeletePolicyRuleAddress(ruleID, addrType, addedAddress)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
-	flowList, err := ofTestUtils.OfctlDumpFlows(br, uint8(ruleTable))
+	flowList, err := ofTestUtils.OfctlDumpFlows(br, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
 
 	action := fmt.Sprintf("conjunction(%d,1/3)", ruleID)
@@ -345,7 +345,7 @@ func checkDeleteAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint
 
 	for _, addr := range addedAddress {
 		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(addrType)), addr.GetMatchValue())
-		flow := &ofTestUtils.ExpectFlow{conjMatch, action}
+		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: action}
 		assert.False(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow")
 	}
 
@@ -364,13 +364,13 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 	require.Nil(t, err, "Failed to dump flows")
 
 	conjunctionActionMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip", priority-10, rule.ID)
-	flow := &ofTestUtils.ExpectFlow{conjunctionActionMatch, fmt.Sprintf("resubmit(,%d)", allowTable)}
+	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("resubmit(,%d)", allowTable)}
 	testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to update conjunction action flow")
 
 	if rule.ExceptFrom != nil {
 		for _, addr := range rule.ExceptFrom {
 			exceptsMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip,%s=%s", priority, ruleID, getCmdMatchKey(addr.GetMatchKey(types.SrcAddress)), addr.GetMatchValue())
-			flow := &ofTestUtils.ExpectFlow{exceptsMatch, fmt.Sprintf("resubmit(,%d)", dropTable)}
+			flow := &ofTestUtils.ExpectFlow{MatchStr: exceptsMatch, ActStr: fmt.Sprintf("resubmit(,%d)", dropTable)}
 			testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunction excepts flow")
 		}
 	}
@@ -378,7 +378,7 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 	if rule.ExceptTo != nil {
 		for _, addr := range rule.ExceptTo {
 			exceptsMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip,%s=%s", priority, ruleID, getCmdMatchKey(addr.GetMatchKey(types.DstAddress)), addr.GetMatchValue())
-			flow := &ofTestUtils.ExpectFlow{exceptsMatch, fmt.Sprintf("resubmit(,%d)", dropTable)}
+			flow := &ofTestUtils.ExpectFlow{MatchStr: exceptsMatch, ActStr: fmt.Sprintf("resubmit(,%d)", dropTable)}
 			testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow),
 				"Failed to install conjunction excepts flow")
 		}
@@ -386,19 +386,19 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 
 	for _, addr := range rule.From {
 		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(types.SrcAddress)), addr.GetMatchValue())
-		flow := &ofTestUtils.ExpectFlow{conjMatch, fmt.Sprintf("conjunction(%d,1/3)", ruleID)}
+		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,1/3)", ruleID)}
 		testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause1")
 	}
 
 	for _, addr := range rule.To {
 		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(types.DstAddress)), addr.GetMatchValue())
-		flow := &ofTestUtils.ExpectFlow{conjMatch, fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
+		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
 		testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause2")
 	}
 
 	for _, service := range rule.Service {
 		conjMatch1 := fmt.Sprintf("priority=%d,%s,tp_dst=%d", priority, strings.ToLower(string(*service.Protocol)), service.Port.IntVal)
-		flow := &ofTestUtils.ExpectFlow{conjMatch1, fmt.Sprintf("conjunction(%d,3/3)", ruleID)}
+		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch1, ActStr: fmt.Sprintf("conjunction(%d,3/3)", ruleID)}
 		testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause3")
 	}
 
