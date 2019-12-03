@@ -328,7 +328,7 @@ func countFlows(data *TestData) (int, error) {
 	return strings.Count(output, "\n"), nil
 }
 
-// withPerformanceTestSetup provides the fn a clean test environment.
+// withPerformanceTestSetup runs function fn in a clean test environment.
 // It ensures no stale flow rules in ovs and the bench timer is stopped and reset.
 func withPerformanceTestSetup(fn func(data *TestData), b *testing.B) {
 	b.StopTimer()
