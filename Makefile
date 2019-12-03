@@ -111,14 +111,15 @@ fmt:
 
 .PHONY: .linter
 .linter:
-	@if ! command golint; then \
+	@if ! PATH=$$PATH:$(GOPATH)/bin command -v golint > /dev/null; then \
+	  echo "===> Installing Golint <==="; \
 	  go get -u golang.org/x/lint/golint; \
 	fi
 
 .PHONY: lint
 lint: export GOOS=linux
 lint: .linter
-	@golint ./cmd/... ./pkg/...
+	@PATH=$$PATH:$(GOPATH)/bin golint ./cmd/... ./pkg/...
 
 .PHONY: clean
 clean:
