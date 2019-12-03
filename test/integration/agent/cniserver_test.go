@@ -356,6 +356,7 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 
 	link, err := linkByName(tester.testNS, result.Interfaces[0].Name)
 	testRequire.Nil(err)
+	tester.vethName = result.Interfaces[0].Name
 
 	testRequire.IsType(&netlink.Veth{}, link)
 	testRequire.Equal(hostIfaceName, link.Attrs().Name)
@@ -450,13 +451,13 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 
 	var link netlink.Link
 
-	// Make sure the host veth has been deleted.
-	link, err = netlink.LinkByName(IFName)
+	// Make sure the container veth has been deleted
+	link, err = linkByName(tester.targetNS, IFName)
 	testRequire.NotNil(err)
 	testRequire.Nil(link)
 
-	// Make sure the container veth has been deleted
-	link, err = netlink.LinkByName(tester.vethName)
+	// Make sure the host veth has been deleted.
+	link, err = linkByName(tester.testNS, tester.vethName)
 	testRequire.NotNil(err)
 	testRequire.Nil(link)
 }
