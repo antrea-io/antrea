@@ -117,24 +117,23 @@ go test -v -timeout=30m -run=XXX -bench=. \
     --performance.http.concurrency=16 \
     github.com/vmware-tanzu/antrea/test/e2e 
 ```
-The above command uses `-run=XXX` to deselect all `Test` and uses `-bench=.` to select all `Benchmark`. Since the performance test
-would need quite a while to be finished, you need extend the time out duration `-timeout` from the default `10m`
-to a longer duration like `30m`.
+The above command uses `-run=XXX` to deselect all `Test*` tests and uses `-bench=.` to select
+all `Benchmark*` tests. Since performance tests take a while to complete, you need to extend
+the timeout duration `-timeout` from the default `10m` to a longer one like `30m`.
 
-If you would like to run the performance tests a a different scale, you could run:
+If you would like to run the performance tests in a different scale, you could run:
 ```bash
 go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
-    --performance.http.times=5000 \
-    --performance.http.workload=1000 \
+    --performance.http.requsts=5000 \
+    --performance.http.workloads=1000 \
     --performance.http.concurrency=16 \
     github.com/vmware-tanzu/antrea/test/e2e
 ```
-This command would run only the customized performance test with 5000 https requests in concurrency 16 under a 1000 CIDRs network policy. 
 
-All flags of the performance tests includes:
-- `performance.http.concurrency (int)`: Number of multiple requests to make at a time (default 1)
-- `performance.http.times (int)`: Total number of http requests
-- `performance.http.workload (int)`: Number of network policy workloads
+All flags of performance tests includes:
+- `performance.http.concurrency (int)`: Number of allowed concurrent http requests (default 1)
+- `performance.http.requsts (int)`: Total Number of http requests
+- `performance.http.workloads (int)`: Number of CIDRs in the workload network policy
 - `performance.realize.timeout (duration)`: Timeout of the realization of network policies (default 5m0s)
 
 ## Tests to be added

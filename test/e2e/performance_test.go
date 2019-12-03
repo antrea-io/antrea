@@ -45,22 +45,22 @@ var (
 	benchNginxPodName = randName(abContainerName + "-")
 	benchABPodName    = randName(nginxContainerName + "-")
 
-	customizeTimes    = flag.Int("performance.http.times", 0, "Times of http requests")
-	customizeWorkload = flag.Int("performance.http.workload", 0, "Number of network policy workloads")
-	httpConcurrency   = flag.Int("performance.http.concurrency", 1, "Number of multiple requests to make at a time")
-	realizeTimeout    = flag.Duration("performance.realize.timeout", 5*time.Minute, "Timeout of the realization of network policies")
+	requestsNumber  = flag.Int("performance.http.requests", 0, "Number of http requests")
+	workloads       = flag.Int("performance.http.workloads", 0, "Number of CIDRs in the network policy workload")
+	httpConcurrency = flag.Int("performance.http.concurrency", 1, "Number of multiple requests to make at a time")
+	realizeTimeout  = flag.Duration("performance.realize.timeout", 5*time.Minute, "Timeout of the realization of network policies")
 )
 
 func BenchmarkHTTPRequest(b *testing.B) {
-	for _, scale := range []struct{ times, workloads int }{
+	for _, scale := range []struct{ requests, workloads int }{
 		{100000, 0},
 		{1000000, 0},
 		{100000, 5000},
 		{100000, 10000},
 		{100000, 15000},
 	} {
-		b.Run(fmt.Sprintf("Request%dWorkloads%d", scale.times, scale.workloads), func(b *testing.B) {
-			withPerformanceTestSetup(func(data *TestData) { httpRequest(scale.times, scale.workloads, data, b) }, b)
+		b.Run(fmt.Sprintf("Request%dWorkloads%d", scale.requests, scale.workloads), func(b *testing.B) {
+			withPerformanceTestSetup(func(data *TestData) { httpRequest(scale.requests, scale.workloads, data, b) }, b)
 		})
 	}
 }
@@ -74,17 +74,17 @@ func BenchmarkRealizeNetworkPolicy(b *testing.B) {
 }
 
 func BenchmarkCustomizeHTTPRequest(b *testing.B) {
-	if *customizeTimes == 0 {
-		b.Skip("The value of performance.http.times=0, skipped")
+	if *requestsNumber == 0 {
+		b.Skip("The value of performance.http.requests=0, skipped")
 	}
-	withPerformanceTestSetup(func(data *TestData) { httpRequest(*customizeTimes, *customizeWorkload, data, b) }, b)
+	withPerformanceTestSetup(func(data *TestData) { httpRequest(*requestsNumber, *workloads, data, b) }, b)
 }
 
 func BenchmarkCustomizeRealizeNetworkPolicy(b *testing.B) {
-	if *customizeWorkload == 0 {
+	if *workloads == 0 {
 		b.Skip("The value of performance.http.workload=0, skipped")
 	}
-	withPerformanceTestSetup(func(data *TestData) { networkPolicyRealize(*customizeWorkload, data, b) }, b)
+	withPerformanceTestSetup(func(data *TestData) { networkPolicyRealize(*workloads, data, b) }, b)
 }
 
 func randCidr(rndSrc rand.Source) string {
@@ -124,11 +124,12 @@ func createPerformanceTestPodSpec(name, containerName, image string) *v1.Pod {
 	return pod
 }
 
-// createPerformanceNginx creates the nginx Pod and wait it to be ready.
+// createPerformanceNginx creates the nginx Pod and waits for it to be ready.
 func createPerformanceNginx(data *TestData, b *testing.B) (string, error) {
 	b.Logf("Creating a nginx test Pod")
 	nginxPod := createPerformanceTestPodSpec(benchNginxPodName, nginxContainerName, nginxImage)
-	if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(nginxPod); err != nil {
+	_, err := data.clientset.CoreV1().Pods(testNamespace).Create(nginxPod)
+	if err != nil {
 		b.Fatalf("Error when creating nginx test pod: %v", err)
 	}
 	b.Logf("Waiting IP assignment of the nginx test Pod")
@@ -141,14 +142,15 @@ func createPerformanceAB(data *TestData, b *testing.B) (string, error) {
 	sleepDuration := "3600" // seconds
 	abPod := createPerformanceTestPodSpec(benchABPodName, abContainerName, abImage)
 	abPod.Spec.Containers[0].Command = []string{"sleep", sleepDuration}
-	if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(abPod); err != nil {
+	_, err := data.clientset.CoreV1().Pods(testNamespace).Create(abPod)
+	if err != nil {
 		b.Fatalf("Error when creating apache-bench test Pod: %v", err)
 	}
 	b.Logf("Waiting IP assignment of the apache-bench test Pod")
 	return data.podWaitForIP(defaultTimeout, benchABPodName)
 }
 
-// setupPerformanceTestPodsConnection applies the network policy which enable connectivity between test Pods to the cluster.
+// setupPerformanceTestPodsConnection applies the network policy which enables connectivity between test Pods in the cluster.
 func setupPerformanceTestPodsConnection(data *TestData) error {
 	npSpec := networkv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": performanceAppLabel}},
@@ -173,17 +175,16 @@ func setupPerformanceTestPodsConnection(data *TestData) error {
 	return err
 }
 
-func generateWorkload(amount int) *networkv1.NetworkPolicy {
-	var ingressRules []networkv1.NetworkPolicyPeer
+func generateWorkloads(amount int) *networkv1.NetworkPolicy {
+	ingressRules := make([]networkv1.NetworkPolicyPeer, amount)
 	rndSrc := rand.NewSource(seed)
-	existed := make(map[string]struct{}) // ensure no duplicated cidrs
+	existingCIDRs := make(map[string]struct{}) // ensure no duplicated cidrs
 	for len(ingressRules) < amount {
 		cidr := randCidr(rndSrc)
-		if _, ok := existed[cidr]; ok {
+		if _, ok := existingCIDRs[cidr]; ok {
 			continue
-		} else {
-			existed[cidr] = struct{}{}
 		}
+		existingCIDRs[cidr] = struct{}{}
 		ingressRules = append(ingressRules, networkv1.NetworkPolicyPeer{IPBlock: &networkv1.IPBlock{CIDR: cidr}})
 	}
 	npSpec := networkv1.NetworkPolicySpec{
@@ -197,7 +198,7 @@ func generateWorkload(amount int) *networkv1.NetworkPolicy {
 	}
 }
 
-func populateWorkload(np *networkv1.NetworkPolicy, data *TestData) error {
+func populateWorkloads(np *networkv1.NetworkPolicy, data *TestData) error {
 	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(np)
 	return err
 }
@@ -217,58 +218,66 @@ func setupPerformanceTestPods(data *TestData, b *testing.B) (nginxPodIP, abPodIP
 }
 
 // httpRequest runs the benchmark of intra-node HTTP requests performance. It creates one Apache-Bench
-// Pod and one Nginx Pod on the Master Node. The Apache-Bench would make `times` requests in the
-// `--http.performance.concurrency` concurrency to the Nginx Pod. `workloads` indicates how many CIDRs
+// Pod and one Nginx Pod on the Master Node. The Apache-Bench will make `requests` number of requests in
+// the `--http.performance.concurrency` concurrency to the Nginx Pod. `workloadsNum` indicates how many CIDRs
 // in the workload network policy should be generated.
-func httpRequest(times int, workloads int, data *TestData, b *testing.B) {
+func httpRequest(times int, workloadsNum int, data *TestData, b *testing.B) {
 	nginxPodIP, _ := setupPerformanceTestPods(data, b)
-	// enable Pods connectivity policy first
-	if err := setupPerformanceTestPodsConnection(data); err != nil {
+
+	err := setupPerformanceTestPodsConnection(data) // enable Pods connectivity policy first
+	if err != nil {
 		b.Fatalf("Error when adding network policy to set up connection between performance test Pods")
 	}
+
 	b.Log("Populating performance test workloads")
-	if err := populateWorkload(generateWorkload(workloads), data); err != nil {
+	err = populateWorkloads(generateWorkloads(workloadsNum), data)
+	if err != nil {
 		b.Fatalf("Error when populating workloads: %v", err)
 	}
 
-	if err := waitNetworkPolicyRealize(workloads, data); err != nil {
+	b.Log("Waiting the workload network policy to be realized")
+	err = waitNetworkPolicyRealize(workloadsNum, data)
+	if err != nil {
 		b.Fatalf("Checking network policies realization failed: %v", err)
-	} else {
-		b.Log("Network policy realized")
 	}
+	b.Log("Network policy realized")
 
 	serverURL := &url.URL{Scheme: "http", Host: nginxPodIP, Path: "/"}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		b.Logf("Running http request bench %d/%d", i+1, b.N)
 		cmd := []string{"ab", "-n", fmt.Sprint(times), "-c", fmt.Sprint(*httpConcurrency), serverURL.String()}
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, benchABPodName, abContainerName, cmd); err != nil {
+		stdout, stderr, err := data.runCommandFromPod(testNamespace, benchABPodName, abContainerName, cmd)
+		if err != nil {
 			b.Errorf("Error when running http request %dx: %v, stdout: %s, stderr: %s\n", times, err, stdout, stderr)
 		}
 	}
 }
 
-// networkPolicyRealize runs the benchmark of time cost of a network policy with `workloads` amount CIDRs
+// networkPolicyRealize runs the benchmark of the time cost of a network policy with `workloadsNum` amount CIDRs
 // to be realized into flow entries. In order to have entities for the network policy to apply to, we
 // create two dummy Pods: apache-bench and Nginx, they don't have activity during the benchmark test.
-func networkPolicyRealize(workloads int, data *TestData, b *testing.B) {
+func networkPolicyRealize(workloadsNum int, data *TestData, b *testing.B) {
 	setupPerformanceTestPods(data, b)
 	for i := 0; i < b.N; i++ {
 		go func() {
-			if err := populateWorkload(generateWorkload(workloads), data); err != nil {
+			err := populateWorkloads(generateWorkloads(workloadsNum), data)
+			if err != nil {
 				b.Fatalf("Error when populating workload: %v", err)
 			}
 		}()
 
+		b.Log("Waiting the network policy to be realized")
 		b.StartTimer()
-		if err := waitNetworkPolicyRealize(workloads, data); err != nil {
+		err := waitNetworkPolicyRealize(workloadsNum, data)
+		if err != nil {
 			b.Fatalf("Checking network policies realization failed: %v", err)
-		} else {
-			b.Log("Network policy realized")
 		}
 		b.StopTimer()
+		b.Log("Network policy realized")
 
-		if err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Delete(workloadNetworkPolicyName, new(metav1.DeleteOptions)); err != nil {
+		err = data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Delete(workloadNetworkPolicyName, new(metav1.DeleteOptions))
+		if err != nil {
 			b.Fatalf("Error when cleaning up network policies after running one bench iteration: %v", err)
 		}
 	}
@@ -288,36 +297,22 @@ func dumpFlows(data *TestData) (string, error) {
 }
 
 func waitNetworkPolicyRealize(workloads int, data *TestData) error {
-	done := make(chan struct{})
-	return wait.WaitFor(
-		func(stopCh <-chan struct{}) <-chan struct{} {
-			checkCh := make(chan struct{})
-			timeout := time.After(*realizeTimeout)
-			go func() {
-				defer close(done)
-				for {
-					select {
-					case <-stopCh: // realized
-						break
-					case <-timeout: // timeout
-						break
-					case checkCh <- struct{}{}: // signal next check
-					}
-				}
-			}()
-			return checkCh
-		},
-		func() (bool, error) { return checkRealize(workloads, data) },
-		done,
-	)
+	return wait.PollImmediate(0, *realizeTimeout, func() (bool, error) {
+		return checkRealize(workloads, data)
+	})
 }
 
-func checkRealize(workloads int, data *TestData) (bool, error) {
+// checkRealize checks if all CIDRs in the workload network policy are realized.
+// Since `countFlows` is an SSH operation, we could not get the precise time of the realization. According to the
+// antrea-agent implementation, each CIDR in a network policy will be reflected in one flow entry. To reduce the
+// over counted duration which is introduced by the checking, this function ignores a constant amount of flow
+// entries that are installed by antrea-agent.
+func checkRealize(workloadsNum int, data *TestData) (bool, error) {
 	flowNums, err := countFlows(data)
 	if err != nil {
 		return false, fmt.Errorf("dumping flow keeps failed")
 	}
-	return flowNums > workloads, nil
+	return flowNums > workloadsNum, nil
 }
 
 func countFlows(data *TestData) (int, error) {
@@ -333,6 +328,7 @@ func countFlows(data *TestData) (int, error) {
 func withPerformanceTestSetup(fn func(data *TestData), b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
+	defer b.StopTimer()
 
 	data, err := setupTest(b)
 	if err != nil {
@@ -361,5 +357,4 @@ func withPerformanceTestSetup(fn func(data *TestData), b *testing.B) {
 	}()
 
 	fn(data)
-	b.StopTimer()
 }
