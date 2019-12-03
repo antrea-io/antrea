@@ -1,0 +1,23 @@
+name: Integration
+on:
+  pull_request:
+    branches:
+    - master
+    - release-*
+  push:
+    branches:
+    - master
+    - release-*
+jobs:
+  test-unit:
+    name: Integration tests
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/setup-go@v1
+      with:
+        go-version: 1.12
+    - name: Install OVS
+      run: sudo apt-get install openvswitch-switch
+    - name: Run integration tests
+      run: sudo make test-integration
