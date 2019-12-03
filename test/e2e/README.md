@@ -133,7 +133,7 @@ This command would run only the customized performance test with 5000 https requ
 
 All flags of the performance tests includes:
 - `performance.http.concurrency (int)`: Number of multiple requests to make at a time (default 1)
-- `performance.http.times (int)`: Times of http requests
+- `performance.http.times (int)`: Total number of http requests
 - `performance.http.workload (int)`: Number of network policy workloads
 - `performance.realize.timeout (duration)`: Timeout of the realization of network policies (default 5m0s)
 
