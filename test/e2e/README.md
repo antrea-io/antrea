@@ -111,7 +111,7 @@ go test -v github.com/vmware-tanzu/antrea/test/e2e -provider=kind
 ```
 
 ## Running the performance test
-To run all benchmarks excepts e2e tests:
+To run all benchmarks, without the standard e2e tests:
 ```bash
 go test -v -timeout=30m -run=XXX -bench=. \
     --performance.http.concurrency=16 \
