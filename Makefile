@@ -79,7 +79,7 @@ docker-tidy: $(DOCKER_CACHE)
 .linux-test-unit:
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -cover github.com/vmware-tanzu/antrea/pkg/...
+	$(GO) test -race -cover github.com/vmware-tanzu/antrea/pkg/...
 
 .PHONY: tidy
 tidy:

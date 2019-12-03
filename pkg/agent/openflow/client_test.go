@@ -15,16 +15,18 @@
 package openflow
 
 import (
-	"context"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 )
 
@@ -132,18 +134,14 @@ func TestFlowInstallationPartialSuccess(t *testing.T) {
 // TestConcurrentFlowInstallation checks that flow installation for a given flow category (e.g. Node
 // flows) and for different cache keys (e.g. different Node hostnames) can happen concurrently.
 func TestConcurrentFlowInstallation(t *testing.T) {
-	testCases := []struct {
-		name        string
-		cacheKey    string
-		numAddCalls int
-		installFn   func(ofClient Client, cacheKey string) (int, error)
+	for _, tc := range []struct {
+		name           string
+		cacheKeyFormat string
+		fn             func(ofClient Client, cacheKey string) (int, error)
 	}{
-		{"NodeFlows", "host", 2, installNodeFlows},
-		{"PodFlows", "aaaa-bbbb-cccc-dddd", 5, installPodFlows},
-	}
-
-	for _, tc := range testCases {
-		tc := tc
+		{"NodeFlows", "host-%d", installNodeFlows},
+		{"PodFlows", "aaaa-bbbb-cccc-ddd%d", installPodFlows},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -152,58 +150,43 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			client := ofClient.(*client)
 			client.flowOperations = m
 
-			var wg sync.WaitGroup
-			var counter int32        // tracks the number of concurrent Add calls at any given time
-			var callIdx int32        // used to distinguish between the first Add call and subsequent calls
-			var concurrentCalls bool // set to true if we observe concurrent calls
-			var stop bool
-			var mutex sync.Mutex
-			cond := sync.NewCond(&mutex)
-
+			var concurrentCalls atomic.Value // set to true if we observe concurrent calls
+			timeoutCh := make(chan struct{})
+			rendezvousCh := make(chan struct{})
 			m.EXPECT().Add(gomock.Any()).DoAndReturn(func(args ...interface{}) error {
-				cond.L.Lock()
-				defer cond.L.Unlock()
-				counter += 1
-				callIdx += 1
-				if callIdx == 1 { // first call
-					// we wait until we need to stop
-					// we stop when one of these conditions is met:
-					// 1) we detected concurrent Add calls (test is a success), or
-					// 2) the test timed out
-					for !stop {
-						cond.Wait()
-					}
-				} else if counter > 1 {
-					concurrentCalls = true
-					stop = true
-					cond.Signal()
+				select {
+				case <-timeoutCh:
+				case <-rendezvousCh:
+					concurrentCalls.Store(true)
+				case rendezvousCh <- struct{}{}:
 				}
 				return nil
 			}).AnyTimes()
 
-			wg.Add(2)
-			go func() {
-				tc.installFn(ofClient, tc.cacheKey)
-				wg.Done()
-			}()
-			go func() {
-				tc.installFn(ofClient, tc.cacheKey)
-				wg.Done()
-			}()
+			var wg sync.WaitGroup
+			done := make(chan struct{})
 
-			// enforce a timeout of one second for the test
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			for i := 0; i < 2; i++ {
+				wg.Add(1)
+				cacheKey := fmt.Sprintf(tc.cacheKeyFormat, i)
+				go func() {
+					defer wg.Done()
+					_, _ = tc.fn(ofClient, cacheKey) // in mock we trust
+				}()
+			}
 			go func() {
-				<-ctx.Done()
-				cond.L.Lock()
-				defer cond.L.Unlock()
-				stop = true
+				defer close(done)
+				wg.Wait()
 			}()
 
-			wg.Wait()
-			cancel()
-
-			assert.True(t, concurrentCalls)
+			select {
+			case <-time.After(time.Second):
+				close(timeoutCh)
+				t.Fatal("timeoutCh, maybe there are some deadlocks")
+			case <-done:
+				assert.True(t, concurrentCalls.Load().(bool))
+			}
 		})
 	}
+
 }
