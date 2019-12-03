@@ -16,14 +16,17 @@ package networkpolicy
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/util/workqueue"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
@@ -249,4 +252,232 @@ func getK8sNetworkPolicyPorts(proto v1.Protocol) []networkingv1.NetworkPolicyPor
 	}
 	ports := []networkingv1.NetworkPolicyPort{port}
 	return ports
+}
+
+func TestProcessNetworkPolicy(t *testing.T) {
+	protocolTCP := networkpolicy.ProtocolTCP
+	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
+	int80, int81 := int32(80), int32(81)
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
+	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	tests := []struct {
+		name                    string
+		inputPolicy             *networkingv1.NetworkPolicy
+		expectedPolicy          *antreatypes.NetworkPolicy
+		expectedAppliedToGroups int
+		expectedAddressGroups   int
+	}{
+		{
+			name: "default-allow-ingress",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+					Ingress:     []networkingv1.NetworkPolicyIngressRule{{}},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{{
+					Direction: networkpolicy.DirectionIn,
+					From:      matchAllPeer,
+					Services:  nil,
+				}},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			name: "default-deny-egress",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:             "uidA",
+				Name:            "npA",
+				Namespace:       "nsA",
+				Rules:           []networkpolicy.NetworkPolicyRule{denyAllEgressRule},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			name: "rules-with-same-selectors",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: selectorA,
+					Ingress: []networkingv1.NetworkPolicyIngressRule{
+						{
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Port: &intstr80,
+								},
+							},
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+					},
+					Egress: []networkingv1.NetworkPolicyEgressRule{
+						{
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Port: &intstr81,
+								},
+							},
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
+						},
+						Services: []networkpolicy.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+					},
+					{
+						Direction: networkpolicy.DirectionOut,
+						To: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
+						},
+						Services: []networkpolicy.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int81,
+							},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
+			name: "rules-with-different-selectors",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: selectorA,
+					Ingress: []networkingv1.NetworkPolicyIngressRule{
+						{
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Port: &intstr80,
+								},
+							},
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+						},
+						{
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Port: &intstr81,
+								},
+							},
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
+						},
+						Services: []networkpolicy.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+					},
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", nil, &selectorC).NormalizedName)},
+						},
+						Services: []networkpolicy.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int81,
+							},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addressGroupStore := store.NewAddressGroupStore()
+			appliedToGroupStore := store.NewAppliedToGroupStore()
+			networkPolicyStore := store.NewNetworkPolicyStore()
+			c := &NetworkPolicyController{
+				addressGroupQueue:          workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+				appliedToGroupQueue:        workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+				addressGroupStore:          addressGroupStore,
+				appliedToGroupStore:        appliedToGroupStore,
+				internalNetworkPolicyStore: networkPolicyStore,
+			}
+
+			if actualPolicy := c.processNetworkPolicy(tt.inputPolicy); !reflect.DeepEqual(actualPolicy, tt.expectedPolicy) {
+				t.Errorf("processNetworkPolicy() got %v, want %v", actualPolicy, tt.expectedPolicy)
+			}
+
+			if actualAddressGroups := len(addressGroupStore.List()); actualAddressGroups != tt.expectedAddressGroups {
+				t.Errorf("len(addressGroupStore.List()) got %v, want %v", actualAddressGroups, tt.expectedAddressGroups)
+			}
+
+			if actualAppliedToGroups := len(appliedToGroupStore.List()); actualAppliedToGroups != tt.expectedAppliedToGroups {
+				t.Errorf("len(appliedToGroupStore.List()) got %v, want %v", actualAppliedToGroups, tt.expectedAppliedToGroups)
+			}
+		})
+	}
 }
