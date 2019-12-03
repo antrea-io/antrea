@@ -121,7 +121,7 @@ The above command uses `-run=XXX` to deselect all `Test` and uses `-bench=.` to 
 would need quite a while to be finished, you need extend the time out duration `-timeout` from the default `10m`
 to a longer duration like `30m`.
 
-If you would like to run the performance test in a different scale, you could run:
+If you would like to run the performance tests a a different scale, you could run:
 ```bash
 go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
     --performance.http.times=5000 \
