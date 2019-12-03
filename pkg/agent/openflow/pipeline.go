@@ -452,6 +452,14 @@ func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey int, matc
 		Action().Drop().Done()
 }
 
+// localProbeFlow generates the flow to resubmit packets to l2ForwardingOutTable. The packets are sent from Node to probe the liveness/readiness of local Pods.
+func (c *client) localProbeFlow(localGatewayIP net.IP) binding.Flow {
+	return c.pipeline[ingressRuleTable].BuildFlow().Priority(priorityHigh).
+		MatchProtocol(binding.ProtocolIP).
+		MatchSrcIP(localGatewayIP).
+		Action().Resubmit(emptyPlaceholderStr, l2ForwardingOutTable).Done()
+}
+
 // NewClient is the constructor of the Client interface.
 func NewClient(bridgeName string) Client {
 	bridge := binding.NewBridge(bridgeName)

@@ -184,6 +184,8 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 		return err
 	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort)); err != nil {
 		return err
+	} else if err := c.flowOperations.Add(c.localProbeFlow(gatewayAddr)); err != nil {
+		return err
 	}
 	return nil
 }
