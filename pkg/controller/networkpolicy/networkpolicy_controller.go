@@ -482,11 +482,11 @@ func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networkpolicy.IPBlock, err
 func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkPolicy) *antreatypes.NetworkPolicy {
 	appliedToGroupKey := n.createAppliedToGroup(np)
 	appliedToGroupNames := []string{appliedToGroupKey}
-	inAddressGroupNames, outAddressGroupNames := []string{}, []string{}
 	rules := make([]networkpolicy.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for _, ingressRule := range np.Spec.Ingress {
 		ipBlocks := []networkpolicy.IPBlock{}
+		inAddressGroupNames := []string{}
 		for _, peer := range ingressRule.From {
 			// A networking.NetworkPolicyPeer will either have an IPBlock or a
 			// podSelector and/or namespaceSelector set.
@@ -515,6 +515,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	// Compute NetworkPolicyRule for Egress Rule.
 	for _, egressRule := range np.Spec.Egress {
 		ipBlocks := []networkpolicy.IPBlock{}
+		outAddressGroupNames := []string{}
 		for _, peer := range egressRule.To {
 			// A networking.NetworkPolicyPeer will either have an IPBlock or a
 			// podSelector and/or namespaceSelector set.
