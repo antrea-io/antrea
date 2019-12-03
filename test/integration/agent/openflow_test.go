@@ -526,6 +526,14 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32) [
 					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)", gwOFPort)},
 			},
 		},
+		{
+			uint8(90),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					fmt.Sprintf("priority=210,ip,nw_src=%s", gwIP.String()),
+					"resubmit(,110)"},
+			},
+		},
 	}
 }
 
