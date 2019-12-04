@@ -54,8 +54,8 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	nClause := uint8(3)
 	clause1 := conj1.newClause(clauseID, nClause, outTable, outDropTable)
 
-	outDropTable.EXPECT().BuildFlow().Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
-	outTable.EXPECT().BuildFlow().Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
+	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
+	outTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
 
 	var addedAddrs = parseAddresses([]string{"192.168.1.3", "192.168.1.30", "192.168.2.0/24", "103", "104"})
 	expectFlowInvokeTimes(dropFlow, 5, 0, 0)
@@ -126,8 +126,8 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		From:      parseAddresses([]string{"192.168.1.30", "192.168.1.50"}),
 	}
 
-	outDropTable.EXPECT().BuildFlow().Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
-	outTable.EXPECT().BuildFlow().Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
+	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
+	outTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
 
 	expectFlowInvokeTimes(dropFlow, 2, 0, 0)
 	err := c.InstallPolicyRuleFlows(rule1)
@@ -235,7 +235,6 @@ func expectConjunctionsCount(conjs []*expectConjunctionTimes) {
 
 func newMockDropFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	dropFlowBuilder = mocks.NewMockFlowBuilder(ctrl)
-	dropFlowBuilder.EXPECT().Priority(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchProtocol(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchDstIPNet(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchSrcIPNet(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
@@ -253,7 +252,6 @@ func newMockDropFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 
 func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlowBuilder = mocks.NewMockFlowBuilder(ctrl)
-	ruleFlowBuilder.EXPECT().Priority(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchProtocol(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchDstIPNet(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchSrcIPNet(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
@@ -266,7 +264,7 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlowBuilder.EXPECT().MatchSCTPDstPort(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchConjID(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleAction = mocks.NewMockAction(ctrl)
-	ruleAction.EXPECT().Resubmit(gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	ruleAction.EXPECT().ResubmitToTable(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().Action().Return(ruleAction).AnyTimes()
 	ruleFlow = mocks.NewMockFlow(ctrl)
 	ruleFlowBuilder.EXPECT().Done().Return(ruleFlow).AnyTimes()

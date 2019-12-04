@@ -50,17 +50,17 @@ func (m *MockBridge) EXPECT() *MockBridgeMockRecorder {
 }
 
 // Connect mocks base method
-func (m *MockBridge) Connect(arg0 int) error {
+func (m *MockBridge) Connect(arg0 int, arg1 chan struct{}) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Connect", arg0)
+	ret := m.ctrl.Call(m, "Connect", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Connect indicates an expected call of Connect
-func (mr *MockBridgeMockRecorder) Connect(arg0 interface{}) *gomock.Call {
+func (mr *MockBridgeMockRecorder) Connect(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockBridge)(nil).Connect), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockBridge)(nil).Connect), arg0, arg1)
 }
 
 // CreateTable mocks base method
@@ -75,6 +75,20 @@ func (m *MockBridge) CreateTable(arg0, arg1 openflow.TableIDType, arg2 openflow.
 func (mr *MockBridgeMockRecorder) CreateTable(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTable", reflect.TypeOf((*MockBridge)(nil).CreateTable), arg0, arg1, arg2)
+}
+
+// DeleteFlowsByCookie mocks base method
+func (m *MockBridge) DeleteFlowsByCookie(arg0, arg1 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteFlowsByCookie", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteFlowsByCookie indicates an expected call of DeleteFlowsByCookie
+func (mr *MockBridgeMockRecorder) DeleteFlowsByCookie(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFlowsByCookie", reflect.TypeOf((*MockBridge)(nil).DeleteFlowsByCookie), arg0, arg1)
 }
 
 // DeleteTable mocks base method
@@ -105,6 +119,20 @@ func (mr *MockBridgeMockRecorder) Disconnect() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Disconnect", reflect.TypeOf((*MockBridge)(nil).Disconnect))
 }
 
+// DumpFlows mocks base method
+func (m *MockBridge) DumpFlows(arg0, arg1 uint64) map[uint64]*openflow.FlowStates {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DumpFlows", arg0, arg1)
+	ret0, _ := ret[0].(map[uint64]*openflow.FlowStates)
+	return ret0
+}
+
+// DumpFlows indicates an expected call of DumpFlows
+func (mr *MockBridgeMockRecorder) DumpFlows(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlows", reflect.TypeOf((*MockBridge)(nil).DumpFlows), arg0, arg1)
+}
+
 // DumpTableStatus mocks base method
 func (m *MockBridge) DumpTableStatus() []openflow.TableStatus {
 	m.ctrl.T.Helper()
@@ -119,18 +147,18 @@ func (mr *MockBridgeMockRecorder) DumpTableStatus() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableStatus", reflect.TypeOf((*MockBridge)(nil).DumpTableStatus))
 }
 
-// GetName mocks base method
-func (m *MockBridge) GetName() string {
+// IsConnected mocks base method
+func (m *MockBridge) IsConnected() bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetName")
-	ret0, _ := ret[0].(string)
+	ret := m.ctrl.Call(m, "IsConnected")
+	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// GetName indicates an expected call of GetName
-func (mr *MockBridgeMockRecorder) GetName() *gomock.Call {
+// IsConnected indicates an expected call of IsConnected
+func (mr *MockBridgeMockRecorder) IsConnected() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetName", reflect.TypeOf((*MockBridge)(nil).GetName))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockBridge)(nil).IsConnected))
 }
 
 // MockTable is a mock of Table interface
@@ -157,17 +185,17 @@ func (m *MockTable) EXPECT() *MockTableMockRecorder {
 }
 
 // BuildFlow mocks base method
-func (m *MockTable) BuildFlow() openflow.FlowBuilder {
+func (m *MockTable) BuildFlow(arg0 uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildFlow")
+	ret := m.ctrl.Call(m, "BuildFlow", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // BuildFlow indicates an expected call of BuildFlow
-func (mr *MockTableMockRecorder) BuildFlow() *gomock.Call {
+func (mr *MockTableMockRecorder) BuildFlow(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildFlow", reflect.TypeOf((*MockTable)(nil).BuildFlow))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildFlow", reflect.TypeOf((*MockTable)(nil).BuildFlow), arg0)
 }
 
 // GetID mocks base method
@@ -291,20 +319,6 @@ func (mr *MockFlowMockRecorder) Delete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockFlow)(nil).Delete))
 }
 
-// GetTable mocks base method
-func (m *MockFlow) GetTable() openflow.Table {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTable")
-	ret0, _ := ret[0].(openflow.Table)
-	return ret0
-}
-
-// GetTable indicates an expected call of GetTable
-func (mr *MockFlowMockRecorder) GetTable() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTable", reflect.TypeOf((*MockFlow)(nil).GetTable))
-}
-
 // MatchString mocks base method
 func (m *MockFlow) MatchString() string {
 	m.ctrl.T.Helper()
@@ -331,20 +345,6 @@ func (m *MockFlow) Modify() error {
 func (mr *MockFlowMockRecorder) Modify() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Modify", reflect.TypeOf((*MockFlow)(nil).Modify))
-}
-
-// String mocks base method
-func (m *MockFlow) String() string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "String")
-	ret0, _ := ret[0].(string)
-	return ret0
-}
-
-// String indicates an expected call of String
-func (mr *MockFlowMockRecorder) String() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "String", reflect.TypeOf((*MockFlow)(nil).String))
 }
 
 // MockAction is a mock of Action interface
@@ -567,7 +567,7 @@ func (mr *MockActionMockRecorder) OutputRegRange(arg0, arg1 interface{}) *gomock
 }
 
 // Resubmit mocks base method
-func (m *MockAction) Resubmit(arg0 string, arg1 openflow.TableIDType) openflow.FlowBuilder {
+func (m *MockAction) Resubmit(arg0 uint16, arg1 openflow.TableIDType) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Resubmit", arg0, arg1)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
@@ -578,6 +578,20 @@ func (m *MockAction) Resubmit(arg0 string, arg1 openflow.TableIDType) openflow.F
 func (mr *MockActionMockRecorder) Resubmit(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Resubmit", reflect.TypeOf((*MockAction)(nil).Resubmit), arg0, arg1)
+}
+
+// ResubmitToTable mocks base method
+func (m *MockAction) ResubmitToTable(arg0 openflow.TableIDType) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResubmitToTable", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// ResubmitToTable indicates an expected call of ResubmitToTable
+func (mr *MockActionMockRecorder) ResubmitToTable(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResubmitToTable", reflect.TypeOf((*MockAction)(nil).ResubmitToTable), arg0)
 }
 
 // SetARPSha mocks base method
@@ -842,7 +856,7 @@ func (mr *MockFlowBuilderMockRecorder) MatchARPTpa(arg0 interface{}) *gomock.Cal
 }
 
 // MatchCTMark mocks base method
-func (m *MockFlowBuilder) MatchCTMark(arg0 string) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTMark(arg0 uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MatchCTMark", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
@@ -855,18 +869,88 @@ func (mr *MockFlowBuilderMockRecorder) MatchCTMark(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTMark), arg0)
 }
 
-// MatchCTState mocks base method
-func (m *MockFlowBuilder) MatchCTState(arg0 string) openflow.FlowBuilder {
+// MatchCTStateEst mocks base method
+func (m *MockFlowBuilder) MatchCTStateEst(arg0 bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTState", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateEst", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
-// MatchCTState indicates an expected call of MatchCTState
-func (mr *MockFlowBuilderMockRecorder) MatchCTState(arg0 interface{}) *gomock.Call {
+// MatchCTStateEst indicates an expected call of MatchCTStateEst
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateEst(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTState", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTState), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateEst", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateEst), arg0)
+}
+
+// MatchCTStateInv mocks base method
+func (m *MockFlowBuilder) MatchCTStateInv(arg0 bool) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateInv", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateInv indicates an expected call of MatchCTStateInv
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateInv(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateInv", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateInv), arg0)
+}
+
+// MatchCTStateNew mocks base method
+func (m *MockFlowBuilder) MatchCTStateNew(arg0 bool) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateNew", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateNew indicates an expected call of MatchCTStateNew
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateNew(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateNew", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateNew), arg0)
+}
+
+// MatchCTStateRel mocks base method
+func (m *MockFlowBuilder) MatchCTStateRel(arg0 bool) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateRel", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateRel indicates an expected call of MatchCTStateRel
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateRel(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateRel", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateRel), arg0)
+}
+
+// MatchCTStateRpl mocks base method
+func (m *MockFlowBuilder) MatchCTStateRpl(arg0 bool) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateRpl", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateRpl indicates an expected call of MatchCTStateRpl
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateRpl(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateRpl", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateRpl), arg0)
+}
+
+// MatchCTStateTrk mocks base method
+func (m *MockFlowBuilder) MatchCTStateTrk(arg0 bool) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateTrk", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateTrk indicates an expected call of MatchCTStateTrk
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateTrk(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateTrk", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateTrk), arg0)
 }
 
 // MatchConjID mocks base method
@@ -1063,18 +1147,4 @@ func (m *MockFlowBuilder) MatchUDPDstPort(arg0 uint16) openflow.FlowBuilder {
 func (mr *MockFlowBuilderMockRecorder) MatchUDPDstPort(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchUDPDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchUDPDstPort), arg0)
-}
-
-// Priority mocks base method
-func (m *MockFlowBuilder) Priority(arg0 uint32) openflow.FlowBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Priority", arg0)
-	ret0, _ := ret[0].(openflow.FlowBuilder)
-	return ret0
-}
-
-// Priority indicates an expected call of Priority
-func (mr *MockFlowBuilderMockRecorder) Priority(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Priority", reflect.TypeOf((*MockFlowBuilder)(nil).Priority), arg0)
 }
