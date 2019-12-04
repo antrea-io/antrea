@@ -44,7 +44,7 @@ The Antrea community welcomes new contributors. We are waiting for your PRs!
 about setting up your development environment and our contribution workflow.
 * Learn about Antrea's [Architecture and design](/docs/architecture.md).
 Your feedback is more than welcome!
-* Check out Open Issues.
+* Check out [Open Issues](https://github.com/vmware-tanzu/antrea/issues).
 * Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
 [#antrea](https://kubernetes.slack.com/messages/CR2J23M0X) channel.
 * Attend the [project weekly meeting](https://VMware.zoom.us/j/823654111),
