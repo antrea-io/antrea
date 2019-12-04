@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package ethtool provides functions that make antrea to run on Kind.
+// Package ethtool provides Go wrappers for ioctl ethtool system calls on Linux
 package ethtool
