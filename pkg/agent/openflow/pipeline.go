@@ -39,10 +39,10 @@ const (
 	l2ForwardingOutTable  binding.TableIDType = 110
 
 	// Flow priority level
-	priorityHigh   = 210
-	priorityNormal = 200
-	priorityLow    = 190
-	priorityMiss   = 80
+	priorityHigh   = uint16(210)
+	priorityNormal = uint16(200)
+	priorityLow    = uint16(190)
+	priorityMiss   = uint16(80)
 
 	// Traffic marks
 	markTrafficFromTunnel  = 0
@@ -77,7 +77,6 @@ func i2h(data int64) string {
 }
 
 const (
-	emptyPlaceholderStr = ""
 	// marksReg stores traffic-source mark and pod-found mark.
 	// traffic-source resides in [0..15], pod-found resides in [16].
 	marksReg     regType = 0
@@ -136,10 +135,10 @@ func (c *client) Delete(flow binding.Flow) error {
 // defaultFlows generates the default flows of all tables.
 func (c *client) defaultFlows() (flows []binding.Flow) {
 	for _, table := range c.pipeline {
-		flowBuilder := table.BuildFlow().Priority(priorityMiss).MatchProtocol(binding.ProtocolIP)
+		flowBuilder := table.BuildFlow(priorityMiss).MatchProtocol(binding.ProtocolIP)
 		switch table.GetMissAction() {
 		case binding.TableMissActionNext:
-			flowBuilder = flowBuilder.Action().Resubmit(emptyPlaceholderStr, table.GetNext())
+			flowBuilder = flowBuilder.Action().ResubmitToTable(table.GetNext())
 		case binding.TableMissActionNormal:
 			flowBuilder = flowBuilder.Action().Normal()
 		case binding.TableMissActionDrop:
@@ -154,30 +153,30 @@ func (c *client) defaultFlows() (flows []binding.Flow) {
 
 // tunnelClassifierFlow generates the flow to mark traffic comes from the tunnelOFPort.
 func (c *client) tunnelClassifierFlow(tunnelOFPort uint32) binding.Flow {
-	return c.pipeline[classifierTable].BuildFlow().Priority(priorityNormal).
+	return c.pipeline[classifierTable].BuildFlow(priorityNormal).
 		MatchInPort(tunnelOFPort).
 		Action().LoadRegRange(int(marksReg), markTrafficFromTunnel, binding.Range{0, 15}).
-		Action().Resubmit(emptyPlaceholderStr, conntrackTable).
+		Action().ResubmitToTable(conntrackTable).
 		Done()
 }
 
 // gatewayClassifierFlow generates the flow to mark traffic comes from the gatewayOFPort.
 func (c *client) gatewayClassifierFlow(gatewayOFPort uint32) binding.Flow {
 	classifierTable := c.pipeline[classifierTable]
-	return classifierTable.BuildFlow().Priority(priorityNormal).
+	return classifierTable.BuildFlow(priorityNormal).
 		MatchInPort(gatewayOFPort).
 		Action().LoadRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-		Action().Resubmit(emptyPlaceholderStr, classifierTable.GetNext()).
+		Action().ResubmitToTable(classifierTable.GetNext()).
 		Done()
 }
 
 // podClassifierFlow generates the flow to mark traffic comes from the podOFPort.
 func (c *client) podClassifierFlow(podOFPort uint32) binding.Flow {
 	classifierTable := c.pipeline[classifierTable]
-	return classifierTable.BuildFlow().Priority(priorityLow).
+	return classifierTable.BuildFlow(priorityLow).
 		MatchInPort(podOFPort).
 		Action().LoadRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
-		Action().Resubmit(emptyPlaceholderStr, classifierTable.GetNext()).
+		Action().ResubmitToTable(classifierTable.GetNext()).
 		Done()
 }
 
@@ -189,43 +188,43 @@ func (c *client) podClassifierFlow(podOFPort uint32) binding.Flow {
 // 4) Drop all invalid traffic.
 func (c *client) connectionTrackFlows() (flows []binding.Flow) {
 	connectionTrackTable := c.pipeline[conntrackTable]
-	baseConnectionTrackFlow := connectionTrackTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
+	baseConnectionTrackFlow := connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		Action().CT(false, connectionTrackTable.GetNext(), ctZone).CTDone().
 		Done()
 	flows = append(flows, baseConnectionTrackFlow)
 
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	gatewayReplyFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityHigh).
+	gatewayReplyFlow := connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-		MatchCTMark(i2h(gatewayCTMark)).
-		MatchCTState("-new+trk").
-		Action().Resubmit(emptyPlaceholderStr, connectionTrackStateTable.GetNext()).
+		MatchCTMark(gatewayCTMark).
+		MatchCTStateNew(false).MatchCTStateTrk(true).
+		Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
 		Done()
 	flows = append(flows, gatewayReplyFlow)
 
-	gatewaySendFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
+	gatewaySendFlow := connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-		MatchCTState("+new+trk").
+		MatchCTStateNew(true).MatchCTStateTrk(true).
 		Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).LoadToMark(gatewayCTMark).MoveToLabel(binding.NxmFieldSrcMAC, &binding.Range{0, 47}, &binding.Range{0, 47}).CTDone().
 		Done()
 	flows = append(flows, gatewaySendFlow)
 
-	podReplyGatewayFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
-		MatchCTMark(i2h(gatewayCTMark)).
-		MatchCTState("-new+trk").
+	podReplyGatewayFlow := connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		MatchCTMark(gatewayCTMark).
+		MatchCTStateNew(false).MatchCTStateTrk(true).
 		Action().MoveRange(binding.NxmFieldCtLabel, binding.NxmFieldDstMAC, binding.Range{0, 47}, binding.Range{0, 47}).
-		Action().Resubmit(emptyPlaceholderStr, connectionTrackStateTable.GetNext()).
+		Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
 		Done()
 	flows = append(flows, podReplyGatewayFlow)
 
-	nonGatewaySendFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityLow).
-		MatchCTState("+new+trk").
+	nonGatewaySendFlow := connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
+		MatchCTStateNew(true).MatchCTStateTrk(true).
 		Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).CTDone().
 		Done()
 	flows = append(flows, nonGatewaySendFlow)
 
-	invCTFlow := connectionTrackStateTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
-		MatchCTState("+new+inv").
+	invCTFlow := connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		MatchCTStateNew(true).MatchCTStateInv(true).
 		Action().Drop().
 		Done()
 	flows = append(flows, invCTFlow)
@@ -236,19 +235,17 @@ func (c *client) connectionTrackFlows() (flows []binding.Flow) {
 // l2ForwardCalcFlow generates the flow that matches dst MAC and loads ofPort to reg.
 func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32) binding.Flow {
 	l2FwdCalcTable := c.pipeline[l2ForwardingCalcTable]
-	return l2FwdCalcTable.BuildFlow().Priority(priorityNormal).
+	return l2FwdCalcTable.BuildFlow(priorityNormal).
 		MatchDstMAC(dstMAC).
 		Action().LoadRegRange(int(portCacheReg), ofPort, ofPortRegRange).
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().Resubmit(emptyPlaceholderStr, l2FwdCalcTable.GetNext()).
+		Action().ResubmitToTable(l2FwdCalcTable.GetNext()).
 		Done()
 }
 
 // l2ForwardOutputFlow generates the flow that outputs packets to OVS port after L2 forwarding calculation.
 func (c *client) l2ForwardOutputFlow() binding.Flow {
-	return c.pipeline[l2ForwardingOutTable].BuildFlow().
-		Priority(priorityNormal).
-		MatchProtocol(binding.ProtocolIP).
+	return c.pipeline[l2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
 		Done()
@@ -258,23 +255,23 @@ func (c *client) l2ForwardOutputFlow() binding.Flow {
 func (c *client) l3FlowsToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP net.IP, podInterfaceMAC net.HardwareAddr) binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	// Rewrite src MAC to local gateway MAC, and rewrite dst MAC to pod MAC
-	return l3FwdTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
+	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstMAC(globalVirtualMAC).
 		MatchDstIP(podInterfaceIP).
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(podInterfaceMAC).
 		Action().DecTTL().
-		Action().Resubmit(emptyPlaceholderStr, l3FwdTable.GetNext()).
+		Action().ResubmitToTable(l3FwdTable.GetNext()).
 		Done()
 }
 
 // l3ToGatewayFlow generates flow that rewrites MAC of the packet received from tunnel port and destined to local gateway.
 func (c *client) l3ToGatewayFlow(localGatewayIP net.IP, localGatewayMAC net.HardwareAddr) binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
-	return l3FwdTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
+	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstIP(localGatewayIP).
 		Action().SetDstMAC(localGatewayMAC).
-		Action().Resubmit(emptyPlaceholderStr, l3FwdTable.GetNext()).
+		Action().ResubmitToTable(l3FwdTable.GetNext()).
 		Done()
 }
 
@@ -282,21 +279,20 @@ func (c *client) l3ToGatewayFlow(localGatewayIP net.IP, localGatewayMAC net.Hard
 func (c *client) l3FwdFlowToRemote(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	// Rewrite src MAC to local gateway MAC and rewrite dst MAC to virtual MAC
-	return l3FwdTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
+	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstIPNet(peerSubnet).
 		Action().DecTTL().
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(globalVirtualMAC).
 		Action().SetTunnelDst(tunnelPeer).
-		Action().Resubmit(emptyPlaceholderStr, l3FwdTable.GetNext()).
+		Action().ResubmitToTable(l3FwdTable.GetNext()).
 		Done()
 }
 
 // arpResponderFlow generates the ARP responder flow entry that replies request comes from local gateway for peer
 // gateway MAC.
 func (c *client) arpResponderFlow(peerGatewayIP net.IP) binding.Flow {
-	return c.pipeline[arpResponderTable].BuildFlow().
-		MatchProtocol(binding.ProtocolARP).Priority(priorityNormal).
+	return c.pipeline[arpResponderTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
 		MatchARPOp(1).
 		MatchARPTpa(peerGatewayIP).
 		Action().Move(binding.NxmFieldSrcMAC, binding.NxmFieldDstMAC).
@@ -315,29 +311,29 @@ func (c *client) arpResponderFlow(peerGatewayIP net.IP) binding.Flow {
 func (c *client) podIPSpoofGuardFlow(ifIP net.IP, ifMAC net.HardwareAddr, ifOFPort uint32) binding.Flow {
 	ipPipeline := c.pipeline
 	ipSpoofGuardTable := ipPipeline[spoofGuardTable]
-	return ipSpoofGuardTable.BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
+	return ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchInPort(ifOFPort).
 		MatchSrcMAC(ifMAC).
 		MatchSrcIP(ifIP).
-		Action().Resubmit(emptyPlaceholderStr, ipSpoofGuardTable.GetNext()).
+		Action().ResubmitToTable(ipSpoofGuardTable.GetNext()).
 		Done()
 }
 
 // gatewayARPSpoofGuardFlow generates the flow to skip ARP UP check on packets sent out from the local gateway interface.
 func (c *client) gatewayARPSpoofGuardFlow(gatewayOFPort uint32) binding.Flow {
-	return c.pipeline[spoofGuardTable].BuildFlow().MatchProtocol(binding.ProtocolARP).Priority(priorityNormal).
+	return c.pipeline[spoofGuardTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
 		MatchInPort(gatewayOFPort).
-		Action().Resubmit(emptyPlaceholderStr, arpResponderTable).
+		Action().ResubmitToTable(arpResponderTable).
 		Done()
 }
 
 // arpSpoofGuardFlow generates the flow to check ARP traffic sent out from local pods interfaces.
 func (c *client) arpSpoofGuardFlow(ifIP net.IP, ifMAC net.HardwareAddr, ifOFPort uint32) binding.Flow {
-	return c.pipeline[spoofGuardTable].BuildFlow().MatchProtocol(binding.ProtocolARP).Priority(priorityNormal).
+	return c.pipeline[spoofGuardTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
 		MatchInPort(ifOFPort).
 		MatchARPSha(ifMAC).
 		MatchARPSpa(ifIP).
-		Action().Resubmit(emptyPlaceholderStr, arpResponderTable).
+		Action().ResubmitToTable(arpResponderTable).
 		Done()
 }
 
@@ -345,16 +341,15 @@ func (c *client) arpSpoofGuardFlow(ifIP net.IP, ifMAC net.HardwareAddr, ifOFPort
 func (c *client) gatewayIPSpoofGuardFlow(gatewayOFPort uint32) binding.Flow {
 	ipPipeline := c.pipeline
 	ipSpoofGuardTable := ipPipeline[spoofGuardTable]
-	return ipSpoofGuardTable.BuildFlow().Priority(priorityNormal).
-		MatchProtocol(binding.ProtocolIP).
+	return ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchInPort(gatewayOFPort).
-		Action().Resubmit(emptyPlaceholderStr, ipSpoofGuardTable.GetNext()).
+		Action().ResubmitToTable(ipSpoofGuardTable.GetNext()).
 		Done()
 }
 
 // serviceCIDRDNATFlow generates flows to match dst IP in service CIDR and output to host gateway interface directly.
 func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayOFPort uint32) binding.Flow {
-	return c.pipeline[dnatTable].BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityNormal).
+	return c.pipeline[dnatTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstIPNet(*serviceCIDR).
 		Action().Output(int(gatewayOFPort)).
 		Done()
@@ -362,18 +357,16 @@ func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayOFPort uint3
 
 // arpNormalFlow generates the flow to response arp in normal way if no flow in arpResponderTable is matched.
 func (c *client) arpNormalFlow() binding.Flow {
-	return c.pipeline[arpResponderTable].BuildFlow().
-		MatchProtocol(binding.ProtocolARP).Priority(priorityLow).
+	return c.pipeline[arpResponderTable].BuildFlow(priorityLow).MatchProtocol(binding.ProtocolARP).
 		Action().Normal().Done()
 }
 
 // conjunctionActionFlow generates the flow to resubmit to a specific table if policyRuleConjunction ID is matched. Priority of
 // conjunctionActionFlow is priorityLow.
 func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType) binding.Flow {
-	return c.pipeline[tableID].BuildFlow().
-		MatchProtocol(binding.ProtocolIP).Priority(priorityLow).
+	return c.pipeline[tableID].BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 		MatchConjID(conjunctionID).
-		Action().Resubmit(emptyPlaceholderStr, nextTable).Done()
+		Action().ResubmitToTable(nextTable).Done()
 }
 
 func (c *client) Disconnect() error {
@@ -390,16 +383,16 @@ func (c *client) establishedConnectionFlows() (flows []binding.Flow) {
 	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
 	// egressRuleTable or the egressDropTable.
 	egressDropTable := c.pipeline[egressDefaultTable]
-	egressEstFlow := c.pipeline[egressRuleTable].BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityHigh).
-		MatchCTState("-new+est").
-		Action().Resubmit(emptyPlaceholderStr, egressDropTable.GetNext()).Done()
+	egressEstFlow := c.pipeline[egressRuleTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+		MatchCTStateNew(false).MatchCTStateEst(true).
+		Action().ResubmitToTable(egressDropTable.GetNext()).Done()
 	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
 	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
 	// ingressRuleTable or ingressDropTable.
 	ingressDropTable := c.pipeline[ingressDefaultTable]
-	ingressEstFlow := c.pipeline[ingressRuleTable].BuildFlow().MatchProtocol(binding.ProtocolIP).Priority(priorityHigh).
-		MatchCTState("-new+est").
-		Action().Resubmit(emptyPlaceholderStr, ingressDropTable.GetNext()).Done()
+	ingressEstFlow := c.pipeline[ingressRuleTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+		MatchCTStateNew(false).MatchCTStateEst(true).
+		Action().ResubmitToTable(ingressDropTable.GetNext()).Done()
 	return []binding.Flow{egressEstFlow, ingressEstFlow}
 }
 
@@ -430,14 +423,14 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue 
 
 // conjunctionExceptionFlow generates the flow to resubmit to a specific table if both policyRuleConjunction ID and except address are matched.
 func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, matchKey int, matchValue interface{}) binding.Flow {
-	fb := c.pipeline[tableID].BuildFlow().Priority(priorityNormal).MatchConjID(conjunctionID)
+	fb := c.pipeline[tableID].BuildFlow(priorityNormal).MatchConjID(conjunctionID)
 	return c.addFlowMatch(fb, matchKey, matchValue).
-		Action().Resubmit(emptyPlaceholderStr, nextTable).Done()
+		Action().ResubmitToTable(nextTable).Done()
 }
 
 // conjunctiveMatchFlow generates the flow to set conjunctive actions if the match condition is matched.
 func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey int, matchValue interface{}, actions ...*conjunctiveAction) binding.Flow {
-	fb := c.pipeline[tableID].BuildFlow().Priority(priorityNormal)
+	fb := c.pipeline[tableID].BuildFlow(priorityNormal)
 	fb = c.addFlowMatch(fb, matchKey, matchValue)
 	for _, act := range actions {
 		fb.Action().Conjunction(act.conjID, act.clauseID, act.nClause)
@@ -447,7 +440,7 @@ func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey int,
 
 // defaultDropFlow generates the flow to drop packets if the match condition is matched.
 func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey int, matchValue interface{}) binding.Flow {
-	fb := c.pipeline[tableID].BuildFlow().Priority(priorityNormal)
+	fb := c.pipeline[tableID].BuildFlow(priorityNormal)
 	return c.addFlowMatch(fb, matchKey, matchValue).
 		Action().Drop().Done()
 }
@@ -462,7 +455,7 @@ func (c *client) localProbeFlow(localGatewayIP net.IP) binding.Flow {
 
 // NewClient is the constructor of the Client interface.
 func NewClient(bridgeName string) Client {
-	bridge := binding.NewBridge(bridgeName)
+	bridge := binding.NewOFBridge(bridgeName)
 	c := &client{
 		bridge: bridge,
 		pipeline: map[binding.TableIDType]binding.Table{

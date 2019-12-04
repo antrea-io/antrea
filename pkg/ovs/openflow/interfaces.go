@@ -32,8 +32,6 @@ type MissActionType uint32
 type Range [2]uint32
 
 const (
-	Version13 versionType = "Openflow13"
-
 	ProtocolIP   protocol = "ip"
 	ProtocolARP  protocol = "arp"
 	ProtocolTCP  protocol = "tcp"
@@ -65,21 +63,20 @@ const (
 // Bridge defines operations on an openflow bridge.
 type Bridge interface {
 	CreateTable(id, next TableIDType, missAction MissActionType) Table
-	GetName() string
 	DeleteTable(id TableIDType) bool
 	DumpTableStatus() []TableStatus
-	// Connect initiates connection to the OFSwitch. It will block until the connection is established.
-	// If Bridge is not connected in maxRetry times, it will return error.
-	Connect(maxRetry int) error
+	// DumpFlows queries the Openflow entries from OFSwitch. The filter of the query is Openflow cookieID; the result is
+	// a map from flow cookieID to FlowStates.
+	DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates
+	// DeleteFlowsByCookie removes Openflow entries from OFSwitch. The removed Openflow entries use the specific CookieID.
+	DeleteFlowsByCookie(cookieID, cookieMask uint64) error
+	// Connect initiates connection to the OFSwitch. It will block until the connection is established. connectCh is used to
+	// send notification whenever the switch is connected or reconnected.
+	Connect(maxRetrySec int, connectCh chan struct{}) error
 	// Disconnect stops connection to the OFSwitch.
 	Disconnect() error
-}
-
-func NewBridge(name string) Bridge {
-	return &commandBridge{
-		name:       name,
-		tableCache: map[TableIDType]Table{},
-	}
+	// IsConnected returns the OFSwitch's connection status. The result is true if the OFSwitch is connected.
+	IsConnected() bool
 }
 
 // TableStatus represents the status of a specific flow table. The status is useful for debugging.
@@ -91,7 +88,7 @@ type TableStatus struct {
 
 type Table interface {
 	GetID() TableIDType
-	BuildFlow() FlowBuilder
+	BuildFlow(priority uint16) FlowBuilder
 	GetMissAction() MissActionType
 	Status() TableStatus
 	GetNext() TableIDType
@@ -105,10 +102,8 @@ type Flow interface {
 	Add() error
 	Modify() error
 	Delete() error
-	String() string
 	MatchString() string
-	GetTable() Table
-	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not not copy the actions.
+	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions.
 	CopyToBuilder() FlowBuilder
 }
 
@@ -118,7 +113,8 @@ type Action interface {
 	LoadRange(name string, addr uint32, to Range) FlowBuilder
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder
-	Resubmit(port string, table TableIDType) FlowBuilder
+	Resubmit(port uint16, table TableIDType) FlowBuilder
+	ResubmitToTable(table TableIDType) FlowBuilder
 	CT(commit bool, tableID TableIDType, zone int) CTAction
 	Drop() FlowBuilder
 	Output(port int) FlowBuilder
@@ -140,7 +136,6 @@ type Action interface {
 }
 
 type FlowBuilder interface {
-	Priority(value uint32) FlowBuilder
 	MatchProtocol(name protocol) FlowBuilder
 	MatchReg(regID int, data uint32) FlowBuilder
 	MatchRegRange(regID int, data uint32, rng Range) FlowBuilder
@@ -156,8 +151,13 @@ type FlowBuilder interface {
 	MatchARPSpa(ip net.IP) FlowBuilder
 	MatchARPTpa(ip net.IP) FlowBuilder
 	MatchARPOp(op uint16) FlowBuilder
-	MatchCTState(value string) FlowBuilder
-	MatchCTMark(value string) FlowBuilder
+	MatchCTStateNew(isSet bool) FlowBuilder
+	MatchCTStateRel(isSet bool) FlowBuilder
+	MatchCTStateRpl(isSet bool) FlowBuilder
+	MatchCTStateEst(isSet bool) FlowBuilder
+	MatchCTStateTrk(isSet bool) FlowBuilder
+	MatchCTStateInv(isSet bool) FlowBuilder
+	MatchCTMark(value uint32) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
 	MatchTCPDstPort(port uint16) FlowBuilder
 	MatchUDPDstPort(port uint16) FlowBuilder
