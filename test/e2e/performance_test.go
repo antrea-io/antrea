@@ -91,7 +91,7 @@ func randCidr(rndSrc rand.Source) string {
 	return fmt.Sprintf("%d.%d.%d.%d/32", rndSrc.Uint64()%255+1, rndSrc.Uint64()%255+1, rndSrc.Uint64()%255+1, rndSrc.Uint64()%255+1)
 }
 
-// createPerformanceTestPodSpec creates Pod description for the performance test.
+// createPerformanceTestPodSpec creates the Pod specification for the performance test.
 // The Pod will be scheduled on the master Node.
 func createPerformanceTestPodSpec(name, containerName, image string) *v1.Pod {
 	podSpec := v1.PodSpec{

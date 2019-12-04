@@ -132,7 +132,7 @@ go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
 
 All flags of performance tests includes:
 - `performance.http.concurrency (int)`: Number of allowed concurrent http requests (default 1)
-- `performance.http.requsts (int)`: Total Number of http requests
+- `performance.http.requests (int)`: Total Number of http requests
 - `performance.http.workloads (int)`: Number of CIDRs in the workload network policy
 - `performance.realize.timeout (duration)`: Timeout of the realization of network policies (default 5m0s)
 
