@@ -124,8 +124,8 @@ the timeout duration `-timeout` from the default `10m` to a longer one like `30m
 If you would like to run the performance tests in a different scale, you could run:
 ```bash
 go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
-    --performance.http.requsts=5000 \
-    --performance.http.workloads=1000 \
+    --performance.http.requests=5000 \
+    --performance.http.policy_rules=1000 \
     --performance.http.concurrency=16 \
     github.com/vmware-tanzu/antrea/test/e2e
 ```
@@ -133,7 +133,7 @@ go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
 All flags of performance tests includes:
 - `performance.http.concurrency (int)`: Number of allowed concurrent http requests (default 1)
 - `performance.http.requests (int)`: Total Number of http requests
-- `performance.http.workloads (int)`: Number of CIDRs in the workload network policy
+- `performance.http.policy_rules (int)`: Number of CIDRs in the network policy
 - `performance.realize.timeout (duration)`: Timeout of the realization of network policies (default 5m0s)
 
 ## Tests to be added
