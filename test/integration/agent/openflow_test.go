@@ -28,7 +28,7 @@ import (
 
 	ofClient "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	ofTestUtils "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
+	ofTestUtils "github.com/vmware-tanzu/antrea/test/integration/ovs"
 )
 
 var (
@@ -80,12 +80,12 @@ func TestConnectivityFlows(t *testing.T) {
 	c = ofClient.NewClient(br)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	if err != nil {
-		t.Errorf("failed to prepare OVS bridge: %v", br)
+		t.Errorf("Failed to prepare OVS bridge: %v", err)
 	}
 	defer func() {
 		err = ofTestUtils.DeleteOVSBridge(br)
 		if err != nil {
-			t.Errorf("error while deleting OVS bridge: %v", err)
+			t.Errorf("Error while deleting OVS bridge: %v", err)
 		}
 	}()
 

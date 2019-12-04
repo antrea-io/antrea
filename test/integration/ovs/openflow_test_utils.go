@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package testing
+package ovs
 
 import (
 	"fmt"
@@ -22,8 +22,13 @@ import (
 )
 
 func PrepareOVSBridge(brName string) error {
-	cmdStr := fmt.Sprintf("sudo /usr/bin/ovs-vsctl --may-exist add-br %s", brName)
+	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s", brName)
 	err := exec.Command("/bin/sh", "-c", cmdStr).Run()
+	if err != nil {
+		return err
+	}
+	cmdStr = fmt.Sprintf("ovs-vsctl set Bridge %s protocols='OpenFlow10,OpenFlow13'", brName)
+	err = exec.Command("/bin/sh", "-c", cmdStr).Run()
 	if err != nil {
 		return err
 	}
@@ -31,7 +36,7 @@ func PrepareOVSBridge(brName string) error {
 }
 
 func DeleteOVSBridge(brName string) error {
-	cmdStr := fmt.Sprintf("sudo /usr/bin/ovs-vsctl --if-exist del-br %s", brName)
+	cmdStr := fmt.Sprintf("ovs-vsctl --if-exist del-br %s", brName)
 	err := exec.Command("/bin/sh", "-c", cmdStr).Run()
 	if err != nil {
 		return err
@@ -99,7 +104,7 @@ func OfctlDumpFlows(brName string, table uint8) ([]string, error) {
 }
 
 func runOfctlCmd(cmd, brName string, table uint8) ([]byte, error) {
-	cmdStr := fmt.Sprintf("sudo /usr/bin/ovs-ofctl -O Openflow13 %s %s table=%d", cmd, brName, table)
+	cmdStr := fmt.Sprintf("ovs-ofctl -O Openflow13 %s %s table=%d", cmd, brName, table)
 	out, err := exec.Command("/bin/sh", "-c", cmdStr).Output()
 	if err != nil {
 		return nil, err
