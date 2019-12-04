@@ -150,8 +150,8 @@ func createPerformanceAB(data *TestData, b *testing.B) (string, error) {
 	return data.podWaitForIP(defaultTimeout, benchABPodName)
 }
 
-// setupPerformanceTestPodsConnection applies the network policy which enables connectivity between test Pods in the cluster.
-func setupPerformanceTestPodsConnection(data *TestData) error {
+// setupTestPodsConnection applies the network policy which enables connectivity between test Pods in the cluster.
+func setupTestPodsConnection(data *TestData) error {
 	npSpec := networkv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": performanceAppLabel}},
 		Ingress: []networkv1.NetworkPolicyIngressRule{
@@ -203,7 +203,7 @@ func populateWorkloads(np *networkv1.NetworkPolicy, data *TestData) error {
 	return err
 }
 
-func setupPerformanceTestPods(data *TestData, b *testing.B) (nginxPodIP, abPodIP string) {
+func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, abPodIP string) {
 	var err error
 	nginxPodIP, err = createPerformanceNginx(data, b)
 	if err != nil {
@@ -222,9 +222,9 @@ func setupPerformanceTestPods(data *TestData, b *testing.B) (nginxPodIP, abPodIP
 // the `--http.performance.concurrency` concurrency to the Nginx Pod. `workloadsNum` indicates how many CIDRs
 // in the workload network policy should be generated.
 func httpRequest(times int, workloadsNum int, data *TestData, b *testing.B) {
-	nginxPodIP, _ := setupPerformanceTestPods(data, b)
+	nginxPodIP, _ := setupTestPods(data, b)
 
-	err := setupPerformanceTestPodsConnection(data) // enable Pods connectivity policy first
+	err := setupTestPodsConnection(data) // enable Pods connectivity policy first
 	if err != nil {
 		b.Fatalf("Error when adding network policy to set up connection between performance test Pods")
 	}
@@ -258,7 +258,7 @@ func httpRequest(times int, workloadsNum int, data *TestData, b *testing.B) {
 // to be realized into flow entries. In order to have entities for the network policy to apply to, we
 // create two dummy Pods: apache-bench and Nginx, they don't have activity during the benchmark test.
 func networkPolicyRealize(workloadsNum int, data *TestData, b *testing.B) {
-	setupPerformanceTestPods(data, b)
+	setupTestPods(data, b)
 	for i := 0; i < b.N; i++ {
 		go func() {
 			err := populateWorkloads(generateWorkloads(workloadsNum), data)
