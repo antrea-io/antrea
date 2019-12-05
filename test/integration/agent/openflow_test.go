@@ -416,7 +416,7 @@ func testInstallGatewayFlows(t *testing.T, config *testConfig) {
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries for gateway: %v", err)
 	}
-	for _, tableFlow := range prepareGatewayFlows(config.localGateway.ip, config.localGateway.mac, config.localGateway.ofPort) {
+	for _, tableFlow := range prepareGatewayFlows(config.localGateway.ip, config.localGateway.mac, config.localGateway.ofPort, config.globalMAC) {
 		ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -494,7 +494,7 @@ func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gw
 	}
 }
 
-func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32) []expectTableFlows {
+func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, vMAC net.HardwareAddr) []expectTableFlows {
 	return []expectTableFlows{
 		{
 			uint8(0),
@@ -514,7 +514,7 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32) [
 			uint8(70),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					fmt.Sprintf("priority=200,ip,nw_dst=%s", gwIP.String()),
+					fmt.Sprintf("priority=200,ip,dl_dst=%s,nw_dst=%s", vMAC.String(), gwIP.String()),
 					fmt.Sprintf("set_field:%s->eth_dst,resubmit(,80)", gwMAC.String())},
 			},
 		},
