@@ -617,7 +617,7 @@ func prepareDefaultFlows() []expectTableFlows {
 				{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "resubmit(,40)"},
 				{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=40,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[],move:NXM_OF_ETH_SRC[]->NXM_NX_CT_LABEL[0..47]))"},
 				{"priority=200,ct_state=-new+trk,ct_mark=0x20,ip", "move:NXM_NX_CT_LABEL[0..47]->NXM_OF_ETH_DST[],resubmit(,40)"},
-				{"priority=200,ct_state=+new+inv,ip", "drop"},
+				{"priority=200,ct_state=+inv+trk,ip", "drop"},
 				{"priority=190,ct_state=+new+trk,ip", "ct(commit,table=40,zone=65520)"},
 				{"priority=80,ip", "resubmit(,40)"},
 			},

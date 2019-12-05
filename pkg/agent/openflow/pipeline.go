@@ -224,7 +224,7 @@ func (c *client) connectionTrackFlows() (flows []binding.Flow) {
 	flows = append(flows, nonGatewaySendFlow)
 
 	invCTFlow := connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchCTStateNew(true).MatchCTStateInv(true).
+		MatchCTStateInv(true).MatchCTStateTrk(true).
 		Action().Drop().
 		Done()
 	flows = append(flows, invCTFlow)
