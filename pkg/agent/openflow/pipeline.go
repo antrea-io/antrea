@@ -269,6 +269,7 @@ func (c *client) l3FlowsToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP n
 func (c *client) l3ToGatewayFlow(localGatewayIP net.IP, localGatewayMAC net.HardwareAddr) binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		MatchDstMAC(globalVirtualMAC).
 		MatchDstIP(localGatewayIP).
 		Action().SetDstMAC(localGatewayMAC).
 		Action().ResubmitToTable(l3FwdTable.GetNext()).
