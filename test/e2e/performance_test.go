@@ -66,9 +66,9 @@ func BenchmarkHTTPRequest(b *testing.B) {
 }
 
 func BenchmarkRealizeNetworkPolicy(b *testing.B) {
-	for _, scale := range []int{5000, 10000, 15000} {
-		b.Run(fmt.Sprintf("RealizeNetworkPolicy%d", scale), func(b *testing.B) {
-			withPerformanceTestSetup(func(data *TestData) { networkPolicyRealize(scale, data, b) }, b)
+	for _, policyRules := range []int{5000, 10000, 15000} {
+		b.Run(fmt.Sprintf("RealizeNetworkPolicy%d", policyRules), func(b *testing.B) {
+			withPerformanceTestSetup(func(data *TestData) { networkPolicyRealize(policyRules, data, b) }, b)
 		})
 	}
 }
@@ -149,17 +149,17 @@ func setupTestPodsConnection(data *TestData) error {
 	return err
 }
 
-func generateWorkloadNetworkPolicy(amount int) *networkv1.NetworkPolicy {
-	ingressRules := make([]networkv1.NetworkPolicyPeer, amount)
+func generateWorkloadNetworkPolicy(policyRules int) *networkv1.NetworkPolicy {
+	ingressRules := make([]networkv1.NetworkPolicyPeer, policyRules)
 	rndSrc := rand.NewSource(seed)
 	existingCIDRs := make(map[string]struct{}) // ensure no duplicated cidrs
-	for len(ingressRules) < amount {
+	for i := 0; i < policyRules; i++ {
 		cidr := randCidr(rndSrc)
-		if _, ok := existingCIDRs[cidr]; ok {
-			continue
+		for _, ok := existingCIDRs[cidr]; ok; {
+			cidr = randCidr(rndSrc)
 		}
 		existingCIDRs[cidr] = struct{}{}
-		ingressRules = append(ingressRules, networkv1.NetworkPolicyPeer{IPBlock: &networkv1.IPBlock{CIDR: cidr}})
+		ingressRules[i] = networkv1.NetworkPolicyPeer{IPBlock: &networkv1.IPBlock{CIDR: cidr}}
 	}
 	npSpec := networkv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": performanceTestAppLabel}},
@@ -274,7 +274,7 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 }
 
 func waitNetworkPolicyRealize(policyRules int, data *TestData) error {
-	return wait.PollImmediate(0, *realizeTimeout, func() (bool, error) {
+	return wait.PollImmediate(50*time.Millisecond, *realizeTimeout, func() (bool, error) {
 		return checkRealize(policyRules, data)
 	})
 }
@@ -282,29 +282,22 @@ func waitNetworkPolicyRealize(policyRules int, data *TestData) error {
 // checkRealize checks if all CIDR rules in the Network Policy have been realized as OVS flows. It counts the number of
 // flows installed in the ingressRuleTable of the OVS bridge of the master Node. This relies on the implementation
 // knowledge that given a single ingress policy, the Antrea agent will install exactly one flow per CIDR rule in table 90.
-// Since the check is done over SSH, the time measurement is not completely accurate.
 // checkRealize returns true when the number of flows exceeds the number of CIDR, because each table has a default flow
 // entry which is used for default matching.
+// Since the check is done over SSH, the time measurement is not completely accurate.
 func checkRealize(policyRules int, data *TestData) (bool, error) {
-	flowNums, err := countFlows(data)
-	if err != nil {
-		return false, fmt.Errorf("dumping flow keeps failed")
-	}
-	return flowNums > policyRules, nil
-}
-
-func countFlows(data *TestData) (int, error) {
 	antreaPodName, err := data.getAntreaPodOnNode(masterNodeName())
 	if err != nil {
-		return 0, err
+		return false, err
 	}
 	// table 90 is the ingressRuleTable where the rules in workload network policy is being applied to.
 	cmd := []string{"ovs-ofctl", "dump-flows", "br-int", "table=90"}
 	stdout, _, err := data.runCommandFromPod(AntreaNamespace, antreaPodName, "antrea-agent", cmd)
 	if err != nil {
-		return 0, err
+		return false, err
 	}
-	return strings.Count(stdout, "\n"), nil
+	flowNums := strings.Count(stdout, "\n")
+	return flowNums > policyRules, nil
 }
 
 // withPerformanceTestSetup runs function fn in a clean test environment.
@@ -332,13 +325,6 @@ func withPerformanceTestSetup(fn func(data *TestData), b *testing.B) {
 	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
 		b.Fatalf("Error when restarting Antrea: %v", err)
 	}
-	defer func() {
-		if flowNum, err := countFlows(data); err != nil {
-			b.Fatalf("Error when counting flow number: %v", err)
-		} else {
-			b.Logf("Flow entries: %d", flowNum)
-		}
-	}()
 
 	fn(data)
 }

@@ -114,8 +114,8 @@ go test -v github.com/vmware-tanzu/antrea/test/e2e -provider=kind
 To run all benchmarks, without the standard e2e tests:
 ```bash
 go test -v -timeout=30m -run=XXX -bench=. \
-    --performance.http.concurrency=16 \
-    github.com/vmware-tanzu/antrea/test/e2e 
+    github.com/vmware-tanzu/antrea/test/e2e \
+    --performance.http.concurrency=16
 ```
 The above command uses `-run=XXX` to deselect all `Test*` tests and uses `-bench=.` to select
 all `Benchmark*` tests. Since performance tests take a while to complete, you need to extend
@@ -124,10 +124,10 @@ the timeout duration `-timeout` from the default `10m` to a longer one like `30m
 If you would like to run the performance tests in a different scale, you could run:
 ```bash
 go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
+    github.com/vmware-tanzu/antrea/test/e2e \
     --performance.http.requests=5000 \
     --performance.http.policy_rules=1000 \
-    --performance.http.concurrency=16 \
-    github.com/vmware-tanzu/antrea/test/e2e
+    --performance.http.concurrency=16
 ```
 
 All flags of performance tests includes:
