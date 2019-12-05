@@ -17,7 +17,7 @@ package networkpolicy
 import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
 
 // TODO: use set-gen to generate it.

@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
@@ -54,14 +54,14 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				})
 			},
 			expected: []watch.Event{
-				{watch.Added, &networkpolicy.AddressGroup{
+				{watch.Added, &networking.AddressGroup{
 					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
-					IPAddresses: []networkpolicy.IPAddress{IPStrToIPAddress("1.1.1.1"), IPStrToIPAddress("2.2.2.2")},
+					IPAddresses: []networking.IPAddress{IPStrToIPAddress("1.1.1.1"), IPStrToIPAddress("2.2.2.2")},
 				}},
-				{watch.Modified, &networkpolicy.AddressGroupPatch{
+				{watch.Modified, &networking.AddressGroupPatch{
 					ObjectMeta:         metav1.ObjectMeta{Name: "foo"},
-					AddedIPAddresses:   []networkpolicy.IPAddress{IPStrToIPAddress("3.3.3.3")},
-					RemovedIPAddresses: []networkpolicy.IPAddress{IPStrToIPAddress("2.2.2.2")},
+					AddedIPAddresses:   []networking.IPAddress{IPStrToIPAddress("3.3.3.3")},
+					RemovedIPAddresses: []networking.IPAddress{IPStrToIPAddress("2.2.2.2")},
 				}},
 			},
 		},
@@ -95,16 +95,16 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				})
 			},
 			expected: []watch.Event{
-				{watch.Added, &networkpolicy.AddressGroup{
+				{watch.Added, &networking.AddressGroup{
 					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
-					IPAddresses: []networkpolicy.IPAddress{IPStrToIPAddress("1.1.1.1"), IPStrToIPAddress("2.2.2.2")},
+					IPAddresses: []networking.IPAddress{IPStrToIPAddress("1.1.1.1"), IPStrToIPAddress("2.2.2.2")},
 				}},
-				{watch.Modified, &networkpolicy.AddressGroupPatch{
+				{watch.Modified, &networking.AddressGroupPatch{
 					ObjectMeta:         metav1.ObjectMeta{Name: "foo"},
-					AddedIPAddresses:   []networkpolicy.IPAddress{IPStrToIPAddress("3.3.3.3")},
-					RemovedIPAddresses: []networkpolicy.IPAddress{IPStrToIPAddress("2.2.2.2")},
+					AddedIPAddresses:   []networking.IPAddress{IPStrToIPAddress("3.3.3.3")},
+					RemovedIPAddresses: []networking.IPAddress{IPStrToIPAddress("2.2.2.2")},
 				}},
-				{watch.Deleted, &networkpolicy.AddressGroup{
+				{watch.Deleted, &networking.AddressGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 				}},
 			},
@@ -126,8 +126,8 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				}
 				switch actualEvent.Type {
 				case watch.Added, watch.Deleted:
-					actualObj := actualEvent.Object.(*networkpolicy.AddressGroup)
-					expectedObj := expectedEvent.Object.(*networkpolicy.AddressGroup)
+					actualObj := actualEvent.Object.(*networking.AddressGroup)
+					expectedObj := expectedEvent.Object.(*networking.AddressGroup)
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}
@@ -135,8 +135,8 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 						t.Errorf("Expected IPAddresses %v, got %v", expectedObj.IPAddresses, actualObj.IPAddresses)
 					}
 				case watch.Modified:
-					actualObj := actualEvent.Object.(*networkpolicy.AddressGroupPatch)
-					expectedObj := expectedEvent.Object.(*networkpolicy.AddressGroupPatch)
+					actualObj := actualEvent.Object.(*networking.AddressGroupPatch)
+					expectedObj := expectedEvent.Object.(*networking.AddressGroupPatch)
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}

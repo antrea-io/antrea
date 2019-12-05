@@ -28,7 +28,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
 
 // Reconciler is an interface that knows how to reconcile the desired state of

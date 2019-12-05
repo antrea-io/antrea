@@ -27,7 +27,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/version"

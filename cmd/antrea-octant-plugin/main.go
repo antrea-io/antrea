@@ -174,7 +174,7 @@ func getControllerRows() []component.TableRow {
 			serviceCol: component.NewLink(controller.ServiceRef.Name, controller.ServiceRef.Name,
 				"/overview/namespace/"+controller.PodRef.Namespace+"/discovery-and-load-balancing/services/"+controller.ServiceRef.Name),
 			crdCol: component.NewLink(controller.Name, controller.Name,
-				"/cluster-overview/custom-resources/antreacontrollerinfos.clusterinformation.crd.antrea.io/"+controller.Name),
+				"/cluster-overview/custom-resources/antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com/"+controller.Name),
 			heartbeatCol: component.NewText(controller.ControllerConditions[0].LastHeartbeatTime.String()),
 		})
 	}
@@ -199,7 +199,7 @@ func getAgentRows() []component.TableRow {
 			bridgeCol: component.NewText(agent.OVSInfo.BridgeName),
 			podNumCol: component.NewText(strconv.Itoa(int(agent.LocalPodNum))),
 			crdCol: component.NewLink(agent.Name, agent.Name,
-				"/cluster-overview/custom-resources/antreaagentinfos.clusterinformation.crd.antrea.io/"+agent.Name),
+				"/cluster-overview/custom-resources/antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com/"+agent.Name),
 			heartbeatCol: component.NewText(agent.AgentConditions[0].LastHeartbeatTime.String()),
 		})
 	}

@@ -26,7 +26,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 )
 
@@ -172,7 +172,7 @@ func (c *Controller) watchAppliedToGroups() {
 	// TODO: Cleanup AppliedToGroups that are removed during reconnection.
 	klog.Info("Start watching AppliedToGroups")
 	options := c.nodeScopedListOptions()
-	w, err := c.antreaClient.NetworkpolicyV1beta1().AppliedToGroups().Watch(options)
+	w, err := c.antreaClient.NetworkingV1beta1().AppliedToGroups().Watch(options)
 	if err != nil {
 		klog.Errorf("Failed to watch AppliedToGroups: %v", err)
 		return
@@ -225,7 +225,7 @@ func (c *Controller) watchAddressGroups() {
 	// TODO: Cleanup AddressGroups that are removed during reconnection.
 	klog.Info("Start watching AddressGroups")
 	options := c.nodeScopedListOptions()
-	w, err := c.antreaClient.NetworkpolicyV1beta1().AddressGroups().Watch(options)
+	w, err := c.antreaClient.NetworkingV1beta1().AddressGroups().Watch(options)
 	if err != nil {
 		klog.Errorf("Failed to watch AddressGroups: %v", err)
 		return
@@ -278,7 +278,7 @@ func (c *Controller) watchNetworkPolicies() {
 	// TODO: Cleanup NetworkPolicies that are removed during reconnection.
 	klog.Info("Start watching NetworkPolicies")
 	options := c.nodeScopedListOptions()
-	w, err := c.antreaClient.NetworkpolicyV1beta1().NetworkPolicies("").Watch(options)
+	w, err := c.antreaClient.NetworkingV1beta1().NetworkPolicies("").Watch(options)
 	if err != nil {
 		klog.Errorf("Failed to watch NetworkPolicies: %v", err)
 		return
