@@ -109,10 +109,10 @@ type flowCategoryCache struct {
 }
 
 type client struct {
-	bridge                                    binding.Bridge
-	pipeline                                  map[binding.TableIDType]binding.Table
-	nodeFlowCache, podFlowCache, serviceCache *flowCategoryCache // cache for corresponding deletions
-	flowOperations                            FlowOperations
+	bridge                      binding.Bridge
+	pipeline                    map[binding.TableIDType]binding.Table
+	nodeFlowCache, podFlowCache *flowCategoryCache // cache for corresponding deletions
+	flowOperations              FlowOperations
 	// policyCache is a map from PolicyRule ID to policyRuleConjunction. It's guaranteed that one policyRuleConjunction
 	// is processed by at most one goroutine at any given time.
 	policyCache       sync.Map
@@ -474,7 +474,6 @@ func NewClient(bridgeName string) Client {
 		},
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),
-		serviceCache:             newFlowCategoryCache(),
 		policyCache:              sync.Map{},
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 	}
