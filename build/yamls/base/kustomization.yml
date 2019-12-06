@@ -1,6 +1,8 @@
 resources:
 - crds.yml
+- controller-rbac.yml
 - controller.yml
+- agent-rbac.yml
 - agent.yml
 configMapGenerator:
 - files:
