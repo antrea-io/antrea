@@ -18,6 +18,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"k8s.io/klog"
 )
 
 var capturedSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT}
@@ -34,6 +36,8 @@ func RegisterSignalHandlers() <-chan struct{} {
 		<-notifyCh
 		close(stopCh)
 		<-notifyCh
+		klog.Warning("Received second signal, will force exit")
+		klog.Flush()
 		os.Exit(1)
 	}()
 
