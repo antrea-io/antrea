@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
@@ -94,8 +95,7 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 // add allocates an unique Openflow ID for the provide CompletedRule, converts
 // it to PolicyRule, and invoke InstallPolicyRuleFlows to install the later.
 func (r *reconciler) add(rule *CompletedRule) error {
-	klog.V(2).Infof("Adding new rule %v (%v, %d FromAddresses, %d ToAddresses, %d Pods)",
-		rule.ID, rule.Direction, len(rule.FromAddresses), len(rule.ToAddresses), len(rule.Pods))
+	klog.V(2).Infof("Adding new rule %v", rule)
 	ofID, err := r.idAllocator.allocate()
 	if err != nil {
 		return fmt.Errorf("error allocating Openflow ID")
@@ -108,60 +108,55 @@ func (r *reconciler) add(rule *CompletedRule) error {
 	}()
 	// TODO: Update types.PolicyRule to use Antrea Direction type.
 	var direction networkingv1.PolicyType
-	// TODO: Differentiate rule that match everything and rule that match nothing.
-	// nil slice should match everything and empty slice should match nothing.
-	var from, to []types.Address
+	var from, exceptFrom, to, exceptTo []types.Address
 	if rule.Direction == v1beta1.DirectionIn {
 		direction = networkingv1.PolicyTypeIngress
-
-		if rule.FromAddresses != nil || rule.From.IPBlocks != nil {
-			from = make([]types.Address, 0, len(rule.FromAddresses)+len(rule.From.IPBlocks))
-		}
-		for a := range rule.FromAddresses {
-			from = append(from, openflow.NewIPAddress(net.ParseIP(a)))
-		}
-		// TODO: handle except field.
-		for _, b := range rule.From.IPBlocks {
-			from = append(from, openflow.NewIPNetAddress(antreaIPNetToIPNet(b.CIDR)))
-		}
-
+		from, exceptFrom = ipsToOFAddresses(rule.FromAddresses, rule.From.IPBlocks)
 		to = r.podsToOFPortAddresses(rule.Pods)
 	} else {
 		direction = networkingv1.PolicyTypeEgress
-
 		from = r.podsToIPAddresses(rule.Pods)
-
-		if rule.ToAddresses != nil || rule.To.IPBlocks != nil {
-			to = make([]types.Address, 0, len(rule.ToAddresses)+len(rule.To.IPBlocks))
-		}
-		for a := range rule.ToAddresses {
-			to = append(to, openflow.NewIPAddress(net.ParseIP(a)))
-		}
-		// TODO: handle except field.
-		for _, b := range rule.To.IPBlocks {
-			to = append(to, openflow.NewIPNetAddress(antreaIPNetToIPNet(b.CIDR)))
-		}
+		to, exceptTo = ipsToOFAddresses(rule.ToAddresses, rule.To.IPBlocks)
 	}
 
 	// TODO: Update types.PolicyRule to use Antrea Service type.
 	services := servicesToNetworkPolicyPort(rule.Services)
 
 	ofRule := &types.PolicyRule{
-		ID:        ofID,
-		Direction: direction,
-		From:      from,
-		To:        to,
-		Service:   services,
+		ID:         ofID,
+		Direction:  direction,
+		From:       from,
+		ExceptFrom: exceptFrom,
+		To:         to,
+		ExceptTo:   exceptTo,
+		Service:    services,
 	}
 
-	klog.V(2).Infof("Installing ofRule %d (%v, %d From, %d To, %d Service)",
-		ofRule.ID, ofRule.Direction, len(ofRule.From), len(ofRule.To), len(ofRule.Service))
+	klog.V(2).Infof("Installing ofRule %d (Direction: %v, From: %d, ExceptFrom: %d, To: %d, ExceptTo: %d, Service: %d)",
+		ofRule.ID, ofRule.Direction, len(ofRule.From), len(ofRule.ExceptFrom), len(ofRule.To), len(ofRule.ExceptTo), len(ofRule.Service))
 	if err := r.ofClient.InstallPolicyRuleFlows(ofRule); err != nil {
 		return fmt.Errorf("error installing ofRule %v: %v", ofRule.ID, err)
 	}
 
 	r.lastRealizeds.Store(rule.ID, &lastRealized{ofID, rule})
 	return nil
+}
+
+func ipsToOFAddresses(ipAddresses sets.String, ipBlocks []v1beta1.IPBlock) ([]types.Address, []types.Address) {
+	// Note that addresses must not return nil because it means not restricted by addresses
+	// in Openflow implementation.
+	addresses := make([]types.Address, 0, len(ipAddresses)+len(ipBlocks))
+	for a := range ipAddresses {
+		addresses = append(addresses, openflow.NewIPAddress(net.ParseIP(a)))
+	}
+	var exceptAddresses []types.Address
+	for _, b := range ipBlocks {
+		addresses = append(addresses, openflow.NewIPNetAddress(antreaIPNetToIPNet(b.CIDR)))
+		for _, e := range b.Except {
+			exceptAddresses = append(exceptAddresses, openflow.NewIPNetAddress(antreaIPNetToIPNet(e)))
+		}
+	}
+	return addresses, exceptAddresses
 }
 
 func servicesToNetworkPolicyPort(in []v1beta1.Service) []*networkingv1.NetworkPolicyPort {
@@ -188,8 +183,7 @@ func servicesToNetworkPolicyPort(in []v1beta1.Service) []*networkingv1.NetworkPo
 // update calculates the difference of Addresses between oldRule and newRule,
 // and invokes Openflow client's methods to reconcile them.
 func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) error {
-	klog.V(2).Infof("Updating existing rule %v (%v, %d FromAddresses, %d ToAddresses, %d Pods)",
-		newRule.ID, newRule.Direction, len(newRule.FromAddresses), len(newRule.ToAddresses), len(newRule.Pods))
+	klog.V(2).Infof("Updating existing rule %v", newRule)
 	// As rule identifier is calculated from the rule's content, the update can
 	// only happen to Group members.
 	var addedFrom, addedTo, deletedFrom, deletedTo []types.Address
@@ -213,8 +207,8 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 		}
 	}
 
-	klog.V(2).Infof("Updating ofRule %d (%d addedFrom, %d addedTo, %d deleteFrom, %d deletedTo)",
-		lastRealized.ofID, len(addedFrom), len(addedTo), len(deletedFrom), len(deletedTo))
+	klog.V(2).Infof("Updating ofRule %d (Direction: %v, addedFrom: %d, addedTo: %d, deleteFrom: %d, deletedTo: %d)",
+		lastRealized.ofID, lastRealized.Direction, len(addedFrom), len(addedTo), len(deletedFrom), len(deletedTo))
 
 	// TODO: This might be unnecessarily complex and hard for error handling, consider revising the Openflow interfaces.
 	if len(addedFrom) > 0 {

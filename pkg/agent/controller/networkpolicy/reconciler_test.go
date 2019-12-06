@@ -86,6 +86,21 @@ func TestReconcilerReconcile(t *testing.T) {
 	port80 := int32(80)
 	service1 := v1beta1.Service{Protocol: &protocolTCP, Port: &port80}
 	service2 := v1beta1.Service{Protocol: &protocolTCP}
+	_, ipNet1, _ := net.ParseCIDR("10.10.0.0/16")
+	_, ipNet2, _ := net.ParseCIDR("10.20.0.0/16")
+	_, ipNet3, _ := net.ParseCIDR("10.20.1.0/24")
+	_, ipNet4, _ := net.ParseCIDR("10.20.2.0/28")
+	ipBlock1 := v1beta1.IPBlock{
+		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet1.IP), PrefixLength: 16},
+	}
+	ipBlock2 := v1beta1.IPBlock{
+		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet2.IP), PrefixLength: 16},
+		Except: []v1beta1.IPNet{
+			{IP: v1beta1.IPAddress(ipNet3.IP), PrefixLength: 24},
+			{IP: v1beta1.IPAddress(ipNet4.IP), PrefixLength: 28},
+		},
+	}
+
 	tests := []struct {
 		name           string
 		args           *CompletedRule
@@ -131,6 +146,37 @@ func TestReconcilerReconcile(t *testing.T) {
 			false,
 		},
 		{
+			"ingress-rule-with-ipblocks",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					From:      v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2}},
+					Services:  []v1beta1.Service{service1, service2},
+				},
+				FromAddresses: addressGroup1,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			&types.PolicyRule{
+				ID:        1,
+				Direction: networkingv1.PolicyTypeIngress,
+				From: []types.Address{
+					openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
+					openflow.NewIPNetAddress(*ipNet1),
+					openflow.NewIPNetAddress(*ipNet2),
+				},
+				ExceptFrom: []types.Address{
+					openflow.NewIPNetAddress(*ipNet3),
+					openflow.NewIPNetAddress(*ipNet4),
+				},
+				To:       []types.Address{openflow.NewOFPortAddress(1)},
+				ExceptTo: nil,
+				Service:  servicesToNetworkPolicyPort([]v1beta1.Service{service1, service2}),
+			},
+			false,
+		},
+		{
 			"egress-rule",
 			&CompletedRule{
 				rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
@@ -146,6 +192,36 @@ func TestReconcilerReconcile(t *testing.T) {
 				To:         []types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
 				ExceptTo:   nil,
 				Service:    nil,
+			},
+			false,
+		},
+		{
+			"egress-rule-with-ipblocks",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta1.DirectionOut,
+					To:        v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2}},
+				},
+				FromAddresses: nil,
+				ToAddresses:   addressGroup1,
+				Pods:          appliedToGroup1,
+			},
+			&types.PolicyRule{
+				ID:         1,
+				Direction:  networkingv1.PolicyTypeEgress,
+				From:       []types.Address{openflow.NewIPAddress(net.ParseIP("2.2.2.2"))},
+				ExceptFrom: nil,
+				To: []types.Address{
+					openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
+					openflow.NewIPNetAddress(*ipNet1),
+					openflow.NewIPNetAddress(*ipNet2),
+				},
+				ExceptTo: []types.Address{
+					openflow.NewIPNetAddress(*ipNet3),
+					openflow.NewIPNetAddress(*ipNet4),
+				},
+				Service: nil,
 			},
 			false,
 		},
