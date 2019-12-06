@@ -43,7 +43,7 @@ const AntreaDaemonSet string = "antrea-agent"
 
 const testNamespace string = "antrea-test"
 
-const defaultContainerName string = "busybox"
+const busyboxContainerName string = "busybox"
 
 const nameSuffixLength int = 8
 
@@ -384,15 +384,14 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 
 // createPodOnNode creates a pod in the test namespace with a container whose type is decided by imageName.
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createPodOnNode(name string, nodeName string, imageName string) error {
-	sleepDuration := 3600 // seconds
+func (data *TestData) createPodOnNode(name string, nodeName string, imageName string, command []string) error {
 	podSpec := v1.PodSpec{
 		Containers: []v1.Container{
 			{
-				Name:            defaultContainerName,
+				Name:            imageName,
 				Image:           imageName,
 				ImagePullPolicy: v1.PullIfNotPresent,
-				Command:         []string{"sleep", strconv.Itoa(sleepDuration)},
+				Command:         command,
 			},
 		},
 		RestartPolicy: v1.RestartPolicyNever,
@@ -430,7 +429,8 @@ func (data *TestData) createPodOnNode(name string, nodeName string, imageName st
 // createBusyboxPodOnNode creates a Pod in the test namespace with a single busybox container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error {
-	return data.createPodOnNode(name, nodeName, "busybox")
+	sleepDuration := 3600 // seconds
+	return data.createPodOnNode(name, nodeName, "busybox", []string{"sleep", strconv.Itoa(sleepDuration)})
 }
 
 // createBusyboxPod creates a Pod in the test namespace with a single busybox container.
@@ -441,7 +441,7 @@ func (data *TestData) createBusyboxPod(name string) error {
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
-	return data.createPodOnNode(name, nodeName, "nginx")
+	return data.createPodOnNode(name, nodeName, "nginx", []string{})
 }
 
 // createNginxPod creates a Pod in the test namespace with a single nginx container.
@@ -752,6 +752,6 @@ func (data *TestData) forAllAntreaPods(fn func(nodeName, podName string) error) 
 
 func (data *TestData) runPingCommandFromTestPod(podName string, targetIP string, count int) error {
 	cmd := []string{"ping", "-c", strconv.Itoa(count), targetIP}
-	_, _, err := data.runCommandFromPod(testNamespace, podName, defaultContainerName, cmd)
+	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
 	return err
 }
