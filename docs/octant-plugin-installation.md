@@ -98,7 +98,7 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
 5. Start Octant as a background process with UI related environment variables.
 
     ```
-    # Change port 80 according to your environment and set OCTANT_ACCEPTED_HOSTS according to your demand
+    # Change port 80 according to your environment and set OCTANT_ACCEPTED_HOSTS based on your requirements
     OCTANT_LISTENER_ADDR=0.0.0.0:80 OCTANT_ACCEPTED_HOSTS=0.0.0.0 OCTANT_DISABLE_OPEN_BROWSER=true nohup octant &
     ```
 
