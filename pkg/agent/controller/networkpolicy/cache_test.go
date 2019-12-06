@@ -170,7 +170,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record, []string{"192.168.1.1"})
+			c := newRuleCache(recorder.Record)
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
@@ -240,7 +240,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record, []string{"192.168.1.1"})
+			c := newRuleCache(recorder.Record)
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
@@ -307,7 +307,7 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record, []string{"192.168.1.1"})
+			c := newRuleCache(recorder.Record)
 			c.AddNetworkPolicy(tt.args)
 			actualRules := c.rules.List()
 			if !assert.ElementsMatch(t, tt.expectedRules, actualRules) {
@@ -371,7 +371,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record, []string{"192.168.1.1"})
+			c := newRuleCache(recorder.Record)
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
@@ -389,8 +389,8 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 }
 
 func TestRuleCacheGetCompletedRule(t *testing.T) {
-	addressGroup1 := sets.NewString("1.1.1.1", "1.1.1.2", "192.168.1.1")
-	addressGroup2 := sets.NewString("1.1.1.2", "1.1.1.3", "192.168.1.1")
+	addressGroup1 := sets.NewString("1.1.1.1", "1.1.1.2")
+	addressGroup2 := sets.NewString("1.1.1.2", "1.1.1.3")
 	appliedToGroup1 := newPodSet(v1beta1.PodReference{"pod1", "ns1"}, v1beta1.PodReference{"pod2", "ns1"})
 	appliedToGroup2 := newPodSet(v1beta1.PodReference{"pod2", "ns1"}, v1beta1.PodReference{"pod3", "ns1"})
 	rule1 := &rule{
@@ -460,7 +460,7 @@ func TestRuleCacheGetCompletedRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record, []string{"192.168.1.1"})
+			c := newRuleCache(recorder.Record)
 			c.addressSetByGroup["addressGroup1"] = addressGroup1
 			c.addressSetByGroup["addressGroup2"] = addressGroup2
 			c.podSetByGroup["appliedToGroup1"] = appliedToGroup1
@@ -543,7 +543,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record, []string{"192.168.1.1"})
+			c := newRuleCache(recorder.Record)
 			c.podSetByGroup = tt.podSetByGroup
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
@@ -623,7 +623,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record, []string{"192.168.1.1"})
+			c := newRuleCache(recorder.Record)
 			c.addressSetByGroup = tt.addressSetByGroup
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
@@ -699,7 +699,7 @@ func TestRuleCacheUpdateNetworkPolicy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record, []string{"192.168.1.1"})
+			c := newRuleCache(recorder.Record)
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}

@@ -66,15 +66,14 @@ type Controller struct {
 }
 
 // NewNetworkPolicyController returns a new *Controller.
-func NewNetworkPolicyController(antreaClient versioned.Interface, ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, nodeName string, gatewayIP string) *Controller {
+func NewNetworkPolicyController(antreaClient versioned.Interface, ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, nodeName string) *Controller {
 	c := &Controller{
 		antreaClient: antreaClient,
 		nodeName:     nodeName,
 		queue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
 		reconciler:   newReconciler(ofClient, ifaceStore),
 	}
-	// Set Node gateway IP as the defaultFromAddresses so that Node to Pod traffic will always be allowed.
-	c.ruleCache = newRuleCache(c.enqueueRule, []string{gatewayIP})
+	c.ruleCache = newRuleCache(c.enqueueRule)
 	return c
 }
 
