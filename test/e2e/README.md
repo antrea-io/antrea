@@ -110,6 +110,32 @@ also need to copy the Antrea manifest to the master Docker container:
 go test -v github.com/vmware-tanzu/antrea/test/e2e -provider=kind
 ```
 
+## Running the performance test
+To run all benchmarks, without the standard e2e tests:
+```bash
+go test -v -timeout=30m -run=XXX -bench=. \
+    github.com/vmware-tanzu/antrea/test/e2e \
+    --performance.http.concurrency=16
+```
+The above command uses `-run=XXX` to deselect all `Test*` tests and uses `-bench=.` to select
+all `Benchmark*` tests. Since performance tests take a while to complete, you need to extend
+the timeout duration `-timeout` from the default `10m` to a longer one like `30m`.
+
+If you would like to run the performance tests in a different scale, you could run:
+```bash
+go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
+    github.com/vmware-tanzu/antrea/test/e2e \
+    --performance.http.requests=5000 \
+    --performance.http.policy_rules=1000 \
+    --performance.http.concurrency=16
+```
+
+All flags of performance tests includes:
+- `performance.http.concurrency (int)`: Number of allowed concurrent http requests (default 1)
+- `performance.http.requests (int)`: Total Number of http requests
+- `performance.http.policy_rules (int)`: Number of CIDRs in the network policy
+- `performance.realize.timeout (duration)`: Timeout of the realization of network policies (default 5m0s)
+
 ## Tests to be added
 
  * Network policy tests
