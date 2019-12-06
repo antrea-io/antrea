@@ -93,7 +93,7 @@ func run(o *Options) error {
 		ofClient,
 		nodeConfig)
 
-	networkPolicyController := networkpolicy.NewNetworkPolicyController(antreaClient, ofClient, ifaceStore, nodeConfig.Name, nodeConfig.IP.String())
+	networkPolicyController := networkpolicy.NewNetworkPolicyController(antreaClient, ofClient, ifaceStore, nodeConfig.Name)
 
 	cniServer := cniserver.New(
 		o.config.CNISocket,

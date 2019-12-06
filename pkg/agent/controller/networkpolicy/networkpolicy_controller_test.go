@@ -30,12 +30,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 )
 
-const gatewayIP = "10.10.10.1"
-
 func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 
-	controller := NewNetworkPolicyController(clientset, nil, nil, "node1", gatewayIP)
+	controller := NewNetworkPolicyController(clientset, nil, nil, "node1")
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
 	return controller, clientset, reconciler
@@ -126,7 +124,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 	services := []v1beta1.Service{{Protocol: &protocolTCP, Port: &port}}
 	desiredRule := &CompletedRule{
 		rule:          &rule{Direction: v1beta1.DirectionIn, Services: services},
-		FromAddresses: sets.NewString("1.1.1.1", "2.2.2.2", gatewayIP),
+		FromAddresses: sets.NewString("1.1.1.1", "2.2.2.2"),
 		ToAddresses:   sets.NewString(),
 		Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
 	}
@@ -189,7 +187,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	services := []v1beta1.Service{{Protocol: &protocolTCP, Port: &port}}
 	desiredRule := &CompletedRule{
 		rule:          &rule{Direction: v1beta1.DirectionIn, Services: services},
-		FromAddresses: sets.NewString("1.1.1.1", "2.2.2.2", "3.3.3.3", gatewayIP),
+		FromAddresses: sets.NewString("1.1.1.1", "2.2.2.2", "3.3.3.3"),
 		ToAddresses:   sets.NewString(),
 		Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}, v1beta1.PodReference{"pod2", "ns2"}),
 	}
