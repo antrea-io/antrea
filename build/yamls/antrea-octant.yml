@@ -75,5 +75,5 @@ spec:
         - name: kubeconfig
           secret:
             secretName: octant-kubeconfig
-            # defaultMode can be changed according to your demands
+            # defaultMode can be changed according to your requirements
             defaultMode: 256
