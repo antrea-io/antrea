@@ -52,7 +52,7 @@ DOCKER_ENV := \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
 		-v $(CURDIR):/usr/src/github.com/vmware-tanzu/antrea \
-		golang:1.12
+		golang:1.13
 
 .PHONY: docker-bin
 docker-bin: $(DOCKER_CACHE)

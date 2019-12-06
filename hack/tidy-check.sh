@@ -26,7 +26,7 @@ SUM_FILE="$PROJECT_DIR/go.sum"
 TMP_DIR="$THIS_DIR/.tmp.tidy-check"
 TMP_MOD_FILE="$TMP_DIR/go.mod"
 TMP_SUM_FILE="$TMP_DIR/go.sum"
-TARGET_GO_VERSION="1.12"
+TARGET_GO_VERSION="1.13"
 TARGET_GO_VERSION_PATTERN="go$TARGET_GO_VERSION.*"
 
 # if Go environment variable is set, use it as it is, otherwise default to "go"
@@ -71,7 +71,7 @@ function tidy {
       -e "GOPATH=/tmp/gopath" \
       -w /usr/src/github.com/vmware-tanzu/antrea \
       -v "$PROJECT_DIR:/usr/src/github.com/vmware-tanzu/antrea" \
-      golang:1.12 bash -c "go mod tidy >> /dev/null 2>&1"
+      golang:$TARGET_GO_VERSION bash -c "go mod tidy >> /dev/null 2>&1"
   fi
 }
 
