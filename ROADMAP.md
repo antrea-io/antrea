@@ -37,7 +37,7 @@ Antrea will have an [Octant](https://github.com/vmware-tanzu/octant) plugin
 which shows the Antrea information obtained from the Antrea Controller and Agent
 monitoring CRDs. Right now an Octant plugin that shows some basic Antrea
 Controller and Agent information is already implemented, but we are still working
-on the installation guide and support for displaying more information.
+on the support for displaying more information.
 
 * **IPSec encryption**
 Enable IPSec (ESP) on the OVS VXLAN or Geneve tunnels to encrypt Pod traffic
