@@ -320,10 +320,12 @@ func (c *client) podIPSpoofGuardFlow(ifIP net.IP, ifMAC net.HardwareAddr, ifOFPo
 		Done()
 }
 
-// gatewayARPSpoofGuardFlow generates the flow to skip ARP UP check on packets sent out from the local gateway interface.
-func (c *client) gatewayARPSpoofGuardFlow(gatewayOFPort uint32) binding.Flow {
+// gatewayARPSpoofGuardFlow generates the flow to check ARP traffic sent out from the local gateway interface.
+func (c *client) gatewayARPSpoofGuardFlow(gatewayOFPort uint32, gatewayIP net.IP, gatewayMAC net.HardwareAddr) binding.Flow {
 	return c.pipeline[spoofGuardTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
 		MatchInPort(gatewayOFPort).
+		MatchARPSha(gatewayMAC).
+		MatchARPSpa(gatewayIP).
 		Action().ResubmitToTable(arpResponderTable).
 		Done()
 }
