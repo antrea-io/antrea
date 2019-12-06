@@ -20,6 +20,7 @@ package networkpolicy
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 	"sync"
@@ -67,6 +68,15 @@ var (
 	// 5a5e7dd9-e3fb-49bb-b263-9bab25c95841 was generated using
 	// uuid.NewV4() function.
 	uuidNamespace = uuid.FromStringOrNil("5a5e7dd9-e3fb-49bb-b263-9bab25c95841")
+
+	// matchAllPeer is a NetworkPolicyPeer matching all source/destination IP addresses.
+	matchAllPeer = networkpolicy.NetworkPolicyPeer{
+		IPBlocks: []networkpolicy.IPBlock{{CIDR: networkpolicy.IPNet{IP: networkpolicy.IPAddress(net.IPv4zero), PrefixLength: 0}}},
+	}
+	// denyAllIngressRule is a NetworkPolicyRule which denies all ingress traffic.
+	denyAllIngressRule = networkpolicy.NetworkPolicyRule{Direction: networkpolicy.DirectionIn}
+	// denyAllEgressRule is a NetworkPolicyRule which denies all egress traffic.
+	denyAllEgressRule = networkpolicy.NetworkPolicyRule{Direction: networkpolicy.DirectionOut}
 )
 
 // NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
@@ -483,64 +493,47 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	appliedToGroupKey := n.createAppliedToGroup(np)
 	appliedToGroupNames := []string{appliedToGroupKey}
 	rules := make([]networkpolicy.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
+	var ingressRuleExists, egressRuleExists bool
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for _, ingressRule := range np.Spec.Ingress {
-		ipBlocks := []networkpolicy.IPBlock{}
-		inAddressGroupNames := []string{}
-		for _, peer := range ingressRule.From {
-			// A networking.NetworkPolicyPeer will either have an IPBlock or a
-			// podSelector and/or namespaceSelector set.
-			if peer.IPBlock != nil {
-				ipBlock, err := toAntreaIPBlock(peer.IPBlock)
-				if err != nil {
-					klog.Errorf("Failure processing NetworkPolicy %s/%s ingress IPBlock CIDR: %v", np.ObjectMeta.Namespace, np.ObjectMeta.Name, err)
-					continue
-				}
-				ipBlocks = append(ipBlocks, *ipBlock)
-			} else {
-				normalizedUID := n.createAddressGroup(peer, np)
-				inAddressGroupNames = append(inAddressGroupNames, normalizedUID)
-			}
-		}
-		fromAddress := networkpolicy.NetworkPolicyPeer{
-			AddressGroups: inAddressGroupNames,
-			IPBlocks:      ipBlocks,
-		}
+		ingressRuleExists = true
 		rules = append(rules, networkpolicy.NetworkPolicyRule{
 			Direction: networkpolicy.DirectionIn,
-			From:      fromAddress,
+			From:      *n.toAntreaPeer(ingressRule.From, np),
 			Services:  toAntreaServices(ingressRule.Ports),
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
 	for _, egressRule := range np.Spec.Egress {
-		ipBlocks := []networkpolicy.IPBlock{}
-		outAddressGroupNames := []string{}
-		for _, peer := range egressRule.To {
-			// A networking.NetworkPolicyPeer will either have an IPBlock or a
-			// podSelector and/or namespaceSelector set.
-			if peer.IPBlock != nil {
-				ipBlock, err := toAntreaIPBlock(peer.IPBlock)
-				if err != nil {
-					klog.Errorf("Failure processing NetworkPolicy %s/%s egress IPBlock CIDR: %v", np.ObjectMeta.Namespace, np.ObjectMeta.Name, err)
-					continue
-				}
-				ipBlocks = append(ipBlocks, *ipBlock)
-			} else {
-				normalizedUID := n.createAddressGroup(peer, np)
-				outAddressGroupNames = append(outAddressGroupNames, normalizedUID)
-			}
-		}
-		toAddress := networkpolicy.NetworkPolicyPeer{
-			AddressGroups: outAddressGroupNames,
-			IPBlocks:      ipBlocks,
-		}
+		egressRuleExists = true
 		rules = append(rules, networkpolicy.NetworkPolicyRule{
 			Direction: networkpolicy.DirectionOut,
-			To:        toAddress,
+			To:        *n.toAntreaPeer(egressRule.To, np),
 			Services:  toAntreaServices(egressRule.Ports),
 		})
 	}
+
+	// Traffic in a direction must be isolated if Spec.PolicyTypes specify it explicitly.
+	var ingressIsolated, egressIsolated bool
+	for _, policyType := range np.Spec.PolicyTypes {
+		if policyType == networkingv1.PolicyTypeIngress {
+			ingressIsolated = true
+		} else if policyType == networkingv1.PolicyTypeEgress {
+			egressIsolated = true
+		}
+	}
+
+	// If ingress isolation is specified explicitly and there's no ingress rule, append a deny-all ingress rule.
+	// See https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-ingress-traffic
+	if ingressIsolated && !ingressRuleExists {
+		rules = append(rules, denyAllIngressRule)
+	}
+	// If egress isolation is specified explicitly and there's no egress rule, append a deny-all egress rule.
+	// See https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-egress-traffic
+	if egressIsolated && !egressRuleExists {
+		rules = append(rules, denyAllEgressRule)
+	}
+
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
 		Name:            np.ObjectMeta.Name,
 		Namespace:       np.ObjectMeta.Namespace,
@@ -549,6 +542,33 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 		Rules:           rules,
 	}
 	return internalNetworkPolicy
+}
+
+func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy) *networkpolicy.NetworkPolicyPeer {
+	// Empty NetworkPolicyPeer is supposed to match all addresses.
+	// See https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-allow-all-ingress-traffic.
+	// It's treated as an IPBlock "0.0.0.0/0".
+	if len(peers) == 0 {
+		return &matchAllPeer
+	}
+	var ipBlocks []networkpolicy.IPBlock
+	var addressGroups []string
+	for _, peer := range peers {
+		// A networking.NetworkPolicyPeer will either have an IPBlock or a
+		// podSelector and/or namespaceSelector set.
+		if peer.IPBlock != nil {
+			ipBlock, err := toAntreaIPBlock(peer.IPBlock)
+			if err != nil {
+				klog.Errorf("Failure processing NetworkPolicy %s/%s IPBlock %v: %v", np.Namespace, np.Name, peer.IPBlock, err)
+				continue
+			}
+			ipBlocks = append(ipBlocks, *ipBlock)
+		} else {
+			normalizedUID := n.createAddressGroup(peer, np)
+			addressGroups = append(addressGroups, normalizedUID)
+		}
+	}
+	return &networkpolicy.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
 }
 
 // addNetworkPolicy receives NetworkPolicy ADD events and creates resources
