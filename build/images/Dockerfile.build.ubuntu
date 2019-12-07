@@ -7,7 +7,7 @@ RUN mkdir -p /opt/cni/bin && \
     wget -q -O - https://dl.k8s.io/network-plugins/cni-plugins-amd64-v0.7.5.tgz | tar xz -C /opt/cni/bin ./host-local
 
 
-FROM golang:1.12 as antrea-build
+FROM golang:1.13 as antrea-build
 
 WORKDIR /antrea
 
