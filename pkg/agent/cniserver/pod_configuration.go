@@ -17,8 +17,6 @@ package cniserver
 import (
 	"encoding/json"
 	"fmt"
-	"net"
-
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
@@ -29,6 +27,8 @@ import (
 	"github.com/vishvananda/netlink"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
+	"net"
+	"time"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
@@ -115,8 +115,10 @@ func (pc *podConfigurator) setupInterfaces(
 // configureContainerAddr takes the result of the IPAM plugin, and adds the appropriate IP
 // addresses and routes to the interface. It then sends a gratuitous ARP to the network.
 func configureContainerAddr(netns ns.NetNS, containerInterface *current.Interface, result *current.Result) error {
+	var containerVeth *net.Interface
 	if err := netns.Do(func(containerNs ns.NetNS) error {
-		containerVeth, err := net.InterfaceByName(containerInterface.Name)
+		var err error
+		containerVeth, err = net.InterfaceByName(containerInterface.Name)
 		if err != nil {
 			klog.Errorf("Failed to find container interface %s in ns %s", containerInterface.Name, netns.Path())
 			return err
@@ -124,17 +126,34 @@ func configureContainerAddr(netns ns.NetNS, containerInterface *current.Interfac
 		if err := ipam.ConfigureIface(containerInterface.Name, result); err != nil {
 			return err
 		}
-		// Send gratuitous ARP to network in case of stale mappings for this IP address
-		// (e.g. if a previous - deleted - Pod was using the same IP).
-		for _, ipc := range result.IPs {
-			if ipc.Version == "4" {
-				// Ignore error
-				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *containerVeth)
-			}
-		}
 		return nil
 	}); err != nil {
 		return err
+	}
+
+	if containerVeth != nil {
+		// Send 3 GARP packets in another goroutine with 50ms interval. It's because Openflow entries are installed async,
+		// and the gratuitous ARP could be sent out after the Openflow entries are installed. Using another goroutine
+		// ensures the processing of CNI ADD request is not blocked.
+		go func() {
+			netns.Do(func(containerNs ns.NetNS) error {
+				count := 0
+				for count < 3 {
+					select {
+					case <-time.Tick(50 * time.Millisecond):
+						// Send gratuitous ARP to network in case of stale mappings for this IP address
+						// (e.g. if a previous - deleted - Pod was using the same IP).
+						for _, ipc := range result.IPs {
+							if ipc.Version == "4" {
+								arping.GratuitousArpOverIface(ipc.Address.IP, *containerVeth)
+							}
+						}
+					}
+					count += 1
+				}
+				return nil
+			})
+		}()
 	}
 	return nil
 }
