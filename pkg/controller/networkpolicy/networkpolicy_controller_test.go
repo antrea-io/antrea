@@ -687,145 +687,349 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 }
 
 func TestAddPod(t *testing.T) {
-	ns := metav1.NamespaceDefault
-	nodeName := "node1"
-	matchNPName := "testNP"
-	matchLabels := map[string]string{"group": "appliedTo"}
-	ruleLabels := map[string]string{"group": "address"}
-	matchSelector := metav1.LabelSelector{
-		MatchLabels: matchLabels,
+	selectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"group": "appliedTo"},
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      "role",
+				Operator: metav1.LabelSelectorOpIn,
+				Values:   []string{"db", "app"},
+			},
+		},
 	}
-	inPSelector := metav1.LabelSelector{
-		MatchLabels: ruleLabels,
+	selectorIn := metav1.LabelSelector{
+		MatchLabels: map[string]string{"inGroup": "inAddress"},
 	}
-	matchAppGID := getNormalizedUID(generateNormalizedName(ns, &matchSelector, nil))
-	ingressRules := []networkingv1.NetworkPolicyIngressRule{
-		{
-			From: []networkingv1.NetworkPolicyPeer{
+	selectorOut := metav1.LabelSelector{
+		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	testNPObj := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "npA",
+			Namespace: "nsA",
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: selectorSpec,
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
 				{
-					PodSelector: &inPSelector,
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &selectorIn,
+						},
+					},
+				},
+			},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{
+					To: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &selectorOut,
+						},
+					},
 				},
 			},
 		},
 	}
-	matchNPObj := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      matchNPName,
-			Namespace: ns,
-		},
-		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: matchSelector,
-			Ingress:     ingressRules,
-		},
-	}
-	p1 := getPod("p1", ns)
-	tables := []struct {
-		podLabels      map[string]string
-		podIP          string
-		appGroupMatch  bool
-		addrGroupMatch bool
+	tests := []struct {
+		name                 string
+		addedPod             *v1.Pod
+		appGroupMatch        bool
+		inAddressGroupMatch  bool
+		outAddressGroupMatch bool
 	}{
-		// Pod matching NetworkPolicy spec.PodSelector.
 		{
-			map[string]string{
-				"group": "appliedTo",
+			name: "not-match-spec-podselector-match-labels",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "appliedTo"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
 			},
-			"1.2.3.4",
-			true,
-			false,
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
 		},
-		// Pod matching NetworkPolicy spec.PodSelector.
 		{
-			map[string]string{
-				"group": "appliedTo",
-				"user":  "meh",
+			name: "not-match-spec-podselector-match-exprs",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"role": "db"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
 			},
-			"1.2.3.4",
-			true,
-			false,
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
 		},
-		// Pod matching NetworkPolicy spec.PodSelector but no PodIP.
 		{
-			map[string]string{
-				"group": "appliedTo",
+			name: "match-spec-podselector",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels: map[string]string{
+						"role":  "db",
+						"group": "appliedTo",
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
 			},
-			"",
-			false,
-			false,
+			appGroupMatch:        true,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
 		},
-		// Pod matching NetworkPolicy Rule.
 		{
-			map[string]string{
-				"group": "address",
+			name: "match-ingress-podselector",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"inGroup": "inAddress"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
 			},
-			"1.2.3.4",
-			false,
-			true,
+			appGroupMatch:        false,
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: false,
 		},
-		// Pod matching NetworkPolicy Rule.
 		{
-			map[string]string{
-				"group": "address",
-				"user":  "meh",
+			name: "match-egress-podselector",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"outGroup": "outAddress"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
 			},
-			"1.2.3.4",
-			false,
-			true,
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: true,
 		},
-		// Pod matching NetworkPolicy Rule but no PodIP.
 		{
-			map[string]string{
-				"group": "address",
+			name: "match-all-selectors",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels: map[string]string{
+						"role":     "app",
+						"group":    "appliedTo",
+						"inGroup":  "inAddress",
+						"outGroup": "outAddress",
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
 			},
-			"",
-			false,
-			false,
+			appGroupMatch:        true,
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: true,
 		},
-		// Pod not matching NetworkPolicy spec.PodSelector nor Rule.
 		{
-			map[string]string{
-				"user": "meh",
+			name: "match-spec-podselector-no-podip",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "appliedTo"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+				},
 			},
-			"1.2.3.4",
-			false,
-			false,
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
 		},
-		// Pod not matching NetworkPolicy spec.PodSelector nor Rule.
 		{
-			map[string]string{},
-			"1.2.3.4",
-			false,
-			false,
+			name: "match-rule-podselector-no-ip",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"inGroup": "inAddress"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "no-match-spec-podselector",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "none"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
 		},
 	}
-	for _, table := range tables {
-		_, npc := newController()
-		npc.addNetworkPolicy(matchNPObj)
-		p1.Labels = table.podLabels
-		p1.Status.PodIP = table.podIP
-		npc.podStore.Add(p1)
-		npc.syncAppliedToGroup(matchAppGID)
-		// Retrieve AddressGroup.
-		adgs := npc.addressGroupStore.List()
-		// Considering the NP, there should be only one AddressGroup for tests.
-		addrGroupObj := adgs[0]
-		addrGroup := addrGroupObj.(*antreatypes.AddressGroup)
-		npc.syncAddressGroup(addrGroup.Name)
-		appGroupObj, _, _ := npc.appliedToGroupStore.Get(matchAppGID)
-		appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
-		podsAdded := appGroup.PodsByNode[nodeName]
-		updatedAddrGroupObj, _, _ := npc.addressGroupStore.Get(addrGroup.Name)
-		updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
-		if table.appGroupMatch {
-			assert.Len(t, podsAdded, 1, "expected Pod to match AppliedToGroup")
-		} else {
-			assert.Len(t, podsAdded, 0, "expected Pod not to match AppliedToGroup")
-		}
-		if table.addrGroupMatch {
-			assert.Contains(t, updatedAddrGroup.Addresses, table.podIP)
-		} else {
-			assert.NotContains(t, updatedAddrGroup.Addresses, table.podIP)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.addNetworkPolicy(testNPObj)
+			npc.podStore.Add(tt.addedPod)
+			appGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorSpec, nil).NormalizedName)
+			inGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorIn, nil).NormalizedName)
+			outGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorOut, nil).NormalizedName)
+			npc.syncAppliedToGroup(appGroupID)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+			appGroupObj, _, _ := npc.appliedToGroupStore.Get(appGroupID)
+			appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
+			podsAdded := appGroup.PodsByNode["nodeA"]
+			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
+			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
+			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
+			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			if tt.appGroupMatch {
+				assert.Len(t, podsAdded, 1, "expected Pod to match AppliedToGroup")
+			} else {
+				assert.Len(t, podsAdded, 0, "expected Pod not to match AppliedToGroup")
+			}
+			if tt.inAddressGroupMatch {
+				assert.Contains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
+			} else {
+				assert.NotContains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
+			}
+			if tt.outAddressGroupMatch {
+				assert.Contains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
+			} else {
+				assert.NotContains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
+			}
+		})
 	}
 }
 
@@ -863,14 +1067,12 @@ func TestDeletePod(t *testing.T) {
 	}
 	p1IP := "1.1.1.1"
 	p2IP := "2.2.2.2"
-	p1 := getPod("p1", ns)
+	p1 := getPod("p1", ns, "", p1IP)
 	// Ensure Pod p1 matches AppliedToGroup.
 	p1.Labels = matchLabels
-	p1.Status.PodIP = p1IP
-	p2 := getPod("p2", ns)
+	p2 := getPod("p2", ns, "", p2IP)
 	// Ensure Pod p2 matches AddressGroup.
 	p2.Labels = ruleLabels
-	p2.Status.PodIP = p2IP
 	_, npc := newController()
 	npc.addNetworkPolicy(matchNPObj)
 	npc.podStore.Add(p1)
@@ -897,6 +1099,254 @@ func TestDeletePod(t *testing.T) {
 	updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
 	// Ensure Pod2 IP is removed from AddressGroup.
 	assert.NotContains(t, updatedAddrGroup.Addresses, p2IP)
+}
+
+func TestAddNamespace(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{}
+	selectorIn := metav1.LabelSelector{
+		MatchLabels: map[string]string{"inGroup": "inAddress"},
+	}
+	selectorOut := metav1.LabelSelector{
+		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	testNPObj := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "npA",
+			Namespace: "nsA",
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: selectorSpec,
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &selectorIn,
+						},
+					},
+				},
+			},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{
+					To: []networkingv1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &selectorOut,
+						},
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name                 string
+		addedNamespace       *v1.Namespace
+		inAddressGroupMatch  bool
+		outAddressGroupMatch bool
+	}{
+		{
+			name: "match-namespace-ingress-rule",
+			addedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"inGroup": "inAddress"},
+				},
+			},
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "match-namespace-egress-rule",
+			addedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"outGroup": "outAddress"},
+				},
+			},
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: true,
+		},
+		{
+			name: "match-namespace-all",
+			addedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "nsA",
+					Labels: map[string]string{
+						"inGroup":  "inAddress",
+						"outGroup": "outAddress",
+					},
+				},
+			},
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: true,
+		},
+		{
+			name: "match-namespace-none",
+			addedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"group": "none"},
+				},
+			},
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.addNetworkPolicy(testNPObj)
+			npc.namespaceStore.Add(tt.addedNamespace)
+			p1 := getPod("p1", "nsA", "nodeA", "1.2.3.4")
+			p2 := getPod("p2", "nsA", "nodeA", "2.2.3.4")
+			npc.podStore.Add(p1)
+			npc.podStore.Add(p2)
+			inGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorIn).NormalizedName)
+			outGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorOut).NormalizedName)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
+			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
+			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
+			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			if tt.inAddressGroupMatch {
+				assert.Contains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
+				assert.Contains(t, updatedInAddrGroup.Addresses, "2.2.3.4")
+			} else {
+				assert.NotContains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
+				assert.NotContains(t, updatedInAddrGroup.Addresses, "2.2.3.4")
+			}
+			if tt.outAddressGroupMatch {
+				assert.Contains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
+				assert.Contains(t, updatedOutAddrGroup.Addresses, "2.2.3.4")
+			} else {
+				assert.NotContains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
+				assert.NotContains(t, updatedOutAddrGroup.Addresses, "2.2.3.4")
+			}
+		})
+	}
+}
+
+func TestDeleteNamespace(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{}
+	selectorIn := metav1.LabelSelector{
+		MatchLabels: map[string]string{"inGroup": "inAddress"},
+	}
+	selectorOut := metav1.LabelSelector{
+		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	testNPObj := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "npA",
+			Namespace: "nsA",
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: selectorSpec,
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &selectorIn,
+						},
+					},
+				},
+			},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{
+					To: []networkingv1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &selectorOut,
+						},
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name                 string
+		deletedNamespace     *v1.Namespace
+		inAddressGroupMatch  bool
+		outAddressGroupMatch bool
+	}{
+		{
+			name: "match-namespace-ingress-rule",
+			deletedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"inGroup": "inAddress"},
+				},
+			},
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "match-namespace-egress-rule",
+			deletedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"outGroup": "outAddress"},
+				},
+			},
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: true,
+		},
+		{
+			name: "match-namespace-all",
+			deletedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "nsA",
+					Labels: map[string]string{
+						"inGroup":  "inAddress",
+						"outGroup": "outAddress",
+					},
+				},
+			},
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: true,
+		},
+		{
+			name: "match-namespace-none",
+			deletedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"group": "none"},
+				},
+			},
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.addNetworkPolicy(testNPObj)
+			p1 := getPod("p1", "nsA", "", "1.1.1.1")
+			p2 := getPod("p2", "nsA", "", "1.1.1.2")
+			npc.namespaceStore.Add(tt.deletedNamespace)
+			npc.podStore.Add(p1)
+			npc.podStore.Add(p2)
+			npc.namespaceStore.Delete(tt.deletedNamespace)
+			inGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorIn).NormalizedName)
+			outGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorOut).NormalizedName)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+			npc.podStore.Delete(p1)
+			npc.podStore.Delete(p2)
+			npc.namespaceStore.Delete(tt.deletedNamespace)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
+			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
+			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
+			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			if tt.inAddressGroupMatch {
+				assert.NotContains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
+				assert.NotContains(t, updatedInAddrGroup.Addresses, "2.2.3.4")
+			}
+			if tt.outAddressGroupMatch {
+				assert.NotContains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
+				assert.NotContains(t, updatedOutAddrGroup.Addresses, "2.2.3.4")
+			}
+		})
+	}
 }
 
 func TestToGroupSelector(t *testing.T) {
@@ -1441,8 +1891,19 @@ func getK8sNetworkPolicyObj() *networkingv1.NetworkPolicy {
 	return npObj
 }
 
-func getPod(name, ns string) *v1.Pod {
-	nodeName := "node1"
+func getPod(name, ns, nodeName, podIP string) *v1.Pod {
+	if name == "" {
+		name = "testPod"
+	}
+	if nodeName == "" {
+		nodeName = "node1"
+	}
+	if ns == "" {
+		ns = metav1.NamespaceDefault
+	}
+	if podIP == "" {
+		podIP = "1.2.3.4"
+	}
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -1461,6 +1922,7 @@ func getPod(name, ns string) *v1.Pod {
 					Status: v1.ConditionTrue,
 				},
 			},
+			PodIP: podIP,
 		},
 	}
 }
