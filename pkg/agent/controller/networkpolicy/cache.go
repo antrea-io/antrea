@@ -107,6 +107,9 @@ type ruleCache struct {
 	rules cache.Indexer
 	// dirtyRuleHandler is a callback that is run upon finding a rule out-of-sync.
 	dirtyRuleHandler func(string)
+
+	// podUpdates is a channel for receiving Pod updates from CNIServer.
+	podUpdates <-chan v1beta1.PodReference
 }
 
 // ruleKeyFunc knows how to get key of a *rule.
@@ -140,16 +143,44 @@ func policyIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string)) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta1.PodReference) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc},
 	)
-	return &ruleCache{
+	cache := &ruleCache{
 		podSetByGroup:     make(map[string]podSet),
 		addressSetByGroup: make(map[string]sets.String),
 		rules:             rules,
 		dirtyRuleHandler:  dirtyRuleHandler,
+		podUpdates:        podUpdate,
+	}
+	go cache.processPodUpdates()
+	return cache
+}
+
+// processPodUpdates is an infinite loop that takes Pod update events from the
+// channel, finds out AppliedToGroups that contains this Pod and trigger
+// reconciling of related rules.
+// It can enforce NetworkPolicies to newly added Pods right after CNI ADD is
+// done if antrea-controller has computed the Pods' policies and propagated
+// them to this Node by their labels and NodeName, instead of waiting for their
+// IPs are reported to kube-apiserver and processed by antrea-controller.
+func (c *ruleCache) processPodUpdates() {
+	for {
+		select {
+		case pod := <-c.podUpdates:
+			func() {
+				c.podSetLock.RLock()
+				defer c.podSetLock.RUnlock()
+				for group, podSet := range c.podSetByGroup {
+					_, exists := podSet[pod]
+					if exists {
+						c.onAppliedToGroupUpdate(group)
+					}
+				}
+			}()
+		}
 	}
 }
 

@@ -275,7 +275,125 @@ func TestReconcilerReconcile(t *testing.T) {
 			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Eq(tt.expectedOFRule))
 			r := newReconciler(mockOFClient, ifaceStore)
 			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
-				t.Fatalf("Forget() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestReconcilerUpdate(t *testing.T) {
+	ifaceStore := interfacestore.NewInterfaceStore()
+	ifaceStore.AddInterface(util.GenerateContainerInterfaceName("pod1", "ns1"),
+		&interfacestore.InterfaceConfig{IP: net.ParseIP("2.2.2.2"), OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 1}})
+	ifaceStore.AddInterface(util.GenerateContainerInterfaceName("pod2", "ns1"),
+		&interfacestore.InterfaceConfig{IP: net.ParseIP("3.3.3.3"), OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 2}})
+	tests := []struct {
+		name                string
+		originalRule        *CompletedRule
+		updatedRule         *CompletedRule
+		expectedAddedFrom   []types.Address
+		expectedAddedTo     []types.Address
+		expectedDeletedFrom []types.Address
+		expectedDeletedTo   []types.Address
+		wantErr             bool
+	}{
+		{
+			"updating-ingress-rule",
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				FromAddresses: sets.NewString("1.1.1.1"),
+				Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+			},
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				FromAddresses: sets.NewString("1.1.1.2"),
+				Pods:          newPodSet(v1beta1.PodReference{"pod2", "ns1"}),
+			},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.2"))},
+			[]types.Address{openflow.NewOFPortAddress(2)},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+			[]types.Address{openflow.NewOFPortAddress(1)},
+			false,
+		},
+		{
+			"updating-egress-rule",
+			&CompletedRule{
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				ToAddresses: sets.NewString("1.1.1.1"),
+				Pods:        newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+			},
+			&CompletedRule{
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				ToAddresses: sets.NewString("1.1.1.2"),
+				Pods:        newPodSet(v1beta1.PodReference{"pod2", "ns1"}),
+			},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("3.3.3.3"))},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.2"))},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("2.2.2.2"))},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+			false,
+		},
+		{
+			"updating-ingress-rule-with-missing-ofport",
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				FromAddresses: sets.NewString("1.1.1.1"),
+				Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+			},
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				FromAddresses: sets.NewString("1.1.1.2"),
+				Pods:          newPodSet(v1beta1.PodReference{"pod3", "ns1"}),
+			},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.2"))},
+			[]types.Address{},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+			[]types.Address{openflow.NewOFPortAddress(1)},
+			false,
+		},
+		{
+			"updating-egress-rule-with-missing-ip",
+			&CompletedRule{
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				ToAddresses: sets.NewString("1.1.1.1"),
+				Pods:        newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+			},
+			&CompletedRule{
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				ToAddresses: sets.NewString("1.1.1.2"),
+				Pods:        newPodSet(v1beta1.PodReference{"pod3", "ns1"}),
+			},
+			[]types.Address{},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.2"))},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("2.2.2.2"))},
+			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+			mockOFClient := openflowtest.NewMockClient(controller)
+			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
+			if len(tt.expectedAddedFrom) > 0 {
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedAddedFrom))
+			}
+			if len(tt.expectedAddedTo) > 0 {
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedAddedTo))
+			}
+			if len(tt.expectedDeletedFrom) > 0 {
+				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedDeletedFrom))
+			}
+			if len(tt.expectedDeletedTo) > 0 {
+				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedDeletedTo))
+			}
+			r := newReconciler(mockOFClient, ifaceStore)
+			if err := r.Reconcile(tt.originalRule); (err != nil) != tt.wantErr {
+				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err := r.Reconcile(tt.updatedRule); (err != nil) != tt.wantErr {
+				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

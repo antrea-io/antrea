@@ -28,6 +28,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -93,7 +94,11 @@ func run(o *Options) error {
 		ofClient,
 		nodeConfig)
 
-	networkPolicyController := networkpolicy.NewNetworkPolicyController(antreaClient, ofClient, ifaceStore, nodeConfig.Name)
+	// podUpdates is a channel for receiving Pod updates from CNIServer and
+	// notifying NetworkPolicyController to reconcile rules related to the
+	// updated Pods.
+	podUpdates := make(chan v1beta1.PodReference, 100)
+	networkPolicyController := networkpolicy.NewNetworkPolicyController(antreaClient, ofClient, ifaceStore, nodeConfig.Name, podUpdates)
 
 	cniServer := cniserver.New(
 		o.config.CNISocket,
@@ -104,7 +109,8 @@ func run(o *Options) error {
 		ovsBridgeClient,
 		ofClient,
 		ifaceStore,
-		k8sClient)
+		k8sClient,
+		podUpdates)
 	err = cniServer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing CNI server: %v", err)
