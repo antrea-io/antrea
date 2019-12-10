@@ -9,7 +9,7 @@ on:
     - master
     - release-*
 jobs:
-  test-unit:
+  test-integration:
     name: Integration tests
     runs-on: [ubuntu-18.04]
     steps:

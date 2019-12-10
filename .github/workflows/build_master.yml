@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    if: github.repository == 'vmware-tanzu/antrea'
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v1
@@ -18,3 +19,10 @@ jobs:
         make
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/antrea-ubuntu:latest
+  skip:
+    if: github.repository != 'vmware-tanzu/antrea'
+    runs-on: [ubuntu-18.04]
+    steps:
+      - name: Skip
+        run: |
+          echo "Skipping Antrea image update because workflow cannot be run from fork"
