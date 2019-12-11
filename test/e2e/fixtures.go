@@ -52,7 +52,7 @@ func setupTest(tb testing.TB) (*TestData, error) {
 
 func logsDirForTest(testName string) string {
 	// a filepath-friendly timestamp format.
-	const timeFormat = "Jan_2-15-04-05"
+	const timeFormat = "Jan02-15-04-05"
 	timeStamp := time.Now().Format(timeFormat)
 	logsDir := filepath.Join(testOptions.logsExportDir, fmt.Sprintf("%s.%s", testName, timeStamp))
 	return logsDir
