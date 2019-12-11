@@ -80,6 +80,17 @@ type CompletedRule struct {
 	Pods          podSet
 }
 
+// String returns the string representation of the CompletedRule.
+func (r *CompletedRule) String() string {
+	var addressString string
+	if r.Direction == v1beta1.DirectionIn {
+		addressString = fmt.Sprintf("FromAddressGroups: %d, FromIPBlocks: %d, FromAddresses: %d", len(r.From.AddressGroups), len(r.From.IPBlocks), len(r.FromAddresses))
+	} else {
+		addressString = fmt.Sprintf("ToAddressGroups: %d, ToIPBlocks: %d, ToAddresses: %d", len(r.To.AddressGroups), len(r.To.IPBlocks), len(r.ToAddresses))
+	}
+	return fmt.Sprintf("%s (Direction: %v, Pods: %d, %s, Services: %d)", r.ID, r.Direction, len(r.Pods), addressString, len(r.Services))
+}
+
 // ruleCache caches Antrea AddressGroups, AppliedToGroups and NetworkPolicies,
 // can construct complete rules that can be used by reconciler to enforce.
 type ruleCache struct {
