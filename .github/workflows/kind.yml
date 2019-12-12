@@ -43,4 +43,4 @@ jobs:
     - name: Run e2e tests
       run: |
         ./hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
-        go test github.com/vmware-tanzu/antrea/test/e2e -provider=kind
+        go test -short github.com/vmware-tanzu/antrea/test/e2e -provider=kind
