@@ -235,6 +235,7 @@ data:
   antrea-controller.conf: ""
 kind: ConfigMap
 metadata:
+  annotations: {}
   labels:
     app: antrea
   name: antrea-config-48gttf992h

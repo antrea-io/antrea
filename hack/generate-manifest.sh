@@ -24,6 +24,7 @@ _usage="Usage: $0 [--mode (dev|release)] [--kind] [--keep] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
         --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
+        --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
         --keep                Debug flag which will preserve the generated kustomization.yml
         --help, -h            Print this message and exit
 
@@ -44,6 +45,7 @@ function print_help {
 
 MODE="dev"
 KIND=false
+IPSEC=false
 KEEP=false
 
 while [[ $# -gt 0 ]]
@@ -57,6 +59,10 @@ case $key in
     ;;
     --kind)
     KIND=true
+    shift
+    ;;
+    --ipsec)
+    IPSEC=true
     shift
     ;;
     --keep)
@@ -104,38 +110,77 @@ elif ! $KUSTOMIZE version > /dev/null 2>&1; then
     exit 1
 fi
 
-KUSTOMIZATION_DIR=$THIS_DIR/../build/yamls/overlays
+KUSTOMIZATION_DIR=$THIS_DIR/../build/yamls
 
-TMP_DIR=$(mktemp -d $KUSTOMIZATION_DIR/$MODE.XXXXXXXX)
+TMP_DIR=$(mktemp -d $KUSTOMIZATION_DIR/overlays.XXXXXXXX)
 
 pushd $TMP_DIR > /dev/null
 
-touch kustomization.yml
-$KUSTOMIZE edit add base ../$MODE
+BASE=../../base
 
-if [ "$MODE" == "dev" ]; then
-    # nothing to do for now, everything is taken care of in the overlay kustomization.yml.
-    :
+# do all ConfigMap edits
+mkdir configMap && cd configMap
+# user is not expected to make changes directly to antrea-agent.conf but instead to the generated
+# YAML manifest, so our regexs need not be too robust.
+cp $KUSTOMIZATION_DIR/base/conf/antrea-agent.conf antrea-agent.conf
+if $KIND; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ovsDatapathType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/ovsDatapathType: netdev/" antrea-agent.conf
 fi
+# unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,
+# which is why we use a template kustomization file.
+sed -e "s/<CONF_FILE>/antrea-agent.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
+$KUSTOMIZE edit add base $BASE
+BASE=../configMap
+cd ..
 
-if [ "$MODE" == "release" ]; then
-    $KUSTOMIZE edit set image antrea=$IMG_NAME:$IMG_TAG
+if $IPSEC; then
+    mkdir ipsec && cd ipsec
+    # we copy the patch files to avoid having to use the '--load-restrictor. flag when calling
+    # 'kustomize build'. See https://github.com/kubernetes-sigs/kustomize/blob/master/docs/FAQ.md#security-file-foo-is-not-in-or-below-bar
+    cp ../../patches/ipsec/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    $KUSTOMIZE edit add patch ipsecContainer.yml
+    BASE=../ipsec
+    cd ..
 fi
 
 if $KIND; then
-    # we copy the patch files to avoid having to use the '--load-restrictor. flag when calling
-    # 'kustomize build'. See https://github.com/kubernetes-sigs/kustomize/blob/master/docs/FAQ.md#security-file-foo-is-not-in-or-below-bar
+    mkdir kind && cd kind
     cp ../../patches/kind/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
 
     # add tun device to antrea OVS container
     $KUSTOMIZE edit add patch tunDevice.yml
-    # edit antrea Agent configuration to use the netdev datapath
-    $KUSTOMIZE edit add patch ovsDatapath.yml
     # antrea-ovs should use start_ovs_netdev instead of start_ovs to ensure that the br_phy bridge
     # is created.
     $KUSTOMIZE edit add patch startOvs.yml
     # change initContainer script and remove SYS_MODULE capability
     $KUSTOMIZE edit add patch installCni.yml
+
+    BASE=../kind
+    cd ..
+fi
+
+mkdir $MODE && cd $MODE
+touch kustomization.yml
+$KUSTOMIZE edit add base $BASE
+cp ../../patches/$MODE/*.yml .
+
+if [ "$MODE" == "dev" ]; then
+    $KUSTOMIZE edit set image antrea=antrea/antrea-ubuntu:latest
+    $KUSTOMIZE edit add patch agentImagePullPolicy.yml
+    $KUSTOMIZE edit add patch controllerImagePullPolicy.yml
+    # only required because there is no good way at the moment to update the imagePullPolicy for all
+    # containers. See https://github.com/kubernetes-sigs/kustomize/issues/1493
+    if $IPSEC; then
+        $KUSTOMIZE edit add patch agentIpsecImagePullPolicy.yml
+    fi
+fi
+
+if [ "$MODE" == "release" ]; then
+    $KUSTOMIZE edit set image antrea=$IMG_NAME:$IMG_TAG
 fi
 
 $KUSTOMIZE build
@@ -143,7 +188,7 @@ $KUSTOMIZE build
 popd > /dev/null
 
 if $KEEP; then
-    echoerr "Kustomization file is at $TMP_DIR/kustomization.yml"
+    echoerr "Kustomization file is at $TMP_DIR/$MODE/kustomization.yml"
 else
     rm -rf $TMP_DIR
 fi
