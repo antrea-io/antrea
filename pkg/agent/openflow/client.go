@@ -178,7 +178,7 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 		return err
 	} else if err := c.flowOperations.Add(c.gatewayIPSpoofGuardFlow(gatewayOFPort)); err != nil {
 		return err
-	} else if err := c.flowOperations.Add(c.gatewayARPSpoofGuardFlow(gatewayOFPort)); err != nil {
+	} else if err := c.flowOperations.Add(c.gatewayARPSpoofGuardFlow(gatewayOFPort, gatewayAddr, gatewayMAC)); err != nil {
 		return err
 	} else if err := c.flowOperations.Add(c.ctRewriteDstMACFlow(gatewayMAC)); err != nil {
 		return err
