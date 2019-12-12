@@ -79,17 +79,13 @@ type testConfig struct {
 func TestConnectivityFlows(t *testing.T) {
 	c = ofClient.NewClient(br)
 	err := ofTestUtils.PrepareOVSBridge(br)
-	if err != nil {
-		t.Errorf("Failed to prepare OVS bridge: %v", err)
-	}
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
+		err = c.Disconnect()
+		assert.Nil(t, err, fmt.Sprintf("Error while disconnect OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
-		if err != nil {
-			t.Errorf("Error while deleting OVS bridge: %v", err)
-		}
+		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
 	}()
-
-	defer c.Disconnect()
 
 	config := prepareConfiguration()
 	for _, f := range []func(t *testing.T, config *testConfig){
@@ -108,7 +104,7 @@ func TestConnectivityFlows(t *testing.T) {
 
 func testInitialize(t *testing.T, config *testConfig) {
 	if err := c.Initialize(); err != nil {
-		t.Errorf("failed to initialize openflow client: %v", err)
+		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows() {
 		ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
@@ -188,12 +184,15 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
-	defer func() {
-		err = ofTestUtils.DeleteOVSBridge(br)
-	}()
-
 	err = c.Initialize()
 	require.Nil(t, err, "Failed to initialize OFClient")
+
+	defer func() {
+		err = c.Disconnect()
+		assert.Nil(t, err, fmt.Sprintf("Error while disconnect OVS bridge: %v", err))
+		err = ofTestUtils.DeleteOVSBridge(br)
+		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+	}()
 
 	ruleID := uint32(100)
 	fromList := []string{"192.168.1.3", "192.168.1.25", "192.168.2.4"}
@@ -271,9 +270,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 func checkDefaultDropFlows(t *testing.T, table uint8, priority int, addrType types.AddressType, addresses []types.Address, add bool) {
 	// dump flows
 	flowList, err := ofTestUtils.OfctlDumpFlows(br, table)
-	if err != nil {
-		t.Errorf("failed to dump flows")
-	}
+	assert.Nil(t, err, fmt.Sprintf("Failed to dump flows: %v", err))
 	for _, addr := range addresses {
 		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(addrType)), addr.GetMatchValue())
 		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: "drop"}
@@ -513,7 +510,7 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 		{
 			uint8(10),
 			[]*ofTestUtils.ExpectFlow{
-				{fmt.Sprintf("priority=200,arp,in_port=%d", gwOFPort), "resubmit(,20)"},
+				{fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", gwOFPort, gwIP, gwMAC), "resubmit(,20)"},
 				{fmt.Sprintf("priority=200,ip,in_port=%d", gwOFPort), "resubmit(,30)"},
 			},
 		},
