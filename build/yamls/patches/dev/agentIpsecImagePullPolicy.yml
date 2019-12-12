@@ -1,0 +1,10 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent
+spec:
+  template:
+    spec:
+      containers:
+        - name: antrea-ipsec
+          imagePullPolicy: IfNotPresent
