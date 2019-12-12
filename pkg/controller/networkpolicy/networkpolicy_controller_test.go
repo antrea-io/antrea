@@ -15,20 +15,1339 @@
 package networkpolicy
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/util/workqueue"
+	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
+
+var alwaysReady = func() bool { return true }
+
+const informerDefaultResync time.Duration = 30 * time.Second
+
+type networkPolicyController struct {
+	*NetworkPolicyController
+	podStore                   cache.Store
+	namespaceStore             cache.Store
+	networkPolicyStore         cache.Store
+	appliedToGroupStore        storage.Interface
+	addressGroupStore          storage.Interface
+	internalNetworkPolicyStore storage.Interface
+}
+
+func newController() (*fake.Clientset, *networkPolicyController) {
+	client := newClientset()
+	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
+	appliedToGroupStore := store.NewAppliedToGroupStore()
+	addressGroupStore := store.NewAddressGroupStore()
+	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
+	npController := NewNetworkPolicyController(client, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), informerFactory.Networking().V1().NetworkPolicies(), addressGroupStore, appliedToGroupStore, internalNetworkPolicyStore)
+	npController.podListerSynced = alwaysReady
+	npController.namespaceListerSynced = alwaysReady
+	npController.networkPolicyListerSynced = alwaysReady
+	return client, &networkPolicyController{
+		npController,
+		informerFactory.Core().V1().Pods().Informer().GetStore(),
+		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
+		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
+		appliedToGroupStore,
+		addressGroupStore,
+		internalNetworkPolicyStore,
+	}
+}
+
+func newClientset() *fake.Clientset {
+	client := fake.NewSimpleClientset()
+
+	client.PrependReactor("create", "networkpolicies", k8stesting.ReactionFunc(func(action k8stesting.Action) (bool, runtime.Object, error) {
+		np := action.(k8stesting.CreateAction).GetObject().(*networkingv1.NetworkPolicy)
+
+		if np.ObjectMeta.GenerateName != "" {
+			np.ObjectMeta.Name = fmt.Sprintf("%s-%s", np.ObjectMeta.GenerateName, rand.String(8))
+			np.ObjectMeta.GenerateName = ""
+		}
+
+		return false, np, nil
+	}))
+
+	return client
+}
+
+func TestAddNetworkPolicy(t *testing.T) {
+	protocolTCP := networkpolicy.ProtocolTCP
+	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
+	int80, int81 := int32(80), int32(81)
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
+	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	tests := []struct {
+		name               string
+		inputPolicy        *networkingv1.NetworkPolicy
+		expPolicy          *antreatypes.NetworkPolicy
+		expAppliedToGroups int
+		expAddressGroups   int
+	}{
+		{
+			name: "default-allow-ingress",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+					Ingress:     []networkingv1.NetworkPolicyIngressRule{{}},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{{
+					Direction: networkpolicy.DirectionIn,
+					From:      matchAllPeer,
+					Services:  nil,
+				}},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   0,
+		},
+		{
+			name: "default-allow-egress",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+					Egress:      []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{{
+					Direction: networkpolicy.DirectionOut,
+					To:        matchAllPeer,
+					Services:  nil,
+				}},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   0,
+		},
+		{
+			name: "default-deny-ingress",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					denyAllIngressRule,
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   0,
+		},
+		{
+			name: "default-deny-egress",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					denyAllEgressRule,
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   0,
+		},
+		{
+			name: "rules-with-same-selectors",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: selectorA,
+					Ingress: []networkingv1.NetworkPolicyIngressRule{
+						{
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Port: &intstr80,
+								},
+							},
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+					},
+					Egress: []networkingv1.NetworkPolicyEgressRule{
+						{
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Port: &intstr81,
+								},
+							},
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
+						},
+						Services: []networkpolicy.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+					},
+					{
+						Direction: networkpolicy.DirectionOut,
+						To: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
+						},
+						Services: []networkpolicy.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int81,
+							},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
+		{
+			name: "rules-with-different-selectors",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: selectorA,
+					Ingress: []networkingv1.NetworkPolicyIngressRule{
+						{
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Port: &intstr80,
+								},
+							},
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+						},
+						{
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Port: &intstr81,
+								},
+							},
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
+						},
+						Services: []networkpolicy.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+					},
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", nil, &selectorC).NormalizedName)},
+						},
+						Services: []networkpolicy.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int81,
+							},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.addNetworkPolicy(tt.inputPolicy)
+			key, _ := keyFunc(tt.inputPolicy)
+			actualPolicyObj, _, _ := npc.internalNetworkPolicyStore.Get(key)
+			actualPolicy := actualPolicyObj.(*antreatypes.NetworkPolicy)
+			if !reflect.DeepEqual(actualPolicy, tt.expPolicy) {
+				t.Errorf("addNetworkPolicy() got %v, want %v", actualPolicy, tt.expPolicy)
+			}
+
+			if actualAddressGroups := len(npc.addressGroupStore.List()); actualAddressGroups != tt.expAddressGroups {
+				t.Errorf("len(addressGroupStore.List()) got %v, want %v", actualAddressGroups, tt.expAddressGroups)
+			}
+
+			if actualAppliedToGroups := len(npc.appliedToGroupStore.List()); actualAppliedToGroups != tt.expAppliedToGroups {
+				t.Errorf("len(appliedToGroupStore.List()) got %v, want %v", actualAppliedToGroups, tt.expAppliedToGroups)
+			}
+		})
+	}
+}
+
+func TestDeleteNetworkPolicy(t *testing.T) {
+	npObj := getK8sNetworkPolicyObj()
+	ns := npObj.ObjectMeta.Namespace
+	pSelector := npObj.Spec.PodSelector
+	apgID := getNormalizedUID(generateNormalizedName(ns, &pSelector, nil))
+	_, npc := newController()
+	npc.addNetworkPolicy(npObj)
+	npc.deleteNetworkPolicy(npObj)
+	_, found, _ := npc.appliedToGroupStore.Get(apgID)
+	assert.False(t, found, "expected AppliedToGroup to be deleted")
+	adgs := npc.addressGroupStore.List()
+	assert.Len(t, adgs, 0, "expected empty AddressGroup list")
+	key, _ := keyFunc(npObj)
+	_, found, _ = npc.internalNetworkPolicyStore.Get(key)
+	assert.False(t, found, "expected internal NetworkPolicy to be deleted")
+}
+
+func TestUpdateNetworkPolicy(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
+	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	oldNP := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector:       &selectorB,
+							NamespaceSelector: &selectorC,
+						},
+					},
+				},
+			},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{
+					To: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &selectorB,
+						},
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name                 string
+		updatedNetworkPolicy *networkingv1.NetworkPolicy
+		expNetworkPolicy     *antreatypes.NetworkPolicy
+		expAppliedToGroups   int
+		expAddressGroups     int
+	}{
+		{
+			name: "update-pod-selector",
+			updatedNetworkPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: selectorA,
+					Ingress: []networkingv1.NetworkPolicyIngressRule{
+						{
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+					},
+					Egress: []networkingv1.NetworkPolicyEgressRule{
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+						},
+					},
+				},
+			},
+			expNetworkPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
+						},
+					},
+					{
+						Direction: networkpolicy.DirectionOut,
+						To: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   2,
+		},
+		{
+			name: "remove-ingress-rule",
+			updatedNetworkPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					Egress: []networkingv1.NetworkPolicyEgressRule{
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+					},
+				},
+			},
+			expNetworkPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					{
+						Direction: networkpolicy.DirectionOut,
+						To: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
+		{
+			name: "remove-egress-rule",
+			updatedNetworkPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					Ingress: []networkingv1.NetworkPolicyIngressRule{
+						{
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+					},
+				},
+			},
+			expNetworkPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
+		{
+			name: "remove-all-rules",
+			updatedNetworkPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+				},
+			},
+			expNetworkPolicy: &antreatypes.NetworkPolicy{
+				UID:             "uidA",
+				Name:            "npA",
+				Namespace:       "nsA",
+				Rules:           []networkpolicy.NetworkPolicyRule{},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   0,
+		},
+		{
+			name: "add-ingress-rule",
+			updatedNetworkPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					Ingress: []networkingv1.NetworkPolicyIngressRule{
+						{
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+						{
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &selectorA,
+								},
+							},
+						},
+					},
+					Egress: []networkingv1.NetworkPolicyEgressRule{
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+						},
+					},
+				},
+			},
+			expNetworkPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
+						},
+					},
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorA).NormalizedName)},
+						},
+					},
+					{
+						Direction: networkpolicy.DirectionOut,
+						To: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   3,
+		},
+		{
+			name: "update-egress-rule-selector",
+			updatedNetworkPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					Ingress: []networkingv1.NetworkPolicyIngressRule{
+						{
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+						},
+					},
+					Egress: []networkingv1.NetworkPolicyEgressRule{
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorA,
+								},
+							},
+						},
+					},
+				},
+			},
+			expNetworkPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "nsA",
+				Rules: []networkpolicy.NetworkPolicyRule{
+					{
+						Direction: networkpolicy.DirectionIn,
+						From: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
+						},
+					},
+					{
+						Direction: networkpolicy.DirectionOut,
+						To: networkpolicy.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil).NormalizedName)},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.addNetworkPolicy(oldNP)
+			npc.updateNetworkPolicy(oldNP, tt.updatedNetworkPolicy)
+			key, _ := keyFunc(oldNP)
+			actualPolicyObj, _, _ := npc.internalNetworkPolicyStore.Get(key)
+			actualPolicy := actualPolicyObj.(*antreatypes.NetworkPolicy)
+			if actualAppliedToGroups := len(npc.appliedToGroupStore.List()); actualAppliedToGroups != tt.expAppliedToGroups {
+				t.Errorf("updateNetworkPolicy() got %v, want %v", actualAppliedToGroups, tt.expAppliedToGroups)
+			}
+			if actualAddressGroups := len(npc.addressGroupStore.List()); actualAddressGroups != tt.expAddressGroups {
+				t.Errorf("updateNetworkPolicy() got %v, want %v", actualAddressGroups, tt.expAddressGroups)
+			}
+			if !reflect.DeepEqual(actualPolicy, tt.expNetworkPolicy) {
+				t.Errorf("updateNetworkPolicy() got %#v, want %#v", actualPolicy, tt.expNetworkPolicy)
+			}
+		})
+	}
+}
+
+func TestAddPod(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"group": "appliedTo"},
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      "role",
+				Operator: metav1.LabelSelectorOpIn,
+				Values:   []string{"db", "app"},
+			},
+		},
+	}
+	selectorIn := metav1.LabelSelector{
+		MatchLabels: map[string]string{"inGroup": "inAddress"},
+	}
+	selectorOut := metav1.LabelSelector{
+		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	testNPObj := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "npA",
+			Namespace: "nsA",
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: selectorSpec,
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &selectorIn,
+						},
+					},
+				},
+			},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{
+					To: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &selectorOut,
+						},
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name                 string
+		addedPod             *v1.Pod
+		appGroupMatch        bool
+		inAddressGroupMatch  bool
+		outAddressGroupMatch bool
+	}{
+		{
+			name: "not-match-spec-podselector-match-labels",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "appliedTo"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "not-match-spec-podselector-match-exprs",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"role": "db"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "match-spec-podselector",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels: map[string]string{
+						"role":  "db",
+						"group": "appliedTo",
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
+			},
+			appGroupMatch:        true,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "match-ingress-podselector",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"inGroup": "inAddress"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "match-egress-podselector",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"outGroup": "outAddress"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: true,
+		},
+		{
+			name: "match-all-selectors",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels: map[string]string{
+						"role":     "app",
+						"group":    "appliedTo",
+						"inGroup":  "inAddress",
+						"outGroup": "outAddress",
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
+			},
+			appGroupMatch:        true,
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: true,
+		},
+		{
+			name: "match-spec-podselector-no-podip",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "appliedTo"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "match-rule-podselector-no-ip",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"inGroup": "inAddress"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "no-match-spec-podselector",
+			addedPod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "none"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: v1.PodStatus{
+					Conditions: []v1.PodCondition{
+						{
+							Type:   v1.PodReady,
+							Status: v1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.addNetworkPolicy(testNPObj)
+			npc.podStore.Add(tt.addedPod)
+			appGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorSpec, nil).NormalizedName)
+			inGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorIn, nil).NormalizedName)
+			outGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorOut, nil).NormalizedName)
+			npc.syncAppliedToGroup(appGroupID)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+			appGroupObj, _, _ := npc.appliedToGroupStore.Get(appGroupID)
+			appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
+			podsAdded := appGroup.PodsByNode["nodeA"]
+			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
+			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
+			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
+			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			if tt.appGroupMatch {
+				assert.Len(t, podsAdded, 1, "expected Pod to match AppliedToGroup")
+			} else {
+				assert.Len(t, podsAdded, 0, "expected Pod not to match AppliedToGroup")
+			}
+			if tt.inAddressGroupMatch {
+				assert.Contains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
+			} else {
+				assert.NotContains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
+			}
+			if tt.outAddressGroupMatch {
+				assert.Contains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
+			} else {
+				assert.NotContains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
+			}
+		})
+	}
+}
+
+func TestDeletePod(t *testing.T) {
+	ns := metav1.NamespaceDefault
+	nodeName := "node1"
+	matchNPName := "testNP"
+	matchLabels := map[string]string{"group": "appliedTo"}
+	ruleLabels := map[string]string{"group": "address"}
+	matchSelector := metav1.LabelSelector{
+		MatchLabels: matchLabels,
+	}
+	inPSelector := metav1.LabelSelector{
+		MatchLabels: ruleLabels,
+	}
+	matchAppGID := getNormalizedUID(generateNormalizedName(ns, &matchSelector, nil))
+	ingressRules := []networkingv1.NetworkPolicyIngressRule{
+		{
+			From: []networkingv1.NetworkPolicyPeer{
+				{
+					PodSelector: &inPSelector,
+				},
+			},
+		},
+	}
+	matchNPObj := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      matchNPName,
+			Namespace: ns,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: matchSelector,
+			Ingress:     ingressRules,
+		},
+	}
+	p1IP := "1.1.1.1"
+	p2IP := "2.2.2.2"
+	p1 := getPod("p1", ns, "", p1IP)
+	// Ensure Pod p1 matches AppliedToGroup.
+	p1.Labels = matchLabels
+	p2 := getPod("p2", ns, "", p2IP)
+	// Ensure Pod p2 matches AddressGroup.
+	p2.Labels = ruleLabels
+	_, npc := newController()
+	npc.addNetworkPolicy(matchNPObj)
+	npc.podStore.Add(p1)
+	npc.podStore.Add(p2)
+	npc.syncAppliedToGroup(matchAppGID)
+	// Retrieve AddressGroup.
+	adgs := npc.addressGroupStore.List()
+	// Considering the NP, there should be only one AddressGroup for tests.
+	addrGroupObj := adgs[0]
+	addrGroup := addrGroupObj.(*antreatypes.AddressGroup)
+	npc.syncAddressGroup(addrGroup.Name)
+	// Delete Pod P1 matching the AppliedToGroup.
+	npc.podStore.Delete(p1)
+	npc.syncAppliedToGroup(matchAppGID)
+	appGroupObj, _, _ := npc.appliedToGroupStore.Get(matchAppGID)
+	appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
+	podsAdded := appGroup.PodsByNode[nodeName]
+	// Ensure Pod1 reference is removed from AppliedToGroup.
+	assert.Len(t, podsAdded, 0, "expected Pod to be deleted from AppliedToGroup")
+	// Delete Pod P2 matching the NetworkPolicy Rule.
+	npc.podStore.Delete(p2)
+	npc.syncAddressGroup(addrGroup.Name)
+	updatedAddrGroupObj, _, _ := npc.addressGroupStore.Get(addrGroup.Name)
+	updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
+	// Ensure Pod2 IP is removed from AddressGroup.
+	assert.NotContains(t, updatedAddrGroup.Addresses, p2IP)
+}
+
+func TestAddNamespace(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{}
+	selectorIn := metav1.LabelSelector{
+		MatchLabels: map[string]string{"inGroup": "inAddress"},
+	}
+	selectorOut := metav1.LabelSelector{
+		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	testNPObj := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "npA",
+			Namespace: "nsA",
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: selectorSpec,
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &selectorIn,
+						},
+					},
+				},
+			},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{
+					To: []networkingv1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &selectorOut,
+						},
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name                 string
+		addedNamespace       *v1.Namespace
+		inAddressGroupMatch  bool
+		outAddressGroupMatch bool
+	}{
+		{
+			name: "match-namespace-ingress-rule",
+			addedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"inGroup": "inAddress"},
+				},
+			},
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "match-namespace-egress-rule",
+			addedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"outGroup": "outAddress"},
+				},
+			},
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: true,
+		},
+		{
+			name: "match-namespace-all",
+			addedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "nsA",
+					Labels: map[string]string{
+						"inGroup":  "inAddress",
+						"outGroup": "outAddress",
+					},
+				},
+			},
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: true,
+		},
+		{
+			name: "match-namespace-none",
+			addedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"group": "none"},
+				},
+			},
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.addNetworkPolicy(testNPObj)
+			npc.namespaceStore.Add(tt.addedNamespace)
+			p1 := getPod("p1", "nsA", "nodeA", "1.2.3.4")
+			p2 := getPod("p2", "nsA", "nodeA", "2.2.3.4")
+			npc.podStore.Add(p1)
+			npc.podStore.Add(p2)
+			inGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorIn).NormalizedName)
+			outGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorOut).NormalizedName)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
+			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
+			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
+			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			if tt.inAddressGroupMatch {
+				assert.Contains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
+				assert.Contains(t, updatedInAddrGroup.Addresses, "2.2.3.4")
+			} else {
+				assert.NotContains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
+				assert.NotContains(t, updatedInAddrGroup.Addresses, "2.2.3.4")
+			}
+			if tt.outAddressGroupMatch {
+				assert.Contains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
+				assert.Contains(t, updatedOutAddrGroup.Addresses, "2.2.3.4")
+			} else {
+				assert.NotContains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
+				assert.NotContains(t, updatedOutAddrGroup.Addresses, "2.2.3.4")
+			}
+		})
+	}
+}
+
+func TestDeleteNamespace(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{}
+	selectorIn := metav1.LabelSelector{
+		MatchLabels: map[string]string{"inGroup": "inAddress"},
+	}
+	selectorOut := metav1.LabelSelector{
+		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	testNPObj := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "npA",
+			Namespace: "nsA",
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: selectorSpec,
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &selectorIn,
+						},
+					},
+				},
+			},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{
+					To: []networkingv1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &selectorOut,
+						},
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name                 string
+		deletedNamespace     *v1.Namespace
+		inAddressGroupMatch  bool
+		outAddressGroupMatch bool
+	}{
+		{
+			name: "match-namespace-ingress-rule",
+			deletedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"inGroup": "inAddress"},
+				},
+			},
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: false,
+		},
+		{
+			name: "match-namespace-egress-rule",
+			deletedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"outGroup": "outAddress"},
+				},
+			},
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: true,
+		},
+		{
+			name: "match-namespace-all",
+			deletedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "nsA",
+					Labels: map[string]string{
+						"inGroup":  "inAddress",
+						"outGroup": "outAddress",
+					},
+				},
+			},
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: true,
+		},
+		{
+			name: "match-namespace-none",
+			deletedNamespace: &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"group": "none"},
+				},
+			},
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.addNetworkPolicy(testNPObj)
+			p1 := getPod("p1", "nsA", "", "1.1.1.1")
+			p2 := getPod("p2", "nsA", "", "1.1.1.2")
+			npc.namespaceStore.Add(tt.deletedNamespace)
+			npc.podStore.Add(p1)
+			npc.podStore.Add(p2)
+			npc.namespaceStore.Delete(tt.deletedNamespace)
+			inGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorIn).NormalizedName)
+			outGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorOut).NormalizedName)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+			npc.podStore.Delete(p1)
+			npc.podStore.Delete(p2)
+			npc.namespaceStore.Delete(tt.deletedNamespace)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
+			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
+			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
+			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			if tt.inAddressGroupMatch {
+				assert.NotContains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
+				assert.NotContains(t, updatedInAddrGroup.Addresses, "2.2.3.4")
+			}
+			if tt.outAddressGroupMatch {
+				assert.NotContains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
+				assert.NotContains(t, updatedOutAddrGroup.Addresses, "2.2.3.4")
+			}
+		})
+	}
+}
 
 func TestToGroupSelector(t *testing.T) {
 	pSelector := metav1.LabelSelector{}
@@ -244,14 +1563,51 @@ func TestToAntreaServices(t *testing.T) {
 	}
 }
 
-func getK8sNetworkPolicyPorts(proto v1.Protocol) []networkingv1.NetworkPolicyPort {
-	portNum := intstr.FromInt(80)
-	port := networkingv1.NetworkPolicyPort{
-		Protocol: &proto,
-		Port:     &portNum,
+func TestToAntreaIPBlock(t *testing.T) {
+	expIpNet := networkpolicy.IPNet{
+		IP:           store.IPStrToIPAddress("10.0.0.0"),
+		PrefixLength: 24,
 	}
-	ports := []networkingv1.NetworkPolicyPort{port}
-	return ports
+	tables := []struct {
+		ipBlock  *networkingv1.IPBlock
+		expValue networkpolicy.IPBlock
+		err      error
+	}{
+		{
+			&networkingv1.IPBlock{
+				CIDR: "10.0.0.0/24",
+			},
+			networkpolicy.IPBlock{
+				CIDR: expIpNet,
+			},
+			nil,
+		},
+		{
+			&networkingv1.IPBlock{
+				CIDR: "10.0.0.0",
+			},
+			networkpolicy.IPBlock{},
+			fmt.Errorf("invalid format for IPBlock CIDR: 10.0.0.0"),
+		},
+	}
+	for _, table := range tables {
+		antreaIPBlock, err := toAntreaIPBlock(table.ipBlock)
+		if err != nil {
+			if err.Error() != table.err.Error() {
+				t.Errorf("Unexpected error in Antrea IPBlock conversion. Expected %v, got %v", table.err, err)
+			}
+		}
+		if antreaIPBlock == nil {
+			continue
+		}
+		ipNet := antreaIPBlock.CIDR
+		if bytes.Compare(ipNet.IP, table.expValue.CIDR.IP) != 0 {
+			t.Errorf("Unexpected IP in Antrea IPBlock conversion. Expected %v, got %v", table.expValue.CIDR.IP, ipNet.IP)
+		}
+		if table.expValue.CIDR.PrefixLength != ipNet.PrefixLength {
+			t.Errorf("Unexpected PrefixLength in Antrea IPBlock conversion. Expected %v, got %v", table.expValue.CIDR.PrefixLength, ipNet.PrefixLength)
+		}
+	}
 }
 
 func TestProcessNetworkPolicy(t *testing.T) {
@@ -456,28 +1812,117 @@ func TestProcessNetworkPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			addressGroupStore := store.NewAddressGroupStore()
-			appliedToGroupStore := store.NewAppliedToGroupStore()
-			networkPolicyStore := store.NewNetworkPolicyStore()
-			c := &NetworkPolicyController{
-				addressGroupQueue:          workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
-				appliedToGroupQueue:        workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
-				addressGroupStore:          addressGroupStore,
-				appliedToGroupStore:        appliedToGroupStore,
-				internalNetworkPolicyStore: networkPolicyStore,
-			}
+			_, c := newController()
 
 			if actualPolicy := c.processNetworkPolicy(tt.inputPolicy); !reflect.DeepEqual(actualPolicy, tt.expectedPolicy) {
 				t.Errorf("processNetworkPolicy() got %v, want %v", actualPolicy, tt.expectedPolicy)
 			}
 
-			if actualAddressGroups := len(addressGroupStore.List()); actualAddressGroups != tt.expectedAddressGroups {
+			if actualAddressGroups := len(c.addressGroupStore.List()); actualAddressGroups != tt.expectedAddressGroups {
 				t.Errorf("len(addressGroupStore.List()) got %v, want %v", actualAddressGroups, tt.expectedAddressGroups)
 			}
 
-			if actualAppliedToGroups := len(appliedToGroupStore.List()); actualAppliedToGroups != tt.expectedAppliedToGroups {
+			if actualAppliedToGroups := len(c.appliedToGroupStore.List()); actualAppliedToGroups != tt.expectedAppliedToGroups {
 				t.Errorf("len(appliedToGroupStore.List()) got %v, want %v", actualAppliedToGroups, tt.expectedAppliedToGroups)
 			}
 		})
+	}
+}
+
+// util functions for testing.
+func getK8sNetworkPolicyPorts(proto v1.Protocol) []networkingv1.NetworkPolicyPort {
+	portNum := intstr.FromInt(80)
+	port := networkingv1.NetworkPolicyPort{
+		Protocol: &proto,
+		Port:     &portNum,
+	}
+	ports := []networkingv1.NetworkPolicyPort{port}
+	return ports
+}
+
+// getK8sLabelSelector is a utility function to retrieve LabelSelector with
+// multiple randomly generated labels. Parameter numLabels can be used to
+// generate selector with number of labels equivalent to numLabels and hence
+// create unique LabelSelector.
+func getK8sLabelSelector(numLabels int) metav1.LabelSelector {
+	testLabels := make(map[string]string)
+	for i := 0; i < numLabels; i++ {
+		k := fmt.Sprintf("user-%d", i)
+		v := fmt.Sprintf("dev-%d", i)
+		testLabels[k] = v
+	}
+	return metav1.LabelSelector{
+		MatchLabels: testLabels,
+	}
+}
+
+func getK8sNetworkPolicyObj() *networkingv1.NetworkPolicy {
+	ns := metav1.NamespaceDefault
+	npName := "testing-1"
+	pSelector := metav1.LabelSelector{}
+	inNsSelector := metav1.LabelSelector{}
+	outPSelector := metav1.LabelSelector{}
+	ingressRules := []networkingv1.NetworkPolicyIngressRule{
+		{
+			From: []networkingv1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &inNsSelector,
+				},
+			},
+		},
+	}
+	egressRules := []networkingv1.NetworkPolicyEgressRule{
+		{
+			To: []networkingv1.NetworkPolicyPeer{
+				{
+					PodSelector: &outPSelector,
+				},
+			},
+		},
+	}
+	npObj := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: npName, Namespace: ns},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: pSelector,
+			Ingress:     ingressRules,
+			Egress:      egressRules,
+		},
+	}
+	return npObj
+}
+
+func getPod(name, ns, nodeName, podIP string) *v1.Pod {
+	if name == "" {
+		name = "testPod"
+	}
+	if nodeName == "" {
+		nodeName = "node1"
+	}
+	if ns == "" {
+		ns = metav1.NamespaceDefault
+	}
+	if podIP == "" {
+		podIP = "1.2.3.4"
+	}
+	return &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name: "container-1",
+			}},
+			NodeName: nodeName,
+		},
+		Status: v1.PodStatus{
+			Conditions: []v1.PodCondition{
+				{
+					Type:   v1.PodReady,
+					Status: v1.ConditionTrue,
+				},
+			},
+			PodIP: podIP,
+		},
 	}
 }
