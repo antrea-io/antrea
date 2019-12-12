@@ -441,7 +441,7 @@ func (mr *MockActionMockRecorder) LoadARPOperation(arg0 interface{}) *gomock.Cal
 }
 
 // LoadRange mocks base method
-func (m *MockAction) LoadRange(arg0 string, arg1 uint32, arg2 openflow.Range) openflow.FlowBuilder {
+func (m *MockAction) LoadRange(arg0 string, arg1 uint64, arg2 openflow.Range) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LoadRange", arg0, arg1, arg2)
 	ret0, _ := ret[0].(openflow.FlowBuilder)

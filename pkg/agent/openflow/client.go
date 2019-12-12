@@ -180,6 +180,8 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 		return err
 	} else if err := c.flowOperations.Add(c.gatewayARPSpoofGuardFlow(gatewayOFPort)); err != nil {
 		return err
+	} else if err := c.flowOperations.Add(c.ctRewriteDstMACFlow(gatewayMAC)); err != nil {
+		return err
 	} else if err := c.flowOperations.Add(c.l3ToGatewayFlow(gatewayAddr, gatewayMAC)); err != nil {
 		return err
 	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort)); err != nil {

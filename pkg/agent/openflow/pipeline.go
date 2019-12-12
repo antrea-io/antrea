@@ -17,6 +17,8 @@ package openflow
 import (
 	"fmt"
 	"net"
+	"strconv"
+	"strings"
 	"sync"
 
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -181,55 +183,49 @@ func (c *client) podClassifierFlow(podOFPort uint32) binding.Flow {
 }
 
 // connectionTrackFlows generates flows that redirect traffic to ct_zone and handle traffic according to ct_state:
-// 1) commit new connections to ct that sent from non-gateway.
-// 2) Add ct_mark on traffic replied from the host gateway.
-// 3) Cache src MAC if traffic comes from the host gateway and rewrite the dst MAC on traffic replied from Pod to the
-// cached MAC.
-// 4) Drop all invalid traffic.
+// 1) commit new connections to ct.
+// 2) Add ct_mark on the packet if it is sent back to the switch from the host gateway.
+// 3) Drop all invalid traffic.
 func (c *client) connectionTrackFlows() (flows []binding.Flow) {
 	connectionTrackTable := c.pipeline[conntrackTable]
-	baseConnectionTrackFlow := connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		Action().CT(false, connectionTrackTable.GetNext(), ctZone).CTDone().
-		Done()
-	flows = append(flows, baseConnectionTrackFlow)
-
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	gatewayReplyFlow := connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
+	flows = []binding.Flow{
+		connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			Action().CT(false, connectionTrackTable.GetNext(), ctZone).CTDone().
+			Done(),
+		connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
+			MatchCTMark(gatewayCTMark).
+			MatchCTStateNew(false).MatchCTStateTrk(true).
+			Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
+			Done(),
+		connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
+			MatchCTStateNew(true).MatchCTStateTrk(true).
+			Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).LoadToMark(gatewayCTMark).CTDone().
+			Done(),
+		connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
+			MatchCTStateNew(true).MatchCTStateTrk(true).
+			Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).CTDone().
+			Done(),
+		connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			MatchCTStateInv(true).MatchCTStateTrk(true).
+			Action().Drop().
+			Done(),
+	}
+	return
+}
+
+// ctRewriteDstMACFlow rewrites the destination MAC with local host gateway MAC if the packets has set ct_mark but not sent from the host gateway.
+func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr) binding.Flow {
+	connectionTrackStateTable := c.pipeline[conntrackStateTable]
+	macData, _ := strconv.ParseUint(strings.Replace(gatewayMAC.String(), ":", "", -1), 16, 64)
+	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchCTMark(gatewayCTMark).
 		MatchCTStateNew(false).MatchCTStateTrk(true).
+		Action().LoadRange(binding.NxmFieldDstMAC, macData, binding.Range{0, 47}).
 		Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
 		Done()
-	flows = append(flows, gatewayReplyFlow)
-
-	gatewaySendFlow := connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-		MatchCTStateNew(true).MatchCTStateTrk(true).
-		Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).LoadToMark(gatewayCTMark).MoveToLabel(binding.NxmFieldSrcMAC, &binding.Range{0, 47}, &binding.Range{0, 47}).CTDone().
-		Done()
-	flows = append(flows, gatewaySendFlow)
-
-	podReplyGatewayFlow := connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchCTMark(gatewayCTMark).
-		MatchCTStateNew(false).MatchCTStateTrk(true).
-		Action().MoveRange(binding.NxmFieldCtLabel, binding.NxmFieldDstMAC, binding.Range{0, 47}, binding.Range{0, 47}).
-		Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
-		Done()
-	flows = append(flows, podReplyGatewayFlow)
-
-	nonGatewaySendFlow := connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
-		MatchCTStateNew(true).MatchCTStateTrk(true).
-		Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).CTDone().
-		Done()
-	flows = append(flows, nonGatewaySendFlow)
-
-	invCTFlow := connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchCTStateInv(true).MatchCTStateTrk(true).
-		Action().Drop().
-		Done()
-	flows = append(flows, invCTFlow)
-
-	return flows
 }
 
 // l2ForwardCalcFlow generates the flow that matches dst MAC and loads ofPort to reg.

@@ -17,6 +17,8 @@ package ovs
 import (
 	"fmt"
 	"net"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -211,6 +213,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	var flows []binding.Flow
 	_, AllIPs, _ := net.ParseCIDR("0.0.0.0/0")
 	_, conjSrcIPNet, _ := net.ParseCIDR("192.168.3.0/24")
+	gwMACData, _ := strconv.ParseUint(strings.Replace(gwMAC.String(), ":", "", -1), 16, 64)
 	flows = append(flows,
 		table.BuildFlow(priorityNormal-10).
 			Cookie(getCookieID()).
@@ -267,14 +270,13 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			true,
 			nextTable,
 			ctZone).
-			LoadToMark(uint32(gatewayCTMark)).
-			MoveToLabel(binding.NxmFieldSrcMAC, &binding.Range{0, 47}, &binding.Range{0, 47}).CTDone().
+			LoadToMark(uint32(gatewayCTMark)).CTDone().
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchCTMark(gatewayCTMark).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
-			Action().MoveRange(binding.NxmFieldCtLabel, binding.NxmFieldDstMAC, binding.Range{0, 47}, binding.Range{0, 47}).
+			Action().LoadRange(binding.NxmFieldDstMAC, gwMACData, binding.Range{0, 47}).
 			Action().ResubmitToTable(nextTable).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
@@ -353,8 +355,8 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		&ExpectFlow{"priority=190,arp", "NORMAL"},
 		&ExpectFlow{"priority=200,ip", "ct(table=2,zone=65520)"},
 		&ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "resubmit(,2)"},
-		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=2,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[],move:NXM_OF_ETH_SRC[]->NXM_NX_CT_LABEL[0..47]))"},
-		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x20,ip", "move:NXM_NX_CT_LABEL[0..47]->NXM_OF_ETH_DST[],resubmit(,2)"},
+		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=2,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
+		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x20,ip", "load:0xaaaaaaaaaa11->NXM_OF_ETH_DST[],resubmit(,2)"},
 		&ExpectFlow{"priority=200,ct_state=+new+inv,ip", "drop"},
 		&ExpectFlow{"priority=190,ct_state=+new+trk,ip", "ct(commit,table=2,zone=65520)"},
 		&ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", "set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,resubmit(,2)"},
