@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -657,8 +658,8 @@ func (data *TestData) createService(name string, service string, port int, targe
 	return err
 }
 
-// createNginxServiceOnNode create a nginx service on node.
-func (data *TestData) createNginxServiceOnNode(name string) error {
+// createNginxService create a nginx service with the given name.
+func (data *TestData) createNginxService(name string) error {
 	return data.createService(name, "nginx", 80, 80)
 }
 
@@ -666,6 +667,28 @@ func (data *TestData) createNginxServiceOnNode(name string) error {
 func (data *TestData) deleteService(name string) error {
 	if err := data.clientset.CoreV1().Services(testNamespace).Delete(name, nil); err != nil {
 		return fmt.Errorf("unable to cleanup service %v: %v", name, err)
+	}
+	return nil
+}
+
+// createNetworkPolicy creates a network policy with spec.
+func (data *TestData) createNetworkPolicy(name string, spec *networkingv1.NetworkPolicySpec) (*networkingv1.NetworkPolicy, error) {
+	policy := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"antrea-e2e": name,
+			},
+		},
+		Spec: *spec,
+	}
+	return data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(policy)
+}
+
+// deleteNetworkpolicy deletes the network policy.
+func (data *TestData) deleteNetworkpolicy(policy *networkingv1.NetworkPolicy) error {
+	if err := data.clientset.NetworkingV1().NetworkPolicies(policy.Namespace).Delete(policy.Name, nil); err != nil {
+		return fmt.Errorf("unable to cleanup policy %v: %v", policy.Name, err)
 	}
 	return nil
 }
@@ -752,6 +775,12 @@ func (data *TestData) forAllAntreaPods(fn func(nodeName, podName string) error) 
 
 func (data *TestData) runPingCommandFromTestPod(podName string, targetIP string, count int) error {
 	cmd := []string{"ping", "-c", strconv.Itoa(count), targetIP}
+	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
+	return err
+}
+
+func (data *TestData) runWgetCommandFromTestPod(podName string, svcName string) error {
+	cmd := []string{"nc", "-vz", "-w", "8", svcName + "." + testNamespace, "80"}
 	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
 	return err
 }
