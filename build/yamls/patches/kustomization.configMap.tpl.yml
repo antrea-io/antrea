@@ -1,0 +1,5 @@
+configMapGenerator:
+- name: antrea-config
+  behavior: merge
+  files:
+  - <CONF_FILE>

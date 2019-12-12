@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent
+spec:
+  template:
+    spec:
+      containers:
+        - name: antrea-ipsec
+          image: antrea
+          command: ["start_ovs_ipsec"]
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - timeout 5 container_liveness_probe ovs-ipsec
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            capabilities:
+              add:
+              - NET_ADMIN
+          volumeMounts:
+          - name: host-var-run-antrea
+            mountPath: /var/run/openvswitch
+            subPath: openvswitch
+          - name: host-var-log-antrea
+            mountPath: /var/log/openvswitch
+            subPath: openvswitch
+          - name: host-var-log-antrea
+            mountPath: /var/log/strongswan
+            subPath: strongswan
