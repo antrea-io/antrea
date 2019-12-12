@@ -110,7 +110,7 @@ type Flow interface {
 type Action interface {
 	LoadARPOperation(value uint16) FlowBuilder
 	LoadRegRange(regID int, value uint32, to Range) FlowBuilder
-	LoadRange(name string, addr uint32, to Range) FlowBuilder
+	LoadRange(name string, addr uint64, to Range) FlowBuilder
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder
 	Resubmit(port uint16, table TableIDType) FlowBuilder

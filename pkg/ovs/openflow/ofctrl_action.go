@@ -183,8 +183,8 @@ func (a *ofFlowAction) LoadARPOperation(value uint16) FlowBuilder {
 }
 
 // LoadRange is an action to Load data to the target field at specified range.
-func (a *ofFlowAction) LoadRange(name string, value uint32, rng Range) FlowBuilder {
-	a.builder.ofFlow.LoadReg(name, uint64(value), rng.ToNXRange())
+func (a *ofFlowAction) LoadRange(name string, value uint64, rng Range) FlowBuilder {
+	a.builder.ofFlow.LoadReg(name, value, rng.ToNXRange())
 	return a.builder
 }
 
