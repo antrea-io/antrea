@@ -257,7 +257,7 @@ func getNormalizedUID(name string) string {
 // generateNormalizedName generates a string, based on the selectors, in
 // the following format: "namespace=NamespaceName And podSelector=normalizedPodSelector".
 // Note: Namespace and nsSelector may or may not be set depending on the
-// selector. However, they cannot be set simulataneously.
+// selector. However, they cannot be set simultaneously.
 func generateNormalizedName(namespace string, podSelector, nsSelector *metav1.LabelSelector) string {
 	normalizedName := []string{}
 	if nsSelector != nil {
