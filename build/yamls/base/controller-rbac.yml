@@ -13,6 +13,7 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - nodes
       - pods
       - namespaces
     verbs:
@@ -35,6 +36,13 @@ rules:
       - get
       - create
       - update
+      - delete
+  - apiGroups:
+      - clusterinformation.crd.antrea.io
+    resources:
+      - antreaagentinfos
+    verbs:
+      - list
       - delete
   - apiGroups:
       - authentication.k8s.io

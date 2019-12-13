@@ -50,6 +50,7 @@ func run(o *Options) error {
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
+	nodeInformer := informerFactory.Core().V1().Nodes()
 
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()
@@ -83,7 +84,7 @@ func run(o *Options) error {
 
 	informerFactory.Start(stopCh)
 
-	controllerMonitor := monitor.NewControllerMonitor(crdClient)
+	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer)
 	go controllerMonitor.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
