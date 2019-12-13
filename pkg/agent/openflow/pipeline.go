@@ -74,10 +74,6 @@ func (rt regType) reg() string {
 	return fmt.Sprintf("reg%d", rt)
 }
 
-func i2h(data int64) string {
-	return fmt.Sprintf("0x%x", data)
-}
-
 const (
 	// marksReg stores traffic-source mark and pod-found mark.
 	// traffic-source resides in [0..15], pod-found resides in [16].

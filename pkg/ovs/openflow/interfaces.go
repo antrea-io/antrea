@@ -16,13 +16,9 @@ package openflow
 
 import (
 	"net"
-	"os/exec"
 	"time"
 )
 
-var executor = exec.Command
-
-type versionType = string
 type protocol = string
 type TableIDType uint8
 
@@ -92,10 +88,6 @@ type Table interface {
 	GetMissAction() MissActionType
 	Status() TableStatus
 	GetNext() TableIDType
-}
-
-type updater interface {
-	UpdateStatus(delta int)
 }
 
 type Flow interface {

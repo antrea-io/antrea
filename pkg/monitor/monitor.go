@@ -54,7 +54,7 @@ type agentMonitor struct {
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 }
 
-func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers.NodeInformer) *controllerMonitor {
+func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers.NodeInformer) monitor {
 	m := &controllerMonitor{client: client, nodeInformer: nodeInformer, nodeListerSynced: nodeInformer.Informer().HasSynced}
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    nil,
@@ -65,7 +65,15 @@ func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers
 	return m
 }
 
-func NewAgentMonitor(client clientset.Interface, ovsBridge string, nodeName string, nodeSubnet string, interfaceStore interfacestore.InterfaceStore, ofClient openflow.Client, ovsBridgeClient ovsconfig.OVSBridgeClient) *agentMonitor {
+func NewAgentMonitor(
+	client clientset.Interface,
+	ovsBridge string,
+	nodeName string,
+	nodeSubnet string,
+	interfaceStore interfacestore.InterfaceStore,
+	ofClient openflow.Client,
+	ovsBridgeClient ovsconfig.OVSBridgeClient,
+) monitor {
 	return &agentMonitor{client: client, ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient}
 }
 
