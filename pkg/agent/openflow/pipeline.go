@@ -38,6 +38,7 @@ const (
 	l2ForwardingCalcTable binding.TableIDType = 80
 	ingressRuleTable      binding.TableIDType = 90
 	ingressDefaultTable   binding.TableIDType = 100
+	conntrackCommitTable  binding.TableIDType = 105
 	l2ForwardingOutTable  binding.TableIDType = 110
 
 	// Flow priority level
@@ -144,9 +145,11 @@ func (c *client) defaultFlows() (flows []binding.Flow) {
 		case binding.TableMissActionNormal:
 			flowBuilder = flowBuilder.Action().Normal()
 		case binding.TableMissActionDrop:
+			flowBuilder = flowBuilder.Action().Drop()
+		case binding.TableMissActionNone:
 			fallthrough
 		default:
-			flowBuilder = flowBuilder.Action().Drop()
+			continue
 		}
 		flows = append(flows, flowBuilder.Done())
 	}
@@ -183,12 +186,15 @@ func (c *client) podClassifierFlow(podOFPort uint32) binding.Flow {
 }
 
 // connectionTrackFlows generates flows that redirect traffic to ct_zone and handle traffic according to ct_state:
-// 1) commit new connections to ct.
-// 2) Add ct_mark on the packet if it is sent back to the switch from the host gateway.
-// 3) Drop all invalid traffic.
+// 1) commit new connections to ct_zone(0xfff0) in the contrackCommitTable.
+// 2) Add ct_mark on the packet if it is sent to the switch from the host gateway.
+// 3) Allow traffic if it hits ct_mark and is sent from the host gateway.
+// 4) Drop all invalid traffic.
+// 5) Resubmit other traffic to the next table by the table-miss flow.
 func (c *client) connectionTrackFlows() (flows []binding.Flow) {
 	connectionTrackTable := c.pipeline[conntrackTable]
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
+	connectionTrackCommitTable := c.pipeline[conntrackCommitTable]
 	flows = []binding.Flow{
 		connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Action().CT(false, connectionTrackTable.GetNext(), ctZone).CTDone().
@@ -200,17 +206,17 @@ func (c *client) connectionTrackFlows() (flows []binding.Flow) {
 			Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
 			Done(),
 		connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-			MatchCTStateNew(true).MatchCTStateTrk(true).
-			Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).LoadToMark(gatewayCTMark).CTDone().
-			Done(),
-		connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
-			MatchCTStateNew(true).MatchCTStateTrk(true).
-			Action().CT(true, connectionTrackStateTable.GetNext(), ctZone).CTDone().
-			Done(),
-		connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			MatchCTStateInv(true).MatchCTStateTrk(true).
 			Action().Drop().
+			Done(),
+		connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
+			MatchCTStateNew(true).MatchCTStateTrk(true).
+			Action().CT(true, connectionTrackCommitTable.GetNext(), ctZone).LoadToMark(gatewayCTMark).CTDone().
+			Done(),
+		connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
+			MatchCTStateNew(true).MatchCTStateTrk(true).
+			Action().CT(true, connectionTrackCommitTable.GetNext(), ctZone).CTDone().
 			Done(),
 	}
 	return
@@ -350,7 +356,9 @@ func (c *client) gatewayIPSpoofGuardFlow(gatewayOFPort uint32) binding.Flow {
 func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayOFPort uint32) binding.Flow {
 	return c.pipeline[dnatTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstIPNet(*serviceCIDR).
-		Action().Output(int(gatewayOFPort)).
+		Action().LoadRegRange(int(portCacheReg), gatewayOFPort, ofPortRegRange).
+		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+		Action().ResubmitToTable(conntrackCommitTable).
 		Done()
 }
 
@@ -444,12 +452,12 @@ func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey int, matc
 		Action().Drop().Done()
 }
 
-// localProbeFlow generates the flow to resubmit packets to l2ForwardingOutTable. The packets are sent from Node to probe the liveness/readiness of local Pods.
+// localProbeFlow generates the flow to resubmit packets to conntrackCommitTable. The packets are sent from Node to probe the liveness/readiness of local Pods.
 func (c *client) localProbeFlow(localGatewayIP net.IP) binding.Flow {
 	return c.pipeline[ingressRuleTable].BuildFlow(priorityHigh).
 		MatchProtocol(binding.ProtocolIP).
 		MatchSrcIP(localGatewayIP).
-		Action().ResubmitToTable(l2ForwardingOutTable).Done()
+		Action().ResubmitToTable(conntrackCommitTable).Done()
 }
 
 // NewClient is the constructor of the Client interface.
@@ -460,17 +468,18 @@ func NewClient(bridgeName string) Client {
 		pipeline: map[binding.TableIDType]binding.Table{
 			classifierTable:       bridge.CreateTable(classifierTable, spoofGuardTable, binding.TableMissActionNext),
 			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, conntrackTable, binding.TableMissActionDrop),
-			conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNext),
+			conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
 			conntrackStateTable:   bridge.CreateTable(conntrackStateTable, dnatTable, binding.TableMissActionNext),
 			dnatTable:             bridge.CreateTable(dnatTable, egressRuleTable, binding.TableMissActionNext),
-			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, ingressRuleTable, binding.TableMissActionNext),
-			l2ForwardingOutTable:  bridge.CreateTable(l2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
-			arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
 			egressRuleTable:       bridge.CreateTable(egressRuleTable, egressDefaultTable, binding.TableMissActionNext),
 			egressDefaultTable:    bridge.CreateTable(egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
+			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, ingressRuleTable, binding.TableMissActionNext),
+			arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
 			ingressRuleTable:      bridge.CreateTable(ingressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
-			ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, l2ForwardingOutTable, binding.TableMissActionNext),
+			ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
+			conntrackCommitTable:  bridge.CreateTable(conntrackCommitTable, l2ForwardingOutTable, binding.TableMissActionNext),
+			l2ForwardingOutTable:  bridge.CreateTable(l2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 		},
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),
