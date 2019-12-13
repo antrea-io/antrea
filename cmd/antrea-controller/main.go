@@ -35,6 +35,7 @@ func main() {
 	command := newControllerCommand()
 
 	if err := command.Execute(); err != nil {
+		logs.FlushLogs()
 		os.Exit(1)
 	}
 }
