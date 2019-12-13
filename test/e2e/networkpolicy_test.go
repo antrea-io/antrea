@@ -39,7 +39,8 @@ func TestIPBlockWithExcept(t *testing.T) {
 		t.Fatalf("Error when creating nginx pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, nginxPodName)
-	if _, err := data.podWaitForIP(defaultTimeout, nginxPodName); err != nil {
+	nginxPodIP, err := data.podWaitForIP(defaultTimeout, nginxPodName)
+	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", nginxPodName, err)
 	}
 
@@ -109,6 +110,15 @@ func TestIPBlockWithExcept(t *testing.T) {
 	// pod1 cannot wget to service.
 	if err = data.runWgetCommandFromTestPod(podName1, svcName); err == nil {
 		t.Fatalf("Pod %s should not be able to connect Service %s, but was able to connect", podName1, svcName)
+	}
+
+	// pod0 can wget to pod IP.
+	if err = data.runWgetCommandFromTestPodToPodIP(podName0, nginxPodIP); err != nil {
+		t.Fatalf("Pod %s should be able to connect Pod %s, but was not able to connect", podName0, nginxPodIP)
+	}
+	// pod1 cannot wget to pod IP.
+	if err = data.runWgetCommandFromTestPodToPodIP(podName1, nginxPodIP); err == nil {
+		t.Fatalf("Pod %s should not be able to connect Pod %s, but was able to connect", podName1, nginxPodIP)
 	}
 }
 

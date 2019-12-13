@@ -40,6 +40,7 @@ const (
 	TableMissActionDrop MissActionType = iota
 	TableMissActionNormal
 	TableMissActionNext
+	TableMissActionNone
 )
 
 const (
