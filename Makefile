@@ -133,28 +133,11 @@ lint: .linter
 clean:
 	@rm -rf $(BINDIR)
 	@rm -rf $(DOCKER_CACHE)
-	@rm -f .mockgen .protoc
 	@rm -rf .golangci-bin
 
-# Install a specific version of gomock to avoid generating different source code
-# for the mocks every time a new version of gomock is released. If a new version
-# of gomock is desired, this file should be updated.
-.mockgen:
-	@echo "===> Installing Mockgen <==="
-	@go get github.com/golang/mock/gomock@1.3.1
-	@go install github.com/golang/mock/mockgen
-	@touch $@
-
-.PHONY: mocks
-mocks: .mockgen
-	@echo "===> Re-generating mocks with Mockgen <==="
-	PATH=$$PATH:$(GOPATH)/bin $(GO) generate ./...
-
-# Install a specific version of k8s.io/code-generator to
-# generate monitoring CRDs client and deepcopy
-.PHONY: crd-gen
-crd-gen:
-	@echo "===> Re-generating CRD client and deepcopy with code-generator <==="
+.PHONY: codegen
+codegen:
+	@echo "===> Updating generated code <==="
 	$(CURDIR)/hack/update-codegen.sh
 
 ### Docker images ###

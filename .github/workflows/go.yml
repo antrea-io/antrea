@@ -59,8 +59,8 @@ jobs:
       run: make bin
 
 
-  mocks:
-    name: Check mock generation
+  codegen:
+    name: Check code generation
     runs-on: [ubuntu-18.04]
     steps:
 
@@ -72,8 +72,8 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v1
 
-    - name: Check mock generation
-      run: ./ci/check-mocks.sh
+    - name: Check code generation
+      run: ./ci/check-codegen.sh
 
 
   manifest:
