@@ -56,6 +56,6 @@ func RunDockerExecCommand(container string, cmd string, workdir string) (
 		return 0, "", "", err
 	}
 
-	// command is succesful
+	// command is successful
 	return 0, string(stdoutBytes), string(stderrBytes), nil
 }

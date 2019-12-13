@@ -109,6 +109,14 @@ fmt:
 	@echo "===> Formatting Go files <==="
 	@gofmt -s -l -w $(GO_FILES)
 
+.golangci-bin:
+	@echo "===> Installing Golangci-lint <==="
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.21.0
+
+.PHONY: golangci
+golangci: .golangci-bin
+	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml
+
 .PHONY: .linter
 .linter:
 	@if ! PATH=$$PATH:$(GOPATH)/bin command -v golint > /dev/null; then \
@@ -126,6 +134,7 @@ clean:
 	@rm -rf $(BINDIR)
 	@rm -rf $(DOCKER_CACHE)
 	@rm -f .mockgen .protoc
+	@rm -rf .golangci-bin
 
 # Install a specific version of gomock to avoid generating different source code
 # for the mocks every time a new version of gomock is released. If a new version
@@ -134,7 +143,7 @@ clean:
 	@echo "===> Installing Mockgen <==="
 	@go get github.com/golang/mock/gomock@1.3.1
 	@go install github.com/golang/mock/mockgen
-	@touch .mockgen
+	@touch $@
 
 .PHONY: mocks
 mocks: .mockgen
