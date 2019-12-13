@@ -521,18 +521,6 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	tester.cmdDelTest(tc, dataDir)
 }
 
-func getContainerIPMacConfig(ipamResult *current.Result) (string, string) {
-	containerMAC := ipamResult.Interfaces[1].Mac
-	containerIP := ""
-	for _, ipc := range ipamResult.IPs {
-		if ipc.Version == "4" {
-			containerIP = ipc.Address.IP.String()
-			break
-		}
-	}
-	return containerIP, containerMAC
-}
-
 func TestAntreaServerFunc(t *testing.T) {
 	controller := mock.NewController(t)
 	defer controller.Finish()

@@ -58,7 +58,6 @@ var routes = []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 var dns = []string{"192.168.100.1"}
 var ips = []string{"10.1.2.100/24,10.1.2.1,4"}
 var args = cniservertest.GenerateCNIArgs(testPodName, testPodNamespace, testPodInfraContainerID)
-var containerNamespace = "test"
 var testNodeConfig *types.NodeConfig
 var gwIP net.IP
 

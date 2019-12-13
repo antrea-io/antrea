@@ -1840,22 +1840,6 @@ func getK8sNetworkPolicyPorts(proto v1.Protocol) []networkingv1.NetworkPolicyPor
 	return ports
 }
 
-// getK8sLabelSelector is a utility function to retrieve LabelSelector with
-// multiple randomly generated labels. Parameter numLabels can be used to
-// generate selector with number of labels equivalent to numLabels and hence
-// create unique LabelSelector.
-func getK8sLabelSelector(numLabels int) metav1.LabelSelector {
-	testLabels := make(map[string]string)
-	for i := 0; i < numLabels; i++ {
-		k := fmt.Sprintf("user-%d", i)
-		v := fmt.Sprintf("dev-%d", i)
-		testLabels[k] = v
-	}
-	return metav1.LabelSelector{
-		MatchLabels: testLabels,
-	}
-}
-
 func getK8sNetworkPolicyObj() *networkingv1.NetworkPolicy {
 	ns := metav1.NamespaceDefault
 	npName := "testing-1"
