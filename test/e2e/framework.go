@@ -784,3 +784,9 @@ func (data *TestData) runWgetCommandFromTestPod(podName string, svcName string) 
 	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
 	return err
 }
+
+func (data *TestData) runWgetCommandFromTestPodToPodIP(podName string, podIP string) error {
+	cmd := []string{"nc", "-vz", "-w", "8", podIP, "80"}
+	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
+	return err
+}

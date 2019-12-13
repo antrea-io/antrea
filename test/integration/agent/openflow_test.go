@@ -37,10 +37,10 @@ var (
 )
 
 const (
-	ingressRuleTable     = uint8(90)
-	ingressDefaultTable  = uint8(100)
-	l2ForwardingOutTable = uint8(110)
-	priorityNormal       = 200
+	ingressRuleTable    = uint8(90)
+	ingressDefaultTable = uint8(100)
+	contrackCommitTable = uint8(105)
+	priorityNormal      = 200
 )
 
 type expectTableFlows struct {
@@ -126,7 +126,7 @@ func testInstallServiceFlows(t *testing.T, config *testConfig) {
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries to skip service CIDR from egress table")
 	}
-	for _, tableFlow := range prepareServiceHelperFlows(*config.serviceCIDR) {
+	for _, tableFlow := range prepareServiceHelperFlows(*config.serviceCIDR, config.localGateway.ofPort) {
 		ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -214,7 +214,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 	err = c.InstallPolicyRuleFlows(rule)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
-	checkConjunctionFlows(t, ingressRuleTable, ingressDefaultTable, l2ForwardingOutTable, priorityNormal, rule, assert.True)
+	checkConjunctionFlows(t, ingressRuleTable, ingressDefaultTable, contrackCommitTable, priorityNormal, rule, assert.True)
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList, true)
 
 	addedFrom := prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"})
@@ -263,7 +263,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 	err = c.UninstallPolicyRuleFlows(ruleID)
 	require.Nil(t, err, "Failed to DeletePolicyRuleService")
-	checkConjunctionFlows(t, ingressRuleTable, ingressDefaultTable, l2ForwardingOutTable, priorityNormal, rule, assert.False)
+	checkConjunctionFlows(t, ingressRuleTable, ingressDefaultTable, contrackCommitTable, priorityNormal, rule, assert.False)
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList, false)
 }
 
@@ -535,7 +535,7 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=210,ip,nw_src=%s", gwIP.String()),
-					"resubmit(,110)"},
+					"resubmit(,105)"},
 			},
 		},
 	}
@@ -580,12 +580,14 @@ func prepareNodeFlows(peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, l
 	}
 }
 
-func prepareServiceHelperFlows(serviceCIDR net.IPNet) []expectTableFlows {
+func prepareServiceHelperFlows(serviceCIDR net.IPNet, gwOFPort uint32) []expectTableFlows {
 	return []expectTableFlows{
 		{
 			uint8(40),
 			[]*ofTestUtils.ExpectFlow{
-				{fmt.Sprintf("priority=200,ip,nw_dst=%s", serviceCIDR.String()), "output:1"},
+				{fmt.Sprintf("priority=200,ip,nw_dst=%s", serviceCIDR.String()),
+					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,105)", gwOFPort),
+				},
 			},
 		},
 	}
@@ -612,16 +614,13 @@ func prepareDefaultFlows() []expectTableFlows {
 			uint8(30),
 			[]*ofTestUtils.ExpectFlow{
 				{"priority=200,ip", "ct(table=31,zone=65520)"},
-				{"priority=80,ip", "resubmit(,31)"},
 			},
 		},
 		{
 			uint8(31),
 			[]*ofTestUtils.ExpectFlow{
 				{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "resubmit(,40)"},
-				{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=40,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
 				{"priority=200,ct_state=+inv+trk,ip", "drop"},
-				{"priority=190,ct_state=+new+trk,ip", "ct(commit,table=40,zone=65520)"},
 				{"priority=80,ip", "resubmit(,40)"},
 			},
 		},
@@ -651,7 +650,15 @@ func prepareDefaultFlows() []expectTableFlows {
 		},
 		{
 			uint8(100),
-			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "resubmit(,110)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "resubmit(,105)"}},
+		},
+		{
+			uint8(105),
+			[]*ofTestUtils.ExpectFlow{
+				{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=110,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
+				{"priority=190,ct_state=+new+trk,ip", "ct(commit,table=110,zone=65520)"},
+				{"priority=80,ip", "resubmit(,110)"},
+			},
 		},
 		{
 			uint8(110),
