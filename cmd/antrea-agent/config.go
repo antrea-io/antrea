@@ -43,6 +43,8 @@ type AgentConfig struct {
 	// Encapsulation mode for communication between Pods across Nodes, supported values:
 	// - vxlan (default)
 	// - geneve
+	// - gre
+	// - stt
 	TunnelType string `yaml:"tunnelType,omitempty"`
 	// Default MTU to use for the host gateway interface and the network interface of each
 	// Pod. If omitted, antrea-agent will default this value to 1450 to accommodate for tunnel

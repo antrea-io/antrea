@@ -33,6 +33,8 @@ const (
 	defaultServiceCIDR        = "10.96.0.0/12"
 	defaultMTUVXLAN           = 1450
 	defaultMTUGeneve          = 1450
+	defaultMTUGRE             = 1462
+	defaultMTUSTT             = 1500
 )
 
 type Options struct {
@@ -76,7 +78,8 @@ func (o *Options) validate(args []string) error {
 	if err != nil {
 		return fmt.Errorf("service CIDR %s is invalid", o.config.ServiceCIDR)
 	}
-	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel {
+	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
+		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
 		return fmt.Errorf("tunnel type %s is invalid", o.config.TunnelType)
 	}
 	if o.config.OVSDatapathType != ovsconfig.OVSDatapathSystem && o.config.OVSDatapathType != ovsconfig.OVSDatapathNetdev {
@@ -126,6 +129,10 @@ func (o *Options) setDefaults() {
 			o.config.DefaultMTU = defaultMTUVXLAN
 		} else if o.config.TunnelType == ovsconfig.GeneveTunnel {
 			o.config.DefaultMTU = defaultMTUGeneve
+		} else if o.config.TunnelType == ovsconfig.GRETunnel {
+			o.config.DefaultMTU = defaultMTUGRE
+		} else if o.config.TunnelType == ovsconfig.STTTunnel {
+			o.config.DefaultMTU = defaultMTUSTT
 		}
 	}
 }

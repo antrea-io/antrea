@@ -353,7 +353,7 @@ func (br *OVSBridge) createTunnelPort(
 	psk string,
 	externalIDs map[string]interface{}) (string, Error) {
 
-	if tunnelType != VXLANTunnel && tunnelType != GeneveTunnel {
+	if tunnelType != VXLANTunnel && tunnelType != GeneveTunnel && tunnelType != GRETunnel && tunnelType != STTTunnel {
 		return "", newInvalidArgumentsError("unsupported tunnel type: " + string(tunnelType))
 	}
 	if ofPortRequest < 0 || ofPortRequest > ofPortRequestMax {

@@ -93,7 +93,7 @@ the OVS bridge and installs the necessary flows in OVS.
 
 Antrea Agent includes two Kubernetes controllers:
 - The Node controller watches the Kubernetes API server for new Nodes, and
-creates an OVS (VXLAN or Geneve) tunnel to each remote Node.
+creates an OVS (VXLAN / Geneve / GRE / STT) tunnel to each remote Node.
 - The NetworkPolicy controller watches the computed NetworkPolicies from the
 Antrea Controller API, and installs OVS flows to implement the NetworkPolicies
 for the local Pods.
@@ -145,7 +145,7 @@ On every Node, Antrea Agent creates an OVS bridge (named `br-int` by default),
 and creates a veth pair for each Pod, with one end being in the Pod's network
 namespace and the other connected to the OVS bridge. On the OVS bridge, Antrea
 Agent also creates an internal port - `gw0` by default - to be the gateway of
-the Node's subnet, and a tunnel port `tun0` which is for creating VXLAN / Geneve
+the Node's subnet, and a tunnel port `tun0` which is for creating overlay
 tunnels to other Nodes.
 
 <img src="/docs/assets/node.svg.png" width="300" alt="Antrea Node Network">
@@ -161,8 +161,8 @@ to allocate IPs from the subnet to all local Pods. A local Pod is assigned an IP
 when the CNI ADD command is received for that Pod.
 
 For every remote Node, Antrea Agent adds an OVS flow to send the traffic to that
-Node through the appropriate VXLAN or Geneve tunnel. The flow matches the
-packets' destination IP against each Node's subnet.
+Node through the appropriate tunnel. The flow matches the packets' destination
+IP against each Node's subnet.
 
 ### Traffic walk
 
@@ -172,10 +172,9 @@ packets' destination IP against each Node's subnet.
 the OVS bridge directly.
 
 * ***Inter-node traffic*** Packets to a Pod on another Node will be first
-forwarded to the `tun0` port, encapsulated (with VXLAN or Geneve), and sent to
-the destination Node through the tunnel; then they will be decapsulated,
-injected through the `tun0` port to the OVS bridge, and finally forwarded to the
-destination Pod.
+forwarded to the `tun0` port, encapsulated, and sent to the destination Node
+through the tunnel; then they will be decapsulated, injected through the `tun0`
+port to the OVS bridge, and finally forwarded to the destination Pod.
 
 * ***Pod to external traffic*** Packets sent to an external IP or the Nodes'
 network will be forwarded to the `gw0` port (as it is the gateway of the local
@@ -195,7 +194,7 @@ forwarded through the `gw0` port, then `kube-proxy` will select one Service
 backend Pod to be the connection's destination and DNAT the packets to the Pod's
 IP and port. If the destination Pod is on the local Node the packets will be
 forwarded to the Pod directly; if it is on another Node the packets will be sent
-to that Node via the VXLAN / Geneve tunnel.
+to that Node via the tunnel.
 
 `kube-proxy` can be used in any supported mode: user-space iptables, or IPVS.
 See the [Kubernetes Service documentation](https://kubernetes.io/docs/concepts/services-networking/service)

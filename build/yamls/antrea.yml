@@ -211,6 +211,8 @@ data:
     # Encapsulation mode for communication between Pods across Nodes, supported values:
     # - vxlan (default)
     # - geneve
+    # - gre
+    # - stt
     #tunnelType: vxlan
 
     # Default MTU to use for the host gateway interface and the network interface of each Pod. If
@@ -235,7 +237,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-config-fh9t4g64dc
+  name: antrea-config-48gttf992h
   namespace: kube-system
 ---
 apiVersion: v1
@@ -318,7 +320,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-fh9t4g64dc
+          name: antrea-config-48gttf992h
         name: antrea-config
 ---
 apiVersion: apps/v1
@@ -458,7 +460,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-fh9t4g64dc
+          name: antrea-config-48gttf992h
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
