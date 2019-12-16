@@ -1060,11 +1060,6 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	defer func() {
 		klog.V(2).Infof("Finished syncing AppliedToGroup %s. (%v)", key, time.Since(startTime))
 	}()
-	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
-	nps, err := n.internalNetworkPolicyStore.GetByIndex(store.AppliedToGroupIndex, key)
-	if err != nil {
-		return fmt.Errorf("unable to filter internal NetworkPolicies for AppliedToGroup %s: %v", key, err)
-	}
 	podsByNodes := make(map[string]antreatypes.PodSet)
 	var pods []*v1.Pod
 	appGroupNodeNames := sets.String{}
@@ -1110,6 +1105,15 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	}
 	klog.V(2).Infof("Updating existing AppliedToGroup in store %s with Pods %v and Nodes %v", key, podsByNodes, updatedAppliedToGroup.SpanMeta)
 	n.appliedToGroupStore.Update(updatedAppliedToGroup)
+
+	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
+	// Note that this must be executed after storing the result, to ensure that
+	// both of the NetworkPolicies that referred it before storing it and the
+	// ones after storing it can get the right span.
+	nps, err := n.internalNetworkPolicyStore.GetByIndex(store.AppliedToGroupIndex, key)
+	if err != nil {
+		return fmt.Errorf("unable to filter internal NetworkPolicies for AppliedToGroup %s: %v", key, err)
+	}
 	// Enqueue syncInternalNetworkPolicy for each affected internal NetworkPolicy so
 	// that corresponding Node spans are updated.
 	for _, npObj := range nps {
