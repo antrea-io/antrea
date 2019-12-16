@@ -49,6 +49,20 @@ func (m *MockBridge) EXPECT() *MockBridgeMockRecorder {
 	return m.recorder
 }
 
+// AddFlows mocks base method
+func (m *MockBridge) AddFlows(arg0 []openflow.Flow) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddFlows indicates an expected call of AddFlows
+func (mr *MockBridgeMockRecorder) AddFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddFlows", reflect.TypeOf((*MockBridge)(nil).AddFlows), arg0)
+}
+
 // Connect mocks base method
 func (m *MockBridge) Connect(arg0 int, arg1 chan struct{}) error {
 	m.ctrl.T.Helper()

@@ -1,6 +1,7 @@
 package openflow
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -285,6 +286,54 @@ func (b *OFBridge) DeleteFlowsByCookie(cookieID, cookieMask uint64) error {
 
 func (b *OFBridge) IsConnected() bool {
 	return b.ofSwitch.IsReady()
+}
+
+func (b *OFBridge) AddFlows(flows []Flow) error {
+	// Create a new transaction.
+	tx := b.ofSwitch.NewTransaction(ofctrl.Atomic)
+	// Open a bundle on the OFSwitch.
+	if err := tx.Begin(); err != nil {
+		return err
+	}
+	// Add Openflow messages into the bundle. "Add" operation is async, the function returns error in constructing and
+	// sending BundleAdd message. It doesn't represent all Openflow entries are added into the bundle even if the function
+	// returns nil. The number of the Openflow entries successfully added into the bundle is returned from function "Complete".
+	for _, flow := range flows {
+		ofFlow := flow.(*ofFlow)
+		ofFlow.Flow.NextElem = ofFlow.lastAction
+		if err := tx.AddFlow(&ofFlow.Flow); err != nil {
+			// Close the bundle and abort it if there is error when adding the Openflow entries.
+			_, err := tx.Complete()
+			if err == nil {
+				tx.Abort()
+			}
+			return err
+		}
+	}
+
+	// Close the bundle before commit it to the OFSwitch.
+	count, err := tx.Complete()
+	if err != nil {
+		return err
+	} else if count != len(flows) {
+		// If the returned number is not as expected, there should be some errors returned during adding the Openflow
+		// entries into the bundle, abort the bundle.
+		tx.Abort()
+		return errors.New("failed to add all Openflow entries in one transaction, abort it")
+	}
+
+	// Commit the bundle to the OFSwitch. The "Commit" operation is sync, and the Openflow entries should be realized if
+	// there is no error returned.
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	// Update TableStatus after the flows are added.
+	for _, flow := range flows {
+		ofFlow := flow.(*ofFlow)
+		ofFlow.table.UpdateStatus(1)
+		ofFlow.UpdateInstallStatus(true)
+	}
+	return nil
 }
 
 // MaxRetry is a callback from OFController. It sets the max retry count that OFController attempts to connect to OFSwitch.

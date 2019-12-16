@@ -53,7 +53,7 @@ require (
 )
 
 replace (
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20191128031608-5339eaf55aa1
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20191223104501-cdb284f09a2e
 	// Octant is renamed from vmware/octant to vmware-tanzu/octant since v0.9.0.
 	// However, Octant v0.9.0 K8s API is not compatible with Antrea K8s API version.
 	// Furthermore, octant v0.8 and v0.9 do not check-in some generated code required for testing
