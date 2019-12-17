@@ -17,8 +17,10 @@ package ovsconfig
 type TunnelType string
 
 const (
-	GeneveTunnel = "geneve"
 	VXLANTunnel  = "vxlan"
+	GeneveTunnel = "geneve"
+	GRETunnel    = "gre"
+	STTTunnel    = "stt"
 
 	OVSDatapathSystem = "system"
 	OVSDatapathNetdev = "netdev"
