@@ -45,7 +45,7 @@ const (
 	priorityHigh   = uint16(210)
 	priorityNormal = uint16(200)
 	priorityLow    = uint16(190)
-	priorityMiss   = uint16(80)
+	priorityMiss   = uint16(0)
 
 	// Traffic marks
 	markTrafficFromTunnel  = 0
@@ -134,7 +134,7 @@ func (c *client) Delete(flow binding.Flow) error {
 // defaultFlows generates the default flows of all tables.
 func (c *client) defaultFlows() (flows []binding.Flow) {
 	for _, table := range c.pipeline {
-		flowBuilder := table.BuildFlow(priorityMiss).MatchProtocol(binding.ProtocolIP)
+		flowBuilder := table.BuildFlow(priorityMiss)
 		switch table.GetMissAction() {
 		case binding.TableMissActionNext:
 			flowBuilder = flowBuilder.Action().ResubmitToTable(table.GetNext())
@@ -462,7 +462,7 @@ func NewClient(bridgeName string) Client {
 	c := &client{
 		bridge: bridge,
 		pipeline: map[binding.TableIDType]binding.Table{
-			classifierTable:       bridge.CreateTable(classifierTable, spoofGuardTable, binding.TableMissActionNext),
+			classifierTable:       bridge.CreateTable(classifierTable, spoofGuardTable, binding.TableMissActionDrop),
 			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, conntrackTable, binding.TableMissActionDrop),
 			conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
 			conntrackStateTable:   bridge.CreateTable(conntrackStateTable, dnatTable, binding.TableMissActionNext),
