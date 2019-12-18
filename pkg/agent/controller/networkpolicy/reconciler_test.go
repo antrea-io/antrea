@@ -84,8 +84,11 @@ func TestReconcilerReconcile(t *testing.T) {
 		&interfacestore.InterfaceConfig{IP: net.ParseIP("2.2.2.2"), OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 1}})
 	protocolTCP := v1beta1.ProtocolTCP
 	port80 := int32(80)
+	// It represents named port that we can't resolve.
+	port0 := int32(0)
 	service1 := v1beta1.Service{Protocol: &protocolTCP, Port: &port80}
 	service2 := v1beta1.Service{Protocol: &protocolTCP}
+	service3 := v1beta1.Service{Protocol: &protocolTCP, Port: &port0}
 	_, ipNet1, _ := net.ParseCIDR("10.10.0.0/16")
 	_, ipNet2, _ := net.ParseCIDR("10.20.0.0/16")
 	_, ipNet3, _ := net.ParseCIDR("10.20.1.0/24")
@@ -173,6 +176,44 @@ func TestReconcilerReconcile(t *testing.T) {
 				To:       []types.Address{openflow.NewOFPortAddress(1)},
 				ExceptTo: nil,
 				Service:  servicesToNetworkPolicyPort([]v1beta1.Service{service1, service2}),
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-no-ports",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{},
+				},
+				Pods: appliedToGroup1,
+			},
+			&types.PolicyRule{
+				ID:        1,
+				Direction: networkingv1.PolicyTypeIngress,
+				From:      []types.Address{},
+				To:        []types.Address{openflow.NewOFPortAddress(1)},
+				Service:   nil,
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-unsupported-namedport",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{service3},
+				},
+				Pods: appliedToGroup1,
+			},
+			&types.PolicyRule{
+				ID:        1,
+				Direction: networkingv1.PolicyTypeIngress,
+				From:      []types.Address{},
+				To:        []types.Address{openflow.NewOFPortAddress(1)},
+				Service:   []*networkingv1.NetworkPolicyPort{},
 			},
 			false,
 		},
