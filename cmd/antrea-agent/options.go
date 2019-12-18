@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"io/ioutil"
 	"net"
 
@@ -35,6 +36,7 @@ const (
 	defaultMTUGeneve          = 1450
 	defaultMTUGRE             = 1462
 	defaultMTUSTT             = 1500
+	defaultMTU                = 1500
 )
 
 type Options struct {
@@ -85,6 +87,9 @@ func (o *Options) validate(args []string) error {
 	if o.config.OVSDatapathType != ovsconfig.OVSDatapathSystem && o.config.OVSDatapathType != ovsconfig.OVSDatapathNetdev {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
 	}
+	if ok, _ := types.GetPodEncapModeFromStr(o.config.PodTrafficEncapMode); !ok {
+		return fmt.Errorf("PodTrafficEncapMode %s is unknown", o.config.PodTrafficEncapMode)
+	}
 	return nil
 }
 
@@ -124,8 +129,15 @@ func (o *Options) setDefaults() {
 	if o.config.ServiceCIDR == "" {
 		o.config.ServiceCIDR = defaultServiceCIDR
 	}
+	if o.config.PodTrafficEncapMode == "" {
+		o.config.PodTrafficEncapMode = types.PodEncapModeEncap.String()
+	}
+
 	if o.config.DefaultMTU == 0 {
-		if o.config.TunnelType == ovsconfig.VXLANTunnel {
+		ok, encapMode := types.GetPodEncapModeFromStr(o.config.PodTrafficEncapMode)
+		if ok && !encapMode.SupportsEncap() {
+			o.config.DefaultMTU = defaultMTU
+		} else if o.config.TunnelType == ovsconfig.VXLANTunnel {
 			o.config.DefaultMTU = defaultMTUVXLAN
 		} else if o.config.TunnelType == ovsconfig.GeneveTunnel {
 			o.config.DefaultMTU = defaultMTUGeneve

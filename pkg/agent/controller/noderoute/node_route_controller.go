@@ -35,6 +35,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -69,6 +70,7 @@ type Controller struct {
 	// be enabled.
 	ipsecPSK    string
 	gatewayLink netlink.Link
+	routeClient *route.Client
 	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the route to the Node.
 	// If the flows of the Node are installed, the installedNodes must contains a key which is the host name.
@@ -89,6 +91,7 @@ func NewNodeRouteController(
 	config *types.NodeConfig,
 	tunnelType ovsconfig.TunnelType,
 	ipsecPSK string,
+	routeClient *route.Client,
 ) *Controller {
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	link, _ := netlink.LinkByName(config.GatewayConfig.Name)
@@ -106,7 +109,9 @@ func NewNodeRouteController(
 		gatewayLink:      link,
 		installedNodes:   &sync.Map{},
 		tunnelType:       tunnelType,
-		ipsecPSK:         ipsecPSK}
+		ipsecPSK:         ipsecPSK,
+		routeClient:      routeClient,
+	}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(cur interface{}) {
@@ -372,28 +377,35 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 	// methods.
 
 	if node, err := c.nodeLister.Get(nodeName); err != nil {
-		return c.deleteNodeRoute(nodeName)
+		return c.deleteNodeRoute(nodeName, node)
 	} else {
 		return c.addNodeRoute(nodeName, node)
 	}
 }
 
-func (c *Controller) deleteNodeRoute(nodeName string) error {
+func (c *Controller) deleteNodeRoute(nodeName string, node *v1.Node) error {
 	klog.Infof("Deleting routes and flows to Node %s", nodeName)
 
-	route, flowsAreInstalled := c.installedNodes.Load(nodeName)
-	if route != nil {
-		if err := netlink.RouteDel(route.(*netlink.Route)); err != nil {
+	entry, flowsAreInstalled := c.installedNodes.Load(nodeName)
+	routes := entry.([]*netlink.Route)
+	for _, r := range routes {
+		if err := netlink.RouteDel(r); err != nil {
 			return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 		}
-		c.installedNodes.Store(nodeName, nil)
 	}
+	c.installedNodes.Store(nodeName, nil)
 
 	if flowsAreInstalled {
 		if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
 			return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
 		}
 		c.installedNodes.Delete(nodeName)
+	} else if entry, flowsAreInstalled = c.installedNodes.Load(nodeName); entry == nil {
+		klog.Infof("Adding routes and flows to Node %s, podCIDR: %s, addresses: %v",
+			nodeName, node.Spec.PodCIDR, node.Status.Addresses)
+		if node.Spec.PodCIDR == "" {
+			klog.V(1).Infof("PodCIDR is empty for peer node %s", nodeName)
+		}
 	}
 
 	if c.ipsecPSK != "" {
@@ -440,19 +452,19 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 	peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
 	var tunOFPort int32
-	var remoteIP net.IP
-	if c.ipsecPSK != "" {
-		// Create a separate tunnel port for the Node, as OVS does not support flow
-		// based tunnel for IPSec.
-		if tunOFPort, err = c.createIPSecTunnelPort(nodeName, peerNodeIP); err != nil {
-			return err
+	remoteIP := peerNodeIP
+	if c.nodeConfig.PodEncapMode.UseTunnel(peerNodeIP, c.nodeConfig.NodeIPAddr) {
+		if c.ipsecPSK != "" {
+			// Create a separate tunnel port for the Node, as OVS does not support flow
+			// based tunnel for IPSec.
+			if tunOFPort, err = c.createIPSecTunnelPort(nodeName, peerNodeIP); err != nil {
+				return err
+			}
+			remoteIP = nil
+		} else {
+			// Use the default tunnel port.
+			tunOFPort = types.DefaultTunOFPort
 		}
-		remoteIP = nil
-	} else {
-		// Use the default tunnel port.
-		tunOFPort = types.DefaultTunOFPort
-		// Flow based tunnel. Set remote IP in the OVS flow.
-		remoteIP = peerNodeIP
 	}
 
 	if !flowsAreInstalled { // then install flows
@@ -469,21 +481,9 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 		c.installedNodes.Store(nodeName, nil)
 	}
 
-	// install route
-	route := &netlink.Route{
-		Dst:       peerPodCIDR,
-		Flags:     int(netlink.FLAG_ONLINK),
-		LinkIndex: c.gatewayLink.Attrs().Index,
-		Gw:        peerGatewayIP,
-	}
-
-	// RouteReplace will add the route if it's missing or update it if it's already
-	// present (as is the case for agent restarts).
-	if err = netlink.RouteReplace(route); err != nil {
-		return fmt.Errorf("failed to install route to Node %s with netlink: %v", nodeName, err)
-	}
-	c.installedNodes.Store(nodeName, route)
-	return nil
+	routes, err := c.routeClient.AddPeerCIDRRoute(peerPodCIDR, c.gatewayLink.Attrs().Index, peerNodeIP, peerGatewayIP)
+	c.installedNodes.Store(nodeName, routes)
+	return err
 }
 
 // createIPSecTunnelPort creates an IPSec tunnel port for the remote Node if the

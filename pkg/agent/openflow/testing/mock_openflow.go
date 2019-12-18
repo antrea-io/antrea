@@ -121,7 +121,7 @@ func (mr *MockClientMockRecorder) GetFlowTableStatus() *gomock.Call {
 }
 
 // Initialize mocks base method
-func (m *MockClient) Initialize(arg0 types.RoundInfo) (<-chan struct{}, error) {
+func (m *MockClient) Initialize(arg0 types.RoundInfo, _ *types.NodeConfig) (<-chan struct{}, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Initialize", arg0)
 	ret0, _ := ret[0].(<-chan struct{})

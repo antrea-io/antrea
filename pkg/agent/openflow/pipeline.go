@@ -50,9 +50,10 @@ const (
 	priorityMiss   = uint16(0)
 
 	// Traffic marks
-	markTrafficFromTunnel  = 0
-	markTrafficFromGateway = 1
-	markTrafficFromLocal   = 2
+	markTrafficFromTunnel    = 0
+	markTrafficFromGateway   = 1
+	markTrafficFromLocal     = 2
+	markTrafficFromPatchPort = 3
 )
 
 var (
@@ -91,6 +92,7 @@ const (
 
 var (
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
+	ReentranceMAC, _    = net.ParseMAC("de:ad:be:ef:de:ad")
 )
 
 type FlowOperations interface {
@@ -128,6 +130,7 @@ type client struct {
 	globalConjMatchFlowCache map[string]*conjMatchFlowContext
 	// replayMutex provides exclusive access to the OFSwitch to the ReplayFlows method.
 	replayMutex sync.RWMutex
+	nodeConfig  *types.NodeConfig
 }
 
 func (c *client) Add(flow binding.Flow) error {
@@ -189,6 +192,30 @@ func (c *client) gatewayClassifierFlow(gatewayOFPort uint32, category cookie.Cat
 		Action().LoadRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 		Action().ResubmitToTable(classifierTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
+// patchPortClassifierFlow generates the flow to mark IP traffic comes from the patch port and
+// are destined to local pods
+func (c *client) patchPortClassifierIPFlow(patchPort uint32, podIP net.IP) binding.Flow {
+	classifierTable := c.pipeline[classifierTable]
+	return classifierTable.BuildFlow(priorityNormal).
+		MatchInPort(patchPort).
+		MatchDstIP(podIP).
+		Action().LoadRegRange(int(marksReg), markTrafficFromPatchPort, binding.Range{0, 15}).
+		Action().ResubmitToTable(classifierTable.GetNext()).
+		Done()
+}
+
+// patchPortClassifierFlow generates the flow to mark ARP traffic comes from the patch port and
+// are destined to local pods
+func (c *client) patchPortClassifierARPFlow(patchPort uint32, podIP net.IP) binding.Flow {
+	classifierTable := c.pipeline[classifierTable]
+	return classifierTable.BuildFlow(priorityNormal).
+		MatchInPort(patchPort).
+		MatchARPTpa(podIP).
+		Action().LoadRegRange(int(marksReg), markTrafficFromPatchPort, binding.Range{0, 15}).
+		Action().ResubmitToTable(classifierTable.GetNext()).
 		Done()
 }
 
@@ -279,6 +306,18 @@ func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
 		Done()
 }
 
+// l2ForwardOutputFlow generates the flow that forward peer node traffic via gw0.
+// This flow supersedes default output flow because ovs by default auto-skips packets with output = input port.
+func (c *client) l2ForwardOutputToRemoteInPortOut(gwPort uint32, category cookie.Category) binding.Flow {
+	return c.pipeline[l2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+		MatchInPort(gwPort).MatchRegRange(int(portCacheReg), gwPort, ofPortRegRange).
+		Action().SetSrcMAC(ReentranceMAC).
+		Action().OutputInPort().
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
 // l3FlowsToPod generates the flow to rewrite MAC if the packet is received from tunnel port and destined for local Pods.
 func (c *client) l3FlowsToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP net.IP, podInterfaceMAC net.HardwareAddr, category cookie.Category) binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
@@ -334,6 +373,21 @@ func (c *client) l3FwdFlowToRemote(
 	// Bypass l2ForwardingCalcTable and tables for ingress rules (which won't
 	// apply to packets to remote Nodes).
 	return flowBuilder.Action().ResubmitToTable(conntrackCommitTable).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
+// l3FwdFlowToRemote generates the L3 forward flow on source node to support traffic to remote via gateway.
+func (c *client) l3FwdFlowToRemoteViaGw(
+	localGatewayMAC net.HardwareAddr,
+	peerSubnet net.IPNet,
+	category cookie.Category) binding.Flow {
+	l3FwdTable := c.pipeline[l3ForwardingTable]
+	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		MatchDstIPNet(peerSubnet).
+		Action().DecTTL().
+		Action().SetDstMAC(localGatewayMAC).
+		Action().ResubmitToTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }

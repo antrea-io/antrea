@@ -18,7 +18,10 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"github.com/vishvananda/netlink"
 	"io"
+	"k8s.io/klog"
+	"net"
 )
 
 const (
@@ -67,4 +70,45 @@ func GenerateContainerInterfaceName(podName string, podNamespace string) string 
 // tunnel to the Node, using the Node's name.
 func GenerateNodeTunnelInterfaceName(nodeName string) string {
 	return generateInterfaceName(GenerateNodeTunnelInterfaceKey(nodeName), nodeName, false)
+}
+
+// GetLocalNodeAddr return a local IP/mask that is on the path of default route.
+func GetDefaultLocalNodeAddr() (*net.IPNet, netlink.Link, error) {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return nil, nil, err
+	}
+	defer conn.Close()
+	localIP := conn.LocalAddr().(*net.UDPAddr).IP
+
+	linkList, err := netlink.LinkList()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var dev netlink.Link
+	var localAddr *net.IPNet
+	for _, link := range linkList {
+		addrList, err := netlink.AddrList(link, netlink.FAMILY_V4)
+		if err != nil {
+			klog.Errorf("Failed to get addr list for device %s", link)
+			continue
+		}
+		for _, addr := range addrList {
+			if addr.IP.Equal(localIP) {
+				localAddr = addr.IPNet
+				dev = link
+				break
+			}
+		}
+		if dev != nil {
+			break
+		}
+	}
+
+	err = nil
+	if dev == nil {
+		err = fmt.Errorf("Unable to find local ip and device")
+	}
+	return localAddr, dev, err
 }

@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -34,8 +35,11 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
+	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"github.com/vmware-tanzu/antrea/pkg/signals"
 )
 
 const (
@@ -49,7 +53,6 @@ const (
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
-	ovsBridge         string
 	hostGateway       string
 	tunnelType        ovsconfig.TunnelType
 	mtu               int
@@ -61,6 +64,8 @@ type Initializer struct {
 	serviceCIDR       *net.IPNet
 	ofClient          openflow.Client
 	ipsecPSK          string
+	podEncapMode      types.PodEncapMode
+	routeClient       *route.Client
 }
 
 func disableICMPSendRedirects(intfName string) error {
@@ -78,16 +83,18 @@ func NewInitializer(
 	ofClient openflow.Client,
 	k8sClient clientset.Interface,
 	ifaceStore interfacestore.InterfaceStore,
-	ovsBridge, serviceCIDR, hostGateway string,
+	serviceCIDR, hostGateway string,
 	mtu int,
 	tunnelType ovsconfig.TunnelType,
-	enableIPSecTunnel bool) *Initializer {
+	enableIPSecTunnel bool,
+	inPodEncapMode string,
+	routeClient *route.Client) *Initializer {
 	// Parse service CIDR configuration. serviceCIDR is checked in option.validate, so
 	// it should be a valid configuration here.
 	_, serviceCIDRNet, _ := net.ParseCIDR(serviceCIDR)
+	_, podEncapMode := types.GetPodEncapModeFromStr(inPodEncapMode)
 	return &Initializer{
 		ovsBridgeClient:   ovsBridgeClient,
-		ovsBridge:         ovsBridge,
 		hostGateway:       hostGateway,
 		tunnelType:        tunnelType,
 		mtu:               mtu,
@@ -96,6 +103,8 @@ func NewInitializer(
 		ifaceStore:        ifaceStore,
 		serviceCIDR:       serviceCIDRNet,
 		ofClient:          ofClient,
+		podEncapMode:      podEncapMode,
+		routeClient:       routeClient,
 	}
 }
 
@@ -200,7 +209,7 @@ func (i *Initializer) Initialize() error {
 	}
 
 	// Setup iptables chains and rules.
-	iptablesClient, err := iptables.NewClient(i.hostGateway)
+	iptablesClient, err := iptables.NewClient(i.hostGateway, i.nodeConfig)
 	if err != nil {
 		return fmt.Errorf("error creating iptables client: %v", err)
 	}
@@ -214,6 +223,10 @@ func (i *Initializer) Initialize() error {
 
 	// Install Openflow entries on OVS bridge
 	if err := i.initOpenFlowPipeline(); err != nil {
+		return err
+	}
+
+	if err := i.routeClient.Initialize(i.nodeConfig); err != nil {
 		return err
 	}
 
@@ -258,10 +271,9 @@ func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interva
 func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
 	// Setup all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundInfo)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
-		return err
 	}
 
 	// Setup flow entries for gateway interface, including classifier, skip spoof guard check,
@@ -274,7 +286,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	}
 
 	// When IPSec encyption is enabled, no flow is needed for the default tunnel interface.
-	if !i.enableIPSecTunnel {
+	if !i.enableIPSecTunnel && i.nodeConfig.PodEncapMode.SupportsEncap() {
 		// Setup flow entries for the default tunnel port interface.
 		if err := i.ofClient.InstallDefaultTunnelFlows(types.DefaultTunOFPort); err != nil {
 			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
@@ -342,11 +354,12 @@ func (i *Initializer) setupGatewayInterface() error {
 	} else {
 		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
 	}
+
 	// Idempotent operation to set the gateway's MTU: we perform this operation regardless of
 	// whether or not the gateway interface already exists, as the desired MTU may change across
 	// restarts.
 	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.mtu)
-	i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.mtu)
+	_ = i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.mtu)
 	// host link might not be queried at once after create OVS internal port, retry max 5 times with 1s
 	// delay each time to ensure the link is ready. If still failed after max retry return error.
 	link, err := func() (netlink.Link, error) {
@@ -373,6 +386,11 @@ func (i *Initializer) setupGatewayInterface() error {
 	if err := netlink.LinkSetUp(link); err != nil {
 		klog.Errorf("Failed to set host link for %s up: %v", i.hostGateway, err)
 		return err
+	}
+
+	// BumpOnWire mode, CIDR unknown
+	if i.nodeConfig.PodEncapMode == types.PodEncapModeNoEncapMasq {
+		return nil
 	}
 
 	// Configure host gateway IP using the first address of node localSubnet
@@ -410,11 +428,30 @@ func (i *Initializer) setupGatewayInterface() error {
 		klog.Errorf("Failed to set gateway interface %s with address %v: %v", i.hostGateway, gwAddr, err)
 		return err
 	}
+
+	// cleanup host gateway on exit
+	signals.AddCleanup(func() error {
+		klog.Infof("Cleaning up link %v", link.Attrs().Name)
+		return netlink.LinkDel(link)
+	})
 	return nil
 }
 
 func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 	tunnelIface, portExists := i.ifaceStore.GetInterface(tunnelPortName)
+
+	if !i.nodeConfig.PodEncapMode.SupportsEncap() {
+		if portExists {
+			if err := i.ovsBridgeClient.DeletePort(tunnelIface.PortUUID); err != nil {
+				klog.Errorf("Failed to removed tunnel port %s in NoEncapMode, err %s", tunnelPortName, err)
+			} else {
+				klog.V(2).Infof("Tunnel port %s removed for NoEncapMode", tunnelPortName)
+			}
+			i.ifaceStore.DeleteInterface(tunnelIface)
+		}
+		return nil
+	}
+
 	if portExists {
 		klog.V(2).Infof("Tunnel port %s already exists on OVS", tunnelPortName)
 		return nil
@@ -454,11 +491,93 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return err
 	}
 
-	i.nodeConfig = &types.NodeConfig{Name: nodeName, PodCIDR: localSubnet}
+	localAddr, dev, err := util.GetDefaultLocalNodeAddr()
+	if err != nil {
+		return fmt.Errorf("initNodeLocalConfig | %v", err)
+	}
+
+	servRtTable := &types.ServiceRtTableConfig{Idx: 254, Name: "main"}
+	if i.podEncapMode.SupportsNoEncap() {
+		servRtTable.Idx = 300
+		servRtTable.Name = "Antrea-service"
+	}
+	i.nodeConfig = &types.NodeConfig{Name: nodeName, PodCIDR: localSubnet, NodeIPAddr: localAddr, NodeDefaultDev: dev, PodEncapMode: i.podEncapMode, ServiceCIDR: i.serviceCIDR, ServiceRtTable: servRtTable}
+	klog.Infof("Initialized NodeConfig=%v", i.nodeConfig)
 	return nil
 }
 
-// getNodeName returns the node's name used in Kubernetes, based on the priority:
+func (i *Initializer) setupServiceRouteTable() error {
+	if i.nodeConfig.ServiceRtTable.IsMainTable() {
+		return nil
+	}
+	f, err := os.OpenFile("/etc/iproute2/rt_tables", os.O_RDWR|os.O_APPEND, 0)
+	if err != nil {
+		klog.Fatalf("Unable to create service route table, err %v", err)
+	}
+	defer f.Close()
+
+	oldTablesRaw := make([]byte, 1024)
+	_, _ = f.Read(oldTablesRaw)
+	oldTables := string(oldTablesRaw)
+	newTable := fmt.Sprintf("%d/t%s", i.nodeConfig.ServiceRtTable.Idx, i.nodeConfig.ServiceRtTable.Name)
+
+	if strings.Index(oldTables, newTable) != -1 {
+		oldTables = strings.Replace(oldTables, newTable, "", -1)
+	} else {
+		if _, err := f.WriteString(newTable); err != nil {
+			klog.Fatalf("Failed to add antrea service route table, err=%v", err)
+		}
+	}
+
+	signals.AddCleanup(func() error {
+		klog.Infof("Cleaning up antrea service table")
+		f, err := os.OpenFile("/etc/iproute2/rt_tables", os.O_WRONLY, 0)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = f.WriteString(oldTables)
+		return err
+	})
+
+	gwConfig := i.nodeConfig.GatewayConfig
+	if gwConfig != nil && i.nodeConfig.PodCIDR != nil {
+		// add local podCIDR if applicable to service rt table
+		gw, err := netlink.LinkByName(gwConfig.Name)
+		if err != nil {
+			klog.Fatalf("Failed to find local gateway %s, err=%v", gwConfig, err)
+		}
+		route := &netlink.Route{
+			LinkIndex: gw.Attrs().Index,
+			Scope:     netlink.SCOPE_LINK,
+			Src:       gwConfig.IP,
+			Dst:       i.nodeConfig.PodCIDR,
+			Table:     i.nodeConfig.ServiceRtTable.Idx,
+		}
+		if err := netlink.RouteAdd(route); err != nil {
+			klog.Fatalf("Failed to add link route to service taable, err=%v", err)
+		}
+	}
+
+	// create ip rule to select route table
+	ipRule := netlink.NewRule()
+	ipRule.IifName = i.hostGateway
+	ipRule.Mark = iptables.RtTblSelectorValue
+	ipRule.Mark = iptables.RtTblSelectorValue
+	ipRule.Table = i.nodeConfig.ServiceRtTable.Idx
+
+	err = netlink.RuleAdd(ipRule)
+	if err != nil {
+		klog.Fatalf("Failed to create ip rule for service route table, err=%v", err)
+	}
+
+	signals.AddCleanup(func() error {
+		klog.Infof("Cleaning up ip rule %s", ipRule)
+		return netlink.RuleDel(ipRule)
+	})
+	return nil
+}
+
 // - Environment variable NODE_NAME, which should be set by Downward API
 // - OS's hostname
 func getNodeName() (string, error) {

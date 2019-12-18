@@ -44,3 +44,11 @@ func TestGenerateContainerInterfaceName(t *testing.T) {
 		t.Errorf("failed to differentiate interfaces with pods has the same prefix")
 	}
 }
+
+func TestGetDefaultLocalNodeAddr(t *testing.T) {
+	ip, dev, err := GetDefaultLocalNodeAddr()
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("IP obtained %s, %s", ip, dev)
+}

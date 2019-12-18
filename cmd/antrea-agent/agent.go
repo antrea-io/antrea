@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"time"
 
 	"k8s.io/client-go/informers"
@@ -68,6 +69,7 @@ func run(o *Options) error {
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 
 	ofClient := openflow.NewClient(o.config.OVSBridge)
+	routeClient := route.NewClient()
 
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -78,12 +80,13 @@ func run(o *Options) error {
 		ofClient,
 		k8sClient,
 		ifaceStore,
-		o.config.OVSBridge,
 		o.config.ServiceCIDR,
 		o.config.HostGateway,
 		o.config.DefaultMTU,
 		ovsconfig.TunnelType(o.config.TunnelType),
-		o.config.EnableIPSecTunnel)
+		o.config.EnableIPSecTunnel,
+		o.config.PodTrafficEncapMode,
+		routeClient)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -103,7 +106,8 @@ func run(o *Options) error {
 		ifaceStore,
 		nodeConfig,
 		ovsconfig.TunnelType(o.config.TunnelType),
-		agentInitializer.GetIPSecPSK())
+		agentInitializer.GetIPSecPSK(),
+		routeClient)
 
 	// podUpdates is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the

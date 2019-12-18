@@ -498,5 +498,5 @@ func init() {
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 	gwMAC, _ := net.ParseMAC("00:00:00:00:00:01")
 	gateway := &types.GatewayConfig{Name: "gw", IP: gwIP, MAC: gwMAC}
-	testNodeConfig = &types.NodeConfig{testBr, nodeName, nodePodCIDR, gateway}
+	testNodeConfig = &types.NodeConfig{Bridge: testBr, Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: gateway}
 }

@@ -76,11 +76,12 @@ docker-test-integration:
 	@docker run --privileged --rm -it \
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
+		-e "INCONTAINER=true" \
 		-w /usr/src/github.com/vmware-tanzu/antrea \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
 		-v $(CURDIR):/usr/src/github.com/vmware-tanzu/antrea:ro \
-		antrea/test bash -c "start_ovs_netdev --no-monitor && make test-integration && chown -R $(USERID):$(GRPID) /tmp/gopath /tmp/gocache"
+		antrea/test bash -c "start_ovs_netdev --no-monitor && make test-integration ; chown -R $(USERID):$(GRPID) /tmp/gopath /tmp/gocache"
 
 .PHONY: docker-tidy
 docker-tidy: $(DOCKER_CACHE)

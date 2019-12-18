@@ -16,6 +16,9 @@ package iptables
 
 import (
 	"fmt"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/signals"
 
 	"github.com/coreos/go-iptables/iptables"
 	"k8s.io/klog"
@@ -24,15 +27,21 @@ import (
 const (
 	NATTable    = "nat"
 	FilterTable = "filter"
+	MangleTable = "mangle"
+	RawTable    = "raw"
 
 	AcceptTarget     = "ACCEPT"
 	MasqueradeTarget = "MASQUERADE"
 	MarkTarget       = "MARK"
+	ConnTrackTarget  = "CT"
 
+	PreRoutingChain        = "PREROUTING"
 	ForwardChain           = "FORWARD"
 	PostRoutingChain       = "POSTROUTING"
 	AntreaForwardChain     = "ANTREA-FORWARD"
 	AntreaPostRoutingChain = "ANTREA-POSTROUTING"
+	AntreaMangleChain      = "ANTREA-MANGLE"
+	AntreaRawChain         = "ANTREA-RAW"
 )
 
 var (
@@ -43,16 +52,21 @@ var (
 	masqueradeBit   = uint(10)
 	masqueradeValue = 1 << masqueradeBit
 	masqueradeMark  = fmt.Sprintf("%#08x/%#08x", masqueradeValue, masqueradeValue)
+
+	// select which route table to use to forward service traffic back to host gateway gw0
+	RtTblSelectorValue = 1 << 11
+	rtTblSelectorMark  = fmt.Sprintf("%#08x/%#08x", RtTblSelectorValue, RtTblSelectorValue)
 )
 
 // Client knows how to set up host iptables rules Antrea requires.
 type Client struct {
 	ipt         *iptables.IPTables
 	hostGateway string
+	nodeConfig  *types.NodeConfig
 }
 
 // NewClient constructs a Client instance for iptables operations.
-func NewClient(hostGateway string) (*Client, error) {
+func NewClient(hostGateway string, nodeConfig *types.NodeConfig) (*Client, error) {
 	ipt, err := iptables.New()
 	if err != nil {
 		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
@@ -60,6 +74,7 @@ func NewClient(hostGateway string) (*Client, error) {
 	return &Client{
 		ipt:         ipt,
 		hostGateway: hostGateway,
+		nodeConfig:  nodeConfig,
 	}, nil
 }
 
@@ -92,6 +107,7 @@ func (c *Client) SetupRules() error {
 		// Accept external-to-Pod traffic. This allows NodePort traffic to be forwarded even if the default FORWARD policy is DROP.
 		{FilterTable, AntreaForwardChain, []string{"!", "-i", c.hostGateway, "-o", c.hostGateway}, AcceptTarget, nil, "Antrea: accept external to pod traffic"},
 		// Mark Pod-to-external traffic which are received via host gateway interface but not sent via it for later masquerading in NAT table.
+		// TBD, qualifies it with peer CIDRs in no encap mode.
 		{FilterTable, AntreaForwardChain, []string{"-i", c.hostGateway, "!", "-o", c.hostGateway}, MarkTarget, []string{"--set-xmark", masqueradeMark}, "Antrea: mark pod to external traffic"},
 		// Accept Pod-to-external traffic which are received via host gateway interface but not sent via it.
 		{FilterTable, AntreaForwardChain, []string{"-i", c.hostGateway, "!", "-o", c.hostGateway}, AcceptTarget, nil, "Antrea: accept pod to external traffic"},
@@ -99,6 +115,15 @@ func (c *Client) SetupRules() error {
 		{NATTable, PostRoutingChain, nil, AntreaPostRoutingChain, nil, "Antrea: jump to Antrea postrouting rules"},
 		// Masquerade traffic requiring SNAT (has masqueradeMark set).
 		{NATTable, AntreaPostRoutingChain, []string{"-m", "mark", "--mark", masqueradeMark}, MasqueradeTarget, nil, "Antrea: masquerade traffic requiring SNAT"},
+	}
+
+	if c.nodeConfig.PodEncapMode.SupportsNoEncap() {
+		rules = append(rules,
+			rule{table: MangleTable, chain: PreRoutingChain, parameters: nil, target: AntreaMangleChain, targetOptions: nil, comment: "Antrea: jump to Antrea mangle rule"},
+			rule{table: MangleTable, chain: AntreaMangleChain, parameters: []string{"-i", c.hostGateway, "-d", c.nodeConfig.ServiceCIDR.String()},
+				target: MarkTarget, targetOptions: []string{"--set-xmark", rtTblSelectorMark}, comment: "Andrea: mark service traffic"},
+			rule{table: RawTable, chain: PreRoutingChain, parameters: nil, target: AntreaRawChain, targetOptions: nil, comment: "Antrea: jump to Antrea raw rule"},
+			rule{table: RawTable, chain: AntreaRawChain, parameters: []string{"-i", c.hostGateway, "-m", "mac", "--mac-source", openflow.ReentranceMAC.String()}, target: ConnTrackTarget, targetOptions: []string{"--notrack"}, comment: "Antrea: reentry pod traffic skip conntrack"})
 	}
 
 	// Ensure all the chains involved exist.
@@ -119,6 +144,23 @@ func (c *Client) SetupRules() error {
 			return err
 		}
 	}
+
+	signals.AddCleanup(func() error {
+		klog.Infof("Cleaning up iptables")
+		for idx := range rules {
+			rule := rules[len(rules)-1-idx]
+			var ruleSpec []string
+			ruleSpec = append(ruleSpec, rule.parameters...)
+			ruleSpec = append(ruleSpec, "-j", rule.target)
+			ruleSpec = append(ruleSpec, rule.targetOptions...)
+			ruleSpec = append(ruleSpec, "-m", "comment", "--comment", rule.comment)
+			if err := c.ipt.Delete(rule.table, rule.chain, ruleSpec...); err != nil {
+				return err
+			}
+		}
+		// no bother with unreferenced empty chains
+		return nil
+	})
 	return nil
 }
 

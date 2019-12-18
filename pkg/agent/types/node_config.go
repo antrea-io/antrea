@@ -15,6 +15,8 @@
 package types
 
 import (
+	"fmt"
+	"github.com/vishvananda/netlink"
 	"net"
 )
 
@@ -30,9 +32,37 @@ type GatewayConfig struct {
 	Name string
 }
 
+func (g *GatewayConfig) String() string {
+	return fmt.Sprintf("%s: IP %s, MAC %s", g.Name, g.IP, g.MAC)
+}
+
+type ServiceRtTableConfig struct {
+	Idx  int
+	Name string
+}
+
+func (s *ServiceRtTableConfig) String() string {
+	return fmt.Sprintf("%s: idx %d", s.Name, s.Idx)
+}
+
+func (s *ServiceRtTableConfig) IsMainTable() bool {
+	return s.Name == "main"
+}
+
 type NodeConfig struct {
-	Bridge  string
-	Name    string
-	PodCIDR *net.IPNet
-	*GatewayConfig
+	Bridge         string
+	Name           string
+	PodCIDR        *net.IPNet
+	NodeIPAddr     *net.IPNet
+	NodeDefaultDev netlink.Link
+	PodEncapMode   PodEncapMode
+	GatewayConfig  *GatewayConfig
+	ServiceCIDR    *net.IPNet
+	ServiceRtTable *ServiceRtTableConfig
+}
+
+func (n *NodeConfig) String() string {
+	return fmt.Sprintf("\nNodeName: %s\nPodCIDR: %s\nNodeIP: %s\nDev:%s\nEncapMode: %s\nGateway: %s\n"+
+		"ServiceCIDR: %s\nServieRT: %s", n.Name, n.PodCIDR, n.NodeIPAddr, n.NodeDefaultDev.Attrs().Name, n.PodEncapMode, n.GatewayConfig,
+		n.ServiceCIDR, n.ServiceRtTable)
 }

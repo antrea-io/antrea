@@ -22,7 +22,10 @@ import (
 	"k8s.io/klog"
 )
 
-var capturedSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT}
+var (
+	capturedSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT}
+	CleanupFns      = make([]func() error, 0)
+)
 
 // RegisterSignalHandlers registers a signal handler for capturedSignals and starts a goroutine that
 // will block until a signal is received. The first signal received will cause the stopCh channel to
@@ -33,7 +36,13 @@ func RegisterSignalHandlers() <-chan struct{} {
 	stopCh := make(chan struct{})
 
 	go func() {
-		<-notifyCh
+		s := <-notifyCh
+		klog.Infof("Got signal %v, cleaning up", s)
+		for _, fn := range CleanupFns {
+			if err := fn(); err != nil {
+				klog.Errorf("cleanup failed, err %v", err)
+			}
+		}
 		close(stopCh)
 		<-notifyCh
 		klog.Warning("Received second signal, will force exit")
@@ -44,4 +53,8 @@ func RegisterSignalHandlers() <-chan struct{} {
 	signal.Notify(notifyCh, capturedSignals...)
 
 	return stopCh
+}
+
+func AddCleanup(fn func() error) {
+	CleanupFns = append(CleanupFns, fn)
 }
