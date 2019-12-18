@@ -160,7 +160,14 @@ func ipsToOFAddresses(ipAddresses sets.String, ipBlocks []v1beta1.IPBlock) ([]ty
 }
 
 func servicesToNetworkPolicyPort(in []v1beta1.Service) []*networkingv1.NetworkPolicyPort {
-	var out []*networkingv1.NetworkPolicyPort
+	// Empty or nil slice means allowing all ports in Kubernetes.
+	// nil must be returned to meet ofClient's expectation for this behavior.
+	if len(in) == 0 {
+		return nil
+	}
+	// It makes sure out won't be nil, so that if only named ports are defined,
+	// we don't enforce the rule as allowing all ports by mistake.
+	out := make([]*networkingv1.NetworkPolicyPort, 0, len(in))
 	for _, s := range in {
 		service := &networkingv1.NetworkPolicyPort{}
 		if s.Protocol != nil {
@@ -169,7 +176,13 @@ func servicesToNetworkPolicyPort(in []v1beta1.Service) []*networkingv1.NetworkPo
 			service.Protocol = &proto
 		}
 		if s.Port != nil {
-			// We have converted named port to int port in antrea-controller.
+			// 0 is invalid and not allowed by kube-apiserver.
+			// If we get 0, it must be a named port and antrea-controller fails to convert it.
+			// Before we can support named port, we must discard it as port 0 will be ignored
+			// by Openflow and will result in matching all ports.
+			if *s.Port == 0 {
+				continue
+			}
 			// Here it's just to adapt the PolicyRule type, and can be removed
 			// once switching to use Antrea Service type.
 			port := intstr.FromInt(int(*s.Port))
