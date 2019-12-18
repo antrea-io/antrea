@@ -66,14 +66,18 @@ type Controller struct {
 }
 
 // NewNetworkPolicyController returns a new *Controller.
-func NewNetworkPolicyController(antreaClient versioned.Interface, ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, nodeName string) *Controller {
+func NewNetworkPolicyController(antreaClient versioned.Interface,
+	ofClient openflow.Client,
+	ifaceStore interfacestore.InterfaceStore,
+	nodeName string,
+	podUpdates <-chan v1beta1.PodReference) *Controller {
 	c := &Controller{
 		antreaClient: antreaClient,
 		nodeName:     nodeName,
 		queue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
 		reconciler:   newReconciler(ofClient, ifaceStore),
 	}
-	c.ruleCache = newRuleCache(c.enqueueRule)
+	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
 	return c
 }
 

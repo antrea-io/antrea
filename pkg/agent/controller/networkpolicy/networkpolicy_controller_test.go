@@ -32,8 +32,8 @@ import (
 
 func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
-
-	controller := NewNetworkPolicyController(clientset, nil, nil, "node1")
+	ch := make(chan v1beta1.PodReference, 100)
+	controller := NewNetworkPolicyController(clientset, nil, nil, "node1", ch)
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
 	return controller, clientset, reconciler
