@@ -100,7 +100,7 @@ test fails. You can choose to dump this information unconditionally with
 
 ## Running the e2e tests on a Kind cluster
 
-Refer to this [document](/docs/antrea.md) for instructions on how to create a
+Refer to this [document](/docs/kind.md) for instructions on how to create a
 Kind cluster and use Antrea as the CNI. You need at least one control-plane
 (master) Node and one worker Node. Before running the Go e2e tests, you will
 also need to copy the Antrea manifest to the master Docker container:
