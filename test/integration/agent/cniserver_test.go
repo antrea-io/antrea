@@ -44,6 +44,7 @@ import (
 	agenttypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnimsg "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
 )
@@ -465,7 +466,16 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := interfacestore.NewInterfaceStore()
-	tester.server = cniserver.New(testSock, "", 1450, "", testNodeConfig, ovsServiceMock, ofServiceMock, ifaceStore, k8sFake.NewSimpleClientset())
+	tester.server = cniserver.New(testSock,
+		"",
+		1450,
+		"",
+		testNodeConfig,
+		ovsServiceMock,
+		ofServiceMock,
+		ifaceStore,
+		k8sFake.NewSimpleClientset(),
+		make(chan v1beta1.PodReference, 100))
 	ctx, _ := context.WithCancel(context.Background())
 	tester.ctx = ctx
 	return tester

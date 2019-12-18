@@ -40,6 +40,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
@@ -97,6 +98,8 @@ type CNIServer struct {
 	kubeClient           clientset.Interface
 	containerAccess      *containerAccessArbitrator
 	podConfigurator      *podConfigurator
+	// podUpdates is a channel for notifying Pod updates to other components, i.e NetworkPolicyController.
+	podUpdates chan<- v1beta1.PodReference
 }
 
 const (
@@ -403,6 +406,10 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (
 		klog.Errorf("Failed to configure container %s interface: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
+
+	// Notify the Pod update event to required components.
+	s.podUpdates <- v1beta1.PodReference{Name: podName, Namespace: podNamespace}
+
 	result.DNS = cniConfig.DNS
 	var resultBytes bytes.Buffer
 	result.PrintTo(&resultBytes)
@@ -488,6 +495,7 @@ func New(
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	kubeClient clientset.Interface,
+	podUpdates chan<- v1beta1.PodReference,
 ) *CNIServer {
 	return &CNIServer{
 		cniSocket:            cniSocket,
@@ -499,6 +507,7 @@ func New(
 		kubeClient:           kubeClient,
 		containerAccess:      newContainerAccessArbitrator(),
 		podConfigurator:      newPodConfigurator(ovsBridgeClient, ofClient, ifaceStore, nodeConfig.GatewayConfig.MAC, ovsDatapathType),
+		podUpdates:           podUpdates,
 	}
 }
 

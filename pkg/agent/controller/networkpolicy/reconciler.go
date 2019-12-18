@@ -42,12 +42,26 @@ type Reconciler interface {
 	Forget(ruleID string) error
 }
 
-// lastRealized is the struct cached by reconciler.
+// lastRealized is the struct cached by reconciler. It's used to track the
+// actual state of rules we have enforced, so that we can know how to reconcile
+// a rule when it's updated/removed.
+// It includes the last version of CompletedRule the reconciler has realized
+// and the related runtime information including the unique ofID, the Openflow
+// ports or the IP addresses of the target Pods got from the InterfaceStore.
 type lastRealized struct {
 	// ofID identifies a rule in Openflow implementation.
 	ofID uint32
 	// The desired state of a policy rule.
 	*CompletedRule
+	// The OFPort set we have realized for target Pods. We need to record them
+	// because this info will be removed from InterfaceStore after CNI DEL, we
+	// can't know which OFPort to delete when deleting a Pod from the rule. So
+	// we compare the last realized OFPorts and the new desired one to identify
+	// difference, which could also cover the stale OFPorts produced by the case
+	// that Kubelet calls CNI ADD for a Pod more than once due to non CNI issues.
+	podOFPorts sets.Int32
+	// The IP set we have realized for target Pods. Same as podOFPorts.
+	podIPs sets.String
 }
 
 // reconciler implements Reconciler.
@@ -106,17 +120,31 @@ func (r *reconciler) add(rule *CompletedRule) error {
 			r.idAllocator.release(ofID)
 		}
 	}()
+
+	lastRealized := &lastRealized{ofID: ofID, CompletedRule: rule}
 	// TODO: Update types.PolicyRule to use Antrea Direction type.
 	var direction networkingv1.PolicyType
 	var from, exceptFrom, to, exceptTo []types.Address
 	if rule.Direction == v1beta1.DirectionIn {
 		direction = networkingv1.PolicyTypeIngress
 		from, exceptFrom = ipsToOFAddresses(rule.FromAddresses, rule.From.IPBlocks)
-		to = r.podsToOFPortAddresses(rule.Pods)
+		ofPorts := r.podsToOFPorts(rule.Pods)
+		// "to" must not be nil, otherwise destination address won't be a match condition in ofClient.
+		to = make([]types.Address, 0, len(ofPorts))
+		for ofPort := range ofPorts {
+			to = append(to, openflow.NewOFPortAddress(ofPort))
+		}
+		lastRealized.podOFPorts = ofPorts
 	} else {
 		direction = networkingv1.PolicyTypeEgress
-		from = r.podsToIPAddresses(rule.Pods)
+		ips := r.podsToIPs(rule.Pods)
+		// "from" must not be nil, otherwise source address won't be a match condition in ofClient.
+		from = make([]types.Address, 0, len(ips))
+		for ip := range ips {
+			from = append(from, openflow.NewIPAddress(net.ParseIP(ip)))
+		}
 		to, exceptTo = ipsToOFAddresses(rule.ToAddresses, rule.To.IPBlocks)
+		lastRealized.podIPs = ips
 	}
 
 	// TODO: Update types.PolicyRule to use Antrea Service type.
@@ -138,7 +166,7 @@ func (r *reconciler) add(rule *CompletedRule) error {
 		return fmt.Errorf("error installing ofRule %v: %v", ofRule.ID, err)
 	}
 
-	r.lastRealizeds.Store(rule.ID, &lastRealized{ofID, rule})
+	r.lastRealizeds.Store(rule.ID, lastRealized)
 	return nil
 }
 
@@ -200,6 +228,8 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 	// As rule identifier is calculated from the rule's content, the update can
 	// only happen to Group members.
 	var addedFrom, addedTo, deletedFrom, deletedTo []types.Address
+	var newOFPorts sets.Int32
+	var newIPs sets.String
 	if newRule.Direction == v1beta1.DirectionIn {
 		for a := range newRule.FromAddresses.Difference(lastRealized.FromAddresses) {
 			addedFrom = append(addedFrom, openflow.NewIPAddress(net.ParseIP(a)))
@@ -207,11 +237,21 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 		for a := range lastRealized.FromAddresses.Difference(newRule.FromAddresses) {
 			deletedFrom = append(deletedFrom, openflow.NewIPAddress(net.ParseIP(a)))
 		}
-		addedTo = r.podsToOFPortAddresses(newRule.Pods.Difference(lastRealized.Pods))
-		deletedTo = r.podsToOFPortAddresses(lastRealized.Pods.Difference(lastRealized.Pods))
+		newOFPorts = r.podsToOFPorts(newRule.Pods)
+		for p := range newOFPorts.Difference(lastRealized.podOFPorts) {
+			addedTo = append(addedTo, openflow.NewOFPortAddress(p))
+		}
+		for p := range lastRealized.podOFPorts.Difference(newOFPorts) {
+			deletedTo = append(deletedTo, openflow.NewOFPortAddress(p))
+		}
 	} else {
-		addedFrom = r.podsToIPAddresses(newRule.Pods.Difference(lastRealized.Pods))
-		deletedFrom = r.podsToIPAddresses(lastRealized.Pods.Difference(newRule.Pods))
+		newIPs = r.podsToIPs(newRule.Pods)
+		for ip := range newIPs.Difference(lastRealized.podIPs) {
+			addedFrom = append(addedTo, openflow.NewIPAddress(net.ParseIP(ip)))
+		}
+		for ip := range lastRealized.podIPs.Difference(newIPs) {
+			deletedFrom = append(addedTo, openflow.NewIPAddress(net.ParseIP(ip)))
+		}
 		for a := range newRule.ToAddresses.Difference(lastRealized.ToAddresses) {
 			addedTo = append(addedTo, openflow.NewIPAddress(net.ParseIP(a)))
 		}
@@ -245,6 +285,8 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 		}
 	}
 
+	lastRealized.podOFPorts = newOFPorts
+	lastRealized.podIPs = newIPs
 	lastRealized.CompletedRule = newRule
 	return nil
 }
@@ -276,42 +318,34 @@ func (r *reconciler) Forget(ruleID string) error {
 	return nil
 }
 
-func (r *reconciler) podsToOFPortAddresses(pods podSet) []types.Address {
-	// If pods is nil, nil must be returned, can't be empty slice.
-	if pods == nil {
-		return nil
-	}
-	addresses := make([]types.Address, 0, len(pods))
+func (r *reconciler) podsToOFPorts(pods podSet) sets.Int32 {
+	ofPorts := sets.NewInt32()
 	for pod := range pods {
 		iface, found := r.ifaceStore.GetContainerInterface(pod.Name, pod.Namespace)
 		if !found {
-			// This might be because the container has been deleted during realization.
-			klog.Warningf("Can't find interface for Pod %s/%s, skipping", pod.Namespace, pod.Name)
+			// This might be because the container has been deleted during realization or hasn't been set up yet.
+			klog.Infof("Can't find interface for Pod %s/%s, skipping", pod.Namespace, pod.Name)
 			continue
 		}
 		klog.V(2).Infof("Got OFPort %v for Pod %s/%s", iface.OFPort, pod.Namespace, pod.Name)
-		addresses = append(addresses, openflow.NewOFPortAddress(iface.OFPort))
+		ofPorts.Insert(iface.OFPort)
 	}
-	return addresses
+	return ofPorts
 }
 
-func (r *reconciler) podsToIPAddresses(pods podSet) []types.Address {
-	// If pods is nil, nil must be returned, can't be empty slice.
-	if pods == nil {
-		return nil
-	}
-	addresses := make([]types.Address, 0, len(pods))
+func (r *reconciler) podsToIPs(pods podSet) sets.String {
+	ips := sets.NewString()
 	for pod := range pods {
 		iface, found := r.ifaceStore.GetContainerInterface(pod.Name, pod.Namespace)
 		if !found {
-			// This might be because the container has been deleted during realization.
-			klog.Warningf("Can't find interface for Pod %s/%s, skipping", pod.Namespace, pod.Name)
+			// This might be because the container has been deleted during realization or hasn't been set up yet.
+			klog.Infof("Can't find interface for Pod %s/%s, skipping", pod.Namespace, pod.Name)
 			continue
 		}
 		klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IP, pod.Namespace, pod.Name)
-		addresses = append(addresses, openflow.NewIPAddress(iface.IP))
+		ips.Insert(iface.IP.String())
 	}
-	return addresses
+	return ips
 }
 
 func antreaIPNetToIPNet(in v1beta1.IPNet) net.IPNet {

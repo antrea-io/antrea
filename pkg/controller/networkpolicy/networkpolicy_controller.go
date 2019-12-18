@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1075,8 +1075,8 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	// Retrieve all Pods matching the podSelector.
 	pods, err = n.podLister.Pods(appliedToGroup.Selector.Namespace).List(selector)
 	for _, pod := range pods {
-		if pod.Status.PodIP == "" {
-			// No need to process Pod when IPAddress is unset.
+		if pod.Spec.NodeName == "" {
+			// No need to process Pod when it's not scheduled.
 			continue
 		}
 		podSet := podsByNodes[pod.Spec.NodeName]

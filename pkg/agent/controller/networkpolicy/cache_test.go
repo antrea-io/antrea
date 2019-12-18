@@ -18,6 +18,7 @@ import (
 	"net"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -105,15 +106,17 @@ func TestAppliedToGroupIndexFunc(t *testing.T) {
 }
 
 type dirtyRuleRecorder struct {
-	rules sets.String
+	rules   sets.String
+	eventCh chan string
 }
 
 func newDirtyRuleRecorder() *dirtyRuleRecorder {
-	return &dirtyRuleRecorder{sets.NewString()}
+	return &dirtyRuleRecorder{sets.NewString(), make(chan string, 100)}
 }
 
 func (r *dirtyRuleRecorder) Record(ruleID string) {
 	r.rules.Insert(ruleID)
+	r.eventCh <- ruleID
 }
 
 func ipStrToIPAddress(ip string) v1beta1.IPAddress {
@@ -169,8 +172,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record)
+			c, recorder, _ := newFakeRuleCache()
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
@@ -188,6 +190,13 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, chan v1beta1.PodReference) {
+	recorder := newDirtyRuleRecorder()
+	ch := make(chan v1beta1.PodReference, 100)
+	c := newRuleCache(recorder.Record, ch)
+	return c, recorder, ch
 }
 
 func TestRuleCacheAddAppliedToGroup(t *testing.T) {
@@ -239,8 +248,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record)
+			c, recorder, _ := newFakeRuleCache()
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
@@ -306,8 +314,7 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record)
+			c, recorder, _ := newFakeRuleCache()
 			c.AddNetworkPolicy(tt.args)
 			actualRules := c.rules.List()
 			if !assert.ElementsMatch(t, tt.expectedRules, actualRules) {
@@ -370,8 +377,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record)
+			c, recorder, _ := newFakeRuleCache()
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
@@ -459,8 +465,7 @@ func TestRuleCacheGetCompletedRule(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record)
+			c, _, _ := newFakeRuleCache()
 			c.addressSetByGroup["addressGroup1"] = addressGroup1
 			c.addressSetByGroup["addressGroup2"] = addressGroup2
 			c.podSetByGroup["appliedToGroup1"] = appliedToGroup1
@@ -542,8 +547,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record)
+			c, recorder, _ := newFakeRuleCache()
 			c.podSetByGroup = tt.podSetByGroup
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
@@ -622,8 +626,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record)
+			c, recorder, _ := newFakeRuleCache()
 			c.addressSetByGroup = tt.addressSetByGroup
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
@@ -698,8 +701,7 @@ func TestRuleCacheUpdateNetworkPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recorder := newDirtyRuleRecorder()
-			c := newRuleCache(recorder.Record)
+			c, recorder, _ := newFakeRuleCache()
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
@@ -709,6 +711,74 @@ func TestRuleCacheUpdateNetworkPolicy(t *testing.T) {
 			if !assert.ElementsMatch(t, tt.expectedRules, actualRules) {
 				t.Errorf("Got rules %v, expected %v", actualRules, tt.expectedRules)
 			}
+			if !recorder.rules.Equal(tt.expectedDirtyRules) {
+				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
+			}
+		})
+	}
+}
+
+func TestRuleCacheProcessPodUpdates(t *testing.T) {
+	rule1 := &rule{
+		ID:              "rule1",
+		AppliedToGroups: []string{"group1"},
+	}
+	rule2 := &rule{
+		ID:              "rule2",
+		AppliedToGroups: []string{"group1", "group2"},
+	}
+	tests := []struct {
+		name               string
+		rules              []*rule
+		podSetByGroup      map[string]podSet
+		podUpdate          v1beta1.PodReference
+		expectedDirtyRules sets.String
+	}{
+		{
+			"non-matching-group",
+			nil,
+			nil,
+			v1beta1.PodReference{"foo", "bar"},
+			sets.NewString(),
+		},
+		{
+			"matching-one-group-affecting-one-rule",
+			[]*rule{rule1, rule2},
+			map[string]podSet{"group2": newPodSet(v1beta1.PodReference{"pod1", "ns1"})},
+			v1beta1.PodReference{Name: "pod1", Namespace: "ns1"},
+			sets.NewString("rule2"),
+		},
+		{
+			"matching-two-groups-affecting-two-rules",
+			[]*rule{rule1, rule2},
+			map[string]podSet{
+				"group1": newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+				"group2": newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+			},
+			v1beta1.PodReference{Name: "pod1", Namespace: "ns1"},
+			sets.NewString("rule1", "rule2"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, recorder, ch := newFakeRuleCache()
+			c.podSetByGroup = tt.podSetByGroup
+			for _, rule := range tt.rules {
+				c.rules.Add(rule)
+			}
+			ch <- tt.podUpdate
+
+			func() {
+				// Drain the channel with 10 ms timeout so we can know it's done.
+				for {
+					select {
+					case <-recorder.eventCh:
+					case <-time.After(time.Millisecond * 10):
+						return
+					}
+				}
+			}()
+
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
