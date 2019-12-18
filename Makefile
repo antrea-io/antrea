@@ -159,6 +159,7 @@ build-ubuntu:
 manifest:
 	@echo "===> Generating dev manifest for Antrea <==="
 	$(CURDIR)/hack/generate-manifest.sh --mode dev > build/yamls/antrea.yml
+	$(CURDIR)/hack/generate-manifest.sh --mode dev --ipsec > build/yamls/antrea-ipsec.yml
 
 .PHONY: octant-antrea-ubuntu
 octant-antrea-ubuntu:

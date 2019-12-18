@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent
+spec:
+  template:
+    spec:
+      containers:
+        - name: antrea-agent
+          env:
+            # Pre-shared key for IPSec IKE.
+            - name: ANTREA_IPSEC_PSK
+              valueFrom:
+                secretKeyRef:
+                  name: antrea-ipsec
+                  key: psk
