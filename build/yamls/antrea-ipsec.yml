@@ -3,9 +3,9 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
-  name: antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com
+  name: antreaagentinfos.clusterinformation.crd.antrea.io
 spec:
-  group: clusterinformation.antrea.tanzu.vmware.com
+  group: clusterinformation.crd.antrea.io
   names:
     kind: AntreaAgentInfo
     plural: antreaagentinfos
@@ -23,9 +23,9 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
-  name: antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com
+  name: antreacontrollerinfos.clusterinformation.crd.antrea.io
 spec:
-  group: clusterinformation.antrea.tanzu.vmware.com
+  group: clusterinformation.crd.antrea.io
   names:
     kind: AntreaControllerInfo
     plural: antreacontrollerinfos
@@ -71,7 +71,7 @@ rules:
   - watch
   - list
 - apiGroups:
-  - clusterinformation.antrea.tanzu.vmware.com
+  - clusterinformation.crd.antrea.io
   resources:
   - antreaagentinfos
   verbs:
@@ -80,7 +80,7 @@ rules:
   - update
   - delete
 - apiGroups:
-  - networking.antrea.tanzu.vmware.com
+  - networkpolicy.antrea.io
   resources:
   - networkpolicies
   - appliedtogroups
@@ -116,7 +116,7 @@ rules:
   - watch
   - list
 - apiGroups:
-  - clusterinformation.antrea.tanzu.vmware.com
+  - clusterinformation.crd.antrea.io
   resources:
   - antreacontrollerinfos
   verbs:
@@ -213,7 +213,7 @@ data:
     # - geneve
     # - gre
     # - stt
-    #tunnelType: vxlan
+    tunnelType: gre
 
     # Default MTU to use for the host gateway interface and the network interface of each Pod. If
     # omitted, antrea-agent will default this value to 1450 to accomodate for tunnel encapsulate
@@ -221,7 +221,7 @@ data:
     #defaultMTU: 1450
 
     # Whether or not to enable IPSec encryption of tunnel traffic.
-    #enableIPSecTunnel: false
+    enableIPSecTunnel: true
 
     # CIDR Range for services in cluster. It's required to support egress network policy, should
     # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
@@ -241,8 +241,17 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-tm7bht9mg6
+  name: antrea-config-k5f958t9km
   namespace: kube-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: antrea-ipsec
+  namespace: kube-system
+stringData:
+  psk: changeme
+type: Opaque
 ---
 apiVersion: v1
 kind: Service
@@ -324,7 +333,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-tm7bht9mg6
+          name: antrea-config-k5f958t9km
         name: antrea-config
 ---
 apiVersion: apps/v1
@@ -347,12 +356,44 @@ spec:
         component: antrea-agent
     spec:
       containers:
+      - command:
+        - start_ovs_ipsec
+        image: antrea/antrea-ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - timeout 5 container_liveness_probe ovs-ipsec
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        name: antrea-ipsec
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+        volumeMounts:
+        - mountPath: /var/run/openvswitch
+          name: host-var-run-antrea
+          subPath: openvswitch
+        - mountPath: /var/log/openvswitch
+          name: host-var-log-antrea
+          subPath: openvswitch
+        - mountPath: /var/log/strongswan
+          name: host-var-log-antrea
+          subPath: strongswan
       - args:
         - --config
         - /etc/antrea/antrea-agent.conf
         command:
         - antrea-agent
         env:
+        - name: ANTREA_IPSEC_PSK
+          valueFrom:
+            secretKeyRef:
+              key: psk
+              name: antrea-ipsec
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -464,7 +505,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-tm7bht9mg6
+          name: antrea-config-k5f958t9km
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

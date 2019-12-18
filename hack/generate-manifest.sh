@@ -126,6 +126,13 @@ cp $KUSTOMIZATION_DIR/base/conf/antrea-agent.conf antrea-agent.conf
 if $KIND; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ovsDatapathType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/ovsDatapathType: netdev/" antrea-agent.conf
 fi
+
+if $IPSEC; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableIPSecTunnel[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableIPSecTunnel: true/" antrea-agent.conf
+    # change the tunnel type to GRE which works better with IPSec encryption than other types.
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
+fi
+
 # unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,
 # which is why we use a template kustomization file.
 sed -e "s/<CONF_FILE>/antrea-agent.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
@@ -140,7 +147,12 @@ if $IPSEC; then
     cp ../../patches/ipsec/*.yml .
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
+    # create a K8s Secret to save the PSK (pre-shared key) for IKE authentication.
+    $KUSTOMIZE edit add resource ipsecSecret.yml
+    # add a container to the Agent DaemonSet that runs the OVS IPSec and strongSwan daemons.
     $KUSTOMIZE edit add patch ipsecContainer.yml
+    # add an environment variable to the antrea-agent container for passing the PSK to Agent.
+    $KUSTOMIZE edit add patch pskEnv.yml
     BASE=../ipsec
     cd ..
 fi
