@@ -224,13 +224,13 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 	// methods.
 
 	if node, err := c.nodeLister.Get(nodeName); err != nil {
-		return c.deleteNodeRoute(nodeName)
+		return c.deleteNodeRoute(nodeName, node)
 	} else {
 		return c.addNodeRoute(nodeName, node)
 	}
 }
 
-func (c *Controller) deleteNodeRoute(nodeName string) error {
+func (c *Controller) deleteNodeRoute(nodeName string, node *v1.Node) error {
 	klog.Infof("Deleting routes and flows to Node %s", nodeName)
 
 	route, flowsAreInstalled := c.installedNodes.Load(nodeName)
@@ -246,6 +246,16 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 			return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
 		}
 		c.installedNodes.Delete(nodeName)
+	} else if route, flowsAreInstalled = c.installedNodes.Load(nodeName); route == nil {
+		klog.Infof("Adding routes and flows to Node %s, podCIDR: %s, addresses: %v",
+			nodeName, node.Spec.PodCIDR, node.Status.Addresses)
+		if c.nodeConfig.PodEncapMode == types.PodEncapModeNoEncapMasq {
+			klog.Infof("Native network skip route manipulation")
+			return nil
+		}
+		if node.Spec.PodCIDR == "" {
+			klog.V(1).Infof("PodCIDR is empty for peer node %s", nodeName)
+		}
 	}
 
 	if c.ipsecPSK != "" {

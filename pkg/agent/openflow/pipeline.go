@@ -16,6 +16,7 @@ package openflow
 
 import (
 	"fmt"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"net"
 	"strconv"
 	"strings"
@@ -49,9 +50,10 @@ const (
 	priorityMiss   = uint16(0)
 
 	// Traffic marks
-	markTrafficFromTunnel  = 0
-	markTrafficFromGateway = 1
-	markTrafficFromLocal   = 2
+	markTrafficFromTunnel    = 0
+	markTrafficFromGateway   = 1
+	markTrafficFromLocal     = 2
+	markTrafficFromPatchPort = 3
 )
 
 var (
@@ -117,6 +119,7 @@ type client struct {
 	// globalConjMatchFlowCache is a global map for conjMatchFlowContext. The key is a string generated from the
 	// conjMatchFlowContext.
 	globalConjMatchFlowCache map[string]*conjMatchFlowContext
+	nodeConfig               *types.NodeConfig
 }
 
 func (c *client) Add(flow binding.Flow) error {
@@ -170,6 +173,30 @@ func (c *client) gatewayClassifierFlow(gatewayOFPort uint32, category cookie.Cat
 		Action().LoadRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 		Action().ResubmitToTable(classifierTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
+// patchPortClassifierFlow generates the flow to mark IP traffic comes from the patch port and
+// are destined to local pods
+func (c *client) patchPortClassifierIPFlow(patchPort uint32, podIP net.IP) binding.Flow {
+	classifierTable := c.pipeline[classifierTable]
+	return classifierTable.BuildFlow(priorityNormal).
+		MatchInPort(patchPort).
+		MatchDstIP(podIP).
+		Action().LoadRegRange(int(marksReg), markTrafficFromPatchPort, binding.Range{0, 15}).
+		Action().ResubmitToTable(classifierTable.GetNext()).
+		Done()
+}
+
+// patchPortClassifierFlow generates the flow to mark ARP traffic comes from the patch port and
+// are destined to local pods
+func (c *client) patchPortClassifierARPFlow(patchPort uint32, podIP net.IP) binding.Flow {
+	classifierTable := c.pipeline[classifierTable]
+	return classifierTable.BuildFlow(priorityNormal).
+		MatchInPort(patchPort).
+		MatchARPTpa(podIP).
+		Action().LoadRegRange(int(marksReg), markTrafficFromPatchPort, binding.Range{0, 15}).
+		Action().ResubmitToTable(classifierTable.GetNext()).
 		Done()
 }
 
@@ -334,6 +361,24 @@ func (c *client) arpResponderFlow(peerGatewayIP net.IP, category cookie.Category
 		Action().SetARPSpa(peerGatewayIP).
 		Action().OutputInPort().
 		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
+// arpResponderPodFlow generates the ARP responder flow entry that replies arp request comes from local pod for remote
+// pods with gw mac
+func (c *client) arpResponderRemotePodFlow(local, remote net.IPNet, gwMac net.HardwareAddr, gwIP net.IP) binding.Flow {
+	return c.pipeline[arpResponderTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
+		MatchARPOp(1).
+		MatchARPTpaNet(remote).
+		MatchARPSpaNet(local).
+		Action().Move(binding.NxmFieldSrcMAC, binding.NxmFieldDstMAC).
+		Action().SetSrcMAC(gwMac).
+		Action().LoadARPOperation(2).
+		Action().Move(binding.NxmFieldARPSha, binding.NxmFieldARPTha).
+		Action().SetARPSha(gwMac).
+		Action().Move(binding.NxmFieldARPSpa, binding.NxmFieldARPTpa).
+		Action().SetARPSpa(gwIP).
+		Action().OutputInPort().
 		Done()
 }
 

@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"io/ioutil"
 	"net"
 
@@ -85,6 +86,17 @@ func (o *Options) validate(args []string) error {
 	if o.config.OVSDatapathType != ovsconfig.OVSDatapathSystem && o.config.OVSDatapathType != ovsconfig.OVSDatapathNetdev {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
 	}
+	if ok, podEncap := types.GetPodEncapModeFromStr(o.config.PodTrafficEncapMode); !ok {
+		return fmt.Errorf("PodTrafficEncapMode %s is unknown", o.config.PodTrafficEncapMode)
+	} else if podEncap.SupportsNoEncap() && o.config.ClusterCIDR == "" {
+		return fmt.Errorf("no cluster CIDR provided when supporting no encap mode")
+	}
+	if o.config.ClusterCIDR != "" {
+		_, _, err := net.ParseCIDR(o.config.ClusterCIDR)
+		if err != nil {
+			return fmt.Errorf("cluster CIDR %s is invalid", o.config.ClusterCIDR)
+		}
+	}
 	return nil
 }
 
@@ -134,5 +146,8 @@ func (o *Options) setDefaults() {
 		} else if o.config.TunnelType == ovsconfig.STTTunnel {
 			o.config.DefaultMTU = defaultMTUSTT
 		}
+	}
+	if o.config.PodTrafficEncapMode == "" {
+		o.config.PodTrafficEncapMode = types.PodEncapModeEncap.String()
 	}
 }

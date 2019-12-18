@@ -29,7 +29,7 @@ const maxRetryForOFSwitch = 5
 // TODO: flow sync (e.g. at agent restart), retry at failure, garbage collection mechanisms
 type Client interface {
 	// Initialize sets up all basic flows on the specific OVS bridge.
-	Initialize(roundNum uint64) error
+	Initialize(roundNum uint64, config *types.NodeConfig) error
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
@@ -168,7 +168,6 @@ func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podI
 		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, cookie.Pod),
 		c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod),
 	}
-
 	return c.addMissingFlows(c.podFlowCache, containerID, flows)
 }
 
@@ -206,7 +205,8 @@ func (c *client) InstallDefaultTunnelFlows(tunnelOFPort uint32) error {
 	return nil
 }
 
-func (c *client) Initialize(roundNum uint64) error {
+func (c *client) Initialize(roundNum uint64, config *types.NodeConfig) error {
+	c.nodeConfig = config
 	// Initiate connections to target OFswitch, and create tables on the switch.
 	if err := c.bridge.Connect(maxRetryForOFSwitch, make(chan struct{})); err != nil {
 		return err

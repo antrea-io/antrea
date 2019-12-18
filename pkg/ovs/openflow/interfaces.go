@@ -142,6 +142,8 @@ type FlowBuilder interface {
 	MatchARPTha(mac net.HardwareAddr) FlowBuilder
 	MatchARPSpa(ip net.IP) FlowBuilder
 	MatchARPTpa(ip net.IP) FlowBuilder
+	MatchARPSpaNet(ipNet net.IPNet) FlowBuilder
+	MatchARPTpaNet(ipnet net.IPNet) FlowBuilder
 	MatchARPOp(op uint16) FlowBuilder
 	MatchCTStateNew(isSet bool) FlowBuilder
 	MatchCTStateRel(isSet bool) FlowBuilder

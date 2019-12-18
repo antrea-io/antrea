@@ -27,6 +27,8 @@ const (
 	GatewayInterface
 	// TunnelInterface is used to mark current interface is for tunnel port
 	TunnelInterface
+	// PatchInterface is used to mark interface is for patch port
+	PatchInterface
 )
 
 type InterfaceType uint8
@@ -114,4 +116,10 @@ func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType) *Int
 func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelType, nodeName string, nodeIP net.IP, psk string) *InterfaceConfig {
 	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, NodeName: nodeName, RemoteIP: nodeIP, PSK: psk}
 	return &InterfaceConfig{InterfaceName: interfaceName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
+}
+
+// NewTunnelInterface creates InterfaceConfig for the default tunnel port
+// interface.
+func NewPatchInterface(patchName string) *InterfaceConfig {
+	return &InterfaceConfig{InterfaceName: patchName, Type: PatchInterface}
 }

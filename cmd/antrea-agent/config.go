@@ -64,4 +64,13 @@ type AgentConfig struct {
 	// Antrea Agent through an environment variable: ANTREA_IPSEC_PSK.
 	// Defaults to false.
 	EnableIPSecTunnel bool `yaml:"enableIPSecTunnel,omitempty"`
+	// Determines how pod traffic is encapsulated. It has the following options
+	// Encap: inboud(stateful) traffic always encapsulated. outbound masqueraded. This is default
+	// NoEncap: no encap for inbound, but masq for outbound
+	// Hybrid: inbound noEncap if worker nodes on same subnet, otherwise encap. Masq for outbound.
+	// NoEncapMasq: no encap and masq.
+	PodTrafficEncapMode string `yaml:"podTrafficEncapMode,omitempty"`
+	// k8s cluster CIDR. It should be same as --cluster-cidr value specified for kube-controller-manager.
+	// This is required when PodTrafficEncapMode is NoEncap or Hybrid
+	ClusterCIDR string `yaml:"ClusterCIDR,omitempty"`
 }
