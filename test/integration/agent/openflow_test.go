@@ -597,17 +597,17 @@ func prepareDefaultFlows() []expectTableFlows {
 	return []expectTableFlows{
 		{
 			uint8(0),
-			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "resubmit(,10)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "drop"}},
 		},
 		{
 			uint8(10),
-			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "drop"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "drop"}},
 		},
 		{
 			uint8(20),
 			[]*ofTestUtils.ExpectFlow{
 				{"priority=190,arp", "NORMAL"},
-				{"priority=80,ip", "drop"},
+				{"priority=0", "drop"},
 			},
 		},
 		{
@@ -621,44 +621,43 @@ func prepareDefaultFlows() []expectTableFlows {
 			[]*ofTestUtils.ExpectFlow{
 				{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "resubmit(,40)"},
 				{"priority=200,ct_state=+inv+trk,ip", "drop"},
-				{"priority=80,ip", "resubmit(,40)"},
+				{"priority=0", "resubmit(,40)"},
 			},
 		},
 		{
 			uint8(40),
-			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "resubmit(,50)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,50)"}},
 		},
 		{
 			uint8(50),
-			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "resubmit(,60)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,60)"}},
 		},
 		{
 			uint8(60),
-			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "resubmit(,70)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,70)"}},
 		},
 		{
 			uint8(70),
-			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "resubmit(,80)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,80)"}},
 		},
 		{
 			uint8(80),
-			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "resubmit(,90)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,90)"}},
 		},
 		{
 			uint8(90),
-			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "resubmit(,100)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,100)"}},
 		},
 		{
 			uint8(100),
-			[]*ofTestUtils.ExpectFlow{{"priority=80,ip", "resubmit(,105)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,105)"}},
 		},
 		{
 			uint8(105),
 			[]*ofTestUtils.ExpectFlow{
 				{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=110,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
 				{"priority=190,ct_state=+new+trk,ip", "ct(commit,table=110,zone=65520)"},
-				{"priority=80,ip", "resubmit(,110)"},
-			},
+				{"priority=0", "resubmit(,110)"}},
 		},
 		{
 			uint8(110),
