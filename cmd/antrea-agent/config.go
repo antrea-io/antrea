@@ -65,4 +65,10 @@ type AgentConfig struct {
 	// through an environment variable: ANTREA_IPSEC_PSK.
 	// Defaults to false.
 	EnableIPSecTunnel bool `yaml:"enableIPSecTunnel,omitempty"`
+	// Determines how traffic is encapsulated. It has the following options
+	// Encap(default): Inter-node Pod traffic is always encapsulated and Pod to outbound traffic is masqueraded.
+	// NoEncap: Inter-node Pod traffic is not encapsulated, but Pod to outbound traffic is masqueraded.
+	//          Underlying network must be capable of supporting Pod traffic across IP subnet.
+	// Hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
+	TrafficEncapMode string `yaml:"trafficEncapMode,omitempty"`
 }

@@ -29,18 +29,23 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
+	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
-	maxRetryForHostLink     = 5
-	NodeNameEnvKey          = "NODE_NAME"
+	maxRetryForHostLink = 5
+	// NodeNameEnvKey is environment variable.
+	NodeNameEnvKey = "NODE_NAME"
+	// IPSecPSKEnvKey is environment variable.
 	IPSecPSKEnvKey          = "ANTREA_IPSEC_PSK"
 	roundNumKey             = "roundNum" // round number key in externalIDs.
 	initialRoundNum         = 1
@@ -49,7 +54,6 @@ const (
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
-	ovsBridge         string
 	hostGateway       string
 	tunnelType        ovsconfig.TunnelType
 	mtu               int
@@ -61,6 +65,9 @@ type Initializer struct {
 	serviceCIDR       *net.IPNet
 	ofClient          openflow.Client
 	ipsecPSK          string
+	trafficEncapMode  config.TrafficEncapModeType
+	routeClient       *route.Client
+	iptablesClient    *iptables.Client
 }
 
 func disableICMPSendRedirects(intfName string) error {
@@ -78,16 +85,19 @@ func NewInitializer(
 	ofClient openflow.Client,
 	k8sClient clientset.Interface,
 	ifaceStore interfacestore.InterfaceStore,
-	ovsBridge, serviceCIDR, hostGateway string,
+	serviceCIDR, hostGateway string,
 	mtu int,
 	tunnelType ovsconfig.TunnelType,
-	enableIPSecTunnel bool) *Initializer {
+	enableIPSecTunnel bool,
+	encapModeStr string,
+	routeClient *route.Client,
+	iptablesClient *iptables.Client) *Initializer {
 	// Parse service CIDR configuration. serviceCIDR is checked in option.validate, so
 	// it should be a valid configuration here.
 	_, serviceCIDRNet, _ := net.ParseCIDR(serviceCIDR)
+	_, encapMode := config.GetTrafficEncapModeFromStr(encapModeStr)
 	return &Initializer{
 		ovsBridgeClient:   ovsBridgeClient,
-		ovsBridge:         ovsBridge,
 		hostGateway:       hostGateway,
 		tunnelType:        tunnelType,
 		mtu:               mtu,
@@ -96,6 +106,9 @@ func NewInitializer(
 		ifaceStore:        ifaceStore,
 		serviceCIDR:       serviceCIDRNet,
 		ofClient:          ofClient,
+		trafficEncapMode:  encapMode,
+		routeClient:       routeClient,
+		iptablesClient:    iptablesClient,
 	}
 }
 
@@ -187,8 +200,10 @@ func (i *Initializer) initInterfaceStore() error {
 	return nil
 }
 
+// Initialize sets up agent initial configurations.
 func (i *Initializer) Initialize() error {
 	klog.Info("Setting up node network")
+
 	if err := i.initNodeLocalConfig(); err != nil {
 		return err
 	}
@@ -198,11 +213,7 @@ func (i *Initializer) Initialize() error {
 	}
 
 	// Setup iptables chains and rules.
-	iptablesClient, err := iptables.NewClient(i.hostGateway)
-	if err != nil {
-		return fmt.Errorf("error creating iptables client: %v", err)
-	}
-	if err := iptablesClient.SetupRules(); err != nil {
+	if err := i.iptablesClient.Initialize(i.hostGateway, i.serviceCIDR, i.nodeConfig, i.trafficEncapMode); err != nil {
 		return fmt.Errorf("error setting up iptables rules: %v", err)
 	}
 
@@ -215,6 +226,11 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
+	if err := i.routeClient.Initialize(i.nodeConfig, i.trafficEncapMode); err != nil {
+		return err
+	}
+
+	klog.Infof("Agent initialized NodeConfig=%v, encapMode=%s", i.nodeConfig, i.trafficEncapMode)
 	return nil
 }
 
@@ -256,7 +272,7 @@ func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interva
 func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
 	// Setup all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundInfo)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.trafficEncapMode)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
@@ -271,10 +287,13 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		return err
 	}
 
-	// Setup flow entries for the default tunnel port interface.
-	if err := i.ofClient.InstallDefaultTunnelFlows(types.DefaultTunOFPort); err != nil {
-		klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
-		return err
+	// When IPSec encyption is enabled, no flow is needed for the default tunnel interface.
+	if i.trafficEncapMode.SupportsEncap() {
+		// Setup flow entries for the default tunnel port interface.
+		if err := i.ofClient.InstallDefaultTunnelFlows(types.DefaultTunOFPort); err != nil {
+			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
+			return err
+		}
 	}
 
 	// Setup flow entries to enable service connectivity. Upstream kube-proxy is leveraged to
@@ -337,11 +356,12 @@ func (i *Initializer) setupGatewayInterface() error {
 	} else {
 		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
 	}
+
 	// Idempotent operation to set the gateway's MTU: we perform this operation regardless of
 	// whether or not the gateway interface already exists, as the desired MTU may change across
 	// restarts.
 	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.mtu)
-	i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.mtu)
+	_ = i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.mtu)
 	// host link might not be queried at once after create OVS internal port, retry max 5 times with 1s
 	// delay each time to ensure the link is ready. If still failed after max retry return error.
 	link, err := func() (netlink.Link, error) {
@@ -376,7 +396,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
 	gwAddr := &netlink.Addr{IPNet: gwIP, Label: ""}
 	gwMAC := link.Attrs().HardwareAddr
-	i.nodeConfig.GatewayConfig = &types.GatewayConfig{Name: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
+	i.nodeConfig.GatewayConfig = &types.GatewayConfig{Link: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
 	gatewayIface.IP = gwIP.IP
 	gatewayIface.MAC = gwMAC
 
@@ -405,11 +425,25 @@ func (i *Initializer) setupGatewayInterface() error {
 		klog.Errorf("Failed to set gateway interface %s with address %v: %v", i.hostGateway, gwAddr, err)
 		return err
 	}
+
 	return nil
 }
 
 func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 	tunnelIface, portExists := i.ifaceStore.GetInterface(tunnelPortName)
+
+	if !i.trafficEncapMode.SupportsEncap() {
+		if portExists {
+			if err := i.ovsBridgeClient.DeletePort(tunnelIface.PortUUID); err != nil {
+				klog.Errorf("Failed to removed tunnel port %s in NoEncapMode, err %s", tunnelPortName, err)
+			} else {
+				klog.V(2).Infof("Tunnel port %s removed for NoEncapMode", tunnelPortName)
+			}
+			i.ifaceStore.DeleteInterface(tunnelIface)
+		}
+		return nil
+	}
+
 	if portExists {
 		klog.V(2).Infof("Tunnel port %s already exists on OVS", tunnelPortName)
 		return nil
@@ -448,8 +482,16 @@ func (i *Initializer) initNodeLocalConfig() error {
 		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
 		return err
 	}
+	ip, err := noderoute.GetNodeAddr(node)
+	if err != nil {
+		return fmt.Errorf("failed to obtain local IP address from k8s: %w", err)
+	}
+	localAddr, _, err := util.GetIPNetDeviceFromIP(ip)
+	if err != nil {
+		return fmt.Errorf("failed to get local IPNet:  %v", err)
+	}
 
-	i.nodeConfig = &types.NodeConfig{Name: nodeName, PodCIDR: localSubnet}
+	i.nodeConfig = &types.NodeConfig{Name: nodeName, PodCIDR: localSubnet, NodeIPAddr: localAddr}
 	return nil
 }
 
@@ -529,7 +571,7 @@ func getRoundInfo(bridgeClient ovsconfig.OVSBridgeClient) types.RoundInfo {
 	} else {
 		roundInfo.PrevRoundNum = new(uint64)
 		*roundInfo.PrevRoundNum = num
-		num += 1
+		num++
 	}
 
 	num %= 1 << cookie.BitwidthRound

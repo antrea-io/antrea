@@ -614,7 +614,7 @@ func init() {
 	nodeName := "node1"
 	gwIP := net.ParseIP("192.168.1.1")
 	gwMAC, _ := net.ParseMAC("11:11:11:11:11:11")
-	nodeGateway := &agenttypes.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: "gw"}
+	nodeGateway := &agenttypes.GatewayConfig{IP: gwIP, MAC: gwMAC, Link: ""}
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 
 	testNodeConfig = &agenttypes.NodeConfig{Bridge: bridge, Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: nodeGateway}

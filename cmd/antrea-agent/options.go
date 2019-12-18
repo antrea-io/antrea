@@ -19,11 +19,12 @@ import (
 	"io/ioutil"
 	"net"
 
-	"github.com/vmware-tanzu/antrea/pkg/cni"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/cni"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
@@ -35,6 +36,7 @@ const (
 	defaultMTUGeneve          = 1450
 	defaultMTUGRE             = 1462
 	defaultMTUSTT             = 1500
+	defaultMTU                = 1500
 )
 
 type Options struct {
@@ -88,6 +90,13 @@ func (o *Options) validate(args []string) error {
 	if o.config.OVSDatapathType != ovsconfig.OVSDatapathSystem && o.config.OVSDatapathType != ovsconfig.OVSDatapathNetdev {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
 	}
+	ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
+	if !ok {
+		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
+	}
+	if encapMode.SupportsNoEncap() && o.config.EnableIPSecTunnel {
+		return fmt.Errorf("IPSec tunnel may only be enabled on %s mode", config.TrafficEncapModeEncap)
+	}
 	return nil
 }
 
@@ -127,8 +136,15 @@ func (o *Options) setDefaults() {
 	if o.config.ServiceCIDR == "" {
 		o.config.ServiceCIDR = defaultServiceCIDR
 	}
+	if o.config.TrafficEncapMode == "" {
+		o.config.TrafficEncapMode = config.TrafficEncapModeEncap.String()
+	}
+
 	if o.config.DefaultMTU == 0 {
-		if o.config.TunnelType == ovsconfig.VXLANTunnel {
+		ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
+		if ok && !encapMode.SupportsEncap() {
+			o.config.DefaultMTU = defaultMTU
+		} else if o.config.TunnelType == ovsconfig.VXLANTunnel {
 			o.config.DefaultMTU = defaultMTUVXLAN
 		} else if o.config.TunnelType == ovsconfig.GeneveTunnel {
 			o.config.DefaultMTU = defaultMTUGeneve

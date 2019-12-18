@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"testing"
 )
 
@@ -104,7 +105,14 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, numPods int) (podN
 }
 
 func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
-	numPods := 2 // can be increased
+	numPods := 2
+	encapMode, err := data.GetEncapMode()
+	if err != nil {
+		t.Errorf("Failed to retrive encap mode: %v", err)
+	}
+	if encapMode == types.TrafficEncapModeHybrid {
+		numPods = clusterInfo.numNodes
+	}
 	podNames, deletePods := createPodsOnDifferentNodes(t, data, numPods)
 	defer deletePods()
 

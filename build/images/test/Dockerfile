@@ -8,3 +8,4 @@ RUN apt-get update && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/*
 
 COPY build/images/scripts/* /usr/local/bin/
+COPY build/images/test/test-integration /usr/local/bin/
