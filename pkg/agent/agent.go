@@ -16,6 +16,7 @@ package agent
 
 import (
 	"fmt"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"net"
 	"os"
 	"os/exec"
@@ -46,7 +47,6 @@ const (
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
-	ovsBridge         string
 	hostGateway       string
 	tunnelType        ovsconfig.TunnelType
 	mtu               int
@@ -58,6 +58,8 @@ type Initializer struct {
 	serviceCIDR       *net.IPNet
 	ofClient          openflow.Client
 	ipsecPSK          string
+	podEncapMode      types.PodEncapMode
+	clusterCIDR       string
 }
 
 func disableICMPSendRedirects(intfName string) error {
@@ -75,16 +77,17 @@ func NewInitializer(
 	ofClient openflow.Client,
 	k8sClient clientset.Interface,
 	ifaceStore interfacestore.InterfaceStore,
-	ovsBridge, serviceCIDR, hostGateway string,
+	serviceCIDR, hostGateway string,
 	mtu int,
 	tunnelType ovsconfig.TunnelType,
-	enableIPSecTunnel bool) *Initializer {
+	enableIPSecTunnel bool,
+	inPodEncapMode, clusterCIDR string) *Initializer {
 	// Parse service CIDR configuration. serviceCIDR is checked in option.validate, so
 	// it should be a valid configuration here.
 	_, serviceCIDRNet, _ := net.ParseCIDR(serviceCIDR)
+	_, podEncapMode := types.GetPodEncapModeFromStr(inPodEncapMode)
 	return &Initializer{
 		ovsBridgeClient:   ovsBridgeClient,
-		ovsBridge:         ovsBridge,
 		hostGateway:       hostGateway,
 		tunnelType:        tunnelType,
 		mtu:               mtu,
@@ -93,6 +96,8 @@ func NewInitializer(
 		ifaceStore:        ifaceStore,
 		serviceCIDR:       serviceCIDRNet,
 		ofClient:          ofClient,
+		podEncapMode:      podEncapMode,
+		clusterCIDR:       clusterCIDR,
 	}
 }
 
@@ -126,6 +131,11 @@ func (i *Initializer) setupOVSBridge() error {
 	err := i.setupGatewayInterface()
 	if err != nil {
 		return err
+	}
+
+	// Setup patch port on OVS
+	if err := i.setupPatchInterface(); err != nil {
+		return fmt.Errorf("setupOVSBridge | %v", err)
 	}
 
 	// send_redirects for the interface will be enabled if at least one of
@@ -169,6 +179,11 @@ func (i *Initializer) initInterfaceStore() error {
 				Type:          interfacestore.TunnelInterface,
 				OVSPortConfig: ovsPort,
 				ID:            TunPortName}
+		case port.Name == openflow.PatchPortName:
+			intf = &interfacestore.InterfaceConfig{
+				Type:          interfacestore.PatchInterface,
+				OVSPortConfig: ovsPort,
+				ID:            openflow.PatchPortName}
 		default:
 			// The port should be for a container interface.
 			intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
@@ -216,7 +231,7 @@ func (i *Initializer) Initialize() error {
 // initOpenFlowPipeline sets up necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
 func (i *Initializer) initOpenFlowPipeline() error {
 	// Setup all basic flows.
-	if err := i.ofClient.Initialize(); err != nil {
+	if err := i.ofClient.Initialize(i.nodeConfig); err != nil {
 		klog.Errorf("Failed to setup basic openflow entries: %v", err)
 		return err
 	}
@@ -232,9 +247,11 @@ func (i *Initializer) initOpenFlowPipeline() error {
 
 	// Setup flow entries for tunnel port Interface, including classifier and L2 Forwarding
 	// (match vMAC as dst)
-	if err := i.ofClient.InstallTunnelFlows(tunOFPort); err != nil {
-		klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
-		return err
+	if i.podEncapMode.SupportsEncap() {
+		if err := i.ofClient.InstallTunnelFlows(tunOFPort); err != nil {
+			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
+			return err
+		}
 	}
 
 	// Setup flow entries to enable service connectivity. Upstream kube-proxy is leveraged to
@@ -262,7 +279,7 @@ func (i *Initializer) setupGatewayInterface() error {
 			return err
 		}
 		gatewayIface = interfacestore.NewGatewayInterface(i.hostGateway)
-		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{i.hostGateway, gwPortUUID, hostGatewayOFPort}
+		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{IfaceName: i.hostGateway, PortUUID: gwPortUUID, OFPort: hostGatewayOFPort}
 		i.ifaceStore.AddInterface(i.hostGateway, gatewayIface)
 	} else {
 		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
@@ -271,7 +288,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	// whether or not the gateway interface already exists, as the desired MTU may change across
 	// restarts.
 	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.mtu)
-	i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.mtu)
+	_ = i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.mtu)
 	// host link might not be queried at once after create OVS internal port, retry max 5 times with 1s
 	// delay each time to ensure the link is ready. If still failed after max retry return error.
 	link, err := func() (netlink.Link, error) {
@@ -298,6 +315,10 @@ func (i *Initializer) setupGatewayInterface() error {
 	if err := netlink.LinkSetUp(link); err != nil {
 		klog.Errorf("Failed to set host link for %s up: %v", i.hostGateway, err)
 		return err
+	}
+
+	if i.nodeConfig.PodEncapMode == types.PodEncapModeNoEncapMasq {
+		return nil
 	}
 
 	// Configure host gateway IP using the first address of node localSubnet
@@ -340,6 +361,15 @@ func (i *Initializer) setupGatewayInterface() error {
 
 func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
 	tunnelIface, portExists := i.ifaceStore.GetInterface(tunnelPortName)
+	if !i.podEncapMode.SupportsEncap() {
+		if !portExists {
+			return nil
+		}
+		if err := i.ovsBridgeClient.DeletePort(tunnelIface.OVSPortConfig.PortUUID); err != nil {
+			return fmt.Errorf("setupTunnelInterface|%v", err)
+		}
+		return nil
+	}
 	if portExists {
 		klog.V(2).Infof("Tunnel port %s already exists on OVS", tunnelPortName)
 		return nil
@@ -352,6 +382,32 @@ func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
 	tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName)
 	tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{tunnelPortName, tunnelPortUUID, tunOFPort}
 	i.ifaceStore.AddInterface(tunnelPortName, tunnelIface)
+	return nil
+}
+
+func (i *Initializer) setupPatchInterface() error {
+	patchIface, portExists := i.ifaceStore.GetInterface(openflow.PatchPortName)
+	if !i.podEncapMode.SupportsNoEncap() {
+		if !portExists {
+			return nil
+		}
+		if err := i.ovsBridgeClient.DeletePort(patchIface.OVSPortConfig.PortUUID); err != nil {
+			return fmt.Errorf("setupTunnelInterface|%v", err)
+		}
+		return nil
+	}
+	if portExists {
+		klog.V(2).Infof("Patch port %s already exists on OVS", openflow.PatchPortName)
+		return nil
+	}
+	portUUID, err := i.ovsBridgeClient.CreatePatchPort(openflow.PatchPortName, openflow.PatchPeerPortName, openflow.PatchOfPort)
+	if err != nil {
+		klog.Errorf("Failed to add patch port: %v, %v", openflow.PatchPortName, err)
+		return fmt.Errorf("setupPatchInterface port=%v | %v", openflow.PatchPortName, err)
+	}
+	patchIface = interfacestore.NewTunnelInterface(openflow.PatchPortName)
+	patchIface.OVSPortConfig = &interfacestore.OVSPortConfig{IfaceName: openflow.PatchPortName, PortUUID: portUUID, OFPort: openflow.PatchOfPort}
+	i.ifaceStore.AddInterface(openflow.PatchPortName, patchIface)
 	return nil
 }
 
@@ -378,8 +434,19 @@ func (i *Initializer) initNodeLocalConfig() error {
 		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
 		return err
 	}
-
-	i.nodeConfig = &types.NodeConfig{Name: nodeName, PodCIDR: localSubnet}
+	var localAddr *net.IPNet
+	if i.podEncapMode == types.PodEncapModeHybrid {
+		localAddr, err = util.GetDefaultLocalNodeAddr()
+		if err != nil {
+			return fmt.Errorf("initNodeLocalConfig | %v", err)
+		}
+	}
+	var clusterCIDR *net.IPNet
+	if i.clusterCIDR != "" {
+		_, clusterCIDR, _ = net.ParseCIDR(i.clusterCIDR)
+	}
+	i.nodeConfig = &types.NodeConfig{Name: nodeName, PodCIDR: localSubnet, NodeIPAddr: localAddr, PodEncapMode: i.podEncapMode,
+		ClusterPodCIDR: clusterCIDR}
 	return nil
 }
 

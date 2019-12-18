@@ -25,6 +25,8 @@ const (
 	GatewayInterface
 	// TunnelInterface is used to mark current interface is for tunnel port
 	TunnelInterface
+	// PatchInterface is used to mark interface is for patch port
+	PatchInterface
 )
 
 type InterfaceType uint8

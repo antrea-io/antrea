@@ -77,12 +77,13 @@ func run(o *Options) error {
 		ofClient,
 		k8sClient,
 		ifaceStore,
-		o.config.OVSBridge,
 		o.config.ServiceCIDR,
 		o.config.HostGateway,
 		o.config.DefaultMTU,
 		ovsconfig.TunnelType(o.config.TunnelType),
-		o.config.EnableIPSecTunnel)
+		o.config.EnableIPSecTunnel,
+		o.config.PodTrafficEncapMode,
+		o.config.ClusterCIDR)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)

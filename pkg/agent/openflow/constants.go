@@ -12,24 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package types
+package openflow
 
-import (
-	"net"
+const (
+	PatchOfPort       = 3
+	PatchPortName     = "patch-integration-antrea"
+	PatchPeerPortName = "patch-transport-antrea"
 )
-
-type GatewayConfig struct {
-	IP   net.IP
-	MAC  net.HardwareAddr
-	Name string
-}
-
-type NodeConfig struct {
-	Bridge         string
-	Name           string
-	PodCIDR        *net.IPNet
-	NodeIPAddr     *net.IPNet
-	ClusterPodCIDR *net.IPNet
-	PodEncapMode   PodEncapMode
-	*GatewayConfig
-}

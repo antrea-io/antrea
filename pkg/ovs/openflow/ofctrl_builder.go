@@ -250,6 +250,22 @@ func (b *ofFlowBuilder) MatchARPTpa(ip net.IP) FlowBuilder {
 	return b
 }
 
+// MatchARPSpa adds match condition for matching ARP source protocol address range.
+func (b *ofFlowBuilder) MatchARPSpaNet(ipNet net.IPNet) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("arp_spa=%s", ipNet.String()))
+	b.Match.ArpSpa = &ipNet.IP
+	b.Match.IpSaMask = maskToIPv4(ipNet.Mask)
+	return b
+}
+
+// MatchARPTpa adds match condition for matching ARP target protocol address range.
+func (b *ofFlowBuilder) MatchARPTpaNet(ipNet net.IPNet) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("arp_tpa=%s", ipNet.String()))
+	b.Match.ArpTpa = &ipNet.IP
+	b.Match.IpDaMask = maskToIPv4(ipNet.Mask)
+	return b
+}
+
 // MatchARPOp adds match condition for matching ARP operator.
 func (b *ofFlowBuilder) MatchARPOp(op uint16) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("arp_op=%d", op))

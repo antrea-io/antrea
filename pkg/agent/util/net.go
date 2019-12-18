@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 )
 
@@ -43,4 +44,33 @@ func GenerateContainerInterfaceName(podName string, podNamespace string) string 
 	}
 	podKeyLength := interfaceNameLength - len(name) - len(containerKeyConnector)
 	return strings.Join([]string{name, podKey[:podKeyLength]}, containerKeyConnector)
+}
+
+// GetLocalNodeAddr return a local IP/mask that is on the path of default route.
+func GetDefaultLocalNodeAddr() (*net.IPNet, error) {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	localIP := conn.LocalAddr().(*net.UDPAddr).IP
+
+	var localMask net.IPMask
+	localAddrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, err
+	}
+	for _, addr := range localAddrs {
+		switch v := addr.(type) {
+		case *net.IPNet:
+			if v.IP.Equal(localIP) {
+				localMask = v.Mask
+			}
+			break
+		}
+	}
+	if localMask == nil {
+		return nil, fmt.Errorf("unable to find valid local IP  %s", localIP)
+	}
+	return &net.IPNet{IP: localIP, Mask: localMask}, nil
 }

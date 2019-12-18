@@ -322,6 +322,14 @@ func (br *OVSBridge) CreateTunnelPort(name string, tunnelType TunnelType, ofPort
 	return br.createTunnelPort(name, tunnelType, ofPortRequest, "", "", nil)
 }
 
+// CreatePatchPort creates a patch port with provided name, peerName, and ofPortRequest.
+// If ofPortRequest is not zero, it will be passed to the OVS port creation.
+func (br *OVSBridge) CreatePatchPort(name, peerName string, ofPortRequest int32) (string, Error) {
+	return br.createPort(
+		name, name, "patch", ofPortRequest, nil,
+		map[string]interface{}{"peer": peerName})
+}
+
 // CreateTunnelPortExt creates a tunnel port with the specified name and type
 // on the bridge.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.

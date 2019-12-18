@@ -28,7 +28,7 @@ const maxRetryForOFSwitch = 5
 // TODO: flow sync (e.g. at agent restart), retry at failure, garbage collection mechanisms
 type Client interface {
 	// Initialize sets up all basic flows on the specific OVS bridge.
-	Initialize() error
+	Initialize(config *types.NodeConfig) error
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
@@ -139,11 +139,20 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 }
 
 func (c *client) InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, tunnelPeerAddr net.IP) error {
+	if c.nodeConfig.PodEncapMode == types.PodEncapModeNoEncapMasq {
+		return nil
+	}
 	flows := []binding.Flow{
 		c.arpResponderFlow(peerGatewayIP),
-		c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr),
 	}
-
+	if c.nodeConfig.PodEncapMode == types.PodEncapModeEncap {
+		flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr))
+	} else if c.nodeConfig.PodEncapMode == types.PodEncapModeHybrid &&
+		c.nodeConfig.NodeIPAddr.Contains(tunnelPeerAddr) {
+		flows = append(
+			flows, c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr),
+			c.arpResponderRemotePodFlow(*c.nodeConfig.PodCIDR, peerPodCIDR, c.nodeConfig.MAC, c.nodeConfig.IP))
+	}
 	return c.addMissingFlows(c.nodeFlowCache, hostname, flows)
 }
 
@@ -157,9 +166,15 @@ func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podI
 		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort),
 		c.arpSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort),
 		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort),
-		c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC),
 	}
 
+	if c.nodeConfig.PodEncapMode.SupportsEncap() {
+		flows = append(flows, c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC))
+	}
+	if c.nodeConfig.PodEncapMode.SupportsNoEncap() {
+		flows = append(flows, c.patchPortClassifierARPFlow(PatchOfPort, podInterfaceIP),
+			c.patchPortClassifierIPFlow(PatchOfPort, podInterfaceIP))
+	}
 	return c.addMissingFlows(c.podFlowCache, containerID, flows)
 }
 
@@ -199,7 +214,8 @@ func (c *client) InstallTunnelFlows(tunnelOFPort uint32) error {
 	return nil
 }
 
-func (c *client) Initialize() error {
+func (c *client) Initialize(config *types.NodeConfig) error {
+	c.nodeConfig = config
 	// Initiate connections to target OFswitch, and create tables on the switch.
 	if err := c.bridge.Connect(maxRetryForOFSwitch, make(chan struct{})); err != nil {
 		return err

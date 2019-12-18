@@ -388,6 +388,16 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (
 	}
 	klog.Infof("Added ip addresses from IPAM driver, %v", ipamResult)
 	result.IPs = ipamResult.IPs
+	// allow ARPing to other containers on different nodes directly by replace
+	//node pod CIDR mask with cluster pod CIDR mask
+	if s.nodeConfig.PodEncapMode.SupportsNoEncap() {
+		for _, ip := range result.IPs {
+			if s.nodeConfig.PodCIDR.Contains(ip.Address.IP) {
+				ip.Address.Mask = s.nodeConfig.ClusterPodCIDR.Mask
+				break
+			}
+		}
+	}
 	result.Routes = ipamResult.Routes
 	// Ensure interface gateway setting and mapping relations between result.Interfaces and result.IPs
 	updateResultIfaceConfig(result, s.nodeConfig.GatewayConfig.IP)
