@@ -26,8 +26,6 @@ const (
 	OVSDatapathNetdev = "netdev"
 )
 
-//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.raw.txt -destination testing/mock_ovsconfig.go -package=testing github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig OVSBridgeClient
-
 type OVSBridgeClient interface {
 	Create() Error
 	Delete() Error

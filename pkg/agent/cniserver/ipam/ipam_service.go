@@ -30,8 +30,6 @@ type IPAMConfig struct {
 	Gateway string `json:"gateway,omitempty"`
 }
 
-//go:generate mockgen -copyright_file ../../../../hack/boilerplate/license_header.raw.txt -destination testing/mock_ipam.go -package=testing github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam IPAMDriver
-
 type IPAMDriver interface {
 	Add(args *invoke.Args, networkConfig []byte) (*current.Result, error)
 	Del(args *invoke.Args, networkConfig []byte) error

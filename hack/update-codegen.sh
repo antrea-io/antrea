@@ -14,35 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# get and install specific version of code-generator which is compatible with apimachinery
-go get -d k8s.io/code-generator@kubernetes-1.15.0
-go install k8s.io/code-generator/cmd/{client-gen,deepcopy-gen,conversion-gen}
+set -o errexit
+set -o nounset
+set -o pipefail
 
-# re-generate both client and deepcopy for monitoring api
-# position generate client to its desired location
-export GOPATH=`go env GOPATH`
-$GOPATH/bin/client-gen \
-  --clientset-name "versioned" \
-  --input-base "github.com/vmware-tanzu/antrea/pkg/apis/" \
-  --input "clusterinformation/crd/antrea/v1beta1,networkpolicy/v1beta1" \
-  --output-base .crdtmp \
-  --output-package "github.com/vmware-tanzu/antrea/pkg/client/clientset" \
-  --go-header-file hack/boilerplate/license_header.go.txt
-cp -r .crdtmp/github.com/vmware-tanzu/antrea/* .
-rm -rf .crdtmp
+ANTREA_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+IMAGE_NAME="antrea/codegen:latest"
 
-$GOPATH/bin/deepcopy-gen \
-  --input-dirs "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/crd/antrea/v1beta1,github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy,github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1" \
-  --output-base .crdtmp \
-  -O zz_generated.deepcopy \
-  --go-header-file hack/boilerplate/license_header.go.txt
-cp -r .crdtmp/github.com/vmware-tanzu/antrea/* .
-rm -rf .crdtmp
+function docker_run() {
+  docker run --rm \
+		-w /go/src/github.com/vmware-tanzu/antrea \
+		-v ${ANTREA_ROOT}:/go/src/github.com/vmware-tanzu/antrea \
+		"${IMAGE_NAME}" "$@"
+}
 
-$GOPATH/bin/conversion-gen  \
-  --input-dirs "github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1,github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/" \
-  --output-base .crdtmp \
-  -O zz_generated.conversion \
-  --go-header-file hack/boilerplate/license_header.go.txt
-cp -r .crdtmp/github.com/vmware-tanzu/antrea/* .
-rm -rf .crdtmp
+docker_run hack/update-codegen-dockerized.sh
