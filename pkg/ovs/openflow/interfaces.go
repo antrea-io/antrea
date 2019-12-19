@@ -56,7 +56,6 @@ const (
 	NxmFieldReg     = "NXM_NX_REG"
 )
 
-//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -destination testing/mock_openflow.go -package=testing github.com/vmware-tanzu/antrea/pkg/ovs/openflow Bridge,Table,Flow,Action,FlowBuilder
 // Bridge defines operations on an openflow bridge.
 type Bridge interface {
 	CreateTable(id, next TableIDType, missAction MissActionType) Table

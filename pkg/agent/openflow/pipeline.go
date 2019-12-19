@@ -91,8 +91,6 @@ var (
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 )
 
-//go:generate mockgen -copyright_file ../../../hack/boilerplate/license_header.go.txt -package=testing -destination testing/mock_operations.go github.com/vmware-tanzu/antrea/pkg/agent/openflow FlowOperations
-
 type FlowOperations interface {
 	Add(flow binding.Flow) error
 	Modify(flow binding.Flow) error
