@@ -22,10 +22,6 @@ import (
 )
 
 func TestIPBlockWithExcept(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping TestIPBlockWithExcept in short mode")
-	}
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -105,7 +101,7 @@ func TestIPBlockWithExcept(t *testing.T) {
 
 	// pod0 can wget to service.
 	if err = data.runWgetCommandFromTestPod(podName0, svcName); err != nil {
-		t.Fatalf("Pod %s should be able to connect Service %s, but was not able to connect", podName0, svcName)
+		t.Fatalf("Pod %s should be able to connect Service %s, but was not able to connect: %v", podName0, svcName, err)
 	}
 	// pod1 cannot wget to service.
 	if err = data.runWgetCommandFromTestPod(podName1, svcName); err == nil {
@@ -114,7 +110,7 @@ func TestIPBlockWithExcept(t *testing.T) {
 
 	// pod0 can wget to pod IP.
 	if err = data.runWgetCommandFromTestPodToPodIP(podName0, nginxPodIP); err != nil {
-		t.Fatalf("Pod %s should be able to connect Pod %s, but was not able to connect", podName0, nginxPodIP)
+		t.Fatalf("Pod %s should be able to connect Pod %s, but was not able to connect: %v", podName0, nginxPodIP, err)
 	}
 	// pod1 cannot wget to pod IP.
 	if err = data.runWgetCommandFromTestPodToPodIP(podName1, nginxPodIP); err == nil {
