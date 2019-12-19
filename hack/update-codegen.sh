@@ -19,7 +19,7 @@ set -o nounset
 set -o pipefail
 
 ANTREA_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-IMAGE_NAME="qtian/codegen:latest"
+IMAGE_NAME="antrea/codegen:latest"
 
 function docker_run() {
   docker run --rm \
