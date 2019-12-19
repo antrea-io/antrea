@@ -123,6 +123,9 @@ func TestPodConnectivityDifferentNodes(t *testing.T) {
 // TestPodConnectivityAfterAntreaRestart checks that restarting antrea-agent does not create
 // connectivity issues between Pods.
 func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping TestPodConnectivityAfterAntreaRestart in short mode")
+	}
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
