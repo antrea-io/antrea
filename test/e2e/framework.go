@@ -781,8 +781,11 @@ func (data *TestData) runPingCommandFromTestPod(podName string, targetIP string,
 
 func (data *TestData) runWgetCommandFromTestPod(podName string, svcName string) error {
 	cmd := []string{"nc", "-vz", "-w", "8", svcName + "." + testNamespace, "80"}
-	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
-	return err
+	stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("nc stdout: <%v>, stderr: <%v>, err: <%v>", stdout, stderr, err)
 }
 
 func (data *TestData) runWgetCommandFromTestPodToPodIP(podName string, podIP string) error {
