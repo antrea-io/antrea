@@ -192,6 +192,18 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	return n
 }
 
+func (n *NetworkPolicyController) GetNetworkPolicyNum() int {
+	return len(n.internalNetworkPolicyStore.List())
+}
+
+func (n *NetworkPolicyController) GetAddressGroupNum() int {
+	return len(n.addressGroupStore.List())
+}
+
+func (n *NetworkPolicyController) GetAppliedToGroupNum() int {
+	return len(n.appliedToGroupStore.List())
+}
+
 // toGroupSelector converts the podSelector and namespaceSelector
 // and NetworkPolicy Namespace to a networkpolicy.GroupSelector object.
 func toGroupSelector(namespace string, podSelector, nsSelector *metav1.LabelSelector) *antreatypes.GroupSelector {
@@ -576,7 +588,7 @@ func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolic
 func (n *NetworkPolicyController) addNetworkPolicy(obj interface{}) {
 	np := obj.(*networkingv1.NetworkPolicy)
 	defer klog.V(2).Infof("Finished processing NetworkPolicy %s/%s ADD event", np.ObjectMeta.Namespace, np.ObjectMeta.Name)
-	// Create an internal NetworkPolicy object correspoding to this NetworkPolicy
+	// Create an internal NetworkPolicy object corresponding to this NetworkPolicy
 	// and enqueue task to internal NetworkPolicy Workqueue.
 	internalNP := n.processNetworkPolicy(np)
 	klog.V(2).Infof("Creating new internal NetworkPolicy %s/%s", internalNP.Namespace, internalNP.Name)
@@ -590,7 +602,7 @@ func (n *NetworkPolicyController) addNetworkPolicy(obj interface{}) {
 func (n *NetworkPolicyController) updateNetworkPolicy(old, cur interface{}) {
 	np := cur.(*networkingv1.NetworkPolicy)
 	defer klog.V(2).Infof("Finished processing NetworkPolicy %s/%s UPDATE event", np.ObjectMeta.Namespace, np.ObjectMeta.Name)
-	// Update an internal NetworkPolicy ID, correspoding to this NetworkPolicy and
+	// Update an internal NetworkPolicy ID, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processNetworkPolicy(np)
 	klog.V(2).Infof("Updating existing internal NetworkPolicy %s/%s", curInternalNP.Namespace, curInternalNP.Name)

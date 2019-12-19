@@ -110,6 +110,26 @@ func getNetworkPolicy(uid string, from, to, appliedTo []string, services []v1bet
 	}
 }
 
+func getNetworkPolicyWithMultipleRules(uid string, from, to, appliedTo []string, services []v1beta1.Service) *v1beta1.NetworkPolicy {
+	networkPolicyRule1 := v1beta1.NetworkPolicyRule{
+		Direction: v1beta1.DirectionIn,
+		From:      v1beta1.NetworkPolicyPeer{AddressGroups: from},
+		To:        v1beta1.NetworkPolicyPeer{},
+		Services:  services,
+	}
+	networkPolicyRule2 := v1beta1.NetworkPolicyRule{
+		Direction: v1beta1.DirectionOut,
+		From:      v1beta1.NetworkPolicyPeer{},
+		To:        v1beta1.NetworkPolicyPeer{AddressGroups: to},
+		Services:  services,
+	}
+	return &v1beta1.NetworkPolicy{
+		ObjectMeta:      v1.ObjectMeta{UID: types.UID(uid)},
+		Rules:           []v1beta1.NetworkPolicyRule{networkPolicyRule1, networkPolicyRule2},
+		AppliedToGroups: appliedTo,
+	}
+}
+
 func TestAddSingleGroupRule(t *testing.T) {
 	controller, clientset, reconciler := newTestController()
 	addressGroupWatcher := watch.NewFake()
@@ -139,6 +159,9 @@ func TestAddSingleGroupRule(t *testing.T) {
 		t.Fatalf("Expected no update, got %v", ruleID)
 	case <-time.After(time.Millisecond * 100):
 	}
+	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
+	assert.Equal(t, 0, controller.GetAddressGroupNum())
+	assert.Equal(t, 0, controller.GetAppliedToGroupNum())
 
 	// addressGroup1 comes, no rule will be synced due to missing appliedToGroup1 data.
 	addressGroupWatcher.Add(getAddressGroup("addressGroup1", []v1beta1.IPAddress{ipStrToIPAddress("1.1.1.1"), ipStrToIPAddress("2.2.2.2")}))
@@ -147,6 +170,9 @@ func TestAddSingleGroupRule(t *testing.T) {
 		t.Fatalf("Expected no update, got %v", ruleID)
 	case <-time.After(time.Millisecond * 100):
 	}
+	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
+	assert.Equal(t, 1, controller.GetAddressGroupNum())
+	assert.Equal(t, 0, controller.GetAppliedToGroupNum())
 
 	// appliedToGroup1 comes, policy1 will be synced.
 	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup1", []v1beta1.PodReference{{"pod1", "ns1"}}))
@@ -171,6 +197,9 @@ func TestAddSingleGroupRule(t *testing.T) {
 	case <-time.After(time.Millisecond * 100):
 		t.Fatal("Expected one update, got none")
 	}
+	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
+	assert.Equal(t, 1, controller.GetAddressGroupNum())
+	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 }
 
 func TestAddMultipleGroupsRule(t *testing.T) {
@@ -206,6 +235,9 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 		t.Fatalf("Expected no update, got %v", ruleID)
 	case <-time.After(time.Millisecond * 100):
 	}
+	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
+	assert.Equal(t, 1, controller.GetAddressGroupNum())
+	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 
 	// addressGroup2 comes, no rule will be synced due to missing appliedToGroup2 data.
 	addressGroupWatcher.Add(getAddressGroup("addressGroup2", []v1beta1.IPAddress{ipStrToIPAddress("1.1.1.1"), ipStrToIPAddress("3.3.3.3")}))
@@ -214,6 +246,9 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 		t.Fatalf("Expected no update, got %v", ruleID)
 	case <-time.After(time.Millisecond * 100):
 	}
+	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
+	assert.Equal(t, 2, controller.GetAddressGroupNum())
+	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 
 	// appliedToGroup2 comes, policy1 will be synced.
 	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup2", []v1beta1.PodReference{{"pod2", "ns2"}}))
@@ -238,6 +273,9 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	case <-time.After(time.Millisecond * 100):
 		t.Fatal("Expected one update, got none")
 	}
+	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
+	assert.Equal(t, 2, controller.GetAddressGroupNum())
+	assert.Equal(t, 2, controller.GetAppliedToGroupNum())
 }
 
 func TestDeleteRule(t *testing.T) {
@@ -268,6 +306,9 @@ func TestDeleteRule(t *testing.T) {
 	case <-time.After(time.Millisecond * 100):
 		t.Fatal("Expected one update, got none")
 	}
+	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
+	assert.Equal(t, 1, controller.GetAddressGroupNum())
+	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 
 	networkPolicyWatcher.Delete(getNetworkPolicy("policy1", []string{}, []string{}, []string{}, nil))
 	select {
@@ -279,4 +320,77 @@ func TestDeleteRule(t *testing.T) {
 	case <-time.After(time.Millisecond * 100):
 		t.Fatal("Expected one update, got none")
 	}
+}
+
+func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
+	controller, clientset, reconciler := newTestController()
+	addressGroupWatcher := watch.NewFake()
+	appliedToGroupWatcher := watch.NewFake()
+	networkPolicyWatcher := watch.NewFake()
+	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
+	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
+	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
+
+	protocolTCP := v1beta1.ProtocolTCP
+	port := int32(80)
+	services := []v1beta1.Service{{Protocol: &protocolTCP, Port: &port}}
+	desiredRule1 := &CompletedRule{
+		rule:          &rule{Direction: v1beta1.DirectionIn, Services: services},
+		FromAddresses: sets.NewString("1.1.1.1", "2.2.2.2"),
+		ToAddresses:   sets.NewString(),
+		Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+	}
+	desiredRule2 := &CompletedRule{
+		rule:          &rule{Direction: v1beta1.DirectionOut, Services: services},
+		FromAddresses: sets.NewString("3.3.3.3", "4.4.4.4"),
+		ToAddresses:   sets.NewString(),
+		Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+	}
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go controller.Run(stopCh)
+
+	// Test NetworkPolicyInfoQuerier functions when the NetworkPolicy has multiple rules.
+	networkPolicyWatcher.Add(getNetworkPolicyWithMultipleRules("policy1", []string{"addressGroup1"}, []string{"addressGroup2"}, []string{"appliedToGroup1"}, services))
+	addressGroupWatcher.Add(getAddressGroup("addressGroup1", []v1beta1.IPAddress{ipStrToIPAddress("1.1.1.1"), ipStrToIPAddress("2.2.2.2")}))
+	addressGroupWatcher.Add(getAddressGroup("addressGroup2", []v1beta1.IPAddress{ipStrToIPAddress("3.3.3.3"), ipStrToIPAddress("4.4.4.4")}))
+	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup1", []v1beta1.PodReference{{"pod1", "ns1"}}))
+	select {
+	case ruleID := <-reconciler.updated:
+		actualRule, _ := reconciler.getLastRealized(ruleID)
+		if actualRule.Direction == v1beta1.DirectionIn {
+			if !assert.ElementsMatch(t, actualRule.Services, desiredRule1.Services) {
+				t.Errorf("Expected Services %v, got %v", actualRule.Services, desiredRule1.Services)
+			}
+			if !actualRule.FromAddresses.Equal(desiredRule1.FromAddresses) {
+				t.Errorf("Expected FromAddresses %v, got %v", actualRule.FromAddresses, desiredRule1.FromAddresses)
+			}
+			if !actualRule.ToAddresses.Equal(desiredRule1.ToAddresses) {
+				t.Errorf("Expected ToAddresses %v, got %v", actualRule.ToAddresses, desiredRule1.ToAddresses)
+			}
+			if !actualRule.Pods.Equal(desiredRule1.Pods) {
+				t.Errorf("Expected Pods %v, got %v", actualRule.Pods, desiredRule1.Pods)
+			}
+		}
+		if actualRule.Direction == v1beta1.DirectionOut {
+			if !assert.ElementsMatch(t, actualRule.Services, desiredRule2.Services) {
+				t.Errorf("Expected Services %v, got %v", actualRule.Services, desiredRule2.Services)
+			}
+			if !actualRule.FromAddresses.Equal(desiredRule2.FromAddresses) {
+				t.Errorf("Expected FromAddresses %v, got %v", actualRule.FromAddresses, desiredRule2.FromAddresses)
+			}
+			if !actualRule.ToAddresses.Equal(desiredRule2.ToAddresses) {
+				t.Errorf("Expected ToAddresses %v, got %v", actualRule.ToAddresses, desiredRule2.ToAddresses)
+			}
+			if !actualRule.Pods.Equal(desiredRule2.Pods) {
+				t.Errorf("Expected Pods %v, got %v", actualRule.Pods, desiredRule2.Pods)
+			}
+		}
+
+	case <-time.After(time.Millisecond * 100):
+		t.Fatal("Expected two updates, got timeout")
+	}
+	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
+	assert.Equal(t, 2, controller.GetAddressGroupNum())
+	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 }
