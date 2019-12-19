@@ -23,7 +23,7 @@ If you make any change to any `types.go`, you can re-generate the code by invoki
 Antrea uses the [GoMock](https://github.com/golang/mock) framework for its unit tests.
 
 If you add or modify interfaces that need to be mocked, please add or update `MOCKGEN_TARGETS` in 
-[update-codegen-dockerized.sh](hack/update-codegen-dockerized.sh) accordingly. All the mocks for a given package will be
+[update-codegen-dockerized.sh](/hack/update-codegen-dockerized.sh) accordingly. All the mocks for a given package will be
 generated in a sub-package called `testing`. For example, the mock code for the interface `Baz` defined in the package
 `pkg/foo/bar` will be generated to `pkg/foo/bar/testing/mock_bar.go`, and you can import it via `pkg/foo/bar/testing`.
 
