@@ -58,7 +58,7 @@ func (r *REST) NewList() runtime.Object {
 }
 
 func (r *REST) Get(ctx context.Context, name string, options *v1.GetOptions) (runtime.Object, error) {
-	addressGroup, exists, err := r.appliedToGroupStore.Get(name)
+	appliedToGroup, exists, err := r.appliedToGroupStore.Get(name)
 	if err != nil {
 		return nil, errors.NewInternalError(err)
 	}
@@ -66,7 +66,7 @@ func (r *REST) Get(ctx context.Context, name string, options *v1.GetOptions) (ru
 		return nil, errors.NewNotFound(networkpolicyapis.Resource("appliedtogroup"), name)
 	}
 	obj := new(networkpolicyapis.AppliedToGroup)
-	store.ToAppliedToGroupMsg(addressGroup.(*types.AppliedToGroup), obj, true, nil)
+	store.ToAppliedToGroupMsg(appliedToGroup.(*types.AppliedToGroup), obj, true, nil)
 	return obj, nil
 }
 
