@@ -166,7 +166,8 @@ fi
 mkdir $MODE && cd $MODE
 touch kustomization.yml
 $KUSTOMIZE edit add base $BASE
-cp ../../patches/$MODE/*.yml .
+# ../../patches/$MODE may be empty so we use find and not simply cp
+find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
     $KUSTOMIZE edit set image antrea=antrea/antrea-ubuntu:latest
