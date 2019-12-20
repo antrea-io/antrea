@@ -41,7 +41,7 @@ to implement the communication channel to Antrea Agents. Each Antrea Agent
 connects to the Controller API server and watches the computed NetworkPolicy
 objects. Controller also exposes a REST API for `antctl` on the same HTTP
 endpoint. See more information about the Controller API server implementation
-in the [Controller API server section](#Controller API server).
+in the [Controller API server section](#Controller-API-server).
 
 #### Controller API server
 
