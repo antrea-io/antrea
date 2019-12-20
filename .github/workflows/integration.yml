@@ -20,4 +20,5 @@ jobs:
     - name: Install OVS
       run: sudo apt-get install openvswitch-switch
     - name: Run integration tests
-      run: sudo make test-integration
+      # Use the specified go version instead of the default one installed on the Github worker VM.
+      run: sudo make GOROOT="$(go env GOROOT)" GOPATH="$(go env GOPATH)" GO="$(go env GOROOT)/bin/go" test-integration
