@@ -37,6 +37,8 @@
       file:
         path: /home/{{ test_user }}/.kube
         state: directory
+        owner: "{{ test_user }}"
+        group: "{{ test_user }}"
     - name: Copy kubeconfig file to /home/{{ test_user }}/.kube
       copy:
         src: /etc/kubernetes/admin.conf
