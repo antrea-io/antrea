@@ -101,6 +101,14 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, numPods int) (podN
 	return podNames, cleanup
 }
 
+func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
+	numPods := 2 // can be increased
+	podNames, deletePods := createPodsOnDifferentNodes(t, data, numPods)
+	defer deletePods()
+
+	data.runPingMesh(t, podNames)
+}
+
 // TestPodConnectivityDifferentNodes checks that Pods running on different Nodes can reach each
 // other, by creating multiple Pods across distinct Nodes and having them ping each other.
 func TestPodConnectivityDifferentNodes(t *testing.T) {
@@ -113,11 +121,31 @@ func TestPodConnectivityDifferentNodes(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	numPods := 2 // can be increased
-	podNames, deletePods := createPodsOnDifferentNodes(t, data, numPods)
-	defer deletePods()
+	data.testPodConnectivityDifferentNodes(t)
+}
 
-	data.runPingMesh(t, podNames)
+func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
+	var err error
+
+	t.Logf("Deleting Antrea Agent DaemonSet")
+	if err = data.deleteAntrea(defaultTimeout); err != nil {
+		t.Fatalf("Error when deleting Antrea DaemonSet: %v", err)
+	}
+
+	t.Logf("Applying Antrea YAML")
+	if enableIPSec {
+		err = data.deployAntreaIPSec()
+	} else {
+		err = data.deployAntrea()
+	}
+	if err != nil {
+		t.Fatalf("Error when restarting Antrea: %v", err)
+	}
+
+	t.Logf("Waiting for all Antrea DaemonSet pods")
+	if err = data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
+		t.Fatalf("Error when restarting Antrea: %v", err)
+	}
 }
 
 // TestPodConnectivityAfterAntreaRestart checks that restarting antrea-agent does not create
@@ -138,19 +166,7 @@ func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
 
 	data.runPingMesh(t, podNames)
 
-	t.Logf("Deleting Antrea Agent DaemonSet")
-	if err := data.deleteAntrea(defaultTimeout); err != nil {
-		t.Fatalf("Error when deleting Antrea DaemonSet: %v", err)
-	}
-
-	t.Logf("Applying Antrea YAML")
-	if err := data.deployAntrea(); err != nil {
-		t.Fatalf("Error when restarting Antrea: %v", err)
-	}
-	t.Logf("Waiting for all Antrea DaemonSet pods")
-	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
-		t.Fatalf("Error when restarting Antrea: %v", err)
-	}
+	data.redeployAntrea(t, false)
 
 	data.runPingMesh(t, podNames)
 }

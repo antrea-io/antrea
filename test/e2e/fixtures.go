@@ -124,7 +124,7 @@ func exportLogs(tb testing.TB, data *TestData) {
 			return nil
 		}
 		defer w.Close()
-		cmd := fmt.Sprintf("kubectl -n %s logs --all-containers %s", AntreaNamespace, podName)
+		cmd := fmt.Sprintf("kubectl -n %s logs --all-containers %s", antreaNamespace, podName)
 		stdout := runKubectl(cmd)
 		if stdout == "" {
 			return nil
@@ -140,7 +140,7 @@ func exportLogs(tb testing.TB, data *TestData) {
 			return nil
 		}
 		defer w.Close()
-		cmd := fmt.Sprintf("kubectl -n %s describe pod %s", AntreaNamespace, podName)
+		cmd := fmt.Sprintf("kubectl -n %s describe pod %s", antreaNamespace, podName)
 		stdout := runKubectl(cmd)
 		if stdout == "" {
 			return nil

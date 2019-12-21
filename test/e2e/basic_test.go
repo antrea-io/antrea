@@ -89,11 +89,11 @@ func TestDeletePod(t *testing.T) {
 	ifName := util.GenerateContainerInterfaceName(podName, testNamespace)
 	t.Logf("Host interface name for Pod is '%s'", ifName)
 
-	var AntreaPodName string
-	if AntreaPodName, err = data.getAntreaPodOnNode(nodeName); err != nil {
+	var antreaPodName string
+	if antreaPodName, err = data.getAntreaPodOnNode(nodeName); err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
-	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, AntreaPodName)
+	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
 
 	doesInterfaceExist := func() bool {
 		cmd := fmt.Sprintf("ip link show %s", ifName)
@@ -107,12 +107,12 @@ func TestDeletePod(t *testing.T) {
 
 	doesOVSPortExist := func() bool {
 		cmd := []string{"ovs-vsctl", "port-to-br", ifName}
-		if _, stderr, err := data.runCommandFromPod(AntreaNamespace, AntreaPodName, OVSContainerName, cmd); err == nil {
+		if _, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd); err == nil {
 			return true
 		} else if strings.Contains(stderr, "no port named") {
 			return false
 		} else {
-			t.Fatalf("Error when running ovs-vsctl command on Pod '%s': %v", AntreaPodName, err)
+			t.Fatalf("Error when running ovs-vsctl command on Pod '%s': %v", antreaPodName, err)
 		}
 		return true
 	}

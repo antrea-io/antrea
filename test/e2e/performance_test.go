@@ -292,7 +292,7 @@ func checkRealize(policyRules int, data *TestData) (bool, error) {
 	}
 	// table 90 is the ingressRuleTable where the rules in workload network policy is being applied to.
 	cmd := []string{"ovs-ofctl", "dump-flows", "br-int", "table=90"}
-	stdout, _, err := data.runCommandFromPod(AntreaNamespace, antreaPodName, "antrea-agent", cmd)
+	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
 	if err != nil {
 		return false, err
 	}
