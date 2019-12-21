@@ -38,20 +38,20 @@ import (
 	"github.com/vmware-tanzu/antrea/test/e2e/providers"
 )
 
-const defaultTimeout time.Duration = 90 * time.Second
+const (
+	defaultTimeout time.Duration = 90 * time.Second
 
-const AntreaDaemonSet string = "antrea-agent"
+	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
+	antreaNamespace      string = "kube-system"
+	antreaDaemonSet      string = "antrea-agent"
+	testNamespace        string = "antrea-test"
+	busyboxContainerName string = "busybox"
+	ovsContainerName     string = "antrea-ovs"
+	antreaYML            string = "antrea.yml"
+	antreaIPSecYML       string = "antrea-ipsec.yml"
 
-const testNamespace string = "antrea-test"
-
-const busyboxContainerName string = "busybox"
-
-const nameSuffixLength int = 8
-
-const OVSContainerName string = "antrea-ovs"
-
-// AntreaNamespace is the K8s Namespace in which all Antrea resources are running.
-const AntreaNamespace string = "kube-system"
+	nameSuffixLength int = 8
+)
 
 type ClusterNode struct {
 	idx  int // 0 for master Node
@@ -248,22 +248,40 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 	return err
 }
 
-// deployAntrea deploys the Antrea DaemonSet using kubectl on the master node.
-func (data *TestData) deployAntrea() error {
+// deployAntreaCommon deploys Antrea using kubectl on the master node.
+func (data *TestData) deployAntreaCommon(ipsec bool) error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
-	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), "kubectl apply -f antrea.yml")
+
+	var yamlFile string
+	if ipsec {
+		yamlFile = antreaIPSecYML
+	} else {
+		yamlFile = antreaYML
+	}
+
+	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), "kubectl apply -f "+yamlFile)
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deploying Antrea; is antrea.yml available on the master Node?")
+		return fmt.Errorf("error when deploying Antrea; is %s available on the master Node?", yamlFile)
 	}
 	return nil
+}
+
+// deployAntrea deploys Antrea with the standard manifest.
+func (data *TestData) deployAntrea() error {
+	return data.deployAntreaCommon(false)
+}
+
+// deployAntreaIPSec deploys Antrea with IPSec tunnel enabled.
+func (data *TestData) deployAntreaIPSec() error {
+	return data.deployAntreaCommon(true)
 }
 
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		daemonSet, err := data.clientset.AppsV1().DaemonSets(AntreaNamespace).Get(AntreaDaemonSet, metav1.GetOptions{})
+		daemonSet, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(antreaDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
 		}
@@ -287,7 +305,7 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 // checkCoreDNSPods checks that all the Pods for the CoreDNS deployment are ready. If not, delete
 // all the Pods to force them to restart and waits up to timeout for the Pods to become ready.
 func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
-	if deployment, err := data.clientset.AppsV1().Deployments(AntreaNamespace).Get("coredns", metav1.GetOptions{}); err != nil {
+	if deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get("coredns", metav1.GetOptions{}); err != nil {
 		return fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
 	} else if deployment.Status.UnavailableReplicas == 0 {
 		// deployment ready, nothing to do
@@ -302,11 +320,11 @@ func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "k8s-app=kube-dns",
 	}
-	if err := data.clientset.CoreV1().Pods(AntreaNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
 		return fmt.Errorf("error when deleting all CoreDNS Pods: %v", err)
 	}
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		deployment, err := data.clientset.AppsV1().Deployments(AntreaNamespace).Get("coredns", metav1.GetOptions{})
+		deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get("coredns", metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
 		}
@@ -361,7 +379,7 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-	if err := data.clientset.AppsV1().DaemonSets(AntreaNamespace).Delete("antrea-agent", deleteOptions); err != nil {
+	if err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Delete("antrea-agent", deleteOptions); err != nil {
 		if errors.IsNotFound(err) {
 			// no Antrea DaemonSet running, we return right away
 			return nil
@@ -369,7 +387,7 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 		return fmt.Errorf("error when trying to delete Antrea DaemonSet: %v", err)
 	}
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if _, err := data.clientset.AppsV1().DaemonSets(AntreaNamespace).Get(AntreaDaemonSet, metav1.GetOptions{}); err != nil {
+		if _, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(antreaDaemonSet, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				// Antrea DaemonSet does not exist any more, success
 				return true, nil
@@ -609,7 +627,7 @@ func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err e
 		LabelSelector: "app=antrea,component=antrea-agent",
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	}
-	pods, err := data.clientset.CoreV1().Pods(AntreaNamespace).List(listOptions)
+	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(listOptions)
 	if err != nil {
 		return "", fmt.Errorf("failed to list Antrea Pods: %v", err)
 	}
@@ -760,7 +778,7 @@ func (data *TestData) forAllAntreaPods(fn func(nodeName, podName string) error) 
 			LabelSelector: "app=antrea",
 			FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.name),
 		}
-		pods, err := data.clientset.CoreV1().Pods(AntreaNamespace).List(listOptions)
+		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(listOptions)
 		if err != nil {
 			return fmt.Errorf("failed to list Antrea Pods on Node '%s': %v", node.name, err)
 		}
