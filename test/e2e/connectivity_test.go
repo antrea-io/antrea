@@ -139,12 +139,16 @@ func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
 		err = data.deployAntrea()
 	}
 	if err != nil {
-		t.Fatalf("Error when restarting Antrea: %v", err)
+		t.Fatalf("Error when applying Antrea YAML: %v", err)
 	}
 
-	t.Logf("Waiting for all Antrea DaemonSet pods")
-	if err = data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
+	t.Logf("Waiting for all Antrea DaemonSet Pods")
+	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting Antrea: %v", err)
+	}
+	t.Logf("Checking CoreDNS deployment")
+	if err := data.checkCoreDNSPods(defaultTimeout); err != nil {
+		t.Fatalf("Error when checking CoreDNS deployment: %v", err)
 	}
 }
 

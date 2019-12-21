@@ -16,9 +16,13 @@ package e2e
 
 import (
 	"fmt"
+	"net"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 )
@@ -106,15 +110,11 @@ func TestDeletePod(t *testing.T) {
 	}
 
 	doesOVSPortExist := func() bool {
-		cmd := []string{"ovs-vsctl", "port-to-br", ifName}
-		if _, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd); err == nil {
-			return true
-		} else if strings.Contains(stderr, "no port named") {
-			return false
-		} else {
-			t.Fatalf("Error when running ovs-vsctl command on Pod '%s': %v", antreaPodName, err)
+		exists, err := data.doesOVSPortExist(antreaPodName, ifName)
+		if err != nil {
+			t.Fatalf("Cannot determine if OVS port exists: %v", err)
 		}
-		return true
+		return exists
 	}
 
 	t.Logf("Checking that the veth interface and the OVS port exist")
@@ -219,5 +219,169 @@ func TestIPAMRestart(t *testing.T) {
 
 	if podIP1 == podIP2 {
 		t.Errorf("Pods '%s' and '%s' were assigned the same IP %s", podName1, podName2, podIP1)
+	}
+}
+
+// TestReconcileGatewayRoutesOnStartup checks that when the Antrea agent is restarted, the set of
+// gateway routes is updated correctly, i.e. stale routes (for Nodes which are no longer in the
+// cluster) are removed and missing routes are added.
+func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
+	if clusterInfo.numNodes < 2 {
+		t.Skipf("Skipping test as it requires 2 different nodes")
+	}
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	type Route struct {
+		peerPodCIDR *net.IPNet
+		peerPodGW   net.IP
+	}
+
+	nodeName := nodeName(0)
+	antreaPodName := func() string {
+		antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+		if err != nil {
+			t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
+		}
+		t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
+		return antreaPodName
+	}
+
+	getGatewayRoutes := func() (routes []Route, err error) {
+		cmd := fmt.Sprintf("ip route list dev %s", antreaGWName)
+		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)
+		if err != nil {
+			return nil, fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
+		}
+		if rc != 0 {
+			return nil, fmt.Errorf("running ip command on Node '%s' returned error", nodeName)
+		}
+		re := regexp.MustCompile(`([^\s]+) via ([^\s]+)`)
+		for _, line := range strings.Split(stdout, "\n") {
+			var err error
+			matches := re.FindStringSubmatch(line)
+			if len(matches) == 0 {
+				continue
+			}
+			route := Route{}
+			if _, route.peerPodCIDR, err = net.ParseCIDR(matches[1]); err != nil {
+				return nil, fmt.Errorf("%s is not a valid net CIDR", matches[1])
+			}
+			if route.peerPodGW = net.ParseIP(matches[2]); route.peerPodGW == nil {
+				return nil, fmt.Errorf("%s is not a valid IP", matches[2])
+			}
+			routes = append(routes, route)
+		}
+		return routes, nil
+	}
+
+	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)
+	var routes []Route
+	if err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (found bool, err error) {
+		routes, err = getGatewayRoutes()
+		if err != nil {
+			return false, err
+		}
+		if len(routes) < clusterInfo.numNodes-1 {
+			// Not enough routes, keep trying
+			return false, nil
+		} else if len(routes) > clusterInfo.numNodes-1 {
+			return false, fmt.Errorf("found too many gateway routes, expected %d but got %d", clusterInfo.numNodes-1, len(routes))
+		}
+		return true, nil
+	}); err == wait.ErrWaitTimeout {
+		t.Fatalf("Not enough gateway routes after %v", defaultTimeout)
+	} else if err != nil {
+		t.Fatalf("Error while waiting for gateway routes: %v", err)
+	} else {
+		t.Logf("Found all expected gateway routes")
+	}
+
+	routeToDelete := routes[0]
+	// A dummy route
+	routeToAdd := Route{}
+	_, routeToAdd.peerPodCIDR, _ = net.ParseCIDR("99.99.99.0/24")
+	routeToAdd.peerPodGW = net.ParseIP("99.99.99.1")
+
+	// We run the ip command from the antrea-agent container for delete / add since they need to
+	// be run as root and the antrea-agent container is privileged. If we used RunCommandOnNode,
+	// we may need to use "sudo" for some providers (e.g. vagrant).
+	deleteGatewayRoute := func(route Route) error {
+		cmd := []string{"ip", "route", "del", route.peerPodCIDR.String()}
+		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
+		if err != nil {
+			return fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
+		}
+		return nil
+	}
+
+	addGatewayRoute := func(route Route) error {
+		cmd := []string{"ip", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
+		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
+		if err != nil {
+			return fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
+		}
+		return nil
+	}
+
+	t.Logf("Deleting one actual gateway route and adding a dummy one")
+	if err := deleteGatewayRoute(routeToDelete); err != nil {
+		t.Fatalf("Error when deleting route: %v", err)
+	}
+	if err := addGatewayRoute(routeToAdd); err != nil {
+		t.Fatalf("Error when adding dummy route route: %v", err)
+	}
+	defer func() {
+		// Cleanup the dummy route regardless of whether the test was a success or a
+		// failure; ignore error (there will be an error if the test is a success since the
+		// dummy route will no longer exist).
+		_ = deleteGatewayRoute(routeToAdd)
+	}()
+
+	t.Logf("Restarting antrea-agent on Node '%s'", nodeName)
+	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
+		t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
+	}
+
+	t.Logf("Checking that all Antrea DaemonSet Pods are running")
+	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
+		t.Fatalf("Error when waiting for Antrea Pods: %v", err)
+	}
+
+	// We expect the agent to delete the extra route we added and add back the route we deleted
+	t.Logf("Waiting for gateway routes to converge")
+	if err := wait.Poll(1*time.Second, defaultTimeout, func() (bool, error) {
+		newRoutes, err := getGatewayRoutes()
+		if err != nil {
+			return false, err
+		}
+		if len(newRoutes) != len(routes) {
+			return false, nil
+		}
+		for _, route := range newRoutes {
+			if route.peerPodGW.Equal(routeToAdd.peerPodGW) {
+				// The dummy route hasn't been deleted yet, keep trying
+				return false, nil
+			}
+		}
+		// At this stage we have confirmed that the dummy route has been deleted
+		for _, route := range newRoutes {
+			if route.peerPodGW.Equal(routeToDelete.peerPodGW) {
+				// The deleted route was added back, success!
+				return true, nil
+			}
+		}
+		// We haven't found the deleted route, keep trying
+		return false, nil
+	}); err == wait.ErrWaitTimeout {
+		t.Errorf("Gateway routes did not converge after %v", defaultTimeout)
+	} else if err != nil {
+		t.Fatalf("Error while waiting for gateway routes to converge: %v", err)
+	} else {
+		t.Logf("Gateway routes successfully converged")
 	}
 }

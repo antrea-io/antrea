@@ -21,6 +21,7 @@ import (
 	"net"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"k8s.io/api/core/v1"
@@ -44,9 +45,11 @@ const (
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
 	antreaNamespace      string = "kube-system"
 	antreaDaemonSet      string = "antrea-agent"
+	antreaGWName         string = "gw0"
 	testNamespace        string = "antrea-test"
 	busyboxContainerName string = "busybox"
 	ovsContainerName     string = "antrea-ovs"
+	agentContainerName   string = "antrea-agent"
 	antreaYML            string = "antrea.yml"
 	antreaIPSecYML       string = "antrea-ipsec.yml"
 
@@ -260,10 +263,11 @@ func (data *TestData) deployAntreaCommon(ipsec bool) error {
 		yamlFile = antreaYML
 	}
 
-	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), "kubectl apply -f "+yamlFile)
+	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName(), "kubectl apply -f "+yamlFile)
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deploying Antrea; is %s available on the master Node?", yamlFile)
 	}
+	fmt.Println(stdout)
 	return nil
 }
 
@@ -810,4 +814,15 @@ func (data *TestData) runNetcatCommandFromTestPod(podName string, svcName string
 		return nil
 	}
 	return fmt.Errorf("nc stdout: <%v>, stderr: <%v>, err: <%v>", stdout, stderr, err)
+}
+
+func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (bool, error) {
+	cmd := []string{"ovs-vsctl", "port-to-br", portName}
+	_, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+	if err == nil {
+		return true, nil
+	} else if strings.Contains(stderr, "no port named") {
+		return false, nil
+	}
+	return false, fmt.Errorf("error when running ovs-vsctl command on Pod '%s': %v", antreaPodName, err)
 }

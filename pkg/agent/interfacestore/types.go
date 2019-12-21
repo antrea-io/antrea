@@ -74,6 +74,7 @@ type InterfaceStore interface {
 	GetContainerInterfaceNum() int
 	Len() int
 	GetInterfaceKeys() []string
+	GetInterfaceKeysByType(interfaceType InterfaceType) []string
 }
 
 // NewContainerInterface creates InterfaceConfig for a Pod.

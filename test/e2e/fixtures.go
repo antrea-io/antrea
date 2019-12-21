@@ -22,6 +22,22 @@ import (
 	"time"
 )
 
+func ensureAntreaRunning(tb testing.TB, data *TestData) error {
+	tb.Logf("Applying Antrea YAML")
+	if err := data.deployAntrea(); err != nil {
+		return err
+	}
+	tb.Logf("Waiting for all Antrea DaemonSet Pods")
+	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
+		return err
+	}
+	tb.Logf("Checking CoreDNS deployment")
+	if err := data.checkCoreDNSPods(defaultTimeout); err != nil {
+		return err
+	}
+	return nil
+}
+
 func setupTest(tb testing.TB) (*TestData, error) {
 	data := &TestData{}
 	tb.Logf("Creating K8s clientset")
@@ -34,19 +50,9 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	if err := data.createTestNamespace(); err != nil {
 		return nil, err
 	}
-	tb.Logf("Applying Antrea YAML")
-	if err := data.deployAntrea(); err != nil {
+	if err := ensureAntreaRunning(tb, data); err != nil {
 		return nil, err
 	}
-	tb.Logf("Waiting for all Antrea DaemonSet Pods")
-	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
-		return nil, err
-	}
-	// TODO: CoreDNS keeps crashing at the moment, even when Antrea is running fine.
-	// t.Logf("Checking CoreDNS deployment")
-	// if err := data.checkCoreDNSPods(defaultTimeout); err != nil {
-	// 	return nil, err
-	// }
 	return data, nil
 }
 
