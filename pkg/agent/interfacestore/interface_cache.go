@@ -118,6 +118,19 @@ func (c *interfaceCache) GetInterfaceKeys() []string {
 	return keys
 }
 
+func (c *interfaceCache) GetInterfaceKeysByType(interfaceType InterfaceType) []string {
+	c.RLock()
+	defer c.RUnlock()
+	keys := make([]string, 0, len(c.cache))
+	for key, v := range c.cache {
+		if v.Type != interfaceType {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 // GetPodInterface retrieves InterfaceConfig for the Pod.
 func (c *interfaceCache) GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool) {
 	key := util.GenerateContainerInterfaceKey(podName, podNamespace)

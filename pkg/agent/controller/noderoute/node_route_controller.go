@@ -22,8 +22,8 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/vishvananda/netlink"
-	"golang.org/x/sys/unix"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -41,6 +41,7 @@ import (
 )
 
 const (
+	controllerName = "AntreaAgentNodeRouteController"
 	// Interval of synchronizing node status from apiserver
 	nodeSyncPeriod = 60 * time.Second
 	// How long to wait before retrying the processing of a node change
@@ -77,6 +78,8 @@ type Controller struct {
 	installedNodes *sync.Map
 }
 
+// NewNodeRouteController instantiates a new Controller object which will process Node events
+// and ensure connectivity between different Nodes.
 func NewNodeRouteController(
 	kubeClient clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
@@ -144,18 +147,160 @@ func (c *Controller) enqueueNode(obj interface{}) {
 	}
 }
 
+// listRoutes reads all the routes for the gateway and returns them as a map with the destination
+// subnet as the key.
+func (c *Controller) listRoutes() (routes map[string]*netlink.Route, err error) {
+	routes = make(map[string]*netlink.Route)
+	routeList, err := netlink.RouteList(c.gatewayLink, netlink.FAMILY_V4)
+	if err != nil {
+		return routes, err
+	}
+	for idx := 0; idx < len(routeList); idx++ {
+		route := &routeList[idx]
+		routes[route.Dst.String()] = route
+	}
+	return routes, nil
+}
+
+// removeStaleGatewayRoutes removes all the gateway routes which no longer correspond to a Node in
+// the cluster. If the antrea agent restarts and Nodes have left the cluster, this function will
+// take care of removing routes which are no longer valid.
+func (c *Controller) removeStaleGatewayRoutes() error {
+	nodes, err := c.nodeLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("error when listing Nodes: %v", err)
+	}
+
+	routes, err := c.listRoutes()
+	if err != nil {
+		return fmt.Errorf("error when listing existing gateway routes: %v", err)
+	}
+
+	for _, node := range nodes {
+		_, podCIDR, err := net.ParseCIDR(node.Spec.PodCIDR)
+		if err != nil {
+			return fmt.Errorf("error when parsing Pod CIDR for Node %s: %v", node.Name, err)
+		}
+		podCIDRStr := podCIDR.String()
+		// remove from map of routes: at the end of the loop the remaining routes will be
+		// the stale ones (the ones we want to delete).
+		// we iterate over all current Nodes, including the Node on which this agent is
+		// running, so the route to local Pods will be removed from the map as well.
+		delete(routes, podCIDRStr)
+	}
+
+	// remove all remaining routes in the map: these routes do not match any Node in the
+	// cluster.
+	klog.V(4).Infof("Need to delete %d routes", len(routes))
+	for _, route := range routes {
+		if err := netlink.RouteDel(route); err != nil {
+			klog.Errorf("error when deleting route '%v': %v", route, err)
+		}
+	}
+
+	return nil
+}
+
+// removeStaleTunnelPorts removes all the tunnel ports which no longer correspond to a Node in the
+// cluster. If the antrea agent restarts and Nodes have left the cluster, this function will take
+// care of removing tunnel ports which are no longer valid. If the tunnel port configuration has
+// changed, the tunnel port will also be deleted (the controller loop will later take care of
+// re-creating the port with the correct configuration).
+func (c *Controller) removeStaleTunnelPorts() error {
+	nodes, err := c.nodeLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("error when listing Nodes: %v", err)
+	}
+	// desiredInterfaces is the set of interfaces we wish to have, based on the current list of
+	// Nodes. If a tunnel port corresponds to a valid Node but its configuration is wrong, we
+	// will not include it in the set.
+	desiredInterfaces := make(map[string]bool)
+	// knownInterfaces is the list of interfaces currently in the local cache.
+	knownInterfaces := c.interfaceStore.GetInterfaceKeysByType(interfacestore.TunnelInterface)
+
+	if c.ipsecPSK != "" {
+		for _, node := range nodes {
+			interfaceConfig, found := c.interfaceStore.GetNodeTunnelInterface(node.Name)
+			if !found {
+				// Tunnel port not created for this Node, nothing to do.
+				continue
+			}
+
+			peerNodeIP, err := getNodeAddr(node)
+			if err != nil {
+				klog.Errorf("Failed to retrieve IP address of Node %s: %v", node.Name, err)
+				continue
+			}
+
+			ifaceID := util.GenerateNodeTunnelInterfaceKey(node.Name)
+			validConfiguration := interfaceConfig.PSK == c.ipsecPSK &&
+				interfaceConfig.RemoteIP.Equal(peerNodeIP) &&
+				interfaceConfig.TunnelInterfaceConfig.Type == c.tunnelType
+			if validConfiguration {
+				desiredInterfaces[ifaceID] = true
+			}
+		}
+	}
+
+	// remove all ports which are no longer needed or for which the configuration is no longer
+	// valid.
+	for _, ifaceID := range knownInterfaces {
+		if _, found := desiredInterfaces[ifaceID]; found {
+			// this interface matches an existing Node, nothing to do.
+			continue
+		}
+		interfaceConfig, found := c.interfaceStore.GetInterface(ifaceID)
+		if !found {
+			// should not happen, nothing should have concurrent access to the interface
+			// store for tunnel interfaces.
+			klog.Errorf("Interface %s can no longer be found in the interface store", ifaceID)
+			continue
+		}
+		if interfaceConfig.InterfaceName == types.DefaultTunPortName {
+			continue
+		}
+		if err := c.ovsBridgeClient.DeletePort(interfaceConfig.PortUUID); err != nil {
+			klog.Errorf("Failed to delete OVS tunnel port %s: %v", interfaceConfig.InterfaceName, err)
+		} else {
+			c.interfaceStore.DeleteInterface(interfaceConfig)
+		}
+	}
+
+	return nil
+}
+
+func (c *Controller) reconcile() error {
+	klog.Infof("Reconciliation for %s", controllerName)
+	// reconciliation consists of removing stale routes and stale / invalid tunnel ports:
+	// missing routes and tunnel ports will be added normally by processNextWorkItem, which will
+	// also take care of updating incorrect routes.
+	if err := c.removeStaleGatewayRoutes(); err != nil {
+		return fmt.Errorf("error when removing stale routes: %v", err)
+	}
+	if err := c.removeStaleTunnelPorts(); err != nil {
+		return fmt.Errorf("error when removing stale tunnel ports: %v", err)
+	}
+	return nil
+}
+
+// Run will create defaultWorkers workers (go routines) which will process the Node events from the
+// workqueue.
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 
-	klog.Info("Starting Node Route controller")
-	defer klog.Info("Shutting down Node Route controller")
+	klog.Infof("Starting %s", controllerName)
+	defer klog.Infof("Shutting down %s", controllerName)
 
-	klog.Info("Waiting for caches to sync for Node Route controller")
+	klog.Infof("Waiting for caches to sync for %s", controllerName)
 	if !cache.WaitForCacheSync(stopCh, c.nodeListerSynced) {
-		klog.Error("Unable to sync caches for Node Route controller")
+		klog.Errorf("Unable to sync caches for %s", controllerName)
 		return
 	}
-	klog.Info("Caches are synced for Node Route controller")
+	klog.Infof("Caches are synced for %s", controllerName)
+
+	if err := c.reconcile(); err != nil {
+		klog.Errorf("Error during %s reconciliation", controllerName)
+	}
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
@@ -163,16 +308,19 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
+// worker is a long-running function that will continually call the processNextWorkItem function in
+// order to read and process a message on the workqueue.
 func (c *Controller) worker() {
 	for c.processNextWorkItem() {
 	}
 }
 
-// Processes an item in the "node" work queue, by calling syncNodeRoute after casting the item to a
-// string (Node name). If syncNodeRoute returns an error, this function handles it by requeueing the item
-// so that it can be processed again later. If syncNodeRoute is successful, the Node is removed from the
-// queue until we get notify of a new change. This function return false if and only if the work
-// queue was shutdown (no more items will be processed).
+// processNextWorkItem processes an item in the "node" work queue, by calling syncNodeRoute after
+// casting the item to a string (Node name). If syncNodeRoute returns an error, this function
+// handles it by requeueing the item so that it can be processed again later. If syncNodeRoute is
+// successful, the Node is removed from the queue until we get notified of a new change. This
+// function returns false if and only if the work queue was shutdown (no more items will be
+// processed).
 func (c *Controller) processNextWorkItem() bool {
 	obj, quit := c.queue.Get()
 	if quit {
@@ -204,7 +352,7 @@ func (c *Controller) processNextWorkItem() bool {
 	return true
 }
 
-// Manages connectivity to "peer" Node with name nodeName
+// syncNode manages connectivity to "peer" Node with name nodeName
 // If we have not established connectivity to the Node yet:
 //   * we install the appropriate Linux route:
 // Destination     Gateway         Use Iface
@@ -329,15 +477,9 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 		Gw:        peerGatewayIP,
 	}
 
-	err = netlink.RouteAdd(route)
-	// This is likely to be caused by an agent restart and so should not happen once we
-	// handle state reconciliation on restart properly. However, it is probably better
-	// to handle this case gracefully for the time being.
-	if err == unix.EEXIST {
-		klog.Warningf("Route to Node %s already exists, replacing it", nodeName)
-		err = netlink.RouteReplace(route)
-	}
-	if err != nil {
+	// RouteReplace will add the route if it's missing or update it if it's already
+	// present (as is the case for agent restarts).
+	if err = netlink.RouteReplace(route); err != nil {
 		return fmt.Errorf("failed to install route to Node %s with netlink: %v", nodeName, err)
 	}
 	c.installedNodes.Store(nodeName, route)
@@ -349,8 +491,9 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int32, error) {
 	interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
 	if ok {
-		// TODO: check if Node IP, PSK, or tunnel type changes or handle it in
-		// reconciliation.
+		// TODO: check if Node IP, PSK, or tunnel type changes. This can
+		// happen if removeStaleTunnelPorts fails to remove a "stale"
+		// tunnel port for which the configuration has changed.
 		if interfaceConfig.OFPort != 0 {
 			return interfaceConfig.OFPort, nil
 		}
