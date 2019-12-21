@@ -19,18 +19,31 @@ function stop_agents {
     ipsec stop
 }
 
+SLEEP_PID=
+
 function quit {
     log_info $CONTAINER_NAME "Stopping OVS IPSec before quit"
     stop_agents
+    # kill background sleep process
+    if [ "$SLEEP_PID" != "" ]; then kill $SLEEP_PID > /dev/null 2>&1 || true; fi
     exit 0
 }
-trap quit Exit
+
+# Do not trap EXIT as it would then ignore the "exit 0" statement in quit and
+# exit with code 128 + SIGNAL
+trap "quit" INT TERM
 
 start_agents
 
 log_info $CONTAINER_NAME "Started the loop that checks agents status every 30 seconds"
 while true; do
-    sleep 30
+    # we run sleep in the background so that we can immediately exit when we
+    # receive SIGINT / SIGTERM
+    # see https://stackoverflow.com/questions/32041674/linux-how-to-kill-sleep
+    sleep 30 &
+    SLEEP_PID=$!
+    wait $SLEEP_PID
+
     if ! check_ovs_ipsec_status ; then
         log_warning $CONTAINER_NAME "OVS IPSec was stopped. Starting it again"
 

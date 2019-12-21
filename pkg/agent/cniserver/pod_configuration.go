@@ -627,7 +627,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod) error {
 	// current list of Pods.
 	desiredInterfaces := make(map[string]bool)
 	// knownInterfaces is the list of interfaces currently in the local cache.
-	knownInterfaces := pc.ifaceStore.GetInterfaceKeys()
+	knownInterfaces := pc.ifaceStore.GetInterfaceKeysByType(interfacestore.ContainerInterface)
 
 	for _, pod := range pods {
 		// Skip Pods for which we are not in charge of the networking.
@@ -677,10 +677,6 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod) error {
 			// should not happen, nothing should have concurrent access to the interface
 			// store.
 			klog.Errorf("Interface %s can no longer be found in the interface store", ifaceID)
-			continue
-		}
-		if containerConfig.Type != interfacestore.ContainerInterface {
-			// not a container interface, skipping.
 			continue
 		}
 		klog.V(4).Infof("Deleting interface %s", ifaceID)
