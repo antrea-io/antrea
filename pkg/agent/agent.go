@@ -16,9 +16,11 @@ package agent
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -31,6 +33,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
@@ -42,6 +45,7 @@ const (
 	maxRetryForHostLink = 5
 	NodeNameEnvKey      = "NODE_NAME"
 	IPSecPSKEnvKey      = "ANTREA_IPSEC_PSK"
+	roundNumKey         = "roundNum" // round number key in externalIDs.
 )
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
@@ -215,8 +219,9 @@ func (i *Initializer) Initialize() error {
 
 // initOpenFlowPipeline sets up necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
 func (i *Initializer) initOpenFlowPipeline() error {
+	roundNum := getRoundNum(i.ovsBridgeClient)
 	// Setup all basic flows.
-	if err := i.ofClient.Initialize(); err != nil {
+	if err := i.ofClient.Initialize(roundNum); err != nil {
 		klog.Errorf("Failed to setup basic openflow entries: %v", err)
 		return err
 	}
@@ -416,4 +421,53 @@ func (i *Initializer) readIPSecPSK() error {
 	// Normally we want not to log the secret data.
 	klog.V(4).Infof("IPSec PSK value: %s", i.ipsecPSK)
 	return nil
+}
+
+func getLastRoundNum(bridgeClient ovsconfig.OVSBridgeClient) (uint64, error) {
+	extIDs, ovsCfgErr := bridgeClient.GetExternalIDs()
+	if ovsCfgErr != nil {
+		return 0, fmt.Errorf("error getting external IDs: %w", ovsCfgErr)
+	}
+	roundNumValue, exists := extIDs[roundNumKey]
+	if !exists {
+		return 0, fmt.Errorf("no round number found in OVSDB")
+	}
+	num, err := strconv.ParseUint(roundNumValue, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("error parsing last round number %v: %w", num, err)
+	}
+	return num, nil
+}
+
+func saveRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient) error {
+	extIDs, ovsCfgErr := bridgeClient.GetExternalIDs()
+	if ovsCfgErr != nil {
+		return fmt.Errorf("error getting external IDs: %w", ovsCfgErr)
+	}
+	updatedExtIDs := make(map[string]interface{})
+	for k, v := range extIDs {
+		updatedExtIDs[k] = v
+	}
+	updatedExtIDs[roundNumKey] = fmt.Sprint(num)
+	return bridgeClient.SetExternalIDs(updatedExtIDs)
+}
+
+func getRoundNum(bridgeClient ovsconfig.OVSBridgeClient) uint64 {
+	num, err := getLastRoundNum(bridgeClient)
+	if err != nil {
+		klog.Warningln("No round number found in OVSDB, using a random value")
+		rand.Seed(time.Now().UnixNano())
+		num = rand.Uint64()
+	} else {
+		num += 1
+	}
+
+	num %= 1 << cookie.BitwidthRound
+	klog.Infof("Using round number %d", num)
+	err = saveRoundNum(num, bridgeClient)
+	if err != nil {
+		klog.Errorf("Writing round number failed: %v", err)
+	}
+
+	return num
 }
