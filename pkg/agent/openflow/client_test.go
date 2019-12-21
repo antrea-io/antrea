@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 )
 
@@ -75,6 +76,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			m := oftest.NewMockFlowOperations(ctrl)
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
+			client.cookieAllocator = cookie.NewAllocator(0)
 			client.flowOperations = m
 
 			m.EXPECT().Add(gomock.Any()).Return(nil).Times(tc.numAddCalls)
@@ -110,6 +112,7 @@ func TestFlowInstallationPartialSuccess(t *testing.T) {
 			m := oftest.NewMockFlowOperations(ctrl)
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
+			client.cookieAllocator = cookie.NewAllocator(0)
 			client.flowOperations = m
 
 			// We generate an error for the last Add call.
@@ -148,6 +151,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			m := oftest.NewMockFlowOperations(ctrl)
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
+			client.cookieAllocator = cookie.NewAllocator(0)
 			client.flowOperations = m
 
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls

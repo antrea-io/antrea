@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -235,6 +237,7 @@ func expectConjunctionsCount(conjs []*expectConjunctionTimes) {
 
 func newMockDropFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	dropFlowBuilder = mocks.NewMockFlowBuilder(ctrl)
+	dropFlowBuilder.EXPECT().Cookie(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchProtocol(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchDstIPNet(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchSrcIPNet(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
@@ -252,6 +255,7 @@ func newMockDropFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 
 func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlowBuilder = mocks.NewMockFlowBuilder(ctrl)
+	ruleFlowBuilder.EXPECT().Cookie(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchProtocol(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchDstIPNet(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchSrcIPNet(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
@@ -310,5 +314,6 @@ func prepareClient(ctrl *gomock.Controller) *client {
 		policyCache:              sync.Map{},
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 	}
+	c.cookieAllocator = cookie.NewAllocator(0)
 	return c
 }

@@ -16,11 +16,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"io/ioutil"
 	"net"
 
 	"github.com/vmware-tanzu/antrea/pkg/cni"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
