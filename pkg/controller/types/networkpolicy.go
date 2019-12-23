@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 )
 
 // SpanMeta describes the span information of an object.
@@ -29,7 +29,7 @@ type SpanMeta struct {
 }
 
 // PodSet is a set of Pod references.
-type PodSet map[networkpolicy.PodReference]sets.Empty
+type PodSet map[networking.PodReference]sets.Empty
 
 // Difference returns a set of Pod references that are not in s2.
 func (s PodSet) Difference(s2 PodSet) PodSet {
@@ -55,7 +55,7 @@ func (s PodSet) Union(o PodSet) PodSet {
 }
 
 // Insert adds items to the set.
-func (s PodSet) Insert(items ...networkpolicy.PodReference) {
+func (s PodSet) Insert(items ...networking.PodReference) {
 	for _, item := range items {
 		s[item] = sets.Empty{}
 	}
@@ -116,7 +116,7 @@ type NetworkPolicy struct {
 	// Namespace of the original K8s Network Policy.
 	Namespace string
 	// Rules is a list of rules to be applied to the selected Pods.
-	Rules []networkpolicy.NetworkPolicyRule
+	Rules []networking.NetworkPolicyRule
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
 	AppliedToGroups []string
 }

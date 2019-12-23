@@ -20,7 +20,7 @@ rules:
       - watch
       - list
   - apiGroups:
-      - clusterinformation.crd.antrea.io
+      - clusterinformation.antrea.tanzu.vmware.com
     resources:
       - antreaagentinfos
     verbs:
@@ -29,7 +29,7 @@ rules:
       - update
       - delete
   - apiGroups:
-      - networkpolicy.antrea.io
+      - networking.antrea.tanzu.vmware.com
     resources:
       - networkpolicies
       - appliedtogroups

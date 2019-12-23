@@ -25,16 +25,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
 func TestWatchAppliedToGroupEvent(t *testing.T) {
-	pod1 := networkpolicy.PodReference{"pod1", "default"}
-	pod2 := networkpolicy.PodReference{"pod2", "default"}
-	pod3 := networkpolicy.PodReference{"pod3", "default"}
-	pod4 := networkpolicy.PodReference{"pod4", "default"}
+	pod1 := networking.PodReference{"pod1", "default"}
+	pod2 := networking.PodReference{"pod2", "default"}
+	pod3 := networking.PodReference{"pod3", "default"}
+	pod4 := networking.PodReference{"pod4", "default"}
 
 	testCases := map[string]struct {
 		fieldSelector fields.Selector
@@ -59,14 +59,14 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 				})
 			},
 			expected: []watch.Event{
-				{watch.Added, &networkpolicy.AppliedToGroup{
+				{watch.Added, &networking.AppliedToGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-					Pods:       []networkpolicy.PodReference{pod1, pod2},
+					Pods:       []networking.PodReference{pod1, pod2},
 				}},
-				{watch.Modified, &networkpolicy.AppliedToGroupPatch{
+				{watch.Modified, &networking.AppliedToGroupPatch{
 					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
-					AddedPods:   []networkpolicy.PodReference{pod3},
-					RemovedPods: []networkpolicy.PodReference{pod2},
+					AddedPods:   []networking.PodReference{pod3},
+					RemovedPods: []networking.PodReference{pod2},
 				}},
 			},
 		},
@@ -106,16 +106,16 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 				})
 			},
 			expected: []watch.Event{
-				{watch.Added, &networkpolicy.AppliedToGroup{
+				{watch.Added, &networking.AppliedToGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-					Pods:       []networkpolicy.PodReference{pod3},
+					Pods:       []networking.PodReference{pod3},
 				}},
-				{watch.Modified, &networkpolicy.AppliedToGroupPatch{
+				{watch.Modified, &networking.AppliedToGroupPatch{
 					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
-					AddedPods:   []networkpolicy.PodReference{pod4},
-					RemovedPods: []networkpolicy.PodReference{pod3},
+					AddedPods:   []networking.PodReference{pod4},
+					RemovedPods: []networking.PodReference{pod3},
 				}},
-				{watch.Deleted, &networkpolicy.AppliedToGroup{
+				{watch.Deleted, &networking.AppliedToGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 				}},
 			},
@@ -137,8 +137,8 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 				}
 				switch actualEvent.Type {
 				case watch.Added, watch.Deleted:
-					actualObj := actualEvent.Object.(*networkpolicy.AppliedToGroup)
-					expectedObj := expectedEvent.Object.(*networkpolicy.AppliedToGroup)
+					actualObj := actualEvent.Object.(*networking.AppliedToGroup)
+					expectedObj := expectedEvent.Object.(*networking.AppliedToGroup)
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}
@@ -146,8 +146,8 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 						t.Errorf("Expected Pods %v, got %v", expectedObj.Pods, actualObj.Pods)
 					}
 				case watch.Modified:
-					actualObj := actualEvent.Object.(*networkpolicy.AppliedToGroupPatch)
-					expectedObj := expectedEvent.Object.(*networkpolicy.AppliedToGroupPatch)
+					actualObj := actualEvent.Object.(*networking.AppliedToGroupPatch)
+					expectedObj := expectedEvent.Object.(*networking.AppliedToGroupPatch)
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}

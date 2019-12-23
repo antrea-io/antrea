@@ -25,7 +25,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	networkpolicyapis "github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -52,11 +52,11 @@ func NewREST(networkPolicyStore storage.Interface) *REST {
 }
 
 func (r *REST) New() runtime.Object {
-	return &networkpolicyapis.NetworkPolicy{}
+	return &networking.NetworkPolicy{}
 }
 
 func (r *REST) NewList() runtime.Object {
-	return &networkpolicyapis.NetworkPolicyList{}
+	return &networking.NetworkPolicyList{}
 }
 
 func (r *REST) Get(ctx context.Context, name string, options *v1.GetOptions) (runtime.Object, error) {
@@ -70,17 +70,17 @@ func (r *REST) Get(ctx context.Context, name string, options *v1.GetOptions) (ru
 		return nil, errors.NewInternalError(err)
 	}
 	if !exists {
-		return nil, errors.NewNotFound(networkpolicyapis.Resource("networkpolicy"), name)
+		return nil, errors.NewNotFound(networking.Resource("networkpolicy"), name)
 	}
-	obj := new(networkpolicyapis.NetworkPolicy)
+	obj := new(networking.NetworkPolicy)
 	store.ToNetworkPolicyMsg(networkPolicy.(*types.NetworkPolicy), obj, true)
 	return obj, nil
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	networkPolicies := r.networkPolicyStore.List()
-	list := new(networkpolicyapis.NetworkPolicyList)
-	list.Items = make([]networkpolicyapis.NetworkPolicy, len(networkPolicies))
+	list := new(networking.NetworkPolicyList)
+	list.Items = make([]networking.NetworkPolicy, len(networkPolicies))
 	for i := range networkPolicies {
 		store.ToNetworkPolicyMsg(networkPolicies[i].(*types.NetworkPolicy), &list.Items[i], true)
 	}

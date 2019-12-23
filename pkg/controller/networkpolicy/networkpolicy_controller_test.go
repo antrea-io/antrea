@@ -33,7 +33,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -92,7 +92,7 @@ func newClientset() *fake.Clientset {
 }
 
 func TestAddNetworkPolicy(t *testing.T) {
-	protocolTCP := networkpolicy.ProtocolTCP
+	protocolTCP := networking.ProtocolTCP
 	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
 	int80, int81 := int32(80), int32(81)
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
@@ -119,8 +119,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{{
-					Direction: networkpolicy.DirectionIn,
+				Rules: []networking.NetworkPolicyRule{{
+					Direction: networking.DirectionIn,
 					From:      matchAllPeer,
 					Services:  nil,
 				}},
@@ -143,8 +143,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{{
-					Direction: networkpolicy.DirectionOut,
+				Rules: []networking.NetworkPolicyRule{{
+					Direction: networking.DirectionOut,
 					To:        matchAllPeer,
 					Services:  nil,
 				}},
@@ -166,7 +166,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					denyAllIngressRule,
 				},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
@@ -187,7 +187,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					denyAllEgressRule,
 				},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
@@ -237,13 +237,13 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networkpolicy.Service{
+						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -251,11 +251,11 @@ func TestAddNetworkPolicy(t *testing.T) {
 						},
 					},
 					{
-						Direction: networkpolicy.DirectionOut,
-						To: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionOut,
+						To: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networkpolicy.Service{
+						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int81,
@@ -306,13 +306,13 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
 						},
-						Services: []networkpolicy.Service{
+						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -320,11 +320,11 @@ func TestAddNetworkPolicy(t *testing.T) {
 						},
 					},
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", nil, &selectorC).NormalizedName)},
 						},
-						Services: []networkpolicy.Service{
+						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int81,
@@ -444,16 +444,16 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
 					},
 					{
-						Direction: networkpolicy.DirectionOut,
-						To: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionOut,
+						To: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
 						},
 					},
@@ -485,10 +485,10 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					{
-						Direction: networkpolicy.DirectionOut,
-						To: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionOut,
+						To: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
 					},
@@ -520,10 +520,10 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
 					},
@@ -545,7 +545,7 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:             "uidA",
 				Name:            "npA",
 				Namespace:       "nsA",
-				Rules:           []networkpolicy.NetworkPolicyRule{},
+				Rules:           []networking.NetworkPolicyRule{},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
@@ -589,22 +589,22 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
 					},
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorA).NormalizedName)},
 						},
 					},
 					{
-						Direction: networkpolicy.DirectionOut,
-						To: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionOut,
+						To: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
 						},
 					},
@@ -645,16 +645,16 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
 					},
 					{
-						Direction: networkpolicy.DirectionOut,
-						To: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionOut,
+						To: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil).NormalizedName)},
 						},
 					},
@@ -1518,12 +1518,12 @@ func TestToAntreaProtocol(t *testing.T) {
 	sctpProto := v1.ProtocolSCTP
 	tables := []struct {
 		proto            *v1.Protocol
-		expInternalProto networkpolicy.Protocol
+		expInternalProto networking.Protocol
 	}{
-		{nil, networkpolicy.ProtocolTCP},
-		{&udpProto, networkpolicy.ProtocolUDP},
-		{&tcpProto, networkpolicy.ProtocolTCP},
-		{&sctpProto, networkpolicy.ProtocolSCTP},
+		{nil, networking.ProtocolTCP},
+		{&udpProto, networking.ProtocolUDP},
+		{&tcpProto, networking.ProtocolTCP},
+		{&sctpProto, networking.ProtocolSCTP},
 	}
 	for _, table := range tables {
 		protocol := toAntreaProtocol(table.proto)
@@ -1538,11 +1538,11 @@ func TestToAntreaServices(t *testing.T) {
 	portNum := int32(80)
 	tables := []struct {
 		ports     []networkingv1.NetworkPolicyPort
-		expValues []networkpolicy.Service
+		expValues []networking.Service
 	}{
 		{
 			getK8sNetworkPolicyPorts(tcpProto),
-			[]networkpolicy.Service{
+			[]networking.Service{
 				{
 					Protocol: toAntreaProtocol(&tcpProto),
 					Port:     &portNum,
@@ -1564,20 +1564,20 @@ func TestToAntreaServices(t *testing.T) {
 }
 
 func TestToAntreaIPBlock(t *testing.T) {
-	expIpNet := networkpolicy.IPNet{
+	expIpNet := networking.IPNet{
 		IP:           store.IPStrToIPAddress("10.0.0.0"),
 		PrefixLength: 24,
 	}
 	tables := []struct {
 		ipBlock  *networkingv1.IPBlock
-		expValue networkpolicy.IPBlock
+		expValue networking.IPBlock
 		err      error
 	}{
 		{
 			&networkingv1.IPBlock{
 				CIDR: "10.0.0.0/24",
 			},
-			networkpolicy.IPBlock{
+			networking.IPBlock{
 				CIDR: expIpNet,
 			},
 			nil,
@@ -1586,7 +1586,7 @@ func TestToAntreaIPBlock(t *testing.T) {
 			&networkingv1.IPBlock{
 				CIDR: "10.0.0.0",
 			},
-			networkpolicy.IPBlock{},
+			networking.IPBlock{},
 			fmt.Errorf("invalid format for IPBlock CIDR: 10.0.0.0"),
 		},
 	}
@@ -1611,7 +1611,7 @@ func TestToAntreaIPBlock(t *testing.T) {
 }
 
 func TestProcessNetworkPolicy(t *testing.T) {
-	protocolTCP := networkpolicy.ProtocolTCP
+	protocolTCP := networking.ProtocolTCP
 	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
 	int80, int81 := int32(80), int32(81)
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
@@ -1638,8 +1638,8 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{{
-					Direction: networkpolicy.DirectionIn,
+				Rules: []networking.NetworkPolicyRule{{
+					Direction: networking.DirectionIn,
 					From:      matchAllPeer,
 					Services:  nil,
 				}},
@@ -1661,7 +1661,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				UID:             "uidA",
 				Name:            "npA",
 				Namespace:       "nsA",
-				Rules:           []networkpolicy.NetworkPolicyRule{denyAllEgressRule},
+				Rules:           []networking.NetworkPolicyRule{denyAllEgressRule},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
 			},
 			expectedAppliedToGroups: 1,
@@ -1709,13 +1709,13 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networkpolicy.Service{
+						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -1723,11 +1723,11 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						},
 					},
 					{
-						Direction: networkpolicy.DirectionOut,
-						To: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionOut,
+						To: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networkpolicy.Service{
+						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int81,
@@ -1778,13 +1778,13 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networkpolicy.NetworkPolicyRule{
+				Rules: []networking.NetworkPolicyRule{
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
 						},
-						Services: []networkpolicy.Service{
+						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -1792,11 +1792,11 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						},
 					},
 					{
-						Direction: networkpolicy.DirectionIn,
-						From: networkpolicy.NetworkPolicyPeer{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", nil, &selectorC).NormalizedName)},
 						},
-						Services: []networkpolicy.Service{
+						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int81,

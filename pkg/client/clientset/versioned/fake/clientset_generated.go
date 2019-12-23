@@ -18,10 +18,10 @@ package fake
 
 import (
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/antrea/v1beta1"
-	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/antrea/v1beta1/fake"
-	networkpolicyv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networkpolicy/v1beta1"
-	fakenetworkpolicyv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networkpolicy/v1beta1/fake"
+	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
+	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1/fake"
+	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
+	fakenetworkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -81,7 +81,7 @@ func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.Cluste
 	return &fakeclusterinformationv1beta1.FakeClusterinformationV1beta1{Fake: &c.Fake}
 }
 
-// NetworkpolicyV1beta1 retrieves the NetworkpolicyV1beta1Client
-func (c *Clientset) NetworkpolicyV1beta1() networkpolicyv1beta1.NetworkpolicyV1beta1Interface {
-	return &fakenetworkpolicyv1beta1.FakeNetworkpolicyV1beta1{Fake: &c.Fake}
+// NetworkingV1beta1 retrieves the NetworkingV1beta1Client
+func (c *Clientset) NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface {
+	return &fakenetworkingv1beta1.FakeNetworkingV1beta1{Fake: &c.Fake}
 }

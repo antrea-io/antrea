@@ -25,22 +25,22 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
 func TestWatchNetworkPolicyEvent(t *testing.T) {
-	protocolTCP := networkpolicy.ProtocolTCP
+	protocolTCP := networking.ProtocolTCP
 	policyV1 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
 		SpanMeta:  types.SpanMeta{sets.NewString("node1", "node2")},
-		Rules: []networkpolicy.NetworkPolicyRule{{
-			Direction: networkpolicy.DirectionIn,
-			From:      networkpolicy.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-			To:        networkpolicy.NetworkPolicyPeer{},
-			Services:  []networkpolicy.Service{{Protocol: &protocolTCP}},
+		Rules: []networking.NetworkPolicyRule{{
+			Direction: networking.DirectionIn,
+			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+			To:        networking.NetworkPolicyPeer{},
+			Services:  []networking.Service{{Protocol: &protocolTCP}},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
@@ -48,11 +48,11 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 		Namespace: "foo",
 		Name:      "bar",
 		SpanMeta:  types.SpanMeta{sets.NewString("node1", "node3")},
-		Rules: []networkpolicy.NetworkPolicyRule{{
-			Direction: networkpolicy.DirectionIn,
-			From:      networkpolicy.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-			To:        networkpolicy.NetworkPolicyPeer{},
-			Services:  []networkpolicy.Service{{Protocol: &protocolTCP}},
+		Rules: []networking.NetworkPolicyRule{{
+			Direction: networking.DirectionIn,
+			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+			To:        networking.NetworkPolicyPeer{},
+			Services:  []networking.Service{{Protocol: &protocolTCP}},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
@@ -60,11 +60,11 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 		Namespace: "foo",
 		Name:      "bar",
 		SpanMeta:  types.SpanMeta{sets.NewString("node1", "node3")},
-		Rules: []networkpolicy.NetworkPolicyRule{{
-			Direction: networkpolicy.DirectionIn,
-			From:      networkpolicy.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
-			To:        networkpolicy.NetworkPolicyPeer{},
-			Services:  []networkpolicy.Service{{Protocol: &protocolTCP}},
+		Rules: []networking.NetworkPolicyRule{{
+			Direction: networking.DirectionIn,
+			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
+			To:        networking.NetworkPolicyPeer{},
+			Services:  []networking.Service{{Protocol: &protocolTCP}},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
@@ -84,12 +84,12 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV2)
 			},
 			expected: []watch.Event{
-				{watch.Added, &networkpolicy.NetworkPolicy{
+				{watch.Added, &networking.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV1.Rules,
 					AppliedToGroups: policyV1.AppliedToGroups,
 				}},
-				{watch.Modified, &networkpolicy.NetworkPolicy{
+				{watch.Modified, &networking.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
@@ -110,17 +110,17 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV1)
 			},
 			expected: []watch.Event{
-				{watch.Added, &networkpolicy.NetworkPolicy{
+				{watch.Added, &networking.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
 				}},
-				{watch.Modified, &networkpolicy.NetworkPolicy{
+				{watch.Modified, &networking.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV3.Rules,
 					AppliedToGroups: policyV3.AppliedToGroups,
 				}},
-				{watch.Deleted, &networkpolicy.NetworkPolicy{
+				{watch.Deleted, &networking.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 				}},
 			},
@@ -154,20 +154,20 @@ func TestGetNetworkPolicyByIndex(t *testing.T) {
 	policy1 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
-		Rules: []networkpolicy.NetworkPolicyRule{{
-			Direction: networkpolicy.DirectionIn,
-			From:      networkpolicy.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-			To:        networkpolicy.NetworkPolicyPeer{},
+		Rules: []networking.NetworkPolicyRule{{
+			Direction: networking.DirectionIn,
+			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+			To:        networking.NetworkPolicyPeer{},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
 	policy2 := &types.NetworkPolicy{
 		Namespace: "foo2",
 		Name:      "bar2",
-		Rules: []networkpolicy.NetworkPolicyRule{{
-			Direction: networkpolicy.DirectionIn,
-			From:      networkpolicy.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},
-			To:        networkpolicy.NetworkPolicyPeer{},
+		Rules: []networking.NetworkPolicyRule{{
+			Direction: networking.DirectionIn,
+			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},
+			To:        networking.NetworkPolicyPeer{},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1", "appliedToGroup2"},
 	}

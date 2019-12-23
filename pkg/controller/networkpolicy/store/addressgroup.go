@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -34,12 +34,12 @@ type addressGroupEvent struct {
 	// The previous version of the stored AddressGroup.
 	PrevGroup *types.AddressGroup
 	// The current version of the transferred AddressGroup, which will be used in Added events.
-	CurrObject *networkpolicy.AddressGroup
+	CurrObject *networking.AddressGroup
 	// The previous version of the transferred AddressGroup, which will be used in Deleted events.
 	// Note that only metadata will be set in Deleted events for efficiency.
-	PrevObject *networkpolicy.AddressGroup
+	PrevObject *networking.AddressGroup
 	// The patch object of the message for transferring, which will be used in Modified events.
-	PatchObject *networkpolicy.AddressGroupPatch
+	PatchObject *networking.AddressGroupPatch
 	// The key of this AddressGroup.
 	Key             string
 	ResourceVersion uint64
@@ -85,7 +85,7 @@ func (event *addressGroupEvent) GetResourceVersion() uint64 {
 
 // ToAddressGroupMsg converts the stored AddressGroup to its message form.
 // If includeBody is true, IPAddresses will be copied.
-func ToAddressGroupMsg(in *types.AddressGroup, out *networkpolicy.AddressGroup, includeBody bool) {
+func ToAddressGroupMsg(in *types.AddressGroup, out *networking.AddressGroup, includeBody bool) {
 	out.Name = in.Name
 	out.UID = in.UID
 	if !includeBody {
@@ -110,20 +110,20 @@ func genAddressGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (
 
 	if prevObj != nil {
 		event.PrevGroup = prevObj.(*types.AddressGroup)
-		event.PrevObject = new(networkpolicy.AddressGroup)
+		event.PrevObject = new(networking.AddressGroup)
 		ToAddressGroupMsg(event.PrevGroup, event.PrevObject, false)
 	}
 
 	if currObj != nil {
 		event.CurrGroup = currObj.(*types.AddressGroup)
-		event.CurrObject = new(networkpolicy.AddressGroup)
+		event.CurrObject = new(networking.AddressGroup)
 		ToAddressGroupMsg(event.CurrGroup, event.CurrObject, true)
 	}
 
 	// Calculate PatchObject in advance so that we don't need to do it for
 	// each watcher when generating *event.Event.
 	if event.PrevGroup != nil && event.CurrGroup != nil {
-		var addedAddresses, removedAddresses []networkpolicy.IPAddress
+		var addedAddresses, removedAddresses []networking.IPAddress
 
 		for _, a := range event.CurrGroup.Addresses.List() {
 			if _, exists := event.PrevGroup.Addresses[a]; !exists {
@@ -137,7 +137,7 @@ func genAddressGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (
 		}
 		// PatchObject will not be generated when only span changes.
 		if len(addedAddresses)+len(removedAddresses) > 0 {
-			event.PatchObject = new(networkpolicy.AddressGroupPatch)
+			event.PatchObject = new(networking.AddressGroupPatch)
 			event.PatchObject.UID = event.CurrGroup.UID
 			event.PatchObject.Name = event.CurrGroup.Name
 			event.PatchObject.AddedIPAddresses = addedAddresses
