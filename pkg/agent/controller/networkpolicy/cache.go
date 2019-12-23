@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
 
 const (

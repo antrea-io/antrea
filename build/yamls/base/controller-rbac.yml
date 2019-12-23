@@ -29,7 +29,7 @@ rules:
       - watch
       - list
   - apiGroups:
-      - clusterinformation.crd.antrea.io
+      - clusterinformation.antrea.tanzu.vmware.com
     resources:
       - antreacontrollerinfos
     verbs:

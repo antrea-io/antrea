@@ -49,17 +49,17 @@ done
 $GOPATH/bin/client-gen \
   --clientset-name versioned \
   --input-base "${ANTREA_PKG}/pkg/apis/" \
-  --input "clusterinformation/crd/antrea/v1beta1,networkpolicy/v1beta1" \
+  --input "clusterinformation/v1beta1,networking/v1beta1" \
   --output-package "${ANTREA_PKG}/pkg/client/clientset" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/deepcopy-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/crd/antrea/v1beta1,${ANTREA_PKG}/pkg/apis/networkpolicy,${ANTREA_PKG}/pkg/apis/networkpolicy/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1,${ANTREA_PKG}/pkg/apis/networking,${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
   -O zz_generated.deepcopy \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/conversion-gen  \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/networkpolicy/v1beta1,${ANTREA_PKG}/pkg/apis/networkpolicy/" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1,${ANTREA_PKG}/pkg/apis/networking/" \
   -O zz_generated.conversion \
   --go-header-file hack/boilerplate/license_header.go.txt
 
@@ -68,7 +68,7 @@ $GOPATH/bin/conversion-gen  \
 go mod vendor
 $GOPATH/bin/go-to-protobuf \
   --proto-import vendor \
-  --packages "${ANTREA_PKG}/pkg/apis/networkpolicy/v1beta1" \
+  --packages "${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
   --go-header-file hack/boilerplate/license_header.go.txt
 # Clean up vendor directory.
 rm -rf vendor

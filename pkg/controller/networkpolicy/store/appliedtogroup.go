@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -62,7 +62,7 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors) *wa
 	switch {
 	case currObjSelected && !prevObjSelected:
 		// Watcher was not interested in that object but is now, an added event will be generated.
-		obj := new(networkpolicy.AppliedToGroup)
+		obj := new(networking.AppliedToGroup)
 		if nodeSpecified {
 			ToAppliedToGroupMsg(event.CurrGroup, obj, true, &nodeName)
 		} else {
@@ -71,7 +71,7 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors) *wa
 		return &watch.Event{Type: watch.Added, Object: obj}
 	case currObjSelected && prevObjSelected:
 		// Watcher was and is interested in that object, a modified event will be generated.
-		obj := new(networkpolicy.AppliedToGroupPatch)
+		obj := new(networking.AppliedToGroupPatch)
 		obj.UID = event.CurrGroup.UID
 		obj.Name = event.CurrGroup.Name
 
@@ -102,7 +102,7 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors) *wa
 		return &watch.Event{Type: watch.Modified, Object: obj}
 	case !currObjSelected && prevObjSelected:
 		// Watcher was interested in that object but is not interested now, a deleted event will be generated.
-		obj := new(networkpolicy.AppliedToGroup)
+		obj := new(networking.AppliedToGroup)
 		if nodeSpecified {
 			ToAppliedToGroupMsg(event.PrevGroup, obj, false, &nodeName)
 		} else {
@@ -140,7 +140,7 @@ func genAppliedToGroupEvent(key string, prevObj, currObj interface{}, rv uint64)
 // ToAppliedToGroupMsg converts the stored AppliedToGroup to its message form.
 // If includeBody is true, Pods will be copied.
 // If nodeName is provided, only Pods that hosted by the Node will be copied.
-func ToAppliedToGroupMsg(in *types.AppliedToGroup, out *networkpolicy.AppliedToGroup, includeBody bool, nodeName *string) {
+func ToAppliedToGroupMsg(in *types.AppliedToGroup, out *networking.AppliedToGroup, includeBody bool, nodeName *string) {
 	out.Name = in.Name
 	out.UID = in.UID
 	if !includeBody || in.PodsByNode == nil {

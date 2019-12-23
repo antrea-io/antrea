@@ -43,7 +43,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -70,13 +70,13 @@ var (
 	uuidNamespace = uuid.FromStringOrNil("5a5e7dd9-e3fb-49bb-b263-9bab25c95841")
 
 	// matchAllPeer is a NetworkPolicyPeer matching all source/destination IP addresses.
-	matchAllPeer = networkpolicy.NetworkPolicyPeer{
-		IPBlocks: []networkpolicy.IPBlock{{CIDR: networkpolicy.IPNet{IP: networkpolicy.IPAddress(net.IPv4zero), PrefixLength: 0}}},
+	matchAllPeer = networking.NetworkPolicyPeer{
+		IPBlocks: []networking.IPBlock{{CIDR: networking.IPNet{IP: networking.IPAddress(net.IPv4zero), PrefixLength: 0}}},
 	}
 	// denyAllIngressRule is a NetworkPolicyRule which denies all ingress traffic.
-	denyAllIngressRule = networkpolicy.NetworkPolicyRule{Direction: networkpolicy.DirectionIn}
+	denyAllIngressRule = networking.NetworkPolicyRule{Direction: networking.DirectionIn}
 	// denyAllEgressRule is a NetworkPolicyRule which denies all egress traffic.
-	denyAllEgressRule = networkpolicy.NetworkPolicyRule{Direction: networkpolicy.DirectionOut}
+	denyAllEgressRule = networking.NetworkPolicyRule{Direction: networking.DirectionOut}
 )
 
 // NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
@@ -434,21 +434,21 @@ func (n *NetworkPolicyController) createAddressGroup(peer networkingv1.NetworkPo
 }
 
 // toAntreaProtocol converts a v1.Protocol object to an Antrea Protocol object.
-func toAntreaProtocol(npProtocol *v1.Protocol) *networkpolicy.Protocol {
+func toAntreaProtocol(npProtocol *v1.Protocol) *networking.Protocol {
 	// If Protocol is unset, it must default to TCP protocol.
-	internalProtocol := networkpolicy.ProtocolTCP
+	internalProtocol := networking.ProtocolTCP
 	if npProtocol != nil {
-		internalProtocol = networkpolicy.Protocol(*npProtocol)
+		internalProtocol = networking.Protocol(*npProtocol)
 	}
 	return &internalProtocol
 }
 
 // toAntreaServices converts a networkingv1.NetworkPolicyPort object to an
 // Antrea Service object.
-func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) []networkpolicy.Service {
-	var antreaServices []networkpolicy.Service
+func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) []networking.Service {
+	var antreaServices []networking.Service
 	for _, npPort := range npPorts {
-		antreaService := networkpolicy.Service{
+		antreaService := networking.Service{
 			Protocol: toAntreaProtocol(npPort.Protocol),
 		}
 		if npPort.Port != nil {
@@ -462,13 +462,13 @@ func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) []networkpolicy.
 }
 
 // toAntreaIPBlock converts a networkingv1.IPBlock to an Antrea IPBlock.
-func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networkpolicy.IPBlock, error) {
+func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networking.IPBlock, error) {
 	// Convert the allowed IPBlock to networkpolicy.IPNet.
 	ipNet, err := store.CIDRStrToIPNet(ipBlock.CIDR)
 	if err != nil {
 		return nil, err
 	}
-	exceptNets := []networkpolicy.IPNet{}
+	exceptNets := []networking.IPNet{}
 	for _, exc := range ipBlock.Except {
 		// Convert the except IPBlock to networkpolicy.IPNet.
 		exceptNet, err := store.CIDRStrToIPNet(exc)
@@ -477,7 +477,7 @@ func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networkpolicy.IPBlock, err
 		}
 		exceptNets = append(exceptNets, *exceptNet)
 	}
-	antreaIPBlock := &networkpolicy.IPBlock{
+	antreaIPBlock := &networking.IPBlock{
 		CIDR:   *ipNet,
 		Except: exceptNets,
 	}
@@ -492,13 +492,13 @@ func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networkpolicy.IPBlock, err
 func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkPolicy) *antreatypes.NetworkPolicy {
 	appliedToGroupKey := n.createAppliedToGroup(np)
 	appliedToGroupNames := []string{appliedToGroupKey}
-	rules := make([]networkpolicy.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
+	rules := make([]networking.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
 	var ingressRuleExists, egressRuleExists bool
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for _, ingressRule := range np.Spec.Ingress {
 		ingressRuleExists = true
-		rules = append(rules, networkpolicy.NetworkPolicyRule{
-			Direction: networkpolicy.DirectionIn,
+		rules = append(rules, networking.NetworkPolicyRule{
+			Direction: networking.DirectionIn,
 			From:      *n.toAntreaPeer(ingressRule.From, np),
 			Services:  toAntreaServices(ingressRule.Ports),
 		})
@@ -506,8 +506,8 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	// Compute NetworkPolicyRule for Egress Rule.
 	for _, egressRule := range np.Spec.Egress {
 		egressRuleExists = true
-		rules = append(rules, networkpolicy.NetworkPolicyRule{
-			Direction: networkpolicy.DirectionOut,
+		rules = append(rules, networking.NetworkPolicyRule{
+			Direction: networking.DirectionOut,
 			To:        *n.toAntreaPeer(egressRule.To, np),
 			Services:  toAntreaServices(egressRule.Ports),
 		})
@@ -544,14 +544,14 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	return internalNetworkPolicy
 }
 
-func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy) *networkpolicy.NetworkPolicyPeer {
+func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy) *networking.NetworkPolicyPeer {
 	// Empty NetworkPolicyPeer is supposed to match all addresses.
 	// See https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-allow-all-ingress-traffic.
 	// It's treated as an IPBlock "0.0.0.0/0".
 	if len(peers) == 0 {
 		return &matchAllPeer
 	}
-	var ipBlocks []networkpolicy.IPBlock
+	var ipBlocks []networking.IPBlock
 	var addressGroups []string
 	for _, peer := range peers {
 		// A networking.NetworkPolicyPeer will either have an IPBlock or a
@@ -568,7 +568,7 @@ func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolic
 			addressGroups = append(addressGroups, normalizedUID)
 		}
 	}
-	return &networkpolicy.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
+	return &networking.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
 }
 
 // addNetworkPolicy receives NetworkPolicy ADD events and creates resources
@@ -1081,9 +1081,9 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		}
 		podSet := podsByNodes[pod.Spec.NodeName]
 		if podSet == nil {
-			podSet = make(map[networkpolicy.PodReference]sets.Empty)
+			podSet = make(map[networking.PodReference]sets.Empty)
 		}
-		podRef := networkpolicy.PodReference{
+		podRef := networking.PodReference{
 			Name:      pod.Name,
 			Namespace: pod.Namespace,
 		}

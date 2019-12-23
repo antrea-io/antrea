@@ -22,7 +22,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 )
 
@@ -43,12 +43,12 @@ func filter(selectors *storage.Selectors, key string, nodeNames sets.String) boo
 
 // IPStrToIPAddress converts an IP string to networkpolicy.IPAddress.
 // nil will returned if the IP string is not valid.
-func IPStrToIPAddress(ip string) networkpolicy.IPAddress {
-	return networkpolicy.IPAddress(net.ParseIP(ip))
+func IPStrToIPAddress(ip string) networking.IPAddress {
+	return networking.IPAddress(net.ParseIP(ip))
 }
 
 // CIDRStrToIPNet converts a CIDR (eg. 10.0.0.0/16) to a *networkpolicy.IPNet.
-func CIDRStrToIPNet(cidr string) (*networkpolicy.IPNet, error) {
+func CIDRStrToIPNet(cidr string) (*networking.IPNet, error) {
 	// Split the cidr to retrieve the IP and prefix.
 	s := strings.Split(cidr, "/")
 	if len(s) != 2 {
@@ -59,7 +59,7 @@ func CIDRStrToIPNet(cidr string) (*networkpolicy.IPNet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid prefix length: %s", s[1])
 	}
-	ipNet := &networkpolicy.IPNet{
+	ipNet := &networking.IPNet{
 		IP:           IPStrToIPAddress(s[0]),
 		PrefixLength: int32(prefixLen64),
 	}

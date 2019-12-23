@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	networkpolicyapis "github.com/vmware-tanzu/antrea/pkg/apis/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -50,11 +50,11 @@ func NewREST(addressGroupStore storage.Interface) *REST {
 }
 
 func (r *REST) New() runtime.Object {
-	return &networkpolicyapis.AddressGroup{}
+	return &networking.AddressGroup{}
 }
 
 func (r *REST) NewList() runtime.Object {
-	return &networkpolicyapis.AddressGroupList{}
+	return &networking.AddressGroupList{}
 }
 
 func (r *REST) Get(ctx context.Context, name string, options *v1.GetOptions) (runtime.Object, error) {
@@ -63,17 +63,17 @@ func (r *REST) Get(ctx context.Context, name string, options *v1.GetOptions) (ru
 		return nil, errors.NewInternalError(err)
 	}
 	if !exists {
-		return nil, errors.NewNotFound(networkpolicyapis.Resource("addressgroup"), name)
+		return nil, errors.NewNotFound(networking.Resource("addressgroup"), name)
 	}
-	obj := new(networkpolicyapis.AddressGroup)
+	obj := new(networking.AddressGroup)
 	store.ToAddressGroupMsg(addressGroup.(*types.AddressGroup), obj, true)
 	return obj, nil
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	addressGroups := r.addressGroupStore.List()
-	list := new(networkpolicyapis.AddressGroupList)
-	list.Items = make([]networkpolicyapis.AddressGroup, len(addressGroups))
+	list := new(networking.AddressGroupList)
+	list.Items = make([]networking.AddressGroup, len(addressGroups))
 	for i := range addressGroups {
 		store.ToAddressGroupMsg(addressGroups[i].(*types.AddressGroup), &list.Items[i], true)
 	}

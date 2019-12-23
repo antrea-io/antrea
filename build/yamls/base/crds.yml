@@ -2,9 +2,9 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: antreacontrollerinfos.clusterinformation.crd.antrea.io
+  name: antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com
 spec:
-  group: clusterinformation.crd.antrea.io
+  group: clusterinformation.antrea.tanzu.vmware.com
   versions:
     - name: v1beta1
       served: true
@@ -20,9 +20,9 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: antreaagentinfos.clusterinformation.crd.antrea.io
+  name: antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com
 spec:
-  group: clusterinformation.crd.antrea.io
+  group: clusterinformation.antrea.tanzu.vmware.com
   versions:
     - name: v1beta1
       served: true
