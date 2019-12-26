@@ -52,6 +52,7 @@ func (in *AntreaAgentInfo) DeepCopyInto(out *AntreaAgentInfo) {
 		copy(*out, *in)
 	}
 	in.OVSInfo.DeepCopyInto(&out.OVSInfo)
+	out.NetworkPolicyControllerInfo = in.NetworkPolicyControllerInfo
 	if in.AgentConditions != nil {
 		in, out := &in.AgentConditions, &out.AgentConditions
 		*out = make([]AgentCondition, len(*in))

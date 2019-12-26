@@ -102,6 +102,10 @@ type ruleCache struct {
 	// addressSetByGroup is a mapping from AddressGroup name to a set of IP addresses.
 	addressSetByGroup map[string]sets.String
 
+	policySetLock sync.RWMutex
+	// policySet is a set to store NetworkPolicy UID strings.
+	policySet sets.String
+
 	// rules is a storage that supports listing rules using multiple indexing functions.
 	// rules is thread-safe.
 	rules cache.Indexer
@@ -151,6 +155,7 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta1.PodRef
 	cache := &ruleCache{
 		podSetByGroup:     make(map[string]podSet),
 		addressSetByGroup: make(map[string]sets.String),
+		policySet:         sets.NewString(),
 		rules:             rules,
 		dirtyRuleHandler:  dirtyRuleHandler,
 		podUpdates:        podUpdate,
@@ -182,6 +187,14 @@ func (c *ruleCache) processPodUpdates() {
 			}()
 		}
 	}
+}
+
+// GetAddressGroupNum gets the number of AddressGroup.
+func (c *ruleCache) GetAddressGroupNum() int {
+	c.addressSetLock.RLock()
+	defer c.addressSetLock.RUnlock()
+
+	return len(c.addressSetByGroup)
 }
 
 // AddAddressGroup adds a new *v1beta1.AddressGroup to the cache. The rules
@@ -230,6 +243,14 @@ func (c *ruleCache) DeleteAddressGroup(group *v1beta1.AddressGroup) error {
 
 	delete(c.addressSetByGroup, group.Name)
 	return nil
+}
+
+// GetAppliedToGroupNum gets the number of AppliedToGroup.
+func (c *ruleCache) GetAppliedToGroupNum() int {
+	c.podSetLock.RLock()
+	defer c.podSetLock.RUnlock()
+
+	return len(c.podSetByGroup)
 }
 
 // AddAppliedToGroup adds a new *v1beta1.AppliedToGroup to the cache. The rules
@@ -290,11 +311,23 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
 	return rule
 }
 
+// GetNetworkPolicyNum gets the number of NetworkPolicy.
+func (c *ruleCache) GetNetworkPolicyNum() int {
+	c.policySetLock.RLock()
+	defer c.policySetLock.RUnlock()
+
+	return c.policySet.Len()
+}
+
 // AddNetworkPolicy adds a new *v1beta1.NetworkPolicy to the cache.
 // It could happen that an existing NetworkPolicy is "added" again when the
 // watcher reconnects to the Apiserver, we use the same processing as
 // UpdateNetworkPolicy to ensure orphan rules are removed.
 func (c *ruleCache) AddNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
+	c.policySetLock.Lock()
+	defer c.policySetLock.Unlock()
+
+	c.policySet.Insert(string(policy.UID))
 	return c.UpdateNetworkPolicy(policy)
 }
 
@@ -331,6 +364,10 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 // DeleteNetworkPolicy deletes a cached *v1beta1.NetworkPolicy.
 // All its rules will be regarded as dirty.
 func (c *ruleCache) DeleteNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
+	c.policySetLock.Lock()
+	defer c.policySetLock.Unlock()
+
+	c.policySet.Delete(string(policy.UID))
 	existingRules, _ := c.rules.ByIndex(policyIndex, string(policy.UID))
 	for _, r := range existingRules {
 		ruleID := r.(*rule).ID

@@ -26,13 +26,14 @@ type AntreaAgentInfo struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Version         string                 `json:"version,omitempty"`         // Antrea binary version
-	PodRef          corev1.ObjectReference `json:"podRef,omitempty"`          // The Pod that Antrea Agent is running in
-	NodeRef         corev1.ObjectReference `json:"nodeRef,omitempty"`         // The Node that Antrea Agent is running in
-	NodeSubnet      []string               `json:"nodeSubnet,omitempty"`      // Node subnet
-	OVSInfo         OVSInfo                `json:"ovsInfo,omitempty"`         // OVS Information
-	LocalPodNum     int32                  `json:"localPodNum,omitempty"`     // The number of Pods which the agent is in charge of
-	AgentConditions []AgentCondition       `json:"agentConditions,omitempty"` // Agent condition contains types like AgentHealthy
+	Version                     string                      `json:"version,omitempty"`                     // Antrea binary version
+	PodRef                      corev1.ObjectReference      `json:"podRef,omitempty"`                      // The Pod that Antrea Agent is running in
+	NodeRef                     corev1.ObjectReference      `json:"nodeRef,omitempty"`                     // The Node that Antrea Agent is running in
+	NodeSubnet                  []string                    `json:"nodeSubnet,omitempty"`                  // Node subnet
+	OVSInfo                     OVSInfo                     `json:"ovsInfo,omitempty"`                     // OVS Information
+	NetworkPolicyControllerInfo NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Agent NetworkPolicy information
+	LocalPodNum                 int32                       `json:"localPodNum,omitempty"`                 // The number of Pods which the agent is in charge of
+	AgentConditions             []AgentCondition            `json:"agentConditions,omitempty"`             // Agent condition contains types like AgentHealthy
 }
 
 type OVSInfo struct {
@@ -75,15 +76,15 @@ type AntreaControllerInfo struct {
 	PodRef                      corev1.ObjectReference      `json:"podRef,omitempty"`                      // The Pod that Antrea Controller is running in
 	NodeRef                     corev1.ObjectReference      `json:"nodeRef,omitempty"`                     // The Node that Antrea Controller is running in
 	ServiceRef                  corev1.ObjectReference      `json:"serviceRef, omitempty"`                 // Antrea Controller Service
-	NetworkPolicyControllerInfo NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // NetworkPolicy information
+	NetworkPolicyControllerInfo NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Controller NetworkPolicy information
 	ConnectedAgentNum           int32                       `json:"connectedAgentNum,omitempty"`           // Number of agents which are connected to this controller
 	ControllerConditions        []ControllerCondition       `json:"controllerConditions,omitempty"`        // Controller condition contains types like ControllerHealthy
 }
 
 type NetworkPolicyControllerInfo struct {
-	PolicyNum        int32 `json:"policyNum,omitempty"`
-	AddressGroupNum  int32 `json:"addressGroupNum,omitempty"`
-	ApplyingGroupNum int32 `json:"applyingGroupNum,omitempty"`
+	NetworkPolicyNum  int32 `json:"networkPolicyNum,omitempty"`
+	AddressGroupNum   int32 `json:"addressGroupNum,omitempty"`
+	AppliedToGroupNum int32 `json:"appliedToGroupNum,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

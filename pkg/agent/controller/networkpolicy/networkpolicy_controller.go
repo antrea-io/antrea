@@ -81,6 +81,18 @@ func NewNetworkPolicyController(antreaClient versioned.Interface,
 	return c
 }
 
+func (c *Controller) GetNetworkPolicyNum() int {
+	return c.ruleCache.GetNetworkPolicyNum()
+}
+
+func (c *Controller) GetAddressGroupNum() int {
+	return c.ruleCache.GetAddressGroupNum()
+}
+
+func (c *Controller) GetAppliedToGroupNum() int {
+	return c.ruleCache.GetAppliedToGroupNum()
+}
+
 // Run begins watching and processing Antrea AddressGroups, AppliedToGroups
 // and NetworkPolicies, and spawns workers that reconciles NetworkPolicy rules.
 // Run will not return until stopCh is closed.

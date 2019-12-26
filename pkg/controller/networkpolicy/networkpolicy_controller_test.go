@@ -132,7 +132,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 		{
 			name: "default-allow-egress",
 			inputPolicy: &networkingv1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npB", UID: "uidB"},
 				Spec: networkingv1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{},
 					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
@@ -140,8 +140,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
+				UID:       "uidB",
+				Name:      "npB",
 				Namespace: "nsA",
 				Rules: []networking.NetworkPolicyRule{{
 					Direction: networking.DirectionOut,
@@ -156,15 +156,15 @@ func TestAddNetworkPolicy(t *testing.T) {
 		{
 			name: "default-deny-ingress",
 			inputPolicy: &networkingv1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npC", UID: "uidC"},
 				Spec: networkingv1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{},
 					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
+				UID:       "uidC",
+				Name:      "npC",
 				Namespace: "nsA",
 				Rules: []networking.NetworkPolicyRule{
 					denyAllIngressRule,
@@ -177,15 +177,15 @@ func TestAddNetworkPolicy(t *testing.T) {
 		{
 			name: "default-deny-egress",
 			inputPolicy: &networkingv1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npD", UID: "uidD"},
 				Spec: networkingv1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{},
 					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
+				UID:       "uidD",
+				Name:      "npD",
 				Namespace: "nsA",
 				Rules: []networking.NetworkPolicyRule{
 					denyAllEgressRule,
@@ -198,7 +198,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 		{
 			name: "rules-with-same-selectors",
 			inputPolicy: &networkingv1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npE", UID: "uidE"},
 				Spec: networkingv1.NetworkPolicySpec{
 					PodSelector: selectorA,
 					Ingress: []networkingv1.NetworkPolicyIngressRule{
@@ -234,8 +234,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
+				UID:       "uidE",
+				Name:      "npE",
 				Namespace: "nsA",
 				Rules: []networking.NetworkPolicyRule{
 					{
@@ -271,7 +271,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 		{
 			name: "rules-with-different-selectors",
 			inputPolicy: &networkingv1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npF", UID: "uidF"},
 				Spec: networkingv1.NetworkPolicySpec{
 					PodSelector: selectorA,
 					Ingress: []networkingv1.NetworkPolicyIngressRule{
@@ -303,8 +303,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
+				UID:       "uidF",
+				Name:      "npF",
 				Namespace: "nsA",
 				Rules: []networking.NetworkPolicyRule{
 					{
@@ -358,6 +358,13 @@ func TestAddNetworkPolicy(t *testing.T) {
 			}
 		})
 	}
+	_, npc := newController()
+	for _, tt := range tests {
+		npc.addNetworkPolicy(tt.inputPolicy)
+	}
+	assert.Equal(t, npc.GetNetworkPolicyNum(), 6, "expected networkPolicy number is 6")
+	assert.Equal(t, npc.GetAddressGroupNum(), 3, "expected addressGroup number is 3")
+	assert.Equal(t, npc.GetAppliedToGroupNum(), 2, "appliedToGroup number is 2")
 }
 
 func TestDeleteNetworkPolicy(t *testing.T) {
