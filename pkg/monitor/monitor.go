@@ -42,7 +42,7 @@ type controllerMonitor struct {
 	nodeInformer coreinformers.NodeInformer
 	// nodeListerSynced is a function which returns true if the node shared informer has been synced at least once.
 	nodeListerSynced         cache.InformerSynced
-	networkPolicyInfoQuerier NetworkPolicyInfoQuerier
+	networkPolicyInfoQuerier ControllerNetworkPolicyInfoQuerier
 }
 
 type agentMonitor struct {
@@ -53,10 +53,10 @@ type agentMonitor struct {
 	interfaceStore           interfacestore.InterfaceStore
 	ofClient                 openflow.Client
 	ovsBridgeClient          ovsconfig.OVSBridgeClient
-	networkPolicyInfoQuerier NetworkPolicyInfoQuerier
+	networkPolicyInfoQuerier AgentNetworkPolicyInfoQuerier
 }
 
-func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers.NodeInformer, networkPolicyInfoQuerier NetworkPolicyInfoQuerier) monitor {
+func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers.NodeInformer, networkPolicyInfoQuerier ControllerNetworkPolicyInfoQuerier) monitor {
 	m := &controllerMonitor{client: client, nodeInformer: nodeInformer, nodeListerSynced: nodeInformer.Informer().HasSynced, networkPolicyInfoQuerier: networkPolicyInfoQuerier}
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    nil,
@@ -75,7 +75,7 @@ func NewAgentMonitor(
 	interfaceStore interfacestore.InterfaceStore,
 	ofClient openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
-	networkPolicyInfoQuerier NetworkPolicyInfoQuerier,
+	networkPolicyInfoQuerier AgentNetworkPolicyInfoQuerier,
 ) monitor {
 	return &agentMonitor{client: client, ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient, networkPolicyInfoQuerier: networkPolicyInfoQuerier}
 }
@@ -176,6 +176,7 @@ func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.
 		NodeRef:                     monitor.GetSelfNode(),
 		ServiceRef:                  monitor.GetService(),
 		NetworkPolicyControllerInfo: monitor.GetNetworkPolicyControllerInfo(),
+		ConnectedAgentNum:           int32(monitor.GetConnectedAgentNum()),
 		ControllerConditions: []v1beta1.ControllerCondition{
 			{
 				Type:              v1beta1.ControllerHealthy,
@@ -195,6 +196,7 @@ func (monitor *controllerMonitor) updateControllerCRD(controllerCRD *v1beta1.Ant
 	controllerCRD.NodeRef = monitor.GetSelfNode()
 	controllerCRD.ServiceRef = monitor.GetService()
 	controllerCRD.NetworkPolicyControllerInfo = monitor.GetNetworkPolicyControllerInfo()
+	controllerCRD.ConnectedAgentNum = int32(monitor.GetConnectedAgentNum())
 	controllerCRD.ControllerConditions = []v1beta1.ControllerCondition{
 		{
 			Type:              v1beta1.ControllerHealthy,
@@ -209,6 +211,7 @@ func (monitor *controllerMonitor) updateControllerCRD(controllerCRD *v1beta1.Ant
 // partialUpdateControllerCRD only updates the variables.
 func (monitor *controllerMonitor) partialUpdateControllerCRD(controllerCRD *v1beta1.AntreaControllerInfo) (*v1beta1.AntreaControllerInfo, error) {
 	controllerCRD.NetworkPolicyControllerInfo = monitor.GetNetworkPolicyControllerInfo()
+	controllerCRD.ConnectedAgentNum = int32(monitor.GetConnectedAgentNum())
 	controllerCRD.ControllerConditions = []v1beta1.ControllerCondition{
 		{
 			Type:              v1beta1.ControllerHealthy,
@@ -272,13 +275,7 @@ func (monitor *agentMonitor) createAgentCRD(crdName string) (*v1beta1.AntreaAgen
 		OVSInfo:                     v1beta1.OVSInfo{Version: monitor.GetOVSVersion(), BridgeName: monitor.ovsBridge, FlowTable: monitor.GetOVSFlowTable()},
 		NetworkPolicyControllerInfo: monitor.GetNetworkPolicyControllerInfo(),
 		LocalPodNum:                 monitor.GetLocalPodNum(),
-		AgentConditions: []v1beta1.AgentCondition{
-			{
-				Type:              v1beta1.AgentHealthy,
-				Status:            v1.ConditionTrue,
-				LastHeartbeatTime: metav1.Now(),
-			},
-		},
+		AgentConditions:             monitor.GetAgentConditions(),
 	}
 	klog.V(2).Infof("Creating agent monitoring CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Create(agentCRD)
@@ -293,13 +290,7 @@ func (monitor *agentMonitor) updateAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (
 	agentCRD.OVSInfo = v1beta1.OVSInfo{Version: monitor.GetOVSVersion(), BridgeName: monitor.ovsBridge, FlowTable: monitor.GetOVSFlowTable()}
 	agentCRD.NetworkPolicyControllerInfo = monitor.GetNetworkPolicyControllerInfo()
 	agentCRD.LocalPodNum = monitor.GetLocalPodNum()
-	agentCRD.AgentConditions = []v1beta1.AgentCondition{
-		{
-			Type:              v1beta1.AgentHealthy,
-			Status:            v1.ConditionTrue,
-			LastHeartbeatTime: metav1.Now(),
-		},
-	}
+	agentCRD.AgentConditions = monitor.GetAgentConditions()
 	klog.V(2).Infof("Updating agent monitoring CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
 }
@@ -310,13 +301,7 @@ func (monitor *agentMonitor) partialUpdateAgentCRD(agentCRD *v1beta1.AntreaAgent
 	agentCRD.LocalPodNum = monitor.GetLocalPodNum()
 	agentCRD.OVSInfo.FlowTable = monitor.GetOVSFlowTable()
 	agentCRD.NetworkPolicyControllerInfo = monitor.GetNetworkPolicyControllerInfo()
-	agentCRD.AgentConditions = []v1beta1.AgentCondition{
-		{
-			Type:              v1beta1.AgentHealthy,
-			Status:            v1.ConditionTrue,
-			LastHeartbeatTime: metav1.Now(),
-		},
-	}
+	agentCRD.AgentConditions = monitor.GetAgentConditions()
 	klog.V(2).Infof("Partially updating agent monitoring CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
 }

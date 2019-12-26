@@ -79,4 +79,7 @@ type Interface interface {
 
 	// Watch starts watching with the specified key and selectors. Events will be sent to the returned watch.Interface.
 	Watch(ctx context.Context, key string, labelSelector labels.Selector, fieldSelector fields.Selector) (watch.Interface, error)
+
+	// GetWatchersNum gets the number of watchers for the store.
+	GetWatchersNum() int
 }
