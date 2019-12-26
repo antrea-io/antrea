@@ -20,6 +20,8 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 )
 
 const (
@@ -33,6 +35,13 @@ const (
 type Querier interface {
 	GetSelfPod() v1.ObjectReference
 	GetSelfNode() v1.ObjectReference
+	GetNetworkPolicyControllerInfo() v1beta1.NetworkPolicyControllerInfo
+}
+
+type NetworkPolicyInfoQuerier interface {
+	GetNetworkPolicyNum() int
+	GetAddressGroupNum() int
+	GetAppliedToGroupNum() int
 }
 
 type AgentQuerier interface {
@@ -78,6 +87,14 @@ func (monitor *agentMonitor) GetOVSFlowTable() map[string]int32 {
 	return flowTable
 }
 
+func (monitor *agentMonitor) GetNetworkPolicyControllerInfo() v1beta1.NetworkPolicyControllerInfo {
+	return v1beta1.NetworkPolicyControllerInfo{
+		NetworkPolicyNum:  int32(monitor.networkPolicyInfoQuerier.GetNetworkPolicyNum()),
+		AddressGroupNum:   int32(monitor.networkPolicyInfoQuerier.GetAddressGroupNum()),
+		AppliedToGroupNum: int32(monitor.networkPolicyInfoQuerier.GetAppliedToGroupNum()),
+	}
+}
+
 // GetLocalPodNum gets the number of Pod which the Agent is in charge of.
 func (monitor *agentMonitor) GetLocalPodNum() int32 {
 	return int32(monitor.interfaceStore.GetContainerInterfaceNum())
@@ -99,4 +116,12 @@ func (monitor *controllerMonitor) GetSelfNode() v1.ObjectReference {
 
 func (monitor *controllerMonitor) GetService() v1.ObjectReference {
 	return v1.ObjectReference{Kind: "Service", Name: SERVICE_NAME}
+}
+
+func (monitor *controllerMonitor) GetNetworkPolicyControllerInfo() v1beta1.NetworkPolicyControllerInfo {
+	return v1beta1.NetworkPolicyControllerInfo{
+		NetworkPolicyNum:  int32(monitor.networkPolicyInfoQuerier.GetNetworkPolicyNum()),
+		AddressGroupNum:   int32(monitor.networkPolicyInfoQuerier.GetAddressGroupNum()),
+		AppliedToGroupNum: int32(monitor.networkPolicyInfoQuerier.GetAppliedToGroupNum()),
+	}
 }

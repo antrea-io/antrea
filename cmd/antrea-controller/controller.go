@@ -84,7 +84,7 @@ func run(o *Options) error {
 
 	informerFactory.Start(stopCh)
 
-	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer)
+	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, networkPolicyController)
 	go controllerMonitor.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
