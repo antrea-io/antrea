@@ -208,18 +208,6 @@ func TestValidatePrevResult(t *testing.T) {
 		)
 	})
 
-	t.Run("Invalid host interface", func(t *testing.T) {
-		cniConfig := baseCNIConfig()
-		cniConfig.Ifname = ifname
-		hostIface := &current.Interface{Name: "unknown_iface"}
-		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		response, _ := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult)
-		checkErrorResponse(
-			t, response, cnipb.ErrorCode_INVALID_NETWORK_CONFIG,
-			"prevResult does not match network configuration",
-		)
-	})
-
 	t.Run("Interface check failure", func(t *testing.T) {
 		cniConfig := baseCNIConfig()
 		cniConfig.Ifname = ifname
@@ -313,7 +301,7 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 	})
 }
 
-func TestValidateOVSPort(t *testing.T) {
+func TestValidateOVSInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -331,7 +319,7 @@ func TestValidateOVSPort(t *testing.T) {
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID}
 
 	ifaceStore.AddInterface(containerConfig)
-	err := podConfigurator.validateOVSPort(hostIfaceName, containerMACStr, containerID, result.IPs)
+	err := podConfigurator.validateOVSInterfaceConfig(containerID, testPodName, testPodNamespace, containerMACStr, result.IPs)
 	assert.Nil(t, err, "Failed to validate OVS port configuration")
 }
 
