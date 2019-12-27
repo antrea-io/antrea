@@ -81,4 +81,8 @@ be found on our [Roadmap](ROADMAP.md) page. Feel free to throw your ideas in!
 
 ## License
 
+aaa
+bbb
+ccc
+CCCDDD
 Antrea is licensed under the [Apache License, version 2.0](LICENSE)
