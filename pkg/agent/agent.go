@@ -48,18 +48,18 @@ const (
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
-	ovsBridge         string
-	hostGateway       string
-	tunnelType        ovsconfig.TunnelType
-	mtu               int
-	enableIPSecTunnel bool
-	client            clientset.Interface
-	ifaceStore        interfacestore.InterfaceStore
-	nodeConfig        *types.NodeConfig
-	ovsBridgeClient   ovsconfig.OVSBridgeClient
-	serviceCIDR       *net.IPNet
-	ofClient          openflow.Client
-	ipsecPSK          string
+	ovsBridge       string
+	hostGateway     string
+	networkMode     types.NetworkMode
+	tunnelType      ovsconfig.TunnelType
+	mtu             int
+	client          clientset.Interface
+	ifaceStore      interfacestore.InterfaceStore
+	nodeConfig      *types.NodeConfig
+	ovsBridgeClient ovsconfig.OVSBridgeClient
+	serviceCIDR     *net.IPNet
+	ofClient        openflow.Client
+	ipsecPSK        string
 }
 
 func disableICMPSendRedirects(intfName string) error {
@@ -79,22 +79,22 @@ func NewInitializer(
 	ifaceStore interfacestore.InterfaceStore,
 	ovsBridge, serviceCIDR, hostGateway string,
 	mtu int,
-	tunnelType ovsconfig.TunnelType,
-	enableIPSecTunnel bool) *Initializer {
+	networkMode types.NetworkMode,
+	tunnelType ovsconfig.TunnelType) *Initializer {
 	// Parse service CIDR configuration. serviceCIDR is checked in option.validate, so
 	// it should be a valid configuration here.
 	_, serviceCIDRNet, _ := net.ParseCIDR(serviceCIDR)
 	return &Initializer{
-		ovsBridgeClient:   ovsBridgeClient,
-		ovsBridge:         ovsBridge,
-		hostGateway:       hostGateway,
-		tunnelType:        tunnelType,
-		mtu:               mtu,
-		enableIPSecTunnel: enableIPSecTunnel,
-		client:            k8sClient,
-		ifaceStore:        ifaceStore,
-		serviceCIDR:       serviceCIDRNet,
-		ofClient:          ofClient,
+		ovsBridgeClient: ovsBridgeClient,
+		ovsBridge:       ovsBridge,
+		hostGateway:     hostGateway,
+		networkMode:     networkMode,
+		tunnelType:      tunnelType,
+		mtu:             mtu,
+		client:          k8sClient,
+		ifaceStore:      ifaceStore,
+		serviceCIDR:     serviceCIDRNet,
+		ofClient:        ofClient,
 	}
 }
 
@@ -120,7 +120,7 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
-	if !i.enableIPSecTunnel {
+	if i.networkMode == types.EncapNormal {
 		if err := i.setupTunnelInterface(types.DefaultTunPortName); err != nil {
 			return err
 		}
@@ -238,7 +238,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	}
 
 	// When IPSec encyption is enabled, no flow is needed for the default tunnel interface.
-	if !i.enableIPSecTunnel {
+	if i.networkMode == types.EncapNormal {
 		// Setup flow entries for the default tunnel port interface.
 		if err := i.ofClient.InstallDefaultTunnelFlows(types.DefaultTunOFPort); err != nil {
 			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
@@ -413,7 +413,7 @@ func getNodeName() (string, error) {
 // readIPSecPSK reads the IPSec PSK value from environment variable
 // ANTREA_IPSEC_PSK, when enableIPSecTunnel is set to true.
 func (i *Initializer) readIPSecPSK() error {
-	if !i.enableIPSecTunnel {
+	if i.networkMode != types.IPSecEncap {
 		return nil
 	}
 

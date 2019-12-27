@@ -40,6 +40,14 @@ type AgentConfig struct {
 	// Make sure it doesn't conflict with your existing interfaces.
 	// Defaults to gw0.
 	HostGateway string `yaml:"hostGateway,omitempty"`
+	// Pod network mode. Supported values are:
+	// - encapNormal (default): Pod traffic across Nodes will be transmitted over the overlay tunnels
+	// and encapsulated with the protocol decided by the tunnelType.
+	// - ipsecEncap: Pod traffic across Nodes will be transimitted over the overlay tunnels and
+	// encrypted with IPSec (ESP). Antrea uses Preshared Key (PSK) for IKE authentication. When
+	// the ipsecEncap mode is configured, the PSK value must be passed to Antrea Agent through an
+	// environment variable: ANTREA_IPSEC_PSK.
+	NetworkMode string `yaml:"networkMode,omitempty"`
 	// Encapsulation mode for communication between Pods across Nodes, supported values:
 	// - vxlan (default)
 	// - geneve
@@ -59,9 +67,4 @@ type AgentConfig struct {
 	// be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
 	// Default is 10.96.0.0/12
 	ServiceCIDR string `yaml:"serviceCIDR,omitempty"`
-	// Whether or not to enable IPSec (ESP) tunnel for Pod traffic across Nodes. Antrea uses Preshared
-	// Key (PSK) for IKE authentication. When IPSec tunnel is enabled, the PSK value must be passed to
-	// Antrea Agent through an environment variable: ANTREA_IPSEC_PSK.
-	// Defaults to false.
-	EnableIPSecTunnel bool `yaml:"enableIPSecTunnel,omitempty"`
 }

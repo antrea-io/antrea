@@ -124,13 +124,13 @@ mkdir configMap && cd configMap
 # YAML manifest, so our regexs need not be too robust.
 cp $KUSTOMIZATION_DIR/base/conf/antrea-agent.conf antrea-agent.conf
 if $KIND; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ovsDatapathType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/ovsDatapathType: netdev/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ovsDatapathType[[:space:]]*:[[:space:]]*[a-zA-Z]+[[:space:]]*$/ovsDatapathType: netdev/" antrea-agent.conf
 fi
 
 if $IPSEC; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableIPSecTunnel[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableIPSecTunnel: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*networkMode[[:space:]]*:[[:space:]]*[a-zA-Z]+[[:space:]]*$/networkMode: ipsecEncap/" antrea-agent.conf
     # change the tunnel type to GRE which works better with IPSec encryption than other types.
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-zA-Z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
 fi
 
 # unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,

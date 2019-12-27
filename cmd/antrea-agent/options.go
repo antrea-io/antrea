@@ -35,6 +35,9 @@ const (
 	defaultMTUGeneve          = 1450
 	defaultMTUGRE             = 1462
 	defaultMTUSTT             = 1500
+
+	encapNormal = "encapNormal"
+	ipsecEncap  = "ipsecEncap"
 )
 
 type Options struct {
@@ -78,6 +81,9 @@ func (o *Options) validate(args []string) error {
 	if err != nil {
 		return fmt.Errorf("service CIDR %s is invalid", o.config.ServiceCIDR)
 	}
+	if o.config.NetworkMode != encapNormal && o.config.NetworkMode != ipsecEncap {
+		return fmt.Errorf("network mode %s is invalid", o.config.NetworkMode)
+	}
 	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
 		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
 		return fmt.Errorf("tunnel type %s is invalid", o.config.TunnelType)
@@ -114,6 +120,9 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.HostGateway == "" {
 		o.config.HostGateway = defaultHostGateway
+	}
+	if o.config.NetworkMode == "" {
+		o.config.NetworkMode = encapNormal
 	}
 	if o.config.TunnelType == "" {
 		o.config.TunnelType = ovsconfig.VXLANTunnel

@@ -24,6 +24,13 @@ const (
 	HostGatewayOFPort  = 2
 )
 
+const (
+	EncapNormal NetworkMode = iota
+	IPSecEncap
+)
+
+type NetworkMode uint8
+
 type GatewayConfig struct {
 	IP   net.IP
 	MAC  net.HardwareAddr

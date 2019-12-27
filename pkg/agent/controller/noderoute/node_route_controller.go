@@ -63,6 +63,7 @@ type Controller struct {
 	ovsBridgeClient  ovsconfig.OVSBridgeClient
 	interfaceStore   interfacestore.InterfaceStore
 	nodeConfig       *types.NodeConfig
+	networkMode      types.NetworkMode
 	tunnelType       ovsconfig.TunnelType
 	// Pre-shared key for IPSec IKE authentication. If not empty IPSec tunnels will
 	// be enabled.
@@ -84,6 +85,7 @@ func NewNodeRouteController(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	interfaceStore interfacestore.InterfaceStore,
 	config *types.NodeConfig,
+	networkMode types.NetworkMode,
 	tunnelType ovsconfig.TunnelType,
 	ipsecPSK string,
 ) *Controller {
@@ -102,6 +104,7 @@ func NewNodeRouteController(
 		nodeConfig:       config,
 		gatewayLink:      link,
 		installedNodes:   &sync.Map{},
+		networkMode:      networkMode,
 		tunnelType:       tunnelType,
 		ipsecPSK:         ipsecPSK}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
@@ -248,7 +251,7 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 		c.installedNodes.Delete(nodeName)
 	}
 
-	if c.ipsecPSK != "" {
+	if c.networkMode == types.IPSecEncap {
 		interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
 		if !ok {
 			// Tunnel port not created for this Node.
@@ -292,7 +295,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 
 	var tunOFPort int32
 	var remoteIP net.IP
-	if c.ipsecPSK != "" {
+	if c.networkMode == types.IPSecEncap {
 		// Create a separate tunnel port for the Node, as OVS does not support flow
 		// based tunnel for IPSec.
 		if tunOFPort, err = c.createIPSecTunnelPort(nodeName, peerNodeIP); err != nil {

@@ -28,6 +28,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
@@ -72,6 +73,13 @@ func run(o *Options) error {
 	ifaceStore := interfacestore.NewInterfaceStore()
 
 	// Initialize agent and node network.
+	var networkMode types.NetworkMode
+	switch {
+	case o.config.NetworkMode == encapNormal:
+		networkMode = types.EncapNormal
+	case o.config.NetworkMode == ipsecEncap:
+		networkMode = types.IPSecEncap
+	}
 	agentInitializer := agent.NewInitializer(
 		ovsBridgeClient,
 		ofClient,
@@ -81,12 +89,8 @@ func run(o *Options) error {
 		o.config.ServiceCIDR,
 		o.config.HostGateway,
 		o.config.DefaultMTU,
-		ovsconfig.TunnelType(o.config.TunnelType),
-		o.config.EnableIPSecTunnel)
-	err = agentInitializer.Initialize()
-	if err != nil {
-		return fmt.Errorf("error initializing agent: %v", err)
-	}
+		networkMode,
+		ovsconfig.TunnelType(o.config.TunnelType))
 	nodeConfig := agentInitializer.GetNodeConfig()
 
 	nodeRouteController := noderoute.NewNodeRouteController(
@@ -96,6 +100,7 @@ func run(o *Options) error {
 		ovsBridgeClient,
 		ifaceStore,
 		nodeConfig,
+		networkMode,
 		ovsconfig.TunnelType(o.config.TunnelType),
 		agentInitializer.GetIPSecPSK())
 

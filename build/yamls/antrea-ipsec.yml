@@ -3,9 +3,9 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
-  name: antreaagentinfos.clusterinformation.crd.antrea.io
+  name: antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com
 spec:
-  group: clusterinformation.crd.antrea.io
+  group: clusterinformation.antrea.tanzu.vmware.com
   names:
     kind: AntreaAgentInfo
     plural: antreaagentinfos
@@ -23,9 +23,9 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
-  name: antreacontrollerinfos.clusterinformation.crd.antrea.io
+  name: antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com
 spec:
-  group: clusterinformation.crd.antrea.io
+  group: clusterinformation.antrea.tanzu.vmware.com
   names:
     kind: AntreaControllerInfo
     plural: antreacontrollerinfos
@@ -71,7 +71,7 @@ rules:
   - watch
   - list
 - apiGroups:
-  - clusterinformation.crd.antrea.io
+  - clusterinformation.antrea.tanzu.vmware.com
   resources:
   - antreaagentinfos
   verbs:
@@ -80,7 +80,7 @@ rules:
   - update
   - delete
 - apiGroups:
-  - networkpolicy.antrea.io
+  - networking.antrea.tanzu.vmware.com
   resources:
   - networkpolicies
   - appliedtogroups
@@ -116,7 +116,7 @@ rules:
   - watch
   - list
 - apiGroups:
-  - clusterinformation.crd.antrea.io
+  - clusterinformation.antrea.tanzu.vmware.com
   resources:
   - antreacontrollerinfos
   verbs:
@@ -208,6 +208,13 @@ data:
     # Make sure it doesn't conflict with your existing interfaces.
     #hostGateway: gw0
 
+    # Pod network mode. Supported values are:
+    # - encapNormal (default): Pod traffic across Nodes will be transmitted over the overlay tunnels
+    # and encapsulated with the protocol decided by the tunnelType.
+    # - ipsecEncap: Pod traffic across Nodes will be transimitted over the overlay tunnels and
+    # encrypted with IPSec (ESP).
+    networkMode: ipsecEncap
+
     # Encapsulation mode for communication between Pods across Nodes, supported values:
     # - vxlan (default)
     # - geneve
@@ -219,9 +226,6 @@ data:
     # omitted, antrea-agent will default this value to 1450 to accomodate for tunnel encapsulate
     # overhead.
     #defaultMTU: 1450
-
-    # Whether or not to enable IPSec encryption of tunnel traffic.
-    enableIPSecTunnel: true
 
     # CIDR Range for services in cluster. It's required to support egress network policy, should
     # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
@@ -241,7 +245,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-k5f958t9km
+  name: antrea-config-bhtm4dbg6h
   namespace: kube-system
 ---
 apiVersion: v1
@@ -333,7 +337,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-k5f958t9km
+          name: antrea-config-bhtm4dbg6h
         name: antrea-config
 ---
 apiVersion: apps/v1
@@ -505,7 +509,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-k5f958t9km
+          name: antrea-config-bhtm4dbg6h
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
