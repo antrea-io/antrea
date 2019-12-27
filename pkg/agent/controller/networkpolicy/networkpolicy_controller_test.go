@@ -342,8 +342,8 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	}
 	desiredRule2 := &CompletedRule{
 		rule:          &rule{Direction: v1beta1.DirectionOut, Services: services},
-		FromAddresses: sets.NewString("3.3.3.3", "4.4.4.4"),
-		ToAddresses:   sets.NewString(),
+		FromAddresses: sets.NewString(),
+		ToAddresses:   sets.NewString("3.3.3.3", "4.4.4.4"),
 		Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
 	}
 	stopCh := make(chan struct{})
@@ -355,40 +355,42 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	addressGroupWatcher.Add(getAddressGroup("addressGroup1", []v1beta1.IPAddress{ipStrToIPAddress("1.1.1.1"), ipStrToIPAddress("2.2.2.2")}))
 	addressGroupWatcher.Add(getAddressGroup("addressGroup2", []v1beta1.IPAddress{ipStrToIPAddress("3.3.3.3"), ipStrToIPAddress("4.4.4.4")}))
 	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup1", []v1beta1.PodReference{{"pod1", "ns1"}}))
-	select {
-	case ruleID := <-reconciler.updated:
-		actualRule, _ := reconciler.getLastRealized(ruleID)
-		if actualRule.Direction == v1beta1.DirectionIn {
-			if !assert.ElementsMatch(t, actualRule.Services, desiredRule1.Services) {
-				t.Errorf("Expected Services %v, got %v", actualRule.Services, desiredRule1.Services)
+	for i := 0; i < 2; i++ {
+		select {
+		case ruleID := <-reconciler.updated:
+			actualRule, _ := reconciler.getLastRealized(ruleID)
+			if actualRule.Direction == v1beta1.DirectionIn {
+				if !assert.ElementsMatch(t, actualRule.Services, desiredRule1.Services) {
+					t.Errorf("Expected Services %v, got %v", actualRule.Services, desiredRule1.Services)
+				}
+				if !actualRule.FromAddresses.Equal(desiredRule1.FromAddresses) {
+					t.Errorf("Expected FromAddresses %v, got %v", actualRule.FromAddresses, desiredRule1.FromAddresses)
+				}
+				if !actualRule.ToAddresses.Equal(desiredRule1.ToAddresses) {
+					t.Errorf("Expected ToAddresses %v, got %v", actualRule.ToAddresses, desiredRule1.ToAddresses)
+				}
+				if !actualRule.Pods.Equal(desiredRule1.Pods) {
+					t.Errorf("Expected Pods %v, got %v", actualRule.Pods, desiredRule1.Pods)
+				}
 			}
-			if !actualRule.FromAddresses.Equal(desiredRule1.FromAddresses) {
-				t.Errorf("Expected FromAddresses %v, got %v", actualRule.FromAddresses, desiredRule1.FromAddresses)
+			if actualRule.Direction == v1beta1.DirectionOut {
+				if !assert.ElementsMatch(t, actualRule.Services, desiredRule2.Services) {
+					t.Errorf("Expected Services %v, got %v", actualRule.Services, desiredRule2.Services)
+				}
+				if !actualRule.FromAddresses.Equal(desiredRule2.FromAddresses) {
+					t.Errorf("Expected FromAddresses %v, got %v", actualRule.FromAddresses, desiredRule2.FromAddresses)
+				}
+				if !actualRule.ToAddresses.Equal(desiredRule2.ToAddresses) {
+					t.Errorf("Expected ToAddresses %v, got %v", actualRule.ToAddresses, desiredRule2.ToAddresses)
+				}
+				if !actualRule.Pods.Equal(desiredRule2.Pods) {
+					t.Errorf("Expected Pods %v, got %v", actualRule.Pods, desiredRule2.Pods)
+				}
 			}
-			if !actualRule.ToAddresses.Equal(desiredRule1.ToAddresses) {
-				t.Errorf("Expected ToAddresses %v, got %v", actualRule.ToAddresses, desiredRule1.ToAddresses)
-			}
-			if !actualRule.Pods.Equal(desiredRule1.Pods) {
-				t.Errorf("Expected Pods %v, got %v", actualRule.Pods, desiredRule1.Pods)
-			}
-		}
-		if actualRule.Direction == v1beta1.DirectionOut {
-			if !assert.ElementsMatch(t, actualRule.Services, desiredRule2.Services) {
-				t.Errorf("Expected Services %v, got %v", actualRule.Services, desiredRule2.Services)
-			}
-			if !actualRule.FromAddresses.Equal(desiredRule2.FromAddresses) {
-				t.Errorf("Expected FromAddresses %v, got %v", actualRule.FromAddresses, desiredRule2.FromAddresses)
-			}
-			if !actualRule.ToAddresses.Equal(desiredRule2.ToAddresses) {
-				t.Errorf("Expected ToAddresses %v, got %v", actualRule.ToAddresses, desiredRule2.ToAddresses)
-			}
-			if !actualRule.Pods.Equal(desiredRule2.Pods) {
-				t.Errorf("Expected Pods %v, got %v", actualRule.Pods, desiredRule2.Pods)
-			}
-		}
 
-	case <-time.After(time.Millisecond * 100):
-		t.Fatal("Expected two updates, got timeout")
+		case <-time.After(time.Millisecond * 100):
+			t.Fatal("Expected two rule updates, got timeout")
+		}
 	}
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 2, controller.GetAddressGroupNum())
