@@ -89,6 +89,8 @@ func (c *Client) SetupRules() error {
 		// Note: Since L3 forwarding flows are installed, direct inter-Pod traffic won't go through host gateway interface,
 		// only Pod-Service-Pod traffic will go through it.
 		{FilterTable, AntreaForwardChain, []string{"-i", c.hostGateway, "-o", c.hostGateway}, AcceptTarget, nil, "Antrea: accept inter pod traffic"},
+		// Accept external-to-Pod traffic. This allows NodePort traffic to be forwarded even if the default FORWARD policy is DROP.
+		{FilterTable, AntreaForwardChain, []string{"!", "-i", c.hostGateway, "-o", c.hostGateway}, AcceptTarget, nil, "Antrea: accept external to pod traffic"},
 		// Mark Pod-to-external traffic which are received via host gateway interface but not sent via it for later masquerading in NAT table.
 		{FilterTable, AntreaForwardChain, []string{"-i", c.hostGateway, "!", "-o", c.hostGateway}, MarkTarget, []string{"--set-xmark", masqueradeMark}, "Antrea: mark pod to external traffic"},
 		// Accept Pod-to-external traffic which are received via host gateway interface but not sent via it.
