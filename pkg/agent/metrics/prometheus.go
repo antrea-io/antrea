@@ -66,7 +66,7 @@ func NewOVSStatManager(ovsBridge string, ofClient openflow.Client) *OVSStatManag
 		ofClient:  ofClient,
 		OVSBridge: ovsBridge,
 		OVSTableDesc: prometheus.NewDesc(
-			"antrea_ovs_flow_table",
+			"antrea_agent_ovs_flow_table",
 			"OVS flow table flow count.",
 			[]string{"table_id"},
 			prometheus.Labels{"bridge": ovsBridge},
@@ -87,7 +87,7 @@ func StartListener(
 	klog.Info("Binding antrea_local_pod_count")
 	if err := prometheus.Register(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
-			Name:      "antrea_local_pod_count",
+			Name:      "antrea_agent_local_pod_count",
 			Help:      "Number of pods on local node.",
 		},
 		func() float64 { return float64(ifaceStore.GetContainerInterfaceNum()) },

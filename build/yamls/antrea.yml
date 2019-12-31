@@ -271,6 +271,7 @@ data:
     #          Underlying network must be capable of supporting Pod traffic across IP subnet.
     # hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
     #trafficEncapMode: encap
+
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
     #enablePrometheusMetrics: false
 
@@ -288,7 +289,15 @@ data:
             "type": "host-local"
         }
     }
-  antrea-controller.conf: ""
+  antrea-controller.conf: |
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
+    #enablePrometheusMetrics: false
+
+    # Prometheus metrics hostname.
+    #prometheusHost:
+
+    # Prometheus listener port.
+    #prometheusPort: 9093
 kind: ConfigMap
 metadata:
   annotations: {}
@@ -306,9 +315,14 @@ metadata:
   namespace: kube-system
 spec:
   ports:
-  - port: 443
+  - name: https
+    port: 443
     protocol: TCP
     targetPort: 443
+  - name: metrics
+    port: 9093
+    protocol: TCP
+    targetPort: 9093
   selector:
     app: antrea
     component: antrea-controller
@@ -358,7 +372,11 @@ spec:
         imagePullPolicy: IfNotPresent
         name: antrea-controller
         ports:
-        - containerPort: 443
+        - name: https
+          containerPort: 443
+          protocol: TCP
+        - name: metrics
+          containerPort: 9093
           protocol: TCP
         volumeMounts:
         - mountPath: /etc/antrea/antrea-controller.conf

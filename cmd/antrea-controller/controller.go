@@ -17,10 +17,15 @@ package main
 import (
 	"fmt"
 	"net"
+	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
@@ -103,9 +108,35 @@ func run(o *Options) error {
 	// Set up the antctl server for in-pod access.
 	antctlServer.Start(nil, controllerMonitor, stopCh)
 
+	if o.config.EnablePrometheusMetrics {
+		go createPrometheusMetricsListener(o.config.PrometheusHost, strconv.Itoa(o.config.PrometheusPort))
+	}
+
 	<-stopCh
 	klog.Info("Stopping Antrea controller")
 	return nil
+}
+
+func createPrometheusMetricsListener(prometheusHost string, prometheusPort string) {
+	hostname, err := os.Hostname()
+
+
+	klog.Infof("Initializing prometheus host %s port %s", prometheusHost, prometheusPort)
+	gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name:        "antrea_agent_host",
+		Help:        "Antrea agent hostname (as a label), typically used in grouping/aggregating stats; " +
+			"the label defaults to the hostname of the host but can be overridden by configuration. " +
+			"The value of the gauge is always set to 1.",
+		ConstLabels: prometheus.Labels{"host": hostname},
+	})
+	gaugeHost.Set(1)
+	prometheus.MustRegister(gaugeHost)
+	http.Handle("/metrics", promhttp.Handler())
+
+	err = http.ListenAndServe(net.JoinHostPort(prometheusHost, prometheusPort), nil)
+	if err != nil {
+		klog.Error("Failed to initialize Prometheus metrics server %v", err)
+	}
 }
 
 func createAPIServerConfig(kubeconfig string,

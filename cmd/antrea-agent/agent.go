@@ -155,7 +155,7 @@ func run(o *Options) error {
 	go networkPolicyController.Run(stopCh)
 
 	if o.config.EnablePrometheusMetrics {
-		metrics.StartListener(o.config.PrometheusHost, o.config.PrometheusPort, o.config.OVSBridge, ifaceStore, ofClient)
+		go metrics.StartListener(o.config.PrometheusHost, o.config.PrometheusPort, o.config.OVSBridge, ifaceStore, ofClient)
 	}
 
 	agentMonitor := monitor.NewAgentMonitor(crdClient, o.config.OVSBridge, nodeConfig.Name, nodeConfig.PodCIDR.String(), ifaceStore, ofClient, ovsBridgeClient, networkPolicyController)
