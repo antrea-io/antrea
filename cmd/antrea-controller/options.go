@@ -23,6 +23,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const (
+	defaultPrometheusPort     = 9093
+)
+
 type Options struct {
 	// The path of configuration file.
 	configFile string
@@ -50,7 +54,14 @@ func (o *Options) complete(args []string) error {
 		}
 		o.config = c
 	}
+	o.setDefaults()
 	return nil
+}
+
+func (o *Options) setDefaults() {
+	if o.config.PrometheusPort == 0 {
+		o.config.PrometheusPort = defaultPrometheusPort
+	}
 }
 
 // validate validates all the required options.

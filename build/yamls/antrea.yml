@@ -226,6 +226,15 @@ data:
     # CIDR Range for services in cluster. It's required to support egress network policy, should
     # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
     #serviceCIDR: 10.96.0.0/12
+
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
+    #enablePrometheusMetrics: false
+
+    # Prometheus metrics hostname.
+    #prometheusHost:
+
+    # Prometheus listener port.
+    #prometheusPort: 9092
   antrea-cni.conf: |
     {
         "cniVersion":"0.3.0",
@@ -235,7 +244,15 @@ data:
             "type": "host-local"
         }
     }
-  antrea-controller.conf: ""
+  antrea-controller.conf: |
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
+    #enablePrometheusMetrics: false
+
+    # Prometheus metrics hostname.
+    #prometheusHost:
+
+    # Prometheus listener port.
+    #prometheusPort: 9093
 kind: ConfigMap
 metadata:
   annotations: {}
@@ -253,9 +270,14 @@ metadata:
   namespace: kube-system
 spec:
   ports:
-  - port: 443
+  - name: https
+    port: 443
     protocol: TCP
     targetPort: 443
+  - name: metrics
+    port: 9093
+    protocol: TCP
+    targetPort: 9093
   selector:
     app: antrea
     component: antrea-controller
@@ -305,7 +327,11 @@ spec:
         imagePullPolicy: IfNotPresent
         name: antrea-controller
         ports:
-        - containerPort: 443
+        - name: https
+          containerPort: 443
+          protocol: TCP
+        - name: metrics
+          containerPort: 9093
           protocol: TCP
         volumeMounts:
         - mountPath: /etc/antrea/antrea-controller.conf
@@ -378,6 +404,10 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
         name: antrea-agent
+        ports:
+          - containerPort: 9092
+            hostPort: 9092
+            protocol: TCP
         securityContext:
           privileged: true
         volumeMounts:
