@@ -71,4 +71,13 @@ type AgentConfig struct {
 	//          Underlying network must be capable of supporting Pod traffic across IP subnet.
 	// Hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
 	TrafficEncapMode string `yaml:"trafficEncapMode,omitempty"`
+	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
+	// Defaults to false.
+	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// Prometheus metrics hostname.
+	// Defaults to empty string
+	PrometheusHost string `yaml:"prometheusHost,omitempty"`
+	// Prometheus listener port.
+	// Default is 9092
+	PrometheusPort int `yaml:"prometheusPort,omitempty"`
 }

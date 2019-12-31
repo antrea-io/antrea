@@ -271,6 +271,14 @@ data:
     #          Underlying network must be capable of supporting Pod traffic across IP subnet.
     # hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
     #trafficEncapMode: encap
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
+    #enablePrometheusMetrics: false
+
+    # Prometheus metrics hostname.
+    #prometheusHost:
+
+    # Prometheus listener port.
+    #prometheusPort: 9092
   antrea-cni.conf: |
     {
         "cniVersion":"0.3.0",
@@ -439,6 +447,10 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
         name: antrea-agent
+        ports:
+          - containerPort: 9092
+            hostPort: 9092
+            protocol: TCP
         securityContext:
           privileged: true
         volumeMounts:

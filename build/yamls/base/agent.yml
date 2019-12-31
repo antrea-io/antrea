@@ -87,6 +87,10 @@ spec:
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 5
+          ports:
+            - containerPort: 9092
+              hostPort: 9092
+              protocol: TCP
           securityContext:
             # antrea-agent needs to manipulate /proc/sys/net/ipv4/conf/XXX/send_redirects"
             privileged: true
