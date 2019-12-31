@@ -35,6 +35,7 @@ const (
 	defaultMTUGeneve          = 1450
 	defaultMTUGRE             = 1462
 	defaultMTUSTT             = 1500
+	defaultPrometheusPort     = 9092
 )
 
 type Options struct {
@@ -134,5 +135,8 @@ func (o *Options) setDefaults() {
 		} else if o.config.TunnelType == ovsconfig.STTTunnel {
 			o.config.DefaultMTU = defaultMTUSTT
 		}
+	}
+	if o.config.PrometheusPort == 0 {
+		o.config.PrometheusPort = defaultPrometheusPort
 	}
 }

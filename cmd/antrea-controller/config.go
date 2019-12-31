@@ -22,4 +22,11 @@ type ControllerConfig struct {
 	// clientConnection specifies the kubeconfig file and client connection settings for the agent
 	// to communicate with the apiserver.
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration `yaml:"clientConnection"`
+	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// Prometheus metrics hostname.
+	// Defaults to empty string
+	PrometheusHost string `yaml:"prometheusHost,omitempty"`
+	// Prometheus listener port.
+	// Default is 9093
+	PrometheusPort int `yaml:"prometheusPort,omitempty"`
 }

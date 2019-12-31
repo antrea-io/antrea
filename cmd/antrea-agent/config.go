@@ -64,4 +64,13 @@ type AgentConfig struct {
 	// Antrea Agent through an environment variable: ANTREA_IPSEC_PSK.
 	// Defaults to false.
 	EnableIPSecTunnel bool `yaml:"enableIPSecTunnel,omitempty"`
+	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
+	// Defaults to false.
+	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// Prometheus metrics hostname.
+	// Defaults to empty string
+	PrometheusHost string `yaml:"prometheusHost,omitempty"`
+	// Prometheus listener port.
+	// Default is 9092
+	PrometheusPort int `yaml:"prometheusPort,omitempty"`
 }
