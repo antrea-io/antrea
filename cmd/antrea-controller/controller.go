@@ -17,8 +17,12 @@ package main
 import (
 	"fmt"
 	"net"
+	"net/http"
+	"os"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
@@ -74,7 +78,8 @@ func run(o *Options) error {
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
-		controllerMonitor)
+		controllerMonitor,
+		o.config.EnablePrometheusMetrics)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
@@ -96,16 +101,54 @@ func run(o *Options) error {
 
 	go apiServer.GenericAPIServer.PrepareRun().Run(stopCh)
 
+	if o.config.EnablePrometheusMetrics {
+		go initializePrometheusMetrics(
+			o.config.EnablePrometheusGoMetrics,
+			o.config.EnablePrometheusProcessMetrics)
+	}
+
 	<-stopCh
 	klog.Info("Stopping Antrea controller")
 	return nil
+}
+
+// Initialize Prometheus metrics collection.
+func initializePrometheusMetrics(
+	enablePrometheusGoMetrics bool,
+	enablePrometheusProcessMetrics bool) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		klog.Errorf("Failed to retrieve agent node name, %v", err)
+	}
+
+	klog.Info("Initializing prometheus")
+	gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "antrea_controller_host",
+		Help: "Antrea controller hostname (as a label), typically used in grouping/aggregating stats; " +
+			"the label defaults to the hostname of the host but can be overridden by configuration. " +
+			"The value of the gauge is always set to 1.",
+		ConstLabels: prometheus.Labels{"host": hostname},
+	})
+	gaugeHost.Set(1)
+	prometheus.MustRegister(gaugeHost)
+	http.Handle("/metrics", promhttp.Handler())
+
+	if !enablePrometheusGoMetrics {
+		klog.Info("Golang metrics are disabled")
+		prometheus.Unregister(prometheus.NewGoCollector())
+	}
+	if !enablePrometheusProcessMetrics {
+		klog.Info("Process metrics are disabled")
+		prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	}
 }
 
 func createAPIServerConfig(kubeconfig string,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
-	controllerQuerier monitor.ControllerQuerier) (*apiserver.Config, error) {
+	controllerQuerier monitor.ControllerQuerier,
+	enablePrometheusMetrics bool) (*apiserver.Config, error) {
 	// TODO:
 	// 1. Support user-provided certificate.
 	// 2. Support configurable https port.
@@ -113,6 +156,9 @@ func createAPIServerConfig(kubeconfig string,
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions()
 
+	if enablePrometheusMetrics {
+		authorization.WithAlwaysAllowPaths("/metrics")
+	}
 	// Set the PairName but leave certificate directory blank to generate in-memory by default
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = "antrea-apiserver"

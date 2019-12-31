@@ -30,6 +30,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -150,6 +151,13 @@ func run(o *Options) error {
 	go nodeRouteController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
+
+	if o.config.EnablePrometheusMetrics {
+		go metrics.InitializePrometheusMetrics(
+			o.config.EnablePrometheusGoMetrics,
+			o.config.EnablePrometheusProcessMetrics,
+			o.config.OVSBridge, ifaceStore, ofClient)
+	}
 
 	agentMonitor := monitor.NewAgentMonitor(
 		crdClient,

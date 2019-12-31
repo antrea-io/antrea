@@ -286,6 +286,15 @@ data:
     # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
     #
     #trafficEncapMode: encap
+
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
+    #enablePrometheusMetrics: false
+
+    # Enable golang metrics exposure via Prometheus.
+    #enablePrometheusGoMetrics: false
+
+    # Enable process metrics exposure via Prometheus.
+    #enablePrometheusProcessMetrics: false
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -303,13 +312,21 @@ data:
             }
         ]
     }
-  antrea-controller.conf: ""
+  antrea-controller.conf: |
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
+    #enablePrometheusMetrics: false
+
+    # Enable golang metrics exposure via Prometheus.
+    #enablePrometheusGoMetrics: false
+
+    # Enable process metrics exposure via Prometheus.
+    #enablePrometheusProcessMetrics: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-mmd74dm2m9
+  name: antrea-config-9fhk6c8bkm
   namespace: kube-system
 ---
 apiVersion: v1
@@ -324,6 +341,10 @@ type: Opaque
 apiVersion: v1
 kind: Service
 metadata:
+  annotations:
+    prometheus.io/port: "443"
+    prometheus.io/scheme: https
+    prometheus.io/scrape: "true"
   labels:
     app: antrea
   name: antrea
@@ -417,7 +438,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-mmd74dm2m9
+          name: antrea-config-9fhk6c8bkm
         name: antrea-config
       - hostPath:
           path: /var/log/antrea
@@ -471,6 +492,10 @@ spec:
       component: antrea-agent
   template:
     metadata:
+      annotations:
+        prometheus.io/port: "10443"
+        prometheus.io/scheme: https
+        prometheus.io/scrape: "true"
       labels:
         app: antrea
         component: antrea-agent
@@ -643,7 +668,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-mmd74dm2m9
+          name: antrea-config-9fhk6c8bkm
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

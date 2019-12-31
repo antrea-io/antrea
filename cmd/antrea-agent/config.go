@@ -72,4 +72,13 @@ type AgentConfig struct {
 	// Hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
 	// NetworkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
 	TrafficEncapMode string `yaml:"trafficEncapMode,omitempty"`
+	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
+	// Defaults to false.
+	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// Enable golang metrics exposure via Prometheus
+	// Defaults to false.
+	EnablePrometheusGoMetrics bool `yaml:"enablePrometheusGoMetrics,omitempty"`
+	// Enable process metrics exposure via Prometheus
+	// Defaults to false.
+	EnablePrometheusProcessMetrics bool `yaml:"enablePrometheusProcessMetrics,omitempty"`
 }

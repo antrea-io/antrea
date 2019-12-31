@@ -13,6 +13,10 @@ spec:
     type: RollingUpdate
   template:
     metadata:
+      annotations:
+        prometheus.io/port: "10443"
+        prometheus.io/scrape: "true"
+        prometheus.io/scheme: "https"
       labels:
         component: antrea-agent
     spec:
