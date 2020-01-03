@@ -24,8 +24,8 @@ func TestGenerateContainerInterfaceName(t *testing.T) {
 	podNamespace := "namespace1"
 	podName0 := "pod0"
 	iface0 := GenerateContainerInterfaceName(podName0, podNamespace)
-	if len(iface0) != interfaceNameLength {
-		t.Errorf("Failed to ensure length of interface name %s == %d", iface0, interfaceNameLength)
+	if len(iface0) > interfaceNameLength {
+		t.Errorf("Failed to ensure length of interface name %s <= %d", iface0, interfaceNameLength)
 	}
 	if !strings.HasPrefix(iface0, fmt.Sprintf("%s-", podName0)) {
 		t.Errorf("failed to use podName as prefix: %s", iface0)
@@ -35,7 +35,7 @@ func TestGenerateContainerInterfaceName(t *testing.T) {
 	if len(iface1) != interfaceNameLength {
 		t.Errorf("Failed to ensure length of interface name as %d", interfaceNameLength)
 	}
-	if !strings.HasPrefix(iface1, "pod1abcd") {
+	if !strings.HasPrefix(iface1, "pod1-abc") {
 		t.Errorf("failed to use first 8 valid characters")
 	}
 	podName2 := "pod1-abcde-54321"

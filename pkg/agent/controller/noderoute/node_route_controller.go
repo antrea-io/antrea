@@ -259,6 +259,7 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 				interfaceConfig.InterfaceName, nodeName, err)
 			return fmt.Errorf("failed to delete OVS tunnel port for Node %s", nodeName)
 		}
+		c.interfaceStore.DeleteInterface(interfaceConfig)
 	}
 	return nil
 }
@@ -354,7 +355,7 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 			return interfaceConfig.OFPort, nil
 		}
 	} else {
-		portName := util.GenerateTunnelInterfaceName(nodeName)
+		portName := util.GenerateNodeTunnelInterfaceName(nodeName)
 		ovsExternalIDs := map[string]interface{}{ovsExternalIDNodeName: nodeName}
 		portUUID, err := c.ovsBridgeClient.CreateTunnelPortExt(
 			portName,
@@ -367,9 +368,11 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 			klog.Errorf("Failed to create OVS IPSec tunnel port for Node %s: %v", nodeName, err)
 			return 0, fmt.Errorf("failed to create IPSec tunnel port for Node %s", nodeName)
 		}
+		klog.Infof("Created IPSec tunnel port %s for Node %s", portName, nodeName)
+
 		ovsPortConfig := &interfacestore.OVSPortConfig{PortUUID: portUUID}
 		interfaceConfig = interfacestore.NewIPSecTunnelInterface(
-			nodeName,
+			portName,
 			c.tunnelType,
 			nodeName,
 			nodeIP,

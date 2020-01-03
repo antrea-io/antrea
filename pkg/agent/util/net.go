@@ -19,24 +19,39 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"strings"
 )
 
 const (
 	interfaceNameLength   = 15
 	interfacePrefixLength = 8
+	interfaceKeyLength    = interfaceNameLength - (interfacePrefixLength + 1)
 )
 
-func generateInterfaceName(id string, name string) string {
+func generateInterfaceName(key string, name string, useHead bool) string {
 	hash := sha1.New()
-	io.WriteString(hash, id)
+	io.WriteString(hash, key)
 	interfaceKey := hex.EncodeToString(hash.Sum(nil))
-	prefix := strings.Replace(name, "-", "", -1)
-	if len(prefix) > interfacePrefixLength {
-		prefix = prefix[:interfacePrefixLength]
+	prefix := name
+	if len(name) > interfacePrefixLength {
+		if useHead {
+			prefix = name[:interfacePrefixLength]
+		} else {
+			prefix = name[len(name)-interfacePrefixLength:]
+		}
 	}
-	interfaceKeyLength := interfaceNameLength - (len(prefix) + 1)
 	return fmt.Sprintf("%s-%s", prefix, interfaceKey[:interfaceKeyLength])
+}
+
+// GenerateContainerInterfaceKey generates a unique string for a Pod
+// interface as: pod/<Pod-Namespace-name>/<Pod-name>.
+func GenerateContainerInterfaceKey(podName, podNamespace string) string {
+	return fmt.Sprintf("pod/%s/%s", podNamespace, podName)
+}
+
+// GenerateNodeTunnelInterfaceKey generates a unique string for a Node's
+// tunnel interface as: node/<Node-name>.
+func GenerateNodeTunnelInterfaceKey(nodeName string) string {
+	return fmt.Sprintf("node/%s", nodeName)
 }
 
 // GenerateContainerInterfaceName generates a unique interface name using the
@@ -45,13 +60,11 @@ func generateInterfaceName(id string, name string) string {
 // return the same value). The output has the length of interfaceNameLength(15).
 // The probability of collision should be neglectable.
 func GenerateContainerInterfaceName(podName string, podNamespace string) string {
-	id := fmt.Sprintf("%s/%s", podNamespace, podName)
-	return generateInterfaceName(id, podName)
+	return generateInterfaceName(GenerateContainerInterfaceKey(podNamespace, podName), podName, true)
 }
 
-// GenerateTunnelInterfaceName generates a unique interface name for the tunnel
-// to the Node, using the Node's name.
-func GenerateTunnelInterfaceName(nodeName string) string {
-	id := fmt.Sprintf("node/%s", nodeName)
-	return generateInterfaceName(id, nodeName)
+// GenerateNodeTunnelInterfaceName generates a unique interface name for the
+// tunnel to the Node, using the Node's name.
+func GenerateNodeTunnelInterfaceName(nodeName string) string {
+	return generateInterfaceName(GenerateNodeTunnelInterfaceKey(nodeName), nodeName, false)
 }

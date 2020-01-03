@@ -121,7 +121,7 @@ func (i *Initializer) setupOVSBridge() error {
 	}
 
 	if !i.enableIPSecTunnel {
-		if err := i.setupTunnelInterface(types.DefaultTunPortName); err != nil {
+		if err := i.setupDefaultTunnelInterface(types.DefaultTunPortName); err != nil {
 			return err
 		}
 	}
@@ -347,7 +347,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	return nil
 }
 
-func (i *Initializer) setupTunnelInterface(tunnelPortName string) error {
+func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 	tunnelIface, portExists := i.ifaceStore.GetInterface(tunnelPortName)
 	if portExists {
 		klog.V(2).Infof("Tunnel port %s already exists on OVS", tunnelPortName)

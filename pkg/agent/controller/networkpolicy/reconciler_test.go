@@ -81,9 +81,10 @@ func TestReconcilerReconcile(t *testing.T) {
 	appliedToGroup2 := newPodSet(v1beta1.PodReference{"pod2", "ns1"})
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
-		InterfaceName: util.GenerateContainerInterfaceName("pod1", "ns1"),
-		IP:            net.ParseIP("2.2.2.2"),
-		OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 1}})
+		InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1"),
+		IP:                       net.ParseIP("2.2.2.2"),
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1}})
 	protocolTCP := v1beta1.ProtocolTCP
 	port80 := int32(80)
 	// It represents named port that we can't resolve.
@@ -287,14 +288,16 @@ func TestReconcilerUpdate(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(
 		&interfacestore.InterfaceConfig{
-			InterfaceName: util.GenerateContainerInterfaceName("pod1", "ns1"),
-			IP:            net.ParseIP("2.2.2.2"),
-			OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 1}})
+			InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1"),
+			IP:                       net.ParseIP("2.2.2.2"),
+			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1"},
+			OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1}})
 	ifaceStore.AddInterface(
 		&interfacestore.InterfaceConfig{
-			InterfaceName: util.GenerateContainerInterfaceName("pod2", "ns1"),
-			IP:            net.ParseIP("3.3.3.3"),
-			OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 2}})
+			InterfaceName:            util.GenerateContainerInterfaceName("pod2", "ns1"),
+			IP:                       net.ParseIP("3.3.3.3"),
+			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod2", PodNamespace: "ns1"},
+			OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 2}})
 	tests := []struct {
 		name                string
 		originalRule        *CompletedRule
