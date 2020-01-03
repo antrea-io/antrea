@@ -158,82 +158,98 @@ func configureContainerAddr(netns ns.NetNS, containerInterface *current.Interfac
 	return nil
 }
 
-func validateInterface(intf *current.Interface, inNetns bool) (*vethPair, netlink.Link, error) {
-	veth := &vethPair{}
+func validateInterface(intf *current.Interface, inNetns bool) (netlink.Link, error) {
 	if intf.Name == "" {
-		return veth, nil, fmt.Errorf("interface name is missing")
-	}
-	link, err := netlink.LinkByName(intf.Name)
-	if err != nil {
-		return veth, link, fmt.Errorf("failed to find interface with name %s", intf.Name)
+		return nil, fmt.Errorf("interface name is missing")
 	}
 	if inNetns {
 		if intf.Sandbox == "" {
-			return veth, link, fmt.Errorf("interface %s is expected in netns", intf.Name)
+			return nil, fmt.Errorf("interface %s is expected in netns", intf.Name)
 		}
 	} else {
 		if intf.Sandbox != "" {
-			return veth, link, fmt.Errorf("interface %s is expected not in netns", intf.Name)
+			return nil, fmt.Errorf("interface %s is expected not in netns", intf.Name)
 		}
 	}
-	return veth, link, nil
+
+	link, err := netlink.LinkByName(intf.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find link for interface %s", intf.Name)
+	}
+
+	_, isVeth := link.(*netlink.Veth)
+	if !isVeth {
+		return nil, fmt.Errorf("interface %s is not of type veth", intf.Name)
+	}
+	return link, nil
 }
 
 func validateContainerInterface(intf *current.Interface) (*vethPair, error) {
-	veth, link, err := validateInterface(intf, true)
+	link, err := validateInterface(intf, true)
 	if err != nil {
-		return veth, err
+		return nil, err
 	}
 
-	linkAddrName := link.Attrs().Name
-	_, isVeth := link.(*netlink.Veth)
-	if !isVeth {
-		return veth, fmt.Errorf("container interface %s is not of type veth", linkAddrName)
-	}
-	_, veth.peerIndex, err = ip.GetVethPeerIfindex(linkAddrName)
+	linkName := link.Attrs().Name
+	veth := &vethPair{}
+	_, veth.peerIndex, err = ip.GetVethPeerIfindex(linkName)
 	if err != nil {
-		return veth, fmt.Errorf("unable to obtain veth peer index for veth %s", linkAddrName)
+		return nil, fmt.Errorf("failed to get veth peer index for veth %s: %v", linkName, err)
 	}
 	veth.ifIndex = link.Attrs().Index
 	if intf.Mac != link.Attrs().HardwareAddr.String() {
-		return veth, fmt.Errorf("interface %s MAC %s doesn't match container MAC: %s",
+		return nil, fmt.Errorf("interface %s MAC %s doesn't match container MAC: %s",
 			intf.Name, intf.Mac, link.Attrs().HardwareAddr.String())
 	}
-	veth.name = linkAddrName
+	veth.name = linkName
 	return veth, nil
 }
 
-func validateContainerPeerInterface(hostIntf *current.Interface, containerVeth *vethPair) (*vethPair, error) {
-	hostVeth, link, err := validateInterface(hostIntf, false)
-	if err != nil {
-		return hostVeth, err
-	}
-	_, isVeth := link.(*netlink.Veth)
-	if !isVeth {
-		klog.Warningf("Link %s is not created by CNI", hostIntf.Name)
-		return hostVeth, nil
-	}
-	linkName := link.Attrs().Name
-	_, hostVeth.peerIndex, err = ip.GetVethPeerIfindex(linkName)
-	if err != nil {
-		return hostVeth, fmt.Errorf("unable to obtain veth peer index for veth %s", linkName)
-	}
-
-	hostVeth.ifIndex = link.Attrs().Index
-	if (hostVeth.ifIndex != containerVeth.peerIndex) || (hostVeth.peerIndex != containerVeth.ifIndex) {
-		return hostVeth, fmt.Errorf("host interface %s doesn't match container %s peer configuration",
-			linkName, containerVeth.name)
-	}
-
-	if hostIntf.Mac != "" {
-		if hostIntf.Mac != link.Attrs().HardwareAddr.String() {
-			klog.Errorf("Host interface mac %s doesn't match link address %s", hostIntf.Mac,
-				link.Attrs().HardwareAddr.String())
-			return hostVeth, fmt.Errorf("interface %s mac doesn't match: %s not found", hostIntf.Name, hostIntf.Mac)
+func validateContainerPeerInterface(interfaces []*current.Interface, containerVeth *vethPair) (*vethPair, error) {
+	// Interate all the passed interfaces and look up the host interface by
+	// matching the veth peer interface index.
+	for _, hostIntf := range interfaces {
+		if hostIntf.Sandbox != "" {
+			// Not in the default Namespace. Must be the container interface.
+			continue
 		}
+		link, err := validateInterface(hostIntf, false)
+		if err != nil {
+			klog.Errorf("Failed to validate interface %s: %v",
+				hostIntf.Name, err)
+			continue
+		}
+
+		if link.Attrs().Index != containerVeth.peerIndex {
+			continue
+		}
+
+		hostVeth := &vethPair{ifIndex: link.Attrs().Index, name: link.Attrs().Name}
+		_, hostVeth.peerIndex, err = ip.GetVethPeerIfindex(hostVeth.name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get veth peer index for host interface %s: %v",
+				hostIntf.Name, err)
+		}
+
+		if hostVeth.peerIndex != containerVeth.ifIndex {
+			return nil, fmt.Errorf("host interface %s peer index doesn't match container interface %s index",
+				hostIntf.Name, containerVeth.name)
+		}
+
+		if hostIntf.Mac != "" {
+			if hostIntf.Mac != link.Attrs().HardwareAddr.String() {
+				klog.Errorf("Host interface %s MAC %s doesn't match link address %s",
+					hostIntf.Name, hostIntf.Mac, link.Attrs().HardwareAddr.String())
+				return nil, fmt.Errorf("host interface %s MAC %s doesn't match",
+					hostIntf.Name, hostIntf.Mac)
+			}
+		}
+		return hostVeth, nil
+
 	}
-	hostVeth.name = linkName
-	return hostVeth, nil
+
+	return nil, fmt.Errorf("peer veth interface not found for container interface %s",
+		containerVeth.name)
 }
 
 func parseContainerIP(ips []*current.IPConfig) (net.IP, error) {
@@ -465,14 +481,14 @@ func (pc *podConfigurator) removeInterfaces(podName, podNamespace, containerID, 
 		return err
 	}
 	// Remove container configuration from cache.
-	pc.ifaceStore.DeleteInterface(ovsPortName)
+	pc.ifaceStore.DeleteInterface(containerConfig)
 	klog.Infof("Interfaces removed successfully for container %s", containerID)
 	return nil
 }
 
 func (pc *podConfigurator) checkInterfaces(
-	containerID, containerNetNS, hostVethName string,
-	containerIface, hostIface *current.Interface,
+	containerID, containerNetNS, podName, podNamespace string,
+	containerIface *current.Interface,
 	prevResult *current.Result) error {
 	netns, err := ns.GetNS(containerNetNS)
 	if err != nil {
@@ -480,20 +496,23 @@ func (pc *podConfigurator) checkInterfaces(
 		return err
 	}
 	defer netns.Close()
-	if containerlink, err := pc.checkContainerInterface(
+
+	if containerVeth, err := pc.checkContainerInterface(
 		containerNetNS,
 		containerID,
 		netns,
 		containerIface,
-		prevResult); err != nil {
+		prevResult.IPs,
+		prevResult.Routes); err != nil {
 		return err
 	} else if err := pc.checkHostInterface(
 		containerID,
-		hostVethName,
-		hostIface,
+		podName,
+		podNamespace,
 		containerIface,
-		containerlink,
-		prevResult.IPs); err != nil {
+		containerVeth,
+		prevResult.IPs,
+		prevResult.Interfaces); err != nil {
 		return err
 	}
 	return nil
@@ -503,8 +522,9 @@ func (pc *podConfigurator) checkContainerInterface(
 	containerNetns, containerID string,
 	netns ns.NetNS,
 	containerIface *current.Interface,
-	prevResult *current.Result) (*vethPair, error) {
-	var contlink *vethPair
+	containerIPs []*current.IPConfig,
+	containerRoutes []*cnitypes.Route) (*vethPair, error) {
+	var contVeth *vethPair
 	// Check netns configuration
 	if containerNetns != containerIface.Sandbox {
 		klog.Errorf("Sandbox in prevResult %s doesn't match configured netns: %s",
@@ -516,39 +536,44 @@ func (pc *podConfigurator) checkContainerInterface(
 	if err := netns.Do(func(netNS ns.NetNS) error {
 		var errlink error
 		// Check container link config
-		contlink, errlink = validateContainerInterface(containerIface)
+		contVeth, errlink = validateContainerInterface(containerIface)
 		if errlink != nil {
 			return errlink
 		}
 		// Check container IP config
-		if err := ip.ValidateExpectedInterfaceIPs(containerIface.Name, prevResult.IPs); err != nil {
+		if err := ip.ValidateExpectedInterfaceIPs(containerIface.Name, containerIPs); err != nil {
 			return err
 		}
 		// Check container route config
-		if err := ip.ValidateExpectedRoute(prevResult.Routes); err != nil {
+		if err := ip.ValidateExpectedRoute(containerRoutes); err != nil {
 			return err
 		}
 		return nil
 	}); err != nil {
 		klog.Errorf("Failed to check container %s interface configurations in netns %s: %v",
 			containerID, containerNetns, err)
-		return contlink, err
+		return nil, err
 	}
-	return contlink, nil
+	return contVeth, nil
 }
 
 func (pc *podConfigurator) checkHostInterface(
-	containerID, vethName string,
-	hostIntf, containerIntf *current.Interface,
-	containerLink *vethPair,
-	containerIPs []*current.IPConfig) error {
-	hostVeth, errlink := validateContainerPeerInterface(hostIntf, containerLink)
+	containerID, podName, podNamespace string,
+	containerIntf *current.Interface,
+	containerVeth *vethPair,
+	containerIPs []*current.IPConfig,
+	interfaces []*current.Interface) error {
+	hostVeth, errlink := validateContainerPeerInterface(interfaces, containerVeth)
 	if errlink != nil {
-		klog.Errorf("Failed to check container interface %s peer %s in the host: %v",
-			containerID, vethName, errlink)
+		klog.Errorf("Failed to check container %s interface on the host: %v",
+			containerID, errlink)
 		return errlink
 	}
-	if err := pc.validateOVSPort(hostVeth.name, containerIntf.Mac, containerID, containerIPs); err != nil {
+	if err := pc.validateOVSInterfaceConfig(containerID,
+		podName,
+		podNamespace,
+		containerIntf.Mac,
+		containerIPs); err != nil {
 		klog.Errorf("Failed to check host link %s for container %s attaching status on ovs. err: %v",
 			hostVeth.name, containerID, err)
 		return err
@@ -556,13 +581,14 @@ func (pc *podConfigurator) checkHostInterface(
 	return nil
 }
 
-func (pc *podConfigurator) validateOVSPort(
-	ovsPortName, containerMAC, containerID string,
+func (pc *podConfigurator) validateOVSInterfaceConfig(
+	containerID, podName, podNamespace string,
+	containerMAC string,
 	ips []*current.IPConfig) error {
-	if containerConfig, found := pc.ifaceStore.GetInterface(ovsPortName); found {
+	if containerConfig, found := pc.ifaceStore.GetContainerInterface(podName, podNamespace); found {
 		if containerConfig.MAC.String() != containerMAC {
-			return fmt.Errorf("failed to check container MAC %s on OVS port %s",
-				containerID, ovsPortName)
+			return fmt.Errorf("interface MAC %s does not match container %s MAC",
+				containerConfig.MAC.String(), containerID)
 		}
 
 		for _, ipc := range ips {
@@ -572,10 +598,10 @@ func (pc *podConfigurator) validateOVSPort(
 				}
 			}
 		}
-		return fmt.Errorf("failed to find a valid IP equal to attached address")
+		return fmt.Errorf("interface IP %s does not match container %s IP",
+			containerConfig.IP.String(), containerID)
 	} else {
-		klog.V(2).Infof("Not found container %s config from local cache", containerID)
-		return fmt.Errorf("not found OVS port %s", ovsPortName)
+		return fmt.Errorf("container %s interface not found from local cache", containerID)
 	}
 }
 
@@ -601,7 +627,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod) error {
 	// current list of Pods.
 	desiredInterfaces := make(map[string]bool)
 	// knownInterfaces is the list of interfaces currently in the local cache.
-	knownInterfaces := pc.ifaceStore.GetInterfaceIDs()
+	knownInterfaces := pc.ifaceStore.GetInterfaceKeys()
 
 	for _, pod := range pods {
 		// Skip Pods for which we are not in charge of the networking.
@@ -637,7 +663,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod) error {
 			klog.Errorf("Error when re-installing flows for Pod %s/%s", pod.Namespace, pod.Name)
 			continue
 		}
-		desiredInterfaces[containerConfig.InterfaceName] = true
+		desiredInterfaces[util.GenerateContainerInterfaceKey(pod.Name, pod.Namespace)] = true
 	}
 
 	for _, ifaceID := range knownInterfaces {

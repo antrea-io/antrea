@@ -38,7 +38,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
@@ -315,37 +314,30 @@ func (s *CNIServer) hostNetNsPath(netNS string) string {
 }
 
 func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8sArgs, prevResult *current.Result) (*cnipb.CniCmdResponse, error) {
-	var containerIntf, hostIntf *current.Interface
-	hostVethName := util.GenerateContainerInterfaceName(string(k8sCNIArgs.K8S_POD_NAME), string(k8sCNIArgs.K8S_POD_NAMESPACE))
 	containerID := cfgArgs.ContainerId
 	netNS := s.hostNetNsPath(cfgArgs.Netns)
+	podName := string(k8sCNIArgs.K8S_POD_NAME)
+	podNamespace := string(k8sCNIArgs.K8S_POD_NAMESPACE)
 
 	// Find interfaces from previous configuration
+	var containerIntf *current.Interface
 	for _, intf := range prevResult.Interfaces {
-		switch intf.Name {
-		case cfgArgs.Ifname:
+		if intf.Name == cfgArgs.Ifname {
 			containerIntf = intf
-		case hostVethName:
-			hostIntf = intf
-		default:
-			klog.Errorf("Unknown interface name %s", intf.Name)
+			break
 		}
 	}
 	if containerIntf == nil {
 		klog.Errorf("Failed to find interface %s of container %s", cfgArgs.Ifname, containerID)
 		return s.invalidNetworkConfigResponse("prevResult does not match network configuration"), nil
 	}
-	if hostIntf == nil {
-		klog.Errorf("Failed to find host interface peer %s for container %s", hostVethName, containerID)
-		return s.invalidNetworkConfigResponse("prevResult does not match network configuration"), nil
-	}
 
 	if err := s.podConfigurator.checkInterfaces(
 		containerID,
 		netNS,
-		hostVethName,
+		podName,
+		podNamespace,
 		containerIntf,
-		hostIntf,
 		prevResult); err != nil {
 		return s.checkInterfaceFailureResponse(err), nil
 	}
@@ -383,7 +375,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (
 	// Request IP Address from IPAM driver
 	ipamResult, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type)
 	if err != nil {
-		klog.Errorf("Failed to add ip addresses from IPAM driver: %v", err)
+		klog.Errorf("Failed to add IP addresses from IPAM driver: %v", err)
 		return s.ipamFailureResponse(err), nil
 	}
 	klog.Infof("Added ip addresses from IPAM driver, %v", ipamResult)
