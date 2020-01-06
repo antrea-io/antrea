@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"net"
 
+	"k8s.io/klog"
+
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -26,10 +28,9 @@ import (
 const maxRetryForOFSwitch = 5
 
 // Client is the interface to program OVS flows for entity connectivity of Antrea.
-// TODO: flow sync (e.g. at agent restart), retry at failure, garbage collection mechanisms
 type Client interface {
 	// Initialize sets up all basic flows on the specific OVS bridge.
-	Initialize(roundNum uint64) error
+	Initialize(roundNum uint64) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
@@ -89,6 +90,11 @@ type Client interface {
 
 	// IsConnected returns the connection status between client and OFSwitch. The return value is true if the OFSwitch is connected.
 	IsConnected() bool
+
+	// Reconcile should be called when a spurious disconnection occurs. After we reconnect to
+	// the OFSwitch, we need to replay all the flows cached by the client. Reconcile will try to
+	// replay as many flows as possible, and will log an error when a flow cannot be installed.
+	Reconcile(roundNum uint64)
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -153,7 +159,10 @@ func (c *client) InstallNodeFlows(hostname string,
 	peerGatewayIP net.IP,
 	peerPodCIDR net.IPNet,
 	tunnelPeerAddr net.IP,
-	tunOFPort uint32) error {
+	tunOFPort uint32,
+) error {
+	c.reconcileMutex.RLock()
+	defer c.reconcileMutex.RUnlock()
 	flows := make([]binding.Flow, 2, 3)
 	flows[0] = c.arpResponderFlow(peerGatewayIP, cookie.Node)
 	flows[1] = c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr, tunOFPort, cookie.Node)
@@ -165,10 +174,14 @@ func (c *client) InstallNodeFlows(hostname string,
 }
 
 func (c *client) UninstallNodeFlows(hostname string) error {
+	c.reconcileMutex.RLock()
+	defer c.reconcileMutex.RUnlock()
 	return c.deleteFlows(c.nodeFlowCache, hostname)
 }
 
 func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
+	c.reconcileMutex.RLock()
+	defer c.reconcileMutex.RUnlock()
 	flows := []binding.Flow{
 		c.podClassifierFlow(ofPort, cookie.Pod),
 		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
@@ -181,46 +194,49 @@ func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podI
 }
 
 func (c *client) UninstallPodFlows(containerID string) error {
+	c.reconcileMutex.RLock()
+	defer c.reconcileMutex.RUnlock()
 	return c.deleteFlows(c.podFlowCache, containerID)
 }
 
 func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOFPort uint32) error {
-	return c.flowOperations.Add(c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort, cookie.Service))
+	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort, cookie.Service)
+	if err := c.flowOperations.Add(flow); err != nil {
+		return err
+	}
+	c.clusterServiceCIDRFlows = []binding.Flow{flow}
+	return nil
 }
 
 func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
-	if err := c.flowOperations.Add(c.gatewayClassifierFlow(gatewayOFPort, cookie.Default)); err != nil {
-		return err
-	} else if err := c.flowOperations.Add(c.gatewayIPSpoofGuardFlow(gatewayOFPort, cookie.Default)); err != nil {
-		return err
-	} else if err := c.flowOperations.Add(c.gatewayARPSpoofGuardFlow(gatewayOFPort, gatewayAddr, gatewayMAC, cookie.Default)); err != nil {
-		return err
-	} else if err := c.flowOperations.Add(c.ctRewriteDstMACFlow(gatewayMAC, cookie.Default)); err != nil {
-		return err
-	} else if err := c.flowOperations.Add(c.l3ToGatewayFlow(gatewayAddr, gatewayMAC, cookie.Default)); err != nil {
-		return err
-	} else if err := c.flowOperations.Add(c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default)); err != nil {
-		return err
-	} else if err := c.flowOperations.Add(c.localProbeFlow(gatewayAddr, cookie.Default)); err != nil {
-		return err
+	flows := []binding.Flow{
+		c.gatewayClassifierFlow(gatewayOFPort, cookie.Default),
+		c.gatewayIPSpoofGuardFlow(gatewayOFPort, cookie.Default),
+		c.gatewayARPSpoofGuardFlow(gatewayOFPort, gatewayAddr, gatewayMAC, cookie.Default),
+		c.ctRewriteDstMACFlow(gatewayMAC, cookie.Default),
+		c.l3ToGatewayFlow(gatewayAddr, gatewayMAC, cookie.Default),
+		c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default),
+		c.localProbeFlow(gatewayAddr, cookie.Default),
 	}
+	for _, flow := range flows {
+		if err := c.flowOperations.Add(flow); err != nil {
+			return err
+		}
+	}
+	c.gatewayFlows = flows
 	return nil
 }
 
 func (c *client) InstallDefaultTunnelFlows(tunnelOFPort uint32) error {
-	if err := c.flowOperations.Add(c.tunnelClassifierFlow(tunnelOFPort, cookie.Default)); err != nil {
+	flow := c.tunnelClassifierFlow(tunnelOFPort, cookie.Default)
+	if err := c.flowOperations.Add(flow); err != nil {
 		return err
 	}
+	c.defaultTunnelFlows = []binding.Flow{flow}
 	return nil
 }
 
-func (c *client) Initialize(roundNum uint64) error {
-	// Initiate connections to target OFswitch, and create tables on the switch.
-	if err := c.bridge.Connect(maxRetryForOFSwitch, make(chan struct{})); err != nil {
-		return err
-	}
-
-	c.cookieAllocator = cookie.NewAllocator(roundNum)
+func (c *client) initialize() error {
 	for _, flow := range c.defaultFlows() {
 		if err := c.flowOperations.Add(flow); err != nil {
 			return fmt.Errorf("failed to install default flows: %v", err)
@@ -243,4 +259,58 @@ func (c *client) Initialize(roundNum uint64) error {
 		}
 	}
 	return nil
+}
+
+func (c *client) Initialize(roundNum uint64) (<-chan struct{}, error) {
+	// Initiate connections to target OFswitch, and create tables on the switch.
+	connCh := make(chan struct{})
+	if err := c.bridge.Connect(maxRetryForOFSwitch, connCh); err != nil {
+		return nil, err
+	}
+
+	<-connCh
+
+	c.cookieAllocator = cookie.NewAllocator(roundNum)
+
+	return connCh, c.initialize()
+}
+
+func (c *client) Reconcile(roundNum uint64) {
+	c.reconcileMutex.Lock()
+	defer c.reconcileMutex.Unlock()
+
+	c.cookieAllocator = cookie.NewAllocator(roundNum)
+
+	if err := c.initialize(); err != nil {
+		klog.Errorf("Error during flow replay: %v", err)
+	}
+
+	addFixedFlows := func(flows []binding.Flow) {
+		for _, flow := range flows {
+			flow.Reset()
+			if err := c.flowOperations.Add(flow); err != nil {
+				klog.Errorf("Error when replaying flow: %v", err)
+			}
+		}
+	}
+
+	addFixedFlows(c.gatewayFlows)
+	addFixedFlows(c.clusterServiceCIDRFlows)
+	addFixedFlows(c.defaultTunnelFlows)
+
+	installCachedFlows := func(key, value interface{}) bool {
+		fCache := value.(flowCache)
+		for _, flow := range fCache {
+			flow.Reset()
+			if err := c.flowOperations.Add(flow); err != nil {
+				klog.Errorf("Error when replaying flow: %v", err)
+			}
+		}
+		return true
+	}
+
+	c.nodeFlowCache.Range(installCachedFlows)
+	c.podFlowCache.Range(installCachedFlows)
+
+	c.reconcilePolicyFlows()
 }

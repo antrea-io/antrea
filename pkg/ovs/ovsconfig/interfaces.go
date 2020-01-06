@@ -14,6 +14,8 @@
 
 package ovsconfig
 
+import "time"
+
 type TunnelType string
 
 const (
@@ -42,4 +44,5 @@ type OVSBridgeClient interface {
 	GetPortList() ([]OVSPortData, Error)
 	SetInterfaceMTU(name string, MTU int) error
 	GetOVSVersion() (string, Error)
+	CheckConnectionHealth(timeout time.Duration) bool
 }

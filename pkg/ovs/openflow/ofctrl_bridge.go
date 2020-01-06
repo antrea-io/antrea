@@ -59,6 +59,14 @@ func (t *ofTable) UpdateStatus(flowCountDelta int) {
 	t.updateTime = time.Now()
 }
 
+func (t *ofTable) ResetStatus() {
+	t.Lock()
+	defer t.Unlock()
+
+	t.flowCount = 0
+	t.updateTime = time.Now()
+}
+
 // BuildFlow returns FlowBuilder object to help construct Openflow entry.
 func (t *ofTable) BuildFlow(priority uint16) FlowBuilder {
 	fb := new(ofFlowBuilder)
@@ -189,6 +197,8 @@ func (b *OFBridge) initialize() {
 			}
 			table.Table = ofTable
 		}
+		// reset flow counts, which is needed for reconnections
+		table.ResetStatus()
 	}
 }
 

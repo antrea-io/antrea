@@ -347,6 +347,18 @@ func (mr *MockFlowMockRecorder) Modify() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Modify", reflect.TypeOf((*MockFlow)(nil).Modify))
 }
 
+// Reset mocks base method
+func (m *MockFlow) Reset() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Reset")
+}
+
+// Reset indicates an expected call of Reset
+func (mr *MockFlowMockRecorder) Reset() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockFlow)(nil).Reset))
+}
+
 // MockAction is a mock of Action interface
 type MockAction struct {
 	ctrl     *gomock.Controller

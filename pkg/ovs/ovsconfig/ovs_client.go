@@ -15,6 +15,7 @@
 package ovsconfig
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -672,4 +673,34 @@ func (br *OVSBridge) GetOVSVersion() (string, Error) {
 	}
 
 	return res[0].Rows[0].(map[string]interface{})["ovs_version"].(string), nil
+}
+
+func (br *OVSBridge) CheckConnectionHealth(timeout time.Duration) bool {
+	lookupBridge := func() bool {
+		tx := br.ovsdb.Transaction(openvSwitchSchema)
+		tx.Select(dbtransaction.Select{
+			Table:   "Bridge",
+			Columns: []string{"_uuid"},
+			Where:   [][]interface{}{{"name", "==", br.name}},
+		})
+		_, err, _ := tx.Commit()
+		return err == nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	for {
+		if lookupBridge() {
+			return true
+		}
+		select {
+		case <-time.After(1 * time.Second):
+			continue
+		case <-ctx.Done():
+			break
+		}
+	}
+
+	return false
 }
