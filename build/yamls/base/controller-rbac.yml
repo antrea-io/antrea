@@ -38,7 +38,7 @@ rules:
       - update
       - delete
   - apiGroups:
-      - clusterinformation.crd.antrea.io
+      - clusterinformation.antrea.tanzu.vmware.com
     resources:
       - antreaagentinfos
     verbs:
