@@ -16,18 +16,18 @@ package ovs
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"net"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
 var (
-	br       = "br02"
 	maxRetry = 5
 
 	table binding.Table
@@ -63,6 +63,7 @@ var (
 )
 
 func TestDeleteFlowStrict(t *testing.T) {
+	br := "br02"
 	err := PrepareOVSBridge(br)
 	if err != nil {
 		t.Fatalf("Failed to prepare OVS bridge: %v", br)
@@ -84,10 +85,10 @@ func TestDeleteFlowStrict(t *testing.T) {
 	defer bridge.Disconnect()
 
 	flows, expectFlows := prepareOverlapFlows(table, "1.1.1.1", true)
-	testDeleteSingleFlow(t, table, flows, expectFlows)
+	testDeleteSingleFlow(t, br, table, flows, expectFlows)
 
 	flows2, expectFlows2 := prepareOverlapFlows(table, "2.2.2.2", false)
-	testDeleteSingleFlow(t, table, flows2, expectFlows2)
+	testDeleteSingleFlow(t, br, table, flows2, expectFlows2)
 }
 
 func prepareOverlapFlows(table binding.Table, ipStr string, sameCookie bool) ([]binding.Flow, []*ExpectFlow) {
@@ -118,7 +119,7 @@ func prepareOverlapFlows(table binding.Table, ipStr string, sameCookie bool) ([]
 	return flows, expectFlows
 }
 
-func testDeleteSingleFlow(t *testing.T, table binding.Table, flows []binding.Flow, expectFlows []*ExpectFlow) {
+func testDeleteSingleFlow(t *testing.T, br string, table binding.Table, flows []binding.Flow, expectFlows []*ExpectFlow) {
 	for id, flow := range flows {
 		if err := flow.Add(); err != nil {
 			t.Fatalf("Failed to install flow%d: %v", id, err)
@@ -144,6 +145,7 @@ func testDeleteSingleFlow(t *testing.T, table binding.Table, flows []binding.Flo
 }
 
 func TestOFctrlFlow(t *testing.T) {
+	br := "br03"
 	err := PrepareOVSBridge(br)
 	if err != nil {
 		t.Fatalf("Failed to prepare OVS bridge: %v", err)
@@ -210,6 +212,7 @@ func TestOFctrlFlow(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
+	br := "br04"
 	err := PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -225,12 +228,37 @@ func TestTransactions(t *testing.T) {
 	defer bridge.Disconnect()
 
 	flows, expectflows := prepareFlows(table)
-	err = bridge.AddFlows(flows)
+	err = bridge.AddFlowsInBundle(flows, nil, nil)
 	require.Nil(t, err, fmt.Sprintf("Failed to add flows in a transaction: %v", err))
 	dumpTable := uint8(table.GetID())
 	flowList := CheckFlowExists(t, br, dumpTable, true, expectflows)
 
 	// Test: DumpTableStatus
+	for _, tableStates := range bridge.DumpTableStatus() {
+		if tableStates.ID == uint(dumpTable) {
+			if int(tableStates.FlowCount) != len(flowList) {
+				t.Errorf("Flow count of table %d in the cache is incorrect, expect: %d, actual %d", dumpTable, len(flowList), tableStates.FlowCount)
+			}
+		}
+	}
+
+	// Delete flows in a bundle
+	err = bridge.AddFlowsInBundle(nil, nil, flows)
+	require.Nil(t, err, fmt.Sprintf("Failed to delete flows in a transaction: %v", err))
+	dumpTable = uint8(table.GetID())
+	flowList = CheckFlowExists(t, br, dumpTable, false, expectflows)
+
+	for _, tableStates := range bridge.DumpTableStatus() {
+		if tableStates.ID == uint(dumpTable) {
+			if int(tableStates.FlowCount) != len(flowList) {
+				t.Errorf("Flow count of table %d in the cache is incorrect, expect: %d, actual %d", dumpTable, len(flowList), tableStates.FlowCount)
+			}
+		}
+	}
+
+	// Invoke AddFlowsInBundle with no Flow to add/modify/delete.
+	err = bridge.AddFlowsInBundle(nil, nil, nil)
+	require.Nil(t, err, fmt.Sprintf("Not compatible with none flows in the request: %v", err))
 	for _, tableStates := range bridge.DumpTableStatus() {
 		if tableStates.ID == uint(dumpTable) {
 			if int(tableStates.FlowCount) != len(flowList) {

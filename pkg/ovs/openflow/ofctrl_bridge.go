@@ -288,36 +288,62 @@ func (b *OFBridge) IsConnected() bool {
 	return b.ofSwitch.IsReady()
 }
 
-func (b *OFBridge) AddFlows(flows []Flow) error {
+func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows []Flow) error {
+	// If no Openflow entries are requested to be added or modified or deleted on the OVS bridge, return immediately.
+	if len(addflows) == 0 && len(modFlows) == 0 && len(delFlows) == 0 {
+		klog.V(2).Info("No Openflow entries need to be synced to the OVS bridge, returning")
+		return nil
+	}
 	// Create a new transaction.
 	tx := b.ofSwitch.NewTransaction(ofctrl.Atomic)
 	// Open a bundle on the OFSwitch.
 	if err := tx.Begin(); err != nil {
 		return err
 	}
-	// Add Openflow messages into the bundle. "Add" operation is async, the function returns error in constructing and
-	// sending BundleAdd message. It doesn't represent all Openflow entries are added into the bundle even if the function
-	// returns nil. The number of the Openflow entries successfully added into the bundle is returned from function "Complete".
-	for _, flow := range flows {
-		ofFlow := flow.(*ofFlow)
-		ofFlow.Flow.NextElem = ofFlow.lastAction
-		if err := tx.AddFlow(&ofFlow.Flow); err != nil {
-			// Close the bundle and abort it if there is error when adding the Openflow entries.
-			_, err := tx.Complete()
-			if err == nil {
-				tx.Abort()
+
+	syncFlows := func(flows []Flow, operation int) error {
+		for _, flow := range flows {
+			ofFlow := flow.(*ofFlow)
+			ofFlow.Flow.NextElem = ofFlow.lastAction
+			// "AddFlow" operation is async, the function only returns error which occur when constructing and sending
+			// the BundleAdd message. An absence of error does not mean that all Openflow entries are added into the
+			// bundle by the switch. The number of entries successfully added to the bundle by the switch will be
+			// returned by function "Complete".
+			flowMod, err := ofFlow.Flow.GenerateFlowModMessage(operation)
+			if err != nil {
+				return err
 			}
-			return err
+			if err := tx.AddFlow(flowMod); err != nil {
+				// Close the bundle and abort it if there is error when adding the FlowMod message.
+				_, err := tx.Complete()
+				if err == nil {
+					tx.Abort()
+				}
+				return err
+			}
 		}
+		return nil
 	}
 
-	// Close the bundle before commit it to the OFSwitch.
+	// Install new Openflow entries with the opened bundle.
+	if err := syncFlows(addflows, openflow13.FC_ADD); err != nil {
+		return err
+	}
+	// Modify existing Openflow entries with the opened bundle.
+	if err := syncFlows(modFlows, openflow13.FC_MODIFY_STRICT); err != nil {
+		return err
+	}
+	// Delete Openflow entries with the opened bundle.
+	if err := syncFlows(delFlows, openflow13.FC_DELETE_STRICT); err != nil {
+		return err
+	}
+
+	// Close the bundle before committing it to the OFSwitch.
 	count, err := tx.Complete()
 	if err != nil {
 		return err
-	} else if count != len(flows) {
-		// If the returned number is not as expected, there should be some errors returned during adding the Openflow
-		// entries into the bundle, abort the bundle.
+	} else if count != len(addflows)+len(modFlows)+len(delFlows) {
+		// This case should not be possible if all the calls to "tx.AddFlow" returned nil. This is just a sanity check.
 		tx.Abort()
 		return errors.New("failed to add all Openflow entries in one transaction, abort it")
 	}
@@ -327,11 +353,20 @@ func (b *OFBridge) AddFlows(flows []Flow) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	// Update TableStatus after the flows are added.
-	for _, flow := range flows {
+
+	// Update TableStatus after the transaction is committed successfully.
+	for _, flow := range addflows {
 		ofFlow := flow.(*ofFlow)
 		ofFlow.table.UpdateStatus(1)
 		ofFlow.UpdateInstallStatus(true)
+	}
+	for _, flow := range modFlows {
+		ofFlow := flow.(*ofFlow)
+		ofFlow.UpdateInstallStatus(true)
+	}
+	for _, flow := range delFlows {
+		ofFlow := flow.(*ofFlow)
+		ofFlow.table.UpdateStatus(-1)
 	}
 	return nil
 }
