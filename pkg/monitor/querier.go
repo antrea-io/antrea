@@ -19,6 +19,7 @@ import (
 	"strconv"
 
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
@@ -38,12 +39,6 @@ type Querier interface {
 	GetNetworkPolicyControllerInfo() v1beta1.NetworkPolicyControllerInfo
 }
 
-type NetworkPolicyInfoQuerier interface {
-	GetNetworkPolicyNum() int
-	GetAddressGroupNum() int
-	GetAppliedToGroupNum() int
-}
-
 type AgentQuerier interface {
 	Querier
 	GetOVSFlowTable() map[string]int32
@@ -53,6 +48,22 @@ type AgentQuerier interface {
 type ControllerQuerier interface {
 	Querier
 	GetService() v1.ObjectReference
+}
+
+type NetworkPolicyInfoQuerier interface {
+	GetNetworkPolicyNum() int
+	GetAddressGroupNum() int
+	GetAppliedToGroupNum() int
+}
+
+type AgentNetworkPolicyInfoQuerier interface {
+	NetworkPolicyInfoQuerier
+	GetControllerConnectionStatus() bool
+}
+
+type ControllerNetworkPolicyInfoQuerier interface {
+	NetworkPolicyInfoQuerier
+	GetConnectedAgentNum() int
 }
 
 func (monitor *agentMonitor) GetSelfPod() v1.ObjectReference {
@@ -100,6 +111,26 @@ func (monitor *agentMonitor) GetLocalPodNum() int32 {
 	return int32(monitor.interfaceStore.GetContainerInterfaceNum())
 }
 
+func (monitor *agentMonitor) GetAgentConditions() []v1beta1.AgentCondition {
+	lastHeartbeatTime := metav1.Now()
+	connectionStatus := v1.ConditionTrue
+	if !monitor.networkPolicyInfoQuerier.GetControllerConnectionStatus() {
+		connectionStatus = v1.ConditionFalse
+	}
+	return []v1beta1.AgentCondition{
+		{
+			Type:              v1beta1.AgentHealthy,
+			Status:            v1.ConditionTrue,
+			LastHeartbeatTime: lastHeartbeatTime,
+		},
+		{
+			Type:              v1beta1.ControllerConnectionUp,
+			Status:            connectionStatus,
+			LastHeartbeatTime: lastHeartbeatTime,
+		},
+	}
+}
+
 func (monitor *controllerMonitor) GetSelfPod() v1.ObjectReference {
 	if os.Getenv(POD_NAME) == "" || os.Getenv(POD_NAMESPACE) == "" {
 		return v1.ObjectReference{}
@@ -124,4 +155,8 @@ func (monitor *controllerMonitor) GetNetworkPolicyControllerInfo() v1beta1.Netwo
 		AddressGroupNum:   int32(monitor.networkPolicyInfoQuerier.GetAddressGroupNum()),
 		AppliedToGroupNum: int32(monitor.networkPolicyInfoQuerier.GetAppliedToGroupNum()),
 	}
+}
+
+func (monitor *controllerMonitor) GetConnectedAgentNum() int {
+	return monitor.networkPolicyInfoQuerier.GetConnectedAgentNum()
 }

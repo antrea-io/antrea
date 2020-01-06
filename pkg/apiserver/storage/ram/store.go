@@ -234,6 +234,14 @@ func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Sele
 	return watcher, nil
 }
 
+// GetWatchersNum gets the number of watchers for the store.
+func (s *store) GetWatchersNum() int {
+	s.watcherMutex.RLock()
+	defer s.watcherMutex.RUnlock()
+
+	return len(s.watchers)
+}
+
 func forgetWatcher(s *store, index int) func() {
 	return func() {
 		s.watcherMutex.Lock()

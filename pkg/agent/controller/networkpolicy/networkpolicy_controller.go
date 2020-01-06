@@ -63,6 +63,12 @@ type Controller struct {
 	// reconciler provides interfaces to reconcile the desired state of
 	// NetworkPolicy rules with the actual state of Openflow entries.
 	reconciler Reconciler
+	// networkPolicyWatcherConnected maintains the connection status between NetworkPolicyWatcher and Controller.
+	networkPolicyWatcherConnected bool
+	// appliedToGroupWatcherConnected maintains the connection status between appliedToGroupWatcher and Controller.
+	appliedToGroupWatcherConnected bool
+	// addressGroupWatcherConnected maintains the connection status between addressGroupWatcherConnected and Controller.
+	addressGroupWatcherConnected bool
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -78,6 +84,7 @@ func NewNetworkPolicyController(antreaClient versioned.Interface,
 		reconciler:   newReconciler(ofClient, ifaceStore),
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
+	c.networkPolicyWatcherConnected = true
 	return c
 }
 
@@ -91,6 +98,11 @@ func (c *Controller) GetAddressGroupNum() int {
 
 func (c *Controller) GetAppliedToGroupNum() int {
 	return c.ruleCache.GetAppliedToGroupNum()
+}
+
+func (c *Controller) GetControllerConnectionStatus() bool {
+	// When the watchers are connected, controller connection status is true. Otherwise, it is false.
+	return c.addressGroupWatcherConnected && c.appliedToGroupWatcherConnected && c.networkPolicyWatcherConnected
 }
 
 // Run begins watching and processing Antrea AddressGroups, AppliedToGroups
@@ -190,9 +202,11 @@ func (c *Controller) watchAppliedToGroups() {
 		return
 	}
 
+	c.appliedToGroupWatcherConnected = true
 	eventCount := 0
 	defer func() {
 		klog.Infof("Stop watching AppliedToGroups, total %v items received", eventCount)
+		c.appliedToGroupWatcherConnected = false
 		w.Stop()
 	}()
 
@@ -243,9 +257,11 @@ func (c *Controller) watchAddressGroups() {
 		return
 	}
 
+	c.addressGroupWatcherConnected = true
 	eventCount := 0
 	defer func() {
 		klog.Infof("Stop watching AddressGroups, total %v items received", eventCount)
+		c.addressGroupWatcherConnected = false
 		w.Stop()
 	}()
 
@@ -296,9 +312,11 @@ func (c *Controller) watchNetworkPolicies() {
 		return
 	}
 
+	c.networkPolicyWatcherConnected = true
 	eventCount := 0
 	defer func() {
 		klog.Infof("Stop watching NetworkPolicies, total %v items received", eventCount)
+		c.networkPolicyWatcherConnected = false
 		w.Stop()
 	}()
 
