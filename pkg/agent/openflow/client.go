@@ -86,11 +86,19 @@ type Client interface {
 
 	// Disconnect disconnects the connection between client and OFSwitch.
 	Disconnect() error
+
+	// IsConnected returns the connection status between client and OFSwitch. The return value is true if the OFSwitch is connected.
+	IsConnected() bool
 }
 
 // GetFlowTableStatus returns an array of flow table status.
 func (c *client) GetFlowTableStatus() []binding.TableStatus {
 	return c.bridge.DumpTableStatus()
+}
+
+// IsConnected returns the connection status between client and OFSwitch.
+func (c *client) IsConnected() bool {
+	return c.bridge.IsConnected()
 }
 
 // addMissingFlows adds any flow from flows which is not currently in the flow cache. The function

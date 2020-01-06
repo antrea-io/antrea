@@ -111,11 +111,19 @@ func (monitor *agentMonitor) GetLocalPodNum() int32 {
 	return int32(monitor.interfaceStore.GetContainerInterfaceNum())
 }
 
-func (monitor *agentMonitor) GetAgentConditions() []v1beta1.AgentCondition {
+func (monitor *agentMonitor) GetAgentConditions(ovsConnected bool) []v1beta1.AgentCondition {
 	lastHeartbeatTime := metav1.Now()
-	connectionStatus := v1.ConditionTrue
+	controllerConnectionStatus := v1.ConditionTrue
+	ovsdbConnectionStatus := v1.ConditionTrue
+	openflowConnectionStatus := v1.ConditionTrue
 	if !monitor.networkPolicyInfoQuerier.GetControllerConnectionStatus() {
-		connectionStatus = v1.ConditionFalse
+		controllerConnectionStatus = v1.ConditionFalse
+	}
+	if !ovsConnected {
+		ovsdbConnectionStatus = v1.ConditionFalse
+	}
+	if !monitor.ofClient.IsConnected() {
+		openflowConnectionStatus = v1.ConditionFalse
 	}
 	return []v1beta1.AgentCondition{
 		{
@@ -125,7 +133,17 @@ func (monitor *agentMonitor) GetAgentConditions() []v1beta1.AgentCondition {
 		},
 		{
 			Type:              v1beta1.ControllerConnectionUp,
-			Status:            connectionStatus,
+			Status:            controllerConnectionStatus,
+			LastHeartbeatTime: lastHeartbeatTime,
+		},
+		{
+			Type:              v1beta1.OVSDBConnectionUp,
+			Status:            ovsdbConnectionStatus,
+			LastHeartbeatTime: lastHeartbeatTime,
+		},
+		{
+			Type:              v1beta1.OpenflowConnectionUp,
+			Status:            openflowConnectionStatus,
 			LastHeartbeatTime: lastHeartbeatTime,
 		},
 	}

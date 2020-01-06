@@ -46,11 +46,13 @@ type AgentConditionType string
 
 const (
 	AgentHealthy           AgentConditionType = "AgentHealthy"           // Status is always set to be True and LastHeartbeatTime is used to check Agent health status.
-	ControllerConnectionUp AgentConditionType = "ControllerConnectionUp" // Status False is caused by the reasons: AgentControllerConnectionDown
+	ControllerConnectionUp AgentConditionType = "ControllerConnectionUp" // Status True/False is used to mark the connection status between Agent and Controller.
+	OVSDBConnectionUp      AgentConditionType = "OVSDBConnectionUp"      // Status True/False is used to mark OVSDB connection status.
+	OpenflowConnectionUp   AgentConditionType = "OpenflowConnectionUp"   // Status True/False is used to mark Openflow connection status.
 )
 
 type AgentCondition struct {
-	Type              AgentConditionType     `json:"type"`              // One of the AgentConditionType listed above, AgentHealthy or ControllerConnectionUp
+	Type              AgentConditionType     `json:"type"`              // One of the AgentConditionType listed above
 	Status            corev1.ConditionStatus `json:"status"`            // Mark certain type status, one of True, False, Unknown
 	LastHeartbeatTime metav1.Time            `json:"lastHeartbeatTime"` // The timestamp when AntreaAgentInfo is created/updated, ideally heartbeat interval is 60s
 	Reason            string                 `json:"reason,omitempty"`  // Brief reason
