@@ -16,6 +16,8 @@ package ram
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog"
@@ -32,8 +34,10 @@ type storeWatcher struct {
 	done   chan struct{}
 	// selectors represent a watcher's conditions to select objects.
 	selectors *storage.Selectors
-	// forget is used to cleanup the watcher
+	// forget is used to cleanup the watcher.
 	forget func()
+	// stopOnce guarantees Stop function will perform exactly once.
+	stopOnce sync.Once
 }
 
 func newStoreWatcher(chanSize int, selectors *storage.Selectors, forget func()) *storeWatcher {
@@ -46,17 +50,35 @@ func newStoreWatcher(chanSize int, selectors *storage.Selectors, forget func()) 
 	}
 }
 
-// add sends InternalEvent to channel input.
-// It's non blocking and simply discards the event if the channel is currently full.
-// Finally, we should wait for the channel to be available and terminate the
-// watcher, if it times out.
-func (w *storeWatcher) add(event storage.InternalEvent) bool {
+// nonBlockingAdd tries to send event to channel input without blocking.
+// It returns true if successful, otherwise false.
+func (w *storeWatcher) nonBlockingAdd(event storage.InternalEvent) bool {
 	select {
 	case w.input <- event:
 		return true
 	default:
-		// TODO: handle the case the channel is full
-		klog.Errorf("The input channel is full. Event %+v was discarded", event)
+		return false
+	}
+}
+
+// add tries to send event to channel input. It will first use non blocking
+// way, then block until the provided timer fires, if the timer is not nil.
+// It returns true if successful, otherwise false.
+func (w *storeWatcher) add(event storage.InternalEvent, timer *time.Timer) bool {
+	// Try to send the event without blocking regardless of timer is fired or not.
+	// This gives the watcher a chance when other watchers exhaust the time slices.
+	if w.nonBlockingAdd(event) {
+		return true
+	}
+
+	if timer == nil {
+		return false
+	}
+
+	select {
+	case w.input <- event:
+		return true
+	case <-timer.C:
 		return false
 	}
 }
@@ -72,13 +94,14 @@ func (w *storeWatcher) process(ctx context.Context, initEvents []storage.Interna
 		select {
 		case event, ok := <-w.input:
 			if !ok {
-				klog.Error("The input channel had been closed")
+				klog.Info("The input channel had been closed, stopping process")
 				return
 			}
 			if event.GetResourceVersion() > resourceVersion {
 				w.sendWatchEvent(event)
 			}
 		case <-ctx.Done():
+			klog.Info("The context had been canceled, stopping process")
 			return
 		}
 	}
@@ -110,7 +133,15 @@ func (w *storeWatcher) ResultChan() <-chan watch.Event {
 	return w.result
 }
 
-// Stop stops the store watcher.
+// Stop stops this watcher.
+// It must be idempotent and thread safe as it could be called by apiserver endpoint handler
+// and dispatchEvent concurrently.
 func (w *storeWatcher) Stop() {
-	w.forget()
+	w.stopOnce.Do(func() {
+		w.forget()
+		close(w.done)
+		// forget removes this watcher from the store's watcher list, there won't
+		// be events sent to its input channel so we are safe to close it.
+		close(w.input)
+	})
 }

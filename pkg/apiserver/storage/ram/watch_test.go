@@ -18,6 +18,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -146,7 +147,7 @@ func TestEvents(t *testing.T) {
 		go w.process(context.Background(), testCase.initEvents, 0)
 
 		for _, event := range testCase.addedEvents {
-			w.add(event)
+			w.nonBlockingAdd(event)
 		}
 		ch := w.ResultChan()
 		for j, expectedEvent := range testCase.expected {
@@ -161,5 +162,30 @@ func TestEvents(t *testing.T) {
 		default:
 		}
 		w.Stop()
+	}
+}
+
+func TestAddTimeout(t *testing.T) {
+	w := newStoreWatcher(1, &storage.Selectors{}, func() {})
+	events := []storage.InternalEvent{
+		&simpleInternalEvent{
+			Type:            watch.Added,
+			Object:          &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}},
+			ResourceVersion: 1,
+		},
+		&simpleInternalEvent{
+			Type:            watch.Added,
+			Object:          &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}},
+			ResourceVersion: 2,
+		},
+	}
+	timer := time.NewTimer(watcherAddTimeout)
+	if !w.add(events[0], timer) {
+		t.Error("add() failed, expected success")
+	}
+	// Since channel size is 1 and there's no consumer, the second add should fail.
+	timer = time.NewTimer(watcherAddTimeout)
+	if w.add(events[1], timer) {
+		t.Error("add() succeeded, expected failure")
 	}
 }
