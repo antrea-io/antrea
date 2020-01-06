@@ -204,6 +204,14 @@ func (n *NetworkPolicyController) GetAppliedToGroupNum() int {
 	return len(n.appliedToGroupStore.List())
 }
 
+// GetConnectedAgentNum gets the number of Agents which are connected to this Controller.
+// Since Agent will watch all the three stores (internalNetworkPolicyStore, appliedToGroupStore, addressGroupStore),
+// the number of watchers of one of these three stores is equal to the number of connected Agents.
+// Here, we uses the number of watchers of internalNetworkPolicyStore to represent the number of connected Agents.
+func (n *NetworkPolicyController) GetConnectedAgentNum() int {
+	return n.internalNetworkPolicyStore.GetWatchersNum()
+}
+
 // toGroupSelector converts the podSelector and namespaceSelector
 // and NetworkPolicy Namespace to a networkpolicy.GroupSelector object.
 func toGroupSelector(namespace string, podSelector, nsSelector *metav1.LabelSelector) *antreatypes.GroupSelector {
