@@ -3,9 +3,9 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
-  name: antreaagentinfos.clusterinformation.crd.antrea.io
+  name: antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com
 spec:
-  group: clusterinformation.crd.antrea.io
+  group: clusterinformation.antrea.tanzu.vmware.com
   names:
     kind: AntreaAgentInfo
     plural: antreaagentinfos
@@ -23,9 +23,9 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
-  name: antreacontrollerinfos.clusterinformation.crd.antrea.io
+  name: antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com
 spec:
-  group: clusterinformation.crd.antrea.io
+  group: clusterinformation.antrea.tanzu.vmware.com
   names:
     kind: AntreaControllerInfo
     plural: antreacontrollerinfos
@@ -71,7 +71,7 @@ rules:
   - watch
   - list
 - apiGroups:
-  - clusterinformation.crd.antrea.io
+  - clusterinformation.antrea.tanzu.vmware.com
   resources:
   - antreaagentinfos
   verbs:
@@ -80,7 +80,7 @@ rules:
   - update
   - delete
 - apiGroups:
-  - networkpolicy.antrea.io
+  - networking.antrea.tanzu.vmware.com
   resources:
   - networkpolicies
   - appliedtogroups
@@ -116,7 +116,7 @@ rules:
   - watch
   - list
 - apiGroups:
-  - clusterinformation.crd.antrea.io
+  - clusterinformation.antrea.tanzu.vmware.com
   resources:
   - antreacontrollerinfos
   verbs:
@@ -125,7 +125,7 @@ rules:
   - update
   - delete
 - apiGroups:
-  - clusterinformation.crd.antrea.io
+  - clusterinformation.antrea.tanzu.vmware.com
   resources:
   - antreaagentinfos
   verbs:
