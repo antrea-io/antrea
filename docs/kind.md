@@ -56,6 +56,14 @@ antrea-agent-zsztq                   2/2     Running   0          8m56s
 antrea-controller-775f4d79f8-6tksp   1/1     Running   0          8m56s
 ```
 
+### Short Cut
+Alternatively to create a two worker node cluster with antrea installed, do
+
+./hack/kind-linux.sh create CLUSTER_NAME
+
+To see other available options, do
+./hack/kind-linux.sh help
+
 ## FAQ
 
 ### Why is the YAML manifest different when using Kind?

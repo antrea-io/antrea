@@ -22,8 +22,6 @@
 # The script uses the antrea/ethtool Docker image (so that ethtool does not need to be installed on
 # the Linux host).
 
-set -eo pipefail
-
 for node in "$@"; do
     peerIdx=$(docker exec "$node" ip link | grep eth0 | awk -F[@:] '{ print $3 }' | cut -c 3-)
     peerName=$(docker run --net=host antrea/ethtool:latest ip link | grep ^"$peerIdx": | awk -F[:@] '{ print $2 }' | cut -c 2-)
