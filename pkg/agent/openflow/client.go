@@ -94,7 +94,7 @@ type Client interface {
 	// Reconcile should be called when a spurious disconnection occurs. After we reconnect to
 	// the OFSwitch, we need to replay all the flows cached by the client. Reconcile will try to
 	// replay as many flows as possible, and will log an error when a flow cannot be installed.
-	Reconcile(roundNum uint64)
+	Reconcile()
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -268,6 +268,7 @@ func (c *client) Initialize(roundNum uint64) (<-chan struct{}, error) {
 		return nil, err
 	}
 
+	// Ignore first notification, it is not a "reconnection".
 	<-connCh
 
 	c.cookieAllocator = cookie.NewAllocator(roundNum)
@@ -275,11 +276,9 @@ func (c *client) Initialize(roundNum uint64) (<-chan struct{}, error) {
 	return connCh, c.initialize()
 }
 
-func (c *client) Reconcile(roundNum uint64) {
+func (c *client) Reconcile() {
 	c.reconcileMutex.Lock()
 	defer c.reconcileMutex.Unlock()
-
-	c.cookieAllocator = cookie.NewAllocator(roundNum)
 
 	if err := c.initialize(); err != nil {
 		klog.Errorf("Error during flow replay: %v", err)

@@ -220,15 +220,15 @@ func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 }
 
 // Reconcile mocks base method
-func (m *MockClient) Reconcile(arg0 uint64) {
+func (m *MockClient) Reconcile() {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Reconcile", arg0)
+	m.ctrl.Call(m, "Reconcile")
 }
 
 // Reconcile indicates an expected call of Reconcile
-func (mr *MockClientMockRecorder) Reconcile(arg0 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) Reconcile() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reconcile", reflect.TypeOf((*MockClient)(nil).Reconcile), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reconcile", reflect.TypeOf((*MockClient)(nil).Reconcile))
 }
 
 // UninstallNodeFlows mocks base method

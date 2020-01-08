@@ -262,14 +262,8 @@ func (i *Initializer) initOpenFlowPipeline() error {
 			if _, ok := <-ofConnCh; !ok {
 				return
 			}
-			// Give some time for the OVSDB connection to recover if necessary.
-			if ovsdbConnHealthy := i.ovsBridgeClient.CheckConnectionHealth(5 * time.Second); !ovsdbConnHealthy {
-				klog.Warning("No longer connected to OVSDB")
-			}
-			// If the OVSDB connection is broken, a random round number will be picked.
-			roundNum := getRoundNum(i.ovsBridgeClient)
 			klog.Info("Replaying OF flows to OVS bridge")
-			i.ofClient.Reconcile(roundNum)
+			i.ofClient.Reconcile()
 			klog.Info("Flow replay completed")
 		}
 	}()

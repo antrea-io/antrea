@@ -189,7 +189,7 @@ func testReconcile(t *testing.T) {
 	require.Nil(t, err, "Error when deleting flows from OVS bridge")
 	count2 := countFlows()
 	assert.Zero(t, count2, "Expected no flows after deletion")
-	c.Reconcile(1)
+	c.Reconcile()
 	count3 := countFlows()
 	t.Logf("Counted %d flows after reconciliation", count3)
 	assert.Equal(t, count1, count3, "Expected same number of flows after reconciliation")

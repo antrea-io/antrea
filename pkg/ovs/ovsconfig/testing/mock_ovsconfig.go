@@ -23,7 +23,6 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	ovsconfig "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	reflect "reflect"
-	time "time"
 )
 
 // MockOVSBridgeClient is a mock of OVSBridgeClient interface
@@ -47,20 +46,6 @@ func NewMockOVSBridgeClient(ctrl *gomock.Controller) *MockOVSBridgeClient {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockOVSBridgeClient) EXPECT() *MockOVSBridgeClientMockRecorder {
 	return m.recorder
-}
-
-// CheckConnectionHealth mocks base method
-func (m *MockOVSBridgeClient) CheckConnectionHealth(arg0 time.Duration) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckConnectionHealth", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// CheckConnectionHealth indicates an expected call of CheckConnectionHealth
-func (mr *MockOVSBridgeClientMockRecorder) CheckConnectionHealth(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckConnectionHealth", reflect.TypeOf((*MockOVSBridgeClient)(nil).CheckConnectionHealth), arg0)
 }
 
 // Create mocks base method
