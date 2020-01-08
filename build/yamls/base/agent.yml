@@ -118,6 +118,8 @@ spec:
             # When a container is created, a mount point for the network namespace is added under
             # /var/run/netns on the host, which needs to be propagated to the antrea-agent container.
             mountPropagation: HostToContainer
+          - name: xtables-lock
+            mountPath: /run/xtables.lock
         - name: antrea-ovs
           image: antrea
           command: ["start_ovs"]
@@ -177,3 +179,7 @@ spec:
         - name: host-depmod
           hostPath:
             path: /sbin/depmod
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate

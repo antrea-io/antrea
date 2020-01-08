@@ -400,6 +400,8 @@ spec:
           mountPropagation: HostToContainer
           name: host-var-run-netns
           readOnly: true
+        - mountPath: /run/xtables.lock
+          name: xtables-lock
       - command:
         - start_ovs
         image: antrea/antrea-ubuntu:latest
@@ -492,5 +494,9 @@ spec:
       - hostPath:
           path: /sbin/depmod
         name: host-depmod
+      - hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate
+        name: xtables-lock
   updateStrategy:
     type: RollingUpdate
