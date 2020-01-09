@@ -264,6 +264,8 @@ func (monitor *agentMonitor) getAgentCRD(crdName string) *v1beta1.AntreaAgentInf
 }
 
 func (monitor *agentMonitor) createAgentCRD(crdName string) (*v1beta1.AntreaAgentInfo, error) {
+	ovsVersion := monitor.GetOVSVersion()
+	ovsConnected := ovsVersion != ""
 	agentCRD := &v1beta1.AntreaAgentInfo{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crdName,
@@ -272,10 +274,10 @@ func (monitor *agentMonitor) createAgentCRD(crdName string) (*v1beta1.AntreaAgen
 		PodRef:                      monitor.GetSelfPod(),
 		NodeRef:                     monitor.GetSelfNode(),
 		NodeSubnet:                  []string{monitor.nodeSubnet},
-		OVSInfo:                     v1beta1.OVSInfo{Version: monitor.GetOVSVersion(), BridgeName: monitor.ovsBridge, FlowTable: monitor.GetOVSFlowTable()},
+		OVSInfo:                     v1beta1.OVSInfo{Version: ovsVersion, BridgeName: monitor.ovsBridge, FlowTable: monitor.GetOVSFlowTable()},
 		NetworkPolicyControllerInfo: monitor.GetNetworkPolicyControllerInfo(),
 		LocalPodNum:                 monitor.GetLocalPodNum(),
-		AgentConditions:             monitor.GetAgentConditions(),
+		AgentConditions:             monitor.GetAgentConditions(ovsConnected),
 	}
 	klog.V(2).Infof("Creating agent monitoring CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Create(agentCRD)
@@ -287,21 +289,36 @@ func (monitor *agentMonitor) updateAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (
 	agentCRD.PodRef = monitor.GetSelfPod()
 	agentCRD.NodeRef = monitor.GetSelfNode()
 	agentCRD.NodeSubnet = []string{monitor.nodeSubnet}
-	agentCRD.OVSInfo = v1beta1.OVSInfo{Version: monitor.GetOVSVersion(), BridgeName: monitor.ovsBridge, FlowTable: monitor.GetOVSFlowTable()}
+	ovsVersion := monitor.GetOVSVersion()
+	// OVS version query will fail and return empty string when OVSDB connection is down.
+	// Only change OVS version when the query gets a valid version.
+	ovsConnected := ovsVersion != ""
+	if ovsConnected {
+		agentCRD.OVSInfo.Version = ovsVersion
+	}
+	agentCRD.OVSInfo.BridgeName = monitor.ovsBridge
+	agentCRD.OVSInfo.FlowTable = monitor.GetOVSFlowTable()
 	agentCRD.NetworkPolicyControllerInfo = monitor.GetNetworkPolicyControllerInfo()
 	agentCRD.LocalPodNum = monitor.GetLocalPodNum()
-	agentCRD.AgentConditions = monitor.GetAgentConditions()
+	agentCRD.AgentConditions = monitor.GetAgentConditions(ovsConnected)
 	klog.V(2).Infof("Updating agent monitoring CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
 }
 
 // partialUpdateAgentCRD only updates the variables.
 func (monitor *agentMonitor) partialUpdateAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (*v1beta1.AntreaAgentInfo, error) {
-	// LocalPodNum and FlowTable can be changed, so reset these fields.
+	// LocalPodNum, FlowTable, NetworkPolicyControllerInfo, OVSVersion and AgentConditions can be changed, so reset these fields.
 	agentCRD.LocalPodNum = monitor.GetLocalPodNum()
 	agentCRD.OVSInfo.FlowTable = monitor.GetOVSFlowTable()
 	agentCRD.NetworkPolicyControllerInfo = monitor.GetNetworkPolicyControllerInfo()
-	agentCRD.AgentConditions = monitor.GetAgentConditions()
+	ovsVersion := monitor.GetOVSVersion()
+	// OVS version query will fail and return empty string when OVSDB connection is down.
+	// Only change OVS version when the query gets a valid version.
+	ovsConnected := ovsVersion != ""
+	if ovsConnected {
+		agentCRD.OVSInfo.Version = ovsVersion
+	}
+	agentCRD.AgentConditions = monitor.GetAgentConditions(ovsConnected)
 	klog.V(2).Infof("Partially updating agent monitoring CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
 }

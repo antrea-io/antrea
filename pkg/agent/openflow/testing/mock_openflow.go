@@ -204,6 +204,20 @@ func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyRuleFlows), arg0)
 }
 
+// IsConnected mocks base method
+func (m *MockClient) IsConnected() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsConnected")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsConnected indicates an expected call of IsConnected
+func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
+}
+
 // UninstallNodeFlows mocks base method
 func (m *MockClient) UninstallNodeFlows(arg0 string) error {
 	m.ctrl.T.Helper()
