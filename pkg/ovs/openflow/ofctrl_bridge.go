@@ -17,7 +17,8 @@ const (
 
 // ofTable implements openflow.Table.
 type ofTable struct {
-	sync.Mutex
+	// sync.RWMutex protects ofTable status from concurrent modification and reading.
+	sync.RWMutex
 	id         TableIDType
 	next       TableIDType
 	missAction MissActionType
@@ -32,6 +33,9 @@ func (t *ofTable) GetID() TableIDType {
 }
 
 func (t *ofTable) Status() TableStatus {
+	t.RLock()
+	defer t.RUnlock()
+
 	return TableStatus{
 		ID:         uint(t.id),
 		FlowCount:  t.flowCount,
@@ -105,8 +109,9 @@ func newOFTable(id, next TableIDType, missAction MissActionType) *ofTable {
 
 // OFBridge implements openflow.Bridge.
 type OFBridge struct {
-	sync.Mutex
 	bridgeName string
+	// sync.RWMutex protects tableCache from concurrent modification and iteration.
+	sync.RWMutex
 	// tableCache is used to cache ofTables.
 	tableCache map[TableIDType]*ofTable
 
@@ -127,9 +132,11 @@ type OFBridge struct {
 
 func (b *OFBridge) CreateTable(id, next TableIDType, missAction MissActionType) Table {
 	t := newOFTable(id, next, missAction)
+
 	b.Lock()
+	defer b.Unlock()
+
 	b.tableCache[id] = t
-	b.Unlock()
 	return t
 }
 
@@ -141,14 +148,19 @@ func (b *OFBridge) DeleteTable(id TableIDType) bool {
 	}
 
 	b.Lock()
+	defer b.Unlock()
+
 	delete(b.tableCache, id)
-	b.Unlock()
 	return true
 }
 
 // DumpTableStatus dumps table status from local cache.
 func (b *OFBridge) DumpTableStatus() []TableStatus {
 	var r []TableStatus
+
+	b.RLock()
+	defer b.RUnlock()
+
 	for _, t := range b.tableCache {
 		r = append(r, t.Status())
 	}
@@ -187,6 +199,9 @@ func (b *OFBridge) SwitchDisconnected(sw *ofctrl.OFSwitch) {
 
 // Initialize creates ofctrl.Table for each table in the tableCache.
 func (b *OFBridge) initialize() {
+	b.Lock()
+	defer b.Unlock()
+
 	for id, table := range b.tableCache {
 		if id == 0 {
 			table.Table = b.ofSwitch.DefaultTable()
