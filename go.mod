@@ -10,7 +10,7 @@ require (
 	github.com/cenkalti/rpc2 v0.0.0-20180727162946-9642ea02d0aa // indirect
 	github.com/containernetworking/cni v0.7.1
 	github.com/containernetworking/plugins v0.8.2-0.20190724153215-ded2f1757770
-	github.com/contiv/libOpenflow v0.0.0-20191113031650-a32467f65a17
+	github.com/contiv/libOpenflow v0.0.0-20200107061746-e3817550c83b
 	github.com/contiv/libovsdb v0.0.0-20160406174930-bbc744d8ddc8 // indirect
 	github.com/contiv/ofnet v0.0.0-00010101000000-000000000000
 	github.com/coreos/go-iptables v0.4.1
