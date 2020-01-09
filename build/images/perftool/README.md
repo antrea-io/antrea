@@ -1,7 +1,7 @@
 # images/perftool
 
 This Docker image is a very lightweight image based on Ubuntu 18.04 which
-includes the apache2-utils and iperf3.
+includes the apache2-utils and iperf3 packages.
 
 If you need to build a new version of the image and push it to Dockerhub, you
 can run the following:
