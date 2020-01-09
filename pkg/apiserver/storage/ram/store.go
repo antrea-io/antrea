@@ -308,6 +308,7 @@ func (s *store) dispatchEvent(event antreastorage.InternalEvent) {
 		// Then try to send events to blocked watchers with a timeout. If it
 		// timeouts, it means the watcher is too slow to consume the events or the
 		// underlying connection is already dead, terminate the watcher in this case.
+		// antrea-agent will start a new watch after it's disconnected.
 		s.timer.Reset(watcherAddTimeout)
 		timer := s.timer
 
