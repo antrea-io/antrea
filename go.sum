@@ -49,8 +49,8 @@ github.com/containernetworking/cni v0.7.1 h1:fE3r16wpSEyaqY4Z4oFrLMmIGfBYIKpPrHK
 github.com/containernetworking/cni v0.7.1/go.mod h1:LGwApLUm2FpoOfxTDEeq8T9ipbpZ61X79hmU3w8FmsY=
 github.com/containernetworking/plugins v0.8.2-0.20190724153215-ded2f1757770 h1:AuFzUXPFhLlTfxhHMGdCIr7wZOQ0J0dEZLoffU0KfRM=
 github.com/containernetworking/plugins v0.8.2-0.20190724153215-ded2f1757770/go.mod h1:AlmXjbiLJBqvZ4vxkWAqjx1CKHVEoQf0/Ugrvc6Cv70=
-github.com/contiv/libOpenflow v0.0.0-20191113031650-a32467f65a17 h1:E8lO6HcpWz9LXlzLuTbD3Yx6Cgi5nKclBwGQSnARotM=
-github.com/contiv/libOpenflow v0.0.0-20191113031650-a32467f65a17/go.mod h1:DtsPlJOByJZ+MO9YITEGUlbJ/jfh/ef0qeNyBYaeNR4=
+github.com/contiv/libOpenflow v0.0.0-20200107061746-e3817550c83b h1:qzkU/ohq0um0VazjyzhwIQVr3e+pySXxaELlXVIcGbo=
+github.com/contiv/libOpenflow v0.0.0-20200107061746-e3817550c83b/go.mod h1:DtsPlJOByJZ+MO9YITEGUlbJ/jfh/ef0qeNyBYaeNR4=
 github.com/contiv/libovsdb v0.0.0-20160406174930-bbc744d8ddc8 h1:DfFzwFbZj+ZOEgtjM5jssgXNDYGZSLX29cUEPnqUUlM=
 github.com/contiv/libovsdb v0.0.0-20160406174930-bbc744d8ddc8/go.mod h1:+qKEHaNVPj+wrn5st7TEFH9wcUWCJq5ZBvVKPQwzAeg=
 github.com/coreos/bbolt v1.3.1-coreos.6 h1:uTXKg9gY70s9jMAKdfljFQcuh4e/BXOM+V+d00KFj3A=
