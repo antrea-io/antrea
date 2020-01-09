@@ -28,7 +28,6 @@ import (
 )
 
 const (
-	defaultUDSAddress     = "/var/run/openvswitch/db.sock"
 	defaultBridgeName     = "br-antrea-test"
 	defaultConnectTimeout = 5 * time.Second
 )
@@ -235,7 +234,7 @@ func testDeletePort(t *testing.T, br *ovsconfig.OVSBridge, uuid string) {
 }
 
 func TestMain(m *testing.M) {
-	flag.StringVar(&UDSAddress, "ovsdb-socket", defaultUDSAddress, "Unix domain server socket named file for OVSDB")
+	flag.StringVar(&UDSAddress, "ovsdb-socket", defaultOVSDBAddress, "Unix domain server socket named file for OVSDB")
 	flag.StringVar(&bridgeName, "br-name", defaultBridgeName, "Bridge name to use for tests")
 	os.Exit(m.Run())
 }
