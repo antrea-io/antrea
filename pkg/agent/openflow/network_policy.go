@@ -535,8 +535,8 @@ func (c *policyRuleConjunction) getAddressClause(addrType types.AddressType) *cl
 // If the default drop flow is already installed before this error, all packets will be dropped by the default drop flow,
 // Otherwise all packets will be allowed.
 func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
-	c.reconcileMutex.RLock()
-	defer c.reconcileMutex.RUnlock()
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
 
 	// Check if the policyRuleConjunction is added into cache or not. If yes, return nil.
 	conj := c.getPolicyRuleConjunction(rule.ID)
@@ -662,8 +662,8 @@ func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction 
 // UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
 // UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
 func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
-	c.reconcileMutex.RLock()
-	defer c.reconcileMutex.RUnlock()
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
 
 	conj := c.getPolicyRuleConjunction(ruleID)
 	if conj == nil {
@@ -704,7 +704,7 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
 	return nil
 }
 
-func (c *client) reconcilePolicyFlows() {
+func (c *client) replayPolicyFlows() {
 	addActionFlows := func(conj *policyRuleConjunction) {
 		for _, flow := range conj.actionFlows {
 			if err := flow.Add(); err != nil {
@@ -735,8 +735,8 @@ func (c *client) reconcilePolicyFlows() {
 // AddPolicyRuleAddress adds one or multiple addresses to the specified NetworkPolicy rule. If addrType is srcAddress, the
 // addresses are added to PolicyRule.From, else to PolicyRule.To.
 func (c *client) AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error {
-	c.reconcileMutex.RLock()
-	defer c.reconcileMutex.RUnlock()
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
 
 	conj := c.getPolicyRuleConjunction(ruleID)
 	// If policyRuleConjunction doesn't exist in client's policyCache return not found error. It should not happen, since
@@ -756,8 +756,8 @@ func (c *client) AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType,
 // DeletePolicyRuleAddress removes addresses from the specified NetworkPolicy rule. If addrType is srcAddress, the addresses
 // are removed from PolicyRule.From, else from PolicyRule.To.
 func (c *client) DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error {
-	c.reconcileMutex.RLock()
-	defer c.reconcileMutex.RUnlock()
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
 
 	conj := c.getPolicyRuleConjunction(ruleID)
 	// If policyRuleConjunction doesn't exist in client's policyCache return not found error. It should not happen, since

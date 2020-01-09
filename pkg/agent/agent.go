@@ -263,7 +263,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 				return
 			}
 			klog.Info("Replaying OF flows to OVS bridge")
-			i.ofClient.Reconcile()
+			i.ofClient.ReplayFlows()
 			klog.Info("Flow replay completed")
 		}
 	}()

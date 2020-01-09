@@ -122,8 +122,8 @@ type client struct {
 	// globalConjMatchFlowCache is a global map for conjMatchFlowContext. The key is a string generated from the
 	// conjMatchFlowContext.
 	globalConjMatchFlowCache map[string]*conjMatchFlowContext
-	// reconcileMutex provides exclusive access to the OFSwitch to the Reconcile method.
-	reconcileMutex sync.RWMutex
+	// replayMutex provides exclusive access to the OFSwitch to the ReplayFlows method.
+	replayMutex sync.RWMutex
 }
 
 func (c *client) Add(flow binding.Flow) error {

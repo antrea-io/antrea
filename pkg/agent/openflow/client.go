@@ -29,7 +29,9 @@ const maxRetryForOFSwitch = 5
 
 // Client is the interface to program OVS flows for entity connectivity of Antrea.
 type Client interface {
-	// Initialize sets up all basic flows on the specific OVS bridge.
+	// Initialize sets up all basic flows on the specific OVS bridge. It returns a channel which
+	// is used to notify the caller in case of a reconnection, in which case ReplayFlows should
+	// be called to ensure that the set of OVS flows is correct.
 	Initialize(roundNum uint64) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
@@ -91,10 +93,11 @@ type Client interface {
 	// IsConnected returns the connection status between client and OFSwitch. The return value is true if the OFSwitch is connected.
 	IsConnected() bool
 
-	// Reconcile should be called when a spurious disconnection occurs. After we reconnect to
-	// the OFSwitch, we need to replay all the flows cached by the client. Reconcile will try to
-	// replay as many flows as possible, and will log an error when a flow cannot be installed.
-	Reconcile()
+	// ReplayFlows should be called when a spurious disconnection occurs. After we reconnect to
+	// the OFSwitch, we need to replay all the flows cached by the client. ReplayFlows will try
+	// to replay as many flows as possible, and will log an error when a flow cannot be
+	// installed.
+	ReplayFlows()
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -161,8 +164,8 @@ func (c *client) InstallNodeFlows(hostname string,
 	tunnelPeerAddr net.IP,
 	tunOFPort uint32,
 ) error {
-	c.reconcileMutex.RLock()
-	defer c.reconcileMutex.RUnlock()
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
 	flows := make([]binding.Flow, 2, 3)
 	flows[0] = c.arpResponderFlow(peerGatewayIP, cookie.Node)
 	flows[1] = c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr, tunOFPort, cookie.Node)
@@ -174,14 +177,14 @@ func (c *client) InstallNodeFlows(hostname string,
 }
 
 func (c *client) UninstallNodeFlows(hostname string) error {
-	c.reconcileMutex.RLock()
-	defer c.reconcileMutex.RUnlock()
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
 	return c.deleteFlows(c.nodeFlowCache, hostname)
 }
 
 func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
-	c.reconcileMutex.RLock()
-	defer c.reconcileMutex.RUnlock()
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
 	flows := []binding.Flow{
 		c.podClassifierFlow(ofPort, cookie.Pod),
 		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
@@ -194,8 +197,8 @@ func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podI
 }
 
 func (c *client) UninstallPodFlows(containerID string) error {
-	c.reconcileMutex.RLock()
-	defer c.reconcileMutex.RUnlock()
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
 	return c.deleteFlows(c.podFlowCache, containerID)
 }
 
@@ -276,9 +279,9 @@ func (c *client) Initialize(roundNum uint64) (<-chan struct{}, error) {
 	return connCh, c.initialize()
 }
 
-func (c *client) Reconcile() {
-	c.reconcileMutex.Lock()
-	defer c.reconcileMutex.Unlock()
+func (c *client) ReplayFlows() {
+	c.replayMutex.Lock()
+	defer c.replayMutex.Unlock()
 
 	if err := c.initialize(); err != nil {
 		klog.Errorf("Error during flow replay: %v", err)
@@ -311,5 +314,5 @@ func (c *client) Reconcile() {
 	c.nodeFlowCache.Range(installCachedFlows)
 	c.podFlowCache.Range(installCachedFlows)
 
-	c.reconcilePolicyFlows()
+	c.replayPolicyFlows()
 }

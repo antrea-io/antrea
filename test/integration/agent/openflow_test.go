@@ -102,7 +102,7 @@ func TestConnectivityFlows(t *testing.T) {
 	}
 }
 
-func TestReconcileConnectivityFlows(t *testing.T) {
+func TestReplayFlowsConnectivityFlows(t *testing.T) {
 	c = ofClient.NewClient(br)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
@@ -126,10 +126,10 @@ func TestReconcileConnectivityFlows(t *testing.T) {
 		f(t, config)
 	}
 
-	testReconcile(t)
+	testReplayFlows(t)
 }
 
-func TestReconcileNetworkPolicyFlows(t *testing.T) {
+func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	c = ofClient.NewClient(br)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
@@ -171,10 +171,10 @@ func TestReconcileNetworkPolicyFlows(t *testing.T) {
 	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)})
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
-	testReconcile(t)
+	testReplayFlows(t)
 }
 
-func testReconcile(t *testing.T) {
+func testReplayFlows(t *testing.T) {
 	var err error
 
 	countFlows := func() int {
@@ -189,7 +189,7 @@ func testReconcile(t *testing.T) {
 	require.Nil(t, err, "Error when deleting flows from OVS bridge")
 	count2 := countFlows()
 	assert.Zero(t, count2, "Expected no flows after deletion")
-	c.Reconcile()
+	c.ReplayFlows()
 	count3 := countFlows()
 	t.Logf("Counted %d flows after reconciliation", count3)
 	assert.Equal(t, count1, count3, "Expected same number of flows after reconciliation")
