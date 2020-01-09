@@ -3,7 +3,7 @@ module github.com/vmware-tanzu/antrea
 go 1.13
 
 require (
-	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20190103132138-cf96a9e61bd1
+	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20200116135253-9bbdfadcd881
 	github.com/blang/semver v3.5.0+incompatible
 	github.com/cenk/hub v1.0.1 // indirect
 	github.com/cenkalti/hub v1.0.1 // indirect

@@ -44,7 +44,6 @@ type OVSPortData struct {
 }
 
 const (
-	defaultUDSAddress = "/run/openvswitch/db.sock"
 	openvSwitchSchema = "Open_vSwitch"
 	// Openflow protocol version 1.0.
 	openflowProtoVersion10 = "OpenFlow10"
@@ -61,7 +60,7 @@ const (
 // Returns the OVSDB struct on success.
 func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 	if address == "" {
-		address = defaultUDSAddress
+		address = defaultConnAddress
 	}
 	klog.Infof("Connecting to OVSDB at address %s", address)
 
@@ -87,7 +86,7 @@ func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 		}
 	}()
 
-	db := ovsdb.Dial([][]string{{"unix", address}}, nil, nil)
+	db := ovsdb.Dial([][]string{{defaultConnNetwork, address}}, nil, nil)
 	success <- true
 	return db, nil
 }
@@ -469,7 +468,7 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, Error) {
 
 	tx.Wait(dbtransaction.Wait{
 		Table:   "Interface",
-		Timeout: 1000, // Wait up to 1 second.
+		Timeout: uint64(defaultGetPortTimeout / time.Millisecond), // The unit of timeout is millisecond
 		Columns: []string{"ofport"},
 		Until:   "!=",
 		Rows: []interface{}{map[string]interface{}{
