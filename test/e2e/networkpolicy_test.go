@@ -35,7 +35,7 @@ func TestIPBlockWithExcept(t *testing.T) {
 		t.Fatalf("Error when creating nginx pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, nginxPodName)
-	nginxPodIP, err := data.podWaitForIP(defaultTimeout, nginxPodName)
+	_, err = data.podWaitForIP(defaultTimeout, nginxPodName)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", nginxPodName, err)
 	}
@@ -46,7 +46,7 @@ func TestIPBlockWithExcept(t *testing.T) {
 	}
 	defer func() {
 		if err = data.deleteService(svcName); err != nil {
-			t.Fatalf("delete nginx service error: %v", err)
+			t.Fatalf("Error when deleting nginx service: %v", err)
 		}
 	}()
 
@@ -80,11 +80,11 @@ func TestIPBlockWithExcept(t *testing.T) {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName1, err)
 	}
 
-	// Two pods cannot wget to service.
-	if err = data.runWgetCommandFromTestPod(podName0, svcName); err == nil {
+	// Both pods cannot connect to service.
+	if err = data.runNetcatCommandFromTestPod(podName0, svcName); err == nil {
 		t.Fatalf("Pod %s should not be able to connect Service %s, but was able to connect", podName0, svcName)
 	}
-	if err = data.runWgetCommandFromTestPod(podName1, svcName); err == nil {
+	if err = data.runNetcatCommandFromTestPod(podName1, svcName); err == nil {
 		t.Fatalf("Pod %s should not be able to connect Service %s, but was able to connect", podName1, svcName)
 	}
 
@@ -99,22 +99,13 @@ func TestIPBlockWithExcept(t *testing.T) {
 		}
 	}()
 
-	// pod0 can wget to service.
-	if err = data.runWgetCommandFromTestPod(podName0, svcName); err != nil {
+	// pod0 can connect to service.
+	if err = data.runNetcatCommandFromTestPod(podName0, svcName); err != nil {
 		t.Fatalf("Pod %s should be able to connect Service %s, but was not able to connect: %v", podName0, svcName, err)
 	}
-	// pod1 cannot wget to service.
-	if err = data.runWgetCommandFromTestPod(podName1, svcName); err == nil {
+	// pod1 cannot connect to service.
+	if err = data.runNetcatCommandFromTestPod(podName1, svcName); err == nil {
 		t.Fatalf("Pod %s should not be able to connect Service %s, but was able to connect", podName1, svcName)
-	}
-
-	// pod0 can wget to pod IP.
-	if err = data.runWgetCommandFromTestPodToPodIP(podName0, nginxPodIP); err != nil {
-		t.Fatalf("Pod %s should be able to connect Pod %s, but was not able to connect: %v", podName0, nginxPodIP, err)
-	}
-	// pod1 cannot wget to pod IP.
-	if err = data.runWgetCommandFromTestPodToPodIP(podName1, nginxPodIP); err == nil {
-		t.Fatalf("Pod %s should not be able to connect Pod %s, but was able to connect", podName1, nginxPodIP)
 	}
 }
 
