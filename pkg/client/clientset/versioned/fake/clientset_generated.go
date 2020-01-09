@@ -18,6 +18,8 @@ package fake
 
 import (
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	cleanupv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/cleanup/v1beta1"
+	fakecleanupv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/cleanup/v1beta1/fake"
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
 	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1/fake"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
@@ -75,6 +77,11 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 }
 
 var _ clientset.Interface = &Clientset{}
+
+// CleanupV1beta1 retrieves the CleanupV1beta1Client
+func (c *Clientset) CleanupV1beta1() cleanupv1beta1.CleanupV1beta1Interface {
+	return &fakecleanupv1beta1.FakeCleanupV1beta1{Fake: &c.Fake}
+}
 
 // ClusterinformationV1beta1 retrieves the ClusterinformationV1beta1Client
 func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface {

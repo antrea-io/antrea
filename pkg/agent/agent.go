@@ -44,6 +44,7 @@ const (
 	NodeNameEnvKey      = "NODE_NAME"
 	IPSecPSKEnvKey      = "ANTREA_IPSEC_PSK"
 	roundNumKey         = "roundNum" // round number key in externalIDs.
+	SavedConfigPath     = "/var/run/antrea/antrea-agent.conf"
 )
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.

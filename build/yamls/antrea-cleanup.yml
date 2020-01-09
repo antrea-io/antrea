@@ -1,0 +1,203 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: cleanupstatuses.cleanup.antrea.tanzu.vmware.com
+spec:
+  group: cleanup.antrea.tanzu.vmware.com
+  names:
+    kind: CleanupStatus
+    plural: cleanupstatuses
+    singular: cleanupstatus
+  scope: Cluster
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: antrea-cleanup-controller
+rules:
+- apiGroups:
+  - cleanup.antrea.tanzu.vmware.com
+  resources:
+  - cleanupstatuses
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  verbs:
+  - get
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: antrea-cleanup-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: antrea-cleanup-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-cleanup-controller
+subjects:
+- kind: ServiceAccount
+  namespace: kube-system
+  name: antrea-cleanup-controller
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: antrea-cleanup-agent
+rules:
+- apiGroups:
+  - cleanup.antrea.tanzu.vmware.com
+  resources:
+  - cleanupstatuses
+  verbs:
+  - create
+  - update
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: antrea-cleanup-agent
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: antrea-cleanup-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-cleanup-agent
+subjects:
+- kind: ServiceAccount
+  namespace: kube-system
+  name: antrea-cleanup-agent
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: antrea-cleanup-job
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      containers:
+        - image: antrea/antrea-ubuntu:latest
+          command:
+            - antrea-cleanup-controller
+          imagePullPolicy: IfNotPresent
+          name: antrea-cleanup-controller
+      restartPolicy: Never
+      serviceAccountName: antrea-cleanup-controller
+      hostNetwork: true
+  backoffLimit: 3
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: antrea
+    component: antrea-cleanup-agent
+  name: antrea-cleanup-agent
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-cleanup-agent
+  template:
+    metadata:
+      labels:
+        app: antrea
+        component: antrea-cleanup-agent
+    spec:
+      containers:
+      - command:
+        - antrea-cleanup-agent
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        image: antrea/antrea-ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        name: antrea-cleanup-agent
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /var/run/antrea
+          name: host-var-run-antrea
+        - mountPath: /var/run/openvswitch
+          name: host-var-run-antrea
+          subPath: openvswitch
+        - mountPath: /var/lib/cni
+          name: host-var-run-antrea
+          subPath: cni
+        - mountPath: /run/xtables.lock
+          name: xtables-lock
+      - command:
+        - start_ovs
+        image: antrea/antrea-ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - timeout 5 container_liveness_probe ovs
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        name: antrea-ovs
+        securityContext:
+          capabilities:
+            add:
+            - SYS_NICE
+            - NET_ADMIN
+            - SYS_ADMIN
+            - IPC_LOCK
+        volumeMounts:
+        - mountPath: /var/run/openvswitch
+          name: host-var-run-antrea
+          subPath: openvswitch
+        - mountPath: /var/log/openvswitch
+          name: host-var-log-antrea
+          subPath: openvswitch
+      hostNetwork: true
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+      priorityClassName: system-node-critical
+      serviceAccountName: antrea-cleanup-agent
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        operator: Exists
+      volumes:
+      - hostPath:
+          path: /var/run/antrea
+          type: DirectoryOrCreate
+        name: host-var-run-antrea
+      - hostPath:
+          path: /var/log/antrea
+          type: DirectoryOrCreate
+        name: host-var-log-antrea
+      - hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate
+        name: xtables-lock
+  updateStrategy:
+    type: RollingUpdate

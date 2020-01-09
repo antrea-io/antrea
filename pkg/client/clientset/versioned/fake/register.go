@@ -17,6 +17,7 @@
 package fake
 
 import (
+	cleanupv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/cleanup/v1beta1"
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +31,7 @@ var scheme = runtime.NewScheme()
 var codecs = serializer.NewCodecFactory(scheme)
 var parameterCodec = runtime.NewParameterCodec(scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
+	cleanupv1beta1.AddToScheme,
 	clusterinformationv1beta1.AddToScheme,
 	networkingv1beta1.AddToScheme,
 }

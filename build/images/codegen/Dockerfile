@@ -20,6 +20,8 @@ ENV GO111MODULE=on
 ARG K8S_VERSION=1.15.0
 
 RUN go get k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
+    go get k8s.io/code-generator/cmd/informer-gen@kubernetes-$K8S_VERSION && \
+    go get k8s.io/code-generator/cmd/lister-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/conversion-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION && \

@@ -17,6 +17,7 @@
 package versioned
 
 import (
+	cleanupv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/cleanup/v1beta1"
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
 	discovery "k8s.io/client-go/discovery"
@@ -26,6 +27,7 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
+	CleanupV1beta1() cleanupv1beta1.CleanupV1beta1Interface
 	ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface
 	NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface
 }
@@ -34,8 +36,14 @@ type Interface interface {
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
+	cleanupV1beta1            *cleanupv1beta1.CleanupV1beta1Client
 	clusterinformationV1beta1 *clusterinformationv1beta1.ClusterinformationV1beta1Client
 	networkingV1beta1         *networkingv1beta1.NetworkingV1beta1Client
+}
+
+// CleanupV1beta1 retrieves the CleanupV1beta1Client
+func (c *Clientset) CleanupV1beta1() cleanupv1beta1.CleanupV1beta1Interface {
+	return c.cleanupV1beta1
 }
 
 // ClusterinformationV1beta1 retrieves the ClusterinformationV1beta1Client
@@ -64,6 +72,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
+	cs.cleanupV1beta1, err = cleanupv1beta1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	cs.clusterinformationV1beta1, err = clusterinformationv1beta1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -84,6 +96,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
+	cs.cleanupV1beta1 = cleanupv1beta1.NewForConfigOrDie(c)
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.NewForConfigOrDie(c)
 	cs.networkingV1beta1 = networkingv1beta1.NewForConfigOrDie(c)
 
@@ -94,6 +107,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
+	cs.cleanupV1beta1 = cleanupv1beta1.New(c)
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.New(c)
 	cs.networkingV1beta1 = networkingv1beta1.New(c)
 

@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"time"
 
 	"k8s.io/client-go/informers"
@@ -34,15 +35,31 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/version"
+	"gopkg.in/yaml.v2"
 )
 
 // Determine how often we go through reconciliation (between current and desired state)
 // Same as in https://github.com/kubernetes/sample-controller/blob/master/main.go
 const informerDefaultResync time.Duration = 30 * time.Second
 
+func saveConfig(config *AgentConfig) error {
+	// rather than copying the config file, we unmarshal the YAML: this way fields are populated
+	// with their default values when they were omitted in the original config.
+	bytes, err := yaml.Marshal(config)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(agent.SavedConfigPath, bytes, 0666)
+}
+
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
+
+	if err := saveConfig(o.config); err != nil {
+		return fmt.Errorf("error when saving agent configuration to file: %v", err)
+	}
+
 	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	k8sClient, crdClient, err := k8s.CreateClients(o.config.ClientConnection)
 	if err != nil {
