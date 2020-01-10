@@ -22,7 +22,7 @@ import (
 
 // Factory is the interface to generate command handlers.
 type Factory interface {
-	// Handler returns net/http.HandlerFunc which will be used to handle
+	// Handler returns a net/http.HandlerFunc which will be used to handle
 	// requests issued by commands from the antctl client. An implementation
 	// needs to determine the component it is running in by checking nullable
 	// of the AgentQuerier or the ControllerQuerier. If the antctl server is

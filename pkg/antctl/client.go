@@ -42,13 +42,14 @@ type RequestOption struct {
 	// Args are the parameters of the ongoing request.
 	Args map[string]string
 	// Timeout specifies a time limit for requests made by the client. The timeout
-	// includes connection time, any redirects, and reading the response body.
+	// duration includes connection setup, all redirects, and reading of the
+	// response body.
 	TimeOut time.Duration
 }
 
 // client issues requests to an antctl server and gets the response.
 type client struct {
-	// inPod tells the running mode of the client.
+	// inPod indicate whether the client is running in a pod or not.
 	inPod bool
 	// codec is the CodecFactory for this command, it is needed for remote accessing.
 	codec serializer.CodecFactory
@@ -57,7 +58,7 @@ type client struct {
 // resolveKubeconfig tries to load the kubeconfig specified in the RequestOption.
 // It will return error if the stating of the file failed or the kubeconfig is malformed.
 // It will not try to look up InCluster configuration. If the kubeconfig is loaded,
-// The groupVersion and the codec in the RequestOption will be populated into the
+// the groupVersion and the codec in the RequestOption will be populated into the
 // kubeconfig object.
 func (c *client) resolveKubeconfig(opt *RequestOption) (*rest.Config, error) {
 	kubeconfig, err := clientcmd.BuildConfigFromFlags("", opt.Kubeconfig)
@@ -108,7 +109,7 @@ func (c *client) localRequest(opt *RequestOption) (io.Reader, error) {
 // data.
 func (c *client) Request(opt *RequestOption) (io.Reader, error) {
 	if c.inPod {
-		klog.Infoln("Antctl runs as local mode")
+		klog.Infoln("antctl runs as local mode")
 		return c.localRequest(opt)
 	}
 	kubeconfig, err := c.resolveKubeconfig(opt)

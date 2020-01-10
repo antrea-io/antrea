@@ -332,8 +332,6 @@ spec:
       - args:
         - --config
         - /etc/antrea/antrea-controller.conf
-        - -v
-        - "1000"
         command:
         - antrea-controller
         env:

@@ -46,9 +46,9 @@ func (cl *commandList) InstallToAPIServer(apiServer *server.GenericAPIServer, cq
 }
 
 // applyToMux adds the handler function of each commandDefinition in the
-// commandList to the mux with path /<api prefix>/<cmd>, it also adds a dummy discovery
-// handler with path /<api prefix>. It sets up a discovery handler for the
-// service available checking of the kubernetes apiserver.
+// commandList to the mux with path /apis/<group_version>/<cmd>. It also adds
+// corresponding discovery handlers at /apis/<group_version> for kubernetes service
+// discovery.
 func (cl *commandList) applyToMux(mux *mux.PathRecorderMux, aq monitor.AgentQuerier, cq monitor.ControllerQuerier) {
 	resources := map[string][]metav1.APIResource{}
 	for _, def := range cl.definitions {
@@ -100,8 +100,8 @@ func (cl *commandList) applyFlagsToRootCommand(root *cobra.Command) {
 	root.PersistentFlags().DurationP("timeout", "t", 0, "time limit of the execution of the command")
 }
 
-// ApplyToRootCommand applies the commandList to the root cobra applySubCommandToRoot, it applies
-// each commandDefinition of it to the root applySubCommandToRoot as a sub-applySubCommandToRoot.
+// ApplyToRootCommand applies the commandList to the root cobra command, it applies
+// each commandDefinition of it to the root command as a sub-command.
 func (cl *commandList) ApplyToRootCommand(root *cobra.Command, isAgent bool, inPod bool) {
 	client := &client{
 		inPod: inPod,
@@ -116,6 +116,7 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command, isAgent bool, inP
 			continue
 		}
 		def.applySubCommandToRoot(root, client, isAgent)
+		klog.Infof("Added command %s", def.Use)
 	}
 	cl.applyFlagsToRootCommand(root)
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
@@ -124,10 +125,6 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command, isAgent bool, inP
 			return err
 		}
 		err = flag.Set("logtostderr", fmt.Sprint(enableVerbose))
-		if err != nil {
-			return err
-		}
-		err = flag.Set("alsologtostderr", fmt.Sprint(enableVerbose))
 		if err != nil {
 			return err
 		}
@@ -145,10 +142,10 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command, isAgent bool, inP
 // validate checks the validation of the commandList.
 func (cl *commandList) validate() []error {
 	var errs []error
-	if len(cl.definitions) == 0 { // must have at least one applySubCommandToRoot
+	if len(cl.definitions) == 0 {
 		return []error{fmt.Errorf("no command found in the command list")}
 	}
-	for i, c := range cl.definitions { // each commandDefinition must be valid
+	for i, c := range cl.definitions {
 		for _, err := range c.validate() {
 			errs = append(errs, fmt.Errorf("#%d command<%s>: %w", i, c.Use, err))
 		}

@@ -62,7 +62,7 @@ spec:
         - name: antrea-controller
           image: antrea
           command: ["antrea-controller"]
-          args: ["--config", "/etc/antrea/antrea-controller.conf", "-v", "1000"]
+          args: ["--config", "/etc/antrea/antrea-controller.conf"]
           env:
             # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME

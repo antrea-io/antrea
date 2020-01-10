@@ -42,8 +42,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	// prevent any unexpected output at beginning
-	flag.Set("logtostderr", "true")
-	flag.Set("alsologtostderr", "true")
+	flag.Set("logtostderr", "false")
 	flag.Set("v", "0")
 	pflag.CommandLine.MarkHidden("log-flush-frequency")
 }

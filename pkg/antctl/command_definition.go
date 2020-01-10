@@ -48,7 +48,7 @@ const (
 // antctl framework will generate a same name sub-command of the root command for
 // each of them, any commands specified as one of these group will need to be invoked
 // as:
-//  antctl <commandGroup> <command>
+//   antctl <commandGroup> <command>
 type commandGroup uint
 
 const (
@@ -164,7 +164,7 @@ func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client *
 // validate checks if the commandDefinition is valid.
 func (cd *commandDefinition) validate() []error {
 	var errs []error
-	if len(cd.Use) == 0 { // must have a use string
+	if len(cd.Use) == 0 {
 		errs = append(errs, fmt.Errorf("the command does not have name"))
 	}
 	if cd.TransformedResponse == nil {
