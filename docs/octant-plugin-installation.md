@@ -50,7 +50,7 @@ Now, you are supposed to see Octant is running together with antrea-octant-plugi
 Note:
 1. Docker image antrea/octant-antrea-ubuntu should be automatically downloaded when you apply antrea-octant.yml in step 3.
 If the image is not successfully downloaded which may be due to network issues, you can run command `make octant-antrea-ubuntu` to build the image locally.
-If it is the case, you need to make sure that the image exists on all the K8s nodes since the Pod of antrea-octant can run on any of them.
+If it is the case, you need to make sure that the image exists on all the K8s Nodes since the antrea-octant Pod may run on any of them.
 2. If the Pod is running without any explicit issue but you can not access the URL, please take a further look at the network configurations
 in your environment. It may be due to the network policies or other security rules configured on your hosts.
 
