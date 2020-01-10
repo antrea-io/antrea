@@ -1,16 +1,15 @@
-# images/apache-bench
+# images/perftool
 
 This Docker image is a very lightweight image based on Ubuntu 18.04 which
-includes the apache2-utils package, and in particular the
-[ApacheBench](https://httpd.apache.org/docs/2.4/programs/ab.html) program.
+includes the apache2-utils and iperf3 packages.
 
 If you need to build a new version of the image and push it to Dockerhub, you
 can run the following:
 
 ```bash
-cd build/images/apache-bench
-docker build -t antrea/apache-bench:latest .
-docker push antrea/apache-bench:latest
+cd build/images/perftool
+docker build -t antrea/perftool:latest .
+docker push antrea/perftool:latest
 ```
 
 The `docker push` command will fail if you do not have permission to push to the
