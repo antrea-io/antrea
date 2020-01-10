@@ -24,27 +24,21 @@ You can follow the sample below to run Octant and antrea-octant-plugin in Pod.
 In this example, we expose UI as a NodePort service for accessing externally.
 You can update antrea-octant.yaml according to your environment and preference.
 
-1. Build octant-antrea-ubuntu docker image.
-
-    ```
-    make octant-antrea-ubuntu
-    ```
-
-2. Create a secret that contains your kubeconfig.
+1. Create a secret that contains your kubeconfig.
 
     ```
     # Change --from-file according to kubeconfig location in your set up.
     kubectl create secret generic octant-kubeconfig --from-file=/etc/kubernetes/admin.conf -n kube-system
     ```
 
-3. You may need to update build/yamls/antrea-octant.yml according to your kubeconfig file name.
+2. You may need to update build/yamls/antrea-octant.yml according to your kubeconfig file name.
 
-4. You can change the sample according to your requirements and environment, then apply the yaml to create both deployment and NodePort service.
+3. You can change the sample according to your requirements and environment, then apply the yaml to create both deployment and NodePort service.
 
     ```
     kubectl apply -f build/yamls/antrea-octant.yml
     ```
-5. You can get the NodePort of antrea-octant service via kubectl.
+4. You can get the NodePort of antrea-octant service via kubectl.
 
     ```
     # See field NodePort
@@ -53,7 +47,11 @@ You can update antrea-octant.yaml according to your environment and preference.
 
 Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):NodePort.
 
-Note: If the Pod is running without any explicit issue but you can not access the URL, please take a further look at the network configurations
+Note:
+1. Docker image antrea/octant-antrea-ubuntu should be automatically downloaded when you apply antrea-octant.yml in step 3.
+If the image is not successfully downloaded which may be due to network issues, you can run command `make octant-antrea-ubuntu` to build the image locally.
+If it is the case, you need to make sure that the image exists on all the K8s Nodes since the antrea-octant Pod may run on any of them.
+2. If the Pod is running without any explicit issue but you can not access the URL, please take a further look at the network configurations
 in your environment. It may be due to the network policies or other security rules configured on your hosts.
 
 ### Deploy Octant and antrea-octant-plugin as a process
