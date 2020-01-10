@@ -49,7 +49,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: antrea-octant
-          image: octant-antrea-ubuntu
+          image: antrea/octant-antrea-ubuntu:latest
           imagePullPolicy: IfNotPresent
           # Octant start-up env
           env:

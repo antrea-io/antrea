@@ -163,6 +163,6 @@ manifest:
 
 .PHONY: octant-antrea-ubuntu
 octant-antrea-ubuntu:
-	@echo "===> Building octant-antrea-ubuntu Docker image <==="
-	docker build -t octant-antrea-ubuntu -f build/images/Dockerfile.octant.ubuntu .
-	docker tag octant-antrea-ubuntu octant-antrea-ubuntu:$(DOCKER_IMG_VERSION)
+	@echo "===> Building antrea/octant-antrea-ubuntu Docker image <==="
+	docker build -t antrea/octant-antrea-ubuntu -f build/images/Dockerfile.octant.ubuntu .
+	docker tag antrea/octant-antrea-ubuntu octant-antrea-ubuntu:$(DOCKER_IMG_VERSION)
