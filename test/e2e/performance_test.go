@@ -25,30 +25,39 @@ import (
 	"golang.org/x/exp/rand"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
 	seed                            uint64 = 0xA1E47 // Use a specific rand seed to make the generated workloads always same
-	performanceTestAppLabel                = "antrea-performance-test"
+	perfTestAppLabel                       = "antrea-perf-test"
 	podsConnectionNetworkPolicyName        = "pods.ingress"
 	workloadNetworkPolicyName              = "workloads.ingress"
-	abImage                                = "antrea/apache-bench"
+	perftoolImage                          = "antrea/perftool"
 	nginxImage                             = "nginx"
-	abContainerName                        = "apache-bench"
+	perftoolContainerName                  = "perftool"
 	nginxContainerName                     = "nginx"
 )
 
 var (
-	benchNginxPodName = randName(abContainerName + "-")
-	benchABPodName    = randName(nginxContainerName + "-")
+	benchNginxPodName = randName(perftoolContainerName + "-")
+	perftoolPodName   = randName(nginxContainerName + "-")
 
-	customizeRequests    = flag.Int("performance.http.requests", 0, "Number of http requests")
-	customizePolicyRules = flag.Int("performance.http.policy_rules", 0, "Number of CIDRs in the network policy")
-	httpConcurrency      = flag.Int("performance.http.concurrency", 1, "Number of multiple requests to make at a time")
-	realizeTimeout       = flag.Duration("performance.realize.timeout", 5*time.Minute, "Timeout of the realization of network policies")
+	customizeRequests    = flag.Int("perf.http.requests", 0, "Number of http requests")
+	customizePolicyRules = flag.Int("perf.http.policy_rules", 0, "Number of CIDRs in the network policy")
+	httpConcurrency      = flag.Int("perf.http.concurrency", 1, "Number of multiple requests to make at a time")
+	realizeTimeout       = flag.Duration("perf.realize.timeout", 5*time.Minute, "Timeout of the realization of network policies")
+	// tolerate NoSchedule taint to let the Pod run on master Node
+	noScheduleToleration = corev1.Toleration{
+		Key:      "node-role.kubernetes.io/master",
+		Operator: corev1.TolerationOpExists,
+		Effect:   corev1.TaintEffectNoSchedule,
+	}
+	labelSelector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{"app": perfTestAppLabel},
+	}
 )
 
 func BenchmarkHTTPRequest(b *testing.B) {
@@ -60,7 +69,7 @@ func BenchmarkHTTPRequest(b *testing.B) {
 		{100000, 15000},
 	} {
 		b.Run(fmt.Sprintf("Request:%d,PolicyRules:%d", scale.requests, scale.policyRules), func(b *testing.B) {
-			withPerformanceTestSetup(func(data *TestData) { httpRequest(scale.requests, scale.policyRules, data, b) }, b)
+			withPerfTestSetup(func(data *TestData) { httpRequest(scale.requests, scale.policyRules, data, b) }, b)
 		})
 	}
 }
@@ -68,56 +77,51 @@ func BenchmarkHTTPRequest(b *testing.B) {
 func BenchmarkRealizeNetworkPolicy(b *testing.B) {
 	for _, policyRules := range []int{5000, 10000, 15000} {
 		b.Run(fmt.Sprintf("RealizeNetworkPolicy%d", policyRules), func(b *testing.B) {
-			withPerformanceTestSetup(func(data *TestData) { networkPolicyRealize(policyRules, data, b) }, b)
+			withPerfTestSetup(func(data *TestData) { networkPolicyRealize(policyRules, data, b) }, b)
 		})
 	}
 }
 
 func BenchmarkCustomizeHTTPRequest(b *testing.B) {
 	if *customizeRequests == 0 {
-		b.Skip("The value of performance.http.requests=0, skipped")
+		b.Skip("The value of perf.http.requests=0, skipped")
 	}
-	withPerformanceTestSetup(func(data *TestData) { httpRequest(*customizeRequests, *customizePolicyRules, data, b) }, b)
+	withPerfTestSetup(func(data *TestData) { httpRequest(*customizeRequests, *customizePolicyRules, data, b) }, b)
 }
 
 func BenchmarkCustomizeRealizeNetworkPolicy(b *testing.B) {
 	if *customizePolicyRules == 0 {
-		b.Skip("The value of performance.http.policy_rules=0, skipped")
+		b.Skip("The value of perf.http.policy_rules=0, skipped")
 	}
-	withPerformanceTestSetup(func(data *TestData) { networkPolicyRealize(*customizePolicyRules, data, b) }, b)
+	withPerfTestSetup(func(data *TestData) { networkPolicyRealize(*customizePolicyRules, data, b) }, b)
 }
 
 func randCidr(rndSrc rand.Source) string {
 	return fmt.Sprintf("%d.%d.%d.%d/32", rndSrc.Uint64()%255+1, rndSrc.Uint64()%255+1, rndSrc.Uint64()%255+1, rndSrc.Uint64()%255+1)
 }
 
-// createPerformanceTestPodSpec creates the Pod specification for the performance test.
+// createPerfTestPodDefinition creates the Pod specification for the perf test.
 // The Pod will be scheduled on the master Node.
-func createPerformanceTestPodSpec(name, containerName, image string) *v1.Pod {
-	podSpec := v1.PodSpec{
-		Containers: []v1.Container{
+func createPerfTestPodDefinition(name, containerName, image string) *corev1.Pod {
+	podSpec := corev1.PodSpec{
+		Containers: []corev1.Container{
 			{
 				Name:            containerName,
 				Image:           image,
-				ImagePullPolicy: v1.PullIfNotPresent,
+				ImagePullPolicy: corev1.PullIfNotPresent,
 			},
 		},
-		RestartPolicy: v1.RestartPolicyNever,
+		RestartPolicy: corev1.RestartPolicyAlways,
 	}
 	podSpec.NodeSelector = map[string]string{
 		"kubernetes.io/hostname": masterNodeName(),
 	}
-	// tolerate NoSchedule taint to let the Pod run on master Node
-	noScheduleToleration := v1.Toleration{
-		Key:      "node-role.kubernetes.io/master",
-		Operator: v1.TolerationOpExists,
-		Effect:   v1.TaintEffectNoSchedule,
-	}
-	podSpec.Tolerations = []v1.Toleration{noScheduleToleration}
-	pod := &v1.Pod{
+
+	podSpec.Tolerations = []corev1.Toleration{noScheduleToleration}
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
-			Labels: map[string]string{"app": performanceTestAppLabel},
+			Labels: map[string]string{"app": perfTestAppLabel},
 		},
 		Spec: podSpec,
 	}
@@ -127,16 +131,10 @@ func createPerformanceTestPodSpec(name, containerName, image string) *v1.Pod {
 // setupTestPodsConnection applies the network policy which enables connectivity between test Pods in the cluster.
 func setupTestPodsConnection(data *TestData) error {
 	npSpec := networkv1.NetworkPolicySpec{
-		PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": performanceTestAppLabel}},
+		PodSelector: *labelSelector,
 		Ingress: []networkv1.NetworkPolicyIngressRule{
 			{
-				From: []networkv1.NetworkPolicyPeer{
-					{
-						PodSelector: &metav1.LabelSelector{
-							MatchLabels: map[string]string{"app": performanceTestAppLabel},
-						},
-					},
-				},
+				From: []networkv1.NetworkPolicyPeer{{PodSelector: labelSelector}},
 			},
 		},
 		PolicyTypes: []networkv1.PolicyType{networkv1.PolicyTypeIngress},
@@ -162,7 +160,7 @@ func generateWorkloadNetworkPolicy(policyRules int) *networkv1.NetworkPolicy {
 		ingressRules[i] = networkv1.NetworkPolicyPeer{IPBlock: &networkv1.IPBlock{CIDR: cidr}}
 	}
 	npSpec := networkv1.NetworkPolicySpec{
-		PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": performanceTestAppLabel}},
+		PodSelector: *labelSelector,
 		Ingress:     []networkv1.NetworkPolicyIngressRule{{From: ingressRules}},
 		PolicyTypes: []networkv1.PolicyType{networkv1.PolicyTypeIngress},
 	}
@@ -177,9 +175,9 @@ func populateWorkloadNetworkPolicy(np *networkv1.NetworkPolicy, data *TestData) 
 	return err
 }
 
-func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, abPodIP string) {
+func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) {
 	b.Logf("Creating a nginx test Pod")
-	nginxPod := createPerformanceTestPodSpec(benchNginxPodName, nginxContainerName, nginxImage)
+	nginxPod := createPerfTestPodDefinition(benchNginxPodName, nginxContainerName, nginxImage)
 	_, err := data.clientset.CoreV1().Pods(testNamespace).Create(nginxPod)
 	if err != nil {
 		b.Fatalf("Error when creating nginx test pod: %v", err)
@@ -190,27 +188,25 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, abPodIP string) {
 		b.Fatalf("Error when waiting for IP assignment of nginx test Pod: %v", err)
 	}
 
-	b.Logf("Creating an apache-bench test Pod")
-	sleepDuration := "3600" // seconds
-	abPod := createPerformanceTestPodSpec(benchABPodName, abContainerName, abImage)
-	abPod.Spec.Containers[0].Command = []string{"sleep", sleepDuration}
-	_, err = data.clientset.CoreV1().Pods(testNamespace).Create(abPod)
+	b.Logf("Creating a perftool test Pod")
+	perfPod := createPerfTestPodDefinition(perftoolPodName, perftoolContainerName, perftoolImage)
+	_, err = data.clientset.CoreV1().Pods(testNamespace).Create(perfPod)
 	if err != nil {
-		b.Fatalf("Error when creating apache-bench test Pod: %v", err)
+		b.Fatalf("Error when creating perftool test Pod: %v", err)
 	}
-	b.Logf("Waiting IP assignment of the apache-bench test Pod")
-	abPodIP, err = data.podWaitForIP(defaultTimeout, benchABPodName)
+	b.Logf("Waiting IP assignment of the perftool test Pod")
+	perfPodIP, err = data.podWaitForIP(defaultTimeout, perftoolPodName)
 	if err != nil {
-		b.Fatalf("Error when waiting for IP assignment of apache-bench test Pod: %v", err)
+		b.Fatalf("Error when waiting for IP assignment of perftool test Pod: %v", err)
 	}
-	return nginxPodIP, abPodIP
+	return nginxPodIP, perfPodIP
 }
 
-// httpRequest runs a benchmark to measure intra-Node Pod-to-Pod HTTP request performance. It creates one Apache-Bench
-// Pod and one Nginx Pod, both on the master Node. The Apache-Bench will generate requests number of requests to the Nginx
-// Pod. The number of concurrent requests will be determined by the value provided with the http.performance.concurrency
-// command-line flag (default is 1, for sequential requests). policyRules indicates how many CIDR rules should be
-// included in the network policy applied to the Pods.
+// httpRequest runs a benchmark to measure intra-Node Pod-to-Pod HTTP request performance. It creates one perftool
+// Pod and one Nginx Pod, both on the master Node. The perftool will use apache-bench tool to issue perf.http.requests
+// number of requests to the Nginx Pod. The number of concurrent requests will be determined by the value provided with
+// the http.perf.concurrency command-line flag (default is 1, for sequential requests). policyRules indicates how many CIDR
+// rules should be included in the network policy applied to the Pods.
 func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	nginxPodIP, _ := setupTestPods(data, b)
 
@@ -237,7 +233,7 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.Logf("Running http request bench %d/%d", i+1, b.N)
 		cmd := []string{"ab", "-n", fmt.Sprint(requests), "-c", fmt.Sprint(*httpConcurrency), serverURL.String()}
-		stdout, stderr, err := data.runCommandFromPod(testNamespace, benchABPodName, abContainerName, cmd)
+		stdout, stderr, err := data.runCommandFromPod(testNamespace, perftoolPodName, perftoolContainerName, cmd)
 		if err != nil {
 			b.Errorf("Error when running http request %dx: %v, stdout: %s, stderr: %s\n", requests, err, stdout, stderr)
 		}
@@ -246,7 +242,7 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 
 // networkPolicyRealize runs a benchmark to measure how long it takes for a Network Policy with policyRules CIDR rules
 // to be realized as OVS flows. In order to have entities for the Network Policy to be applied to, we create two dummy
-// Pods with the "antrea-performance-test" app label, but they do not generate any traffic.
+// Pods with the "antrea-perf-test" app label, but they do not generate any traffic.
 func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 	setupTestPods(data, b)
 	for i := 0; i < b.N; i++ {
@@ -300,9 +296,9 @@ func checkRealize(policyRules int, data *TestData) (bool, error) {
 	return flowNums > policyRules, nil
 }
 
-// withPerformanceTestSetup runs function fn in a clean test environment.
+// withPerfTestSetup runs function fn in a clean test environment.
 // It ensures no stale flow rules in ovs and the bench timer is stopped and reset.
-func withPerformanceTestSetup(fn func(data *TestData), b *testing.B) {
+func withPerfTestSetup(fn func(data *TestData), b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 	defer b.StopTimer()
