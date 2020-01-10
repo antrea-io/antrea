@@ -73,8 +73,8 @@ func (c *client) resolveKubeconfig(opt *RequestOption) (*rest.Config, error) {
 // the groupVersion of the RequestOption which will be used to construct the request
 // URI. localRequest is basically a raw http request, none authentication and authorization
 // will be done during the request. For safety concerns, it communicates with the
-// antctl server by a predefined unix domain socket. If the request succeeded, it
-// will returns an io.Reader which contains the response data.
+// antctl server by a predefined unix domain socket. If the request succeeds, it
+// will return an io.Reader which contains the response data.
 func (c *client) localRequest(opt *RequestOption) (io.Reader, error) {
 	klog.Infof("Requesting %s", opt.Path)
 	client := &http.Client{

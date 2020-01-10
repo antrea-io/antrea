@@ -145,7 +145,7 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command, isAgent bool, inP
 // validate checks the validation of the commandList.
 func (cl *commandList) validate() []error {
 	var errs []error
-	if len(cl.definitions) == 0 { // must has at least one applySubCommandToRoot
+	if len(cl.definitions) == 0 { // must have at least one applySubCommandToRoot
 		return []error{fmt.Errorf("no command found in the command list")}
 	}
 	for i, c := range cl.definitions { // each commandDefinition must be valid
