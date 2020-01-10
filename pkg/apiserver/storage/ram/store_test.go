@@ -16,8 +16,10 @@ package ram
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -452,4 +454,59 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 		default:
 		}
 	}
+}
+
+func TestRamStoreWatchTimeout(t *testing.T) {
+	store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+	// watcherChanSize*2+1 events can fill a watcher's buffer: input channel buffer + result channel buffer + 1 in-flight.
+	maxBuffered := watcherChanSize*2 + 1
+
+	// w1 has consumer for its result chan.
+	w1, err := store.Watch(context.Background(), "", labels.SelectorFromSet(labels.Set{"app": "nginx"}), fields.Everything())
+	if err != nil {
+		t.Errorf("Failed to watch object: %v", err)
+	}
+	go func() {
+		ch := w1.ResultChan()
+		for i := 0; i < maxBuffered+1; i++ {
+			actualEvent := <-ch
+			expectedEvent := watch.Event{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}}}
+			if !reflect.DeepEqual(actualEvent, expectedEvent) {
+				t.Errorf("Unexpected event %d, got %#v, expected %#v ", i, actualEvent, expectedEvent)
+			}
+		}
+		select {
+		case obj, ok := <-ch:
+			t.Errorf("Unexpected excess event: %#v %t", obj, ok)
+		default:
+		}
+	}()
+
+	// w2 has no consumer for its result chan.
+	w2, err := store.Watch(context.Background(), "", labels.SelectorFromSet(labels.Set{"app": "nginx"}), fields.Everything())
+	if err != nil {
+		t.Errorf("Failed to watch object: %v", err)
+	}
+
+	assert.Equal(t, 2, store.GetWatchersNum(), "Unexpected watchers number")
+
+	for i := 0; i < maxBuffered; i++ {
+		store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}})
+	}
+
+	select {
+	case <-w2.(*storeWatcher).done:
+		t.Fatal("w2 was stopped, expected not stopped")
+	case <-time.After(watcherAddTimeout + time.Millisecond*10):
+	}
+
+	// w2 can't take one more event as it's buffer has been full, it should be terminated.
+	store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", maxBuffered), Labels: map[string]string{"app": "nginx"}}})
+
+	select {
+	case <-w2.(*storeWatcher).done:
+	case <-time.After(watcherAddTimeout + time.Millisecond*10):
+		t.Error("w2 was not stopped, expected stopped")
+	}
+	assert.Equal(t, 1, store.GetWatchersNum(), "Unexpected watchers number")
 }

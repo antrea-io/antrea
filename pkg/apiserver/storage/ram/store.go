@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -27,6 +28,14 @@ import (
 	"k8s.io/klog"
 
 	antreastorage "github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+)
+
+const (
+	// watcherChanSize is the buffer size of watchers.
+	watcherChanSize = 1000
+	// watcherAddTimeout is the timeout of sending one event to all watchers.
+	// Watchers whose buffer can't be available in it will be terminated.
+	watcherAddTimeout = 50 * time.Millisecond
 )
 
 type watchersMap map[int]*storeWatcher
@@ -59,6 +68,9 @@ type store struct {
 	watchers watchersMap
 
 	stopCh chan struct{}
+	// timer is used when sending events to watchers. Hold it here to avoid unnecessary
+	// re-allocation for each event.
+	timer *time.Timer
 }
 
 // NewStore creates a store based on the provided KeyFunc, Indexers, and GenEventFunc.
@@ -68,6 +80,11 @@ type store struct {
 func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc) *store {
 	stopCh := make(chan struct{})
 	storage := cache.NewIndexer(keyFunc, indexers)
+	timer := time.NewTimer(time.Duration(0))
+	// Ensure the timer is stopped and drain the channel.
+	if !timer.Stop() {
+		<-timer.C
+	}
 	s := &store{
 		incoming:     make(chan antreastorage.InternalEvent, 100),
 		storage:      storage,
@@ -75,6 +92,7 @@ func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antre
 		watchers:     make(map[int]*storeWatcher),
 		keyFunc:      keyFunc,
 		genEventFunc: genEventFunc,
+		timer:        timer,
 	}
 
 	go s.dispatchEvents()
@@ -222,7 +240,7 @@ func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Sele
 		s.watcherMutex.Lock()
 		defer s.watcherMutex.Unlock()
 
-		w := newStoreWatcher(10, &antreastorage.Selectors{key, labelSelector, fieldSelector}, forgetWatcher(s, s.watcherIdx))
+		w := newStoreWatcher(watcherChanSize, &antreastorage.Selectors{key, labelSelector, fieldSelector}, forgetWatcher(s, s.watcherIdx))
 		s.watchers[s.watcherIdx] = w
 		s.watcherIdx++
 		return w
@@ -266,10 +284,52 @@ func (s *store) dispatchEvents() {
 }
 
 func (s *store) dispatchEvent(event antreastorage.InternalEvent) {
-	s.watcherMutex.Lock()
-	defer s.watcherMutex.Unlock()
-	// TODO: Optimize this to dispatch the event based on watchers' selector.
-	for _, watcher := range s.watchers {
-		watcher.add(event)
+	var failedWatchers []*storeWatcher
+
+	func() {
+		s.watcherMutex.RLock()
+		defer s.watcherMutex.RUnlock()
+
+		// First try to send events without blocking, to avoid setting up a timer
+		// for every event.
+		// blockedWatchers keeps watchers whose buffer are full.
+		var blockedWatchers []*storeWatcher
+		// TODO: Optimize this to dispatch the event based on watchers' selector.
+		for _, watcher := range s.watchers {
+			if !watcher.nonBlockingAdd(event) {
+				blockedWatchers = append(blockedWatchers, watcher)
+			}
+		}
+		if len(blockedWatchers) == 0 {
+			return
+		}
+		klog.V(2).Infof("%d watchers were not available to receive event %+v immediately", len(blockedWatchers), event)
+
+		// Then try to send events to blocked watchers with a timeout. If it
+		// timeouts, it means the watcher is too slow to consume the events or the
+		// underlying connection is already dead, terminate the watcher in this case.
+		// antrea-agent will start a new watch after it's disconnected.
+		s.timer.Reset(watcherAddTimeout)
+		timer := s.timer
+
+		for _, watcher := range blockedWatchers {
+			if !watcher.add(event, timer) {
+				failedWatchers = append(failedWatchers, watcher)
+				// setting timer to nil to let watcher know know the timer has fired.
+				timer = nil
+			}
+		}
+
+		// Stop the timer and drain its channel if it is not fired.
+		if timer != nil && !timer.Stop() {
+			<-timer.C
+		}
+	}()
+
+	// Terminate unresponsive watchers, this must be executed without watcherMutex as
+	// watcher.Stop will require the lock itself.
+	for _, watcher := range failedWatchers {
+		klog.Warningf("Forcing stopping watcher (selectors: %v) due to unresponsiveness", watcher.selectors)
+		watcher.Stop()
 	}
 }
