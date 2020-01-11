@@ -27,13 +27,11 @@ func BenchmarkBandwidthIntraNode(b *testing.B) {
 		b.StartTimer()
 
 		podDefA := createPerfTestPodDefinition("perftest-a", perftoolContainerName, perftoolImage)
-		_, err := data.clientset.CoreV1().Pods(testNamespace).Create(podDefA)
-		if err != nil {
+		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(podDefA); err != nil {
 			b.Fatalf("Error when creating the first perftest Pod: %v", err)
 		}
 		podDefB := createPerfTestPodDefinition("perftest-b", perftoolContainerName, perftoolImage)
-		_, err = data.clientset.CoreV1().Pods(testNamespace).Create(podDefB)
-		if err != nil {
+		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(podDefB); err != nil {
 			b.Fatalf("Error when creating the second perftest Pod: %v", err)
 		}
 		podBIP, err := data.podWaitForIP(defaultTimeout, podDefB.Name)
