@@ -17,6 +17,7 @@ package openflow
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"k8s.io/klog"
 
@@ -32,7 +33,7 @@ type Client interface {
 	// Initialize sets up all basic flows on the specific OVS bridge. It returns a channel which
 	// is used to notify the caller in case of a reconnection, in which case ReplayFlows should
 	// be called to ensure that the set of OVS flows is correct.
-	Initialize(roundNum uint64) (<-chan struct{}, error)
+	Initialize(roundInfo types.RoundInfo) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
@@ -256,7 +257,7 @@ func (c *client) initialize() error {
 	return nil
 }
 
-func (c *client) Initialize(roundNum uint64) (<-chan struct{}, error) {
+func (c *client) Initialize(roundInfo types.RoundInfo) (<-chan struct{}, error) {
 	// Initiate connections to target OFswitch, and create tables on the switch.
 	connCh := make(chan struct{})
 	if err := c.bridge.Connect(maxRetryForOFSwitch, connCh); err != nil {
@@ -266,7 +267,26 @@ func (c *client) Initialize(roundNum uint64) (<-chan struct{}, error) {
 	// Ignore first notification, it is not a "reconnection".
 	<-connCh
 
-	c.cookieAllocator = cookie.NewAllocator(roundNum)
+	c.cookieAllocator = cookie.NewAllocator(roundInfo.RoundNum)
+
+	deleteStaleFlowsAfterConvergence := func() {
+		// Delete stale flows from previous round. We need to wait long enough to ensure
+		// that all the flow which are still required have received an updated cookie (with
+		// the new round number), otherwise we would disrupt the dataplane. Unfortunately,
+		// the time required for convergence is large and there is no simple way to
+		// determine when is a right time to perform the cleanup task.
+		// Additionally, with the current code, if the agent is restarted before having a
+		// chance to delete stale flows, these flows will never be deleted.
+		time.Sleep(10 * time.Second)
+		klog.Infof("Deleting stale flows from previous round")
+		cookieID, cookieMask := cookie.CookieMaskForRound(*roundInfo.PrevRoundNum)
+		if err := c.bridge.DeleteFlowsByCookie(cookieID, cookieMask); err != nil {
+			klog.Errorf("Error when deleting stale flows from previous round: %v", err)
+		}
+	}
+	if roundInfo.PrevRoundNum != nil {
+		go deleteStaleFlowsAfterConvergence()
+	}
 
 	return connCh, c.initialize()
 }

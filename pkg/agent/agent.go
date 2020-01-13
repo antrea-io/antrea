@@ -221,9 +221,9 @@ func (i *Initializer) Initialize() error {
 
 // initOpenFlowPipeline sets up necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
 func (i *Initializer) initOpenFlowPipeline() error {
-	roundNum := getRoundNum(i.ovsBridgeClient)
+	roundInfo := getRoundInfo(i.ovsBridgeClient)
 	// Setup all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundNum)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo)
 	if err != nil {
 		klog.Errorf("Failed to setup basic openflow entries: %v", err)
 		return err
@@ -469,13 +469,16 @@ func saveRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient) error {
 	return bridgeClient.SetExternalIDs(updatedExtIDs)
 }
 
-func getRoundNum(bridgeClient ovsconfig.OVSBridgeClient) uint64 {
+func getRoundInfo(bridgeClient ovsconfig.OVSBridgeClient) types.RoundInfo {
+	roundInfo := types.RoundInfo{}
 	num, err := getLastRoundNum(bridgeClient)
 	if err != nil {
 		klog.Warning("No round number found in OVSDB, using a random value")
 		rand.Seed(time.Now().UnixNano())
 		num = rand.Uint64()
 	} else {
+		roundInfo.PrevRoundNum = new(uint64)
+		*roundInfo.PrevRoundNum = num
 		num += 1
 	}
 
@@ -486,5 +489,7 @@ func getRoundNum(bridgeClient ovsconfig.OVSBridgeClient) uint64 {
 		klog.Errorf("Writing round number failed: %v", err)
 	}
 
-	return num
+	roundInfo.RoundNum = num
+
+	return roundInfo
 }
