@@ -19,6 +19,8 @@ import (
 	"testing"
 )
 
+const pingCount = 10
+
 // runPingMesh runs a ping mesh between all the provided Pods after first retrieveing their IP
 // addresses.
 func (data *TestData) runPingMesh(t *testing.T, podNames []string) {
@@ -39,7 +41,7 @@ func (data *TestData) runPingMesh(t *testing.T, podNames []string) {
 			if podName1 == podName2 {
 				continue
 			}
-			if err := data.runPingCommandFromTestPod(podName1, podIPs[podName2], 10); err != nil {
+			if err := data.runPingCommandFromTestPod(podName1, podIPs[podName2], pingCount); err != nil {
 				t.Errorf("Ping '%s' -> '%s': ERROR (%v)", podName1, podName2, err)
 			} else {
 				t.Logf("Ping '%s' -> '%s': OK", podName1, podName2)
@@ -172,5 +174,60 @@ func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
 
 	data.redeployAntrea(t, false)
 
+	data.runPingMesh(t, podNames)
+}
+
+// TestOVSRestart checks that when OVS restarts unexpectedly the Antrea agent takes care of
+// replaying flows. More precisely this tests check that Pod connectivity is not broken after a
+// restart.
+func TestOVSRestart(t *testing.T) {
+	if testOptions.providerName == "kind" {
+		t.Skipf("Skipping test for the KIND provider as stopping OVS daemons create connectivity issues")
+	}
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	numPods := 2
+	podNames := make([]string, numPods)
+	for idx := range podNames {
+		podNames[idx] = randName(fmt.Sprintf("test-pod-%d-", idx))
+	}
+	workerNode := workerNodeName(1)
+
+	t.Logf("Creating two busybox test Pods on '%s'", workerNode)
+	for _, podName := range podNames {
+		if err := data.createBusyboxPodOnNode(podName, workerNode); err != nil {
+			t.Fatalf("Error when creating busybox test Pod: %v", err)
+		}
+		defer deletePodWrapper(t, data, podName)
+	}
+
+	data.runPingMesh(t, podNames)
+
+	var antreaPodName string
+	if antreaPodName, err = data.getAntreaPodOnNode(workerNode); err != nil {
+		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", workerNode, err)
+	}
+	t.Logf("The Antrea Pod for Node '%s' is '%s'", workerNode, antreaPodName)
+
+	t.Logf("Restarting OVS daemons on Node '%s'", workerNode)
+	// We cannot use "ovs-ctl restart" as it takes care of saving / restoring the flows, while
+	// we are trying to test whether the Antrea agent takes care of replaying the flows after an
+	// unscheduled restart.
+	stopCmd := []string{"/usr/share/openvswitch/scripts/ovs-ctl", "stop"}
+	if stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, stopCmd); err != nil {
+		t.Fatalf("Error when stopping OVS with ovs-ctl: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+	}
+	startCmd := []string{"/usr/share/openvswitch/scripts/ovs-ctl", "--system-id=random", "start", "--db-file=/var/run/openvswitch/conf.db"}
+	if stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, startCmd); err != nil {
+		t.Fatalf("Error when starting OVS with ovs-ctl: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+	}
+
+	// This should give Antrea ~10s to restore flows, since we generate 10 "pings" with a 1s
+	// interval.
+	t.Logf("Running second ping mesh to check that flows have been restored")
 	data.runPingMesh(t, podNames)
 }

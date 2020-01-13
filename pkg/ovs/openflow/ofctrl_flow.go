@@ -32,6 +32,10 @@ type ofFlow struct {
 	lastAction ofctrl.FgraphElem
 }
 
+func (f *ofFlow) Reset() {
+	f.Flow.Table = f.table.Table
+}
+
 func (f *ofFlow) Add() error {
 	f.Flow.UpdateInstallStatus(false)
 	err := f.Flow.Next(f.lastAction)

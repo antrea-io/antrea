@@ -82,7 +82,7 @@ func TestConnectivityFlows(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
 		err = c.Disconnect()
-		assert.Nil(t, err, fmt.Sprintf("Error while disconnect OVS bridge: %v", err))
+		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
 	}()
@@ -102,8 +102,101 @@ func TestConnectivityFlows(t *testing.T) {
 	}
 }
 
+func TestReplayFlowsConnectivityFlows(t *testing.T) {
+	c = ofClient.NewClient(br)
+	err := ofTestUtils.PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+
+	defer func() {
+		err = c.Disconnect()
+		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
+		err = ofTestUtils.DeleteOVSBridge(br)
+		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+	}()
+
+	config := prepareConfiguration()
+	for _, f := range []func(t *testing.T, config *testConfig){
+		testInitialize,
+		testInstallGatewayFlows,
+		testInstallServiceFlows,
+		testInstallTunnelFlows,
+		testInstallNodeFlows,
+		testInstallPodFlows,
+	} {
+		f(t, config)
+	}
+
+	testReplayFlows(t)
+}
+
+func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
+	c = ofClient.NewClient(br)
+	err := ofTestUtils.PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+
+	_, err = c.Initialize(0)
+	require.Nil(t, err, "Failed to initialize OFClient")
+
+	defer func() {
+		err = c.Disconnect()
+		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
+		err = ofTestUtils.DeleteOVSBridge(br)
+		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+	}()
+
+	ruleID := uint32(100)
+	fromList := []string{"192.168.1.3", "192.168.1.25", "192.168.2.4"}
+	exceptFromList := []string{"192.168.2.3"}
+	toList := []string{"192.168.3.4", "192.168.3.5"}
+
+	port2 := intstr.FromInt(8080)
+	tcpProtocol := coreV1.ProtocolTCP
+	npPort1 := &v1.NetworkPolicyPort{Protocol: &tcpProtocol, Port: &port2}
+	toIPList := prepareIPAddresses(toList)
+	rule := &types.PolicyRule{
+		ID:         ruleID,
+		Direction:  v1.PolicyTypeIngress,
+		From:       prepareIPAddresses(fromList),
+		ExceptFrom: prepareIPAddresses(exceptFromList),
+		To:         toIPList,
+		Service:    []*v1.NetworkPolicyPort{npPort1},
+	}
+
+	err = c.InstallPolicyRuleFlows(rule)
+	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
+
+	err = c.AddPolicyRuleAddress(ruleID, types.SrcAddress, prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"}))
+	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
+	ofport := int32(100)
+	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)})
+	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
+
+	testReplayFlows(t)
+}
+
+func testReplayFlows(t *testing.T) {
+	var err error
+
+	countFlows := func() int {
+		flowList, err := ofTestUtils.OfctlDumpFlows(br)
+		require.Nil(t, err, "Error when dumping flows from OVS bridge")
+		return len(flowList)
+	}
+
+	count1 := countFlows()
+	t.Logf("Counted %d flows before deletion & reconciliation", count1)
+	err = ofTestUtils.OfctlDeleteFlows(br)
+	require.Nil(t, err, "Error when deleting flows from OVS bridge")
+	count2 := countFlows()
+	assert.Zero(t, count2, "Expected no flows after deletion")
+	c.ReplayFlows()
+	count3 := countFlows()
+	t.Logf("Counted %d flows after reconciliation", count3)
+	assert.Equal(t, count1, count3, "Expected same number of flows after reconciliation")
+}
+
 func testInitialize(t *testing.T, config *testConfig) {
-	if err := c.Initialize(0); err != nil {
+	if _, err := c.Initialize(0); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows() {
@@ -184,12 +277,12 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
-	err = c.Initialize(0)
+	_, err = c.Initialize(0)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
 		err = c.Disconnect()
-		assert.Nil(t, err, fmt.Sprintf("Error while disconnect OVS bridge: %v", err))
+		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
 	}()
@@ -222,11 +315,11 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	checkDeleteAddress(t, ingressRuleTable, priorityNormal, ruleID, addedFrom, types.SrcAddress)
 
 	ofport := int32(100)
-	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(int32(100))})
-	require.Nil(t, err, "Failed to AddPolicyRuleService")
+	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)})
+	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// Dump flows.
-	flowList, err := ofTestUtils.OfctlDumpFlows(br, ingressRuleTable)
+	flowList, err := ofTestUtils.OfctlDumpTableFlows(br, ingressRuleTable)
 	require.Nil(t, err, "Failed to dump flows")
 	conjMatch := fmt.Sprintf("priority=%d,ip,reg1=0x%x", priorityNormal, ofport)
 	flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
@@ -249,7 +342,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 
 	// Dump flows
-	flowList, err = ofTestUtils.OfctlDumpFlows(br, ingressRuleTable)
+	flowList, err = ofTestUtils.OfctlDumpTableFlows(br, ingressRuleTable)
 	require.Nil(t, err, "Failed to dump flows")
 	conjMatch = fmt.Sprintf("priority=%d,ip,nw_dst=192.168.3.4", priorityNormal)
 	flow1 := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3),conjunction(%d,1/2)", ruleID, ruleID2)}
@@ -269,7 +362,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 func checkDefaultDropFlows(t *testing.T, table uint8, priority int, addrType types.AddressType, addresses []types.Address, add bool) {
 	// dump flows
-	flowList, err := ofTestUtils.OfctlDumpFlows(br, table)
+	flowList, err := ofTestUtils.OfctlDumpTableFlows(br, table)
 	assert.Nil(t, err, fmt.Sprintf("Failed to dump flows: %v", err))
 	for _, addr := range addresses {
 		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(addrType)), addr.GetMatchValue())
@@ -306,7 +399,7 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// dump flows
-	flowList, err := ofTestUtils.OfctlDumpFlows(br, ruleTable)
+	flowList, err := ofTestUtils.OfctlDumpTableFlows(br, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
 
 	action := fmt.Sprintf("conjunction(%d,1/3)", ruleID)
@@ -332,7 +425,7 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 func checkDeleteAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32, addedAddress []types.Address, addrType types.AddressType) {
 	err := c.DeletePolicyRuleAddress(ruleID, addrType, addedAddress)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
-	flowList, err := ofTestUtils.OfctlDumpFlows(br, ruleTable)
+	flowList, err := ofTestUtils.OfctlDumpTableFlows(br, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
 
 	action := fmt.Sprintf("conjunction(%d,1/3)", ruleID)
@@ -357,7 +450,7 @@ func checkDeleteAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint
 
 func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allowTable uint8, priority int, rule *types.PolicyRule, testFunc func(t assert.TestingT, value bool, msgAndArgs ...interface{}) bool) {
 	ruleID := rule.ID
-	flowList, err := ofTestUtils.OfctlDumpFlows(br, ruleTable)
+	flowList, err := ofTestUtils.OfctlDumpTableFlows(br, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
 
 	conjunctionActionMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip", priority-10, rule.ID)

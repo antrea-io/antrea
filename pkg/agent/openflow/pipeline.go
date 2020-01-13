@@ -109,7 +109,12 @@ type client struct {
 	bridge                      binding.Bridge
 	pipeline                    map[binding.TableIDType]binding.Table
 	nodeFlowCache, podFlowCache *flowCategoryCache // cache for corresponding deletions
-	flowOperations              FlowOperations
+	// "fixed" flows installed by the agent after initialization and which do not change during
+	// the lifetime of the client.
+	gatewayFlows, clusterServiceCIDRFlows, defaultTunnelFlows []binding.Flow
+	// flowOperations is a wrapper interface for flow Add / Modify / Delete operations. It
+	// enables convenient mocking in unit tests.
+	flowOperations FlowOperations
 	// policyCache is a map from PolicyRule ID to policyRuleConjunction. It's guaranteed that one policyRuleConjunction
 	// is processed by at most one goroutine at any given time.
 	policyCache       sync.Map
@@ -117,6 +122,8 @@ type client struct {
 	// globalConjMatchFlowCache is a global map for conjMatchFlowContext. The key is a string generated from the
 	// conjMatchFlowContext.
 	globalConjMatchFlowCache map[string]*conjMatchFlowContext
+	// replayMutex provides exclusive access to the OFSwitch to the ReplayFlows method.
+	replayMutex sync.RWMutex
 }
 
 func (c *client) Add(flow binding.Flow) error {

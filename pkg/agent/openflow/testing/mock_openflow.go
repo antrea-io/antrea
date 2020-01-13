@@ -107,11 +107,12 @@ func (mr *MockClientMockRecorder) GetFlowTableStatus() *gomock.Call {
 }
 
 // Initialize mocks base method
-func (m *MockClient) Initialize(arg0 uint64) error {
+func (m *MockClient) Initialize(arg0 uint64) (<-chan struct{}, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Initialize", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(<-chan struct{})
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Initialize indicates an expected call of Initialize
@@ -216,6 +217,18 @@ func (m *MockClient) IsConnected() bool {
 func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
+}
+
+// ReplayFlows mocks base method
+func (m *MockClient) ReplayFlows() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ReplayFlows")
+}
+
+// ReplayFlows indicates an expected call of ReplayFlows
+func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplayFlows", reflect.TypeOf((*MockClient)(nil).ReplayFlows))
 }
 
 // UninstallNodeFlows mocks base method
