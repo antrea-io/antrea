@@ -76,6 +76,17 @@ var CommandList = &commandList{
 			CommandGroup:        flat,
 			AddonTransform:      versionTransform,
 		},
+		{
+			Use:                 "agent-info",
+			Short:               "Print agent's basic information",
+			Long:                "Print agent's basic information including version, node subnet, OVS info, AgentConditions, etc.",
+			HandlerFactory:      new(handlers.AgentInfo),
+			GroupVersion:        &systemGroup,
+			TransformedResponse: reflect.TypeOf(handlers.AntreaAgentInfoResponse{}),
+			Agent:               true,
+			SingleObject:        true,
+			CommandGroup:        flat,
+		},
 	},
 	codec: scheme.Codecs,
 }
