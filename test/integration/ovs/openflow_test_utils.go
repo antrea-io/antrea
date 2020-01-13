@@ -51,7 +51,7 @@ type ExpectFlow struct {
 }
 
 func CheckFlowExists(t *testing.T, br string, tableID uint8, exist bool, flows []*ExpectFlow) []string {
-	flowList, _ := OfctlDumpFlows(br, tableID)
+	flowList, _ := OfctlDumpTableFlows(br, tableID)
 	if exist {
 		for _, flow := range flows {
 			if !OfctlFlowMatch(flowList, tableID, flow) {
@@ -80,8 +80,8 @@ func OfctlFlowMatch(flowList []string, tableID uint8, flow *ExpectFlow) bool {
 	return false
 }
 
-func OfctlDumpFlows(brName string, table uint8) ([]string, error) {
-	flowDump, err := runOfctlCmd("dump-flows", brName, table)
+func OfctlDumpFlows(brName string, args ...string) ([]string, error) {
+	flowDump, err := runOfctlCmd("dump-flows", brName, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +103,18 @@ func OfctlDumpFlows(brName string, table uint8) ([]string, error) {
 	return flowList, nil
 }
 
-func runOfctlCmd(cmd, brName string, table uint8) ([]byte, error) {
-	cmdStr := fmt.Sprintf("ovs-ofctl -O Openflow13 %s %s table=%d", cmd, brName, table)
+func OfctlDumpTableFlows(brName string, table uint8) ([]string, error) {
+	return OfctlDumpFlows(brName, fmt.Sprintf("table=%d", table))
+}
+
+func OfctlDeleteFlows(brName string) error {
+	_, err := runOfctlCmd("del-flows", brName)
+	return err
+}
+
+func runOfctlCmd(cmd, brName string, args ...string) ([]byte, error) {
+	cmdStr := fmt.Sprintf("ovs-ofctl -O Openflow13 %s %s", cmd, brName)
+	cmdStr = cmdStr + " " + strings.Join(args, " ")
 	out, err := exec.Command("/bin/sh", "-c", cmdStr).Output()
 	if err != nil {
 		return nil, err

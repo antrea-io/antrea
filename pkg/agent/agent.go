@@ -223,7 +223,8 @@ func (i *Initializer) Initialize() error {
 func (i *Initializer) initOpenFlowPipeline() error {
 	roundNum := getRoundNum(i.ovsBridgeClient)
 	// Setup all basic flows.
-	if err := i.ofClient.Initialize(roundNum); err != nil {
+	ofConnCh, err := i.ofClient.Initialize(roundNum)
+	if err != nil {
 		klog.Errorf("Failed to setup basic openflow entries: %v", err)
 		return err
 	}
@@ -255,6 +256,18 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
 		return err
 	}
+
+	go func() {
+		for {
+			if _, ok := <-ofConnCh; !ok {
+				return
+			}
+			klog.Info("Replaying OF flows to OVS bridge")
+			i.ofClient.ReplayFlows()
+			klog.Info("Flow replay completed")
+		}
+	}()
+
 	return nil
 }
 
@@ -459,7 +472,7 @@ func saveRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient) error {
 func getRoundNum(bridgeClient ovsconfig.OVSBridgeClient) uint64 {
 	num, err := getLastRoundNum(bridgeClient)
 	if err != nil {
-		klog.Warningln("No round number found in OVSDB, using a random value")
+		klog.Warning("No round number found in OVSDB, using a random value")
 		rand.Seed(time.Now().UnixNano())
 		num = rand.Uint64()
 	} else {

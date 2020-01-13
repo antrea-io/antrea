@@ -203,7 +203,7 @@ func TestOFctrlFlow(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to DeleteFlowsByCookie: %v", err)
 	}
-	flowList, _ = OfctlDumpFlows(br, uint8(tableID))
+	flowList, _ = OfctlDumpTableFlows(br, uint8(tableID))
 	if len(flowList) > 0 {
 		t.Errorf("Failed to delete flows by CookieID")
 	}

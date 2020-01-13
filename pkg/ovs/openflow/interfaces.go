@@ -97,6 +97,10 @@ type Flow interface {
 	MatchString() string
 	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions.
 	CopyToBuilder() FlowBuilder
+	// Reset ensures that the ofFlow object is "correct" and that the Add /
+	// Modify / Delete methods can be called on this object. This method
+	// should be called if a reconnection event happenened.
+	Reset()
 }
 
 type Action interface {
