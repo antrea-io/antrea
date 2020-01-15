@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog"
@@ -68,7 +69,7 @@ var CommandList = &commandList{
 			Long:                "Print version information of the antctl and the ${component}",
 			HandlerFactory:      new(handlers.Version),
 			GroupVersion:        &systemGroup,
-			TransformedResponse: new(transformedVersionResponse),
+			TransformedResponse: reflect.TypeOf(transformedVersionResponse{}),
 			Agent:               true,
 			Controller:          true,
 			SingleObject:        true,

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // antctlOutput is a helper function for logging antctl outputs.
@@ -14,7 +15,7 @@ func antctlOutput(stdout, stderr string, tb testing.TB) {
 	tb.Logf("antctl stderr:\n%s", stderr)
 }
 
-// runAntctl runs antctl commands on antrea pods, the controller, or agents. It
+// runAntctl runs antctl commands on antrea Pods, the controller, or agents. It
 // always runs the commands with verbose flag enabled.
 func runAntctl(podName string, subCMDs []string, data *TestData, tb testing.TB) (string, string, error) {
 	var containerName string
@@ -29,7 +30,7 @@ func runAntctl(podName string, subCMDs []string, data *TestData, tb testing.TB) 
 	return stdout, stderr, err
 }
 
-// TestAntctlAgentLocalAccess ensures antctl is accessible in agent pod.
+// TestAntctlAgentLocalAccess ensures antctl is accessible in a agent Pod.
 func TestAntctlAgentLocalAccess(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
@@ -45,7 +46,7 @@ func TestAntctlAgentLocalAccess(t *testing.T) {
 	}
 }
 
-// TestAntctlControllerLocalAccess ensures antctl is accessible in controller pod.
+// TestAntctlControllerLocalAccess ensures antctl is accessible in the controller Pod.
 func TestAntctlControllerLocalAccess(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
@@ -63,7 +64,7 @@ func TestAntctlControllerLocalAccess(t *testing.T) {
 
 // TestAntctlControllerRemoteAccess ensures antctl is able to be run outside of
 // the kubernetes cluster. It uses the antctl client binary copied from the controller
-// pod.
+// Pod.
 func TestAntctlControllerRemoteAccess(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
@@ -71,17 +72,17 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	podName, err := data.getAntreaController()
-	assert.Nil(t, err, "Error when retrieving antrea controller pod name")
+	require.Nil(t, err, "Error when retrieving antrea controller pod name")
 
-	// Copy antctl from the controller pod to the master node.
+	// Copy antctl from the controller Pod to the master Node.
 	cmd := fmt.Sprintf("kubectl cp %s/%s:/usr/local/bin/antctl ~/antctl", antreaNamespace, podName)
 	rc, stdout, stderr, err := RunCommandOnNode(masterNodeName(), cmd)
-	assert.Zero(t, rc)
-	assert.Nil(t, err, "Error when copying antctl from %s, stdout: %s, stderr: %s", podName, stdout, stderr)
-	// Make sure the antctl binary executable on the master node.
+	require.Zero(t, rc)
+	require.Nil(t, err, "Error when copying antctl from %s, stdout: %s, stderr: %s", podName, stdout, stderr)
+	// Make sure the antctl binary executable on the master Node.
 	rc, stdout, stderr, err = RunCommandOnNode(masterNodeName(), "chmod 0755 ~/antctl")
-	assert.Zero(t, rc)
-	assert.Nil(t, err, "Error when make the antctl on master node executable, stdout: %s, stderr: %s", podName, stdout, stderr)
+	require.Zero(t, rc)
+	require.Nil(t, err, "Error when make the antctl on master node executable, stdout: %s, stderr: %s", podName, stdout, stderr)
 
 	for k, tc := range map[string]struct {
 		commands           string
@@ -117,7 +118,7 @@ func TestAntctlVerboseMode(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	podName, err := data.getAntreaController()
-	assert.Nil(t, err, "Error when retrieving antrea controller pod name")
+	require.Nil(t, err, "Error when retrieving antrea controller pod name")
 	for _, tc := range []struct {
 		name      string
 		hasStderr bool

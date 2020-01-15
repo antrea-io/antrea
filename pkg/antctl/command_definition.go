@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -111,9 +110,10 @@ type commandDefinition struct {
 	// alongside with the HandlerFactory.
 	GroupVersion *schema.GroupVersion
 	// TransformedResponse is the final response struct of the command. If the
-	// AddonTransform is set, this struct is no need to be used as the response
-	// struct of the handler.
-	TransformedResponse interface{}
+	// AddonTransform is set, TransformedResponse is not needed to be used as the
+	// response struct of the handler, but it is still needed to guide the formatter.
+	// It should always be filled.
+	TransformedResponse reflect.Type
 	// AddonTransform is used to transform or update the response data received
 	// from the handler, it must returns an interface which has same type as
 	// TransformedResponse.
@@ -121,8 +121,8 @@ type commandDefinition struct {
 }
 
 // applySubCommandToRoot applies the commandDefinition to a cobra.Command with
-// the client. It populates basic fields of a cobra.Command and creates specific
-// the RunE function for it according the commandDefinition.
+// the client. It populates basic fields of a cobra.Command and creates the
+// appropriate RunE function for it according to the commandDefinition.
 func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client *client, isAgent bool) {
 	cmd := &cobra.Command{
 		Use:   cd.Use,
@@ -198,13 +198,8 @@ func (cd *commandDefinition) validate() []error {
 // argOptions returns the list of arguments that could be used in a commandDefinition.
 func (cd *commandDefinition) argOptions() []*argOption {
 	var ret []*argOption
-	if cd.TransformedResponse == nil {
-		return ret
-	}
-	t := reflect.Indirect(reflect.ValueOf(cd.TransformedResponse)).Type()
-
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
+	for i := 0; i < cd.TransformedResponse.NumField(); i++ {
+		f := cd.TransformedResponse.Field(i)
 		argOpt := &argOption{fieldName: f.Name}
 
 		tags, err := structtag.Parse(string(f.Tag))
@@ -230,21 +225,21 @@ func (cd *commandDefinition) argOptions() []*argOption {
 	return ret
 }
 
-// decode parses the data in reader to the TransformedResponse. If the single is false,
-// the return type is []TransformedResponse. Otherwise, the response struct is TransformedResponse.
+// decode parses the data in reader and converts it to one or more
+// TransformedResponse objects. If single is false, the return type is
+// []TransformedResponse. Otherwise, the return type is TransformedResponse.
 func (cd *commandDefinition) decode(r io.Reader, single bool) (interface{}, error) {
 	var result interface{}
-	t := reflect.Indirect(reflect.ValueOf(cd.TransformedResponse)).Type()
 
 	if single || cd.SingleObject {
-		ref := reflect.New(t)
+		ref := reflect.New(cd.TransformedResponse)
 		err := json.NewDecoder(r).Decode(ref.Interface())
 		if err != nil {
 			return nil, err
 		}
 		result = ref.Interface()
 	} else {
-		ref := reflect.New(reflect.SliceOf(t))
+		ref := reflect.New(reflect.SliceOf(cd.TransformedResponse))
 		err := json.NewDecoder(r).Decode(ref.Interface())
 		if err != nil {
 			return nil, err
@@ -253,30 +248,6 @@ func (cd *commandDefinition) decode(r io.Reader, single bool) (interface{}, erro
 	}
 
 	return result, nil
-}
-
-func (cd *commandDefinition) plainTextOutput(resp io.Reader, writer io.Writer) error {
-	if cd.AddonTransform == nil {
-		data, err := ioutil.ReadAll(resp)
-		if err != nil {
-			return fmt.Errorf("error when reading plain test from response: %w", err)
-		}
-		_, err = fmt.Fprintln(writer, string(data))
-		if err != nil {
-			return fmt.Errorf("error when outputing plain text in local: %w", err)
-		}
-		return nil
-	}
-	obj, err := cd.AddonTransform(resp, false)
-	if err != nil {
-		return fmt.Errorf("error when transforming: %w", err)
-	}
-	klog.Infof("After transforming %v", obj)
-	_, err = fmt.Fprintln(writer, obj)
-	if err != nil {
-		return fmt.Errorf("error when outputing plain text: %w", err)
-	}
-	return err
 }
 
 func (cd *commandDefinition) jsonOutput(obj interface{}, writer io.Writer) error {
@@ -307,9 +278,8 @@ func (cd *commandDefinition) yamlOutput(obj interface{}, writer io.Writer) error
 
 // output reads bytes from the resp and outputs the data to the writer in desired
 // format. If the AddonTransform is set, it will use the function to transform
-// the data first. If the commandDefinition marked the response bytes as PlainText,
-// it will output to writer without using any formatter. Otherwise, it will try
-// to output the resp in the format ft specified.
+// the data first. It will try to output the resp in the format ft specified after
+// doing transform.
 func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatterType, single bool) (err error) {
 	var obj interface{}
 	if cd.AddonTransform == nil { // Decode the data if there is no AddonTransform.
@@ -393,9 +363,6 @@ func (cd *commandDefinition) applyExampleToCommand(cmd *cobra.Command, key *argO
 		cmd.Example = cd.Example
 		return
 	}
-	if cd.TransformedResponse == nil {
-		return
-	}
 
 	var commands []string
 	for iter := cmd; iter != nil; iter = iter.Parent() {
@@ -406,7 +373,7 @@ func (cd *commandDefinition) applyExampleToCommand(cmd *cobra.Command, key *argO
 	}
 
 	var buf bytes.Buffer
-	typeName := reflect.Indirect(reflect.ValueOf(cd.TransformedResponse)).Type().Name()
+	typeName := cd.TransformedResponse.Name()
 	dataName := strings.ToLower(strings.TrimSuffix(typeName, "Response"))
 
 	if cd.SingleObject {

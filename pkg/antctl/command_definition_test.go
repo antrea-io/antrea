@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -38,14 +39,14 @@ func TestFormat(t *testing.T) {
 		single          bool
 		transform       func(reader io.Reader, single bool) (interface{}, error)
 		rawResponseData interface{}
-		responseStruct  interface{}
+		responseStruct  reflect.Type
 		expected        string
 		formatter       formatterType
 	}{
 		{
 			name:            "StructureData-NoTransform-List",
 			rawResponseData: []struct{ Foo string }{{Foo: "foo"}},
-			responseStruct:  &struct{ Foo string }{},
+			responseStruct:  reflect.TypeOf(struct{ Foo string }{}),
 			expected:        "- foo: foo\n",
 			formatter:       yamlFormatter,
 		},
@@ -53,7 +54,7 @@ func TestFormat(t *testing.T) {
 			name:            "StructureData-NoTransform-Single",
 			single:          true,
 			rawResponseData: &struct{ Foo string }{Foo: "foo"},
-			responseStruct:  &struct{ Foo string }{},
+			responseStruct:  reflect.TypeOf(struct{ Foo string }{}),
 			expected:        "foo: foo\n",
 			formatter:       yamlFormatter,
 		},
@@ -66,7 +67,7 @@ func TestFormat(t *testing.T) {
 				return &struct{ Bar string }{Bar: foo.Foo}, err
 			},
 			rawResponseData: &struct{ Foo string }{Foo: "foo"},
-			responseStruct:  &struct{ Bar string }{},
+			responseStruct:  reflect.TypeOf(struct{ Bar string }{}),
 			expected:        "bar: foo\n",
 			formatter:       yamlFormatter,
 		},
@@ -131,7 +132,7 @@ func TestCommandDefinitionGenerateExample(t *testing.T) {
 			}
 			cmd.Use = tc.use
 
-			co := &commandDefinition{SingleObject: tc.singleton, TransformedResponse: new(FooResponse)}
+			co := &commandDefinition{SingleObject: tc.singleton, TransformedResponse: reflect.TypeOf(FooResponse{})}
 			co.applyExampleToCommand(cmd, tc.key)
 			assert.Equal(t, tc.expect, cmd.Example)
 		})

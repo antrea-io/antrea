@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -51,7 +52,7 @@ var testCommandList = &commandList{
 			Short:               "test short description ${component}",
 			Long:                "test description ${component}",
 			HandlerFactory:      new(testHandlerFactory),
-			TransformedResponse: new(testResponse),
+			TransformedResponse: reflect.TypeOf(testResponse{}),
 			Agent:               true,
 			Controller:          true,
 			GroupVersion: &schema.GroupVersion{
