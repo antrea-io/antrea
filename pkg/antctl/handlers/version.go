@@ -29,7 +29,7 @@ var _ Factory = new(Version)
 // command. It contains the version of the component the antctl server is running
 // in, either the agent or the controller.
 // This struct is not the final response struct of the version command. The version
-// command definition has a AddonTransform which will populate this struct and the
+// command definition has an AddonTransform which will populate this struct and the
 // version of antctl client to the final response.
 type ComponentVersionResponse struct {
 	AgentVersion      string `json:"agentVersion,omitempty" yaml:"agentVersion,omitempty"`

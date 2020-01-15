@@ -70,9 +70,9 @@ func (c *client) resolveKubeconfig(opt *RequestOption) (*rest.Config, error) {
 	return kubeconfig, nil
 }
 
-// localRequest issues the local request according to the RequestOption. It only cares
+// localRequest issues the local request according to the RequestOption. It only cares about
 // the groupVersion of the RequestOption which will be used to construct the request
-// URI. localRequest is basically a raw http request, none authentication and authorization
+// URI. localRequest is basically a raw http request, no authentication and authorization
 // will be done during the request. For safety concerns, it communicates with the
 // antctl server by a predefined unix domain socket. If the request succeeds, it
 // will return an io.Reader which contains the response data.
@@ -102,10 +102,10 @@ func (c *client) localRequest(opt *RequestOption) (io.Reader, error) {
 }
 
 // Request issues the appropriate request to the antctl server according to the
-// request options. If the inPod filed of the client is true, the client will do
+// request options. If the inPod field of the client is true, the client will do
 // a local request by invoking localRequest. Otherwise, it will check the kubeconfig
-// and request the antctl server by the delegation of the kubernetes API server.
-// If the request succeeded, it will returns an io.Reader which contains the response
+// and delegate the request destined to the antctl server to the kubernetes API server.
+// If the request succeeds, it will return an io.Reader which contains the response
 // data.
 func (c *client) Request(opt *RequestOption) (io.Reader, error) {
 	if c.inPod {
