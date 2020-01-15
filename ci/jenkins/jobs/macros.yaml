@@ -1,0 +1,174 @@
+- builder:
+    name: builder-job-updater
+    builders:
+      - shell: |-
+          cp /var/jenkins_home/tmp/defaults.yaml ci/jenkins/jobs
+          jenkins-jobs update -r ci/jenkins/jobs
+          rm ci/jenkins/jobs/defaults.yaml
+
+- builder:
+    name: builder-list-tests
+    builders:
+      - shell: |-
+          set +x
+
+          rm -f COMMENT_EXIST
+          rm -f body.json
+          echo "{{\"body\": \"Thanks for your PR.\\\nUnit tests and code linters are run automatically every time the PR is updated.\\\nE2e, conformance and network policy tests can only be triggered by a member of the vmware-tanzu organization. Regular contributors to the project should join the org.\\\n\\\nThe following commands are available:\\\n* \`/test-e2e\`: to trigger e2e tests.\\\n* \`/skip-e2e\`: to skip e2e tests.\\\n* \`/test-conformance\`: to trigger conformance tests.\\\n* \`/skip-conformance\`: to skip conformance tests.\\\n* \`/test-networkpolicy\`: to trigger networkpolicy tests.\\\n* \`/skip-networkpolicy\`: to skip networkpolicy tests.\\\n* \`/test-all\`: to trigger all tests.\\\n* \`/skip-all\`: to skip all tests.\\\n\\\nThese commands can only be run by members of the vmware-tanzu organization.\"}}" > body.json
+
+          B="$(cat body.json | jq .body)"
+
+          # read -r: preserve \n from the input line.
+          curl "https://api.github.com/repos/{org_repo}/issues/${{ghprbPullId}}/comments" | jq '.[].body' | while read -r LINE
+          do
+            if [ "$LINE" = "$B" ]
+            then
+              echo Found existing comment!
+              # pipeline runs in subshell, setting variable won't have effect on the parent process
+              # so use a file as a flag
+              touch COMMENT_EXIST
+              break
+            fi
+          done
+
+          if !(test -f COMMENT_EXIST)
+          then
+            echo Ask the question!
+            curl -u "${{GH_CREDENTIAL}}" -X POST -H 'Content-type: application/json' -d @body.json "https://api.github.com/repos/{org_repo}/issues/${{ghprbPullId}}/comments"
+          else
+            echo Question already asked!
+          fi
+
+- builder:
+    name: builder-pending-label
+    builders:
+      - shell: 'exit 1 # fail on purpose'
+
+- builder:
+    name: prepare-antrea
+    builders:
+      - shell: |-
+          echo ====== Cleanup Antrea Installation ======
+
+          export KUBECONFIG=/var/lib/jenkins/kube.conf
+          kubectl delete daemonset antrea-agent -n kube-system || true
+          kubectl delete -f /var/lib/jenkins/antrea.yml || true
+          kubectl delete ns antrea-test || true
+      - shell: |-
+          echo ====== Building Antrea for the Following Commit ======
+
+          git show --numstat
+
+          export GO111MODULE=on
+          export GOPATH=/var/lib/jenkins/go
+          export GOROOT=/usr/local/go
+          export GOCACHE="${WORKSPACE}/../gocache"
+          export PATH=$GOROOT/bin:$PATH
+
+          make clean
+          docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi || true
+          docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+          make
+      - shell: |-
+          echo ====== Delivering Antrea to all the Nodes ======
+
+          export KUBECONFIG=/var/lib/jenkins/kube.conf
+
+          cp -f build/yamls/*.yml /var/lib/jenkins
+          docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+
+          kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" {print $6}' | while read IP; do
+          rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:/var/lib/jenkins/antrea-ubuntu.tar
+          ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i /var/lib/jenkins/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
+          done
+
+- builder:
+    name: builder-e2e
+    builders:
+      - shell: |-
+          echo ====== Running Antrea E2E Tests ======
+
+          export GO111MODULE=on
+          export JENKINS_HOME=/var/lib/jenkins
+          export GOPATH=$JENKINS_HOME/go
+          export GOROOT=/usr/local/go
+          export GOCACHE=$JENKINS_HOME/.cache/go-build
+          export PATH=$GOROOT/bin:$PATH
+          export KUBECONFIG=$JENKINS_HOME/kube.conf
+
+          mkdir -p test/e2e/infra/vagrant/playbook/kube
+          cp -f "${JENKINS_HOME}/kube.conf" test/e2e/infra/vagrant/playbook/kube/config
+          cp -f "${JENKINS_HOME}/ssh-config" test/e2e/infra/vagrant/ssh-config
+
+          set +e
+          mkdir -p `pwd`/antrea-test-logs
+          go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs
+
+          test_rc=$?
+          set -e
+
+          tar -zcf antrea-test-logs.tar.gz antrea-test-logs
+
+          echo ====== Cleanup Antrea Installation ======
+
+          for antrea_yml in /var/lib/jenkins/*.yml
+          do
+            kubectl delete -f ${antrea_yml} --ignore-not-found=true || true
+          done
+
+          kubectl delete ns antrea-test || true
+
+          exit "$test_rc"
+
+- builder:
+    name: builder-conformance
+    builders:
+      - shell: |-
+          echo ====== Running Antrea Conformance Tests ======
+
+          export GO111MODULE=on
+          export JENKINS_HOME=/var/lib/jenkins
+          export GOPATH=$JENKINS_HOME/go
+          export GOROOT=/usr/local/go
+          export GOCACHE=$JENKINS_HOME/.cache/go-build
+          export PATH=$GOROOT/bin:$PATH
+          export KUBECONFIG=$JENKINS_HOME/kube.conf
+
+          kubectl apply -f build/yamls/antrea.yml
+          kubectl rollout restart deployment/coredns -n kube-system
+          kubectl rollout status deployment/coredns -n kube-system
+          kubectl rollout status deployment.apps/antrea-controller -n kube-system
+          kubectl rollout status daemonset/antrea-agent -n kube-system
+
+          # Run sonobouy
+          sonobuoy delete --wait
+          sonobuoy run --wait --e2e-focus "{focus_regex}" --e2e-skip "{skip_regex}" --e2e-parallel y
+          results="$(sonobuoy retrieve)"
+          echo '=== Print all results ==='
+          sonobuoy results "$results"
+          echo '=== Print failed cases if any ==='
+          sonobuoy results "$results" >> RESULT
+
+          test_rc=0
+          if grep -Fxq "Failed tests:" RESULT
+          then
+            echo "Failed cases exist."
+            test_rc=1
+          else
+            echo "All tests passed."
+          fi
+
+          # Clean up sonobouy resources
+          sonobuoy delete --wait
+          rm RESULT
+
+          echo ====== Cleanup Antrea Installation ======
+
+          for antrea_yml in /var/lib/jenkins/*.yml
+          do
+            kubectl delete -f ${{antrea_yml}} --ignore-not-found=true || true
+          done
+          
+          kubectl delete ns antrea-test || true
+
+          exit "$test_rc"
