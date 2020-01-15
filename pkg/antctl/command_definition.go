@@ -115,7 +115,7 @@ type commandDefinition struct {
 	// struct of the handler.
 	TransformedResponse interface{}
 	// AddonTransform is used to transform or update the response data received
-	// from the handler, it must returns an interface which has same type with
+	// from the handler, it must returns an interface which has same type as
 	// TransformedResponse.
 	AddonTransform func(reader io.Reader, single bool) (interface{}, error)
 }
