@@ -29,7 +29,7 @@ jobs:
     - name: Create Kind cluster
       run: |
         kind create cluster --config ci/kind/config.yml
-        kind get nodes | xargs ./hack/kind-linux.sh
+        kind get nodes | xargs ./hack/kind-fix-networking.sh
     - name: Deploy Antrea
       # kubectl is installed on the Github Ubuntu 18.04 worker
       run: |
