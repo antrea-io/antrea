@@ -87,7 +87,7 @@ type argOption struct {
 	key       bool
 }
 
-// commandDefinition defines options to create a cobra.Command for a antctl client.
+// commandDefinition defines options to create a cobra.Command for an antctl client.
 type commandDefinition struct {
 	// Cobra related
 	Use     string // The lower value of it will be used as the endpoint path, like: <API group>/<lower(Use)>.
