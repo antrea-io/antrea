@@ -23,7 +23,7 @@ import (
 )
 
 func skipIfProviderIs(t *testing.T, name string, reason string) {
-	if testOptions.providerName == "kind" {
+	if testOptions.providerName == name {
 		t.Skipf("Skipping test for the '%s' provider: %s", name, reason)
 	}
 }
