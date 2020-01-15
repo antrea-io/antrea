@@ -114,9 +114,7 @@ func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
 // TestPodConnectivityDifferentNodes checks that Pods running on different Nodes can reach each
 // other, by creating multiple Pods across distinct Nodes and having them ping each other.
 func TestPodConnectivityDifferentNodes(t *testing.T) {
-	if clusterInfo.numNodes < 2 {
-		t.Skipf("Skipping test as it requires 2 different nodes")
-	}
+	skipIfNumNodesLessThan(t, 2)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -157,9 +155,8 @@ func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
 // TestPodConnectivityAfterAntreaRestart checks that restarting antrea-agent does not create
 // connectivity issues between Pods.
 func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping TestPodConnectivityAfterAntreaRestart in short mode")
-	}
+	// See https://github.com/vmware-tanzu/antrea/issues/244
+	skipIfProviderIs(t, "kind", "test may cause subsequent tests to fail in Kind clusters")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -181,9 +178,7 @@ func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
 // replaying flows. More precisely this tests check that Pod connectivity is not broken after a
 // restart.
 func TestOVSRestart(t *testing.T) {
-	if testOptions.providerName == "kind" {
-		t.Skipf("Skipping test for the KIND provider as stopping OVS daemons create connectivity issues")
-	}
+	skipIfProviderIs(t, "kind", "stopping OVS daemons create connectivity issues")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

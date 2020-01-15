@@ -226,9 +226,7 @@ func TestIPAMRestart(t *testing.T) {
 // gateway routes is updated correctly, i.e. stale routes (for Nodes which are no longer in the
 // cluster) are removed and missing routes are added.
 func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
-	if clusterInfo.numNodes < 2 {
-		t.Skipf("Skipping test as it requires 2 different nodes")
-	}
+	skipIfNumNodesLessThan(t, 2)
 
 	data, err := setupTest(t)
 	if err != nil {
