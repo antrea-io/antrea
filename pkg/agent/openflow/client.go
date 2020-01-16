@@ -17,7 +17,6 @@ package openflow
 import (
 	"fmt"
 	"net"
-	"time"
 
 	"k8s.io/klog"
 
@@ -32,7 +31,9 @@ const maxRetryForOFSwitch = 5
 type Client interface {
 	// Initialize sets up all basic flows on the specific OVS bridge. It returns a channel which
 	// is used to notify the caller in case of a reconnection, in which case ReplayFlows should
-	// be called to ensure that the set of OVS flows is correct.
+	// be called to ensure that the set of OVS flows is correct. All flows programmed in the
+	// switch which match the current round number will be deleted before any new flow is
+	// installed.
 	Initialize(roundInfo types.RoundInfo) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
@@ -103,6 +104,11 @@ type Client interface {
 	// to replay as many flows as possible, and will log an error when a flow cannot be
 	// installed.
 	ReplayFlows()
+
+	// DeleteStaleFlows deletes all flows from the previous round which are no longer needed. It
+	// should be called by the agent after all required flows have been installed / updated with
+	// the new round number.
+	DeleteStaleFlows() error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -267,25 +273,15 @@ func (c *client) Initialize(roundInfo types.RoundInfo) (<-chan struct{}, error) 
 	// Ignore first notification, it is not a "reconnection".
 	<-connCh
 
+	c.roundInfo = roundInfo
 	c.cookieAllocator = cookie.NewAllocator(roundInfo.RoundNum)
 
-	deleteStaleFlowsAfterConvergence := func() {
-		// Delete stale flows from previous round. We need to wait long enough to ensure
-		// that all the flow which are still required have received an updated cookie (with
-		// the new round number), otherwise we would disrupt the dataplane. Unfortunately,
-		// the time required for convergence is large and there is no simple way to
-		// determine when is a right time to perform the cleanup task.
-		// Additionally, with the current code, if the agent is restarted before having a
-		// chance to delete stale flows, these flows will never be deleted.
-		time.Sleep(10 * time.Second)
-		klog.Infof("Deleting stale flows from previous round")
-		cookieID, cookieMask := cookie.CookieMaskForRound(*roundInfo.PrevRoundNum)
-		if err := c.bridge.DeleteFlowsByCookie(cookieID, cookieMask); err != nil {
-			klog.Errorf("Error when deleting stale flows from previous round: %v", err)
-		}
-	}
-	if roundInfo.PrevRoundNum != nil {
-		go deleteStaleFlowsAfterConvergence()
+	// In the normal case, there should be no existing flows with the current round number. This
+	// is needed in case the agent was restarted before we had a chance to increment the round
+	// number (incrementing the round number happens once we are satisfied that stale flows from
+	// the previous round have been deleted).
+	if err := c.deleteFlowsByRoundNum(roundInfo.RoundNum); err != nil {
+		return nil, fmt.Errorf("error when deleting exiting flows for current round number: %v", err)
 	}
 
 	return connCh, c.initialize()
@@ -332,4 +328,17 @@ func (c *client) ReplayFlows() {
 	c.podFlowCache.Range(installCachedFlows)
 
 	c.replayPolicyFlows()
+}
+
+func (c *client) deleteFlowsByRoundNum(roundNum uint64) error {
+	cookieID, cookieMask := cookie.CookieMaskForRound(roundNum)
+	return c.bridge.DeleteFlowsByCookie(cookieID, cookieMask)
+}
+
+func (c *client) DeleteStaleFlows() error {
+	if c.roundInfo.PrevRoundNum == nil {
+		klog.V(2).Info("Previous round number is unset, no flows to delete")
+		return nil
+	}
+	return c.deleteFlowsByRoundNum(*c.roundInfo.PrevRoundNum)
 }

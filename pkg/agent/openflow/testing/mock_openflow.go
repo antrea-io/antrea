@@ -78,6 +78,20 @@ func (mr *MockClientMockRecorder) DeletePolicyRuleAddress(arg0, arg1, arg2 inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).DeletePolicyRuleAddress), arg0, arg1, arg2)
 }
 
+// DeleteStaleFlows mocks base method
+func (m *MockClient) DeleteStaleFlows() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteStaleFlows")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteStaleFlows indicates an expected call of DeleteStaleFlows
+func (mr *MockClientMockRecorder) DeleteStaleFlows() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteStaleFlows", reflect.TypeOf((*MockClient)(nil).DeleteStaleFlows))
+}
+
 // Disconnect mocks base method
 func (m *MockClient) Disconnect() error {
 	m.ctrl.T.Helper()

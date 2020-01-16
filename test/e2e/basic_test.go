@@ -458,10 +458,12 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 		}
 		t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
 		return antreaPodName
-	}()
+	}
 
-	roundNumber := func() uint64 {
-		roundNum, err := getRoundNumber(data, antreaPodName)
+	podName := antreaPodName()
+
+	roundNumber := func(podName string) uint64 {
+		roundNum, err := getRoundNumber(data, podName)
 		if err != nil {
 			t.Fatalf("Unable to get agent round number: %v", err)
 		}
@@ -469,17 +471,45 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 	}
 
 	// get current round number
-	roundNum1 := roundNumber()
+	roundNum1 := roundNumber(podName)
 	t.Logf("Current round number is %d", roundNum1)
-	cookieID, cookieMask := cookie.CookieMaskForRound(roundNum1)
+
+	t.Logf("Restarting agent and waiting for new round number")
+	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
+		t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
+	}
+
+	podName = antreaPodName() // pod name has changed
+
+	waitForNextRoundNum := func(roundNum uint64) uint64 {
+		var nextRoundNum uint64
+		if err := wait.Poll(1*time.Second, defaultTimeout, func() (bool, error) {
+			nextRoundNum = roundNumber(podName)
+			if nextRoundNum != roundNum {
+				return true, nil
+			}
+			return false, nil
+		}); err != nil {
+			t.Fatalf("Unable to retrieve new round number: %v", err)
+		}
+		t.Logf("New round number is %d", nextRoundNum)
+		return nextRoundNum
+	}
+
+	roundNum2 := waitForNextRoundNum(roundNum1)
+
+	// at this time, we now that stale flows have been cleaned-up and that the new round number
+	// has been persisted and will not change again until the next restart
+
+	cookieID, cookieMask := cookie.CookieMaskForRound(roundNum2)
 
 	// add dummy flow with current round number
 	addFlow := func() {
 		cmd := []string{
 			"ovs-ofctl", "add-flow", defaultBridgeName,
-			fmt.Sprintf("table=0,cookie=%#x,priority=300,actions=drop", cookieID),
+			fmt.Sprintf("table=0,cookie=%#x,priority=0,actions=drop", cookieID),
 		}
-		_, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+		_, stderr, err := data.runCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
 		if err != nil {
 			t.Fatalf("error when adding flow: <%v>, err: <%v>", stderr, err)
 		}
@@ -487,42 +517,26 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 	t.Logf("Adding dummy flow")
 	addFlow()
 
-	delFlow := func() {
-		cmd := []string{
-			"ovs-ofctl", "del-flows", defaultBridgeName,
-			fmt.Sprintf("table=0,cookie=%#x/%#x", cookieID, cookieMask),
-		}
-		_, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
-		if err != nil {
-			t.Errorf("error when deleting flow: <%v>, err: <%v>", stderr, err)
-		}
-	}
-	// ensure proper cleanup in case the test fails
-	defer delFlow()
-
 	// killAgent stops the docker container, which should be re-created immediately by kubectl
 	killAgent := func() {
 		cmd := []string{"kill", "1"}
 		// ignore potential error as it is possible for the container to exit with code 137
 		// if the container does not restart properly, we will know when we try to get the
 		// new round number below.
-		data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+		data.runCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
 	}
 	t.Logf("Restarting antrea-agent container on Node %s", nodeName)
 	killAgent()
+	defer func() {
+		// "cleanup": delete agent to ensure the restart count goes back to 0
+		// this will also take care of deleting the flow in case of test failure
+		if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
+			t.Logf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
+		}
+	}()
 
 	// validate new round number
-	var roundNum2 uint64
-	if err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (bool, error) {
-		roundNum2 = roundNumber()
-		if roundNum2 != roundNum1 {
-			return true, nil
-		}
-		return false, nil
-	}); err != nil {
-		t.Fatalf("Unable to retrieve new round number: %v", err)
-	}
-	t.Logf("New round number is %d", roundNum2)
+	waitForNextRoundNum(roundNum2)
 
 	// check that the dummy flow has been removed
 	// checkFlow returns true if the flow is present
@@ -531,7 +545,7 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 			"ovs-ofctl", "dump-flows", defaultBridgeName,
 			fmt.Sprintf("table=0,cookie=%#x/%#x", cookieID, cookieMask),
 		}
-		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
 		if err != nil {
 			t.Fatalf("error when dumping flows: <%v>, err: <%v>", stderr, err)
 		}
@@ -539,11 +553,15 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 		return len(flows) > 1
 	}
 
-	t.Logf("Checking that dummy flow is deleted within %v", defaultTimeout)
-	if err := wait.Poll(1*time.Second, defaultTimeout, func() (bool, error) {
+	smallTimeout := 5 * time.Second
+	t.Logf("Checking that dummy flow is deleted within %v", smallTimeout)
+	// In theory there should be no need to poll here because the agent only persists the new
+	// round number after stale flows have been deleted, but it is probably better not to make
+	// this assumption in an e2e test.
+	if err := wait.PollImmediate(1*time.Second, smallTimeout, func() (bool, error) {
 		return !checkFlow(), nil
 
 	}); err != nil {
-		t.Fatalf("Flow was still present after timeout")
+		t.Errorf("Flow was still present after timeout")
 	}
 }
