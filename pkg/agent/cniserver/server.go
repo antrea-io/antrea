@@ -342,14 +342,11 @@ func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8
 		return s.checkInterfaceFailureResponse(err), nil
 	}
 
-	return &cnipb.CniCmdResponse{
-		CniResult: []byte(""),
-	}, nil
+	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
 }
 
-func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (
-	*cnipb.CniCmdResponse, error) {
-	klog.Infof("Receive CmdAdd request %v", request)
+func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*cnipb.CniCmdResponse, error) {
+	klog.Infof("Received CmdAdd request %v", request)
 	cniConfig, response := s.checkRequestMessage(request)
 	if response != nil {
 		return response, nil
@@ -386,7 +383,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (
 	// Setup pod interfaces and connect to ovs bridge
 	podName := string(cniConfig.K8S_POD_NAME)
 	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
-	if err = s.podConfigurator.configureInterface(
+	if err = s.podConfigurator.configureInterfaces(
 		podName,
 		podNamespace,
 		cniConfig.ContainerId,
@@ -395,7 +392,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (
 		cniConfig.MTU,
 		result,
 	); err != nil {
-		klog.Errorf("Failed to configure container %s interface: %v", cniConfig.ContainerId, err)
+		klog.Errorf("Failed to configure interfaces for container %s: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
 
@@ -405,17 +402,15 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (
 	result.DNS = cniConfig.DNS
 	var resultBytes bytes.Buffer
 	result.PrintTo(&resultBytes)
-	klog.Infof("CmdAdd request success")
+	klog.Infof("CmdAdd succeeded")
 	// mark success as true to avoid rollback
 	success = true
-	return &cnipb.CniCmdResponse{
-		CniResult: resultBytes.Bytes(),
-	}, nil
+	return &cnipb.CniCmdResponse{CniResult: resultBytes.Bytes()}, nil
 }
 
 func (s *CNIServer) CmdDel(ctx context.Context, request *cnipb.CniCmdRequest) (
 	*cnipb.CniCmdResponse, error) {
-	klog.Infof("Receive CmdDel request %v", request)
+	klog.Infof("Received CmdDel request %v", request)
 	cniConfig, response := s.checkRequestMessage(request)
 	if response != nil {
 		return response, nil
@@ -433,24 +428,16 @@ func (s *CNIServer) CmdDel(ctx context.Context, request *cnipb.CniCmdRequest) (
 	// Remove host interface and OVS configuration
 	podName := string(cniConfig.K8S_POD_NAME)
 	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
-	netNS := s.hostNetNsPath(cniConfig.Netns)
-	if err := s.podConfigurator.removeInterfaces(
-		podName,
-		podNamespace,
-		cniConfig.ContainerId,
-		netNS,
-		cniConfig.Ifname); err != nil {
-		klog.Errorf("Failed to remove container %s interface configuration: %v", cniConfig.ContainerId, err)
+	if err := s.podConfigurator.removeInterfaces(podName, podNamespace, cniConfig.ContainerId); err != nil {
+		klog.Errorf("Failed to remove interfaces for container %s: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
-	return &cnipb.CniCmdResponse{
-		CniResult: []byte(""),
-	}, nil
+	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
 }
 
 func (s *CNIServer) CmdCheck(ctx context.Context, request *cnipb.CniCmdRequest) (
 	*cnipb.CniCmdResponse, error) {
-	klog.Infof("Receive CmdCheck request %v", request)
+	klog.Infof("Received CmdCheck request %v", request)
 	cniConfig, response := s.checkRequestMessage(request)
 	if response != nil {
 		return response, nil
@@ -473,9 +460,7 @@ func (s *CNIServer) CmdCheck(ctx context.Context, request *cnipb.CniCmdRequest) 
 		}
 	}
 	klog.Info("Succeed to check network configuration")
-	return &cnipb.CniCmdResponse{
-		CniResult: []byte(""),
-	}, nil
+	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
 }
 
 func New(

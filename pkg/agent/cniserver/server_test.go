@@ -132,7 +132,7 @@ func TestIPAMService(t *testing.T) {
 	t.Run("Error on ADD", func(t *testing.T) {
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
 		// A rollback will be tried if add failed.
-		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(1)
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM del error")).Times(1)
 		response, err := cniServer.CmdAdd(cxt, &requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
@@ -373,7 +373,7 @@ func TestRemoveInterface(t *testing.T) {
 		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
 		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(nil)
 
-		err := podConfigurator.removeInterfaces(podName, testPodNamespace, containerID, cniConfig.Netns, cniConfig.Ifname)
+		err := podConfigurator.removeInterfaces(podName, testPodNamespace, containerID)
 		require.Nil(t, err, "Failed to remove interface")
 		_, found := ifaceStore.GetContainerInterface(podName, testPodNamespace)
 		assert.False(t, found, "Interface should not be in the local cache anymore")
@@ -386,7 +386,7 @@ func TestRemoveInterface(t *testing.T) {
 		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(ovsconfig.NewTransactionError(fmt.Errorf("error while deleting OVS port"), true))
 		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
 
-		err := podConfigurator.removeInterfaces(podName, testPodNamespace, containerID, "", cniConfig.Ifname)
+		err := podConfigurator.removeInterfaces(podName, testPodNamespace, containerID)
 		require.NotNil(t, err, "Expected interface remove to fail")
 		_, found := ifaceStore.GetContainerInterface(podName, testPodNamespace)
 		assert.True(t, found, "Interface should still be in local cache because of port deletion failure")
@@ -398,7 +398,7 @@ func TestRemoveInterface(t *testing.T) {
 
 		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(fmt.Errorf("failed to delete openflow entry"))
 
-		err := podConfigurator.removeInterfaces(podName, testPodNamespace, containerID, "", cniConfig.Ifname)
+		err := podConfigurator.removeInterfaces(podName, testPodNamespace, containerID)
 		require.NotNil(t, err, "Expected interface remove to fail")
 		_, found := ifaceStore.GetContainerInterface(podName, testPodNamespace)
 		assert.True(t, found, "Interface should still be in local cache because of flow deletion failure")

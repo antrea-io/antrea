@@ -445,8 +445,17 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 
 	// Execute cmdDEL on the plugin.
 	err = tester.testNS.Do(func(ns.NetNS) error {
-		_, err := tester.server.CmdDel(tester.ctx, tester.request)
-		return err
+		resp, err := tester.server.CmdDel(tester.ctx, tester.request)
+		if err != nil {
+			return err
+		}
+		if resp.Error != nil {
+			return &types.Error{
+				Code: uint(resp.Error.Code),
+				Msg:  resp.Error.Message,
+			}
+		}
+		return nil
 	})
 	testRequire.Nil(err)
 
@@ -491,7 +500,13 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 
 	targetNS, err := testutils.NewNS()
 	testRequire.Nil(err)
-	defer targetNS.Close()
+	targetNSClosed := false
+	defer func() {
+		if !targetNSClosed {
+			targetNS.Close()
+			testutils.UnmountNS(targetNS)
+		}
+	}()
 	tester.setNS(testNS, targetNS)
 
 	ipamResult := ipamtest.GenerateIPAMResult("0.4.0", tc.addresses, tc.routes, tc.dns)
@@ -529,6 +544,15 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	ovsServiceMock.EXPECT().DeletePort(ovsPortUUID).Return(nil).AnyTimes()
 	ofServiceMock.EXPECT().UninstallPodFlows(ovsPortname).Return(nil)
 	tester.cmdDelTest(tc, dataDir)
+
+	// DEL must complete without error when called multiple times.
+	tester.cmdDelTest(tc, dataDir)
+
+	// DEL must complete without error when netns is missing.
+	targetNS.Close()
+	testutils.UnmountNS(targetNS)
+	targetNSClosed = true
+	tester.cmdDelTest(tc, dataDir)
 }
 
 func TestAntreaServerFunc(t *testing.T) {
@@ -560,6 +584,7 @@ func TestAntreaServerFunc(t *testing.T) {
 	teardown := func() {
 		assert.Nil(t, os.RemoveAll(dataDir))
 		assert.Nil(t, originalNS.Close())
+		assert.Nil(t, testutils.UnmountNS(originalNS))
 	}
 
 	testCases := []testCase{
