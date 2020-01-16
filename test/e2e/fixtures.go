@@ -22,6 +22,18 @@ import (
 	"time"
 )
 
+func skipIfProviderIs(t *testing.T, name string, reason string) {
+	if testOptions.providerName == name {
+		t.Skipf("Skipping test for the '%s' provider: %s", name, reason)
+	}
+}
+
+func skipIfNumNodesLessThan(t *testing.T, required int) {
+	if clusterInfo.numNodes < required {
+		t.Skipf("Skipping test as it requires %d different Nodes but cluster only has %d", required, clusterInfo.numNodes)
+	}
+}
+
 func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	tb.Logf("Applying Antrea YAML")
 	if err := data.deployAntrea(); err != nil {

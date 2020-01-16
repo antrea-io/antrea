@@ -27,12 +27,8 @@ import (
 // the IPSec tunnel, by creating multiple Pods across distinct Nodes and having
 // them ping each other.
 func TestIPSecTunnelConnectivity(t *testing.T) {
-	if testOptions.providerName == "kind" {
-		t.Skipf("Skipping test for the KIND provider as IPSec tunnel does not work with KIND")
-	}
-	if clusterInfo.numNodes < 2 {
-		t.Skipf("Skipping test as it requires 2 different nodes")
-	}
+	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
+	skipIfNumNodesLessThan(t, 2)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -53,12 +49,8 @@ func TestIPSecTunnelConnectivity(t *testing.T) {
 // non-encrypted mode, the previously created tunnel ports are deleted
 // correctly.
 func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
-	if testOptions.providerName == "kind" {
-		t.Skipf("Skipping test for the KIND provider as IPSec tunnel does not work with KIND")
-	}
-	if clusterInfo.numNodes < 2 {
-		t.Skipf("Skipping test as it requires 2 different nodes")
-	}
+	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
+	skipIfNumNodesLessThan(t, 2)
 
 	data, err := setupTest(t)
 	if err != nil {
