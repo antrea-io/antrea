@@ -33,9 +33,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
-type monitor interface {
-	Run(stopCh <-chan struct{})
-}
+var (
+	_ ControllerQuerier = new(controllerMonitor)
+	_ AgentQuerier      = new(agentMonitor)
+)
 
 type controllerMonitor struct {
 	client       clientset.Interface
@@ -56,7 +57,7 @@ type agentMonitor struct {
 	networkPolicyInfoQuerier AgentNetworkPolicyInfoQuerier
 }
 
-func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers.NodeInformer, networkPolicyInfoQuerier ControllerNetworkPolicyInfoQuerier) monitor {
+func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers.NodeInformer, networkPolicyInfoQuerier ControllerNetworkPolicyInfoQuerier) *controllerMonitor {
 	m := &controllerMonitor{client: client, nodeInformer: nodeInformer, nodeListerSynced: nodeInformer.Informer().HasSynced, networkPolicyInfoQuerier: networkPolicyInfoQuerier}
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    nil,
@@ -76,7 +77,7 @@ func NewAgentMonitor(
 	ofClient openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	networkPolicyInfoQuerier AgentNetworkPolicyInfoQuerier,
-) monitor {
+) *agentMonitor {
 	return &agentMonitor{client: client, ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient, networkPolicyInfoQuerier: networkPolicyInfoQuerier}
 }
 

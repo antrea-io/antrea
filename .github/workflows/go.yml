@@ -58,6 +58,22 @@ jobs:
     - name: Build Antrea binaries
       run: make bin
 
+  antctl:
+    name: Build antctl for macOS, Linux and Windows
+    runs-on: [ubuntu-18.04]
+    steps:
+
+      - name: Set up Go 1.13
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.13
+
+      - name: Check-out code
+        uses: actions/checkout@v1
+
+      - name: Build antctl binaries
+        run: make antctl
+
 
   codegen:
     name: Check code generation
