@@ -1,5 +1,6 @@
 resources:
 - crds.yml
+- antctl.yml
 - controller-rbac.yml
 - controller.yml
 - agent-rbac.yml

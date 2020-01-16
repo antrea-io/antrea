@@ -43,6 +43,14 @@ kind: ServiceAccount
 metadata:
   labels:
     app: antrea
+  name: antctl
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: antrea
   name: antrea-agent
   namespace: kube-system
 ---
@@ -53,6 +61,19 @@ metadata:
     app: antrea
   name: antrea-controller
   namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
+  name: antctl
+rules:
+- nonResourceURLs:
+  - /apis/system.antrea.tanzu.vmware.com
+  - /apis/system.antrea.tanzu.vmware.com/*
+  verbs:
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -143,6 +164,22 @@ rules:
   - subjectaccessreviews
   verbs:
   - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: antctl
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antctl
+subjects:
+- kind: ServiceAccount
+  name: antctl
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -335,6 +372,22 @@ spec:
       - configMap:
           name: antrea-config-k5f958t9km
         name: antrea-config
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    app: antrea
+  name: v1beta1.system.antrea.tanzu.vmware.com
+spec:
+  group: system.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: antrea
+    namespace: kube-system
+  version: v1beta1
+  versionPriority: 100
 ---
 apiVersion: apps/v1
 kind: DaemonSet

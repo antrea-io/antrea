@@ -1,3 +1,4 @@
+SHELL			:= /bin/bash
 # go options
 GO              ?= go
 LDFLAGS         :=
@@ -74,6 +75,19 @@ docker-tidy: $(DOCKER_CACHE)
 .PHONY: .linux-bin
 .linux-bin:
 	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
+
+# TODO: strip binary when building releases
+ANTCTL_BINARIES := antctl-darwin antctl-linux antctl-windows
+$(ANTCTL_BINARIES): antctl-%:
+	@GOOS=$* $(GO) build -o $(BINDIR)/$@ $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
+	@if [[ $@ != *windows ]]; then \
+	  chmod 0755 $(BINDIR)/$@; \
+	else \
+	  mv $(BINDIR)/$@ $(BINDIR)/$@.exe; \
+	fi
+
+.PHONY: antctl
+antctl: $(ANTCTL_BINARIES)
 
 .PHONY: .linux-test-unit
 .linux-test-unit:
