@@ -32,7 +32,10 @@ func TestSetupRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create a network namespace")
 	}
-	defer testNS.Close()
+	defer func() {
+		testNS.Close()
+		testutils.UnmountNS(testNS)
+	}()
 
 	if err := testNS.Do(func(ns ns.NetNS) error {
 		client, err := iptables.NewClient("gw0")
