@@ -197,7 +197,7 @@ func (ctx *conjMatchFlowContext) installOrUpdateFlow(actions []*conjunctiveActio
 		// Build the Openflow entry. actions here should not be empty for either add or update case.
 		flow := ctx.client.conjunctiveMatchFlow(ctx.tableID, ctx.matchKey, ctx.matchValue, actions...)
 
-		if err := flow.Add(); err != nil {
+		if err := ctx.client.flowOperations.Add(flow); err != nil {
 			return err
 		}
 		ctx.flow = flow
@@ -211,7 +211,7 @@ func (ctx *conjMatchFlowContext) installOrUpdateFlow(actions []*conjunctiveActio
 		flowBuilder.Action().Conjunction(act.conjID, act.clauseID, act.nClause)
 	}
 	newFlow := flowBuilder.Done()
-	if err := newFlow.Modify(); err != nil {
+	if err := ctx.client.flowOperations.Modify(newFlow); err != nil {
 		return err
 	}
 	ctx.flow = newFlow
@@ -346,7 +346,7 @@ func (c *clause) addConjunctiveMatchFlow(client *client, match *conjunctiveMatch
 		// Install the default drop flow entry if dropTable is not nil.
 		if c.dropTable != nil && context.dropFlow == nil {
 			dropFlow := context.client.defaultDropFlow(c.dropTable.GetID(), match.matchKey, match.matchValue)
-			if err := dropFlow.Add(); err != nil {
+			if err := client.flowOperations.Add(dropFlow); err != nil {
 				return err
 			}
 			context.dropFlow = dropFlow
@@ -595,11 +595,8 @@ func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
 				actionFlows = append(actionFlows, flow)
 			}
 		}
-		for _, flow := range actionFlows {
-			err := flow.Add()
-			if err != nil {
-				return err
-			}
+		if err := c.flowOperations.AddAll(actionFlows); err != nil {
+			return nil
 		}
 		conj.actionFlows = actionFlows
 	}

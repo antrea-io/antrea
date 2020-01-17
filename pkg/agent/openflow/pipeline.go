@@ -96,6 +96,8 @@ type FlowOperations interface {
 	Add(flow binding.Flow) error
 	Modify(flow binding.Flow) error
 	Delete(flow binding.Flow) error
+	AddAll(flows []binding.Flow) error
+	DeleteAll(flows []binding.Flow) error
 }
 
 type flowCache map[string]binding.Flow
@@ -127,15 +129,23 @@ type client struct {
 }
 
 func (c *client) Add(flow binding.Flow) error {
-	return flow.Add()
+	return c.bridge.AddFlowsInBundle([]binding.Flow{flow}, nil, nil)
 }
 
 func (c *client) Modify(flow binding.Flow) error {
-	return flow.Modify()
+	return c.bridge.AddFlowsInBundle(nil, []binding.Flow{flow}, nil)
 }
 
 func (c *client) Delete(flow binding.Flow) error {
-	return flow.Delete()
+	return c.bridge.AddFlowsInBundle(nil, nil, []binding.Flow{flow})
+}
+
+func (c *client) AddAll(flows []binding.Flow) error {
+	return c.bridge.AddFlowsInBundle(flows, nil, nil)
+}
+
+func (c *client) DeleteAll(flows []binding.Flow) error {
+	return c.bridge.AddFlowsInBundle(nil, nil, flows)
 }
 
 // defaultFlows generates the default flows of all tables.

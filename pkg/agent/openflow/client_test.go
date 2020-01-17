@@ -41,8 +41,12 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	peerNodeIP := net.ParseIP("192.168.1.1")
 	err := ofClient.InstallNodeFlows(hostName, gwMAC, IP, *IPNet, peerNodeIP, types.DefaultTunOFPort)
 	client := ofClient.(*client)
-	fCacheI, _ := client.nodeFlowCache.Load(hostName)
-	return len(fCacheI.(flowCache)), err
+	fCacheI, ok := client.nodeFlowCache.Load(hostName)
+	if ok {
+		return len(fCacheI.(flowCache)), err
+	} else {
+		return 0, err
+	}
 }
 
 func installPodFlows(ofClient Client, cacheKey string) (int, error) {
@@ -53,22 +57,27 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	ofPort := uint32(10)
 	err := ofClient.InstallPodFlows(containerID, podIP, podMAC, gwMAC, ofPort)
 	client := ofClient.(*client)
-	fCacheI, _ := client.podFlowCache.Load(containerID)
-	return len(fCacheI.(flowCache)), err
+	fCacheI, ok := client.podFlowCache.Load(containerID)
+	if ok {
+		return len(fCacheI.(flowCache)), err
+	} else {
+		return 0, err
+	}
 }
 
 // TestIdempotentFlowInstallation checks that InstallNodeFlows and InstallPodFlows are idempotent.
 func TestIdempotentFlowInstallation(t *testing.T) {
 	testCases := []struct {
-		name        string
-		cacheKey    string
-		numAddCalls int
-		installFn   func(ofClient Client, cacheKey string) (int, error)
+		name      string
+		cacheKey  string
+		numFlows  int
+		installFn func(ofClient Client, cacheKey string) (int, error)
 	}{
 		{"NodeFlows", "host", 2, installNodeFlows},
 		{"PodFlows", "aaaa-bbbb-cccc-dddd", 5, installPodFlows},
 	}
 
+	// Check the flows are installed only once even though InstallNodeFlows/InstallPodFlows is called multiple times.
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
@@ -80,9 +89,11 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.flowOperations = m
 
-			m.EXPECT().Add(gomock.Any()).Return(nil).Times(tc.numAddCalls)
+			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+			// Installing the flows should succeed, and all the flows should be added into the cache.
 			numCached1, err := tc.installFn(ofClient, tc.cacheKey)
 			require.Nil(t, err, "Error when installing Node flows")
+			assert.Equal(t, tc.numFlows, numCached1)
 
 			// Installing the same flows again must not return an error and should not
 			// add additional flows to the cache.
@@ -92,9 +103,38 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			assert.Equal(t, numCached1, numCached2)
 		})
 	}
+
+	// Check the flows could be installed successfully with retry, and all the flows are added into the flow cache only once.
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			m := oftest.NewMockFlowOperations(ctrl)
+			ofClient := NewClient(bridgeName)
+			client := ofClient.(*client)
+			client.cookieAllocator = cookie.NewAllocator(0)
+			client.flowOperations = m
+
+			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
+			m.EXPECT().AddAll(gomock.Any()).Return(nil).After(errorCall)
+
+			// Installing the flows failed at the first time, and no flow cache is created.
+			numCached1, err := tc.installFn(ofClient, tc.cacheKey)
+			require.NotNil(t, err, "Installing flows in bundle is expected to fail")
+			assert.Equal(t, 0, numCached1)
+
+			// Installing the same flows successfully at the second time, and add flows to the cache.
+			numCached2, err := tc.installFn(ofClient, tc.cacheKey)
+			require.Nil(t, err, "Error when installing Node flows again")
+
+			assert.Equal(t, tc.numFlows, numCached2)
+		})
+	}
 }
 
-func TestFlowInstallationPartialSuccess(t *testing.T) {
+// TestFlowInstallationFailed checks that no flows are installed into the flow cache if InstallNodeFlows and InstallPodFlows fail.
+func TestFlowInstallationFailed(t *testing.T) {
 	testCases := []struct {
 		name        string
 		cacheKey    string
@@ -116,21 +156,15 @@ func TestFlowInstallationPartialSuccess(t *testing.T) {
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.flowOperations = m
 
-			// We generate an error for the last Add call.
-			successfulCalls := m.EXPECT().Add(gomock.Any()).Return(nil).Times(tc.numAddCalls - 1)
-			errorCall := m.EXPECT().Add(gomock.Any()).Return(errors.New("OF error")).After(successfulCalls)
+			// We generate an error for AddAll call.
+			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
 
 			var err error
 			var numCached int
 
 			numCached, err = tc.installFn(ofClient, tc.cacheKey)
 			require.NotNil(t, err, "Installing flows is expected to fail")
-			assert.Equal(t, tc.numAddCalls-1, numCached)
-
-			m.EXPECT().Add(gomock.Any()).Return(nil).After(errorCall).Times(1)
-			numCached, err = tc.installFn(ofClient, tc.cacheKey)
-			require.Nil(t, err, "Error when installing Node flows")
-			assert.Equal(t, tc.numAddCalls, numCached)
+			assert.Equal(t, 0, numCached)
 		})
 	}
 }
@@ -158,7 +192,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls
 			timeoutCh := make(chan struct{})
 			rendezvousCh := make(chan struct{})
-			m.EXPECT().Add(gomock.Any()).DoAndReturn(func(args ...interface{}) error {
+			m.EXPECT().AddAll(gomock.Any()).DoAndReturn(func(args ...interface{}) error {
 				select {
 				case <-timeoutCh:
 				case <-rendezvousCh:

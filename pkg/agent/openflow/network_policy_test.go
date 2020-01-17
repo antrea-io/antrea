@@ -17,6 +17,7 @@ import (
 	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	mocks "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
@@ -315,5 +316,10 @@ func prepareClient(ctrl *gomock.Controller) *client {
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 	}
 	c.cookieAllocator = cookie.NewAllocator(0)
+	m := oftest.NewMockFlowOperations(ctrl)
+	m.EXPECT().Add(gomock.Any()).Return(nil).AnyTimes()
+	m.EXPECT().Modify(gomock.Any()).Return(nil).AnyTimes()
+	m.EXPECT().AddAll(gomock.Any()).Return(nil).AnyTimes()
+	c.flowOperations = m
 	return c
 }
