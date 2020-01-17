@@ -66,6 +66,9 @@ type Bridge interface {
 	DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates
 	// DeleteFlowsByCookie removes Openflow entries from OFSwitch. The removed Openflow entries use the specific CookieID.
 	DeleteFlowsByCookie(cookieID, cookieMask uint64) error
+	// AddFlowsInBundle syncs multiple Openflow entries in a single transaction. This operation could add new flows in
+	// "addFlows", modify flows in "modFlows", and remove flows in "delFlows" in the same bundle.
+	AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows []Flow) error
 	// Connect initiates connection to the OFSwitch. It will block until the connection is established. connectCh is used to
 	// send notification whenever the switch is connected or reconnected.
 	Connect(maxRetrySec int, connectCh chan struct{}) error

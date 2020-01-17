@@ -310,6 +310,20 @@ func (mr *MockFlowOperationsMockRecorder) Add(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockFlowOperations)(nil).Add), arg0)
 }
 
+// AddAll mocks base method
+func (m *MockFlowOperations) AddAll(arg0 []openflow.Flow) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddAll", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddAll indicates an expected call of AddAll
+func (mr *MockFlowOperationsMockRecorder) AddAll(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAll", reflect.TypeOf((*MockFlowOperations)(nil).AddAll), arg0)
+}
+
 // Delete mocks base method
 func (m *MockFlowOperations) Delete(arg0 openflow.Flow) error {
 	m.ctrl.T.Helper()
@@ -322,6 +336,20 @@ func (m *MockFlowOperations) Delete(arg0 openflow.Flow) error {
 func (mr *MockFlowOperationsMockRecorder) Delete(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockFlowOperations)(nil).Delete), arg0)
+}
+
+// DeleteAll mocks base method
+func (m *MockFlowOperations) DeleteAll(arg0 []openflow.Flow) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAll", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAll indicates an expected call of DeleteAll
+func (mr *MockFlowOperationsMockRecorder) DeleteAll(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAll", reflect.TypeOf((*MockFlowOperations)(nil).DeleteAll), arg0)
 }
 
 // Modify mocks base method
