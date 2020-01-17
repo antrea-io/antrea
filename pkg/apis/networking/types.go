@@ -16,6 +16,7 @@ package networking
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -24,7 +25,7 @@ type AppliedToGroup struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
 	// Pods is a list of Pods selected by this group.
-	Pods []PodReference
+	Pods []GroupMemberPod
 }
 
 // PodReference represents a Pod Reference.
@@ -35,13 +36,31 @@ type PodReference struct {
 	Namespace string
 }
 
+// ContainerPort represents a NamedPort on Pod.
+type ContainerPort struct {
+	// Port represents the Port number.
+	Port int32
+	// Name represents the associated name with this Port number.
+	Name string
+}
+
+// GroupMemberPod represents a Pod related member to be populated in Groups.
+type GroupMemberPod struct {
+	// Pod maintains the reference to the Pod.
+	Pod PodReference
+	// IP maintains the IPAddress of the Pod.
+	IP IPAddress
+	// Ports maintain the list of named port associated with this Pod member.
+	Ports []ContainerPort
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AppliedToGroupPatch describes the incremental update of an AppliedToGroup.
 type AppliedToGroupPatch struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	AddedPods   []PodReference
-	RemovedPods []PodReference
+	AddedPods   []GroupMemberPod
+	RemovedPods []GroupMemberPod
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -57,8 +76,7 @@ type AppliedToGroupList struct {
 type AddressGroup struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	// IPAddresses is a list of IP addresses selected by this group.
-	IPAddresses []IPAddress
+	Pods []GroupMemberPod
 }
 
 // IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.
@@ -75,8 +93,8 @@ type IPNet struct {
 type AddressGroupPatch struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	AddedIPAddresses   []IPAddress
-	RemovedIPAddresses []IPAddress
+	AddedPods   []GroupMemberPod
+	RemovedPods []GroupMemberPod
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -138,9 +156,9 @@ type Service struct {
 	// field defaults to TCP.
 	// +optional
 	Protocol *Protocol
-	// The port on the given protocol. If not specified, this matches all port numbers.
+	// The port name or number on the given protocol. If not specified, this matches all port numbers.
 	// +optional
-	Port *int32
+	Port *intstr.IntOrString
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.

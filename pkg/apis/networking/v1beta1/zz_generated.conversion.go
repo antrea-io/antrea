@@ -24,6 +24,7 @@ import (
 	networking "github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	intstr "k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func init() {
@@ -90,6 +91,26 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*networking.AppliedToGroupPatch)(nil), (*AppliedToGroupPatch)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_networking_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(a.(*networking.AppliedToGroupPatch), b.(*AppliedToGroupPatch), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*ContainerPort)(nil), (*networking.ContainerPort)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_ContainerPort_To_networking_ContainerPort(a.(*ContainerPort), b.(*networking.ContainerPort), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*networking.ContainerPort)(nil), (*ContainerPort)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_networking_ContainerPort_To_v1beta1_ContainerPort(a.(*networking.ContainerPort), b.(*ContainerPort), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*GroupMemberPod)(nil), (*networking.GroupMemberPod)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_GroupMemberPod_To_networking_GroupMemberPod(a.(*GroupMemberPod), b.(*networking.GroupMemberPod), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*networking.GroupMemberPod)(nil), (*GroupMemberPod)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_networking_GroupMemberPod_To_v1beta1_GroupMemberPod(a.(*networking.GroupMemberPod), b.(*GroupMemberPod), scope)
 	}); err != nil {
 		return err
 	}
@@ -178,7 +199,7 @@ func RegisterConversions(s *runtime.Scheme) error {
 
 func autoConvert_v1beta1_AddressGroup_To_networking_AddressGroup(in *AddressGroup, out *networking.AddressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.IPAddresses = *(*[]networking.IPAddress)(unsafe.Pointer(&in.IPAddresses))
+	out.Pods = *(*[]networking.GroupMemberPod)(unsafe.Pointer(&in.Pods))
 	return nil
 }
 
@@ -189,7 +210,7 @@ func Convert_v1beta1_AddressGroup_To_networking_AddressGroup(in *AddressGroup, o
 
 func autoConvert_networking_AddressGroup_To_v1beta1_AddressGroup(in *networking.AddressGroup, out *AddressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.IPAddresses = *(*[]IPAddress)(unsafe.Pointer(&in.IPAddresses))
+	out.Pods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.Pods))
 	return nil
 }
 
@@ -222,8 +243,8 @@ func Convert_networking_AddressGroupList_To_v1beta1_AddressGroupList(in *network
 
 func autoConvert_v1beta1_AddressGroupPatch_To_networking_AddressGroupPatch(in *AddressGroupPatch, out *networking.AddressGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.AddedIPAddresses = *(*[]networking.IPAddress)(unsafe.Pointer(&in.AddedIPAddresses))
-	out.RemovedIPAddresses = *(*[]networking.IPAddress)(unsafe.Pointer(&in.RemovedIPAddresses))
+	out.AddedPods = *(*[]networking.GroupMemberPod)(unsafe.Pointer(&in.AddedPods))
+	out.RemovedPods = *(*[]networking.GroupMemberPod)(unsafe.Pointer(&in.RemovedPods))
 	return nil
 }
 
@@ -234,8 +255,8 @@ func Convert_v1beta1_AddressGroupPatch_To_networking_AddressGroupPatch(in *Addre
 
 func autoConvert_networking_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *networking.AddressGroupPatch, out *AddressGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.AddedIPAddresses = *(*[]IPAddress)(unsafe.Pointer(&in.AddedIPAddresses))
-	out.RemovedIPAddresses = *(*[]IPAddress)(unsafe.Pointer(&in.RemovedIPAddresses))
+	out.AddedPods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.AddedPods))
+	out.RemovedPods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.RemovedPods))
 	return nil
 }
 
@@ -246,7 +267,7 @@ func Convert_networking_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *netwo
 
 func autoConvert_v1beta1_AppliedToGroup_To_networking_AppliedToGroup(in *AppliedToGroup, out *networking.AppliedToGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.Pods = *(*[]networking.PodReference)(unsafe.Pointer(&in.Pods))
+	out.Pods = *(*[]networking.GroupMemberPod)(unsafe.Pointer(&in.Pods))
 	return nil
 }
 
@@ -257,7 +278,7 @@ func Convert_v1beta1_AppliedToGroup_To_networking_AppliedToGroup(in *AppliedToGr
 
 func autoConvert_networking_AppliedToGroup_To_v1beta1_AppliedToGroup(in *networking.AppliedToGroup, out *AppliedToGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.Pods = *(*[]PodReference)(unsafe.Pointer(&in.Pods))
+	out.Pods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.Pods))
 	return nil
 }
 
@@ -290,8 +311,8 @@ func Convert_networking_AppliedToGroupList_To_v1beta1_AppliedToGroupList(in *net
 
 func autoConvert_v1beta1_AppliedToGroupPatch_To_networking_AppliedToGroupPatch(in *AppliedToGroupPatch, out *networking.AppliedToGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.AddedPods = *(*[]networking.PodReference)(unsafe.Pointer(&in.AddedPods))
-	out.RemovedPods = *(*[]networking.PodReference)(unsafe.Pointer(&in.RemovedPods))
+	out.AddedPods = *(*[]networking.GroupMemberPod)(unsafe.Pointer(&in.AddedPods))
+	out.RemovedPods = *(*[]networking.GroupMemberPod)(unsafe.Pointer(&in.RemovedPods))
 	return nil
 }
 
@@ -302,14 +323,64 @@ func Convert_v1beta1_AppliedToGroupPatch_To_networking_AppliedToGroupPatch(in *A
 
 func autoConvert_networking_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in *networking.AppliedToGroupPatch, out *AppliedToGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.AddedPods = *(*[]PodReference)(unsafe.Pointer(&in.AddedPods))
-	out.RemovedPods = *(*[]PodReference)(unsafe.Pointer(&in.RemovedPods))
+	out.AddedPods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.AddedPods))
+	out.RemovedPods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.RemovedPods))
 	return nil
 }
 
 // Convert_networking_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch is an autogenerated conversion function.
 func Convert_networking_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in *networking.AppliedToGroupPatch, out *AppliedToGroupPatch, s conversion.Scope) error {
 	return autoConvert_networking_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in, out, s)
+}
+
+func autoConvert_v1beta1_ContainerPort_To_networking_ContainerPort(in *ContainerPort, out *networking.ContainerPort, s conversion.Scope) error {
+	out.Port = in.Port
+	out.Name = in.Name
+	return nil
+}
+
+// Convert_v1beta1_ContainerPort_To_networking_ContainerPort is an autogenerated conversion function.
+func Convert_v1beta1_ContainerPort_To_networking_ContainerPort(in *ContainerPort, out *networking.ContainerPort, s conversion.Scope) error {
+	return autoConvert_v1beta1_ContainerPort_To_networking_ContainerPort(in, out, s)
+}
+
+func autoConvert_networking_ContainerPort_To_v1beta1_ContainerPort(in *networking.ContainerPort, out *ContainerPort, s conversion.Scope) error {
+	out.Port = in.Port
+	out.Name = in.Name
+	return nil
+}
+
+// Convert_networking_ContainerPort_To_v1beta1_ContainerPort is an autogenerated conversion function.
+func Convert_networking_ContainerPort_To_v1beta1_ContainerPort(in *networking.ContainerPort, out *ContainerPort, s conversion.Scope) error {
+	return autoConvert_networking_ContainerPort_To_v1beta1_ContainerPort(in, out, s)
+}
+
+func autoConvert_v1beta1_GroupMemberPod_To_networking_GroupMemberPod(in *GroupMemberPod, out *networking.GroupMemberPod, s conversion.Scope) error {
+	if err := Convert_v1beta1_PodReference_To_networking_PodReference(&in.Pod, &out.Pod, s); err != nil {
+		return err
+	}
+	out.IP = *(*networking.IPAddress)(unsafe.Pointer(&in.IP))
+	out.Ports = *(*[]networking.ContainerPort)(unsafe.Pointer(&in.Ports))
+	return nil
+}
+
+// Convert_v1beta1_GroupMemberPod_To_networking_GroupMemberPod is an autogenerated conversion function.
+func Convert_v1beta1_GroupMemberPod_To_networking_GroupMemberPod(in *GroupMemberPod, out *networking.GroupMemberPod, s conversion.Scope) error {
+	return autoConvert_v1beta1_GroupMemberPod_To_networking_GroupMemberPod(in, out, s)
+}
+
+func autoConvert_networking_GroupMemberPod_To_v1beta1_GroupMemberPod(in *networking.GroupMemberPod, out *GroupMemberPod, s conversion.Scope) error {
+	if err := Convert_networking_PodReference_To_v1beta1_PodReference(&in.Pod, &out.Pod, s); err != nil {
+		return err
+	}
+	out.IP = *(*IPAddress)(unsafe.Pointer(&in.IP))
+	out.Ports = *(*[]ContainerPort)(unsafe.Pointer(&in.Ports))
+	return nil
+}
+
+// Convert_networking_GroupMemberPod_To_v1beta1_GroupMemberPod is an autogenerated conversion function.
+func Convert_networking_GroupMemberPod_To_v1beta1_GroupMemberPod(in *networking.GroupMemberPod, out *GroupMemberPod, s conversion.Scope) error {
+	return autoConvert_networking_GroupMemberPod_To_v1beta1_GroupMemberPod(in, out, s)
 }
 
 func autoConvert_v1beta1_IPBlock_To_networking_IPBlock(in *IPBlock, out *networking.IPBlock, s conversion.Scope) error {
@@ -486,7 +557,7 @@ func Convert_networking_PodReference_To_v1beta1_PodReference(in *networking.PodR
 
 func autoConvert_v1beta1_Service_To_networking_Service(in *Service, out *networking.Service, s conversion.Scope) error {
 	out.Protocol = (*networking.Protocol)(unsafe.Pointer(in.Protocol))
-	out.Port = (*int32)(unsafe.Pointer(in.Port))
+	out.Port = (*intstr.IntOrString)(unsafe.Pointer(in.Port))
 	return nil
 }
 
@@ -497,7 +568,7 @@ func Convert_v1beta1_Service_To_networking_Service(in *Service, out *networking.
 
 func autoConvert_networking_Service_To_v1beta1_Service(in *networking.Service, out *Service, s conversion.Scope) error {
 	out.Protocol = (*Protocol)(unsafe.Pointer(in.Protocol))
-	out.Port = (*int32)(unsafe.Pointer(in.Port))
+	out.Port = (*intstr.IntOrString)(unsafe.Pointer(in.Port))
 	return nil
 }
 

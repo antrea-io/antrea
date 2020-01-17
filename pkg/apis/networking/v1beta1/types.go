@@ -16,6 +16,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // +genclient
@@ -27,7 +28,7 @@ type AppliedToGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	// Pods is a list of Pods selected by this group.
-	Pods []PodReference `json:"pods,omitempty" protobuf:"bytes,2,rep,name=pods"`
+	Pods []GroupMemberPod `json:"pods,omitempty" protobuf:"bytes,2,rep,name=pods"`
 }
 
 // PodReference represents a Pod Reference.
@@ -38,13 +39,31 @@ type PodReference struct {
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
 }
 
+// ContainerPort represents a NamedPort on Pod.
+type ContainerPort struct {
+	// Port represents the Port number.
+	Port int32 `json:"port,omitempty" protobuf:"varint,1,opt,name=port"`
+	// Name represents the associated name with this Port number.
+	Name string `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
+}
+
+// GroupMemberPod represents a GroupMember related to Pods.
+type GroupMemberPod struct {
+	// Pod maintains the reference to the Pod.
+	Pod PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
+	// IP maintains the IPAddress associated with the Pod.
+	IP IPAddress `json:"ip,omitempty" protobuf:"bytes,2,opt,name=ip"`
+	// Ports maintain the named port mapping of this Pod.
+	Ports []ContainerPort `json:"ports,omitempty" protobuf:"bytes,3,rep,name=ports"`
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AppliedToGroupPatch describes the incremental update of an AppliedToGroup.
 type AppliedToGroupPatch struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	AddedPods         []PodReference `json:"addedPods,omitempty" protobuf:"bytes,2,rep,name=addedPods"`
-	RemovedPods       []PodReference `json:"removedPods,omitempty" protobuf:"bytes,3,rep,name=removedPods"`
+	AddedPods         []GroupMemberPod `json:"addedPods,omitempty" protobuf:"bytes,2,rep,name=addedPods"`
+	RemovedPods       []GroupMemberPod `json:"removedPods,omitempty" protobuf:"bytes,3,rep,name=removedPods"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -63,8 +82,7 @@ type AppliedToGroupList struct {
 type AddressGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	// IPAddresses is a list of IP addresses selected by this group.
-	IPAddresses []IPAddress `json:"ipAddresses,omitempty" protobuf:"bytes,2,rep,name=ipAddresses"`
+	Pods              []GroupMemberPod `json:"pods,omitempty" protobuf:"bytes,2,rep,name=pods"`
 }
 
 // IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.
@@ -79,10 +97,10 @@ type IPNet struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AddressGroupPatch describes the incremental update of an AddressGroup.
 type AddressGroupPatch struct {
-	metav1.TypeMeta    `json:",inline"`
-	metav1.ObjectMeta  `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	AddedIPAddresses   []IPAddress `json:"addedIPAddresses,omitempty" protobuf:"bytes,2,rep,name=addedIPAddresses"`
-	RemovedIPAddresses []IPAddress `json:"removedIPAddresses,omitempty" protobuf:"bytes,3,rep,name=removedIPAddresses"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	AddedPods         []GroupMemberPod `json:"addedPods,omitempty" protobuf:"bytes,2,rep,name=addedPods"`
+	RemovedPods       []GroupMemberPod `json:"removedPods,omitempty" protobuf:"bytes,3,rep,name=removedPods"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -146,9 +164,9 @@ type Service struct {
 	// field defaults to TCP.
 	// +optional
 	Protocol *Protocol `json:"protocol,omitempty" protobuf:"bytes,1,opt,name=protocol"`
-	// The port on the given protocol. If not specified, this matches all port numbers.
+	// The port name or number on the given protocol. If not specified, this matches all port numbers.
 	// +optional
-	Port *int32 `json:"port,omitempty" protobuf:"varint,2,opt,name=port"`
+	Port *intstr.IntOrString `json:"port,omitempty" protobuf:"bytes,2,opt,name=port"`
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
