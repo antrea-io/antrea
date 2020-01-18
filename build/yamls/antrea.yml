@@ -257,7 +257,8 @@ data:
     # overhead.
     #defaultMTU: 1450
 
-    # Whether or not to enable IPSec encryption of tunnel traffic.
+    # Whether or not to enable IPSec encryption of tunnel traffic. IPSec encryption is supported for
+    # only the GRE tunnel type.
     #enableIPSecTunnel: false
 
     # CIDR Range for services in cluster. It's required to support egress network policy, should
@@ -278,7 +279,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-tm7bht9mg6
+  name: antrea-config-476k567258
   namespace: kube-system
 ---
 apiVersion: v1
@@ -361,7 +362,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-tm7bht9mg6
+          name: antrea-config-476k567258
         name: antrea-config
 ---
 apiVersion: apiregistration.k8s.io/v1
@@ -519,7 +520,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-tm7bht9mg6
+          name: antrea-config-476k567258
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
