@@ -8,8 +8,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +15,7 @@ import (
 	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -61,10 +60,9 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	outTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
 
 	var addedAddrs = parseAddresses([]string{"192.168.1.3", "192.168.1.30", "192.168.2.0/24", "103", "104"})
-	expectFlowInvokeTimes(dropFlow, 5, 0, 0)
-	expectFlowInvokeTimes(ruleFlow, 5, 0, 0)
 	expectConjunctionsCount([]*expectConjunctionTimes{{5, ruleID1, clauseID, nClause}})
-	err := clause1.addAddrFlows(c, types.SrcAddress, addedAddrs)
+	flowChanges1 := clause1.addAddrFlows(c, types.SrcAddress, addedAddrs)
+	err := c.applyConjunctiveMatchFlows(flowChanges1)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	checkFlowCount(t, len(addedAddrs))
 	for _, addr := range addedAddrs {
@@ -73,9 +71,8 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	var currentFlowCount = len(c.globalConjMatchFlowCache)
 
 	var deletedAddrs = parseAddresses([]string{"192.168.1.3", "103"})
-	expectFlowInvokeTimes(dropFlow, 0, 0, 2)
-	expectFlowInvokeTimes(ruleFlow, 0, 0, 2)
-	err = clause1.deleteAddrFlows(types.SrcAddress, deletedAddrs)
+	flowChanges2 := clause1.deleteAddrFlows(types.SrcAddress, deletedAddrs)
+	err = c.applyConjunctiveMatchFlows(flowChanges2)
 	require.Nil(t, err, "Failed to invoke deleteAddrFlows")
 	checkFlowCount(t, currentFlowCount-len(deletedAddrs))
 	currentFlowCount = len(c.globalConjMatchFlowCache)
@@ -87,12 +84,10 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	clauseID2 := uint8(2)
 	clause2 := conj2.newClause(clauseID2, nClause, outTable, outDropTable)
 	var addedAddrs2 = parseAddresses([]string{"192.168.1.30", "192.168.1.50"})
-
-	expectFlowInvokeTimes(dropFlow, 1, 0, 0)
-	expectFlowInvokeTimes(ruleFlow, 1, 1, 0)
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID2, clauseID2, nClause}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID1, clauseID, nClause}})
-	err = clause2.addAddrFlows(c, types.SrcAddress, addedAddrs2)
+	flowChanges3 := clause2.addAddrFlows(c, types.SrcAddress, addedAddrs2)
+	err = c.applyConjunctiveMatchFlows(flowChanges3)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	testAddr := NewIPAddress(net.ParseIP("192.168.1.30"))
 	checkConjMatchFlowActions(t, c, clause2, testAddr, types.SrcAddress, 2, 0)
@@ -107,11 +102,13 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	nClause3 := uint8(1)
 	clause3 := conj3.newClause(clauseID3, nClause3, outTable, outDropTable)
 	var addedAddrs3 = parseAddresses([]string{"192.168.1.30"})
-	err = clause3.addAddrFlows(c, types.SrcAddress, addedAddrs3)
+	flowChanges4 := clause3.addAddrFlows(c, types.SrcAddress, addedAddrs3)
+	err = c.applyConjunctiveMatchFlows(flowChanges4)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	checkConjMatchFlowActions(t, c, clause3, testAddr, types.SrcAddress, 2, 1)
 	checkFlowCount(t, currentFlowCount)
-	err = clause3.deleteAddrFlows(types.SrcAddress, addedAddrs3)
+	flowChanges5 := clause3.deleteAddrFlows(types.SrcAddress, addedAddrs3)
+	err = c.applyConjunctiveMatchFlows(flowChanges5)
 	require.Nil(t, err, "Failed to invoke deleteAddrFlows")
 	checkConjMatchFlowActions(t, c, clause3, testAddr, types.SrcAddress, 2, 0)
 	checkFlowCount(t, currentFlowCount)
@@ -132,12 +129,18 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
 	outTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
 
-	expectFlowInvokeTimes(dropFlow, 2, 0, 0)
-	err := c.InstallPolicyRuleFlows(rule1)
-	if err != nil {
-		t.Fatalf("Failed to invoke InstallPolicyRuleFlows: %v", err)
-	}
-	checkConjunctionConfig(t, ruleID1, 0, 0, 0, 0)
+	conj := &policyRuleConjunction{id: ruleID1}
+	conj.calculateClauses(rule1, c)
+	require.Nil(t, conj.toClause)
+	require.Nil(t, conj.serviceClause)
+	ctxChanges := conj.calculateChangesForRuleCreation(c, rule1)
+	assert.Equal(t, len(rule1.From), len(ctxChanges))
+	matchFlows, dropFlows := getChangedFlows(ctxChanges)
+	assert.Equal(t, len(rule1.From), getChangedFlowCount(dropFlows))
+	assert.Equal(t, 0, getChangedFlowCount(matchFlows))
+	assert.Equal(t, 2, getDenyAllRuleOPCount(matchFlows, insertion))
+	err := c.applyConjunctiveMatchFlows(ctxChanges)
+	require.Nil(t, err)
 
 	ruleID2 := uint32(102)
 	rule2 := &types.PolicyRule{
@@ -146,15 +149,22 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
 		To:        parseAddresses([]string{"0.0.0.0/0"}),
 	}
-	expectFlowInvokeTimes(dropFlow, 1, 0, 0)
-	expectFlowInvokeTimes(ruleFlow, 4, 0, 0)
+	conj2 := &policyRuleConjunction{id: ruleID2}
+	conj2.calculateClauses(rule2, c)
+	require.NotNil(t, conj2.toClause)
+	require.Nil(t, conj2.serviceClause)
 	ruleFlowBuilder.EXPECT().MatchConjID(ruleID2).MaxTimes(1)
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID2, 2, 2}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID2, 1, 2}})
+	ctxChanges2 := conj2.calculateChangesForRuleCreation(c, rule2)
+	matchFlows2, dropFlows2 := getChangedFlows(ctxChanges2)
+	assert.Equal(t, 1, getChangedFlowCount(dropFlows2))
+	assert.Equal(t, 3, getChangedFlowCount(matchFlows2))
+	assert.Equal(t, 3, getChangedFlowOPCount(matchFlows2, insertion))
+	err = c.applyConjunctiveMatchFlows(ctxChanges2)
+	require.Nil(t, err)
 	err = c.InstallPolicyRuleFlows(rule2)
-	if err != nil {
-		t.Fatalf("Failed to invoke InstallPolicyRuleFlows: %v", err)
-	}
+	require.Nil(t, err)
 	checkConjunctionConfig(t, ruleID2, 1, 2, 1, 0)
 
 	ruleID3 := uint32(103)
@@ -171,23 +181,84 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		ExceptTo:  parseAddresses([]string{"192.168.2.100", "192.168.2.150"}),
 		Service:   []*v1.NetworkPolicyPort{npPort1, npPort2},
 	}
-	expectFlowInvokeTimes(dropFlow, 1, 0, 0)
-	expectFlowInvokeTimes(ruleFlow, 7, 1, 0)
+	conj3 := &policyRuleConjunction{id: ruleID3}
+	conj3.calculateClauses(rule3, c)
 	ruleFlowBuilder.EXPECT().MatchConjID(ruleID3).MaxTimes(3)
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID2, 1, 2}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID3, 2, 3}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID3, 1, 3}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID3, 3, 3}})
-
+	ctxChanges3 := conj3.calculateChangesForRuleCreation(c, rule3)
+	matchFlows3, dropFlows3 := getChangedFlows(ctxChanges3)
+	assert.Equal(t, 1, getChangedFlowOPCount(dropFlows3, insertion))
+	assert.Equal(t, 5, getChangedFlowCount(matchFlows3))
+	assert.Equal(t, 4, getChangedFlowOPCount(matchFlows3, insertion))
+	assert.Equal(t, 1, getChangedFlowOPCount(matchFlows3, modification))
+	err = c.applyConjunctiveMatchFlows(ctxChanges3)
+	require.Nil(t, err)
 	err = c.InstallPolicyRuleFlows(rule3)
 	require.Nil(t, err, "Failed to invoke InstallPolicyRuleFlows")
 	checkConjunctionConfig(t, ruleID3, 3, 2, 1, 2)
 
-	expectFlowInvokeTimes(dropFlow, 0, 0, 1)
-	expectFlowInvokeTimes(ruleFlow, 0, 1, 3)
+	ctxChanges4 := conj.calculateChangesForRuleDeletion()
+	matchFlows4, dropFlows4 := getChangedFlows(ctxChanges4)
+	assert.Equal(t, 1, getChangedFlowOPCount(dropFlows4, deletion))
+	assert.Equal(t, 2, getDenyAllRuleOPCount(matchFlows4, deletion))
+	err = c.applyConjunctiveMatchFlows(ctxChanges4)
+	require.Nil(t, err)
+
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID3, 1, 3}})
-	err = c.UninstallPolicyRuleFlows(ruleID2)
-	require.Nil(t, err, "Failed to invoke UninstallPolicyRuleFlows")
+	ctxChanges5 := conj2.calculateChangesForRuleDeletion()
+	matchFlows5, dropFlows5 := getChangedFlows(ctxChanges5)
+	assert.Equal(t, 1, getChangedFlowOPCount(dropFlows5, deletion))
+	assert.Equal(t, 3, getChangedFlowCount(matchFlows5))
+	assert.Equal(t, 2, getChangedFlowOPCount(matchFlows5, deletion))
+	assert.Equal(t, 1, getChangedFlowOPCount(matchFlows5, modification))
+	err = c.applyConjunctiveMatchFlows(ctxChanges5)
+	require.Nil(t, err)
+}
+
+func getChangedFlowCount(flows []*flowChange) int {
+	var count int
+	for _, changedFlow := range flows {
+		if changedFlow.flow != nil {
+			count++
+		}
+	}
+	return count
+}
+
+func getChangedFlowOPCount(flows []*flowChange, flowOperType changeType) int {
+	var count int
+	for _, changedFlow := range flows {
+		if changedFlow.flow != nil && changedFlow.changeType == flowOperType {
+			count++
+		}
+	}
+	return count
+}
+
+func getChangedFlows(changes []*conjMatchFlowContextChange) ([]*flowChange, []*flowChange) {
+	var matchFlows, dropFlows []*flowChange
+	for _, change := range changes {
+		if change.matchFlow != nil {
+			matchFlows = append(matchFlows, change.matchFlow)
+		}
+		if change.dropFlow != nil {
+			dropFlows = append(dropFlows, change.dropFlow)
+		}
+	}
+	return matchFlows, dropFlows
+}
+
+func getDenyAllRuleOPCount(flows []*flowChange, operType changeType) int {
+	var count int
+	for _, changedFlow := range flows {
+		if changedFlow.flow == nil && changedFlow.changeType == operType {
+			count += 1
+		}
+	}
+	return count
 }
 
 func checkConjunctionConfig(t *testing.T, ruleID uint32, actionFlowCount, fromMatchCount, toMatchCount, serviceMatchCount int) {
@@ -207,7 +278,7 @@ func checkConjunctionConfig(t *testing.T, ruleID uint32, actionFlowCount, fromMa
 
 func checkFlowCount(t *testing.T, expectCount int) {
 	actualCount := len(c.globalConjMatchFlowCache)
-	assert.Equal(t, expectCount, len(c.globalConjMatchFlowCache), fmt.Sprintf("Incorrect count of conjunctive match flow context into global cache, expect: %d, actual: %d", expectCount, actualCount))
+	assert.Equal(t, expectCount, actualCount, fmt.Sprintf("Incorrect count of conjunctive match flow context into global cache, expect: %d, actual: %d", expectCount, actualCount))
 }
 
 func checkConjMatchFlowActions(t *testing.T, client *client, c *clause, address types.Address, addressType types.AddressType, actionCount int, anyDropRuleCount int) {
@@ -216,18 +287,6 @@ func checkConjMatchFlowActions(t *testing.T, client *client, c *clause, address 
 	require.True(t, found, "Failed to add conjunctive match flow to global cache")
 	assert.Equal(t, actionCount, len(context.actions), fmt.Sprintf("Incorrect policyRuleConjunction action number, expect: %d, actual: %d", actionCount, len(context.actions)))
 	assert.Equal(t, anyDropRuleCount, len(context.denyAllRules), fmt.Sprintf("Incorrect policyRuleConjunction anyDropRule number, expect: %d, actual: %d", anyDropRuleCount, len(context.denyAllRules)))
-}
-
-func expectFlowInvokeTimes(flow *mocks.MockFlow, addCount, modifyCount, deleteCount int) {
-	if addCount > 0 {
-		flow.EXPECT().Add().MaxTimes(addCount)
-	}
-	if modifyCount > 0 {
-		flow.EXPECT().Modify().MaxTimes(modifyCount)
-	}
-	if deleteCount > 0 {
-		flow.EXPECT().Delete().MaxTimes(deleteCount)
-	}
 }
 
 func expectConjunctionsCount(conjs []*expectConjunctionTimes) {
@@ -303,6 +362,8 @@ func createMockTable(ctrl *gomock.Controller, tableID binding.TableIDType, nextT
 }
 
 func prepareClient(ctrl *gomock.Controller) *client {
+	bridge := mocks.NewMockBridge(ctrl)
+	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	outTable = createMockTable(ctrl, egressRuleTable, egressDefaultTable, binding.TableMissActionNext)
 	outDropTable = createMockTable(ctrl, egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext)
 	outAllowTable = createMockTable(ctrl, l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext)
@@ -314,12 +375,12 @@ func prepareClient(ctrl *gomock.Controller) *client {
 		},
 		policyCache:              sync.Map{},
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
+		bridge:                   bridge,
 	}
 	c.cookieAllocator = cookie.NewAllocator(0)
 	m := oftest.NewMockFlowOperations(ctrl)
-	m.EXPECT().Add(gomock.Any()).Return(nil).AnyTimes()
-	m.EXPECT().Modify(gomock.Any()).Return(nil).AnyTimes()
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).AnyTimes()
+	m.EXPECT().DeleteAll(gomock.Any()).Return(nil).AnyTimes()
 	c.flowOperations = m
 	return c
 }
