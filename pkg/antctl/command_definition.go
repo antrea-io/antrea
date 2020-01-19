@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"reflect"
@@ -78,7 +79,7 @@ const (
 	tagOptionKeyArg = "key"
 )
 
-// argOption describes one argument which can be used in a RequestOption.
+// argOption describes one argument which can be used in a requestOption.
 type argOption struct {
 	name      string
 	fieldName string
@@ -132,16 +133,13 @@ func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client *
 	renderDescription(cmd, isAgent)
 
 	cd.applyFlagsToCommand(cmd)
-	var keyArgOption *argOption
-	argOpts := cd.argOptions()
-	for i := range argOpts {
-		a := argOpts[i]
-		if a.key {
-			cmd.Use += fmt.Sprintf(" [%s]", a.name)
-			cmd.Long += "\n\nArgs:\n" + fmt.Sprintf("  %s\t%s", a.name, a.usage)
-			// save the key arg option
-			keyArgOption = a
-		}
+	argOpt := cd.argOption()
+	if argOpt != nil {
+		cmd.Args = cobra.MaximumNArgs(1)
+		cmd.Use += fmt.Sprintf(" [%s]", argOpt.name)
+		cmd.Long += "\n\nArgs:\n" + fmt.Sprintf("  %s\t%s", argOpt.name, argOpt.usage)
+	} else {
+		cmd.Args = cobra.NoArgs
 	}
 
 	if groupCommand, ok := groupCommands[cd.CommandGroup]; ok {
@@ -149,16 +147,9 @@ func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client *
 	} else {
 		root.AddCommand(cmd)
 	}
-	cd.applyExampleToCommand(cmd, keyArgOption)
+	cd.applyExampleToCommand(cmd)
 
-	// Set key arg length validator to the command.
-	if keyArgOption != nil {
-		cmd.Args = cobra.MaximumNArgs(1)
-	} else {
-		cmd.Args = cobra.NoArgs
-	}
-
-	cmd.RunE = cd.newCommandRunE(keyArgOption, client)
+	cmd.RunE = cd.newCommandRunE(client)
 }
 
 // validate checks if the commandDefinition is valid.
@@ -182,31 +173,20 @@ func (cd *commandDefinition) validate() []error {
 	if cd.HandlerFactory != nil && cd.GroupVersion == nil {
 		errs = append(errs, fmt.Errorf("%s: must provide the group version of customize handler", cd.Use))
 	}
-	// Only one key arg is allowed.
-	var hasKey bool
-	for _, arg := range cd.argOptions() {
-		if arg.key && hasKey {
-			errs = append(errs, fmt.Errorf("%s: has more than one key field", cd.Use))
-			break
-		} else if arg.key {
-			hasKey = true
-		}
-	}
 	return errs
 }
 
-// argOptions returns the list of arguments that could be used in a commandDefinition.
-func (cd *commandDefinition) argOptions() []*argOption {
-	var ret []*argOption
+// argOptions returns the key argument of the commandDefinition. It traverses all
+// exported field and return an argOption based on the first field annotated with
+// antctl.
+func (cd *commandDefinition) argOption() *argOption {
 	for i := 0; i < cd.TransformedResponse.NumField(); i++ {
 		f := cd.TransformedResponse.Field(i)
-		argOpt := &argOption{fieldName: f.Name}
-
 		tags, err := structtag.Parse(string(f.Tag))
 		if err != nil { // Broken cli tags, skip this field
 			continue
 		}
-
+		argOpt := &argOption{fieldName: f.Name}
 		jsonTag, err := tags.Get("json")
 		if err != nil {
 			argOpt.name = strings.ToLower(f.Name)
@@ -215,14 +195,14 @@ func (cd *commandDefinition) argOptions() []*argOption {
 		}
 
 		cliTag, err := tags.Get(tagKey)
-		if err == nil {
-			argOpt.key = cliTag.Name == tagOptionKeyArg
-			argOpt.usage = strings.Join(cliTag.Options, ", ")
+		if err != nil {
+			continue
 		}
-
-		ret = append(ret, argOpt)
+		argOpt.key = cliTag.Name == tagOptionKeyArg
+		argOpt.usage = strings.Join(cliTag.Options, ", ")
+		return argOpt
 	}
-	return ret
+	return nil
 }
 
 // decode parses the data in reader and converts it to one or more
@@ -230,7 +210,6 @@ func (cd *commandDefinition) argOptions() []*argOption {
 // []TransformedResponse. Otherwise, the return type is TransformedResponse.
 func (cd *commandDefinition) decode(r io.Reader, single bool) (interface{}, error) {
 	var result interface{}
-
 	if single || cd.SingleObject {
 		ref := reflect.New(cd.TransformedResponse)
 		err := json.NewDecoder(r).Decode(ref.Interface())
@@ -246,7 +225,6 @@ func (cd *commandDefinition) decode(r io.Reader, single bool) (interface{}, erro
 		}
 		result = reflect.Indirect(ref).Interface()
 	}
-
 	return result, nil
 }
 
@@ -310,32 +288,35 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 
 // newCommandRunE creates the RunE function for the command. The RunE function
 // checks the args according to ArgOptions and flags.
-func (cd *commandDefinition) newCommandRunE(key *argOption, c *client) func(*cobra.Command, []string) error {
+func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		argMap := make(map[string]string)
-		if len(args) > 0 {
-			argMap[key.name] = args[0]
-		}
 		kubeconfigPath, _ := cmd.Flags().GetString("kubeconfig")
 		timeout, _ := cmd.Flags().GetDuration("timeout")
-		var reqPath string
+		u := new(url.URL)
 		if len(cd.API) > 0 {
-			reqPath = cd.API
+			u.Path = cd.API
 		} else {
-			reqPath = "/apis/" + cd.GroupVersion.String() + "/" + strings.ToLower(cd.Use)
+			u.Path = path.Join("/apis", cd.GroupVersion.String(), strings.ToLower(cd.Use))
 		}
-		resp, err := c.Request(&RequestOption{
-			Path:         reqPath,
-			Kubeconfig:   kubeconfigPath,
-			Name:         cmd.Name(),
-			Args:         argMap,
-			TimeOut:      timeout,
-			GroupVersion: cd.GroupVersion,
+
+		if len(args) > 0 {
+			q := u.Query()
+			q.Add(cd.argOption().name, args[0])
+			u.RawQuery = q.Encode()
+		}
+
+		klog.Infof("Requesting URI %s", u.RequestURI())
+		resp, err := c.Request(&requestOption{
+			path:         u,
+			kubeconfig:   kubeconfigPath,
+			name:         cmd.Name(),
+			timeOut:      timeout,
+			groupVersion: cd.GroupVersion,
 		})
 		if err != nil {
 			return err
 		}
-		single := len(argMap) != 0
+		single := len(args) > 0
 		outputFormat, err := cmd.Flags().GetString("output")
 		if err != nil {
 			return err
@@ -358,7 +339,7 @@ func (cd *commandDefinition) requestPath(prefix string) string {
 // is specified, it only creates one example to retrieve the single object. Otherwise,
 // it will generates examples about retrieving single object according to the key
 // argOption and retrieving the object list.
-func (cd *commandDefinition) applyExampleToCommand(cmd *cobra.Command, key *argOption) {
+func (cd *commandDefinition) applyExampleToCommand(cmd *cobra.Command) {
 	if len(cd.Example) != 0 {
 		cmd.Example = cd.Example
 		return
@@ -380,6 +361,7 @@ func (cd *commandDefinition) applyExampleToCommand(cmd *cobra.Command, key *argO
 		fmt.Fprintf(&buf, "  Get the %s\n", dataName)
 		fmt.Fprintf(&buf, "  $ %s\n", strings.Join(commands, " "))
 	} else {
+		key := cd.argOption()
 		if key != nil {
 			fmt.Fprintf(&buf, "  Get a %s\n", dataName)
 			fmt.Fprintf(&buf, "  $ %s [%s]\n", strings.Join(commands, " "), key.name)
