@@ -128,8 +128,8 @@ func createPrometheusMetricsListener(prometheusHost string,
 
 	klog.Infof("Initializing prometheus host %s port %s", prometheusHost, prometheusPort)
 	gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name:        "antrea_agent_host",
-		Help:        "Antrea agent hostname (as a label), typically used in grouping/aggregating stats; " +
+		Name: "antrea_controller_host",
+		Help: "Antrea controller hostname (as a label), typically used in grouping/aggregating stats; " +
 			"the label defaults to the hostname of the host but can be overridden by configuration. " +
 			"The value of the gauge is always set to 1.",
 		ConstLabels: prometheus.Labels{"host": hostname},
