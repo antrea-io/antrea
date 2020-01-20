@@ -29,7 +29,7 @@ import (
 )
 
 type OVSStatManager struct {
-	ofClient openflow.Client
+	ofClient     openflow.Client
 	OVSBridge    string
 	OVSTableDesc *prometheus.Desc
 }
@@ -38,7 +38,7 @@ func (c *OVSStatManager) OVSGetStatistics() (
 	ovsFlowsByTable map[string]float64,
 ) {
 	ovsFlowsByTable = make(map[string]float64)
-	flowTableStatus :=c.ofClient.GetFlowTableStatus()
+	flowTableStatus := c.ofClient.GetFlowTableStatus()
 	for _, tableStatus := range flowTableStatus {
 		ovsFlowsByTable[strconv.Itoa(int(tableStatus.ID))] = float64(tableStatus.FlowCount)
 	}
@@ -84,7 +84,7 @@ func StartListener(
 	ofClient openflow.Client) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		klog.Error("Failed to retrieve agent node name, %v", err)
+		klog.Errorf("Failed to retrieve agent node name, %v", err)
 	}
 	klog.Info("Binding antrea_local_pod_count")
 	if err := prometheus.Register(prometheus.NewGaugeFunc(
