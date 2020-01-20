@@ -15,77 +15,151 @@
 package antctl
 
 import (
-	"encoding/json"
-	"io"
-	"io/ioutil"
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/antctl/handlers"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
+
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/version"
+	clusterinfov1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
-	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
-// unixDomainSockAddr is the address for antctl server in local mode.
-const unixDomainSockAddr = "/var/run/antctl.sock"
-
-var systemGroup = schema.GroupVersion{Group: "system.antrea.tanzu.vmware.com", Version: "v1beta1"}
-
-type transformedVersionResponse struct {
-	handlers.ComponentVersionResponse `json:",inline" yaml:",inline"`
-	AntctlVersion                     string `json:"antctlVersion" yaml:"antctlVersion"`
-}
-
-// versionTransform is the AddonTransform for the version command. This function
-// will try to parse the response as a ComponentVersionResponse and then populate
-// it with the version of antctl to a transformedVersionResponse object.
-func versionTransform(reader io.Reader, _ bool) (interface{}, error) {
-	b, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-	klog.Infof("version transform received: %s", string(b))
-	cv := new(handlers.ComponentVersionResponse)
-	err = json.Unmarshal(b, cv)
-	if err != nil {
-		return nil, err
-	}
-	resp := &transformedVersionResponse{
-		ComponentVersionResponse: *cv,
-		AntctlVersion:            version.GetFullVersion(),
-	}
-	return resp, nil
-}
-
-// CommandList defines all commands that could be used in the antctl for both agent
+// CommandList defines all commands that could be used in the antctl for both agents
 // and controller. The unit test "TestCommandListValidation" ensures it to be valid.
 var CommandList = &commandList{
 	definitions: []commandDefinition{
 		{
-			Use:                 "version",
-			Short:               "Print version information",
-			Long:                "Print version information of the antctl and the ${component}",
-			HandlerFactory:      new(handlers.Version),
-			GroupVersion:        &systemGroup,
-			TransformedResponse: reflect.TypeOf(transformedVersionResponse{}),
-			Agent:               true,
-			Controller:          true,
-			SingleObject:        true,
-			CommandGroup:        flat,
-			AddonTransform:      versionTransform,
+			use:          "version",
+			short:        "Print version information",
+			long:         "Print version information of the antctl and the ${component}",
+			commandGroup: flat,
+			controllerEndpoint: &endpoint{
+				resourceEndpoint: &resourceEndpoint{
+					resourceName: "antrea-controller",
+					groupVersionResource: &schema.GroupVersionResource{
+						Group:    clusterinfov1beta1.SchemeGroupVersion.Group,
+						Version:  clusterinfov1beta1.SchemeGroupVersion.Version,
+						Resource: "antreacontrollerinfos",
+					},
+				},
+				addonTransform: version.ControllerTransform,
+			},
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/version",
+				},
+				addonTransform: version.AgentTransform,
+			},
+			transformedResponse: reflect.TypeOf(version.Response{}),
 		},
 		{
-			Use:                 "agent-info",
-			Short:               "Print agent's basic information",
-			Long:                "Print agent's basic information including version, node subnet, OVS info, AgentConditions, etc.",
-			HandlerFactory:      new(handlers.AgentInfo),
-			GroupVersion:        &systemGroup,
-			TransformedResponse: reflect.TypeOf(handlers.AntreaAgentInfoResponse{}),
-			Agent:               true,
-			SingleObject:        true,
-			CommandGroup:        flat,
+			use:          "network-policy",
+			short:        "Print network policies",
+			long:         "Print network policies in ${component}",
+			commandGroup: get,
+			controllerEndpoint: &endpoint{
+				resourceEndpoint: &resourceEndpoint{
+					groupVersionResource: &schema.GroupVersionResource{
+						Group:    networkingv1beta1.SchemeGroupVersion.Group,
+						Version:  networkingv1beta1.SchemeGroupVersion.Version,
+						Resource: "networkpolicies",
+					},
+				},
+				addonTransform: networkpolicy.Transform,
+			},
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/networkpolicies",
+					params: []flagInfo{
+						{
+							name:  "name",
+							usage: "Retrieve resource by name",
+							arg:   true,
+						},
+					},
+				},
+				addonTransform: networkpolicy.Transform,
+			},
+			transformedResponse: reflect.TypeOf(networkpolicy.Response{}),
+		},
+		{
+			use:          "applied-to-group",
+			short:        "Print applied-to-groups",
+			long:         "Print applied-to-groups in ${component}",
+			commandGroup: get,
+			controllerEndpoint: &endpoint{
+				resourceEndpoint: &resourceEndpoint{
+					groupVersionResource: &schema.GroupVersionResource{
+						Group:    networkingv1beta1.SchemeGroupVersion.Group,
+						Version:  networkingv1beta1.SchemeGroupVersion.Version,
+						Resource: "appliedtogroups",
+					},
+				},
+				addonTransform: appliedtogroup.Transform,
+			},
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/appliedtogroups",
+					params: []flagInfo{
+						{
+							usage: "Retrieve resource by name",
+							name:  "name",
+							arg:   true,
+						},
+					},
+				},
+				addonTransform: appliedtogroup.Transform,
+			},
+			transformedResponse: reflect.TypeOf(appliedtogroup.Response{}),
+		},
+		{
+			use:          "address-group",
+			short:        "Print address groups",
+			long:         "Print address groups in ${component}",
+			commandGroup: get,
+			controllerEndpoint: &endpoint{
+				resourceEndpoint: &resourceEndpoint{
+					groupVersionResource: &schema.GroupVersionResource{
+						Group:    networkingv1beta1.SchemeGroupVersion.Group,
+						Version:  networkingv1beta1.SchemeGroupVersion.Version,
+						Resource: "addressgroups",
+					},
+				},
+				addonTransform: addressgroup.Transform,
+			},
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/addressgroups",
+					params: []flagInfo{
+						{
+							usage: "Retrieve resource by name",
+							name:  "name",
+							arg:   true,
+						},
+					},
+				},
+				addonTransform: addressgroup.Transform,
+			},
+			transformedResponse: reflect.TypeOf(addressgroup.Response{}),
+		},
+		{
+			use:   "agent-info",
+			short: "Print agent's basic information",
+			long:  "Print agent's basic information including version, node subnet, OVS info, AgentConditions, etc.",
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:     "/agentinfo",
+					isSingle: true,
+				},
+			},
+			commandGroup:        flat,
+			transformedResponse: reflect.TypeOf(agentinfo.AntreaAgentInfoResponse{}),
 		},
 	},
 	codec: scheme.Codecs,
