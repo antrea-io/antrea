@@ -336,6 +336,7 @@ func Convert_networking_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in *n
 func autoConvert_v1beta1_ContainerPort_To_networking_ContainerPort(in *ContainerPort, out *networking.ContainerPort, s conversion.Scope) error {
 	out.Port = in.Port
 	out.Name = in.Name
+	out.Protocol = networking.Protocol(in.Protocol)
 	return nil
 }
 
@@ -347,6 +348,7 @@ func Convert_v1beta1_ContainerPort_To_networking_ContainerPort(in *ContainerPort
 func autoConvert_networking_ContainerPort_To_v1beta1_ContainerPort(in *networking.ContainerPort, out *ContainerPort, s conversion.Scope) error {
 	out.Port = in.Port
 	out.Name = in.Name
+	out.Protocol = Protocol(in.Protocol)
 	return nil
 }
 
@@ -356,9 +358,7 @@ func Convert_networking_ContainerPort_To_v1beta1_ContainerPort(in *networking.Co
 }
 
 func autoConvert_v1beta1_GroupMemberPod_To_networking_GroupMemberPod(in *GroupMemberPod, out *networking.GroupMemberPod, s conversion.Scope) error {
-	if err := Convert_v1beta1_PodReference_To_networking_PodReference(&in.Pod, &out.Pod, s); err != nil {
-		return err
-	}
+	out.Pod = (*networking.PodReference)(unsafe.Pointer(in.Pod))
 	out.IP = *(*networking.IPAddress)(unsafe.Pointer(&in.IP))
 	out.Ports = *(*[]networking.ContainerPort)(unsafe.Pointer(&in.Ports))
 	return nil
@@ -370,9 +370,7 @@ func Convert_v1beta1_GroupMemberPod_To_networking_GroupMemberPod(in *GroupMember
 }
 
 func autoConvert_networking_GroupMemberPod_To_v1beta1_GroupMemberPod(in *networking.GroupMemberPod, out *GroupMemberPod, s conversion.Scope) error {
-	if err := Convert_networking_PodReference_To_v1beta1_PodReference(&in.Pod, &out.Pod, s); err != nil {
-		return err
-	}
+	out.Pod = (*PodReference)(unsafe.Pointer(in.Pod))
 	out.IP = *(*IPAddress)(unsafe.Pointer(&in.IP))
 	out.Ports = *(*[]ContainerPort)(unsafe.Pointer(&in.Ports))
 	return nil

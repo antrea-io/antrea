@@ -42,12 +42,14 @@ type ContainerPort struct {
 	Port int32
 	// Name represents the associated name with this Port number.
 	Name string
+	// Protocol for port. Must be UDP, TCP, or SCTP.
+	Protocol Protocol
 }
 
 // GroupMemberPod represents a Pod related member to be populated in Groups.
 type GroupMemberPod struct {
 	// Pod maintains the reference to the Pod.
-	Pod PodReference
+	Pod *PodReference
 	// IP maintains the IPAddress of the Pod.
 	IP IPAddress
 	// Ports maintain the list of named port associated with this Pod member.

@@ -45,12 +45,14 @@ type ContainerPort struct {
 	Port int32 `json:"port,omitempty" protobuf:"varint,1,opt,name=port"`
 	// Name represents the associated name with this Port number.
 	Name string `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
+	// Protocol for port. Must be UDP, TCP, or SCTP.
+	Protocol Protocol `json:"protocol,omitempty" protobuf:"bytes,3,opt,name=protocol"`
 }
 
 // GroupMemberPod represents a GroupMember related to Pods.
 type GroupMemberPod struct {
 	// Pod maintains the reference to the Pod.
-	Pod PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
+	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
 	// IP maintains the IPAddress associated with the Pod.
 	IP IPAddress `json:"ip,omitempty" protobuf:"bytes,2,opt,name=ip"`
 	// Ports maintain the named port mapping of this Pod.

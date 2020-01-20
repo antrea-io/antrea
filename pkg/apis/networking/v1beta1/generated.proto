@@ -21,6 +21,7 @@ package github.com.vmware_tanzu.antrea.pkg.apis.networking.v1beta1;
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
+import "k8s.io/apimachinery/pkg/util/intstr/generated.proto";
 
 // Package-wide variables from generator "generated".
 option go_package = "v1beta1";
@@ -33,8 +34,7 @@ option go_package = "v1beta1";
 message AddressGroup {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
-  // IPAddresses is a list of IP addresses selected by this group.
-  repeated bytes ipAddresses = 2;
+  repeated GroupMemberPod pods = 2;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -50,9 +50,9 @@ message AddressGroupList {
 message AddressGroupPatch {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
-  repeated bytes addedIPAddresses = 2;
+  repeated GroupMemberPod addedPods = 2;
 
-  repeated bytes removedIPAddresses = 3;
+  repeated GroupMemberPod removedPods = 3;
 }
 
 // +genclient
@@ -64,7 +64,7 @@ message AppliedToGroup {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // Pods is a list of Pods selected by this group.
-  repeated PodReference pods = 2;
+  repeated GroupMemberPod pods = 2;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -80,9 +80,33 @@ message AppliedToGroupList {
 message AppliedToGroupPatch {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
-  repeated PodReference addedPods = 2;
+  repeated GroupMemberPod addedPods = 2;
 
-  repeated PodReference removedPods = 3;
+  repeated GroupMemberPod removedPods = 3;
+}
+
+// ContainerPort represents a NamedPort on Pod.
+message ContainerPort {
+  // Port represents the Port number.
+  optional int32 port = 1;
+
+  // Name represents the associated name with this Port number.
+  optional string name = 2;
+
+  // Protocol for port. Must be UDP, TCP, or SCTP.
+  optional string protocol = 3;
+}
+
+// GroupMemberPod represents a GroupMember related to Pods.
+message GroupMemberPod {
+  // Pod maintains the reference to the Pod.
+  optional PodReference pod = 1;
+
+  // IP maintains the IPAddress associated with the Pod.
+  optional bytes ip = 2;
+
+  // Ports maintain the named port mapping of this Pod.
+  repeated ContainerPort ports = 3;
 }
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should
@@ -169,8 +193,8 @@ message Service {
   // +optional
   optional string protocol = 1;
 
-  // The port on the given protocol. If not specified, this matches all port numbers.
+  // The port name or number on the given protocol. If not specified, this matches all port numbers.
   // +optional
-  optional int32 port = 2;
+  optional k8s.io.apimachinery.pkg.util.intstr.IntOrString port = 2;
 }
 

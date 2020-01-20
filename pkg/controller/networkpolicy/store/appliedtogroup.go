@@ -75,25 +75,25 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors) *wa
 		obj.UID = event.CurrGroup.UID
 		obj.Name = event.CurrGroup.Name
 
-		var currPods, prevPods types.PodSet
+		var currPods, prevPods networking.GroupMemberPodSet
 		if nodeSpecified {
 			currPods = event.CurrGroup.PodsByNode[nodeName]
 			prevPods = event.PrevGroup.PodsByNode[nodeName]
 		} else {
-			currPods = types.PodSet{}
+			currPods = networking.GroupMemberPodSet{}
 			for _, pods := range event.CurrGroup.PodsByNode {
 				currPods = currPods.Union(pods)
 			}
-			prevPods = types.PodSet{}
+			prevPods = networking.GroupMemberPodSet{}
 			for _, pods := range event.PrevGroup.PodsByNode {
 				prevPods = prevPods.Union(pods)
 			}
 		}
-		for pod := range currPods.Difference(prevPods) {
-			obj.AddedPods = append(obj.AddedPods, pod)
+		for _, pod := range currPods.Difference(prevPods) {
+			obj.AddedPods = append(obj.AddedPods, *pod)
 		}
-		for pod := range prevPods.Difference(currPods) {
-			obj.RemovedPods = append(obj.RemovedPods, pod)
+		for _, pod := range prevPods.Difference(currPods) {
+			obj.RemovedPods = append(obj.RemovedPods, *pod)
 		}
 		if len(obj.AddedPods)+len(obj.RemovedPods) == 0 {
 			// No change for the watcher.
@@ -148,14 +148,14 @@ func ToAppliedToGroupMsg(in *types.AppliedToGroup, out *networking.AppliedToGrou
 	}
 	if nodeName != nil {
 		if pods, exists := in.PodsByNode[*nodeName]; exists {
-			for pod := range pods {
-				out.Pods = append(out.Pods, pod)
+			for _, pod := range pods {
+				out.Pods = append(out.Pods, *pod)
 			}
 		}
 	} else {
 		for _, pods := range in.PodsByNode {
-			for pod := range pods {
-				out.Pods = append(out.Pods, pod)
+			for _, pod := range pods {
+				out.Pods = append(out.Pods, *pod)
 			}
 		}
 	}

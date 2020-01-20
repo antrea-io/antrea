@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -470,11 +471,7 @@ func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) []networking.Ser
 	for _, npPort := range npPorts {
 		antreaService := networking.Service{
 			Protocol: toAntreaProtocol(npPort.Protocol),
-		}
-		if npPort.Port != nil {
-			// TODO(abhiraut): Retrieve ports for named ports.
-			port := int32(npPort.Port.IntValue())
-			antreaService.Port = &port
+			Port:     npPort.Port,
 		}
 		antreaServices = append(antreaServices, antreaService)
 	}
@@ -484,14 +481,14 @@ func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) []networking.Ser
 // toAntreaIPBlock converts a networkingv1.IPBlock to an Antrea IPBlock.
 func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networking.IPBlock, error) {
 	// Convert the allowed IPBlock to networkpolicy.IPNet.
-	ipNet, err := store.CIDRStrToIPNet(ipBlock.CIDR)
+	ipNet, err := cidrStrToIPNet(ipBlock.CIDR)
 	if err != nil {
 		return nil, err
 	}
 	exceptNets := []networking.IPNet{}
 	for _, exc := range ipBlock.Except {
 		// Convert the except IPBlock to networkpolicy.IPNet.
-		exceptNet, err := store.CIDRStrToIPNet(exc)
+		exceptNet, err := cidrStrToIPNet(exc)
 		if err != nil {
 			return nil, err
 		}
@@ -1050,25 +1047,54 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 			pods = append(pods, nsPods...)
 		}
 	}
-	addresses := sets.String{}
+	podSet := networking.GroupMemberPodSet{}
 	for _, pod := range pods {
 		if pod.Status.PodIP == "" {
 			// No need to insert Pod IPAdddress when it is unset.
 			continue
 		}
-		addresses.Insert(pod.Status.PodIP)
+		podSet.Insert(podToMemberPod(pod, true, false))
 	}
 	updatedAddressGroup := &antreatypes.AddressGroup{
-		Name:      addressGroup.Name,
-		UID:       addressGroup.UID,
-		Selector:  addressGroup.Selector,
-		Addresses: addresses,
-		SpanMeta:  spanMeta,
+		Name:     addressGroup.Name,
+		UID:      addressGroup.UID,
+		Selector: addressGroup.Selector,
+		Pods:     podSet,
+		SpanMeta: spanMeta,
 	}
-	klog.V(2).Infof("Updated AddressGroup %s with addresses %v and Node names %v", key, addresses, addrGroupNodeNames)
+	klog.V(2).Infof("Updated AddressGroup %s with addresses %v and Node names %v", key, podSet, addrGroupNodeNames)
 	// Update the store of AddressGroup.
 	n.addressGroupStore.Update(updatedAddressGroup)
 	return nil
+}
+
+func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *networking.GroupMemberPod {
+	memberPod := &networking.GroupMemberPod{}
+	for _, container := range pod.Spec.Containers {
+		for _, port := range container.Ports {
+			// Only include container ports with name set.
+			if port.Name != "" {
+				memberPod.Ports = append(memberPod.Ports, networking.ContainerPort{
+					Port:     port.ContainerPort,
+					Name:     port.Name,
+					Protocol: networking.Protocol(port.Protocol),
+				})
+			}
+		}
+	}
+
+	if includeIP {
+		memberPod.IP = ipStrToIPAddress(pod.Status.PodIP)
+	}
+
+	if includePodRef {
+		podRef := networking.PodReference{
+			Name:      pod.Name,
+			Namespace: pod.Namespace,
+		}
+		memberPod.Pod = &podRef
+	}
+	return memberPod
 }
 
 // syncAppliedToGroup enqueues all the internal NetworkPolicy keys that
@@ -1080,7 +1106,7 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	defer func() {
 		klog.V(2).Infof("Finished syncing AppliedToGroup %s. (%v)", key, time.Since(startTime))
 	}()
-	podsByNodes := make(map[string]antreatypes.PodSet)
+	podSetByNode := make(map[string]networking.GroupMemberPodSet)
 	var pods []*v1.Pod
 	appGroupNodeNames := sets.String{}
 	appliedToGroupObj, found, err := n.appliedToGroupStore.Get(key)
@@ -1099,17 +1125,13 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 			// No need to process Pod when it's not scheduled.
 			continue
 		}
-		podSet := podsByNodes[pod.Spec.NodeName]
+		podSet := podSetByNode[pod.Spec.NodeName]
 		if podSet == nil {
-			podSet = make(map[networking.PodReference]sets.Empty)
+			podSet = networking.GroupMemberPodSet{}
 		}
-		podRef := networking.PodReference{
-			Name:      pod.Name,
-			Namespace: pod.Namespace,
-		}
-		podSet[podRef] = sets.Empty{}
+		podSet.Insert(podToMemberPod(pod, false, true))
 		// Update the Pod references by Node.
-		podsByNodes[pod.Spec.NodeName] = podSet
+		podSetByNode[pod.Spec.NodeName] = podSet
 		// Update the NodeNames in order to set the SpanMeta for AppliedToGroup.
 		appGroupNodeNames.Insert(pod.Spec.NodeName)
 	}
@@ -1120,10 +1142,10 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		UID:        appliedToGroup.UID,
 		Name:       appliedToGroup.Name,
 		Selector:   appliedToGroup.Selector,
-		PodsByNode: podsByNodes,
+		PodsByNode: podSetByNode,
 		SpanMeta:   spanMeta,
 	}
-	klog.V(2).Infof("Updating existing AppliedToGroup in store %s with Pods %v and Nodes %v", key, podsByNodes, updatedAppliedToGroup.SpanMeta)
+	klog.V(2).Infof("Updating existing AppliedToGroup in store %s with Pods %v and Nodes %v", key, podSetByNode, updatedAppliedToGroup.SpanMeta)
 	n.appliedToGroupStore.Update(updatedAppliedToGroup)
 
 	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
@@ -1209,4 +1231,29 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 		}
 	}
 	return nil
+}
+
+// ipStrToIPAddress converts an IP string to a networking.IPAddress.
+// nil will returned if the IP string is not valid.
+func ipStrToIPAddress(ip string) networking.IPAddress {
+	return networking.IPAddress(net.ParseIP(ip))
+}
+
+// cidrStrToIPNet converts a CIDR (eg. 10.0.0.0/16) to a *networking.IPNet.
+func cidrStrToIPNet(cidr string) (*networking.IPNet, error) {
+	// Split the cidr to retrieve the IP and prefix.
+	s := strings.Split(cidr, "/")
+	if len(s) != 2 {
+		return nil, fmt.Errorf("invalid format for IPBlock CIDR: %s", cidr)
+	}
+	// Convert prefix length to int32
+	prefixLen64, err := strconv.ParseInt(s[1], 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid prefix length: %s", s[1])
+	}
+	ipNet := &networking.IPNet{
+		IP:           ipStrToIPAddress(s[0]),
+		PrefixLength: int32(prefixLen64),
+	}
+	return ipNet, nil
 }

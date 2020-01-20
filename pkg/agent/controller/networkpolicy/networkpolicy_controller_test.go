@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
 	k8stesting "k8s.io/client-go/testing"
 
@@ -82,21 +82,21 @@ func (r *mockReconciler) getLastRealized(ruleID string) (*CompletedRule, bool) {
 
 var _ Reconciler = &mockReconciler{}
 
-func getAddressGroup(name string, addresses []v1beta1.IPAddress) *v1beta1.AddressGroup {
+func newAddressGroup(name string, addresses []v1beta1.GroupMemberPod) *v1beta1.AddressGroup {
 	return &v1beta1.AddressGroup{
-		ObjectMeta:  v1.ObjectMeta{Name: name},
-		IPAddresses: addresses,
+		ObjectMeta: v1.ObjectMeta{Name: name},
+		Pods:       addresses,
 	}
 }
 
-func getAppliedToGroup(name string, pods []v1beta1.PodReference) *v1beta1.AppliedToGroup {
+func newAppliedToGroup(name string, pods []v1beta1.GroupMemberPod) *v1beta1.AppliedToGroup {
 	return &v1beta1.AppliedToGroup{
 		ObjectMeta: v1.ObjectMeta{Name: name},
 		Pods:       pods,
 	}
 }
 
-func getNetworkPolicy(uid string, from, to, appliedTo []string, services []v1beta1.Service) *v1beta1.NetworkPolicy {
+func newNetworkPolicy(uid string, from, to, appliedTo []string, services []v1beta1.Service) *v1beta1.NetworkPolicy {
 	networkPolicyRule1 := v1beta1.NetworkPolicyRule{
 		Direction: v1beta1.DirectionIn,
 		From:      v1beta1.NetworkPolicyPeer{AddressGroups: from},
@@ -140,20 +140,20 @@ func TestAddSingleGroupRule(t *testing.T) {
 	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
 
 	protocolTCP := v1beta1.ProtocolTCP
-	port := int32(80)
+	port := intstr.FromInt(80)
 	services := []v1beta1.Service{{Protocol: &protocolTCP, Port: &port}}
 	desiredRule := &CompletedRule{
 		rule:          &rule{Direction: v1beta1.DirectionIn, Services: services},
-		FromAddresses: sets.NewString("1.1.1.1", "2.2.2.2"),
-		ToAddresses:   sets.NewString(),
-		Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+		FromAddresses: v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
+		ToAddresses:   v1beta1.NewGroupMemberPodSet(),
+		Pods:          v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1")),
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)
 
 	// policy1 comes first, no rule will be synced due to missing addressGroup1 and appliedToGroup1.
-	networkPolicyWatcher.Add(getNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services))
+	networkPolicyWatcher.Add(newNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services))
 	select {
 	case ruleID := <-reconciler.updated:
 		t.Fatalf("Expected no update, got %v", ruleID)
@@ -164,7 +164,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 	assert.Equal(t, 0, controller.GetAppliedToGroupNum())
 
 	// addressGroup1 comes, no rule will be synced due to missing appliedToGroup1 data.
-	addressGroupWatcher.Add(getAddressGroup("addressGroup1", []v1beta1.IPAddress{ipStrToIPAddress("1.1.1.1"), ipStrToIPAddress("2.2.2.2")}))
+	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	select {
 	case ruleID := <-reconciler.updated:
 		t.Fatalf("Expected no update, got %v", ruleID)
@@ -175,7 +175,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 	assert.Equal(t, 0, controller.GetAppliedToGroupNum())
 
 	// appliedToGroup1 comes, policy1 will be synced.
-	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup1", []v1beta1.PodReference{{"pod1", "ns1"}}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")}))
 	select {
 	case ruleID := <-reconciler.updated:
 		actualRule, _ := reconciler.getLastRealized(ruleID)
@@ -212,24 +212,24 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
 
 	protocolTCP := v1beta1.ProtocolTCP
-	port := int32(80)
+	port := intstr.FromInt(80)
 	services := []v1beta1.Service{{Protocol: &protocolTCP, Port: &port}}
 	desiredRule := &CompletedRule{
 		rule:          &rule{Direction: v1beta1.DirectionIn, Services: services},
-		FromAddresses: sets.NewString("1.1.1.1", "2.2.2.2", "3.3.3.3"),
-		ToAddresses:   sets.NewString(),
-		Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}, v1beta1.PodReference{"pod2", "ns2"}),
+		FromAddresses: v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")),
+		ToAddresses:   v1beta1.NewGroupMemberPodSet(),
+		Pods:          v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns2")),
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)
 
 	// addressGroup1 comes, no rule will be synced.
-	addressGroupWatcher.Add(getAddressGroup("addressGroup1", []v1beta1.IPAddress{ipStrToIPAddress("1.1.1.1"), ipStrToIPAddress("2.2.2.2")}))
+	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	// appliedToGroup1 comes, no rule will be synced.
-	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup1", []v1beta1.PodReference{{"pod1", "ns1"}}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")}))
 	// policy1 comes first, no rule will be synced due to missing addressGroup2 and appliedToGroup2.
-	networkPolicyWatcher.Add(getNetworkPolicy("policy1", []string{"addressGroup1", "addressGroup2"}, []string{}, []string{"appliedToGroup1", "appliedToGroup2"}, services))
+	networkPolicyWatcher.Add(newNetworkPolicy("policy1", []string{"addressGroup1", "addressGroup2"}, []string{}, []string{"appliedToGroup1", "appliedToGroup2"}, services))
 	select {
 	case ruleID := <-reconciler.updated:
 		t.Fatalf("Expected no update, got %v", ruleID)
@@ -240,7 +240,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 
 	// addressGroup2 comes, no rule will be synced due to missing appliedToGroup2 data.
-	addressGroupWatcher.Add(getAddressGroup("addressGroup2", []v1beta1.IPAddress{ipStrToIPAddress("1.1.1.1"), ipStrToIPAddress("3.3.3.3")}))
+	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("3.3.3.3")}))
 	select {
 	case ruleID := <-reconciler.updated:
 		t.Fatalf("Expected no update, got %v", ruleID)
@@ -251,7 +251,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 
 	// appliedToGroup2 comes, policy1 will be synced.
-	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup2", []v1beta1.PodReference{{"pod2", "ns2"}}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns2")}))
 	select {
 	case ruleID := <-reconciler.updated:
 		actualRule, _ := reconciler.getLastRealized(ruleID)
@@ -288,15 +288,15 @@ func TestDeleteRule(t *testing.T) {
 	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
 
 	protocolTCP := v1beta1.ProtocolTCP
-	port := int32(80)
+	port := intstr.FromInt(80)
 	services := []v1beta1.Service{{Protocol: &protocolTCP, Port: &port}}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)
 
-	addressGroupWatcher.Add(getAddressGroup("addressGroup1", []v1beta1.IPAddress{ipStrToIPAddress("1.1.1.1"), ipStrToIPAddress("2.2.2.2")}))
-	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup1", []v1beta1.PodReference{{"pod1", "ns1"}}))
-	networkPolicyWatcher.Add(getNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services))
+	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")}))
+	networkPolicyWatcher.Add(newNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services))
 	select {
 	case ruleID := <-reconciler.updated:
 		_, exists := reconciler.getLastRealized(ruleID)
@@ -310,7 +310,7 @@ func TestDeleteRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 
-	networkPolicyWatcher.Delete(getNetworkPolicy("policy1", []string{}, []string{}, []string{}, nil))
+	networkPolicyWatcher.Delete(newNetworkPolicy("policy1", []string{}, []string{}, []string{}, nil))
 	select {
 	case ruleID := <-reconciler.deleted:
 		actualRule, exists := reconciler.getLastRealized(ruleID)
@@ -332,19 +332,19 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
 
 	protocolTCP := v1beta1.ProtocolTCP
-	port := int32(80)
+	port := intstr.FromInt(80)
 	services := []v1beta1.Service{{Protocol: &protocolTCP, Port: &port}}
 	desiredRule1 := &CompletedRule{
 		rule:          &rule{Direction: v1beta1.DirectionIn, Services: services},
-		FromAddresses: sets.NewString("1.1.1.1", "2.2.2.2"),
-		ToAddresses:   sets.NewString(),
-		Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+		FromAddresses: v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
+		ToAddresses:   v1beta1.NewGroupMemberPodSet(),
+		Pods:          v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1")),
 	}
 	desiredRule2 := &CompletedRule{
 		rule:          &rule{Direction: v1beta1.DirectionOut, Services: services},
-		FromAddresses: sets.NewString(),
-		ToAddresses:   sets.NewString("3.3.3.3", "4.4.4.4"),
-		Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+		FromAddresses: v1beta1.NewGroupMemberPodSet(),
+		ToAddresses:   v1beta1.NewGroupMemberPodSet(newAddressGroupMember("3.3.3.3"), newAddressGroupMember("4.4.4.4")),
+		Pods:          v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1")),
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -352,9 +352,9 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 
 	// Test NetworkPolicyInfoQuerier functions when the NetworkPolicy has multiple rules.
 	networkPolicyWatcher.Add(getNetworkPolicyWithMultipleRules("policy1", []string{"addressGroup1"}, []string{"addressGroup2"}, []string{"appliedToGroup1"}, services))
-	addressGroupWatcher.Add(getAddressGroup("addressGroup1", []v1beta1.IPAddress{ipStrToIPAddress("1.1.1.1"), ipStrToIPAddress("2.2.2.2")}))
-	addressGroupWatcher.Add(getAddressGroup("addressGroup2", []v1beta1.IPAddress{ipStrToIPAddress("3.3.3.3"), ipStrToIPAddress("4.4.4.4")}))
-	appliedToGroupWatcher.Add(getAppliedToGroup("appliedToGroup1", []v1beta1.PodReference{{"pod1", "ns1"}}))
+	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
+	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta1.GroupMemberPod{*newAddressGroupMember("3.3.3.3"), *newAddressGroupMember("4.4.4.4")}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")}))
 	for i := 0; i < 2; i++ {
 		select {
 		case ruleID := <-reconciler.updated:

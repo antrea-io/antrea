@@ -94,7 +94,7 @@ func newClientset() *fake.Clientset {
 func TestAddNetworkPolicy(t *testing.T) {
 	protocolTCP := networking.ProtocolTCP
 	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
-	int80, int81 := int32(80), int32(81)
+	int80, int81 := intstr.FromInt(80), intstr.FromInt(81)
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
@@ -1026,16 +1026,9 @@ func TestAddPod(t *testing.T) {
 			} else {
 				assert.Len(t, podsAdded, 0, "expected Pod not to match AppliedToGroup")
 			}
-			if tt.inAddressGroupMatch {
-				assert.Contains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
-			} else {
-				assert.NotContains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
-			}
-			if tt.outAddressGroupMatch {
-				assert.Contains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
-			} else {
-				assert.NotContains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
-			}
+			memberPod := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
+			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod))
+			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod))
 		})
 	}
 }
@@ -1105,7 +1098,8 @@ func TestDeletePod(t *testing.T) {
 	updatedAddrGroupObj, _, _ := npc.addressGroupStore.Get(addrGroup.Name)
 	updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
 	// Ensure Pod2 IP is removed from AddressGroup.
-	assert.NotContains(t, updatedAddrGroup.Addresses, p2IP)
+	memberPod2 := &networking.GroupMemberPod{IP: ipStrToIPAddress(p2IP)}
+	assert.False(t, updatedAddrGroup.Pods.Has(memberPod2))
 }
 
 func TestAddNamespace(t *testing.T) {
@@ -1214,20 +1208,12 @@ func TestAddNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			if tt.inAddressGroupMatch {
-				assert.Contains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
-				assert.Contains(t, updatedInAddrGroup.Addresses, "2.2.3.4")
-			} else {
-				assert.NotContains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
-				assert.NotContains(t, updatedInAddrGroup.Addresses, "2.2.3.4")
-			}
-			if tt.outAddressGroupMatch {
-				assert.Contains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
-				assert.Contains(t, updatedOutAddrGroup.Addresses, "2.2.3.4")
-			} else {
-				assert.NotContains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
-				assert.NotContains(t, updatedOutAddrGroup.Addresses, "2.2.3.4")
-			}
+			memberPod1 := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
+			memberPod2 := &networking.GroupMemberPod{IP: ipStrToIPAddress("2.2.3.4")}
+			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod1))
+			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod2))
+			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod1))
+			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod2))
 		})
 	}
 }
@@ -1344,13 +1330,15 @@ func TestDeleteNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			memberPod1 := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.1.1.1")}
+			memberPod2 := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.1.1.2")}
 			if tt.inAddressGroupMatch {
-				assert.NotContains(t, updatedInAddrGroup.Addresses, "1.2.3.4")
-				assert.NotContains(t, updatedInAddrGroup.Addresses, "2.2.3.4")
+				assert.False(t, updatedInAddrGroup.Pods.Has(memberPod1))
+				assert.False(t, updatedInAddrGroup.Pods.Has(memberPod2))
 			}
 			if tt.outAddressGroupMatch {
-				assert.NotContains(t, updatedOutAddrGroup.Addresses, "1.2.3.4")
-				assert.NotContains(t, updatedOutAddrGroup.Addresses, "2.2.3.4")
+				assert.False(t, updatedOutAddrGroup.Pods.Has(memberPod1))
+				assert.False(t, updatedOutAddrGroup.Pods.Has(memberPod2))
 			}
 		})
 	}
@@ -1542,7 +1530,7 @@ func TestToAntreaProtocol(t *testing.T) {
 
 func TestToAntreaServices(t *testing.T) {
 	tcpProto := v1.ProtocolTCP
-	portNum := int32(80)
+	portNum := intstr.FromInt(80)
 	tables := []struct {
 		ports     []networkingv1.NetworkPolicyPort
 		expValues []networking.Service
@@ -1572,7 +1560,7 @@ func TestToAntreaServices(t *testing.T) {
 
 func TestToAntreaIPBlock(t *testing.T) {
 	expIpNet := networking.IPNet{
-		IP:           store.IPStrToIPAddress("10.0.0.0"),
+		IP:           ipStrToIPAddress("10.0.0.0"),
 		PrefixLength: 24,
 	}
 	tables := []struct {
@@ -1620,7 +1608,6 @@ func TestToAntreaIPBlock(t *testing.T) {
 func TestProcessNetworkPolicy(t *testing.T) {
 	protocolTCP := networking.ProtocolTCP
 	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
-	int80, int81 := int32(80), int32(81)
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
@@ -1725,7 +1712,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &int80,
+								Port:     &intstr80,
 							},
 						},
 					},
@@ -1737,7 +1724,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &int81,
+								Port:     &intstr81,
 							},
 						},
 					},
@@ -1794,7 +1781,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &int80,
+								Port:     &intstr80,
 							},
 						},
 					},
@@ -1806,7 +1793,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &int81,
+								Port:     &intstr81,
 							},
 						},
 					},

@@ -20,7 +20,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
@@ -28,6 +28,14 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+)
+
+var (
+	addressGroup1   = v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))
+	addressGroup2   = v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.2"))
+	appliedToGroup1 = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))
+	appliedToGroup2 = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod2", "ns1"))
+	appliedToGroup3 = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod3", "ns1"))
 )
 
 func TestReconcilerForget(t *testing.T) {
@@ -76,9 +84,6 @@ func TestReconcilerForget(t *testing.T) {
 }
 
 func TestReconcilerReconcile(t *testing.T) {
-	addressGroup1 := sets.NewString("1.1.1.1")
-	appliedToGroup1 := newPodSet(v1beta1.PodReference{"pod1", "ns1"})
-	appliedToGroup2 := newPodSet(v1beta1.PodReference{"pod2", "ns1"})
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
 		InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1"),
@@ -86,12 +91,12 @@ func TestReconcilerReconcile(t *testing.T) {
 		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1"},
 		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1}})
 	protocolTCP := v1beta1.ProtocolTCP
-	port80 := int32(80)
-	// It represents named port that we can't resolve.
-	port0 := int32(0)
+	port80 := intstr.FromInt(80)
+	// It represents named port that we can't resolve for now.
+	portHTTP := intstr.FromString("http")
 	service1 := v1beta1.Service{Protocol: &protocolTCP, Port: &port80}
 	service2 := v1beta1.Service{Protocol: &protocolTCP}
-	service3 := v1beta1.Service{Protocol: &protocolTCP, Port: &port0}
+	service3 := v1beta1.Service{Protocol: &protocolTCP, Port: &portHTTP}
 	_, ipNet1, _ := net.ParseCIDR("10.10.0.0/16")
 	_, ipNet2, _ := net.ParseCIDR("10.20.0.0/16")
 	_, ipNet3, _ := net.ParseCIDR("10.20.1.0/24")
@@ -124,7 +129,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			&types.PolicyRule{
 				ID:         1,
 				Direction:  networkingv1.PolicyTypeIngress,
-				From:       []types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+				From:       []types.Address{ipStringToOFAddress("1.1.1.1")},
 				ExceptFrom: nil,
 				To:         []types.Address{openflow.NewOFPortAddress(1)},
 				ExceptTo:   nil,
@@ -143,7 +148,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			&types.PolicyRule{
 				ID:         1,
 				Direction:  networkingv1.PolicyTypeIngress,
-				From:       []types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+				From:       []types.Address{ipStringToOFAddress("1.1.1.1")},
 				ExceptFrom: nil,
 				To:         []types.Address{},
 				ExceptTo:   nil,
@@ -168,7 +173,7 @@ func TestReconcilerReconcile(t *testing.T) {
 				ID:        1,
 				Direction: networkingv1.PolicyTypeIngress,
 				From: []types.Address{
-					openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
+					ipStringToOFAddress("1.1.1.1"),
 					openflow.NewIPNetAddress(*ipNet1),
 					openflow.NewIPNetAddress(*ipNet2),
 				},
@@ -231,9 +236,9 @@ func TestReconcilerReconcile(t *testing.T) {
 			&types.PolicyRule{
 				ID:         1,
 				Direction:  networkingv1.PolicyTypeEgress,
-				From:       []types.Address{openflow.NewIPAddress(net.ParseIP("2.2.2.2"))},
+				From:       []types.Address{ipStringToOFAddress("2.2.2.2")},
 				ExceptFrom: nil,
-				To:         []types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+				To:         []types.Address{ipStringToOFAddress("1.1.1.1")},
 				ExceptTo:   nil,
 				Service:    nil,
 			},
@@ -254,10 +259,10 @@ func TestReconcilerReconcile(t *testing.T) {
 			&types.PolicyRule{
 				ID:         1,
 				Direction:  networkingv1.PolicyTypeEgress,
-				From:       []types.Address{openflow.NewIPAddress(net.ParseIP("2.2.2.2"))},
+				From:       []types.Address{ipStringToOFAddress("2.2.2.2")},
 				ExceptFrom: nil,
 				To: []types.Address{
-					openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
+					ipStringToOFAddress("1.1.1.1"),
 					openflow.NewIPNetAddress(*ipNet1),
 					openflow.NewIPNetAddress(*ipNet2),
 				},
@@ -312,17 +317,17 @@ func TestReconcilerUpdate(t *testing.T) {
 			"updating-ingress-rule",
 			&CompletedRule{
 				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
-				FromAddresses: sets.NewString("1.1.1.1"),
-				Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+				FromAddresses: addressGroup1,
+				Pods:          appliedToGroup1,
 			},
 			&CompletedRule{
 				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
-				FromAddresses: sets.NewString("1.1.1.2"),
-				Pods:          newPodSet(v1beta1.PodReference{"pod2", "ns1"}),
+				FromAddresses: addressGroup2,
+				Pods:          appliedToGroup2,
 			},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.2"))},
+			[]types.Address{ipStringToOFAddress("1.1.1.2")},
 			[]types.Address{openflow.NewOFPortAddress(2)},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+			[]types.Address{ipStringToOFAddress("1.1.1.1")},
 			[]types.Address{openflow.NewOFPortAddress(1)},
 			false,
 		},
@@ -330,35 +335,35 @@ func TestReconcilerUpdate(t *testing.T) {
 			"updating-egress-rule",
 			&CompletedRule{
 				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
-				ToAddresses: sets.NewString("1.1.1.1"),
-				Pods:        newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+				ToAddresses: addressGroup1,
+				Pods:        appliedToGroup1,
 			},
 			&CompletedRule{
 				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
-				ToAddresses: sets.NewString("1.1.1.2"),
-				Pods:        newPodSet(v1beta1.PodReference{"pod2", "ns1"}),
+				ToAddresses: addressGroup2,
+				Pods:        appliedToGroup2,
 			},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("3.3.3.3"))},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.2"))},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("2.2.2.2"))},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+			[]types.Address{ipStringToOFAddress("3.3.3.3")},
+			[]types.Address{ipStringToOFAddress("1.1.1.2")},
+			[]types.Address{ipStringToOFAddress("2.2.2.2")},
+			[]types.Address{ipStringToOFAddress("1.1.1.1")},
 			false,
 		},
 		{
 			"updating-ingress-rule-with-missing-ofport",
 			&CompletedRule{
 				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
-				FromAddresses: sets.NewString("1.1.1.1"),
-				Pods:          newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+				FromAddresses: addressGroup1,
+				Pods:          appliedToGroup1,
 			},
 			&CompletedRule{
 				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
-				FromAddresses: sets.NewString("1.1.1.2"),
-				Pods:          newPodSet(v1beta1.PodReference{"pod3", "ns1"}),
+				FromAddresses: addressGroup2,
+				Pods:          appliedToGroup3,
 			},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.2"))},
+			[]types.Address{ipStringToOFAddress("1.1.1.2")},
 			[]types.Address{},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+			[]types.Address{ipStringToOFAddress("1.1.1.1")},
 			[]types.Address{openflow.NewOFPortAddress(1)},
 			false,
 		},
@@ -366,18 +371,18 @@ func TestReconcilerUpdate(t *testing.T) {
 			"updating-egress-rule-with-missing-ip",
 			&CompletedRule{
 				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
-				ToAddresses: sets.NewString("1.1.1.1"),
-				Pods:        newPodSet(v1beta1.PodReference{"pod1", "ns1"}),
+				ToAddresses: addressGroup1,
+				Pods:        appliedToGroup1,
 			},
 			&CompletedRule{
 				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
-				ToAddresses: sets.NewString("1.1.1.2"),
-				Pods:        newPodSet(v1beta1.PodReference{"pod3", "ns1"}),
+				ToAddresses: addressGroup2,
+				Pods:        appliedToGroup3,
 			},
 			[]types.Address{},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.2"))},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("2.2.2.2"))},
-			[]types.Address{openflow.NewIPAddress(net.ParseIP("1.1.1.1"))},
+			[]types.Address{ipStringToOFAddress("1.1.1.2")},
+			[]types.Address{ipStringToOFAddress("2.2.2.2")},
+			[]types.Address{ipStringToOFAddress("1.1.1.1")},
 			false,
 		},
 	}
