@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	defaultPrometheusPort     = 9093
+	defaultPrometheusPort = 9093
 )
 
 type Options struct {
