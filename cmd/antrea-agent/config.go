@@ -67,6 +67,12 @@ type AgentConfig struct {
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to false.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// Enable golang metrics exposure via Prometheus
+	// Defaults to false.
+	EnablePrometheusGoMetrics bool `yaml:"enablePrometheusGoMetrics,omitempty"`
+	// Enable process metrics exposure via Prometheus
+	// Defaults to false.
+	EnablePrometheusProcessMetrics bool `yaml:"enablePrometheusProcessMetrics,omitempty"`
 	// Prometheus metrics hostname.
 	// Defaults to empty string
 	PrometheusHost string `yaml:"prometheusHost,omitempty"`
