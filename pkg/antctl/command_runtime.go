@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,5 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package handlers contains handler implementations for different antctl commands.
-package handlers
+package antctl
+
+import (
+	"os"
+	"strings"
+)
+
+const (
+	componentController string = "controller"
+	componentAgent      string = "agent"
+)
+
+var (
+	// runtimeComponent tells the component the antctl client running against or
+	// the antctl server running in.
+	runtimeComponent string
+)
+
+func init() {
+	if strings.HasPrefix(os.Getenv("POD_NAME"), "antrea-agent") {
+		runtimeComponent = componentAgent
+	} else {
+		runtimeComponent = componentController
+	}
+}

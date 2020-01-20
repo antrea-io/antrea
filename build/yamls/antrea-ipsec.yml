@@ -69,11 +69,21 @@ metadata:
     app: antrea
   name: antctl
 rules:
-- nonResourceURLs:
-  - /apis/system.antrea.tanzu.vmware.com
-  - /apis/system.antrea.tanzu.vmware.com/*
+- apiGroups:
+  - clusterinformation.antrea.tanzu.vmware.com
+  resources:
+  - antreacontrollerinfos
   verbs:
   - get
+- apiGroups:
+  - networking.antrea.tanzu.vmware.com
+  resources:
+  - networkpolicies
+  - appliedtogroups
+  - addressgroups
+  verbs:
+  - get
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -170,22 +180,6 @@ kind: RoleBinding
 metadata:
   labels:
     app: antrea
-  name: antctl
-  namespace: kube-system
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: antctl
-subjects:
-- kind: ServiceAccount
-  name: antctl
-  namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  labels:
-    app: antrea
   name: antrea-controller-authentication-reader
   namespace: kube-system
 roleRef:
@@ -195,6 +189,22 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: antrea-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: antctl
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antctl
+subjects:
+- kind: ServiceAccount
+  name: antctl
   namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -386,9 +396,9 @@ kind: APIService
 metadata:
   labels:
     app: antrea
-  name: v1beta1.system.antrea.tanzu.vmware.com
+  name: v1beta1.networking.antrea.tanzu.vmware.com
 spec:
-  group: system.antrea.tanzu.vmware.com
+  group: networking.antrea.tanzu.vmware.com
   groupPriorityMinimum: 100
   insecureSkipTLSVerify: true
   service:

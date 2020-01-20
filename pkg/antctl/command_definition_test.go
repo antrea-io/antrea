@@ -34,7 +34,6 @@ type Foobar struct {
 func TestFormat(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
-		singleton       bool
 		single          bool
 		transform       func(reader io.Reader, single bool) (interface{}, error)
 		rawResponseData interface{}
@@ -87,9 +86,9 @@ func TestFormat(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opt := &commandDefinition{
-				SingleObject:        tc.singleton,
-				TransformedResponse: tc.responseStruct,
-				AddonTransform:      tc.transform,
+				transformedResponse: tc.responseStruct,
+				controllerEndpoint:  &endpoint{addonTransform: tc.transform},
+				agentEndpoint:       &endpoint{addonTransform: tc.transform},
 			}
 			var responseData []byte
 			responseData, err := json.Marshal(tc.rawResponseData)
@@ -105,40 +104,23 @@ func TestFormat(t *testing.T) {
 // TestCommandDefinitionGenerateExample checks example strings are generated as
 // expected.
 func TestCommandDefinitionGenerateExample(t *testing.T) {
-
-	type fooResponse struct {
-		Bar string
-	}
-
-	type keyFooResponse struct {
-		Bar string `antctl:"key"`
-	}
-
+	runtimeComponent = componentAgent
 	for k, tc := range map[string]struct {
 		use          string
 		cmdChain     string
 		singleObject bool
 		expect       string
-		responseType reflect.Type
 	}{
 		"SingleObject": {
 			use:          "test",
 			cmdChain:     "first second third",
 			singleObject: true,
-			responseType: reflect.TypeOf(fooResponse{}),
-			expect:       "  Get the foo\n  $ first second third test\n",
-		},
-		"NoKeyList": {
-			use:          "test",
-			cmdChain:     "first second third",
-			responseType: reflect.TypeOf(fooResponse{}),
-			expect:       "  Get the list of foo\n  $ first second third test\n",
+			expect:       "  Get the test\n  $ first second third test\n",
 		},
 		"KeyList": {
-			use:          "test",
-			cmdChain:     "first second third",
-			responseType: reflect.TypeOf(keyFooResponse{}),
-			expect:       "  Get a keyfoo\n  $ first second third test [bar]\n  Get the list of keyfoo\n  $ first second third test\n",
+			use:      "test",
+			cmdChain: "first second third",
+			expect:   "  Get a test\n  $ first second third test [name]\n  Get the list of test\n  $ first second third test\n",
 		},
 	} {
 		t.Run(k, func(t *testing.T) {
@@ -152,8 +134,8 @@ func TestCommandDefinitionGenerateExample(t *testing.T) {
 			cmd.Use = tc.use
 
 			co := &commandDefinition{
-				SingleObject:        tc.singleObject,
-				TransformedResponse: tc.responseType,
+				use:           tc.use,
+				agentEndpoint: &endpoint{nonResourceEndpoint: &nonResourceEndpoint{isSingle: tc.singleObject}},
 			}
 			co.applyExampleToCommand(cmd)
 			assert.Equal(t, tc.expect, cmd.Example)
