@@ -16,7 +16,6 @@ package agent
 
 import (
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"os/exec"
@@ -40,10 +39,12 @@ import (
 )
 
 const (
-	maxRetryForHostLink = 5
-	NodeNameEnvKey      = "NODE_NAME"
-	IPSecPSKEnvKey      = "ANTREA_IPSEC_PSK"
-	roundNumKey         = "roundNum" // round number key in externalIDs.
+	maxRetryForHostLink     = 5
+	NodeNameEnvKey          = "NODE_NAME"
+	IPSecPSKEnvKey          = "ANTREA_IPSEC_PSK"
+	roundNumKey             = "roundNum" // round number key in externalIDs.
+	initialRoundNum         = 1
+	maxRetryForRoundNumSave = 5
 )
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
@@ -219,13 +220,47 @@ func (i *Initializer) Initialize() error {
 	return nil
 }
 
+// persistRoundNum will save the provided round number to OVSDB as an external ID. To account for
+// transient failures, this (synchronous) function includes a retry mechanism.
+func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interval time.Duration, maxRetries int) {
+	klog.Infof("Persisting round number %d to OVSDB", num)
+	retry := 0
+	for {
+		err := saveRoundNum(num, bridgeClient)
+		if err == nil {
+			klog.Infof("Round number %d was persisted to OVSDB", num)
+			return // success
+		}
+		klog.Errorf("Error when writing round number to OVSDB: %v", err)
+		if retry >= maxRetries {
+			break
+		}
+		time.Sleep(interval)
+	}
+	klog.Errorf("Unable to persist round number %d to OVSDB after %d tries", num, maxRetries+1)
+}
+
 // initOpenFlowPipeline sets up necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
+// Every time the agent is (re)started, we go through the following sequence:
+//   1. agent determines the new round number (this is done by incrementing the round number
+//   persisted in OVSDB, or if it's not available by picking round 1).
+//   2. any existing flow for which the round number matches the round number obtained from step 1
+//   is deleted.
+//   3. all required flows are installed, using the round number obtained from step 1.
+//   4. after convergence, all existing flows for which the round number matches the previous round
+//   number (i.e. the round number which was persisted in OVSDB, if any) are deleted.
+//   5. the new round number obtained from step 1 is persisted to OVSDB.
+// The rationale for not persisting the new round number until after all previous flows have been
+// deleted is to avoid a situation in which some stale flows are never deleted because of successive
+// agent restarts (with the agent crashing before step 4 can be completed). With the sequence
+// described above, We guarantee that at most two rounds of flows exist in the switch at any given
+// time.
 func (i *Initializer) initOpenFlowPipeline() error {
-	roundNum := getRoundNum(i.ovsBridgeClient)
+	roundInfo := getRoundInfo(i.ovsBridgeClient)
 	// Setup all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundNum)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo)
 	if err != nil {
-		klog.Errorf("Failed to setup basic openflow entries: %v", err)
+		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
 	}
 
@@ -256,6 +291,24 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
 		return err
 	}
+
+	go func() {
+		// Delete stale flows from previous round. We need to wait long enough to ensure
+		// that all the flow which are still required have received an updated cookie (with
+		// the new round number), otherwise we would disrupt the dataplane. Unfortunately,
+		// the time required for convergence may be large and there is no simple way to
+		// determine when is a right time to perform the cleanup task.
+		// TODO: introduce a deterministic mechanism through which the different entities
+		// responsible for installing flows can notify the agent that this deletion
+		// operation can take place.
+		time.Sleep(10 * time.Second)
+		klog.Info("Deleting stale flows from previous round if any")
+		if err := i.ofClient.DeleteStaleFlows(); err != nil {
+			klog.Errorf("Error when deleting stale flows from previous round: %v", err)
+			return
+		}
+		persistRoundNum(roundInfo.RoundNum, i.ovsBridgeClient, 1*time.Second, maxRetryForRoundNumSave)
+	}()
 
 	go func() {
 		for {
@@ -469,22 +522,24 @@ func saveRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient) error {
 	return bridgeClient.SetExternalIDs(updatedExtIDs)
 }
 
-func getRoundNum(bridgeClient ovsconfig.OVSBridgeClient) uint64 {
+func getRoundInfo(bridgeClient ovsconfig.OVSBridgeClient) types.RoundInfo {
+	roundInfo := types.RoundInfo{}
 	num, err := getLastRoundNum(bridgeClient)
 	if err != nil {
-		klog.Warning("No round number found in OVSDB, using a random value")
-		rand.Seed(time.Now().UnixNano())
-		num = rand.Uint64()
+		klog.Infof("No round number found in OVSDB, using %v", initialRoundNum)
+		// We use a fixed value instead of a randomly-generated value to ensure that stale
+		// flows can be properly deleted in case of multiple rapid restarts when the agent
+		// is first deployed to a Node.
+		num = initialRoundNum
 	} else {
+		roundInfo.PrevRoundNum = new(uint64)
+		*roundInfo.PrevRoundNum = num
 		num += 1
 	}
 
 	num %= 1 << cookie.BitwidthRound
 	klog.Infof("Using round number %d", num)
-	err = saveRoundNum(num, bridgeClient)
-	if err != nil {
-		klog.Errorf("Writing round number failed: %v", err)
-	}
+	roundInfo.RoundNum = num
 
-	return num
+	return roundInfo
 }

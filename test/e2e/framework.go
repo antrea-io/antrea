@@ -52,6 +52,7 @@ const (
 	agentContainerName   string = "antrea-agent"
 	antreaYML            string = "antrea.yml"
 	antreaIPSecYML       string = "antrea-ipsec.yml"
+	defaultBridgeName    string = "br-int"
 
 	nameSuffixLength int = 8
 )
