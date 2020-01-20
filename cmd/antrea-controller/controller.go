@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/prometheus/common/log"
 	"net"
 	"net/http"
 	"os"
@@ -109,7 +110,10 @@ func run(o *Options) error {
 	antctlServer.Start(nil, controllerMonitor, stopCh)
 
 	if o.config.EnablePrometheusMetrics {
-		go createPrometheusMetricsListener(o.config.PrometheusHost, strconv.Itoa(o.config.PrometheusPort))
+		go createPrometheusMetricsListener(o.config.PrometheusHost,
+			strconv.Itoa(o.config.PrometheusPort),
+			o.config.EnablePrometheusGoMetrics,
+			o.config.EnablePrometheusGoMetrics)
 	}
 
 	<-stopCh
@@ -117,9 +121,11 @@ func run(o *Options) error {
 	return nil
 }
 
-func createPrometheusMetricsListener(prometheusHost string, prometheusPort string) {
+func createPrometheusMetricsListener(prometheusHost string,
+	prometheusPort string,
+	enablePrometheusGoMetrics bool,
+	enablePrometheusProcessMetrics bool) {
 	hostname, err := os.Hostname()
-
 
 	klog.Infof("Initializing prometheus host %s port %s", prometheusHost, prometheusPort)
 	gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
@@ -132,6 +138,15 @@ func createPrometheusMetricsListener(prometheusHost string, prometheusPort strin
 	gaugeHost.Set(1)
 	prometheus.MustRegister(gaugeHost)
 	http.Handle("/metrics", promhttp.Handler())
+
+	if !enablePrometheusGoMetrics {
+		klog.Info("Golang metrics are disabled")
+		prometheus.Unregister(prometheus.NewGoCollector())
+	}
+	if !enablePrometheusProcessMetrics {
+		klog.Info("Process metrics are disabled")
+		prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	}
 
 	err = http.ListenAndServe(net.JoinHostPort(prometheusHost, prometheusPort), nil)
 	if err != nil {
