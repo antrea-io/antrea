@@ -19,6 +19,7 @@ import (
 	"strconv"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 
 	"k8s.io/api/core/v1"
@@ -62,6 +63,9 @@ type NetworkPolicyInfoQuerier interface {
 type AgentNetworkPolicyInfoQuerier interface {
 	NetworkPolicyInfoQuerier
 	GetControllerConnectionStatus() bool
+	GetNetworkPolicies() []networkingv1beta1.NetworkPolicy
+	GetAddressGroups() []networkingv1beta1.AddressGroup
+	GetAppliedToGroups() []networkingv1beta1.AppliedToGroup
 }
 
 type ControllerNetworkPolicyInfoQuerier interface {

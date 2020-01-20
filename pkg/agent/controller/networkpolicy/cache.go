@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
@@ -118,6 +119,65 @@ type ruleCache struct {
 
 	// podUpdates is a channel for receiving Pod updates from CNIServer.
 	podUpdates <-chan v1beta1.PodReference
+}
+
+// TODO: save namespace information in cache.
+func (c *ruleCache) GetNetworkPolicies() []v1beta1.NetworkPolicy {
+	var ret []v1beta1.NetworkPolicy
+	c.policySetLock.RLock()
+	defer c.policySetLock.RUnlock()
+	for uid := range c.policySet {
+		np := v1beta1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: uid},
+		}
+		rules, _ := c.rules.ByIndex(policyIndex, uid)
+		for _, ruleObj := range rules {
+			rule := ruleObj.(*rule)
+			np.Rules = append(np.Rules, v1beta1.NetworkPolicyRule{
+				Direction: rule.Direction,
+				From:      rule.From,
+				To:        rule.To,
+				Services:  rule.Services,
+			})
+			np.AppliedToGroups = rule.AppliedToGroups
+		}
+		ret = append(ret, np)
+	}
+	return ret
+}
+
+func (c *ruleCache) GetAddressGroups() []v1beta1.AddressGroup {
+	var ret []v1beta1.AddressGroup
+	c.addressSetLock.RLock()
+	defer c.addressSetLock.RUnlock()
+	for k, v := range c.addressSetByGroup {
+		var pods []v1beta1.GroupMemberPod
+		for _, pod := range v {
+			pods = append(pods, *pod)
+		}
+		ret = append(ret, v1beta1.AddressGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: k},
+			Pods:       pods,
+		})
+	}
+	return ret
+}
+
+func (c *ruleCache) GetAppliedToGroups() []v1beta1.AppliedToGroup {
+	var ret []v1beta1.AppliedToGroup
+	c.podSetLock.RLock()
+	defer c.podSetLock.RUnlock()
+	for k, v := range c.podSetByGroup {
+		var pods []v1beta1.GroupMemberPod
+		for _, pod := range v.Items() {
+			pods = append(pods, *pod)
+		}
+		ret = append(ret, v1beta1.AppliedToGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: k},
+			Pods:       pods,
+		})
+	}
+	return ret
 }
 
 // ruleKeyFunc knows how to get key of a *rule.

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package handlers
+package agentinfo
 
 import (
 	"encoding/json"
@@ -24,8 +24,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 )
-
-var _ Factory = new(AgentInfo)
 
 // AntreaAgentInfoResponse is the struct for the response of agent-info command.
 // It includes all fields except meta info from v1beta1.AntreaAgentInfo struct.
@@ -40,25 +38,20 @@ type AntreaAgentInfoResponse struct {
 	AgentConditions             []v1beta1.AgentCondition            `json:"agentConditions,omitempty"`             // Agent condition contains types like AgentHealthy
 }
 
-// AgentInfo is the implementation of the Factory interface for the agent-info command.
-type AgentInfo struct{}
-
 // Handler returns the function which can handle queries issued by agent-info commands,
 // the handler function populate component's agent-info to the response.
-func (v *AgentInfo) Handler(aq monitor.AgentQuerier, cq monitor.ControllerQuerier) http.HandlerFunc {
+func HandleFunc(aq monitor.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var info *AntreaAgentInfoResponse
-		if aq != nil {
-			allInfo := aq.GetAgentInfo()
-			info = &AntreaAgentInfoResponse{
-				Version:                     allInfo.Version,
-				PodRef:                      allInfo.PodRef,
-				NodeRef:                     allInfo.NodeRef,
-				OVSInfo:                     allInfo.OVSInfo,
-				NetworkPolicyControllerInfo: allInfo.NetworkPolicyControllerInfo,
-				LocalPodNum:                 allInfo.LocalPodNum,
-				AgentConditions:             allInfo.AgentConditions,
-			}
+		allInfo := aq.GetAgentInfo()
+		info = &AntreaAgentInfoResponse{
+			Version:                     allInfo.Version,
+			PodRef:                      allInfo.PodRef,
+			NodeRef:                     allInfo.NodeRef,
+			OVSInfo:                     allInfo.OVSInfo,
+			NetworkPolicyControllerInfo: allInfo.NetworkPolicyControllerInfo,
+			LocalPodNum:                 allInfo.LocalPodNum,
+			AgentConditions:             allInfo.AgentConditions,
 		}
 		err := json.NewEncoder(w).Encode(info)
 		if err != nil {

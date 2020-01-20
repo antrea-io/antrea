@@ -18,7 +18,6 @@ import (
 	"flag"
 	"os"
 	"path"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -27,12 +26,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl"
 )
 
-var (
-	commandName = path.Base(os.Args[0])
-	// TODO: May not work for antrea on windows
-	inPod   = len(os.Getenv("POD_NAME")) != 0
-	isAgent = strings.HasPrefix(os.Getenv("POD_NAME"), "antrea-agent")
-)
+var commandName = path.Base(os.Args[0])
 
 var rootCmd = &cobra.Command{
 	Use:   commandName,
@@ -51,7 +45,7 @@ func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	antctl.CommandList.ApplyToRootCommand(rootCmd, isAgent, inPod)
+	antctl.CommandList.ApplyToRootCommand(rootCmd)
 	err := rootCmd.Execute()
 	if err != nil {
 		logs.FlushLogs()
