@@ -16,7 +16,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/prometheus/common/log"
 	"net"
 	"net/http"
 	"os"
