@@ -23,10 +23,10 @@ import (
 	"strconv"
 	"time"
 
-	genericapiserver "k8s.io/apiserver/pkg/server"
-	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	genericapiserver "k8s.io/apiserver/pkg/server"
+	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
@@ -150,7 +150,7 @@ func createPrometheusMetricsListener(prometheusHost string,
 
 	err = http.ListenAndServe(net.JoinHostPort(prometheusHost, prometheusPort), nil)
 	if err != nil {
-		klog.Error("Failed to initialize Prometheus metrics server %v", err)
+		klog.Errorf("Failed to initialize Prometheus metrics server %v", err)
 	}
 }
 

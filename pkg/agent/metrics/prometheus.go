@@ -122,6 +122,6 @@ func StartListener(
 
 	err = http.ListenAndServe(net.JoinHostPort(prometheusHost, strconv.Itoa(prometheusPort)), nil)
 	if err != nil {
-		klog.Error("Failed to initialize Prometheus metrics server %v", err)
+		klog.Errorf("Failed to initialize Prometheus metrics server %v", err)
 	}
 }
