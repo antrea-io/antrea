@@ -77,6 +77,8 @@ func NewOVSStatManager(ovsBridge string, ofClient openflow.Client) *OVSStatManag
 func StartListener(
 	prometheusHost string,
 	prometheusPort int,
+	enablePrometheusGoMetrics bool,
+	enablePrometheusProcessMetrics bool,
 	ovsBridge string,
 	ifaceStore interfacestore.InterfaceStore,
 	ofClient openflow.Client) {
@@ -109,8 +111,17 @@ func StartListener(
 	ovsStats := NewOVSStatManager(ovsBridge, ofClient)
 	prometheus.MustRegister(ovsStats)
 
+	if !enablePrometheusGoMetrics {
+		klog.Info("Golang metrics are disabled")
+		prometheus.Unregister(prometheus.NewGoCollector())
+	}
+	if !enablePrometheusProcessMetrics {
+		klog.Info("Process metrics are disabled")
+		prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	}
+
 	err = http.ListenAndServe(net.JoinHostPort(prometheusHost, strconv.Itoa(prometheusPort)), nil)
 	if err != nil {
-		klog.Error("Failed to initialize Prometheus metrics server %v", err)
+		klog.Errorf("Failed to initialize Prometheus metrics server %v", err)
 	}
 }

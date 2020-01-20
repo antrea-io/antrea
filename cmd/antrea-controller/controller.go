@@ -22,10 +22,10 @@ import (
 	"strconv"
 	"time"
 
-	genericapiserver "k8s.io/apiserver/pkg/server"
-	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	genericapiserver "k8s.io/apiserver/pkg/server"
+	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
@@ -97,7 +97,10 @@ func run(o *Options) error {
 	go apiServer.GenericAPIServer.PrepareRun().Run(stopCh)
 
 	if o.config.EnablePrometheusMetrics {
-		go createPrometheusMetricsListener(o.config.PrometheusHost, strconv.Itoa(o.config.PrometheusPort))
+		go createPrometheusMetricsListener(o.config.PrometheusHost,
+			strconv.Itoa(o.config.PrometheusPort),
+			o.config.EnablePrometheusGoMetrics,
+			o.config.EnablePrometheusGoMetrics)
 	}
 
 	<-stopCh
@@ -105,9 +108,11 @@ func run(o *Options) error {
 	return nil
 }
 
-func createPrometheusMetricsListener(prometheusHost string, prometheusPort string) {
+func createPrometheusMetricsListener(prometheusHost string,
+	prometheusPort string,
+	enablePrometheusGoMetrics bool,
+	enablePrometheusProcessMetrics bool) {
 	hostname, err := os.Hostname()
-
 
 	klog.Infof("Initializing prometheus host %s port %s", prometheusHost, prometheusPort)
 	gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
@@ -121,9 +126,18 @@ func createPrometheusMetricsListener(prometheusHost string, prometheusPort strin
 	prometheus.MustRegister(gaugeHost)
 	http.Handle("/metrics", promhttp.Handler())
 
+	if !enablePrometheusGoMetrics {
+		klog.Info("Golang metrics are disabled")
+		prometheus.Unregister(prometheus.NewGoCollector())
+	}
+	if !enablePrometheusProcessMetrics {
+		klog.Info("Process metrics are disabled")
+		prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	}
+
 	err = http.ListenAndServe(net.JoinHostPort(prometheusHost, prometheusPort), nil)
 	if err != nil {
-		klog.Error("Failed to initialize Prometheus metrics server %v", err)
+		klog.Errorf("Failed to initialize Prometheus metrics server %v", err)
 	}
 }
 
