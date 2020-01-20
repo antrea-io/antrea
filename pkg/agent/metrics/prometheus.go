@@ -89,8 +89,8 @@ func StartListener(
 	klog.Info("Binding antrea_local_pod_count")
 	if err := prometheus.Register(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
-			Name:      "antrea_agent_local_pod_count",
-			Help:      "Number of pods on local node.",
+			Name: "antrea_agent_local_pod_count",
+			Help: "Number of pods on local node.",
 		},
 		func() float64 { return float64(ifaceStore.GetContainerInterfaceNum()) },
 	)); err == nil {
@@ -98,8 +98,8 @@ func StartListener(
 	}
 
 	gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name:        "antrea_agent_host",
-		Help:        "Antrea agent hostname (as a label), typically used in grouping/aggregating stats; " +
+		Name: "antrea_agent_host",
+		Help: "Antrea agent hostname (as a label), typically used in grouping/aggregating stats; " +
 			"the label defaults to the hostname of the host but can be overridden by configuration. " +
 			"The value of the gauge is always set to 1.",
 		ConstLabels: prometheus.Labels{"host": hostname},
