@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -107,6 +108,7 @@ type flowCategoryCache struct {
 }
 
 type client struct {
+	roundInfo                   types.RoundInfo
 	cookieAllocator             cookie.Allocator
 	bridge                      binding.Bridge
 	pipeline                    map[binding.TableIDType]binding.Table

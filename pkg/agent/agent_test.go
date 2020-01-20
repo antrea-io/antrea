@@ -129,3 +129,25 @@ func TestInitstore(t *testing.T) {
 		t.Errorf("Failed to load OVS port into local store")
 	}
 }
+
+func TestPersistRoundNum(t *testing.T) {
+	const maxRetries = 3
+	const roundNum uint64 = 5555
+
+	controller := mock.NewController(t)
+	defer controller.Finish()
+	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
+
+	transactionError := ovsconfig.NewTransactionError(fmt.Errorf("Failed to get external IDs"), true)
+	firstCall := mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(nil, transactionError)
+	externalIDs := make(map[string]string)
+	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(externalIDs, nil).After(firstCall)
+	newExternalIDs := make(map[string]interface{})
+	newExternalIDs[roundNumKey] = fmt.Sprint(roundNum)
+	mockOVSBridgeClient.EXPECT().SetExternalIDs(mock.Eq(newExternalIDs)).Times(1)
+
+	// The first call to saveRoundNum will fail. Because we set the retry interval to 0,
+	// persistRoundNum should retry immediately and the second call will succeed (as per the
+	// expectations above).
+	persistRoundNum(roundNum, mockOVSBridgeClient, 0, maxRetries)
+}

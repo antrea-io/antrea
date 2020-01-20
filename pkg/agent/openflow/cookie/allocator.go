@@ -71,6 +71,12 @@ func newID(round uint64, cat Category) ID {
 	return ID(r)
 }
 
+// CookieMaskForRound returns a cookie and mask value that can be used to select
+// all flows belonging to the provided round.
+func CookieMaskForRound(round uint64) (uint64, uint64) {
+	return round << (64 - BitwidthRound), RoundMask
+}
+
 // Raw returns the unit64 type value of the ID.
 func (i ID) Raw() uint64 {
 	return uint64(i)

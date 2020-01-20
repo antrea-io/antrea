@@ -32,8 +32,9 @@ import (
 )
 
 var (
-	br = "br01"
-	c  ofClient.Client
+	br        = "br01"
+	c         ofClient.Client
+	roundInfo = types.RoundInfo{0, nil}
 )
 
 const (
@@ -134,7 +135,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
-	_, err = c.Initialize(0)
+	_, err = c.Initialize(roundInfo)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -196,7 +197,7 @@ func testReplayFlows(t *testing.T) {
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
-	if _, err := c.Initialize(0); err != nil {
+	if _, err := c.Initialize(roundInfo); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows() {
@@ -277,7 +278,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
-	_, err = c.Initialize(0)
+	_, err = c.Initialize(roundInfo)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
