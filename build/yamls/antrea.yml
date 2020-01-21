@@ -339,11 +339,11 @@ spec:
         imagePullPolicy: IfNotPresent
         name: antrea-controller
         ports:
-        - name: https
-          containerPort: 443
+        - containerPort: 443
+          name: https
           protocol: TCP
-        - name: metrics
-          containerPort: 9093
+        - containerPort: 9093
+          name: metrics
           protocol: TCP
         volumeMounts:
         - mountPath: /etc/antrea/antrea-controller.conf
@@ -417,9 +417,9 @@ spec:
           timeoutSeconds: 5
         name: antrea-agent
         ports:
-          - containerPort: 9092
-            hostPort: 9092
-            protocol: TCP
+        - containerPort: 9092
+          hostPort: 9092
+          protocol: TCP
         securityContext:
           privileged: true
         volumeMounts:
