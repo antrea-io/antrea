@@ -5,10 +5,12 @@ metadata:
   name: antrea
 spec:
   ports:
-    - port: 443
+    - name: https
+      port: 443
       protocol: TCP
       targetPort: 443
-    - port: 9093
+    - name: metrics
+      port: 9093
       protocol: TCP
       targetPort: 9093
   selector:
