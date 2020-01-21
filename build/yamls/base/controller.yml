@@ -83,9 +83,11 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
           ports:
-            - containerPort: 443
+            - name: https
+              containerPort: 443
               protocol: TCP
-            - containerPort: 9093
+            - name: metrics
+              containerPort: 9093
               protocol: TCP
           volumeMounts:
             - name: antrea-config
