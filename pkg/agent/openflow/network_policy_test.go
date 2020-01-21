@@ -121,7 +121,6 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	c = prepareClient(ctrl)
 	ruleID1 := uint32(101)
 	rule1 := &types.PolicyRule{
-		ID:        ruleID1,
 		Direction: v1.PolicyTypeEgress,
 		From:      parseAddresses([]string{"192.168.1.30", "192.168.1.50"}),
 	}
@@ -144,7 +143,6 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 	ruleID2 := uint32(102)
 	rule2 := &types.PolicyRule{
-		ID:        ruleID2,
 		Direction: v1.PolicyTypeEgress,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
 		To:        parseAddresses([]string{"0.0.0.0/0"}),
@@ -163,7 +161,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	assert.Equal(t, 3, getChangedFlowOPCount(matchFlows2, insertion))
 	err = c.applyConjunctiveMatchFlows(ctxChanges2)
 	require.Nil(t, err)
-	err = c.InstallPolicyRuleFlows(rule2)
+	err = c.InstallPolicyRuleFlows(ruleID2, rule2)
 	require.Nil(t, err)
 	checkConjunctionConfig(t, ruleID2, 1, 2, 1, 0)
 
@@ -174,7 +172,6 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	npPort1 := &v1.NetworkPolicyPort{Protocol: &tcpProtocol, Port: &port1}
 	npPort2 := &v1.NetworkPolicyPort{Protocol: &tcpProtocol, Port: &port2}
 	rule3 := &types.PolicyRule{
-		ID:        ruleID3,
 		Direction: v1.PolicyTypeEgress,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.60"}),
 		To:        parseAddresses([]string{"192.168.2.0/24"}),
@@ -196,7 +193,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	assert.Equal(t, 1, getChangedFlowOPCount(matchFlows3, modification))
 	err = c.applyConjunctiveMatchFlows(ctxChanges3)
 	require.Nil(t, err)
-	err = c.InstallPolicyRuleFlows(rule3)
+	err = c.InstallPolicyRuleFlows(ruleID3, rule3)
 	require.Nil(t, err, "Failed to invoke InstallPolicyRuleFlows")
 	checkConjunctionConfig(t, ruleID3, 3, 2, 1, 2)
 

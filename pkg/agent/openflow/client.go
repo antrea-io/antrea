@@ -79,7 +79,7 @@ type Client interface {
 	// NetworkPolicy rule. Each ingress/egress policy rule installs Openflow entries on two tables, one for
 	// ruleTable and the other for dropTable. If a packet does not pass the ruleTable, it will be dropped by the
 	// dropTable.
-	InstallPolicyRuleFlows(rule *types.PolicyRule) error
+	InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule) error
 
 	// UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
 	// UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
