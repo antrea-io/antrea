@@ -24,6 +24,7 @@ LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image based on Ubuntu 18.04 which includes Open vSwitch built from source."
 
 COPY --from=ovs-debs /tmp/ovs-debs/* /tmp/ovs-debs/
+COPY charon-logging.conf /tmp
 
 # We clean-up apt cache after installing packages to reduce the size of the
 # final image
@@ -31,6 +32,5 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends iptables libstrongswan-standard-plugins && \
     (dpkg -i /tmp/ovs-debs/*.deb || apt-get -f -y --no-install-recommends install) && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
-    rm -rf /tmp/ovs-debs && \
-    CHARON_FILELOG_CONFIG="\ \ \ \ \ \ \ \ /var/log/strongswan/charon.log {\n\ \ \ \ \ \ \ \ }" && \
-    sed -i "/^.*filelog.*{/a $CHARON_FILELOG_CONFIG" /etc/strongswan.d/charon-logging.conf
+    sed -i "/^.*filelog.*{/r /tmp/charon-logging.conf" /etc/strongswan.d/charon-logging.conf && \
+    rm -rf /tmp/*
