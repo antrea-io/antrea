@@ -82,6 +82,9 @@ func (o *Options) validate(args []string) error {
 		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
 		return fmt.Errorf("tunnel type %s is invalid", o.config.TunnelType)
 	}
+	if o.config.EnableIPSecTunnel && o.config.TunnelType != ovsconfig.GRETunnel {
+		return fmt.Errorf("IPSec encyption is supported only for GRE tunnel")
+	}
 	if o.config.OVSDatapathType != ovsconfig.OVSDatapathSystem && o.config.OVSDatapathType != ovsconfig.OVSDatapathNetdev {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
 	}

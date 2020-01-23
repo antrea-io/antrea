@@ -59,9 +59,10 @@ type AgentConfig struct {
 	// be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
 	// Default is 10.96.0.0/12
 	ServiceCIDR string `yaml:"serviceCIDR,omitempty"`
-	// Whether or not to enable IPSec (ESP) tunnel for Pod traffic across Nodes. Antrea uses Preshared
-	// Key (PSK) for IKE authentication. When IPSec tunnel is enabled, the PSK value must be passed to
-	// Antrea Agent through an environment variable: ANTREA_IPSEC_PSK.
+	// Whether or not to enable IPSec (ESP) encryption for Pod traffic across Nodes. IPSec encryption
+	// is supported only for the GRE tunnel type. Antrea uses Preshared Key (PSK) for IKE
+	// authentication. When IPSec tunnel is enabled, the PSK value must be passed to Antrea Agent
+	// through an environment variable: ANTREA_IPSEC_PSK.
 	// Defaults to false.
 	EnableIPSecTunnel bool `yaml:"enableIPSecTunnel,omitempty"`
 }
