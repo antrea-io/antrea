@@ -9,6 +9,35 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 
 ## Unreleased
 
+## 0.3.0 - 2019-01-23
+
+### Added
+
+- Add support for the IPsec ESP protocol for GRE tunnels only; it can be enabled by applying antrea-ipsec.yml instead of antrea.yml.
+- Add framework to develop CLI commands for Antrea; the antctl binary only supports the "version" command at the moment.
+- Add octant/octant-antrea-ubuntu Docker image to dockerhub for easier deployment of [Octant] with the Antrea plugin.
+- Add OpenFlow and OVSDB connection health information to the Agent's monitoring CRD.
+- Add Network Policy information to monitoring CRDs for both the Agent and the Controller.
+- Add documentation for OVS pipeline.
+
+### Changed
+
+- Change API group namings (for [CRDs] and Network Policies) from "crd.antrea.io" to "antrea.tanzu.vmware.com" and from "networkpolicy.antrea.io" to "networking.antrea.tanzu.vmware.com".
+- Changes in OpenFlow client:
+   * use OpenFlow "bundle" to install related flows as part of the same transaction (except for Network Policy flows)
+   * all flows now have a cookie indicating their purpose (e.g. Pod flow) and encoding the Agent round number (which is incremented with every antrea-agent restart and persisted in OVSDB)
+- Update to "Antrea on Kind" documentation to indicate that macOS hosts are also supported.
+
+### Fixed
+
+- Support NodePort services with externalTrafficPolicy set to Local.
+- Mount xtables lock file to antrea-agent container to prevent concurrent iptables access by Antrea and kube-proxy.
+- Replay flows to OVS switch after an OpenFlow reconnection (as it may indicate that vswitchd restarted and existing flows were deleted).
+- Cleanup stale gateway routes (in host routing table) and tunnel ports (in OVSDB) on Agent startup.
+- Cleanup stale flows in OVS switch on Agent startup.
+- Improve the robustness of CNI DEL processing: cleanup resources even if provided container netns is no longer valid.
+- Fix distribution of Network Polcies at scale: buffer size of the watchers channel is increased and unresponsive watchers (i.e. Agents) are terminated.
+
 ## 0.2.0 - 2019-12-19
 
 The Monitoring [CRDs] feature is graduated from Alpha to Beta.
