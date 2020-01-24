@@ -16,11 +16,12 @@ package e2e
 
 import (
 	"fmt"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"testing"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
 
-const pingCount = 10
+const pingCount = 5
 
 // runPingMesh runs a ping mesh between all the provided Pods after first retrieveing their IP
 // addresses.
@@ -108,9 +109,11 @@ func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
 	numPods := 2
 	encapMode, err := data.GetEncapMode()
 	if err != nil {
-		t.Errorf("Failed to retrive encap mode: %v", err)
+		t.Errorf("Failed to retrieve encap mode: %v", err)
 	}
-	if encapMode == types.TrafficEncapModeHybrid {
+	if encapMode == config.TrafficEncapModeHybrid {
+		// To adequately test hybrid traffic across and within
+		// subnet, all Nodes should have a Pod.
 		numPods = clusterInfo.numNodes
 	}
 	podNames, deletePods := createPodsOnDifferentNodes(t, data, numPods)

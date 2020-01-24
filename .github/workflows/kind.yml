@@ -9,7 +9,9 @@ on:
     - master
     - release-*
 jobs:
-  test-unit:
+
+
+  test-e2e-encap:
     name: E2e tests on a Kind cluster on Linux
     runs-on: [ubuntu-18.04]
     steps:
@@ -26,21 +28,52 @@ jobs:
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
         chmod +x ./kind
         sudo mv kind /usr/local/bin
-    - name: Create Kind cluster
-      run: |
-        kind create cluster --config ci/kind/config.yml
-        kind get nodes | xargs ./hack/kind-fix-networking.sh
-    - name: Deploy Antrea
-      # kubectl is installed on the Github Ubuntu 18.04 worker
-      run: |
-        kind load docker-image antrea/antrea-ubuntu:latest
-        ./hack/generate-manifest.sh --kind | kubectl apply -f -
-    - name: Printing some debug information
-      run: |
-        sleep 30
-        kubectl get -A all
-        kubectl -n kube-system logs --all-containers -l app=antrea
     - name: Run e2e tests
       run: |
-        ./hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
-        go test -v -timeout=20m github.com/vmware-tanzu/antrea/test/e2e -provider=kind
+        ./ci/kind/test-e2e-kind.sh encap
+
+
+
+  test-e2e-noencap:
+    name: E2e tests on a Kind cluster on Linux (noEncap)
+    runs-on: [ubuntu-18.04]
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-go@v1
+        with:
+          go-version: 1.13
+      - name: Build Antrea image
+        run: make
+      - name: Install Kind
+        env:
+          KIND_VERSION: v0.7.0
+        run: |
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Run e2e tests
+        run: |
+          ./ci/kind/test-e2e-kind.sh noEncap
+
+
+
+  test-e2e-hybrid:
+    name: E2e tests on a Kind cluster on Linux (hybrid)
+    runs-on: [ubuntu-18.04]
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-go@v1
+        with:
+          go-version: 1.13
+      - name: Build Antrea image
+        run: make
+      - name: Install Kind
+        env:
+          KIND_VERSION: v0.7.0
+        run: |
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Run e2e tests
+        run: |
+          ./ci/kind/test-e2e-kind.sh hybrid

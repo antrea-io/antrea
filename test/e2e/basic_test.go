@@ -26,6 +26,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 )
@@ -230,12 +231,16 @@ func TestIPAMRestart(t *testing.T) {
 // cluster) are removed and missing routes are added.
 func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+
+	encapMode, err := data.GetEncapMode()
+	if err != nil {
+		t.Fatalf(" failed to get encap mode, err %v", err)
+	}
 
 	type Route struct {
 		peerPodCIDR *net.IPNet
@@ -280,6 +285,14 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		return routes, nil
 	}
 
+	expectedRtNumMin, expectedRtNumMax := clusterInfo.numNodes-1, clusterInfo.numNodes-1
+	if encapMode == config.TrafficEncapModeNoEncap {
+		expectedRtNumMin, expectedRtNumMax = 0, 0
+
+	} else if encapMode == config.TrafficEncapModeHybrid {
+		expectedRtNumMin = 1
+	}
+
 	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)
 	var routes []Route
 	if err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (found bool, err error) {
@@ -287,11 +300,12 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		if err != nil {
 			return false, err
 		}
-		if len(routes) < clusterInfo.numNodes-1 {
+
+		if len(routes) < expectedRtNumMin {
 			// Not enough routes, keep trying
 			return false, nil
-		} else if len(routes) > clusterInfo.numNodes-1 {
-			return false, fmt.Errorf("found too many gateway routes, expected %d but got %d", clusterInfo.numNodes-1, len(routes))
+		} else if len(routes) > expectedRtNumMax {
+			return false, fmt.Errorf("found too many gateway routes, expected %d but got %d", expectedRtNumMax, len(routes))
 		}
 		return true, nil
 	}); err == wait.ErrWaitTimeout {
@@ -302,16 +316,19 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		t.Logf("Found all expected gateway routes")
 	}
 
-	routeToDelete := routes[0]
+	var routeToDelete *Route
+	if encapMode.SupportsEncap() {
+		routeToDelete = &routes[0]
+	}
 	// A dummy route
-	routeToAdd := Route{}
+	routeToAdd := &Route{}
 	_, routeToAdd.peerPodCIDR, _ = net.ParseCIDR("99.99.99.0/24")
 	routeToAdd.peerPodGW = net.ParseIP("99.99.99.1")
 
 	// We run the ip command from the antrea-agent container for delete / add since they need to
 	// be run as root and the antrea-agent container is privileged. If we used RunCommandOnNode,
 	// we may need to use "sudo" for some providers (e.g. vagrant).
-	deleteGatewayRoute := func(route Route) error {
+	deleteGatewayRoute := func(route *Route) error {
 		cmd := []string{"ip", "route", "del", route.peerPodCIDR.String()}
 		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
 		if err != nil {
@@ -320,7 +337,7 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		return nil
 	}
 
-	addGatewayRoute := func(route Route) error {
+	addGatewayRoute := func(route *Route) error {
 		cmd := []string{"ip", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
 		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
 		if err != nil {
@@ -329,9 +346,11 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		return nil
 	}
 
-	t.Logf("Deleting one actual gateway route and adding a dummy one")
-	if err := deleteGatewayRoute(routeToDelete); err != nil {
-		t.Fatalf("Error when deleting route: %v", err)
+	if routeToDelete != nil {
+		t.Logf("Deleting one actual gateway route and adding a dummy one")
+		if err := deleteGatewayRoute(routeToDelete); err != nil {
+			t.Fatalf("Error when deleting route: %v", err)
+		}
 	}
 	if err := addGatewayRoute(routeToAdd); err != nil {
 		t.Fatalf("Error when adding dummy route route: %v", err)
@@ -369,12 +388,16 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 				return false, nil
 			}
 		}
-		// At this stage we have confirmed that the dummy route has been deleted
-		for _, route := range newRoutes {
-			if route.peerPodGW.Equal(routeToDelete.peerPodGW) {
-				// The deleted route was added back, success!
-				return true, nil
+		if routeToDelete != nil {
+			// At this stage we have confirmed that the dummy route has been deleted
+			for _, route := range newRoutes {
+				if route.peerPodGW.Equal(routeToDelete.peerPodGW) {
+					// The deleted route was added back, success!
+					return true, nil
+				}
 			}
+		} else {
+			return true, nil
 		}
 		// We haven't found the deleted route, keep trying
 		return false, nil
