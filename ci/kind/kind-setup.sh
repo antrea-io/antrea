@@ -35,11 +35,13 @@ function echoerr {
 _usage="
 Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni true|false ] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS]
                   destroy CLUSTER_NAME
+                  update CLUSTER_NAME
                   modify-node NODE_NAME
                   help
 where:
   create: create a kind cluster with name CLUSTER_NAME
   destroy: delete a kind cluster with name CLUSTER_NAME
+  update: update network or loaded images in a kind cluster with name CLUSTER_NAME
   modify-node: modify kind node with name NODE_NAME
   --pod-cidr: specifies pod cidr used in kind cluster, default is $POD_CIDR
   --encap-mode: inter-node pod traffic encap mode, default is encap
@@ -71,6 +73,7 @@ function modify {
   peerIdx=$(docker exec "$node" ip link | grep eth0 | awk -F[@:] '{ print $3 }' | cut -c 3-)
   peerName=$(docker run --net=host antrea/ethtool:latest ip link | grep ^"$peerIdx": | awk -F[:@] '{ print $2 }' | cut -c 2-)
   echo "Disabling TX checksum offload for node $node ($peerName)"
+  docker run --net=host --privileged antrea/ethtool:latest ethtool -K "$peerName" tx on
   docker run --net=host --privileged antrea/ethtool:latest ethtool -K "$peerName" tx off
   # Workaround for https://github.com/vmware-tanzu/antrea/issues/324
   docker exec "$node" sysctl -w net.ipv4.tcp_retries2=4
@@ -237,10 +240,13 @@ spec:
   template:
     spec:
       nodeSelector:
-        kubernetes.io/hostname: kind-control-plane
+        kubernetes.io/hostname: $CLUSTER_NAME-control-plane
 EOF
 )
   kubectl patch deployment coredns -p "$patch" -n kube-system
+
+  # allow pods to run on mater node
+  kubectl taint nodes $CLUSTER_NAME-control-plane node-role.kubernetes.io/master:NoSchedule-
 
   configure_networks
   load_images
@@ -274,6 +280,31 @@ function destroy {
   delete_networks
 }
 
+function update {
+  if [[ -z $CLUSTER_NAME ]]; then
+    echoerr "cluster-name not provided"
+    exit 1
+  fi
+
+  set +e
+  kind get clusters | grep $CLUSTER_NAME > /dev/null 2>&1
+  if [[ $? != 0  ]]; then
+    echoerr "cluster $CLUSTER_NAME does not exits"
+    exit 1
+  fi
+  set -e
+  configure_networks
+  load_images
+
+  nodes="$(kind get nodes --name $CLUSTER_NAME)"
+  nodes="$(echo $nodes)"
+  for node in $nodes; do
+    modify $node
+  done
+}
+
+is_update=false
+
 while [[ $# -gt 0 ]]
  do
  key="$1"
@@ -287,6 +318,11 @@ while [[ $# -gt 0 ]]
       CLUSTER_NAME="$2"
       destroy
       exit 0
+      ;;
+    update)
+      CLUSTER_NAME="$2"
+      is_update=true
+      shift 2
       ;;
     modify-node)
       modify "$2"
@@ -327,4 +363,7 @@ while [[ $# -gt 0 ]]
  esac
  done
 
+if [[ $is_update == true ]]; then
+  update
+fi
 create

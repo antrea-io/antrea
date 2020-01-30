@@ -20,7 +20,8 @@ set -eo pipefail
 
 TESTBED_CMD=$(dirname $0)"/kind-setup.sh"
 YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
-COMMON_IMAGES="busybox nginx antrea/antrea-ubuntu:latest"
+HELPER_IMAGES="busybox nginx byrnedo/alpine-curl kennethreitz/httpbin"
+COMMON_IMAGES="antrea/antrea-ubuntu:latest $HELPER_IMAGES"
 
 function quit {
   if [[ $? != 0 ]]; then
@@ -34,27 +35,26 @@ function run_test {
   mode=$1
   args=$2
   echo "create test bed with args $args"
-  eval "timeout 600 $TESTBED_CMD create kind --antrea-cni false $args"
+  eval "timeout 600 $TESTBED_CMD create kind --antrea-cni false --images \"$COMMON_IMAGES\" $args"
   $YML_CMD --kind  --encap-mode $mode | docker exec -i kind-control-plane dd of=/root/antrea.yml
   sleep 1
   go test -v -timeout=20m github.com/vmware-tanzu/antrea/test/e2e -provider=kind
   $TESTBED_CMD destroy kind
 }
 
-docker pull busybox
-docker pull nginx
+echo $HELPER_IMAGES | xargs -n 1 docker pull
 
 if [[ $# == 0 ]] || [[ $1 == "encap" ]]; then
   echo "======== Test encap mode =========="
-  run_test encap "--images \"$COMMON_IMAGES\""
+  run_test encap ""
 fi
 if [[ $# == 0 ]] || [[ $1 == "noEncap" ]]; then
   echo "======== Test noencap mode =========="
-  run_test noEncap "--images \"$COMMON_IMAGES\""
+  run_test noEncap ""
 fi
 if [[ $# == 0 ]] || [[ $1 == "hybrid" ]]; then
   echo "======== Test hybrid mode =========="
-  run_test hybrid "--subnets \"20.20.20.0/24\" --images \"$COMMON_IMAGES\""
+  run_test hybrid "--subnets \"20.20.20.0/24\""
 fi
 exit 0
 

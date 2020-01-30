@@ -28,6 +28,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -867,4 +868,39 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 		}
 	}
 	return config.TrafficEncapModeInvalid, fmt.Errorf("antrea-conf config map is not found")
+}
+
+func (data *TestData) GetPodsFromDeployment(namespace, name string) ([]string, error) {
+	var pods []string
+	err := wait.Poll(2*time.Second, 60*time.Second, func() (bool, error) {
+		deployment, err := data.clientset.AppsV1().Deployments(namespace).Get(name, metav1.GetOptions{})
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return false, fmt.Errorf("GetPodsFromDeployment: get deployment, err=%w", err)
+			}
+			return false, nil
+		}
+
+		replicas := 1
+		if deployment.Spec.Replicas != nil {
+			replicas = int(*deployment.Spec.Replicas)
+		}
+
+		podLabels := deployment.Spec.Selector.MatchLabels
+		podList, err := data.clientset.CoreV1().Pods(namespace).List(metav1.ListOptions{LabelSelector: labels.Set(podLabels).String()})
+		if err != nil {
+			return false, fmt.Errorf("GetPodsFromDeployment: list pods, err=%w", err)
+		}
+		pods = nil
+		for _, pod := range podList.Items {
+			if pod.Status.Phase == v1.PodRunning {
+				pods = append(pods, pod.Name)
+			}
+		}
+		if len(pods) < replicas {
+			return false, nil
+		}
+		return true, nil
+	})
+	return pods, err
 }
