@@ -10,5 +10,12 @@ install -m 644 /etc/antrea/antrea-cni.conf /host/etc/cni/net.d/10-antrea.conf
 # Install Antrea binary file
 install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
 
+# Install the loopback plugin if not already present
+# It is required by kubelet on Linux when using docker as the container runtime
+
+if [ ! -f /host/opt/cni/bin/loopback ]; then
+    install -m 755 /opt/cni/bin/loopback /host/opt/cni/bin/loopback
+fi
+
 # Load the OVS kernel module
 modprobe openvswitch
