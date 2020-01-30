@@ -29,11 +29,13 @@
 # succesful in future runs.
 - name: Setup kubeconfig for test user
   block:
-    - name: Create .kube directory in test user home
+    - name: Create /home/{{ test_user }}/.kube directory
       file:
         path: /home/{{ test_user }}/.kube
         state: directory
-    - name: Copy kubeconfig file to .kube
+        owner: "{{ test_user }}"
+        group: "{{ test_user }}"
+    - name: Copy kubeconfig file to /home/{{ test_user }}/.kube
       copy:
         src: kube/config
         dest: /home/{{ test_user }}/.kube/config
