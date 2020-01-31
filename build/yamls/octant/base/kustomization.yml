@@ -1,0 +1,11 @@
+resources:
+- service.yml
+- deployment.yml
+commonLabels:
+  app: antrea
+namespace: kube-system
+replicas:
+- count: 1
+  name: antrea-octant
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization

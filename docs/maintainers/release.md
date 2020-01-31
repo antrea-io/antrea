@@ -8,13 +8,15 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v0.1.0`).
     1. a commit to update the [CHANGELOG](/CHANGELOG.md).
     2. a commit to update [VERSION](/VERSION) as needed.
 
- * Generate the deployment manifest for the release:
-   `IMG_NAME=antrea/antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest.sh --mode release > antrea.yml`
+ * Generate the manifest files for the release:
+    1. `IMG_NAME=antrea/antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest.sh --mode release > antrea.yml`
+    2. `IMG_NAME=antrea/antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest.sh --mode release --ipsec > antrea-ipsec.yml`
+    3. `IMG_NAME=antrea/octant-antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest-octant.sh --mode release > antrea-octant.yml`
 
  * Make the release on Github with the release branch as the target: copy the
    relevant section of the [CHANGELOG](/CHANGELOG.md) for the release
-   description and upload the deployment manifest generated in the previous step
-   (as antrea.yml, otherwise the manifest link advertised in
+   description and upload the manifests generated in the previous step (with the
+   same file names, otherwise the manifest link advertised in
    [getting-started.md](getting-started.md) will not work!). Check the
    `pre-release` box if applicable.
 

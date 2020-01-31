@@ -20,7 +20,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--kind] [--keep] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [--kind] [--ipsec] [--keep] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
         --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
