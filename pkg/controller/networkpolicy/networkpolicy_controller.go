@@ -1068,13 +1068,17 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	return nil
 }
 
+// podToMemberPod is util function to convert a Pod to a GroupMemberPod type.
+// A networking.NamedPort item will be set in the GroupMemberPod, only if the
+// Pod contains a Port with the name field set. Depending on the input, the
+// Pod IP and/or PodReference will also be set.
 func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *networking.GroupMemberPod {
 	memberPod := &networking.GroupMemberPod{}
 	for _, container := range pod.Spec.Containers {
 		for _, port := range container.Ports {
 			// Only include container ports with name set.
 			if port.Name != "" {
-				memberPod.Ports = append(memberPod.Ports, networking.ContainerPort{
+				memberPod.Ports = append(memberPod.Ports, networking.NamedPort{
 					Port:     port.ContainerPort,
 					Name:     port.Name,
 					Protocol: networking.Protocol(port.Protocol),

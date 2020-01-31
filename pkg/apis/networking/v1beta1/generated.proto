@@ -85,18 +85,6 @@ message AppliedToGroupPatch {
   repeated GroupMemberPod removedPods = 3;
 }
 
-// ContainerPort represents a NamedPort on Pod.
-message ContainerPort {
-  // Port represents the Port number.
-  optional int32 port = 1;
-
-  // Name represents the associated name with this Port number.
-  optional string name = 2;
-
-  // Protocol for port. Must be UDP, TCP, or SCTP.
-  optional string protocol = 3;
-}
-
 // GroupMemberPod represents a GroupMember related to Pods.
 message GroupMemberPod {
   // Pod maintains the reference to the Pod.
@@ -106,7 +94,7 @@ message GroupMemberPod {
   optional bytes ip = 2;
 
   // Ports maintain the named port mapping of this Pod.
-  repeated ContainerPort ports = 3;
+  repeated NamedPort ports = 3;
 }
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should
@@ -126,6 +114,18 @@ message IPNet {
   optional bytes ip = 1;
 
   optional int32 prefixLength = 2;
+}
+
+// NamedPort represents a Port with a name on Pod.
+message NamedPort {
+  // Port represents the Port number.
+  optional int32 port = 1;
+
+  // Name represents the associated name with this Port number.
+  optional string name = 2;
+
+  // Protocol for port. Must be UDP, TCP, or SCTP.
+  optional string protocol = 3;
 }
 
 // +genclient

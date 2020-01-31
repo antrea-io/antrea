@@ -1067,10 +1067,10 @@ func TestDeletePod(t *testing.T) {
 	}
 	p1IP := "1.1.1.1"
 	p2IP := "2.2.2.2"
-	p1 := getPod("p1", ns, "", p1IP)
+	p1 := getPod("p1", ns, "", p1IP, false)
 	// Ensure Pod p1 matches AppliedToGroup.
 	p1.Labels = matchLabels
-	p2 := getPod("p2", ns, "", p2IP)
+	p2 := getPod("p2", ns, "", p2IP, false)
 	// Ensure Pod p2 matches AddressGroup.
 	p2.Labels = ruleLabels
 	_, npc := newController()
@@ -1196,8 +1196,8 @@ func TestAddNamespace(t *testing.T) {
 			_, npc := newController()
 			npc.addNetworkPolicy(testNPObj)
 			npc.namespaceStore.Add(tt.addedNamespace)
-			p1 := getPod("p1", "nsA", "nodeA", "1.2.3.4")
-			p2 := getPod("p2", "nsA", "nodeA", "2.2.3.4")
+			p1 := getPod("p1", "nsA", "nodeA", "1.2.3.4", false)
+			p2 := getPod("p2", "nsA", "nodeA", "2.2.3.4", false)
 			npc.podStore.Add(p1)
 			npc.podStore.Add(p2)
 			inGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorIn).NormalizedName)
@@ -1311,8 +1311,8 @@ func TestDeleteNamespace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, npc := newController()
 			npc.addNetworkPolicy(testNPObj)
-			p1 := getPod("p1", "nsA", "", "1.1.1.1")
-			p2 := getPod("p2", "nsA", "", "1.1.1.2")
+			p1 := getPod("p1", "nsA", "", "1.1.1.1", false)
+			p2 := getPod("p2", "nsA", "", "1.1.1.2", false)
 			npc.namespaceStore.Add(tt.deletedNamespace)
 			npc.podStore.Add(p1)
 			npc.podStore.Add(p2)
@@ -1823,6 +1823,150 @@ func TestProcessNetworkPolicy(t *testing.T) {
 	}
 }
 
+func TestPodToMemberPod(t *testing.T) {
+	namedPod := getPod("", "", "", "", true)
+	unNamedPod := getPod("", "", "", "", false)
+	tests := []struct {
+		name         string
+		inputPod     *v1.Pod
+		expMemberPod networking.GroupMemberPod
+		includeIP    bool
+		includeRef   bool
+		namedPort    bool
+	}{
+		{
+			name:     "namedport-pod-with-ip-ref",
+			inputPod: namedPod,
+			expMemberPod: networking.GroupMemberPod{
+				IP: ipStrToIPAddress(namedPod.Status.PodIP),
+				Pod: &networking.PodReference{
+					Name:      namedPod.Name,
+					Namespace: namedPod.Namespace,
+				},
+				Ports: []networking.NamedPort{
+					{
+						Port:     80,
+						Name:     "http",
+						Protocol: "tcp",
+					},
+				},
+			},
+			includeIP:  true,
+			includeRef: true,
+			namedPort:  true,
+		},
+		{
+			name:     "namedport-pod-with-ip",
+			inputPod: namedPod,
+			expMemberPod: networking.GroupMemberPod{
+				IP: ipStrToIPAddress(namedPod.Status.PodIP),
+				Ports: []networking.NamedPort{
+					{
+						Port:     80,
+						Name:     "http",
+						Protocol: "tcp",
+					},
+				},
+			},
+			includeIP:  true,
+			includeRef: false,
+			namedPort:  true,
+		},
+		{
+			name:     "namedport-pod-with-ref",
+			inputPod: namedPod,
+			expMemberPod: networking.GroupMemberPod{
+				Pod: &networking.PodReference{
+					Name:      namedPod.Name,
+					Namespace: namedPod.Namespace,
+				},
+				Ports: []networking.NamedPort{
+					{
+						Port:     80,
+						Name:     "http",
+						Protocol: "tcp",
+					},
+				},
+			},
+			includeIP:  false,
+			includeRef: true,
+			namedPort:  true,
+		},
+		{
+			name:     "unnamedport-pod-with-ref",
+			inputPod: unNamedPod,
+			expMemberPod: networking.GroupMemberPod{
+				Pod: &networking.PodReference{
+					Name:      unNamedPod.Name,
+					Namespace: unNamedPod.Namespace,
+				},
+			},
+			includeIP:  false,
+			includeRef: true,
+			namedPort:  false,
+		},
+		{
+			name:     "unnamedport-pod-with-ip",
+			inputPod: unNamedPod,
+			expMemberPod: networking.GroupMemberPod{
+				IP: ipStrToIPAddress(unNamedPod.Status.PodIP),
+			},
+			includeIP:  true,
+			includeRef: false,
+			namedPort:  false,
+		},
+		{
+			name:     "unnamedport-pod-with-ip-ref",
+			inputPod: unNamedPod,
+			expMemberPod: networking.GroupMemberPod{
+				IP: ipStrToIPAddress(unNamedPod.Status.PodIP),
+				Pod: &networking.PodReference{
+					Name:      unNamedPod.Name,
+					Namespace: unNamedPod.Namespace,
+				},
+				Ports: []networking.NamedPort{
+					{
+						Port:     80,
+						Name:     "http",
+						Protocol: "tcp",
+					},
+				},
+			},
+			includeIP:  true,
+			includeRef: true,
+			namedPort:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualMemberPod := podToMemberPod(tt.inputPod, tt.includeIP, tt.includeRef)
+			// Case where the PodReference must not be populated.
+			if !tt.includeRef {
+				if actualMemberPod.Pod != nil {
+					t.Errorf("podToMemberPod() got unexpected PodReference %v, want nil", *(*actualMemberPod).Pod)
+				}
+			} else if !reflect.DeepEqual(*(*actualMemberPod).Pod, *(tt.expMemberPod).Pod) {
+				t.Errorf("podToMemberPod() got unexpected PodReference %v, want %v", *(*actualMemberPod).Pod, *(tt.expMemberPod).Pod)
+			}
+			// Case where the IPAddress must not be populated.
+			if !tt.includeIP {
+				if actualMemberPod.IP != nil {
+					t.Errorf("podToMemberPod() got unexpected IP %v, want nil", actualMemberPod.IP)
+				}
+			} else if bytes.Compare(actualMemberPod.IP, tt.expMemberPod.IP) != 0 {
+				t.Errorf("podToMemberPod() got unexpected IP %v, want %v", actualMemberPod.IP, tt.expMemberPod.IP)
+			}
+			if !tt.namedPort {
+				if len(actualMemberPod.Ports) > 0 {
+					t.Errorf("podToMemberPod() got unexpected Ports %v, want []", actualMemberPod.Ports)
+				}
+			} else if !reflect.DeepEqual(actualMemberPod.Ports, tt.expMemberPod.Ports) {
+				t.Errorf("podToMemberPod() got unexpected Ports %v, want %v", actualMemberPod.Ports, tt.expMemberPod.Ports)
+			}
+		})
+	}
+}
+
 // util functions for testing.
 func getK8sNetworkPolicyPorts(proto v1.Protocol) []networkingv1.NetworkPolicyPort {
 	portNum := intstr.FromInt(80)
@@ -1869,7 +2013,7 @@ func getK8sNetworkPolicyObj() *networkingv1.NetworkPolicy {
 	return npObj
 }
 
-func getPod(name, ns, nodeName, podIP string) *v1.Pod {
+func getPod(name, ns, nodeName, podIP string, namedPort bool) *v1.Pod {
 	if name == "" {
 		name = "testPod"
 	}
@@ -1882,6 +2026,13 @@ func getPod(name, ns, nodeName, podIP string) *v1.Pod {
 	if podIP == "" {
 		podIP = "1.2.3.4"
 	}
+	ctrPort := v1.ContainerPort{
+		ContainerPort: 80,
+		Protocol:      "tcp",
+	}
+	if namedPort {
+		ctrPort.Name = "http"
+	}
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -1889,7 +2040,8 @@ func getPod(name, ns, nodeName, podIP string) *v1.Pod {
 		},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{{
-				Name: "container-1",
+				Name:  "container-1",
+				Ports: []v1.ContainerPort{ctrPort},
 			}},
 			NodeName: nodeName,
 		},

@@ -36,8 +36,8 @@ type PodReference struct {
 	Namespace string
 }
 
-// ContainerPort represents a NamedPort on Pod.
-type ContainerPort struct {
+// NamedPort represents a Port with a name on Pod.
+type NamedPort struct {
 	// Port represents the Port number.
 	Port int32
 	// Name represents the associated name with this Port number.
@@ -53,7 +53,7 @@ type GroupMemberPod struct {
 	// IP maintains the IPAddress of the Pod.
 	IP IPAddress
 	// Ports maintain the list of named port associated with this Pod member.
-	Ports []ContainerPort
+	Ports []NamedPort
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -78,6 +78,7 @@ type AppliedToGroupList struct {
 type AddressGroup struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
+	// Pods is a list of Pods selected by this group.
 	Pods []GroupMemberPod
 }
 

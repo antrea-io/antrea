@@ -39,8 +39,8 @@ type PodReference struct {
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
 }
 
-// ContainerPort represents a NamedPort on Pod.
-type ContainerPort struct {
+// NamedPort represents a Port with a name on Pod.
+type NamedPort struct {
 	// Port represents the Port number.
 	Port int32 `json:"port,omitempty" protobuf:"varint,1,opt,name=port"`
 	// Name represents the associated name with this Port number.
@@ -56,7 +56,7 @@ type GroupMemberPod struct {
 	// IP maintains the IPAddress associated with the Pod.
 	IP IPAddress `json:"ip,omitempty" protobuf:"bytes,2,opt,name=ip"`
 	// Ports maintain the named port mapping of this Pod.
-	Ports []ContainerPort `json:"ports,omitempty" protobuf:"bytes,3,rep,name=ports"`
+	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,3,rep,name=ports"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
