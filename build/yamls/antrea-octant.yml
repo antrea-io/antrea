@@ -1,5 +1,3 @@
-# yaml template for octant and antrea-octant-plugin
-# Right config parameters and Docker image must be specified.
 apiVersion: v1
 kind: Service
 metadata:
@@ -8,72 +6,66 @@ metadata:
   name: antrea-octant
   namespace: kube-system
 spec:
-  type: NodePort
   ports:
-    - port: 80
-      targetPort: 80
+  - port: 80
+    targetPort: 80
   selector:
     app: antrea
     component: antrea-octant
+  type: NodePort
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: antrea-octant
-  namespace: kube-system
   labels:
     app: antrea
     component: antrea-octant
+  name: antrea-octant
+  namespace: kube-system
 spec:
   replicas: 1
-  strategy:
-    # Ensure the existing Pod is killed before the new one is created.
-    type: Recreate
   selector:
     matchLabels:
       app: antrea
       component: antrea-octant
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
         app: antrea
         component: antrea-octant
     spec:
+      containers:
+      - args:
+        - -v
+        command:
+        - octant
+        env:
+        - name: OCTANT_ACCEPTED_HOSTS
+          value: 0.0.0.0
+        - name: OCTANT_LISTENER_ADDR
+          value: 0.0.0.0:80
+        - name: OCTANT_DISABLE_OPEN_BROWSER
+          value: "true"
+        - name: KUBECONFIG
+          value: /kube/admin.conf
+        image: antrea/octant-antrea-ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        name: antrea-octant
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - mountPath: /kube/
+          name: kubeconfig
       priorityClassName: system-cluster-critical
       tolerations:
-        # Mark it as a critical add-on.
-        - key: CriticalAddonsOnly
-          operator: Exists
-        # Allow it to schedule onto master nodes.
-        - key: node-role.kubernetes.io/master
-          effect: NoSchedule
-      containers:
-        - name: antrea-octant
-          image: antrea/octant-antrea-ubuntu:latest
-          imagePullPolicy: IfNotPresent
-          # Octant start-up env
-          env:
-            # 0.0.0.0 allows all hosts
-            - name: OCTANT_ACCEPTED_HOSTS
-              value: "0.0.0.0"
-            # Port 80 can be changed according to your set up, but it should match the containerPort value in the port mapping below.
-            - name: OCTANT_LISTENER_ADDR
-              value: "0.0.0.0:80"
-            - name: OCTANT_DISABLE_OPEN_BROWSER
-              value: "true"
-            # Change admin.conf to the name of kubeconfig file in your set up.
-            - name: KUBECONFIG
-              value: "/kube/admin.conf"
-          command: ["octant"]
-          args: ["-v"]
-          ports:
-          - containerPort: 80
-          volumeMounts:
-            - name: kubeconfig
-              mountPath: /kube/
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
       volumes:
-        - name: kubeconfig
-          secret:
-            secretName: octant-kubeconfig
-            # defaultMode can be changed according to your requirements
-            defaultMode: 256
+      - name: kubeconfig
+        secret:
+          defaultMode: 256
+          secretName: octant-kubeconfig

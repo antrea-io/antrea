@@ -1,0 +1,56 @@
+# Update config parameters as needed
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: antrea-octant
+  labels:
+    component: antrea-octant
+spec:
+  strategy:
+    # Ensure the existing Pod is killed before the new one is created.
+    type: Recreate
+  selector:
+    matchLabels:
+      component: antrea-octant
+  template:
+    metadata:
+      labels:
+        component: antrea-octant
+    spec:
+      priorityClassName: system-cluster-critical
+      tolerations:
+        # Mark it as a critical add-on.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        # Allow it to schedule onto master nodes.
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+      containers:
+        - name: antrea-octant
+          image: octant-antrea
+          # Octant start-up env
+          env:
+            # 0.0.0.0 allows all hosts
+            - name: OCTANT_ACCEPTED_HOSTS
+              value: "0.0.0.0"
+            # Port 80 can be changed according to your set up, but it should match the containerPort value in the port mapping below.
+            - name: OCTANT_LISTENER_ADDR
+              value: "0.0.0.0:80"
+            - name: OCTANT_DISABLE_OPEN_BROWSER
+              value: "true"
+            # Change admin.conf to the name of kubeconfig file in your set up.
+            - name: KUBECONFIG
+              value: "/kube/admin.conf"
+          command: ["octant"]
+          args: ["-v"]
+          ports:
+          - containerPort: 80
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /kube/
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: octant-kubeconfig
+            # defaultMode can be changed according to your requirements
+            defaultMode: 256

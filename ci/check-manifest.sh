@@ -25,12 +25,14 @@ function echoerr {
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 pushd $THIS_DIR/.. > /dev/null
 
-rm build/yamls/antrea.yml build/yamls/antrea-ipsec.yml
+YAMLS="build/yamls/antrea.yml build/yamls/antrea-ipsec.yml build/yamls/antrea-octant.yml"
+
+rm $YAMLS
 make manifest
-diff="$(git status --porcelain build/yamls/antrea.yml build/yamls/antrea-ipsec.yml)"
+diff="$(git status --porcelain $YAMLS)"
 
 if [ ! -z "$diff" ]; then
-    echoerr "The generated manifest YAML is not up-to-date"
+    echoerr "The generated manifest YAMLs are not up-to-date"
     echoerr "You can regenerate them with 'make manifest' and commit the changes"
     exit 1
 fi
