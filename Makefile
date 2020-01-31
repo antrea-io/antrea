@@ -131,17 +131,9 @@ fmt:
 golangci: .golangci-bin
 	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml
 
-.PHONY: .linter
-.linter:
-	@if ! PATH=$$PATH:$(GOPATH)/bin command -v golint > /dev/null; then \
-	  echo "===> Installing Golint <==="; \
-	  $(GO) get -u golang.org/x/lint/golint; \
-	fi
-
 .PHONY: lint
-lint: export GOOS=linux
-lint: .linter
-	@PATH=$$PATH:$(GOPATH)/bin golint ./cmd/... ./pkg/...
+lint: .golangci-bin
+	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci-golint.yml
 
 .PHONY: clean
 clean:
