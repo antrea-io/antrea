@@ -22,6 +22,9 @@ import (
 	"github.com/vmware-tanzu/antrea/test/e2e/providers/exec"
 )
 
+// TODO: try not to hardcode this name if possible.
+const masterNodeName = "kind-control-plane"
+
 type KindProvider struct{}
 
 func (provider *KindProvider) RunCommandOnNode(nodeName string, cmd string) (
@@ -45,11 +48,29 @@ func (provider *KindProvider) GetKubeconfigPath() (string, error) {
 // enableKubectlOnMaster copies the Kubeconfig file on the Kind control-plane / master Node to the
 // default location, in order to make sure that we can run kubectl on the Node.
 func (provider *KindProvider) enableKubectlOnMaster() error {
-	// TODO: try not to hardcode this name if possible.
-	nodeName := "kind-control-plane"
-	rc, stdout, _, err := provider.RunCommandOnNode(nodeName, "cp /etc/kubernetes/admin.conf /root/.kube/config")
+	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName, "cp /etc/kubernetes/admin.conf /root/.kube/config")
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when copying Kubeconfig file to /root/.kube/config on '%s': %s", nodeName, stdout)
+		return fmt.Errorf("error when copying Kubeconfig file to /root/.kube/config on '%s': %s", masterNodeName, stdout)
+	}
+	return nil
+}
+
+// moveCoreDNSPodsToMaster ensures that all the CoreDNS Pods are scheduled on master by patching the
+// CoreDNS deployment with kubectl. Several of the e2e tests restart the Antrea agent on a worker
+// Node, which causes the datapath to break. If this happens when CoreDNS Pods are scheduled on this
+// specific worker Node, we observe that kube-apiserver cannot reach CoreDNS any more, which may
+// cause some subsequent tests to fail. Because we never restart the Antrea agent on the master
+// Node, it helps to move the CoreDNS Pods to master. Note that CoreDNS Pods still need to be
+// restarted if a test restarts all Agent Pods (e.g. as part of a rolling update when the Antrea
+// YAML manifest is changed). This issue does not seem to affect clusters which use the OVS kernel
+// datapath as much.
+// TODO: revert changes at the end of tests?
+func (provider *KindProvider) moveCoreDNSPodsToMaster() error {
+	patch := `{"spec":{"template":{"spec":{"nodeName":"kind-control-plane"}}}}`
+	cmd := fmt.Sprintf("kubectl patch -v 8 deployment coredns -n kube-system -p %s", patch)
+	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName, cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when scheduling CoreDNS Pods to '%s': %s", masterNodeName, stdout)
 	}
 	return nil
 }
@@ -60,6 +81,9 @@ func (provider *KindProvider) enableKubectlOnMaster() error {
 func NewKindProvider(configPath string) (ProviderInterface, error) {
 	provider := &KindProvider{}
 	if err := provider.enableKubectlOnMaster(); err != nil {
+		return nil, err
+	}
+	if err := provider.moveCoreDNSPodsToMaster(); err != nil {
 		return nil, err
 	}
 	return provider, nil
