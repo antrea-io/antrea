@@ -286,7 +286,7 @@ func (data *TestData) deployAntreaIPSec() error {
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
 		daemonSet, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(antreaDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
@@ -308,28 +308,9 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 	return nil
 }
 
-// checkCoreDNSPods checks that all the Pods for the CoreDNS deployment are ready. If not, delete
-// all the Pods to force them to restart and waits up to timeout for the Pods to become ready.
-func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
-	if deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get("coredns", metav1.GetOptions{}); err != nil {
-		return fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
-	} else if deployment.Status.UnavailableReplicas == 0 {
-		// deployment ready, nothing to do
-		return nil
-	}
-
-	// restart CoreDNS and wait for all replicas
-	var gracePeriodSeconds int64 = 1
-	deleteOptions := &metav1.DeleteOptions{
-		GracePeriodSeconds: &gracePeriodSeconds,
-	}
-	listOptions := metav1.ListOptions{
-		LabelSelector: "k8s-app=kube-dns",
-	}
-	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
-		return fmt.Errorf("error when deleting all CoreDNS Pods: %v", err)
-	}
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+// waitForCoreDNSPods waits for the K8s apiserver to report that all the CoreDNS Pods are available.
+func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
+	err := wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
 		deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get("coredns", metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
@@ -346,6 +327,35 @@ func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
 		return err
 	}
 	return nil
+}
+
+// restartCoreDNSPods deletes all the CoreDNS Pods to force them to be re-scheduled. It then waits
+// for all the Pods to become available, by calling waitForCoreDNSPods.
+func (data *TestData) restartCoreDNSPods(timeout time.Duration) error {
+	var gracePeriodSeconds int64 = 1
+	deleteOptions := &metav1.DeleteOptions{
+		GracePeriodSeconds: &gracePeriodSeconds,
+	}
+	listOptions := metav1.ListOptions{
+		LabelSelector: "k8s-app=kube-dns",
+	}
+	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
+		return fmt.Errorf("error when deleting all CoreDNS Pods: %v", err)
+	}
+	return data.waitForCoreDNSPods(timeout)
+}
+
+// checkCoreDNSPods checks that all the Pods for the CoreDNS deployment are ready. If not, it
+// deletes all the Pods to force them to restart and waits up to timeout for the Pods to become
+// ready.
+func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
+	if deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get("coredns", metav1.GetOptions{}); err != nil {
+		return fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
+	} else if deployment.Status.UnavailableReplicas == 0 {
+		// deployment ready, nothing to do
+		return nil
+	}
+	return data.restartCoreDNSPods(timeout)
 }
 
 // createClient initializes the K8s clientset in the TestData structure.

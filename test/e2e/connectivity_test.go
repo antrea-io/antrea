@@ -164,17 +164,17 @@ func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
 	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting Antrea: %v", err)
 	}
-	t.Logf("Checking CoreDNS deployment")
-	if err := data.checkCoreDNSPods(defaultTimeout); err != nil {
-		t.Fatalf("Error when checking CoreDNS deployment: %v", err)
+	// Restart CoreDNS Pods to avoid issues caused by disrupting the datapath (when restarting
+	// Antrea Agent Pods).
+	t.Logf("Restarting CoreDNS Pods")
+	if err := data.restartCoreDNSPods(defaultTimeout); err != nil {
+		t.Fatalf("Error when restarting CoreDNS Pods: %v", err)
 	}
 }
 
 // TestPodConnectivityAfterAntreaRestart checks that restarting antrea-agent does not create
 // connectivity issues between Pods.
 func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
-	// See https://github.com/vmware-tanzu/antrea/issues/244
-	skipIfProviderIs(t, "kind", "test may cause subsequent tests to fail in Kind clusters")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
