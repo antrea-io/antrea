@@ -26,9 +26,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type Foobar struct {
+	Foo string
+}
+
 // TestFormat ensures the formatter and AddonTransform works as expected.
 func TestFormat(t *testing.T) {
-	// TODO: Add table formatter tests after implementing table formatter
 	for _, tc := range []struct {
 		name            string
 		singleton       bool
@@ -40,32 +43,46 @@ func TestFormat(t *testing.T) {
 		formatter       formatterType
 	}{
 		{
-			name:            "StructureData-NoTransform-List",
-			rawResponseData: []struct{ Foo string }{{Foo: "foo"}},
-			responseStruct:  reflect.TypeOf(struct{ Foo string }{}),
+			name:            "StructureData-NoTransform-List-Yaml",
+			rawResponseData: []Foobar{{Foo: "foo"}},
+			responseStruct:  reflect.TypeOf(Foobar{}),
 			expected:        "- foo: foo\n",
 			formatter:       yamlFormatter,
 		},
 		{
-			name:            "StructureData-NoTransform-Single",
+			name:            "StructureData-NoTransform-Single-Yaml",
 			single:          true,
-			rawResponseData: &struct{ Foo string }{Foo: "foo"},
-			responseStruct:  reflect.TypeOf(struct{ Foo string }{}),
+			rawResponseData: &Foobar{Foo: "foo"},
+			responseStruct:  reflect.TypeOf(Foobar{}),
 			expected:        "foo: foo\n",
 			formatter:       yamlFormatter,
 		},
 		{
-			name:   "StructureData-Transform-Single",
+			name:   "StructureData-Transform-Single-Yaml",
 			single: true,
 			transform: func(reader io.Reader, single bool) (i interface{}, err error) {
-				foo := &struct{ Foo string }{}
+				foo := &Foobar{}
 				err = json.NewDecoder(reader).Decode(foo)
 				return &struct{ Bar string }{Bar: foo.Foo}, err
 			},
-			rawResponseData: &struct{ Foo string }{Foo: "foo"},
+			rawResponseData: &Foobar{Foo: "foo"},
 			responseStruct:  reflect.TypeOf(struct{ Bar string }{}),
 			expected:        "bar: foo\n",
 			formatter:       yamlFormatter,
+		},
+		{
+			name:            "StructureData-NoTransform-List-Table",
+			rawResponseData: []Foobar{{Foo: "foo"}, {Foo: "bar"}},
+			responseStruct:  reflect.TypeOf(Foobar{}),
+			expected:        "Foo            \nfoo            \nbar            \n",
+			formatter:       tableFormatter,
+		},
+		{
+			name:            "StructureData-NoTransform-List-Table-Struct",
+			rawResponseData: []struct{ Foo Foobar }{{Foo: Foobar{"foo"}}, {Foo: Foobar{"bar"}}},
+			responseStruct:  reflect.TypeOf(struct{ Foo Foobar }{}),
+			expected:        "Foo            \n{\"Foo\":\"foo\"}  \n{\"Foo\":\"bar\"}  \n",
+			formatter:       tableFormatter,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

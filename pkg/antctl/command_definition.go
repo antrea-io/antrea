@@ -24,6 +24,7 @@ import (
 	"path"
 	"reflect"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/fatih/structtag"
 	"github.com/spf13/cobra"
@@ -228,14 +229,21 @@ func (cd *commandDefinition) decode(r io.Reader, single bool) (interface{}, erro
 	return result, nil
 }
 
-func (cd *commandDefinition) jsonOutput(obj interface{}, writer io.Writer) error {
-	var output bytes.Buffer
-	err := json.NewEncoder(&output).Encode(obj)
-	if err != nil {
+func jsonEncode(obj interface{}, output *bytes.Buffer) error {
+	if err := json.NewEncoder(output).Encode(obj); err != nil {
 		return fmt.Errorf("error when encoding data in json: %w", err)
 	}
+	return nil
+}
+
+func (cd *commandDefinition) jsonOutput(obj interface{}, writer io.Writer) error {
+	var output bytes.Buffer
+	if err := jsonEncode(obj, &output); err != nil {
+		return fmt.Errorf("error when encoding data in json: %w", err)
+	}
+
 	var prettifiedBuf bytes.Buffer
-	err = json.Indent(&prettifiedBuf, output.Bytes(), "", "  ")
+	err := json.Indent(&prettifiedBuf, output.Bytes(), "", "  ")
 	if err != nil {
 		return fmt.Errorf("error when formatting outputing in json: %w", err)
 	}
@@ -251,6 +259,99 @@ func (cd *commandDefinition) yamlOutput(obj interface{}, writer io.Writer) error
 	if err != nil {
 		return fmt.Errorf("error when outputing in yaml format: %w", err)
 	}
+	return nil
+}
+
+// respTransformer collects output fields in original transformedResponse
+// and flattens them. respTransformer realizes this by turning obj into
+// JSON and unmarshalling it.
+// E.g. agent's transformedVersionResponse will only have two fields after
+// transforming: agentVersion and antctlVersion.
+func respTransformer(obj interface{}) (interface{}, error) {
+	var jsonObj bytes.Buffer
+	if err := json.NewEncoder(&jsonObj).Encode(obj); err != nil {
+		return nil, fmt.Errorf("error when encoding data in json: %w", err)
+	}
+	jsonStr := jsonObj.String()
+
+	var target interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &target); err != nil {
+		return nil, fmt.Errorf("error when unmarshalling data in json: %w", err)
+	}
+	return target, nil
+}
+
+func (cd *commandDefinition) tableOutput(obj interface{}, writer io.Writer) error {
+	target, err := respTransformer(obj)
+	if err != nil {
+		return fmt.Errorf("error when transforming obj: %w", err)
+	}
+
+	list, multiple := target.([]interface{})
+	var args []string
+	if multiple {
+		for _, el := range list {
+			m := el.(map[string]interface{})
+			for k := range m {
+				args = append(args, k)
+			}
+			break
+		}
+	} else {
+		m, _ := target.(map[string]interface{})
+		for k := range m {
+			args = append(args, k)
+		}
+	}
+
+	var buffer bytes.Buffer
+	for _, arg := range args {
+		buffer.WriteString(arg)
+		buffer.WriteString("\t")
+	}
+	attrLine := buffer.String()
+
+	var valLines []string
+	if multiple {
+		for _, el := range list {
+			m := el.(map[string]interface{})
+			buffer.Reset()
+			for _, k := range args {
+				var output bytes.Buffer
+				if err = jsonEncode(m[k], &output); err != nil {
+					return fmt.Errorf("error when encoding data in json: %w", err)
+				}
+				buffer.WriteString(strings.Trim(output.String(), "\"\n"))
+				buffer.WriteString("\t")
+			}
+			valLines = append(valLines, buffer.String())
+		}
+	} else {
+		buffer.Reset()
+		m, _ := target.(map[string]interface{})
+		for _, k := range args {
+			var output bytes.Buffer
+			if err = jsonEncode(m[k], &output); err != nil {
+				return fmt.Errorf("error when encoding : %w", err)
+			}
+			buffer.WriteString(strings.Trim(output.String(), "\"\n"))
+			buffer.WriteString("\t")
+		}
+		valLines = append(valLines, buffer.String())
+	}
+
+	var b bytes.Buffer
+	w := tabwriter.NewWriter(&b, 15, 0, 1, ' ', 0)
+	fmt.Fprintln(w, attrLine)
+	for _, line := range valLines {
+		fmt.Fprintln(w, line)
+	}
+	w.Flush()
+
+	if _, err = io.Copy(writer, &b); err != nil {
+		return fmt.Errorf("error when copy output into writer: %w", err)
+	}
+
 	return nil
 }
 
@@ -279,8 +380,8 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 		return cd.jsonOutput(obj, writer)
 	case yamlFormatter:
 		return cd.yamlOutput(obj, writer)
-	case tableFormatter: // TODO: Add table formatter
-		panic("Implement it")
+	case tableFormatter:
+		return cd.tableOutput(obj, writer)
 	default:
 		return fmt.Errorf("unsupport format type: %v", ft)
 	}
