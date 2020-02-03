@@ -18,10 +18,13 @@ LABEL description="A Docker image based on golang 1.13 which includes codegen to
 ENV GO111MODULE=on
 
 ARG K8S_VERSION=1.15.0
+# The k8s.io/kube-openapi repo does not have tag, using a workable commit hash.
+ARG KUBEOPENAPI_VERSION=v0.0.0-20190228160746-b3a7cee44a30
 
 RUN go get k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/conversion-gen@kubernetes-$K8S_VERSION && \
+    go get k8s.io/kube-openapi/cmd/openapi-gen@$KUBEOPENAPI_VERSION && \
     go get k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo@kubernetes-$K8S_VERSION && \
     go get github.com/golang/mock/mockgen@1.3.1 && \
