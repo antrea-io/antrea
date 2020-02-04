@@ -205,3 +205,70 @@ func deletePodWrapper(tb testing.TB, data *TestData, name string) {
 		tb.Logf("Error when deleting Pod: %v", err)
 	}
 }
+
+// createTestBusyboxPods creates the desired number of busybox Pods and wait for their IP address to
+// become available. This is a common patter in our tests, so having this helper function makes
+// sense. It calls Fatalf in case of error, so it must be called from the goroutine running the test
+// or benchmark function. You can create all the Pods on the same Node by setting nodeName. If
+// nodeName is the empty string, each Pod will be created on an arbitrary
+// Node. createTestBusyboxPods returns the cleanupFn function which can be used to delete the
+// created Pods. Pods are created in parallel to reduce the time required to run the tests.
+func createTestBusyboxPods(tb testing.TB, data *TestData, num int, nodeName string) (
+	podNames []string, podIPs []string, cleanupFn func(),
+) {
+	cleanupFn = func() {
+		for _, podName := range podNames {
+			deletePodWrapper(tb, data, podName)
+		}
+	}
+
+	type podData struct {
+		podName string
+		podIP   string
+		err     error
+	}
+
+	createPodAndGetIP := func() (string, string, error) {
+		podName := randName("test-pod-")
+
+		tb.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
+		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
+			tb.Errorf("Error when creating busybox test Pod '%s': %v", podName, err)
+			return "", "", err
+		}
+
+		if podIP, err := data.podWaitForIP(defaultTimeout, podName); err != nil {
+			tb.Errorf("Error when waiting for IP for Pod '%s': %v", podName, err)
+			return podName, "", err
+		} else {
+			return podName, podIP, nil
+		}
+	}
+
+	podsCh := make(chan podData, num)
+
+	for i := 0; i < num; i++ {
+		go func() {
+			podName, podIP, err := createPodAndGetIP()
+			podsCh <- podData{podName, podIP, err}
+		}()
+	}
+
+	errCnt := 0
+	for i := 0; i < num; i++ {
+		pod := <-podsCh
+		if pod.podName != "" {
+			podNames = append(podNames, pod.podName)
+			podIPs = append(podIPs, pod.podIP)
+		}
+		if pod.err != nil {
+			errCnt++
+		}
+	}
+	if errCnt > 0 {
+		defer cleanupFn()
+		tb.Fatalf("%d / %d Pods could not be created successfully", errCnt, num)
+	}
+
+	return podNames, podIPs, cleanupFn
+}
