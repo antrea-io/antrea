@@ -836,6 +836,26 @@ func (data *TestData) forAllAntreaPods(fn func(nodeName, podName string) error) 
 	return nil
 }
 
+func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, err error) {
+	re := regexp.MustCompile(`Sent\s+(\d+)\s+probe.*\nReceived\s+(\d+)\s+response`)
+	matches := re.FindStringSubmatch(out)
+	if len(matches) == 0 {
+		return 0, 0, 0.0, fmt.Errorf("Unexpected arping output")
+	}
+	if v, err := strconv.ParseUint(matches[1], 10, 32); err != nil {
+		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'sent probes' from arpping output: %v", err)
+	} else {
+		sent = uint32(v)
+	}
+	if v, err := strconv.ParseUint(matches[2], 10, 32); err != nil {
+		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'received responses' from arpping output: %v", err)
+	} else {
+		received = uint32(v)
+	}
+	loss = 100. * float32(sent-received) / float32(sent)
+	return sent, received, loss, nil
+}
+
 func (data *TestData) runPingCommandFromTestPod(podName string, targetIP string, count int) error {
 	cmd := []string{"ping", "-c", strconv.Itoa(count), targetIP}
 	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
