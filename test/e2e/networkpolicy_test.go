@@ -62,24 +62,10 @@ func TestIPBlockWithExcept(t *testing.T) {
 		}
 	}()
 
-	podName0 := randName("test-pod-networkpolicy-")
-	if err := data.createBusyboxPodOnNode(podName0, workerNode); err != nil {
-		t.Fatalf("Error when creating busybox test Pod: %v", err)
-	}
-	defer deletePodWrapper(t, data, podName0)
-	if _, err := data.podWaitForIP(defaultTimeout, podName0); err != nil {
-		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName0, err)
-	}
-
-	podName1 := randName("test-pod-networkpolicy-")
-	if err := data.createBusyboxPodOnNode(podName1, workerNode); err != nil {
-		t.Fatalf("Error when creating busybox test Pod: %v", err)
-	}
-	defer deletePodWrapper(t, data, podName1)
-	podIP1, err := data.podWaitForIP(defaultTimeout, podName1)
-	if err != nil {
-		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName1, err)
-	}
+	podNames, podIPs, cleanupFn := createTestBusyboxPods(t, data, 2, workerNode)
+	defer cleanupFn()
+	podName0 := podNames[0]
+	podName1, podIP1 := podNames[1], podIPs[1]
 
 	// Both pods cannot connect to service.
 	if err = data.runNetcatCommandFromTestPod(podName0, svcName, 80); err == nil {
