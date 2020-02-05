@@ -252,6 +252,14 @@ func (c *Controller) reconcile() error {
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 
+	// If agent is running policy-only mode, it delegates routing to
+	// underlying network. Therefore it needs not know the routes to
+	// peer Pod CIDRs.
+	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		<-stopCh
+		return
+	}
+
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
 

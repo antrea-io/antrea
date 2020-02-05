@@ -260,7 +260,7 @@ data:
     # - geneve
     # - gre
     # - stt
-    tunnelType: gre
+    #tunnelType: vxlan
 
     # Default MTU to use for the host gateway interface and the network interface of each Pod. If
     # omitted, antrea-agent will default this value to 1450 to accomodate for tunnel encapsulate
@@ -269,7 +269,7 @@ data:
 
     # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
     # for the GRE tunnel type.
-    enableIPSecTunnel: true
+    #enableIPSecTunnel: false
 
     # CIDR Range for services in cluster. It's required to support egress network policy, should
     # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
@@ -282,7 +282,7 @@ data:
     # hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
     # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
     #
-    #trafficEncapMode: encap
+    trafficEncapMode: networkPolicyOnly
   antrea-cni.conf: |
     {
         "cniVersion":"0.3.0",
@@ -298,17 +298,8 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-2g768b876h
+  name: antrea-config-kd2dgdtg74
   namespace: kube-system
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: antrea-ipsec
-  namespace: kube-system
-stringData:
-  psk: changeme
-type: Opaque
 ---
 apiVersion: v1
 kind: Service
@@ -400,7 +391,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-2g768b876h
+          name: antrea-config-kd2dgdtg74
         name: antrea-config
 ---
 apiVersion: apiregistration.k8s.io/v1
@@ -439,44 +430,12 @@ spec:
         component: antrea-agent
     spec:
       containers:
-      - command:
-        - start_ovs_ipsec
-        image: antrea/antrea-ubuntu:latest
-        imagePullPolicy: IfNotPresent
-        livenessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - timeout 5 container_liveness_probe ovs-ipsec
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        name: antrea-ipsec
-        securityContext:
-          capabilities:
-            add:
-            - NET_ADMIN
-        volumeMounts:
-        - mountPath: /var/run/openvswitch
-          name: host-var-run-antrea
-          subPath: openvswitch
-        - mountPath: /var/log/openvswitch
-          name: host-var-log-antrea
-          subPath: openvswitch
-        - mountPath: /var/log/strongswan
-          name: host-var-log-antrea
-          subPath: strongswan
       - args:
         - --config
         - /etc/antrea/antrea-agent.conf
         command:
         - antrea-agent
         env:
-        - name: ANTREA_IPSEC_PSK
-          valueFrom:
-            secretKeyRef:
-              key: psk
-              name: antrea-ipsec
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -566,7 +525,7 @@ spec:
       hostNetwork: true
       initContainers:
       - command:
-        - install_cni
+        - install_cni_chaining
         image: antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: install-cni
@@ -600,7 +559,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-2g768b876h
+          name: antrea-config-kd2dgdtg74
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

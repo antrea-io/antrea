@@ -25,6 +25,7 @@ const (
 	TrafficEncapModeEncap TrafficEncapModeType = iota
 	TrafficEncapModeNoEncap
 	TrafficEncapModeHybrid
+	TrafficEncapModeNetworkPolicyOnly
 	TrafficEncapModeInvalid = -1
 )
 
@@ -33,6 +34,7 @@ var (
 		"Encap",
 		"NoEncap",
 		"Hybrid",
+		"NetworkPolicyOnly",
 	}
 )
 
@@ -52,6 +54,7 @@ func GetTrafficEncapModes() []TrafficEncapModeType {
 		TrafficEncapModeEncap,
 		TrafficEncapModeNoEncap,
 		TrafficEncapModeHybrid,
+		TrafficEncapModeNetworkPolicyOnly,
 	}
 }
 
@@ -60,9 +63,14 @@ func (m TrafficEncapModeType) String() string {
 	return modeStrs[m]
 }
 
+// IsNetworkPolicyOnly returns true if TrafficEncapModeType is network policy only.
+func (m TrafficEncapModeType) IsNetworkPolicyOnly() bool {
+	return m == TrafficEncapModeNetworkPolicyOnly
+}
+
 // SupportsNoEncap returns true if TrafficEncapModeType supports noEncap.
 func (m TrafficEncapModeType) SupportsNoEncap() bool {
-	return m == TrafficEncapModeNoEncap || m == TrafficEncapModeHybrid
+	return m == TrafficEncapModeNoEncap || m == TrafficEncapModeHybrid || m.IsNetworkPolicyOnly()
 }
 
 // SupportsEncap returns true if TrafficEncapModeType supports encap.

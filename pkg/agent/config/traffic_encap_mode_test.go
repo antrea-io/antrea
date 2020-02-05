@@ -17,6 +17,7 @@ func TestGetTrafficEncapModeFromStr(t *testing.T) {
 		{"encap-mode-valid", "enCap", true, 0},
 		{"no-encap-mode-valid", "Noencap", true, 1},
 		{"hybrid-mode-valid", "Hybrid", true, 2},
+		{"policy-only-mode-valid", "NetworkPolicyOnly", true, 3},
 		{"invalid-str", "en cap", false, -1},
 	}
 	for _, tt := range tests {
@@ -30,7 +31,7 @@ func TestGetTrafficEncapModeFromStr(t *testing.T) {
 
 func TestGetTrafficEncapModes(t *testing.T) {
 	modes := GetTrafficEncapModes()
-	expModes := []TrafficEncapModeType{0, 1, 2}
+	expModes := []TrafficEncapModeType{0, 1, 2, 3}
 	assert.Equal(t, modes, expModes, "GetTrafficEncapModes received unexpected encap modes")
 }
 
@@ -43,6 +44,7 @@ func TestTrafficEncapModeTypeString(t *testing.T) {
 		{"encap-mode", 0, "Encap"},
 		{"no-encap-mode", 1, "NoEncap"},
 		{"hybrid-mode", 2, "Hybrid"},
+		{"policy-only-mode-valid", 3, "NetworkPolicyOnly"},
 	}
 
 	for _, tt := range tests {
@@ -63,6 +65,7 @@ func TestTrafficEncapModeTypeSupports(t *testing.T) {
 		{"encap-mode", 0, false, true},
 		{"no-encap-mode", 1, true, false},
 		{"hybrid-mode", 2, true, true},
+		{"policy-only-mode-valid", 3, true, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
