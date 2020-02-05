@@ -121,10 +121,8 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
-	if !i.enableIPSecTunnel {
-		if err := i.setupDefaultTunnelInterface(types.DefaultTunPortName); err != nil {
-			return err
-		}
+	if err := i.setupDefaultTunnelInterface(types.DefaultTunPortName); err != nil {
+		return err
 	}
 
 	// Setup host gateway interface
@@ -273,13 +271,10 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		return err
 	}
 
-	// When IPSec encyption is enabled, no flow is needed for the default tunnel interface.
-	if !i.enableIPSecTunnel {
-		// Setup flow entries for the default tunnel port interface.
-		if err := i.ofClient.InstallDefaultTunnelFlows(types.DefaultTunOFPort); err != nil {
-			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
-			return err
-		}
+	// Setup flow entries for the default tunnel port interface.
+	if err := i.ofClient.InstallDefaultTunnelFlows(types.DefaultTunOFPort); err != nil {
+		klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
+		return err
 	}
 
 	// Setup flow entries to enable service connectivity. Upstream kube-proxy is leveraged to
