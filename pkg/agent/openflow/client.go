@@ -48,8 +48,7 @@ type Client interface {
 	InstallDefaultTunnelFlows(tunnelOFPort uint32) error
 
 	// InstallNodeFlows should be invoked when a connection to a remote Node is going to be set
-	// up. The hostname is used to identify the added flows. When using the flow based tunnel,
-	// tunnelPeerIP must be provided, otherwise it should be set to nil.
+	// up. The hostname is used to identify the added flows.
 	// InstallNodeFlows has all-or-nothing semantics(call succeeds if all the flows are installed
 	// successfully, otherwise no flows will be installed). Calls to InstallNodeFlows are idempotent.
 	// Concurrent calls to InstallNodeFlows and / or UninstallNodeFlows are supported as long as they
@@ -174,13 +173,9 @@ func (c *client) InstallNodeFlows(hostname string,
 ) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	flows := make([]binding.Flow, 2, 3)
-	flows[0] = c.arpResponderFlow(peerGatewayIP, cookie.Node)
-	flows[1] = c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr, tunOFPort, cookie.Node)
-	if tunnelPeerAddr == nil {
-		// Not the default (flow based) tunnel. Add a separate tunnelClassifierFlow.
-		flows = append(flows, c.tunnelClassifierFlow(tunOFPort, cookie.Node))
-	}
+	flows := []binding.Flow{
+		c.arpResponderFlow(peerGatewayIP, cookie.Node),
+		c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr, tunOFPort, cookie.Node)}
 	return c.addFlows(c.nodeFlowCache, hostname, flows)
 }
 
