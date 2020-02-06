@@ -88,6 +88,14 @@ type argOption struct {
 	key       bool
 }
 
+// flagInfo represents a command-line flag that can be provided when invoking an antctl command.
+type flagInfo struct {
+	name         string
+	shorthand    string
+	defaultValue string
+	usage        string
+}
+
 // commandDefinition defines options to create a cobra.Command for an antctl client.
 type commandDefinition struct {
 	// Cobra related
@@ -120,6 +128,8 @@ type commandDefinition struct {
 	// from the handler, it must returns an interface which has same type as
 	// TransformedResponse.
 	AddonTransform func(reader io.Reader, single bool) (interface{}, error)
+	// Flags is a list of all possible flags for this command.
+	Flags []flagInfo
 }
 
 // applySubCommandToRoot applies the commandDefinition to a cobra.Command with
@@ -173,6 +183,20 @@ func (cd *commandDefinition) validate() []error {
 	}
 	if cd.HandlerFactory != nil && cd.GroupVersion == nil {
 		errs = append(errs, fmt.Errorf("%s: must provide the group version of customize handler", cd.Use))
+	}
+	existingFlags := map[string]bool{"output": true, "help": true, "kubeconfig": true, "timeout": true, "verbose": true}
+	for _, f := range cd.Flags {
+		if len(f.name) == 0 {
+			errs = append(errs, fmt.Errorf("%s: flag name cannot be empty", cd.Use))
+		} else {
+			if _, ok := existingFlags[f.name]; ok {
+				errs = append(errs, fmt.Errorf("%s: flag redefined: %s", cd.Use, f.name))
+			}
+			existingFlags[f.name] = true
+		}
+		if len(f.shorthand) > 1 {
+			errs = append(errs, fmt.Errorf("%s: length of a flag shorthand cannot be larger than 1: %s", cd.Use, f.shorthand))
+		}
 	}
 	return errs
 }
@@ -332,7 +356,7 @@ func (cd *commandDefinition) tableOutput(obj interface{}, writer io.Writer) erro
 		for _, k := range args {
 			var output bytes.Buffer
 			if err = jsonEncode(m[k], &output); err != nil {
-				return fmt.Errorf("error when encoding : %w", err)
+				return fmt.Errorf("error when encoding: %w", err)
 			}
 			buffer.WriteString(strings.Trim(output.String(), "\"\n"))
 			buffer.WriteString("\t")
@@ -400,11 +424,18 @@ func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []st
 			u.Path = path.Join("/apis", cd.GroupVersion.String(), strings.ToLower(cd.Use))
 		}
 
+		q := u.Query()
 		if len(args) > 0 {
-			q := u.Query()
 			q.Add(cd.argOption().name, args[0])
-			u.RawQuery = q.Encode()
 		}
+		for _, f := range cd.Flags {
+			v, err := cmd.Flags().GetString(f.name)
+			if err != nil {
+				return err
+			}
+			q.Add(f.name, v)
+		}
+		u.RawQuery = q.Encode()
 
 		klog.Infof("Requesting URI %s", u.RequestURI())
 		resp, err := c.Request(&requestOption{
@@ -429,6 +460,9 @@ func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []st
 // applyFlagsToCommand sets up flags for the command.
 func (cd *commandDefinition) applyFlagsToCommand(cmd *cobra.Command) {
 	cmd.Flags().StringP("output", "o", "json", "output format: json|yaml|table")
+	for _, f := range cd.Flags {
+		cmd.Flags().StringP(f.name, f.shorthand, f.defaultValue, f.usage)
+	}
 }
 
 func (cd *commandDefinition) requestPath(prefix string) string {
