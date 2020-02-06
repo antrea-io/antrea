@@ -40,7 +40,7 @@
   address and initiate MAC learning if the address is unknown).
 
 **This documentation currently assumes that Antrea is used in encap mode (an
-  overlay network is created between all Nodes), without IPsec enabled.**
+  overlay network is created between all Nodes).**
 
 ## Dumping the Flows
 

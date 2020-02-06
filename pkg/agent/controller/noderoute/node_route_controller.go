@@ -439,20 +439,13 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 	}
 	peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
-	var tunOFPort int32
-	var remoteIP net.IP
 	if c.ipsecPSK != "" {
-		// Create a separate tunnel port for the Node, as OVS does not support flow
-		// based tunnel for IPSec.
-		if tunOFPort, err = c.createIPSecTunnelPort(nodeName, peerNodeIP); err != nil {
+		// Create a separate tunnel port for the Node, as OVS IPSec monitor needs to
+		// read PSK and remote IP from the Node's tunnel interface to create IPSec
+		// security policies.
+		if err = c.createIPSecTunnelPort(nodeName, peerNodeIP); err != nil {
 			return err
 		}
-		remoteIP = nil
-	} else {
-		// Use the default tunnel port.
-		tunOFPort = types.DefaultTunOFPort
-		// Flow based tunnel. Set remote IP in the OVS flow.
-		remoteIP = peerNodeIP
 	}
 
 	if !flowsAreInstalled { // then install flows
@@ -461,8 +454,8 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 			c.nodeConfig.GatewayConfig.MAC,
 			peerGatewayIP,
 			*peerPodCIDR,
-			remoteIP,
-			uint32(tunOFPort))
+			peerNodeIP,
+			types.DefaultTunOFPort)
 		if err != nil {
 			return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 		}
@@ -487,53 +480,41 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 }
 
 // createIPSecTunnelPort creates an IPSec tunnel port for the remote Node if the
-// tunnel does not exist, and returns the ofport number.
-func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int32, error) {
+// tunnel does not exist.
+func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) error {
 	interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
 	if ok {
 		// TODO: check if Node IP, PSK, or tunnel type changes. This can
 		// happen if removeStaleTunnelPorts fails to remove a "stale"
 		// tunnel port for which the configuration has changed.
-		if interfaceConfig.OFPort != 0 {
-			return interfaceConfig.OFPort, nil
-		}
-	} else {
-		portName := util.GenerateNodeTunnelInterfaceName(nodeName)
-		ovsExternalIDs := map[string]interface{}{ovsExternalIDNodeName: nodeName}
-		portUUID, err := c.ovsBridgeClient.CreateTunnelPortExt(
-			portName,
-			c.tunnelType,
-			0, // ofPortRequest - let OVS allocate OFPort number.
-			nodeIP.String(),
-			c.ipsecPSK,
-			ovsExternalIDs)
-		if err != nil {
-			klog.Errorf("Failed to create OVS IPSec tunnel port for Node %s: %v", nodeName, err)
-			return 0, fmt.Errorf("failed to create IPSec tunnel port for Node %s", nodeName)
-		}
-		klog.Infof("Created IPSec tunnel port %s for Node %s", portName, nodeName)
-
-		ovsPortConfig := &interfacestore.OVSPortConfig{PortUUID: portUUID}
-		interfaceConfig = interfacestore.NewIPSecTunnelInterface(
-			portName,
-			c.tunnelType,
-			nodeName,
-			nodeIP,
-			c.ipsecPSK)
-		interfaceConfig.OVSPortConfig = ovsPortConfig
-		c.interfaceStore.AddInterface(interfaceConfig)
+		return nil
 	}
 
-	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
-	ofPort, err := c.ovsBridgeClient.GetOFPort(interfaceConfig.InterfaceName)
+	portName := util.GenerateNodeTunnelInterfaceName(nodeName)
+	ovsExternalIDs := map[string]interface{}{ovsExternalIDNodeName: nodeName}
+	portUUID, err := c.ovsBridgeClient.CreateTunnelPortExt(
+		portName,
+		c.tunnelType,
+		0, // ofPortRequest - let OVS allocate OFPort number.
+		nodeIP.String(),
+		c.ipsecPSK,
+		ovsExternalIDs)
 	if err != nil {
-		// Could be a temporary OVSDB connection failure or timeout.
-		// Let NodeRouteController retry at errors.
-		klog.Errorf("Failed to get of_port of the tunnel port for Node %s: %v", nodeName, err)
-		return 0, fmt.Errorf("failed to get of_port of IPSec tunnel port for Node %s", nodeName)
+		klog.Errorf("Failed to create OVS IPSec tunnel port for Node %s: %v", nodeName, err)
+		return fmt.Errorf("failed to create IPSec tunnel port for Node %s", nodeName)
 	}
-	interfaceConfig.OFPort = ofPort
-	return ofPort, nil
+	klog.Infof("Created IPSec tunnel port %s for Node %s", portName, nodeName)
+
+	ovsPortConfig := &interfacestore.OVSPortConfig{PortUUID: portUUID}
+	interfaceConfig = interfacestore.NewIPSecTunnelInterface(
+		portName,
+		c.tunnelType,
+		nodeName,
+		nodeIP,
+		c.ipsecPSK)
+	interfaceConfig.OVSPortConfig = ovsPortConfig
+	c.interfaceStore.AddInterface(interfaceConfig)
+	return nil
 }
 
 // ParseTunnelInterfaceConfig initializes and returns an InterfaceConfig struct
