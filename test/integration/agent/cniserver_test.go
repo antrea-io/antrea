@@ -1,3 +1,5 @@
+// +build linux
+
 // Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -477,13 +479,10 @@ func newTester() *cmdAddDelTester {
 	tester.server = cniserver.New(testSock,
 		"",
 		1450,
-		"",
 		testNodeConfig,
-		ovsServiceMock,
-		ofServiceMock,
-		ifaceStore,
 		k8sFake.NewSimpleClientset(),
 		make(chan v1beta1.PodReference, 100))
+	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
 	ctx, _ := context.WithCancel(context.Background())
 	tester.ctx = ctx
 	return tester
