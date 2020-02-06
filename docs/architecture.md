@@ -239,3 +239,28 @@ NetworkPolicy implementation.
 
 As described earlier, Antrea Controller leverages the Kubernetes apiserver
 library to build the API and communication channel to Agents.
+
+### IPsec encryption
+
+Antrea supports encrypting GRE tunnel traffic with IPsec ESP. The IPsec
+implementation leverages [OVS IPsec](http://docs.openvswitch.org/en/latest/tutorials/ipsec)
+and leverages [strongSwan](https://www.strongswan.org) as the IKE daemon.
+
+To enable IPsec, an extra container -`antrea-ovs-ipsec` - must be added to the
+Antrea Agent DaemonSet, which runs the `ovs-monitor-ipsec` and strongSwan
+daemons. Antrea now supports only using pre-shared key (PSK) for IKE
+authentication, and the PSK string must be passed to Antrea Agent using an
+environment variable - `ANTREA_IPSEC_PSK`. The PSK string can be specified in
+the [Antrea IPsec deployment yaml](/build/yamls/antrea-ipsec.yml), which creates
+a Kubernetes Secret to save the PSK value and populates it to the
+`ANTREA_IPSEC_PSK` environment variable of the Antrea Agent container.
+
+When IPsec is enabled, Antrea Agent will create a separate GRE tunnel port on
+the OVS bridge for each remote Node, and write the PSK string and the remote Node
+IP address to two OVS interface options of the tunnel interface. Then
+`ovs-monitor-ipsec` can detect the tunnel and create IPsec Security Policies
+with PSK for the remote Node, and strongSwan can create the IPsec Security
+Associations based on the Security Policies. These additional tunnel ports are
+not really used for any traffic, but are just for triggering IPsec Security
+Policy creation by `ovs-monitor-ipsec`. All tunnel traffic still goes through
+the default tunnel port (`tun0`) with OVS flow based tunneling.

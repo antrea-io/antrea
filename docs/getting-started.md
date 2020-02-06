@@ -95,3 +95,9 @@ information.
 
 To deploy Antrea in a [Kind](https://github.com/kubernetes-sigs/kind) cluster,
 please refer to this [guide](/docs/kind.md).
+
+
+### Deploying Antrea with IPsec Encyption
+
+Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
+IPsec encyption enabled, please refer to this [guide](/docs/ipsec-tunnel.md).
