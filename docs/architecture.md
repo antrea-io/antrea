@@ -89,7 +89,8 @@ Antrea Agent exposes a gRPC service (`Cni` service) which is invoked by the
 `antrea-cni` binary to perform CNI operations. For each new Pod to be created on
 the Node, after getting the CNI `ADD` call from `antrea-cni`, the Agent creates
 the Pod's network interface, allocates an IP address, connects the interface to
-the OVS bridge and installs the necessary flows in OVS.
+the OVS bridge and installs the necessary flows in OVS. To learn more about the
+OVS flows check out the [OVS pipeline doc](/docs/ovs-pipeline.md).
 
 Antrea Agent includes two Kubernetes controllers:
 - The Node controller watches the Kubernetes API server for new Nodes, and
