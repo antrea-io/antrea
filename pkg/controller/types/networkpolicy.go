@@ -28,39 +28,6 @@ type SpanMeta struct {
 	NodeNames sets.String
 }
 
-// PodSet is a set of Pod references.
-type PodSet map[networking.PodReference]sets.Empty
-
-// Difference returns a set of Pod references that are not in s2.
-func (s PodSet) Difference(s2 PodSet) PodSet {
-	result := PodSet{}
-	for key := range s {
-		if _, contained := s2[key]; !contained {
-			result[key] = sets.Empty{}
-		}
-	}
-	return result
-}
-
-// Union returns a new set which includes items in either s1 or s2.
-func (s PodSet) Union(o PodSet) PodSet {
-	result := PodSet{}
-	for key := range s {
-		result.Insert(key)
-	}
-	for key := range o {
-		result.Insert(key)
-	}
-	return result
-}
-
-// Insert adds items to the set.
-func (s PodSet) Insert(items ...networking.PodReference) {
-	for _, item := range items {
-		s[item] = sets.Empty{}
-	}
-}
-
 // GroupSelector describes how to select pods.
 type GroupSelector struct {
 	// The normalized name is calculated from Namespace, PodSelector, and NamespaceSelector.
@@ -86,9 +53,9 @@ type AppliedToGroup struct {
 	// Selector describes how the group selects pods.
 	Selector GroupSelector
 	// PodsByNode is a mapping from nodeName to a set of Pods on the Node.
-	// It will be converted to a slice of PodReference for transferring according
+	// It will be converted to a slice of GroupMemberPod for transferring according
 	// to client's selection.
-	PodsByNode map[string]PodSet
+	PodsByNode map[string]networking.GroupMemberPodSet
 }
 
 // AddressGroup describes a set of addresses used as source or destination of Network Policy rules.
@@ -100,10 +67,10 @@ type AddressGroup struct {
 	Name string
 	// Selector describes how the group selects pods to get their addresses.
 	Selector GroupSelector
-	// Addresses is a set of IP addresses selected by this group.
-	// Use sets.String here to calculate diff efficiently when generating events.
-	// It will be converted to a slice of IPAddress ([]byte) for transferring.
-	Addresses sets.String
+	// Pods is a set of Pods selected by this group.
+	// It will be converted to a slice of GroupMemberPod for transferring according
+	// to client's selection.
+	Pods networking.GroupMemberPodSet
 }
 
 // NetworkPolicy describes what network traffic is allowed for a set of Pods.

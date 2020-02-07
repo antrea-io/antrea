@@ -141,7 +141,7 @@ func (r *reconciler) add(rule *CompletedRule) error {
 		// "from" must not be nil, otherwise source address won't be a match condition in ofClient.
 		from = make([]types.Address, 0, len(ips))
 		for ip := range ips {
-			from = append(from, openflow.NewIPAddress(net.ParseIP(ip)))
+			from = append(from, ipStringToOFAddress(ip))
 		}
 		to, exceptTo = ipsToOFAddresses(rule.ToAddresses, rule.To.IPBlocks)
 		lastRealized.podIPs = ips
@@ -170,18 +170,18 @@ func (r *reconciler) add(rule *CompletedRule) error {
 	return nil
 }
 
-func ipsToOFAddresses(ipAddresses sets.String, ipBlocks []v1beta1.IPBlock) ([]types.Address, []types.Address) {
+func ipsToOFAddresses(podSet v1beta1.GroupMemberPodSet, ipBlocks []v1beta1.IPBlock) ([]types.Address, []types.Address) {
 	// Note that addresses must not return nil because it means not restricted by addresses
 	// in Openflow implementation.
-	addresses := make([]types.Address, 0, len(ipAddresses)+len(ipBlocks))
-	for a := range ipAddresses {
-		addresses = append(addresses, openflow.NewIPAddress(net.ParseIP(a)))
+	addresses := make([]types.Address, 0, len(podSet)+len(ipBlocks))
+	for _, p := range podSet {
+		addresses = append(addresses, ipAddressToOFAddress(p.IP))
 	}
 	var exceptAddresses []types.Address
 	for _, b := range ipBlocks {
-		addresses = append(addresses, openflow.NewIPNetAddress(antreaIPNetToIPNet(b.CIDR)))
+		addresses = append(addresses, ipNetToOFAddress(b.CIDR))
 		for _, e := range b.Except {
-			exceptAddresses = append(exceptAddresses, openflow.NewIPNetAddress(antreaIPNetToIPNet(e)))
+			exceptAddresses = append(exceptAddresses, ipNetToOFAddress(e))
 		}
 	}
 	return addresses, exceptAddresses
@@ -204,17 +204,11 @@ func servicesToNetworkPolicyPort(in []v1beta1.Service) []*networkingv1.NetworkPo
 			service.Protocol = &proto
 		}
 		if s.Port != nil {
-			// 0 is invalid and not allowed by kube-apiserver.
-			// If we get 0, it must be a named port and antrea-controller fails to convert it.
-			// Before we can support named port, we must discard it as port 0 will be ignored
-			// by Openflow and will result in matching all ports.
-			if *s.Port == 0 {
+			// Ignore named port for now.
+			if s.Port.Type == intstr.String {
 				continue
 			}
-			// Here it's just to adapt the PolicyRule type, and can be removed
-			// once switching to use Antrea Service type.
-			port := intstr.FromInt(int(*s.Port))
-			service.Port = &port
+			service.Port = s.Port
 		}
 		out = append(out, service)
 	}
@@ -231,11 +225,11 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 	var newOFPorts sets.Int32
 	var newIPs sets.String
 	if newRule.Direction == v1beta1.DirectionIn {
-		for a := range newRule.FromAddresses.Difference(lastRealized.FromAddresses) {
-			addedFrom = append(addedFrom, openflow.NewIPAddress(net.ParseIP(a)))
+		for _, a := range newRule.FromAddresses.Difference(lastRealized.FromAddresses) {
+			addedFrom = append(addedFrom, ipAddressToOFAddress(a.IP))
 		}
-		for a := range lastRealized.FromAddresses.Difference(newRule.FromAddresses) {
-			deletedFrom = append(deletedFrom, openflow.NewIPAddress(net.ParseIP(a)))
+		for _, a := range lastRealized.FromAddresses.Difference(newRule.FromAddresses) {
+			deletedFrom = append(deletedFrom, ipAddressToOFAddress(a.IP))
 		}
 		newOFPorts = r.podsToOFPorts(newRule.Pods)
 		for p := range newOFPorts.Difference(lastRealized.podOFPorts) {
@@ -247,16 +241,16 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 	} else {
 		newIPs = r.podsToIPs(newRule.Pods)
 		for ip := range newIPs.Difference(lastRealized.podIPs) {
-			addedFrom = append(addedTo, openflow.NewIPAddress(net.ParseIP(ip)))
+			addedFrom = append(addedTo, ipStringToOFAddress(ip))
 		}
 		for ip := range lastRealized.podIPs.Difference(newIPs) {
-			deletedFrom = append(addedTo, openflow.NewIPAddress(net.ParseIP(ip)))
+			deletedFrom = append(addedTo, ipStringToOFAddress(ip))
 		}
-		for a := range newRule.ToAddresses.Difference(lastRealized.ToAddresses) {
-			addedTo = append(addedTo, openflow.NewIPAddress(net.ParseIP(a)))
+		for _, a := range newRule.ToAddresses.Difference(lastRealized.ToAddresses) {
+			addedTo = append(addedTo, ipAddressToOFAddress(a.IP))
 		}
-		for a := range lastRealized.ToAddresses.Difference(newRule.ToAddresses) {
-			deletedTo = append(deletedTo, openflow.NewIPAddress(net.ParseIP(a)))
+		for _, a := range lastRealized.ToAddresses.Difference(newRule.ToAddresses) {
+			deletedTo = append(deletedTo, ipAddressToOFAddress(a.IP))
 		}
 	}
 
@@ -318,39 +312,48 @@ func (r *reconciler) Forget(ruleID string) error {
 	return nil
 }
 
-func (r *reconciler) podsToOFPorts(pods podSet) sets.Int32 {
+func (r *reconciler) podsToOFPorts(pods v1beta1.GroupMemberPodSet) sets.Int32 {
 	ofPorts := sets.NewInt32()
-	for pod := range pods {
-		iface, found := r.ifaceStore.GetContainerInterface(pod.Name, pod.Namespace)
+	for _, pod := range pods {
+		iface, found := r.ifaceStore.GetContainerInterface(pod.Pod.Name, pod.Pod.Namespace)
 		if !found {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
-			klog.Infof("Can't find interface for Pod %s/%s, skipping", pod.Namespace, pod.Name)
+			klog.Infof("Can't find interface for Pod %s/%s, skipping", pod.Pod.Namespace, pod.Pod.Name)
 			continue
 		}
-		klog.V(2).Infof("Got OFPort %v for Pod %s/%s", iface.OFPort, pod.Namespace, pod.Name)
+		klog.V(2).Infof("Got OFPort %v for Pod %s/%s", iface.OFPort, pod.Pod.Namespace, pod.Pod.Name)
 		ofPorts.Insert(iface.OFPort)
 	}
 	return ofPorts
 }
 
-func (r *reconciler) podsToIPs(pods podSet) sets.String {
+func (r *reconciler) podsToIPs(pods v1beta1.GroupMemberPodSet) sets.String {
 	ips := sets.NewString()
-	for pod := range pods {
-		iface, found := r.ifaceStore.GetContainerInterface(pod.Name, pod.Namespace)
+	for _, pod := range pods {
+		iface, found := r.ifaceStore.GetContainerInterface(pod.Pod.Name, pod.Pod.Namespace)
 		if !found {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
-			klog.Infof("Can't find interface for Pod %s/%s, skipping", pod.Namespace, pod.Name)
+			klog.Infof("Can't find interface for Pod %s/%s, skipping", pod.Pod.Namespace, pod.Pod.Name)
 			continue
 		}
-		klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IP, pod.Namespace, pod.Name)
+		klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IP, pod.Pod.Namespace, pod.Pod.Name)
 		ips.Insert(iface.IP.String())
 	}
 	return ips
 }
 
-func antreaIPNetToIPNet(in v1beta1.IPNet) net.IPNet {
-	return net.IPNet{
+func ipNetToOFAddress(in v1beta1.IPNet) *openflow.IPNetAddress {
+	ipNet := net.IPNet{
 		IP:   net.IP(in.IP),
 		Mask: net.CIDRMask(int(in.PrefixLength), 32),
 	}
+	return openflow.NewIPNetAddress(ipNet)
+}
+
+func ipAddressToOFAddress(in v1beta1.IPAddress) *openflow.IPAddress {
+	return openflow.NewIPAddress(net.IP(in))
+}
+
+func ipStringToOFAddress(in string) *openflow.IPAddress {
+	return openflow.NewIPAddress(net.ParseIP(in))
 }

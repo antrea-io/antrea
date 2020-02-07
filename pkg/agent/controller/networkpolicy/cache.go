@@ -19,7 +19,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"net"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -75,9 +74,12 @@ func hashRule(r *rule) string {
 // It's the struct used by reconciler.
 type CompletedRule struct {
 	*rule
-	FromAddresses sets.String
-	ToAddresses   sets.String
-	Pods          podSet
+	// Source Pods of this rule, can't coexist with ToAddresses.
+	FromAddresses v1beta1.GroupMemberPodSet
+	// Destination Pods of this rule, can't coexist with FromAddresses.
+	ToAddresses v1beta1.GroupMemberPodSet
+	// Target Pods of this rule.
+	Pods v1beta1.GroupMemberPodSet
 }
 
 // String returns the string representation of the CompletedRule.
@@ -95,12 +97,14 @@ func (r *CompletedRule) String() string {
 // can construct complete rules that can be used by reconciler to enforce.
 type ruleCache struct {
 	podSetLock sync.RWMutex
-	// podSetByGroup is a mapping from AppliedToGroup name to a set of Pods.
-	podSetByGroup map[string]podSet
+	// podSetByGroup stores the AppliedToGroup members.
+	// It is a mapping from group name to a set of Pods.
+	podSetByGroup map[string]v1beta1.GroupMemberPodSet
 
 	addressSetLock sync.RWMutex
-	// addressSetByGroup is a mapping from AddressGroup name to a set of IP addresses.
-	addressSetByGroup map[string]sets.String
+	// addressSetByGroup stores the AddressGroup members.
+	// It is a mapping from group name to a set of Pods.
+	addressSetByGroup map[string]v1beta1.GroupMemberPodSet
 
 	policySetLock sync.RWMutex
 	// policySet is a set to store NetworkPolicy UID strings.
@@ -153,8 +157,8 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta1.PodRef
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc},
 	)
 	cache := &ruleCache{
-		podSetByGroup:     make(map[string]podSet),
-		addressSetByGroup: make(map[string]sets.String),
+		podSetByGroup:     make(map[string]v1beta1.GroupMemberPodSet),
+		addressSetByGroup: make(map[string]v1beta1.GroupMemberPodSet),
 		policySet:         sets.NewString(),
 		rules:             rules,
 		dirtyRuleHandler:  dirtyRuleHandler,
@@ -176,11 +180,11 @@ func (c *ruleCache) processPodUpdates() {
 		select {
 		case pod := <-c.podUpdates:
 			func() {
+				memberPod := &v1beta1.GroupMemberPod{Pod: &pod}
 				c.podSetLock.RLock()
 				defer c.podSetLock.RUnlock()
 				for group, podSet := range c.podSetByGroup {
-					_, exists := podSet[pod]
-					if exists {
+					if podSet.Has(memberPod) {
 						c.onAppliedToGroupUpdate(group)
 					}
 				}
@@ -205,11 +209,11 @@ func (c *ruleCache) AddAddressGroup(group *v1beta1.AddressGroup) error {
 	c.addressSetLock.Lock()
 	defer c.addressSetLock.Unlock()
 
-	ipAddressSet := sets.NewString()
-	for _, ip := range group.IPAddresses {
-		ipAddressSet.Insert(ipAddressToIPStr(ip))
+	podSet := v1beta1.GroupMemberPodSet{}
+	for _, pod := range group.Pods {
+		podSet.Insert(&pod)
 	}
-	c.addressSetByGroup[group.Name] = ipAddressSet
+	c.addressSetByGroup[group.Name] = podSet
 	c.onAddressGroupUpdate(group.Name)
 	return nil
 }
@@ -220,15 +224,15 @@ func (c *ruleCache) PatchAddressGroup(patch *v1beta1.AddressGroupPatch) error {
 	c.addressSetLock.Lock()
 	defer c.addressSetLock.Unlock()
 
-	addressSet, exists := c.addressSetByGroup[patch.Name]
+	podSet, exists := c.addressSetByGroup[patch.Name]
 	if !exists {
 		return fmt.Errorf("AddressGroup %v doesn't exist in cache, can't be patched", patch.Name)
 	}
-	for _, ip := range patch.AddedIPAddresses {
-		addressSet.Insert(ipAddressToIPStr(ip))
+	for _, pod := range patch.AddedPods {
+		podSet.Insert(&pod)
 	}
-	for _, ip := range patch.RemovedIPAddresses {
-		addressSet.Delete(ipAddressToIPStr(ip))
+	for _, pod := range patch.RemovedPods {
+		podSet.Delete(&pod)
 	}
 	c.onAddressGroupUpdate(patch.Name)
 	return nil
@@ -261,7 +265,11 @@ func (c *ruleCache) AddAppliedToGroup(group *v1beta1.AppliedToGroup) error {
 	c.podSetLock.Lock()
 	defer c.podSetLock.Unlock()
 
-	c.podSetByGroup[group.Name] = newPodSet(group.Pods...)
+	podSet := v1beta1.GroupMemberPodSet{}
+	for _, pod := range group.Pods {
+		podSet.Insert(&pod)
+	}
+	c.podSetByGroup[group.Name] = podSet
 	c.onAppliedToGroupUpdate(group.Name)
 	return nil
 }
@@ -272,15 +280,15 @@ func (c *ruleCache) PatchAppliedToGroup(patch *v1beta1.AppliedToGroupPatch) erro
 	c.podSetLock.Lock()
 	defer c.podSetLock.Unlock()
 
-	group, exists := c.podSetByGroup[patch.Name]
+	podSet, exists := c.podSetByGroup[patch.Name]
 	if !exists {
 		return fmt.Errorf("AppliedToGroup %v doesn't exist in cache, can't be patched", patch.Name)
 	}
 	for _, added := range patch.AddedPods {
-		group[added] = sets.Empty{}
+		podSet.Insert(&added)
 	}
 	for _, removed := range patch.RemovedPods {
-		delete(group, removed)
+		podSet.Delete(&removed)
 	}
 	c.onAppliedToGroupUpdate(patch.Name)
 	return nil
@@ -387,7 +395,7 @@ func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRul
 	}
 
 	r := obj.(*rule)
-	var fromAddresses, toAddresses sets.String
+	var fromAddresses, toAddresses v1beta1.GroupMemberPodSet
 	if r.Direction == v1beta1.DirectionIn {
 		fromAddresses, completed = c.unionAddressGroups(r.From.AddressGroups)
 	} else {
@@ -432,11 +440,11 @@ func (c *ruleCache) onAddressGroupUpdate(groupName string) {
 // unionAddressGroups gets the union of addresses of the provided address groups.
 // If any group is not found, nil and false will be returned to indicate the
 // set is not complete yet.
-func (c *ruleCache) unionAddressGroups(groupNames []string) (sets.String, bool) {
+func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta1.GroupMemberPodSet, bool) {
 	c.addressSetLock.RLock()
 	defer c.addressSetLock.RUnlock()
 
-	set := sets.NewString()
+	set := v1beta1.NewGroupMemberPodSet()
 	for _, groupName := range groupNames {
 		curSet, exists := c.addressSetByGroup[groupName]
 		if !exists {
@@ -451,11 +459,11 @@ func (c *ruleCache) unionAddressGroups(groupNames []string) (sets.String, bool) 
 // unionAppliedToGroups gets the union of pods of the provided appliedTo groups.
 // If any group is not found, nil and false will be returned to indicate the
 // set is not complete yet.
-func (c *ruleCache) unionAppliedToGroups(groupNames []string) (podSet, bool) {
+func (c *ruleCache) unionAppliedToGroups(groupNames []string) (v1beta1.GroupMemberPodSet, bool) {
 	c.podSetLock.RLock()
 	defer c.podSetLock.RUnlock()
 
-	set := podSet{}
+	set := v1beta1.NewGroupMemberPodSet()
 	for _, groupName := range groupNames {
 		curSet, exists := c.podSetByGroup[groupName]
 		if !exists {
@@ -465,9 +473,4 @@ func (c *ruleCache) unionAppliedToGroups(groupNames []string) (podSet, bool) {
 		set = set.Union(curSet)
 	}
 	return set, true
-}
-
-// ipAddressToIPStr converts v1beta1.IPAddress to an IP string.
-func ipAddressToIPStr(ipAddress v1beta1.IPAddress) string {
-	return net.IP(ipAddress).String()
 }
