@@ -1,0 +1,164 @@
+---
+layout: default
+id: home
+description: Visualize your Kubernetes workloads
+backgrounds:
+  case_study: light-blue
+  team: dark-blue
+hero:
+  banner: /img/heroes/hero-antrea.svg
+  headline: Enable pod networking and enforce network policies for Kubernetes clusters
+  content: Antrea is a Kubernetes-native project that implements the Container Network Interface (CNI) and Kubernetes NetworkPolicy thereby providing network connectivity and security for pod workloads. Antrea extends the benefit of programmable networks from Open vSwitch (OVS) to Kubernetes.
+  promo1:
+    icon: /img/icon-cloud.svg
+    #url: http://www.example.com?box1
+    title:  Unified Network Stack
+    content: Antrea simplifies Kubernetes networking across differing clouds and operating systems with a unified network stack built atop Open vSwitch.
+  promo2:
+    icon: /img/icon-bulb.svg
+    #url: http://www.example.com?box2
+    title: Ease of Operations
+    content: Antrea is designed to ease deployment, operations and troubleshooting by adopting Kubernetes controller patterns and providing diagnostics consumable by tools network operators know and love.
+  promo3:
+    icon: /img/icon-diagram.svg
+    #url: http://www.example.com?box3
+    title: Flexibility & Extensibility
+    content: With the programmability of Open vSwitch under the hood, Antrea can be extended to support advanced network use cases like kernel bypass and network service mesh.
+secondary_ctas:
+  cta1:
+    title: View Latest Release
+    url: https://github.com/vmware-tanzu/antrea/releases
+    content: Antrea v0.3.0 is now available.
+  cta2:
+    title: Get involved and start contributing today.
+    url: https://github.com/vmware-tanzu/antrea
+    content: Antrea is hosted on GitHub. Get involved and start contributing today.
+#reference:
+#  title: Getting Sonobuoy
+#  content: Lorem ipsum dolor sit amet....
+#  links: 
+#    ISO: http://www.example.com
+#    OVA: http://www.example.com
+#    Amazon Machine Image: http://www.example.com
+#    Google Compute Engine Image: http://www.example.com
+#    Azure VHD: http://www.example.com
+---
+<div class="home-hero bg-color-{{ site.hero.background-color }}" style="background-image: url('{{ page.hero.banner }}')">
+  <div class="section">
+    <div class="section-content">
+      <div class="hero-content">
+        <h1 class="mb-3">{{ page.hero.headline }}</h1>
+        <p>{{ page.hero.content }}</p>        
+      </div>
+      {% if page.hero.cta_link1 or page.hero.cta_link2 %}
+      <div class="hero-cta mt-4">
+        {% if page.hero.cta_link1 %}
+        <a href="{{ page.hero.cta_link1.url }}" class="btn btn-primary mb-3 mb-sm-0">{{ page.hero.cta_link1.text }}</a>
+        {% endif %}
+        {% if page.hero.cta_link2 %}
+        <a href="{{ page.hero.cta_link2.url }}" class="btn btn-outline-light">{{ page.hero.cta_link2.text }}</a>
+        {% endif %}        
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="section section-card promo-cards">
+    <div class="section-content">
+      <div class="row">
+        <div class="col-md">
+          <div class="card card-light mb-3 mb-md-0 shadow-sm">
+            <div class="card-body match-height">
+              <figure>
+                <img src="{{ page.hero.promo1.icon }}" alt="{{ page.hero.promo1.title }}" />
+              </figure>
+              {% if page.hero.promo1.url.size > 0 %}
+              <h5><a href="{{ page.hero.promo1.url }}" class="dark">{{ page.hero.promo1.title }}</a></h5>
+              {% else %}
+              <h5>{{ page.hero.promo1.title }}</h5>
+              {% endif %}
+              <p>{{ page.hero.promo1.content }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md">
+          <div class="card card-light mb-3 mb-md-0 shadow-sm">
+            <div class="card-body match-height">
+              <figure>
+                <img src="{{ page.hero.promo2.icon }}" alt="{{ page.hero.promo2.title }}" />
+              </figure>
+              {% if page.hero.promo2.url.size > 0 %}
+              <h5><a href="{{ page.hero.promo2.url }}" class="dark">{{ page.hero.promo2.title }}</a></h5>
+              {% else %}
+              <h5>{{ page.hero.promo2.title }}</h5>
+              {% endif %}
+              <p>{{ page.hero.promo2.content }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md">
+          <div class="card card-light mb-3 mb-md-0 shadow-sm">
+            <div class="card-body match-height">
+              <figure>
+                <img src="{{ page.hero.promo3.icon }}" alt="{{ page.hero.promo3.title }}" />
+              </figure>
+              {% if page.hero.promo3.url.size > 0 %}
+              <h5><a href="{{ page.hero.promo3.url }}" class="dark">{{ page.hero.promo3.title }}</a></h5>
+              {% else %}
+              <h5>{{ page.hero.promo3.title }}</h5>
+              {% endif %}
+              <p>{{ page.hero.promo3.content }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div> <!-- /home-hero -->
+
+<div class="section section-background-darkest-blue">
+  <div class="section-content">
+    <div class="row bg-darkest-blue">
+      <div class="col-sm-5 mb-3 mb-sm-0">
+        <h6 class="mb-1">
+          <a href="{{ page.secondary_ctas.cta1.url }}" class="color-white">{{ page.secondary_ctas.cta1.title }}</a>
+        </h6>
+        <p class="mb-0">{{ page.secondary_ctas.cta1.content }}</p>
+      </div>
+      <div class="col-sm-5 offset-sm-2">
+        <h6 class="mb-1">
+          <a href="{{ page.secondary_ctas.cta2.url }}" class="color-white">{{ page.secondary_ctas.cta2.title }}</a>
+        </h6>
+        <p class="mb-0">{{ page.secondary_ctas.cta2.content }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-content">
+    <div class="row">
+      <div class="col">
+        <h2>Features</h2>
+      </div>          
+    </div>
+    {% assign limit = 3 %}
+    {% include case-studies-alternating.html %}
+  </div>
+</div>
+
+<div class="section pt-3">
+  <div class="section-content">
+    <div class="row">
+      <div class="col">
+        <h2>Blog Highlights</h2>
+      </div>
+    </div>
+    {% assign limit = 3 %}
+    {% include blog-posts.html %}
+    <div class="row pt-5">
+      <div class="col text-center">
+        <a href="/blog" class="btn btn-secondary btn-sm">See All Posts</a>
+      </div>
+    </div>
+  </div>
+</div>
