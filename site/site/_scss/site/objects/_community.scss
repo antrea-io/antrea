@@ -1,0 +1,18 @@
+.community-item {
+  margin-top: 80px;
+  .icon {
+    height: 70px;
+    display: flex;
+    align-items: center; 
+    margin-bottom: 1rem;
+  }
+  h3 {
+    font-size: 23px;
+  }
+  .link-description {
+    word-break: break-word;
+    p {
+      font-size: .875rem;
+    }
+  }
+}
