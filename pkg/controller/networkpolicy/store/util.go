@@ -15,14 +15,8 @@
 package store
 
 import (
-	"fmt"
-	"net"
-	"strconv"
-	"strings"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 )
 
@@ -39,29 +33,4 @@ func filter(selectors *storage.Selectors, key string, nodeNames sets.String) boo
 		}
 	}
 	return true
-}
-
-// IPStrToIPAddress converts an IP string to networkpolicy.IPAddress.
-// nil will returned if the IP string is not valid.
-func IPStrToIPAddress(ip string) networking.IPAddress {
-	return networking.IPAddress(net.ParseIP(ip))
-}
-
-// CIDRStrToIPNet converts a CIDR (eg. 10.0.0.0/16) to a *networkpolicy.IPNet.
-func CIDRStrToIPNet(cidr string) (*networking.IPNet, error) {
-	// Split the cidr to retrieve the IP and prefix.
-	s := strings.Split(cidr, "/")
-	if len(s) != 2 {
-		return nil, fmt.Errorf("invalid format for IPBlock CIDR: %s", cidr)
-	}
-	// Convert prefix length to int32
-	prefixLen64, err := strconv.ParseInt(s[1], 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("invalid prefix length: %s", s[1])
-	}
-	ipNet := &networking.IPNet{
-		IP:           IPStrToIPAddress(s[0]),
-		PrefixLength: int32(prefixLen64),
-	}
-	return ipNet, nil
 }

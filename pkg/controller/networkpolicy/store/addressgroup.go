@@ -91,8 +91,8 @@ func ToAddressGroupMsg(in *types.AddressGroup, out *networking.AddressGroup, inc
 	if !includeBody {
 		return
 	}
-	for a := range in.Addresses {
-		out.IPAddresses = append(out.IPAddresses, IPStrToIPAddress(a))
+	for _, p := range in.Pods {
+		out.Pods = append(out.Pods, *p)
 	}
 }
 
@@ -123,25 +123,25 @@ func genAddressGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (
 	// Calculate PatchObject in advance so that we don't need to do it for
 	// each watcher when generating *event.Event.
 	if event.PrevGroup != nil && event.CurrGroup != nil {
-		var addedAddresses, removedAddresses []networking.IPAddress
+		var addedPods, removedPods []networking.GroupMemberPod
 
-		for _, a := range event.CurrGroup.Addresses.List() {
-			if _, exists := event.PrevGroup.Addresses[a]; !exists {
-				addedAddresses = append(addedAddresses, IPStrToIPAddress(a))
+		for podHash, pod := range event.CurrGroup.Pods {
+			if _, exists := event.PrevGroup.Pods[podHash]; !exists {
+				addedPods = append(addedPods, *pod)
 			}
 		}
-		for _, a := range event.PrevGroup.Addresses.List() {
-			if _, exists := event.CurrGroup.Addresses[a]; !exists {
-				removedAddresses = append(removedAddresses, IPStrToIPAddress(a))
+		for podHash, pod := range event.PrevGroup.Pods {
+			if _, exists := event.CurrGroup.Pods[podHash]; !exists {
+				removedPods = append(removedPods, *pod)
 			}
 		}
 		// PatchObject will not be generated when only span changes.
-		if len(addedAddresses)+len(removedAddresses) > 0 {
+		if len(addedPods)+len(removedPods) > 0 {
 			event.PatchObject = new(networking.AddressGroupPatch)
 			event.PatchObject.UID = event.CurrGroup.UID
 			event.PatchObject.Name = event.CurrGroup.Name
-			event.PatchObject.AddedIPAddresses = addedAddresses
-			event.PatchObject.RemovedIPAddresses = removedAddresses
+			event.PatchObject.AddedPods = addedPods
+			event.PatchObject.RemovedPods = removedPods
 		}
 	}
 

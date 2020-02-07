@@ -16,6 +16,7 @@ package store
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
+func newAddressGroupMember(ip string) *networking.GroupMemberPod {
+	return &networking.GroupMemberPod{IP: networking.IPAddress(net.ParseIP(ip))}
+}
+
 func TestWatchAddressGroupEvent(t *testing.T) {
 	testCases := map[string]struct {
 		fieldSelector fields.Selector
@@ -43,25 +48,25 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 			fieldSelector: fields.Everything(),
 			operations: func(store storage.Interface) {
 				store.Create(&types.AddressGroup{
-					Name:      "foo",
-					SpanMeta:  types.SpanMeta{sets.NewString("node1", "node2")},
-					Addresses: sets.NewString("1.1.1.1", "2.2.2.2"),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{sets.NewString("node1", "node2")},
+					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
 				})
 				store.Update(&types.AddressGroup{
-					Name:      "foo",
-					SpanMeta:  types.SpanMeta{sets.NewString("node1", "node2")},
-					Addresses: sets.NewString("1.1.1.1", "3.3.3.3"),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{sets.NewString("node1", "node2")},
+					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("3.3.3.3")),
 				})
 			},
 			expected: []watch.Event{
 				{watch.Added, &networking.AddressGroup{
-					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
-					IPAddresses: []networking.IPAddress{IPStrToIPAddress("1.1.1.1"), IPStrToIPAddress("2.2.2.2")},
+					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+					Pods:       []networking.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
 				}},
 				{watch.Modified, &networking.AddressGroupPatch{
-					ObjectMeta:         metav1.ObjectMeta{Name: "foo"},
-					AddedIPAddresses:   []networking.IPAddress{IPStrToIPAddress("3.3.3.3")},
-					RemovedIPAddresses: []networking.IPAddress{IPStrToIPAddress("2.2.2.2")},
+					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
+					AddedPods:   []networking.GroupMemberPod{*newAddressGroupMember("3.3.3.3")},
+					RemovedPods: []networking.GroupMemberPod{*newAddressGroupMember("2.2.2.2")},
 				}},
 			},
 		},
@@ -71,38 +76,38 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 			operations: func(store storage.Interface) {
 				// This should not be seen as it doesn't span node3.
 				store.Create(&types.AddressGroup{
-					Name:      "foo",
-					SpanMeta:  types.SpanMeta{sets.NewString("node1", "node2")},
-					Addresses: sets.NewString("1.1.1.1", "2.2.2.2"),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{sets.NewString("node1", "node2")},
+					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
 				})
 				// This should be seen as an added event as it makes foo span node3 for the first time.
 				store.Update(&types.AddressGroup{
-					Name:      "foo",
-					SpanMeta:  types.SpanMeta{sets.NewString("node1", "node3")},
-					Addresses: sets.NewString("1.1.1.1", "2.2.2.2"),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{sets.NewString("node1", "node3")},
+					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
 				})
 				// This should be seen as a modified event as it updates addressGroups of node3.
 				store.Update(&types.AddressGroup{
-					Name:      "foo",
-					SpanMeta:  types.SpanMeta{sets.NewString("node1", "node3")},
-					Addresses: sets.NewString("1.1.1.1", "3.3.3.3"),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{sets.NewString("node1", "node3")},
+					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("3.3.3.3")),
 				})
 				// This should be seen as a deleted event as it makes foo not span node3 any more.
 				store.Update(&types.AddressGroup{
-					Name:      "foo",
-					SpanMeta:  types.SpanMeta{sets.NewString("node1")},
-					Addresses: sets.NewString("1.1.1.1", "3.3.3.3"),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{sets.NewString("node1")},
+					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("3.3.3.3")),
 				})
 			},
 			expected: []watch.Event{
 				{watch.Added, &networking.AddressGroup{
-					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
-					IPAddresses: []networking.IPAddress{IPStrToIPAddress("1.1.1.1"), IPStrToIPAddress("2.2.2.2")},
+					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+					Pods:       []networking.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
 				}},
 				{watch.Modified, &networking.AddressGroupPatch{
-					ObjectMeta:         metav1.ObjectMeta{Name: "foo"},
-					AddedIPAddresses:   []networking.IPAddress{IPStrToIPAddress("3.3.3.3")},
-					RemovedIPAddresses: []networking.IPAddress{IPStrToIPAddress("2.2.2.2")},
+					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
+					AddedPods:   []networking.GroupMemberPod{*newAddressGroupMember("3.3.3.3")},
+					RemovedPods: []networking.GroupMemberPod{*newAddressGroupMember("2.2.2.2")},
 				}},
 				{watch.Deleted, &networking.AddressGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
@@ -131,8 +136,8 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}
-					if !assert.ElementsMatch(t, expectedObj.IPAddresses, actualObj.IPAddresses) {
-						t.Errorf("Expected IPAddresses %v, got %v", expectedObj.IPAddresses, actualObj.IPAddresses)
+					if !assert.ElementsMatch(t, expectedObj.Pods, actualObj.Pods) {
+						t.Errorf("Expected IPAddresses %v, got %v", expectedObj.Pods, actualObj.Pods)
 					}
 				case watch.Modified:
 					actualObj := actualEvent.Object.(*networking.AddressGroupPatch)
@@ -140,11 +145,11 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}
-					if !assert.ElementsMatch(t, expectedObj.AddedIPAddresses, actualObj.AddedIPAddresses) {
-						t.Errorf("Expected AddedIPAddresses %v, got %v", expectedObj.AddedIPAddresses, actualObj.AddedIPAddresses)
+					if !assert.ElementsMatch(t, expectedObj.AddedPods, actualObj.AddedPods) {
+						t.Errorf("Expected AddedIPAddresses %v, got %v", expectedObj.AddedPods, actualObj.AddedPods)
 					}
-					if !assert.ElementsMatch(t, expectedObj.RemovedIPAddresses, actualObj.RemovedIPAddresses) {
-						t.Errorf("Expected RemovedIPAddresses %v, got %v", expectedObj.RemovedIPAddresses, actualObj.RemovedIPAddresses)
+					if !assert.ElementsMatch(t, expectedObj.RemovedPods, actualObj.RemovedPods) {
+						t.Errorf("Expected RemovedIPAddresses %v, got %v", expectedObj.RemovedPods, actualObj.RemovedPods)
 					}
 				}
 			}
