@@ -1,0 +1,46 @@
+---
+layout: page
+title: Community
+description: Community Resources
+links:
+- title: Twitter
+  image: /img/twitter.svg
+  items:
+  - description: "Follow us at: "
+    url: "https://twitter.com/projectantrea"
+    label: "@ProjectAntrea"
+- title: Google
+  image: /img/google.svg
+  items:
+  - description: "Join the discussion at: "
+    url: " https://groups.google.com/forum/#!forum/projectantrea-dev"
+    label: "https://groups.google.com/forum/#!forum/projectantrea-dev"
+- title: Slack
+  image: /img/slack.svg
+  items: 
+  - description: "Join Kubernets on: "
+    url: "https://slack.k8s.io/"
+    label: Slack
+  - description: "Chat with us at"
+    url: "https://kubernetes.slack.com/archives/CR2J23M0X"
+    label: Slack
+id: community
+---
+<div class="container">
+  <div class="row">
+    {% for link in page.links %}
+    <div class="col-md-4 community-item">
+      <div class="icon">
+        <a href="{{ link.url }}" target="_blank"><img src="{{ link.image }}" alt="{{ link.title}}"></a>  
+      </div>
+      <h3>{{link.title}}</h3>
+      {% for item in link.items %}
+      <div class="link-description">
+        <p>{{ item.description }} <a href="{{ item.url }}" target="_blank">{{ item.label }}</a></p>
+        <p>{{ item.notes }}</p>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
