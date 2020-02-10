@@ -104,5 +104,5 @@ https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 | vmware-cla: yes                    | Indicates the PR's author has signed the (VMware CLA)[https://cla.vmware.com/faq] | VMware CLA Bot |
 | do-not-merge/hold                  | Indicates a PR should not be merged because someone has issued a /hold command | Merge Bot |
 | do-not-merge/work-in-progress      | Indicates that a PR should not merge because it is a work in progress. | Merge Bot |
-| lgtm                               | Idicates thatIndicates that a PR is ready to be merged. | Merge Bot |
+| lgtm                               | Indicates that a PR is ready to be merged. | Merge Bot |
 

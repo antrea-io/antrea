@@ -11,31 +11,15 @@ to effectively get it merged upstream.
     - [Accounts Setup](#accounts-setup)
   - [Contribute](#contribute)
     - [Filing An Issue](#filing-an-issue)
-    - [Workflow Overview](#workflow-overview)
     - [GitHub Workflow](#github-workflow)
     - [Getting reviewers](#getting-reviewers)
     - [Building and testing your change](#building-and-testing-your-change)
     - [Running the end-to-end tests](#running-the-end-to-end-tests)
     - [Reverting a commit](#reverting-a-commit)
   - [Issue and PR Management](#issue-and-pr-management)
-    - [Issue Workflow](#issue-workflow)
     - [New Issues](#new-issues)
     - [Issue Triage](#issue-triage)
     - [Issue and PR Kinds](#issue-and-pr-kinds)
-      - [API Change](#api-change)
-      - [Bug](#bug)
-      - [Cleanup](#cleanup)
-      - [Feature](#feature)
-      - [Deprecation](#deprecation)
-      - [Design](#design)
-      - [Documentation](#documentation)
-      - [Failing Test](#failing-test)
-      - [Support](#support)
-    - [Area Assignment](#area-assignment)
-    - [Size](#size)
-    - [Triage](#triage)
-    - [Lifecycle](#lifecycle)
-    - [Priority](#priority)
 
 ## Getting Started
 
@@ -99,18 +83,11 @@ labels are included on your issue:
   of issues that can be submitted, see [Issue and PR Kinds](#issue-and-pr-kinds).
 * **area** (optional) -- if you know the area the issue belongs in, you can assign it.
   Otherwise, another community member will label the issue during triage. For an
-  overview of areas, see the [`docs/labels.md`](docs/labels.md).
+  overview of areas, see the [`docs/github-labels.md.md`](docs/github-labels.md.md).
 * **size** (optional) -- if you have an idea of the size (lines of code, complexity,
   effort) of the issue, you can label it using a [size label](#size).
 
 All other labels will be assigned during issue triage.
-
-### Workflow Overview
-
-Once an issue has been filed, our [issue management workflow](#issue-workflow)
-will help ensure that the issue is properly triaged, assigned, and tracked.
-
-Details of this workflow are described later in this document.
 
 ### GitHub Workflow
 
@@ -232,21 +209,8 @@ including how to setup a local Kubernetes cluster, can be found in
 ## Issue and PR Management
 
 We use labels and workflows (some manual, some automated with GitHub Actions) to
-help us manage triage, prioritize, and track issue progress. 
-
-### Issue Workflow
-
-The purpose of this workflow is to formalize a lightweight set of processes that
-will optimize issue triage and management which will lead to better release
-predictability and community responsiveness for support and feature
-enhancements. Additionally, Antrea must prioritize issues to ensure interlock
-alignment and compatibility with other projects including Kubernetes. The
-processes described here will aid in accomplishing these goals.
-
-![developer workflow overview](docs/assets/developer-workflow-opaque-bg.png)
-
-For additional details and to improve the metadata associated with your issues,
-please keep reading.
+help us manage triage, prioritize, and track issue progress. For a detailed
+discussion, see [docs/issue-management.md](docs/issue-management.md).
 
 ### New Issues
 
@@ -283,266 +247,21 @@ triage labels.
 
 ### Issue and PR Kinds
 
-Use an kind label to describe the kind of issue or PR you are submitting. Valid
+Use a `kind` label to describe the kind of issue or PR you are submitting. Valid
 kinds include:
 
-* [`kind/api-change`](#api-change) -- for api changes
-* [`kind/bug`](#bug) -- for filing a bug
-* [`kind/cleanup`](#cleanup) -- for code cleanup and organization
-* [`kind/deprecation`](#deprecation) -- for deprecating a feature
-* [`kind/design`](#design) -- for proposing a design or architectural change
-* [`kind/documentation`](#documentation) -- for updating documentation
-* [`kind/failing-test`](#failing-test) -- for reporting a failed test (may
+* [`kind/api-change`](docs/issue-management.md#api-change) -- for api changes
+* [`kind/bug`](docs/issue-management.md#bug) -- for filing a bug
+* [`kind/cleanup`](docs/issue-management.md#cleanup) -- for code cleanup and organization
+* [`kind/deprecation`](docs/issue-management.md#deprecation) -- for deprecating a feature
+* [`kind/design`](docs/issue-management.md#design) -- for proposing a design or architectural change
+* [`kind/documentation`](docs/issue-management.md#documentation) -- for updating documentation
+* [`kind/failing-test`](docs/issue-management.md#failing-test) -- for reporting a failed test (may
   create with automation in future)
-* [`kind/feature`](#feature) -- for proposing a feature
-* [`kind/support`](#support) -- to request support. You may also get support by
+* [`kind/feature`](docs/issue-management.md#feature) -- for proposing a feature
+* [`kind/support`](docs/issue-management.md#support) -- to request support. You may also get support by
   using our [Slack](https://kubernetes.slack.com/archives/CR2J23M0X) channel for
   interactive help. If you have not setup the appropriate accounts, please
   follow the instructions in [accounts setup](#accounts-setup).
 
-#### API Change
-
-A `kind/api-change` label categorizes an issue or PR as related to adding, removing,
-or otherwise changing an API.
-
-All API changes must be reviewed by MAINTAINERS in addition to the standard code
-review and approval workflow.
-
-To create an API change issue or PR:
-
-* label your issue or PR with `kind/api-change`
-* describe in the issue or PR body which API you are changing, making sure to include
-  * API endpoint and schema (endpoint, Version, APIGroup, etc.)
-  * Is this a breaking change?
-  * Can new or older clients opt-in to this API?
-  * Is there a fallback? What are the implications of not supporting this API version?
-
-Before starting any work on an API change it is important that you have proper
-review and approval from the project maintainers.
-
-#### Bug
-
-A `kind/bug` label categorizes an issue or PR as related to a bug.
-
-Any problem encountered when building, configuring, or running Antrea could be a
-potential case for submitting a bug.
-
-To create a bug issue or bug fix PR:
-
-* label your issue or PR with `kind/bug`
-* describe your bug in the issue or PR body making sure to include:
-  * version of Antrea
-  * version of Kubernetes
-  * version of OS and any relevent environment or system configuration
-  * steps and/or configuration to reproduce the bug
-  * any tests that demonstrate the presence of the bug
-* please attach any relevent logs or diagnostic output
-
-#### Cleanup
-
-A `kind/cleanup` label categorizes an issue or PR as related to cleaning up
-code, process, or technical debt.
-
-To create a cleanup issue or PR:
-
-* label your issue or PR with `kind/cleanup`
-* describe your cleanup in the issue or PR body being sure to include
-  * what is being cleaned
-  * for what reason it is being cleaned (technical debt, deprecation, etc.)
-
-Examples of a cleanup include:
-* Adding comments to describe code execution
-* Making code easier to read and follow
-* Removing dead code related to deprecated features or implementations
-
-#### Feature
-
-A `kind/feature` label categorizes an issue or PR as related to a new feature.
-
-To create a feature issue or PR:
-
-* label your issue or PR with `kind/feature`
-* describe your proposed feature in the issue or PR body being sure to include
-  * a use case for the new feature
-  * list acceptance tests for the new feature
-  * describe any dependencies for the new feature
-* depending on the size and impact of the feature
-  * a design proposal may need to be submitted
-  * the feature may need to be discussed in the community meeting
-
-Before you begin work on your feature it is import to ensure that you have
-proper review and approval from the project maintainers.
-
-Examples of a new feature include:
-* Adding a new set of metrics for enabling additional telemetry.
-* Adding additional supported transport layer protocol options for network policy.
-* Adding support for IPSec.
-
-#### Deprecation
-
-A `kind/deprecation` label categorizes an issue or PR as related to feature
-marked for deprecation.
-
-To create a deprecation issue or PR:
-
-* label your issue or PR with `kind/deprecation`
-* title the issue or PR with the feature you are deprecating
-* describe the deprecation in the issue or PR body making sure to:
-  * explain why the feature is being deprecated
-  * discuss time-to-live for the feat
-  * discuss any impacts to existing APIs
-
-#### Design
-
-A `kind/design` label categorizes issue or PR as related to design.
-
-A design issue or PR is for discussing larger architectural and design proposals.
-Approval of a design proposal may result in multiple additional feature,
-api-change, or cleanup issues being created to implement the design.
-
-To create a design issue:
-
-* label your issue or PR with `kind/design`
-* describe the design in the issue or PR body
-
-Before creating additional issues or PRs that implement the proposed design it is
-important to get feedback and approval from the maintainers. Design feedback
-could include some of the following:
-
-* needs additional detail
-* no, this problem should be solved in another way
-* this is desireable but we need help completing other issues or PRs first; then we will
-  consider this design
-
-_Note this was previously called `proposal`. We will add the `kind/design` label
-to all issues currently labeled with `proposal`._
-
-#### Documentation
-
-A `kind/documentation` label categorizes issue or PR as related to a
-documentation.
-
-To create a documentation issue or PR:
-
-* label your issue or PR with `kind/documentation`
-* title the issue with a short description of what you are documenting
-* provide a brief summary in the issue or PR body of what you are documenting. In some
-  cases, it might be useful to include a checklist of changed documentation
-  files to indicate your progress.
-
-#### Failing Test
-
-A `kind/failing-test` label categorizes issue or PR as related to a consistently
-or frequently failing test.
-
-To create a failing test issue or PR:
-
-* label your issue or PR with `kind/failing-test`
-
-TODO: As more automation is used in the continuous integration pipeline, we will
-be able to automatically generate an issue for failing tests.
-
-#### Support
-
-A `kind/support` label categorizes issue as related to a support request.
-
-To create a support issue or PR:
-
-* label your issue or PR with `kind/support`
-* title the issue or PR with a short description of your support request
-* answer all of the questions in the support issue template
-
-_Note this was previously called `support`. We will add the `kind/support` label
-to all issues currently labeled with `support`.
-
-### Area Assignment
-
-Area labels begin with `area/` and identify areas of interest or functionality
-to which an issue relates. An issue or PR could have multiple areas. These labels are
-used to sort issues and PRs into categories such as:
-
-* operating systems
-* cloud platform, 
-* functional area,
-* operating or legal area (i.e., licensing), 
-* etc.
-
-A list of areas is maintained in the [`docs/labels.md`](docs/labels.md) document.
-
-An area may be changed, added or deleted during issue or PR triage.
-
-### Size
-
-Size labels beting with `size/` and estimate the relative complexity or work
-required to resolve an issue or PR. 
-
-TODO: For submitted PRs, the size can be automatically calculated and the
-appropriate label assigned.
-
-Size labels are specified according to lines of code; however, some issues may
-not relate to lines of code submission such as documentation. In those cases,
-use the labels to assign an equivalent complexity or size to the task at hand.
-
-Size labels include:
-
-* `size/XS` -- denotes a extra small issue, or PR that changes 0-9 lines, ignoring generated files
-* `size/S` -- denotes a small issue, or PR that changes 10-29 lines, ignoring generated files
-* `size/M` -- denotes a medium issue, or PR that changes 30-99 lines, ignoring generated files
-* `size/L` -- denotes a large issue, or PR that changes 100-499 lines, ignoring generated files
-* `size/XL` -- denotes a very large issue, or PR that changes 500+ lines, ignoring generated files
-
-Size labels are defined in the [`docs/labels.md`](docs/labels.md) document.
-
-### Triage
-
-As soon as new issue are submitted, they must be triaged until they are ready to
-work. The maintainers may assign the following labels during the issue triage
-process:
-
-* `triage/duplicate`  -- indicates an issue is a duplicate of other open issue
-* `triage/needs-information` -- indicates an issue needs more information in order to work on it
-* `triage/not-reproducible` -- indicates an issue can not be reproduced as described
-* `triage/unresolved` -- indicates an issue that can not or will not be resolved
-
-Triage labels are defined in the [`docs/labels.md`](docs/labels.md) document.
-
-### Lifecycle
-
-To track the state of an issue, the following labels will be assigned.
-
-* lifecycle/active -- indicates that an issue or PR is actively being worked on by a contributor
-* lifecycle/frozen -- indicates that an issue or PR should not be auto-closed due to staleness
-* lifecycle/rotten -- denotes an issue or PR that has aged beyond stale and will be auto-closed
-* lifecycle/stale -- denotes an issue or PR has remained open with no activity and has become stale
-
-The following schedule will be used to determine an issue's lifecycle:
-
-* after 90 days of inactivity, an issue will be automatically marked as `lifecycle/stale`
-* after 180 days of inactivity, an issue will be automatically marked as
-  `lifecycle/rotten` and can then be scheduled for auto closure
-* any issue marked as `lifecycle/frozen` will prevent automatic transitions to
-  stale or rotten state.
-* an issue marked as `lifecycle/active` adds an additional 30 days to the
-  scheduled stale and rotten transitions above. If no activity is present, the
-  issue can be automatically closed.
-
-Issue lifecycle management ensures that the project backlog remains fresh and
-relevent. Project maintainers and contributors will need to revisit issues to
-periodically assess their relevence and progress.
-
-TODO: Additional CI automation (GitHub actions) will be used to automatically
-assign and manage some of these lifecycle labels.
-
-Lifecycle labels are defined in the [`docs/labels.md`](docs/labels.md) document.
-
-### Priority
-
-A priority label signifies the overall priority that should be given to an
-issue or PR. Priorities are considered during backlog grooming and help to
-determine the number of features included in a milestone.
-
-* `priority/awaiting-more-evidence` -- lowest priority. Possibly useful, but not yet enough support to actually get it done.
-* `priority/backlog` -- higher priority than priority/awaiting-more-evidence.
-* `priority/critical-urgent` -- highest priority. Must be actively worked on as someone's top priority right now.
-* `priority/important-longterm` -- important over the long term, but may not be staffed and/or may need multiple releases to complete.
-* `priority/import-soon` -- must be staffed and worked on either currently, or very soon, ideally in time for the next release.
+For more details on how we manage issues, please read our [Issue Management doc](docs/issue-management.md).
