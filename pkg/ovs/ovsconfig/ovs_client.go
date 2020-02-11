@@ -671,3 +671,7 @@ func (br *OVSBridge) GetOVSVersion() (string, Error) {
 
 	return res[0].Rows[0].(map[string]interface{})["ovs_version"].(string), nil
 }
+
+func (br *OVSBridge) GetBridgeName() string {
+	return br.name
+}
