@@ -23,6 +23,7 @@ function echoerr {
 _usage="Usage: $0 [--mode (dev|release)] [--kind] [--ipsec] [--keep] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
+        --encap-mode          Traffic encapsulation mode. (default is 'encap')
         --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
         --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
         --keep                Debug flag which will preserve the generated kustomization.yml
@@ -47,6 +48,7 @@ MODE="dev"
 KIND=false
 IPSEC=false
 KEEP=false
+ENCAP_MODE=""
 
 while [[ $# -gt 0 ]]
 do
@@ -57,6 +59,11 @@ case $key in
     MODE="$2"
     shift 2
     ;;
+    --encap-mode)
+    ENCAP_MODE="$2"
+    shift 2
+    ;;
+
     --kind)
     KIND=true
     shift
@@ -131,6 +138,10 @@ if $IPSEC; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableIPSecTunnel[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableIPSecTunnel: true/" antrea-agent.conf
     # change the tunnel type to GRE which works better with IPSec encryption than other types.
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
+fi
+
+if [[ $ENCAP_MODE != "" ]]; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: $ENCAP_MODE/" antrea-agent.conf
 fi
 
 # unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,

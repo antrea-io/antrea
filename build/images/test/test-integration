@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+trap "chown -R $1:$2 /tmp/gopath /tmp/gocache" EXIT
+
+start_ovs_netdev --start-ovs-only
+make test-integration

@@ -33,8 +33,11 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -67,8 +70,11 @@ type Controller struct {
 	tunnelType       ovsconfig.TunnelType
 	// Pre-shared key for IPSec IKE authentication. If not empty IPSec tunnels will
 	// be enabled.
-	ipsecPSK    string
-	gatewayLink netlink.Link
+	ipsecPSK       string
+	gatewayLink    netlink.Link
+	routeClient    *route.Client
+	iptablesClient *iptables.Client
+	encapMode      config.TrafficEncapModeType
 	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the route to the Node.
 	// If the flows of the Node are installed, the installedNodes must contains a key which is the host name.
@@ -86,13 +92,15 @@ func NewNodeRouteController(
 	client openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	interfaceStore interfacestore.InterfaceStore,
-	config *types.NodeConfig,
+	nodeConfig *types.NodeConfig,
 	tunnelType ovsconfig.TunnelType,
 	ipsecPSK string,
+	routeClient *route.Client,
+	iptablesClient *iptables.Client,
+	encapModeStr string,
 ) *Controller {
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	link, _ := netlink.LinkByName(config.GatewayConfig.Name)
-
+	_, encapMode := config.GetTrafficEncapModeFromStr(encapModeStr)
 	controller := &Controller{
 		kubeClient:       kubeClient,
 		nodeInformer:     nodeInformer,
@@ -102,11 +110,15 @@ func NewNodeRouteController(
 		ofClient:         client,
 		ovsBridgeClient:  ovsBridgeClient,
 		interfaceStore:   interfaceStore,
-		nodeConfig:       config,
-		gatewayLink:      link,
+		nodeConfig:       nodeConfig,
+		gatewayLink:      util.GetNetLink(nodeConfig.GatewayConfig.Link),
 		installedNodes:   &sync.Map{},
 		tunnelType:       tunnelType,
-		ipsecPSK:         ipsecPSK}
+		ipsecPSK:         ipsecPSK,
+		routeClient:      routeClient,
+		iptablesClient:   iptablesClient,
+		encapMode:        encapMode,
+	}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(cur interface{}) {
@@ -147,21 +159,6 @@ func (c *Controller) enqueueNode(obj interface{}) {
 	}
 }
 
-// listRoutes reads all the routes for the gateway and returns them as a map with the destination
-// subnet as the key.
-func (c *Controller) listRoutes() (routes map[string]*netlink.Route, err error) {
-	routes = make(map[string]*netlink.Route)
-	routeList, err := netlink.RouteList(c.gatewayLink, netlink.FAMILY_V4)
-	if err != nil {
-		return routes, err
-	}
-	for idx := 0; idx < len(routeList); idx++ {
-		route := &routeList[idx]
-		routes[route.Dst.String()] = route
-	}
-	return routes, nil
-}
-
 // removeStaleGatewayRoutes removes all the gateway routes which no longer correspond to a Node in
 // the cluster. If the antrea agent restarts and Nodes have left the cluster, this function will
 // take care of removing routes which are no longer valid.
@@ -171,7 +168,7 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 		return fmt.Errorf("error when listing Nodes: %v", err)
 	}
 
-	routes, err := c.listRoutes()
+	routes, err := c.routeClient.ListPeerCIDRRoute()
 	if err != nil {
 		return fmt.Errorf("error when listing existing gateway routes: %v", err)
 	}
@@ -192,9 +189,9 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 	// remove all remaining routes in the map: these routes do not match any Node in the
 	// cluster.
 	klog.V(4).Infof("Need to delete %d routes", len(routes))
-	for _, route := range routes {
-		if err := netlink.RouteDel(route); err != nil {
-			klog.Errorf("error when deleting route '%v': %v", route, err)
+	for _, r := range routes {
+		if err := c.routeClient.DeletePeerCIDRRoute(r); err != nil {
+			klog.Errorf("error when deleting route '%v': %v", r, err)
 		}
 	}
 
@@ -226,7 +223,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 				continue
 			}
 
-			peerNodeIP, err := getNodeAddr(node)
+			peerNodeIP, err := GetNodeAddr(node)
 			if err != nil {
 				klog.Errorf("Failed to retrieve IP address of Node %s: %v", node.Name, err)
 				continue
@@ -269,6 +266,36 @@ func (c *Controller) removeStaleTunnelPorts() error {
 	return nil
 }
 
+func (c *Controller) reconcileIPTables() error {
+	nodes, err := c.nodeLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("error when listing Nodes: %v", err)
+	}
+
+	// collect CIDRs from each known Node, and restore its iptables rule.
+	for _, node := range nodes {
+		_, podCIDR, err := net.ParseCIDR(node.Spec.PodCIDR)
+		if err != nil {
+			klog.Errorf("Failed to parse Pod CIDR for Node %s: %v", node.Name, err)
+			continue
+		}
+		peerNodeIP, err := GetNodeAddr(node)
+		if err != nil {
+			klog.Errorf("Failed to get IP for Node %s: %v", node.Name, err)
+			continue
+		}
+		err = c.iptablesClient.AddPeerCIDR(podCIDR, peerNodeIP)
+		if err != nil {
+			klog.Errorf("Failed to update iptables for node %s: %v", node.Name, err)
+			continue
+		}
+	}
+	if err := c.iptablesClient.Reconcile(); err != nil {
+		return fmt.Errorf("iptables reconcile: %v", err)
+	}
+	return nil
+}
+
 func (c *Controller) reconcile() error {
 	klog.Infof("Reconciliation for %s", controllerName)
 	// reconciliation consists of removing stale routes and stale / invalid tunnel ports:
@@ -280,7 +307,7 @@ func (c *Controller) reconcile() error {
 	if err := c.removeStaleTunnelPorts(); err != nil {
 		return fmt.Errorf("error when removing stale tunnel ports: %v", err)
 	}
-	return nil
+	return c.reconcileIPTables()
 }
 
 // Run will create defaultWorkers workers (go routines) which will process the Node events from the
@@ -371,23 +398,23 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 	// same Node, which is required by the InstallNodeFlows / UninstallNodeFlows OF Client
 	// methods.
 
-	if node, err := c.nodeLister.Get(nodeName); err != nil {
+	node, err := c.nodeLister.Get(nodeName)
+	if err != nil {
 		return c.deleteNodeRoute(nodeName)
-	} else {
-		return c.addNodeRoute(nodeName, node)
 	}
+	return c.addNodeRoute(nodeName, node)
 }
 
 func (c *Controller) deleteNodeRoute(nodeName string) error {
 	klog.Infof("Deleting routes and flows to Node %s", nodeName)
 
-	route, flowsAreInstalled := c.installedNodes.Load(nodeName)
-	if route != nil {
-		if err := netlink.RouteDel(route.(*netlink.Route)); err != nil {
+	entry, flowsAreInstalled := c.installedNodes.Load(nodeName)
+	if routes, ok := entry.([]*netlink.Route); ok {
+		if err := c.routeClient.DeletePeerCIDRRoute(routes); err != nil {
 			return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 		}
-		c.installedNodes.Store(nodeName, nil)
 	}
+	c.installedNodes.Store(nodeName, nil)
 
 	if flowsAreInstalled {
 		if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
@@ -432,7 +459,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 		klog.Errorf("Failed to parse PodCIDR %s for Node %s", node.Spec.PodCIDR, nodeName)
 		return nil
 	}
-	peerNodeIP, err := getNodeAddr(node)
+	peerNodeIP, err := GetNodeAddr(node)
 	if err != nil {
 		klog.Errorf("Failed to retrieve IP address of Node %s: %v", nodeName, err)
 		return nil
@@ -462,21 +489,12 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 		c.installedNodes.Store(nodeName, nil)
 	}
 
-	// install route
-	route := &netlink.Route{
-		Dst:       peerPodCIDR,
-		Flags:     int(netlink.FLAG_ONLINK),
-		LinkIndex: c.gatewayLink.Attrs().Index,
-		Gw:        peerGatewayIP,
+	routes, err := c.routeClient.AddPeerCIDRRoute(peerPodCIDR, c.gatewayLink.Attrs().Index, peerNodeIP, peerGatewayIP)
+	if err == nil {
+		c.installedNodes.Store(nodeName, routes)
+		err = c.iptablesClient.AddPeerCIDR(peerPodCIDR, peerNodeIP)
 	}
-
-	// RouteReplace will add the route if it's missing or update it if it's already
-	// present (as is the case for agent restarts).
-	if err = netlink.RouteReplace(route); err != nil {
-		return fmt.Errorf("failed to install route to Node %s with netlink: %v", nodeName, err)
-	}
-	c.installedNodes.Store(nodeName, route)
-	return nil
+	return err
 }
 
 // createIPSecTunnelPort creates an IPSec tunnel port for the remote Node if the
@@ -550,20 +568,20 @@ func ParseTunnelInterfaceConfig(
 	return interfaceConfig
 }
 
-// getNodeAddr gets the available IP address of a Node. getNodeAddr will first try to get the
+// GetNodeAddr gets the available IP address of a Node. GetNodeAddr will first try to get the
 // NodeInternalIP, then try to get the NodeExternalIP.
-func getNodeAddr(node *v1.Node) (net.IP, error) {
+func GetNodeAddr(node *v1.Node) (net.IP, error) {
 	addresses := make(map[v1.NodeAddressType]string)
 	for _, addr := range node.Status.Addresses {
 		addresses[addr.Type] = addr.Address
 	}
 	var ipAddrStr string
-	if internalIp, ok := addresses[v1.NodeInternalIP]; ok {
-		ipAddrStr = internalIp
-	} else if externalIp, ok := addresses[v1.NodeExternalIP]; ok {
-		ipAddrStr = externalIp
+	if internalIP, ok := addresses[v1.NodeInternalIP]; ok {
+		ipAddrStr = internalIP
+	} else if externalIP, ok := addresses[v1.NodeExternalIP]; ok {
+		ipAddrStr = externalIP
 	} else {
-		return nil, fmt.Errorf("Node %s has neither external ip nor internal ip", node.Name)
+		return nil, fmt.Errorf("node %s has neither external ip nor internal ip", node.Name)
 	}
 	ipAddr := net.ParseIP(ipAddrStr)
 	if ipAddr == nil {

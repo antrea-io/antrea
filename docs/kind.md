@@ -56,6 +56,17 @@ antrea-agent-zsztq                   2/2     Running   0          8m56s
 antrea-controller-775f4d79f8-6tksp   1/1     Running   0          8m56s
 ```
 
+### Short Cut
+Alternatively to create a two worker Node cluster with antrea installed, do
+```
+./ci/kind/kind-setup.sh create CLUSTER_NAME
+```
+kind-setup.sh allows user to specify number of worker Nodes, docker bridge networks/subnets
+connected to worker Nodes, and preloaded docker images. For their usages do 
+ ```
+./ci/kind/kind-setup.sh help
+```
+ 
 ## FAQ
 
 ### Why is the YAML manifest different when using Kind?

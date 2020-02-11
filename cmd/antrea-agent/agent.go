@@ -27,7 +27,9 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/antctl"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
@@ -68,6 +70,11 @@ func run(o *Options) error {
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 
 	ofClient := openflow.NewClient(o.config.OVSBridge)
+	routeClient := route.NewClient()
+	iptablesClient, err := iptables.NewClient()
+	if err != nil {
+		return fmt.Errorf("failed to get iptable: %w", err)
+	}
 
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -78,12 +85,14 @@ func run(o *Options) error {
 		ofClient,
 		k8sClient,
 		ifaceStore,
-		o.config.OVSBridge,
 		o.config.ServiceCIDR,
 		o.config.HostGateway,
 		o.config.DefaultMTU,
 		ovsconfig.TunnelType(o.config.TunnelType),
-		o.config.EnableIPSecTunnel)
+		o.config.EnableIPSecTunnel,
+		o.config.TrafficEncapMode,
+		routeClient,
+		iptablesClient)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -103,7 +112,10 @@ func run(o *Options) error {
 		ifaceStore,
 		nodeConfig,
 		ovsconfig.TunnelType(o.config.TunnelType),
-		agentInitializer.GetIPSecPSK())
+		agentInitializer.GetIPSecPSK(),
+		routeClient,
+		iptablesClient,
+		o.config.TrafficEncapMode)
 
 	// podUpdates is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
