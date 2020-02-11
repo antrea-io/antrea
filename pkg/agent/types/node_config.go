@@ -15,6 +15,7 @@
 package types
 
 import (
+	"fmt"
 	"net"
 )
 
@@ -27,12 +28,22 @@ const (
 type GatewayConfig struct {
 	IP   net.IP
 	MAC  net.HardwareAddr
-	Name string
+	Link string
+}
+
+func (g *GatewayConfig) String() string {
+	return fmt.Sprintf("Name %s: IP %s, MAC %s", g.Link, g.IP, g.MAC)
 }
 
 type NodeConfig struct {
-	Bridge  string
-	Name    string
-	PodCIDR *net.IPNet
-	*GatewayConfig
+	Bridge        string
+	Name          string
+	PodCIDR       *net.IPNet
+	NodeIPAddr    *net.IPNet
+	GatewayConfig *GatewayConfig
+}
+
+func (n *NodeConfig) String() string {
+	return fmt.Sprintf("NodeName: %s, PodCIDR: %s, NodeIP: %s, Gateway: %s",
+		n.Name, n.PodCIDR, n.NodeIPAddr, n.GatewayConfig)
 }

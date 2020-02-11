@@ -16,6 +16,7 @@ package util
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 )
@@ -43,4 +44,19 @@ func TestGenerateContainerInterfaceName(t *testing.T) {
 	if iface1 == iface2 {
 		t.Errorf("failed to differentiate interfaces with pods has the same prefix")
 	}
+}
+
+func TestGetDefaultLocalNodeAddr(t *testing.T) {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		t.Error(err)
+	}
+	defer conn.Close()
+	ip := conn.LocalAddr().(*net.UDPAddr).IP
+
+	_, dev, err := GetIPNetDeviceFromIP(ip)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("IP obtained %s, %s", ip, dev)
 }

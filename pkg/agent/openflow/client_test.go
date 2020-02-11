@@ -87,6 +87,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
+			client.nodeConfig = &types.NodeConfig{}
 			client.flowOperations = m
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
@@ -114,6 +115,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
+			client.nodeConfig = &types.NodeConfig{}
 			client.flowOperations = m
 
 			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
@@ -154,6 +156,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
+			client.nodeConfig = &types.NodeConfig{}
 			client.flowOperations = m
 
 			// We generate an error for AddAll call.
@@ -187,6 +190,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
+			client.nodeConfig = &types.NodeConfig{}
 			client.flowOperations = m
 
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls

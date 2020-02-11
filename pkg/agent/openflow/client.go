@@ -20,6 +20,7 @@ import (
 
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -34,7 +35,7 @@ type Client interface {
 	// be called to ensure that the set of OVS flows is correct. All flows programmed in the
 	// switch which match the current round number will be deleted before any new flow is
 	// installed.
-	Initialize(roundInfo types.RoundInfo) (<-chan struct{}, error)
+	Initialize(roundInfo types.RoundInfo, config *types.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
@@ -173,9 +174,16 @@ func (c *client) InstallNodeFlows(hostname string,
 ) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
+
 	flows := []binding.Flow{
 		c.arpResponderFlow(peerGatewayIP, cookie.Node),
-		c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr, tunOFPort, cookie.Node)}
+	}
+
+	if c.encapMode.NeedsEncapToPeer(tunnelPeerAddr, c.nodeConfig.NodeIPAddr) {
+		flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr, tunOFPort, cookie.Node))
+	} else {
+		flows = append(flows, c.l3FwdFlowToRemoteViaGw(localGatewayMAC, peerPodCIDR, cookie.Node))
+	}
 	return c.addFlows(c.nodeFlowCache, hostname, flows)
 }
 
@@ -193,7 +201,11 @@ func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podI
 		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.arpSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, cookie.Pod),
-		c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod),
+	}
+
+	// NoEncap mode has no tunnel.
+	if c.encapMode.SupportsEncap() {
+		flows = append(flows, c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod))
 	}
 	return c.addFlows(c.podFlowCache, containerID, flows)
 }
@@ -219,10 +231,14 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 		c.gatewayIPSpoofGuardFlow(gatewayOFPort, cookie.Default),
 		c.gatewayARPSpoofGuardFlow(gatewayOFPort, gatewayAddr, gatewayMAC, cookie.Default),
 		c.ctRewriteDstMACFlow(gatewayMAC, cookie.Default),
-		c.l3ToGatewayFlow(gatewayAddr, gatewayMAC, cookie.Default),
 		c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default),
 		c.localProbeFlow(gatewayAddr, cookie.Default),
 	}
+	// In NoEncap , no traffic from tunnel port
+	if c.encapMode.SupportsEncap() {
+		flows = append(flows, c.l3ToGatewayFlow(gatewayAddr, gatewayMAC, cookie.Default))
+	}
+
 	if err := c.flowOperations.AddAll(flows); err != nil {
 		return err
 	}
@@ -247,7 +263,7 @@ func (c *client) initialize() error {
 		return fmt.Errorf("failed to install arp normal flow: %v", err)
 	}
 	if err := c.flowOperations.Add(c.l2ForwardOutputFlow(cookie.Default)); err != nil {
-		return fmt.Errorf("failed to install l2 forward output flows: %v", err)
+		return fmt.Errorf("failed to install L2 forward output flows: %v", err)
 	}
 	if err := c.flowOperations.AddAll(c.connectionTrackFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install connection track flows: %v", err)
@@ -255,10 +271,18 @@ func (c *client) initialize() error {
 	if err := c.flowOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip established connections: %v", err)
 	}
+
+	if c.encapMode.SupportsNoEncap() {
+		if err := c.flowOperations.Add(c.l2ForwardOutputInPortFlow(types.HostGatewayOFPort, cookie.Default)); err != nil {
+			return fmt.Errorf("failed to install L2 forward same in-port and out-port flow: %v", err)
+		}
+	}
 	return nil
 }
 
-func (c *client) Initialize(roundInfo types.RoundInfo) (<-chan struct{}, error) {
+func (c *client) Initialize(roundInfo types.RoundInfo, config *types.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error) {
+	c.nodeConfig = config
+	c.encapMode = encapMode
 	// Initiate connections to target OFswitch, and create tables on the switch.
 	connCh := make(chan struct{})
 	if err := c.bridge.Connect(maxRetryForOFSwitch, connCh); err != nil {

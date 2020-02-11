@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	config1 "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	ofClient "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	ofTestUtils "github.com/vmware-tanzu/antrea/test/integration/ovs"
@@ -135,7 +136,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
-	_, err = c.Initialize(roundInfo)
+	_, err = c.Initialize(roundInfo, &types.NodeConfig{}, config1.TrafficEncapModeEncap)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -197,7 +198,7 @@ func testReplayFlows(t *testing.T) {
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
-	if _, err := c.Initialize(roundInfo); err != nil {
+	if _, err := c.Initialize(roundInfo, &types.NodeConfig{}, config1.TrafficEncapModeEncap); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows() {
@@ -278,7 +279,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
-	_, err = c.Initialize(roundInfo)
+	_, err = c.Initialize(roundInfo, &types.NodeConfig{}, config1.TrafficEncapModeEncap)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {

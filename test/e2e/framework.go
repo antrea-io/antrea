@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/test/e2e/providers"
 )
 
@@ -841,4 +842,29 @@ func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (b
 		return false, nil
 	}
 	return false, fmt.Errorf("error when running ovs-vsctl command on Pod '%s': %v", antreaPodName, err)
+}
+
+func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
+	mapList, err := data.clientset.CoreV1().ConfigMaps("kube-system").List(metav1.ListOptions{})
+	if err != nil {
+		return config.TrafficEncapModeInvalid, err
+	}
+	for _, m := range mapList.Items {
+		if strings.HasPrefix(m.Name, "antrea-config") {
+			configMap, err := data.clientset.CoreV1().ConfigMaps("kube-system").Get(m.Name, metav1.GetOptions{})
+			if err != nil {
+				return config.TrafficEncapModeInvalid, err
+			}
+			for _, antreaConfig := range configMap.Data {
+				for _, mode := range config.GetTrafficEncapModes() {
+					searchStr := fmt.Sprintf("trafficEncapMode: %s", mode)
+					if strings.Index(strings.ToLower(antreaConfig), strings.ToLower(searchStr)) != -1 {
+						return mode, nil
+					}
+				}
+			}
+			return config.TrafficEncapModeEncap, nil
+		}
+	}
+	return config.TrafficEncapModeInvalid, fmt.Errorf("antrea-conf config map is not found")
 }

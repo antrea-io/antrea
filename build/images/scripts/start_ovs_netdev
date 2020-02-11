@@ -74,8 +74,11 @@ function quit {
 trap "quit" INT TERM
 
 fix_ovs_ctl
-
 start_ovs
+
+if [[ "$#" -ge 1 ]] && [[ "$1" == "--start-ovs-only" ]]; then
+  exit 0
+fi
 add_br_phy
 
 log_info $CONTAINER_NAME "Started the loop that checks OVS status every 30 seconds"
