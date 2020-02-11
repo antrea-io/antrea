@@ -12,4 +12,8 @@ _site
 .DS_Store
 *.log
 *.js.map
+<<<<<<< HEAD
 *.css.map
+=======
+*.css.map
+>>>>>>> Moved `site/site/` to `site/`
