@@ -5,6 +5,9 @@ metadata:
   name: antrea-agent
   labels:
     component: antrea-agent
+  annotations:
+    prometheus.io/port: '9092'
+    prometheus.io/scrape: 'true'
 spec:
   selector:
     matchLabels:
