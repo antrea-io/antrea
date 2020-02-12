@@ -391,7 +391,7 @@ spec:
           name: https
           protocol: TCP
         - containerPort: 9093
-          name: metrics
+          name: monitoring
           protocol: TCP
         volumeMounts:
         - mountPath: /etc/antrea/antrea-controller.conf
