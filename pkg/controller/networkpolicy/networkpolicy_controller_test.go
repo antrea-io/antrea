@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"reflect"
 	"testing"
 	"time"
@@ -1962,6 +1963,71 @@ func TestPodToMemberPod(t *testing.T) {
 				}
 			} else if !reflect.DeepEqual(actualMemberPod.Ports, tt.expMemberPod.Ports) {
 				t.Errorf("podToMemberPod() got unexpected Ports %v, want %v", actualMemberPod.Ports, tt.expMemberPod.Ports)
+			}
+		})
+	}
+}
+
+func TestCIDRStrToIPNet(t *testing.T) {
+	tests := []struct {
+		name string
+		inC  string
+		expC *networking.IPNet
+	}{
+		{
+			name: "cidr-valid",
+			inC:  "10.0.0.0/16",
+			expC: &networking.IPNet{
+				IP:           ipStrToIPAddress("10.0.0.0"),
+				PrefixLength: int32(16),
+			},
+		},
+		{
+			name: "cidr-invalid",
+			inC:  "10.0.0.0/",
+			expC: nil,
+		},
+		{
+			name: "cidr-prefix-invalid",
+			inC:  "10.0.0.0/a",
+			expC: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actC, _ := cidrStrToIPNet(tt.inC)
+			if !reflect.DeepEqual(actC, tt.expC) {
+				t.Errorf("cidrStrToIPNet() got unexpected IPNet %v, want %v", actC, tt.expC)
+			}
+		})
+	}
+}
+
+func TestIPStrToIPAddress(t *testing.T) {
+	ip1 := "10.0.1.10"
+	expIP1 := net.ParseIP(ip1)
+	ip2 := "1090.0.1.10"
+	tests := []struct {
+		name  string
+		ipStr string
+		expIP networking.IPAddress
+	}{
+		{
+			name:  "str-ip-valid",
+			ipStr: ip1,
+			expIP: networking.IPAddress(expIP1),
+		},
+		{
+			name:  "str-ip-invalid",
+			ipStr: ip2,
+			expIP: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actIP := ipStrToIPAddress(tt.ipStr)
+			if bytes.Compare(actIP, tt.expIP) != 0 {
+				t.Errorf("ipStrToIPAddress() got unexpected IPAddress %v, want %v", actIP, tt.expIP)
 			}
 		})
 	}
