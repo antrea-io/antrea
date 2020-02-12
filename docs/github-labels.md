@@ -28,6 +28,7 @@ https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 | area/endpoint/selection            | Issues or PRs related to endpoint selection | Any |
 | area/endpoint/type                 | Issues or PRs related to endpoint type | Any |
 | area/ipam                          | Issues or PRs related to IP address management (IPAM) | Any |
+| area/interface                     | Issues or PRs related to network interfaces | Any |
 | area/licensing                     | Issues or PRs related to Antrea licensing | Any |
 | area/monitoring/logging            | Issues or PRs related to logging | Any |
 | area/monitoring/auditing           | Issues or PRs related to auditing | Any |
