@@ -7,6 +7,7 @@ CONTRIBUTING.md first before proceeding.
 - [Issue Management](#issue-management)
   - [Developer Workflow Overview](#developer-workflow-overview)
   - [Creating New Issues and PRs](#creating-new-issues-and-prs)
+  - [Good First Issues and Help Wanted](#good-first-issues-and-help-wanted)
   - [Issue and PR Triage Process](#issue-and-pr-triage-process)
     - [Issue Triage](#issue-triage)
     - [PR Triage](#pr-triage)
@@ -44,9 +45,28 @@ processes described here will aid in accomplishing these goals.
 Creating new issues and PRs is covered in detail in
 [CONTRIBUTING.md](../CONTRIBUTING.md)/.
 
+## Good First Issues and Help Wanted
+
+We use `good first issue` and `help wanted` labels to indicate issues we would
+like contribution on. These two labels were borrowed from the Kubernetes project
+and represent the same context as described in [Help Wanted and Good First Issue
+Labels](https://kubernetes-contributor.netlify.com/guide/help-wanted/).
+
+We do not yet support the automation mentioned in the Kubernetes help guild.
+
+To summarize:
+
+* `good first issue` -- issues intended for first time contributors. Members
+  should keep an eye out for these pull requests and shepherd it through our
+  processes.
+* `help wanted` -- issues that represent clearly laid out tasks that are
+  generally tractable for new contributors. The solution has already been
+  designed and requires no further discussion from the community. This labels
+  indicates we need additional contributors to help move this task along.
+
 ## Issue and PR Triage Process
 
-When new issues or PRs come are created, the MAINTAINERS must triage the issue
+When new issues or PRs are created, the MAINTAINERS must triage the issue
 to ensure the information is valid, complete, and properly categorized and
 prioritized.
 
@@ -100,7 +120,7 @@ A PR is triaged in the following way:
 
 ## Working an Issue
 
-Wnen starting work on an issue, assign the issue to yourself if it has not
+When starting work on an issue, assign the issue to yourself if it has not
 already been assigned and apply the `lifecycle/active` label to signal that the
 issue is actively being worked on.
 
@@ -202,7 +222,7 @@ proper review and approval from the project maintainers.
 Examples of a new feature include:
 * Adding a new set of metrics for enabling additional telemetry.
 * Adding additional supported transport layer protocol options for network policy.
-* Adding support for IPSec.
+* Adding support for IPsec.
 
 #### Deprecation
 
@@ -279,7 +299,7 @@ To create a support issue or PR:
 * answer all of the questions in the support issue template
 
 _Note this was previously called `support`. We will add the `kind/support` label
-to all issues currently labeled with `support`.
+to all issues currently labeled with `support`._
 
 ### Area
 
@@ -372,4 +392,3 @@ determine the number of features included in a milestone.
 * `priority/critical-urgent` -- highest priority. Must be actively worked on as someone's top priority right now.
 * `priority/important-longterm` -- important over the long term, but may not be staffed and/or may need multiple releases to complete.
 * `priority/import-soon` -- must be staffed and worked on either currently, or very soon, ideally in time for the next release.
-

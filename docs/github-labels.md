@@ -8,7 +8,7 @@ like to keep the labels required for submission to a minimum. The remaining
 labels will be added either by automation or manual grooming by other
 contributors and maintainers.
 
-This labels in this list originated within Kubernetes at
+The labels in this list originated within Kubernetes at
 https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 
 ## Labels that apply to issues or PRs
@@ -50,9 +50,10 @@ https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 | area/security/access-control       | Issues or PRs related to access control | Any |
 | area/security/controlplane         | Issues or PRs related to controlplane security | Any |
 | area/security/dataplane            | Issues or PRs related to dataplane security | Any |
-| area/test                          | Issues or PRs related to tests. | Any |
-| area/test/conformance              | Issues or PRs related to conformance testing | Any |
-| area/test/e2e                      | Issues or PRs related to end-to-end testing. | Any |
+| area/test                          | Issues or PRs related to unit and integration tests. | Any |
+| area/test/community                | Issues or PRs related to community testing | Any |
+| area/test/e2e                      | Issues or PRs related to Antrea specific end-to-end testing. | Any |
+| area/test/infra                    | Issues or PRs related to test infrastructure (Jenkins configuration, Ansible playbook, Kind wrappers, ...) | Any |
 | area/transit/ip                    | Issues or PRs related to internet protocol version (IP) | Any |
 | area/transit/encapsulation         | Issues or PRs related to encapsulation | Any |
 | area/transit/addressing            | Issues or PRs related to IP addressing category (unicast, multicast, broadcast, anycast) | Any |
