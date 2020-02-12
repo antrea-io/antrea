@@ -1,5 +1,5 @@
 ---
-title: Homogenizing Network policy test controls and rearchitecting the NetworkPolicy test framework for to support a broader and more relevant test matrix for enterprise grade CNI providers.
+title: Homogenizing Network policy test controls and rearchitecting the NetworkPolicy test framework for to support a broader and more relevant test matrix for more fluid discussions around the NetworkPolicy API and how enterprise grade CNI providers implement it.
 authors:
   - "@jayunit100"
 owning-sig: sig-network
