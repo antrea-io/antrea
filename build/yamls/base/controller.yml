@@ -72,7 +72,7 @@ spec:
             - name: https
               containerPort: 443
               protocol: TCP
-            - name: metrics
+            - name: monitoring
               containerPort: 9093
               protocol: TCP
           volumeMounts:
