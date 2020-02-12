@@ -17,7 +17,12 @@ https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 |-------|-------------|----------|
 | api-review                         | Categorizes an issue or PR as actively needing an API review. | Any |
 | area/api                           | Issues or PRs related to an API | Any |
-| area/blog                          | Issues or PRs related to blog entries. | Any |
+| area/blog                          | Issues or PRs related to blog entries | Any |
+| area/component/antctl              | Issues or PRs releated to the command line interface component | Any |
+| area/component/agent               | Issues or PRs related to the agent component | Any |
+| area/component/cni                 | Issues or PRs related to the cni component | Any |
+| area/component/controller          | Issues or PRs related to the controller component | Any |
+| area/component/octant-plugin       | Issues or PRs related to the octant-plugin component | Any |
 | area/dependency                    | Issues or PRs related to dependency changes | Any |
 | area/endpoint/identity             | Issues or PRs related to endpoint identity | Any |
 | area/endpoint/selection            | Issues or PRs related to endpoint selection | Any |
