@@ -18,6 +18,7 @@ https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 | api-review                         | Categorizes an issue or PR as actively needing an API review. | Any |
 | area/api                           | Issues or PRs related to an API | Any |
 | area/blog                          | Issues or PRs related to blog entries | Any |
+| area/build-release                 | Issues or PRs related to building and releasing | Any |
 | area/component/antctl              | Issues or PRs releated to the command line interface component | Any |
 | area/component/agent               | Issues or PRs related to the agent component | Any |
 | area/component/cni                 | Issues or PRs related to the cni component | Any |
