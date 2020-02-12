@@ -1,8 +1,8 @@
 ---
-title: Homogenizing Network policy test controls and rearchitecting the NetworkPolicy test framework for to support a broader and more relevant test matrix for more fluid discussions around the NetworkPolicy API and how enterprise grade CNI providers implement it.
+title: Homogenizing Network policy test controls and rearchitecting the NetworkPolicy test framework to support a broader and more relevant test matrix for more fluid discussions around the NetworkPolicy API and how enterprise grade CNI providers implement it.
 authors:
   - "@jayunit100"
-  - "abished/sedef/cody please add names"
+  - "@abhiraut/sedef/cody please add names"
 owning-sig: sig-network
 reviewers: TBD
 approvers: TBD
@@ -12,7 +12,7 @@ last-updated: 2020-02-05
 status: implementable
 ---
 
-Special thanks to members of the Calico community, Abishek Raut (vmware), Sedef Saavas (vmware), Lui Zang (google) and others for helping with this proposal. 
+Special thanks to members of the Calico community, Abhishek Raut (vmware), Sedef Saavas (vmware), Lui Zang (google) and others for helping with this proposal. 
 
 # Homogenizing and expanding NetworkPolicy tests while reducing their complexity
 
