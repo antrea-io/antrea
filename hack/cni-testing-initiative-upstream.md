@@ -41,6 +41,10 @@ As an overall improvement, this KEP will help to address the solutions for sever
 - https://github.com/kubernetes/kubernetes/issues/85908 (failing tests, unclear semantics)
 - https://github.com/kubernetes/kubernetes/issues/86578 (needs e2e coverage)
 - https://github.com/kubernetes/kubernetes/issues/87709 (logging of netpol actions, will help describing states we reach) 
+- https://github.com/projectcalico/felix/issues/2032 non-deterministic time frames for policy applications
+- https://github.com/projectcalico/felix/issues/2008 need to test postStart pods in networkpolicy upstream
+- https://github.com/vmware-tanzu/antrea/issues/381 "It's not detected by e2e test because it can only happen when more than one Pod is scheduled on a single node."
+
 
 ### Consequences of this problem
  
