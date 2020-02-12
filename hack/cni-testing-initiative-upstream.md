@@ -1,5 +1,5 @@
 ---
-title: Homogenizing and expanding NetworkPolicy test coverage, leveraging audit data, while increasing performance, forensics, complexity of the test suite.
+title: Homogenizing Network policy test controls and rearchitecting the NetworkPolicy test framework for to support a broader and more relevant test matrix for enterprise grade CNI providers.
 authors:
   - "@jayunit100"
 owning-sig: sig-network
