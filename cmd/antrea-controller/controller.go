@@ -115,13 +115,6 @@ func run(o *Options) error {
 			o.config.EnablePrometheusGoMetrics)
 	}
 
-	if o.config.EnablePrometheusMetrics {
-		go createPrometheusMetricsListener(o.config.PrometheusHost,
-			strconv.Itoa(o.config.PrometheusPort),
-			o.config.EnablePrometheusGoMetrics,
-			o.config.EnablePrometheusGoMetrics)
-	}
-
 	<-stopCh
 	klog.Info("Stopping Antrea controller")
 	return nil
