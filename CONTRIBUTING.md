@@ -83,7 +83,7 @@ labels are included on your issue:
   of issues that can be submitted, see [Issue and PR Kinds](#issue-and-pr-kinds).
 * **area** (optional) -- if you know the area the issue belongs in, you can assign it.
   Otherwise, another community member will label the issue during triage. For an
-  overview of areas, see the [`docs/github-labels.md.md`](docs/github-labels.md.md).
+  overview of areas, see the [`docs/github-labels.md`](docs/github-labels.md).
 * **size** (optional) -- if you have an idea of the size (lines of code, complexity,
   effort) of the issue, you can label it using a [size label](#size).
 

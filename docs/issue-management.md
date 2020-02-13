@@ -38,12 +38,12 @@ enhancements. Additionally, Antrea must prioritize issues to ensure interlock
 alignment and compatibility with other projects including Kubernetes. The
 processes described here will aid in accomplishing these goals.
 
-![developer workflow overview](docs/assets/developer-workflow-opaque-bg.png)
+![developer workflow overview](assets/developer-workflow-opaque-bg.png)
 
 ## Creating New Issues and PRs
 
 Creating new issues and PRs is covered in detail in
-[CONTRIBUTING.md](../CONTRIBUTING.md)/.
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Good First Issues and Help Wanted
 
@@ -392,3 +392,4 @@ determine the number of features included in a milestone.
 * `priority/critical-urgent` -- highest priority. Must be actively worked on as someone's top priority right now.
 * `priority/important-longterm` -- important over the long term, but may not be staffed and/or may need multiple releases to complete.
 * `priority/import-soon` -- must be staffed and worked on either currently, or very soon, ideally in time for the next release.
+* 
