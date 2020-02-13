@@ -315,19 +315,19 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-4gb24b784b
+  name: antrea-config-dbb9d5fhf9
   namespace: kube-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
+  annotations:
+    prometheus.io/port: "9093"
+    prometheus.io/scrape: "true"
   labels:
     app: antrea
   name: antrea
   namespace: kube-system
-  annotations:
-    prometheus.io/port: '9093'
-    prometheus.io/scrape: 'true'
 spec:
   ports:
   - name: https
@@ -410,7 +410,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-4gb24b784b
+          name: antrea-config-dbb9d5fhf9
         name: antrea-config
 ---
 apiVersion: apiregistration.k8s.io/v1
@@ -444,12 +444,12 @@ spec:
       component: antrea-agent
   template:
     metadata:
+      annotations:
+        prometheus.io/port: "9092"
+        prometheus.io/scrape: "true"
       labels:
         app: antrea
         component: antrea-agent
-      annotations:
-        prometheus.io/port: '9092'
-        prometheus.io/scrape: 'true'
     spec:
       containers:
       - args:
@@ -575,7 +575,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-4gb24b784b
+          name: antrea-config-dbb9d5fhf9
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

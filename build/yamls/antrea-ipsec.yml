@@ -315,7 +315,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-ghc6hct4mg
+  name: antrea-config-mtd2mc42hm
   namespace: kube-system
 ---
 apiVersion: v1
@@ -330,6 +330,9 @@ type: Opaque
 apiVersion: v1
 kind: Service
 metadata:
+  annotations:
+    prometheus.io/port: "9093"
+    prometheus.io/scrape: "true"
   labels:
     app: antrea
   name: antrea
@@ -416,7 +419,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-ghc6hct4mg
+          name: antrea-config-mtd2mc42hm
         name: antrea-config
 ---
 apiVersion: apiregistration.k8s.io/v1
@@ -450,6 +453,9 @@ spec:
       component: antrea-agent
   template:
     metadata:
+      annotations:
+        prometheus.io/port: "9092"
+        prometheus.io/scrape: "true"
       labels:
         app: antrea
         component: antrea-agent
@@ -610,7 +616,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-ghc6hct4mg
+          name: antrea-config-mtd2mc42hm
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
