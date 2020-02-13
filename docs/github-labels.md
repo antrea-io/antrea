@@ -31,10 +31,11 @@ https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 | area/ipam                          | Issues or PRs related to IP address management (IPAM) | Any |
 | area/interface                     | Issues or PRs related to network interfaces | Any |
 | area/licensing                     | Issues or PRs related to Antrea licensing | Any |
-| area/monitoring/logging            | Issues or PRs related to logging | Any |
 | area/monitoring/auditing           | Issues or PRs related to auditing | Any |
-| area/monitoring/traffic-analysis   | Issues or PRs related to traffic analysis | Any |
+| area/monitoring/health-performance | Issues or PRs related to health and performance monitoring | Any |
+| area/monitoring/logging            | Issues or PRs related to logging | Any |
 | area/monitoring/mirroring          | Issues or PRs related to mirroring | Any |
+| area/monitoring/traffic-analysis   | Issues or PRs related to traffic analysis | Any |
 | area/network-policy/action         | Issues or PRs related to network policy actions | Any |
 | area/network-policy/api            | Issues or PRs related to the network policy API | Any |
 | area/network-polciy/failsafe       | Issues or PRs related to network policy failsafes | Any |
