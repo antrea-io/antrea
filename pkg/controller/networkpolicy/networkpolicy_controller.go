@@ -74,6 +74,10 @@ var (
 	matchAllPeer = networking.NetworkPolicyPeer{
 		IPBlocks: []networking.IPBlock{{CIDR: networking.IPNet{IP: networking.IPAddress(net.IPv4zero), PrefixLength: 0}}},
 	}
+	// matchAllPodsPeer is a networkingv1.NetworkPolicyPeer matching all Pods from all Namespaces.
+	matchAllPodsPeer = networkingv1.NetworkPolicyPeer{
+		NamespaceSelector: &metav1.LabelSelector{},
+	}
 	// denyAllIngressRule is a NetworkPolicyRule which denies all ingress traffic.
 	denyAllIngressRule = networking.NetworkPolicyRule{Direction: networking.DirectionIn}
 	// denyAllEgressRule is a NetworkPolicyRule which denies all egress traffic.
@@ -516,7 +520,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 		ingressRuleExists = true
 		rules = append(rules, networking.NetworkPolicyRule{
 			Direction: networking.DirectionIn,
-			From:      *n.toAntreaPeer(ingressRule.From, np),
+			From:      *n.toAntreaPeer(ingressRule.From, np, networking.DirectionIn),
 			Services:  toAntreaServices(ingressRule.Ports),
 		})
 	}
@@ -525,7 +529,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 		egressRuleExists = true
 		rules = append(rules, networking.NetworkPolicyRule{
 			Direction: networking.DirectionOut,
-			To:        *n.toAntreaPeer(egressRule.To, np),
+			To:        *n.toAntreaPeer(egressRule.To, np, networking.DirectionOut),
 			Services:  toAntreaServices(egressRule.Ports),
 		})
 	}
@@ -561,15 +565,28 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	return internalNetworkPolicy
 }
 
-func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy) *networking.NetworkPolicyPeer {
+func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy, dir networking.Direction) *networking.NetworkPolicyPeer {
+	var addressGroups []string
 	// Empty NetworkPolicyPeer is supposed to match all addresses.
 	// See https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-allow-all-ingress-traffic.
 	// It's treated as an IPBlock "0.0.0.0/0".
 	if len(peers) == 0 {
-		return &matchAllPeer
+		// For an ingress Peer, skip adding the AddressGroup matching all Pods
+		// because in case of ingress Rule, the named Port resolution happens on
+		// Pods in AppliedToGroup.
+		if dir == networking.DirectionIn {
+			return &matchAllPeer
+		}
+		// For an egress Peer, create an AddressGroup matching all Pods in all
+		// Namespaces such that it can be used to resolve named Ports. This
+		// AddressGroup is set in the NetworkPolicyPeer of matchAllPeer.
+		allPodsGroupUID := n.createAddressGroup(matchAllPodsPeer, np)
+		podsPeer := matchAllPeer
+		addressGroups = append(addressGroups, allPodsGroupUID)
+		podsPeer.AddressGroups = addressGroups
+		return &podsPeer
 	}
 	var ipBlocks []networking.IPBlock
-	var addressGroups []string
 	for _, peer := range peers {
 		// A networking.NetworkPolicyPeer will either have an IPBlock or a
 		// podSelector and/or namespaceSelector set.
