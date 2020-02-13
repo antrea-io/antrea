@@ -140,7 +140,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 		name               string
 		rules              []*rule
 		args               *v1beta1.AddressGroup
-		expectedAddresses  v1beta1.GroupMemberPodSet
+		expectedAddresses  []*v1beta1.GroupMemberPod
 		expectedDirtyRules sets.String
 	}{
 		{
@@ -150,7 +150,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "group0"},
 				Pods:       []v1beta1.GroupMemberPod{},
 			},
-			v1beta1.GroupMemberPodSet{},
+			nil,
 			sets.NewString(),
 		},
 		{
@@ -160,7 +160,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "group2"},
 				Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1")},
 			},
-			v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1")),
+			[]*v1beta1.GroupMemberPod{newAddressGroupMember("1.1.1.1")},
 			sets.NewString("rule2"),
 		},
 		{
@@ -170,7 +170,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "group1"},
 				Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
 			},
-			v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
+			[]*v1beta1.GroupMemberPod{newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")},
 			sets.NewString("rule1", "rule2"),
 		},
 	}
@@ -189,9 +189,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 			if !exists {
 				t.Fatalf("AddressGroup %s not found", tt.args.Name)
 			}
-			if !actualAddresses.Equal(tt.expectedAddresses) {
-				t.Errorf("Got addresses %v, expected %v", actualAddresses, tt.expectedAddresses)
-			}
+			assert.ElementsMatch(t, tt.expectedAddresses, actualAddresses.Items(), "stored addresses not equal")
 		})
 	}
 }
@@ -216,7 +214,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 		name               string
 		rules              []*rule
 		args               *v1beta1.AppliedToGroup
-		expectedPods       v1beta1.GroupMemberPodSet
+		expectedPods       []*v1beta1.GroupMemberPod
 		expectedDirtyRules sets.String
 	}{
 		{
@@ -226,7 +224,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "group0"},
 				Pods:       []v1beta1.GroupMemberPod{},
 			},
-			v1beta1.NewGroupMemberPodSet(),
+			nil,
 			sets.NewString(),
 		},
 		{
@@ -236,7 +234,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "group2"},
 				Pods:       []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
 			},
-			v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1")),
+			[]*v1beta1.GroupMemberPod{newAppliedToGroupMember("pod1", "ns1")},
 			sets.NewString("rule2"),
 		},
 		{
@@ -246,7 +244,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "group1"},
 				Pods:       []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1"), *newAppliedToGroupMember("pod2", "ns1")},
 			},
-			v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1")),
+			[]*v1beta1.GroupMemberPod{newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1")},
 			sets.NewString("rule1", "rule2"),
 		},
 	}
@@ -265,9 +263,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 			if !exists {
 				t.Fatalf("AppliedToGroup %s not found", tt.args.Name)
 			}
-			if !actualPods.Equal(tt.expectedPods) {
-				t.Errorf("Got addresses %v, expected %v", actualPods, tt.expectedPods)
-			}
+			assert.ElementsMatch(t, tt.expectedPods, actualPods.Items(), "stored Pods not equal")
 		})
 	}
 }
@@ -506,7 +502,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 		rules              []*rule
 		podSetByGroup      map[string]v1beta1.GroupMemberPodSet
 		args               *v1beta1.AppliedToGroupPatch
-		expectedPods       v1beta1.GroupMemberPodSet
+		expectedPods       []*v1beta1.GroupMemberPod
 		expectedDirtyRules sets.String
 		expectedErr        bool
 	}{
@@ -528,10 +524,10 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 			map[string]v1beta1.GroupMemberPodSet{"group2": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
 			&v1beta1.AppliedToGroupPatch{
 				ObjectMeta:  metav1.ObjectMeta{Name: "group2"},
-				AddedPods:   []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns1")},
+				AddedPods:   []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns1"), *newAppliedToGroupMember("pod3", "ns3")},
 				RemovedPods: []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
 			},
-			v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod2", "ns1")),
+			[]*v1beta1.GroupMemberPod{newAppliedToGroupMember("pod2", "ns1"), newAppliedToGroupMember("pod3", "ns3")},
 			sets.NewString("rule2"),
 			false,
 		},
@@ -541,10 +537,10 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
 			&v1beta1.AppliedToGroupPatch{
 				ObjectMeta:  metav1.ObjectMeta{Name: "group1"},
-				AddedPods:   []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns1")},
+				AddedPods:   []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns1"), *newAppliedToGroupMember("pod3", "ns3")},
 				RemovedPods: []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
 			},
-			v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod2", "ns1")),
+			[]*v1beta1.GroupMemberPod{newAppliedToGroupMember("pod2", "ns1"), newAppliedToGroupMember("pod3", "ns3")},
 			sets.NewString("rule1", "rule2"),
 			false,
 		},
@@ -564,9 +560,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
 			actualPods, _ := c.podSetByGroup[tt.args.Name]
-			if !actualPods.Equal(tt.expectedPods) {
-				t.Errorf("Got pods %v, expected %v", actualPods, tt.expectedPods)
-			}
+			assert.ElementsMatch(t, tt.expectedPods, actualPods.Items(), "stored Pods not equal")
 		})
 	}
 }
@@ -585,7 +579,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 		rules              []*rule
 		addressSetByGroup  map[string]v1beta1.GroupMemberPodSet
 		args               *v1beta1.AddressGroupPatch
-		expectedAddresses  v1beta1.GroupMemberPodSet
+		expectedAddresses  []*v1beta1.GroupMemberPod
 		expectedDirtyRules sets.String
 		expectedErr        bool
 	}{
@@ -607,10 +601,10 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 			map[string]v1beta1.GroupMemberPodSet{"group2": v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))},
 			&v1beta1.AddressGroupPatch{
 				ObjectMeta:  metav1.ObjectMeta{Name: "group2"},
-				AddedPods:   []v1beta1.GroupMemberPod{*newAddressGroupMember("2.2.2.2")},
+				AddedPods:   []v1beta1.GroupMemberPod{*newAddressGroupMember("2.2.2.2"), *newAddressGroupMember("3.3.3.3")},
 				RemovedPods: []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1")},
 			},
-			v1beta1.NewGroupMemberPodSet(newAddressGroupMember("2.2.2.2")),
+			[]*v1beta1.GroupMemberPod{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
 			sets.NewString("rule2"),
 			false,
 		},
@@ -620,10 +614,10 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))},
 			&v1beta1.AddressGroupPatch{
 				ObjectMeta:  metav1.ObjectMeta{Name: "group1"},
-				AddedPods:   []v1beta1.GroupMemberPod{*newAddressGroupMember("2.2.2.2")},
+				AddedPods:   []v1beta1.GroupMemberPod{*newAddressGroupMember("2.2.2.2"), *newAddressGroupMember("3.3.3.3")},
 				RemovedPods: []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1")},
 			},
-			v1beta1.NewGroupMemberPodSet(newAddressGroupMember("2.2.2.2")),
+			[]*v1beta1.GroupMemberPod{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
 			sets.NewString("rule1", "rule2"),
 			false,
 		},
@@ -643,9 +637,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
 			actualAddresses, _ := c.addressSetByGroup[tt.args.Name]
-			if !actualAddresses.Equal(tt.expectedAddresses) {
-				t.Errorf("Got addresses %v, expected %v", actualAddresses, tt.expectedAddresses)
-			}
+			assert.ElementsMatch(t, tt.expectedAddresses, actualAddresses.Items(), "stored addresses not equal")
 		})
 	}
 }

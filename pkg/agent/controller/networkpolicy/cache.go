@@ -210,8 +210,12 @@ func (c *ruleCache) AddAddressGroup(group *v1beta1.AddressGroup) error {
 	defer c.addressSetLock.Unlock()
 
 	podSet := v1beta1.GroupMemberPodSet{}
-	for _, pod := range group.Pods {
-		podSet.Insert(&pod)
+	for i := range group.Pods {
+		// Must not store address of loop iterator variable as it's the same
+		// address taking different values in each loop iteration, otherwise
+		// podSet would eventually contain only the last value.
+		// https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
+		podSet.Insert(&group.Pods[i])
 	}
 	c.addressSetByGroup[group.Name] = podSet
 	c.onAddressGroupUpdate(group.Name)
@@ -228,11 +232,11 @@ func (c *ruleCache) PatchAddressGroup(patch *v1beta1.AddressGroupPatch) error {
 	if !exists {
 		return fmt.Errorf("AddressGroup %v doesn't exist in cache, can't be patched", patch.Name)
 	}
-	for _, pod := range patch.AddedPods {
-		podSet.Insert(&pod)
+	for i := range patch.AddedPods {
+		podSet.Insert(&patch.AddedPods[i])
 	}
-	for _, pod := range patch.RemovedPods {
-		podSet.Delete(&pod)
+	for i := range patch.RemovedPods {
+		podSet.Delete(&patch.RemovedPods[i])
 	}
 	c.onAddressGroupUpdate(patch.Name)
 	return nil
@@ -266,8 +270,8 @@ func (c *ruleCache) AddAppliedToGroup(group *v1beta1.AppliedToGroup) error {
 	defer c.podSetLock.Unlock()
 
 	podSet := v1beta1.GroupMemberPodSet{}
-	for _, pod := range group.Pods {
-		podSet.Insert(&pod)
+	for i := range group.Pods {
+		podSet.Insert(&group.Pods[i])
 	}
 	c.podSetByGroup[group.Name] = podSet
 	c.onAppliedToGroupUpdate(group.Name)
@@ -284,11 +288,11 @@ func (c *ruleCache) PatchAppliedToGroup(patch *v1beta1.AppliedToGroupPatch) erro
 	if !exists {
 		return fmt.Errorf("AppliedToGroup %v doesn't exist in cache, can't be patched", patch.Name)
 	}
-	for _, added := range patch.AddedPods {
-		podSet.Insert(&added)
+	for i := range patch.AddedPods {
+		podSet.Insert(&patch.AddedPods[i])
 	}
-	for _, removed := range patch.RemovedPods {
-		podSet.Delete(&removed)
+	for i := range patch.RemovedPods {
+		podSet.Delete(&patch.RemovedPods[i])
 	}
 	c.onAppliedToGroupUpdate(patch.Name)
 	return nil
@@ -348,8 +352,8 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 		ruleByID[r.(*rule).ID] = r
 	}
 
-	for _, r := range policy.Rules {
-		rule := toRule(&r, policy)
+	for i := range policy.Rules {
+		rule := toRule(&policy.Rules[i], policy)
 		if _, exists := ruleByID[rule.ID]; exists {
 			// If rule already exists, remove it from the map so the ones left finally are orphaned.
 			klog.V(2).Infof("Rule %v was not changed", rule.ID)
