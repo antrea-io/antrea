@@ -210,7 +210,7 @@ enforcing traffic *only* from a different namespace also means:
 - Confirming traffic from *any* pod in the whitelisted namespace
  
 As an example of the pitfall in this test, a network policy provider which, by default
-allowed all internamespaced traffic as whitelisted, would pass this test while violating
+allowed *all internamespaced traffic as whitelisted*, would pass this test while violating
 the semantics of it.
  
 ```
@@ -219,31 +219,31 @@ the semantics of it.
 |           +------------------+       +-------------------+                Figure 2:          |
 |           |                  |       | +---+      +---+  |                                   |
 |   XXXXXXXXX      nsA         |       | | cA|  nsA | cB|  |                A more advanced    |
-|   X       |                  |       | +X--+      +---+  |                example. In these  |
-|   X       |                  |       |  X             X  |                cases, we can      |
-|   X       |     server       |       |  X   server    X  |                increase test      |
-|   X       |      80,81       |     XXXXXXXXX 80,81 XXXX  |                coverage again     |
-|   X       +------------------+     X +-------^-----------+                by testing an      |
-|   X                                X         |                            entire truth       |
-|   X       +------------------+     X +-------------------+                table (right).     |
-|   X       |                  |     X |       |           |                                   |
-|   X       |    +--+   +---+  |     X | +-----+----+---+  |                The "creating a    |
-|   X       |    +cA|   |cB |  |     X | |cA|       | cB|  |                network policy     |
+|   X    --->                  |       | +X--+      +---+  |                example. In these  |
+|   X    |  |                  |       |  X             X  |                cases, we can      |
+|   X    |  |     server       |       |  X   server    X  |                increase test      |
+|   X    |  |      80,81       |     XXXXXXXXX 80,81 XXXX  |                coverage again     |
+|   X    |  +------------------+     X +-------^-----------+                by testing an      |
+|   X    |                           X         |                            entire truth       |
+|   X    |  +------------------+     X +-------------------+                table (right).     |
+|   X    |  |                  |     X |       |           |                                   |
+|   X    |  |    +--+   +---+  |     X | +-----+----+---+  |                The "creating a    |
+|   X    ------- +cA|   |cB |  |     X | |cA|       | cB|  |                network policy     |
 |   X       |    +--+   +---+  |     X | +--+       +---+  |                for the server which
 |   X       |   nsB            |     X |      nsB          |                allows traffic     |
 |   X       +------------------+     X +-------------------+                from ns different  |
 |   X                                X                                      then namespace-a   |
 |   X       +------------------+     X  +------------------+                                   |
-|   X       |                  |     X  |  +--+            |                test is imprecisely|
-|   X       |   +--+    +--+   |     XXXXXX|cA|     +---+  |                named, and also    |
-|   +XXXXXXXXXXX|cA|    |cB|   |     X  |  +--+     | cB|  |                lacks verification |
-|   |       |   +--+    +-++   |     X  |           +---+  |                of local namespace |
-|   |       |             |    |     X  |             X    |                holes and port     |
-|   |       |     nsC     |    |     X  |    nsC      X    |                holes(left).       |
-|   |       +------------------+     X  +-------------X----+                                   |
-|   |                     |          X                X                                       ++
-|   |                     |          XXXXXXXXXXXXXXXXXX                                        |
-|   +---------------------+                                                                    |
+|   X       |                  |     X  |  +--+            |                test should confirm|
+|   X       |   +--+    +--+   |     XXXXXX|cA|     +---+  |                positive connectiv |
+|   +XXXXXXXXXXX|cA|    |cB|   |     X  |  +--+     | cB|  |                for both containers|
+|           |   +--+    +-++   |     X  |           +---+  |                in nsB.  otherwise |
+|           |                  |     X  |             X    |                a policy might not |
+|           |     nsC          |     X  |    nsC      X    |                be whitelisting n+1|
+|           +------------------+     X  +-------------X----+                pods.              |
+|                                    X                X                                        |
+|                                    XXXXXXXXXXXXXXXXXX                                        |
+|                                                                                              |
 |                                                                                              |
 +----------------------------------------------------------------------------------------------+
 ```
