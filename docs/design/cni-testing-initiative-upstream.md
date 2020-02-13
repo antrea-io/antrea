@@ -2,7 +2,8 @@
 title: Homogenizing Network policy test controls and rearchitecting the NetworkPolicy test framework to support a broader and more relevant test matrix for more fluid discussions around the NetworkPolicy API and how enterprise grade CNI providers implement it.
 authors:
   - "@jayunit100"
-  - "@abhiraut/sedef/cody please add names"
+  - "@abhiraut/sedef please add names"'
+  - "@McCodeman"
 owning-sig: sig-network
 reviewers: TBD
 approvers: TBD
@@ -21,11 +22,12 @@ This proposal suggest that we leverage truth tables, uniform positive controls t
 - Defining a common set of test scenarios for all network policy tests and increasing performance by reusing a set of containers.
 - Rearchitecting network policy tests to enhance readibility and reusability.
 - Improve coverage for NetworkPolicy functional tests.
+- Introduce time to conversion tests to measure performance against perturbed state at scale.
 
 ## Motivation 
 The current network policy tests have a few issues which, without increasing technical debt, can be addressed architecturally.
  
-- *Incompleteness*: We do not confirm that a common set of negative scenarios for different policies.  We also do not confirm a complete set of *positive* connectivity, before starting tests (note: 4 out of the existing 23 tests do actually do *some* positive control validation before applying policies, and all tests do postive validation *after* policy application).
+- *Incompleteness*: We do not confirm that a common set of negative scenarios for different policies.  We also do not confirm a complete set of *positive* connectivity, before starting tests (note: 4 out of the existing 23 tests actually do *some* positive control validation before applying policies, and all tests do postive validation *after* policy application).
 - *Understandability*: They are difficult to reason about, due to lack of consistency, completeness, and code duplication
 - *Extensibility*: Extending them is a verbose process, which leads to more sprawl in terms of test implementation.
 - *Performance*: They suffer from low performance due to the high number of pods created.  Network policy tests can take 30 minutes or longer.  The lack of completeness in positive controls, if fixed, could allow us to rapidly skip many tests destined for failure due to cluster health issues not related to network policy.
@@ -55,7 +57,43 @@ The consequences of this problem is that
 - Testing a CNI provider for Kubernetes compatibility requires alot of interpretation and time investment.
 - Extending NetworkPolicy tests is time consuming and error prone, without a structured review process and acceptance standard.
 - It is hard to debug tests, due to the performance characteristics - pods are deleted after each test, so we cannot reproduce the state of the cluster easily.
- 
+
+## Pod Traffic Pathways
+TODO: Complete
+
+Intranode
+- pod -> pod
+- pod -> host 
+- host -> pod
+
+Internode
+- pod -> pod
+- pod -> host
+- host -> pod
+- `*`host -> host (out-of-scope for K8s Network Policies API)
+- host -> pod (host networking)
+
+Traffic Transiting Service DNAT
+- Nodeport -> service (DNAT) -> pod
+- pod -> service (DNAT) -> pod
+
+* don't need to test
+(where to put test probes)
+
+## Security Boundaries
+
+TODO: Complete
+
+Internamespace
+- pod -> pod
+- pod (host networking) -> pod
+- pod -> pod (host networking)
+
+Internamespace
+- pod -> pod
+- pod (host networking) -> pod
+- pod -> pod (host networking)
+
 ## Detailed examples of the Problem statement
  
 ### Incompleteness
@@ -75,8 +113,8 @@ traffic that is allowed.
  
 ```
 +-------------------------------------------------------------------+
-| +------+    +-------+   Figure 1a: The NetworkPolicy Tests        |
-| |      |    |       |   current logical structure only verifies   |
+| +------+    +-------+   Figure 1a: The NetworkPolicy Tests        | TODO: maybe include YAML examples side-by-side
+| |      |    |       |   current logical structure only verifies   |       visual nomenclature (i.e., cA -> podA)
 | |  cA  |    |  cB   |   one of many possible network connectivity |
 | |      |    |       |   requirements. Pods and servers are both   |
 | +--+---+    +--X----+   in the same node and namespace.           |
@@ -107,11 +145,11 @@ namespaces created in the entire network policy test suite.
 |     |   +---------------+   X       of other test scenarios which       |
 |     |   |    server     |   X       guarantee that (1) There is no      |
 |     +--->    80,81      XXXXX       namespace that whitelists traffic   |
-|         |               |           and that (2) there is no "container"
-|         +----X--X-------+           which whitelists traffic.           |
-| +------------X--X---------------+                                       |
-| |            X  X               |   We limit the amount of namespaces   |
-| |   +------XXX  XXX-------+  nsB|   to test to 2 because 2 is the union |
+|         |               |           and that (2) there is no "container"| TODO: test "default" namespace
+|         +----X--X-------+           which whitelists traffic.           |       check for dropped namespaces
+| +------------X--X---------------+                                       |       make test instances bidirectional
+| |            X  X               |   We limit the amount of namespaces   |          (client/servers)
+| |   +------XXX  XXX-------+  nsB|   to test to 3 because 3 is the union |
 | |   |      | X  X |       |     |   of all namespaces.                  |
 | |   |  cA  | X  X |   cB  |     |                                       |
 | |   |      | X  X |       |     |   By leveraging the union of all      |
@@ -135,9 +173,11 @@ namespaces created in the entire network policy test suite.
 
 #### Other concrete examples of incompleteness
 
-The above diagrams show that incompleteness is virtually impossible, the way the tests are written, because of the fact that each test is manually verifiying bespoke cases.  More concretely, however, a look at `should enforce policy to allow traffic only from a different namespace, based on NamespaceSelector [Feature:NetworkPolicy]` reveals that some tests don't do positive controls (validation of preexisting connectivity), whereas others *do* do such controls.
+The above diagrams show that completeness is virtually impossible, the way the tests are written, because of the fact that each test is manually verifiying bespoke cases.  More concretely, however, a look at `should enforce policy to allow traffic only from a different namespace, based on NamespaceSelector [Feature:NetworkPolicy]` reveals that some tests don't do positive controls (validation of preexisting connectivity), whereas others *do* do such controls.
 
 #### List of missing/incomplete functional test cases.
+
+TODO: use multiple pods in contiguous CIDR to validate CIDR traffic matching
 
 - IPBlock Except case: Currently, no test case exist to cover a NetworkPolicy
   IPBlock selector which includes an ``except`` clause.
@@ -153,13 +193,15 @@ The above diagrams show that incompleteness is virtually impossible, the way the
   NetworkPolicy rule.
 
 ### Understandability
+
+TODO: test case names mean something, and each test case should have accompanying diagram
  
 In this next case, we'll take another example test, which is meant to confirm that intra-namespace
 traffic rules work properly.  This test has a misleading description, and an incomplete test matrix as well.
  
 "Understandability" and "Completeness" are not entirely orthogonal - as illustrated here.  The fact that
 we do not cover all communication scenarios (as we did in Figure 1b), means that we have to carefully
-read the code fore this test, to assert that it is testing the same scenario that its Ginkgo description
+read the code for this test, to assert that it is testing the same scenario that its Ginkgo description
 connotes.
  
 We find that the Ginkgo description for this test isn't entirely correct, because
@@ -173,31 +215,31 @@ the semantics of it.
  
 ```
 +----------------------------------------------------------------------------------------------+
-|                                                                                              |
+|           TODO: Jay fix this                                                                 |
 |           +------------------+       +-------------------+                Figure 2:          |
 |           |                  |       | +---+      +---+  |                                   |
-|   XXXXXXXXX                  |       | | cA|      | cB|  |                A more advanced    |
+|   XXXXXXXXX      nsA         |       | | cA|  nsA | cB|  |                A more advanced    |
 |   X       |                  |       | +X--+      +---+  |                example. In these  |
 |   X       |                  |       |  X             X  |                cases, we can      |
-|   X  ^---->     server       |       |  X   server    X  |                increase test      |
-|   X  |    |      80,81       |     XXXXXXXXX 80,81 XXXX  |                coverage again     |
-|   X  |    +------------------+     X +-------^-----------+                by testing an      |
-|   X  |                       |     X         |                            entire truth       |
-|   X  |    +------------------+     X +-------------------+                table (right).     |
-|   X  |    |                  |     X |       |           |                                   |
-|   X  |    |    +--+   +---+  |     X | +-----+----+---+  |                The "creating a    |
-|   X  ----------+cA|   |cB |  |     X | |cA|       | cB|  |                network policy     |
+|   X       |     server       |       |  X   server    X  |                increase test      |
+|   X       |      80,81       |     XXXXXXXXX 80,81 XXXX  |                coverage again     |
+|   X       +------------------+     X +-------^-----------+                by testing an      |
+|   X                                X         |                            entire truth       |
+|   X       +------------------+     X +-------------------+                table (right).     |
+|   X       |                  |     X |       |           |                                   |
+|   X       |    +--+   +---+  |     X | +-----+----+---+  |                The "creating a    |
+|   X       |    +cA|   |cB |  |     X | |cA|       | cB|  |                network policy     |
 |   X       |    +--+   +---+  |     X | +--+       +---+  |                for the server which
-|   X       |   nsA            |     X |      nsA          |                allows traffic     |
+|   X       |   nsB            |     X |      nsB          |                allows traffic     |
 |   X       +------------------+     X +-------------------+                from ns different  |
-|   X                          |     X                                      then namespace-a   |
+|   X                                X                                      then namespace-a   |
 |   X       +------------------+     X  +------------------+                                   |
 |   X       |                  |     X  |  +--+            |                test is imprecisely|
 |   X       |   +--+    +--+   |     XXXXXX|cA|     +---+  |                named, and also    |
 |   +XXXXXXXXXXX|cA|    |cB|   |     X  |  +--+     | cB|  |                lacks verification |
 |   |       |   +--+    +-++   |     X  |           +---+  |                of local namespace |
 |   |       |             |    |     X  |             X    |                holes and port     |
-|   |       |     nsB     |    |     X  |    nsB      X    |                holes(left).       |
+|   |       |     nsC     |    |     X  |    nsC      X    |                holes(left).       |
 |   |       +------------------+     X  +-------------X----+                                   |
 |   |                     |          X                X                                       ++
 |   |                     |          XXXXXXXXXXXXXXXXXX                                        |
@@ -289,6 +331,8 @@ For every current test, a new container is spun up, and a polling process occurs
 In some clusters, for example, namespace deletion is known to be slow - and in these cases the network policy tests may take more then an hour to complete.
  
 - If network policys or pod CIDR's are not correct, its likely all tests can fail, and thus the network policy suite may take an hour to finish, based on the estimate of 3 minutes, for each failed test, alongside 23 tests (in general , NetworkPolicy tests on a healthy EC2 cluster, with no traffic and broken network policy's, take between 150 and 200 seconds complete).
+
+TODO: Solution using pod exec
  
 #### Relationship to Understandability: Logging verbosity is worse for slow tests.
  
@@ -494,4 +538,10 @@ That said, the work proposed here might be a first step towared a more generic C
 
 We cannot proxy this work to the CNI organization, because in large part, the semantics of how network policy's are implemented and what we care about from an API perspective is defined by Kubernetes itself.  As we propose expansion of the Network Policy API, we need a way to express the effects of these new APIs in code, concisely, in a manner which is gauranteed to test robustly.
 
+## Performance and Concurrency of Tests
+TODO: Cody to write
+
+## Perturbed State Tests
+
+## Scale and Convergence Tests
 
