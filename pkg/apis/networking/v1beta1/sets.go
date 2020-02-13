@@ -114,3 +114,12 @@ func (s GroupMemberPodSet) IsSuperset(o GroupMemberPodSet) bool {
 func (s GroupMemberPodSet) Equal(o GroupMemberPodSet) bool {
 	return len(s) == len(o) && s.IsSuperset(o)
 }
+
+// Items returns the slice with contents in random order.
+func (s GroupMemberPodSet) Items() []*GroupMemberPod {
+	res := make([]*GroupMemberPod, 0, len(s))
+	for _, item := range s {
+		res = append(res, item)
+	}
+	return res
+}
