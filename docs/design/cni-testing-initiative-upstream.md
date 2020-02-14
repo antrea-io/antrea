@@ -215,7 +215,7 @@ the semantics of it.
  
 ```
 +----------------------------------------------------------------------------------------------+
-|           TODO: Jay fix this                                                                 |
+|                                                                                              |
 |           +------------------+       +-------------------+                Figure 2:          |
 |           |                  |       | +---+      +---+  |                                   |
 |   XXXXXXXXX      nsA         |       | | cA|  nsA | cB|  |                A more advanced    |
@@ -235,7 +235,7 @@ the semantics of it.
 |   X                                X                                      then namespace-a   |
 |   X       +------------------+     X  +------------------+                                   |
 |   X       |                  |     X  |  +--+            |                test should confirm|
-|   X       |   +--+    +--+   |     XXXXXX|cA|     +---+  |                positive connectiv |
+|   X       |   +--+    +--+   |     XXXXXX|cA|     +---+  |              positive connectivity|
 |   +XXXXXXXXXXX|cA|    |cB|   |     X  |  +--+     | cB|  |                for both containers|
 |           |   +--+    +-++   |     X  |           +---+  |                in nsB.  otherwise |
 |           |                  |     X  |             X    |                a policy might not |
