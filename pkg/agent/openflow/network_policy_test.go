@@ -218,6 +218,47 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	require.Nil(t, err)
 }
 
+func TestConjMatchFlowContextKeyConflict(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	c = prepareClient(ctrl)
+	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
+	outTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
+	ruleAction.EXPECT().Conjunction(gomock.Any(), gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).MaxTimes(3)
+
+	ip, ipNet, _ := net.ParseCIDR("192.168.2.30/32")
+
+	ruleID1 := uint32(11)
+	conj1 := &policyRuleConjunction{
+		id: ruleID1,
+	}
+	clause1 := conj1.newClause(1, 3, outTable, outDropTable)
+	flowChange1 := clause1.addAddrFlows(c, types.DstAddress, parseAddresses([]string{ip.String()}))
+	err := c.applyConjunctiveMatchFlows(flowChange1)
+	require.Nil(t, err, "no error expect in applyConjunctiveMatchFlows")
+
+	ruleID2 := uint32(12)
+	conj2 := &policyRuleConjunction{
+		id: ruleID2,
+	}
+	clause2 := conj2.newClause(1, 3, outTable, outDropTable)
+	flowChange2 := clause2.addAddrFlows(c, types.DstAddress, parseAddresses([]string{ipNet.String()}))
+	err = c.applyConjunctiveMatchFlows(flowChange2)
+	require.Nil(t, err, "no error expect in applyConjunctiveMatchFlows")
+
+	expectedMatchKey := fmt.Sprintf("table:%d,type:%d,value:%s", egressRuleTable, MatchDstIPNet, ipNet.String())
+	ctx, found := c.globalConjMatchFlowCache[expectedMatchKey]
+	assert.True(t, found)
+	assert.Equal(t, 2, len(ctx.actions))
+	act1, found := ctx.actions[ruleID1]
+	assert.True(t, found)
+	assert.Equal(t, clause1.action, act1)
+	act2, found := ctx.actions[ruleID2]
+	assert.True(t, found)
+	assert.Equal(t, clause2.action, act2)
+}
+
 func getChangedFlowCount(flows []*flowChange) int {
 	var count int
 	for _, changedFlow := range flows {
