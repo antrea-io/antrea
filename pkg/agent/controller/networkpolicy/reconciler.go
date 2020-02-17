@@ -15,10 +15,13 @@
 package networkpolicy
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"sync"
 
+	"github.com/davecgh/go-spew/spew"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -29,6 +32,15 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+)
+
+var (
+	printer = spew.ConfigState{
+		Indent:         " ",
+		SortKeys:       true,
+		DisableMethods: true,
+		SpewKeys:       true,
+	}
 )
 
 // Reconciler is an interface that knows how to reconcile the desired state of
@@ -42,15 +54,63 @@ type Reconciler interface {
 	Forget(ruleID string) error
 }
 
+// servicesHash is used to uniquely identify Services.
+type servicesHash string
+
+// hashServices uses the spew library which follows pointers and prints
+// actual values of the nested objects to ensure the hash does not change when
+// a pointer changes.
+func hashServices(services []v1beta1.Service) servicesHash {
+	hasher := md5.New()
+	printer.Fprintf(hasher, "%#v", services)
+	return servicesHash(hex.EncodeToString(hasher.Sum(nil)[0:]))
+}
+
 // lastRealized is the struct cached by reconciler. It's used to track the
 // actual state of rules we have enforced, so that we can know how to reconcile
 // a rule when it's updated/removed.
 // It includes the last version of CompletedRule the reconciler has realized
-// and the related runtime information including the unique ofID, the Openflow
-// ports or the IP addresses of the target Pods got from the InterfaceStore.
+// and the related runtime information including the ofIDs, the Openflow ports
+// or the IP addresses of the target Pods got from the InterfaceStore.
+//
+// Note that a policy rule can be split into multiple Openflow rules based on
+// the named port resolving result. Pods that have same port numbers for the
+// port names defined in the rule will share an Openflow rule. For example,
+// if an ingress rule applies to 3 Pods like below:
+//
+// NetworkPolicy rule:
+// spec:
+//  ingress:
+//  - from:
+//    - namespaceSelector: {}
+//    ports:
+//    - port: http
+//      protocol: TCP
+//
+// Pod A and Pod B:
+// spec:
+//   containers:
+//   - ports:
+//     - containerPort: 80
+//       name: http
+//       protocol: TCP
+//
+// Pod C:
+// spec:
+//   containers:
+//   - ports:
+//     - containerPort: 8080
+//       name: http
+//       protocol: TCP
+//
+// Then Pod A and B will share an Openflow rule as both of them resolve "http" to 80,
+// while Pod C will have another Openflow rule as it resolves "http" to 8080.
+// In the implementation, we group Pods by their resolved services value so Pod A and B
+// can be mapped to same group.
 type lastRealized struct {
-	// ofID identifies a rule in Openflow implementation.
-	ofID uint32
+	// ofIDs identifies Openflow rules in Openflow implementation.
+	// It's a map of servicesHash to Openflow rule ID.
+	ofIDs map[servicesHash]uint32
 	// The desired state of a policy rule.
 	*CompletedRule
 	// The OFPort set we have realized for target Pods. We need to record them
@@ -59,9 +119,23 @@ type lastRealized struct {
 	// we compare the last realized OFPorts and the new desired one to identify
 	// difference, which could also cover the stale OFPorts produced by the case
 	// that Kubelet calls CNI ADD for a Pod more than once due to non CNI issues.
-	podOFPorts sets.Int32
+	// It's only used for ingress rule as its "to" addresses.
+	// It's grouped by services hash, mapping to multiple Openflow rules.
+	podOFPorts map[servicesHash]sets.Int32
 	// The IP set we have realized for target Pods. Same as podOFPorts.
+	// It's only used for egress rule as its "from" addresses.
+	// It's same in all Openflow rules, because named port is only for
+	// destination Pods.
 	podIPs sets.String
+}
+
+func newLastRealized(rule *CompletedRule) *lastRealized {
+	return &lastRealized{
+		ofIDs:         map[servicesHash]uint32{},
+		CompletedRule: rule,
+		podOFPorts:    map[servicesHash]sets.Int32{},
+		podIPs:        nil,
+	}
 }
 
 // reconciler implements Reconciler.
@@ -72,7 +146,7 @@ type reconciler struct {
 	// ofClient is the Openflow interface.
 	ofClient openflow.Client
 
-	// ofClient is the Openflow interface.
+	// ifaceStore provides container interface OFPort and IP information.
 	ifaceStore interfacestore.InterfaceStore
 
 	// lastRealizeds caches the last realized rules.
@@ -106,182 +180,237 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 	return r.update(value.(*lastRealized), rule)
 }
 
-// add allocates an unique Openflow ID for the provide CompletedRule, converts
-// it to PolicyRule, and invoke InstallPolicyRuleFlows to install the later.
+// add converts CompletedRule to PolicyRule(s) and invokes installOFRule to install them.
 func (r *reconciler) add(rule *CompletedRule) error {
 	klog.V(2).Infof("Adding new rule %v", rule)
-	ofID, err := r.idAllocator.allocate()
-	if err != nil {
-		return fmt.Errorf("error allocating Openflow ID")
-	}
-	// Release the ID if encountering any error.
-	defer func() {
-		if err != nil {
-			r.idAllocator.release(ofID)
-		}
-	}()
-
-	lastRealized := &lastRealized{ofID: ofID, CompletedRule: rule}
-	// TODO: Update types.PolicyRule to use Antrea Direction type.
-	var direction networkingv1.PolicyType
-	var from, exceptFrom, to, exceptTo []types.Address
-	if rule.Direction == v1beta1.DirectionIn {
-		direction = networkingv1.PolicyTypeIngress
-		from, exceptFrom = ipsToOFAddresses(rule.FromAddresses, rule.From.IPBlocks)
-		ofPorts := r.podsToOFPorts(rule.Pods)
-		// "to" must not be nil, otherwise destination address won't be a match condition in ofClient.
-		to = make([]types.Address, 0, len(ofPorts))
-		for ofPort := range ofPorts {
-			to = append(to, openflow.NewOFPortAddress(ofPort))
-		}
-		lastRealized.podOFPorts = ofPorts
-	} else {
-		direction = networkingv1.PolicyTypeEgress
-		ips := r.podsToIPs(rule.Pods)
-		// "from" must not be nil, otherwise source address won't be a match condition in ofClient.
-		from = make([]types.Address, 0, len(ips))
-		for ip := range ips {
-			from = append(from, ipStringToOFAddress(ip))
-		}
-		to, exceptTo = ipsToOFAddresses(rule.ToAddresses, rule.To.IPBlocks)
-		lastRealized.podIPs = ips
-	}
-
-	// TODO: Update types.PolicyRule to use Antrea Service type.
-	services := servicesToNetworkPolicyPort(rule.Services)
-
-	ofRule := &types.PolicyRule{
-		ID:         ofID,
-		Direction:  direction,
-		From:       from,
-		ExceptFrom: exceptFrom,
-		To:         to,
-		ExceptTo:   exceptTo,
-		Service:    services,
-	}
-
-	klog.V(2).Infof("Installing ofRule %d (Direction: %v, From: %d, ExceptFrom: %d, To: %d, ExceptTo: %d, Service: %d)",
-		ofRule.ID, ofRule.Direction, len(ofRule.From), len(ofRule.ExceptFrom), len(ofRule.To), len(ofRule.ExceptTo), len(ofRule.Service))
-	if err := r.ofClient.InstallPolicyRuleFlows(ofRule); err != nil {
-		return fmt.Errorf("error installing ofRule %v: %v", ofRule.ID, err)
-	}
-
+	lastRealized := newLastRealized(rule)
+	// TODO: Handle the case that the following processing fails or partially succeeds.
 	r.lastRealizeds.Store(rule.ID, lastRealized)
-	return nil
-}
 
-func ipsToOFAddresses(podSet v1beta1.GroupMemberPodSet, ipBlocks []v1beta1.IPBlock) ([]types.Address, []types.Address) {
-	// Note that addresses must not return nil because it means not restricted by addresses
-	// in Openflow implementation.
-	addresses := make([]types.Address, 0, len(podSet)+len(ipBlocks))
-	for _, p := range podSet {
-		addresses = append(addresses, ipAddressToOFAddress(p.IP))
-	}
-	var exceptAddresses []types.Address
-	for _, b := range ipBlocks {
-		addresses = append(addresses, ipNetToOFAddress(b.CIDR))
-		for _, e := range b.Except {
-			exceptAddresses = append(exceptAddresses, ipNetToOFAddress(e))
-		}
-	}
-	return addresses, exceptAddresses
-}
+	ofRuleByServicesMap := map[servicesHash]*types.PolicyRule{}
+	if rule.Direction == v1beta1.DirectionIn {
+		// Addresses got from source Pod IPs.
+		from1 := podsToOFAddresses(rule.FromAddresses)
+		// Addresses and ExceptAddresses got from IPBlocks.
+		from2, exceptFrom := ipBlocksToOFAddresses(rule.From.IPBlocks)
 
-func servicesToNetworkPolicyPort(in []v1beta1.Service) []*networkingv1.NetworkPolicyPort {
-	// Empty or nil slice means allowing all ports in Kubernetes.
-	// nil must be returned to meet ofClient's expectation for this behavior.
-	if len(in) == 0 {
-		return nil
-	}
-	// It makes sure out won't be nil, so that if only named ports are defined,
-	// we don't enforce the rule as allowing all ports by mistake.
-	out := make([]*networkingv1.NetworkPolicyPort, 0, len(in))
-	for _, s := range in {
-		service := &networkingv1.NetworkPolicyPort{}
-		if s.Protocol != nil {
-			protoStr := string(*s.Protocol)
-			proto := corev1.Protocol(protoStr)
-			service.Protocol = &proto
-		}
-		if s.Port != nil {
-			// Ignore named port for now.
-			if s.Port.Type == intstr.String {
-				continue
+		podsByServicesMap, servicesMap := groupPodsByServices(rule.Services, rule.Pods)
+		for svcHash, pods := range podsByServicesMap {
+			ofPorts := r.getPodOFPorts(pods)
+			lastRealized.podOFPorts[svcHash] = ofPorts
+			// TODO: Update types.PolicyRule to use Antrea type to avoid unnecessary conversion.
+			ofRuleByServicesMap[svcHash] = &types.PolicyRule{
+				Direction:  networkingv1.PolicyTypeIngress,
+				From:       append(from1, from2...),
+				ExceptFrom: exceptFrom,
+				To:         ofPortsToOFAddresses(ofPorts),
+				Service:    servicesToNetworkPolicyPort(servicesMap[svcHash]),
 			}
-			service.Port = s.Port
 		}
-		out = append(out, service)
+	} else {
+		ips := r.getPodIPs(rule.Pods)
+		lastRealized.podIPs = ips
+		from := ipsToOFAddresses(ips)
+
+		podsByServicesMap, servicesMap := groupPodsByServices(rule.Services, rule.ToAddresses)
+		for svcHash, pods := range podsByServicesMap {
+			// TODO: Update types.PolicyRule to use Antrea type to avoid unnecessary conversion.
+			ofRuleByServicesMap[svcHash] = &types.PolicyRule{
+				Direction: networkingv1.PolicyTypeEgress,
+				From:      from,
+				To:        podsToOFAddresses(pods),
+				Service:   servicesToNetworkPolicyPort(servicesMap[svcHash]),
+			}
+		}
+
+		if len(rule.To.IPBlocks) > 0 {
+			// IPBlocks cannot resolve named ports, use the original services.
+			// It will be merged to the same group as Pods that cannot resolve any named port.
+			svcHash := hashServices(rule.Services)
+			ofRule, exists := ofRuleByServicesMap[svcHash]
+			// Create a new Openflow rule if the group doesn't exist.
+			if !exists {
+				ofService := servicesToNetworkPolicyPort(rule.Services)
+				ofRule = &types.PolicyRule{
+					Direction: networkingv1.PolicyTypeEgress,
+					From:      from,
+					Service:   ofService,
+				}
+				ofRuleByServicesMap[svcHash] = ofRule
+				servicesMap[svcHash] = rule.Services
+			}
+			to, exceptTo := ipBlocksToOFAddresses(rule.To.IPBlocks)
+			ofRule.To = append(ofRule.To, to...)
+			ofRule.ExceptTo = append(ofRule.ExceptTo, exceptTo...)
+		}
 	}
-	return out
+
+	for svcHash, ofRule := range ofRuleByServicesMap {
+		ofID, err := r.installOFRule(ofRule)
+		if err != nil {
+			return err
+		}
+		// Record ofID only if its Openflow is installed successfully.
+		lastRealized.ofIDs[svcHash] = ofID
+	}
+
+	return nil
 }
 
 // update calculates the difference of Addresses between oldRule and newRule,
 // and invokes Openflow client's methods to reconcile them.
 func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) error {
 	klog.V(2).Infof("Updating existing rule %v", newRule)
-	// As rule identifier is calculated from the rule's content, the update can
-	// only happen to Group members.
-	var addedFrom, addedTo, deletedFrom, deletedTo []types.Address
-	var newOFPorts sets.Int32
-	var newIPs sets.String
-	if newRule.Direction == v1beta1.DirectionIn {
-		for _, a := range newRule.FromAddresses.Difference(lastRealized.FromAddresses) {
-			addedFrom = append(addedFrom, ipAddressToOFAddress(a.IP))
-		}
-		for _, a := range lastRealized.FromAddresses.Difference(newRule.FromAddresses) {
-			deletedFrom = append(deletedFrom, ipAddressToOFAddress(a.IP))
-		}
-		newOFPorts = r.podsToOFPorts(newRule.Pods)
-		for p := range newOFPorts.Difference(lastRealized.podOFPorts) {
-			addedTo = append(addedTo, openflow.NewOFPortAddress(p))
-		}
-		for p := range lastRealized.podOFPorts.Difference(newOFPorts) {
-			deletedTo = append(deletedTo, openflow.NewOFPortAddress(p))
-		}
-	} else {
-		newIPs = r.podsToIPs(newRule.Pods)
-		for ip := range newIPs.Difference(lastRealized.podIPs) {
-			addedFrom = append(addedTo, ipStringToOFAddress(ip))
-		}
-		for ip := range lastRealized.podIPs.Difference(newIPs) {
-			deletedFrom = append(addedTo, ipStringToOFAddress(ip))
-		}
-		for _, a := range newRule.ToAddresses.Difference(lastRealized.ToAddresses) {
-			addedTo = append(addedTo, ipAddressToOFAddress(a.IP))
-		}
-		for _, a := range lastRealized.ToAddresses.Difference(newRule.ToAddresses) {
-			deletedTo = append(deletedTo, ipAddressToOFAddress(a.IP))
-		}
+	// staleOFIDs tracks servicesHash that are no long needed.
+	// Firstly fill it with the last realized ofIDs.
+	staleOFIDs := make(map[servicesHash]uint32, len(lastRealized.ofIDs))
+	for svcHash, ofID := range lastRealized.ofIDs {
+		staleOFIDs[svcHash] = ofID
 	}
 
-	klog.V(2).Infof("Updating ofRule %d (Direction: %v, addedFrom: %d, addedTo: %d, deleteFrom: %d, deletedTo: %d)",
-		lastRealized.ofID, lastRealized.Direction, len(addedFrom), len(addedTo), len(deletedFrom), len(deletedTo))
+	// As rule identifier is calculated from the rule's content, the update can
+	// only happen to Group members.
+	if newRule.Direction == v1beta1.DirectionIn {
+		from1 := podsToOFAddresses(newRule.FromAddresses)
+		from2, exceptFrom := ipBlocksToOFAddresses(newRule.From.IPBlocks)
+		addedFrom := podsToOFAddresses(newRule.FromAddresses.Difference(lastRealized.FromAddresses))
+		deletedFrom := podsToOFAddresses(lastRealized.FromAddresses.Difference(newRule.FromAddresses))
 
+		podsByServicesMap, servicesMap := groupPodsByServices(newRule.Services, newRule.Pods)
+		for svcHash, pods := range podsByServicesMap {
+			newOFPorts := r.getPodOFPorts(pods)
+			ofID, exists := lastRealized.ofIDs[svcHash]
+			// Install a new Openflow rule if this group doesn't exist, otherwise do incremental update.
+			if !exists {
+				ofRule := &types.PolicyRule{
+					Direction:  networkingv1.PolicyTypeIngress,
+					From:       append(from1, from2...),
+					ExceptFrom: exceptFrom,
+					To:         ofPortsToOFAddresses(newOFPorts),
+					Service:    servicesToNetworkPolicyPort(servicesMap[svcHash]),
+				}
+				ofID, err := r.installOFRule(ofRule)
+				if err != nil {
+					return err
+				}
+				lastRealized.ofIDs[svcHash] = ofID
+			} else {
+				addedTo := ofPortsToOFAddresses(newOFPorts.Difference(lastRealized.podOFPorts[svcHash]))
+				deletedTo := ofPortsToOFAddresses(lastRealized.podOFPorts[svcHash].Difference(newOFPorts))
+				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo); err != nil {
+					return err
+				}
+				// Delete valid servicesHash from staleOFIDs.
+				delete(staleOFIDs, svcHash)
+			}
+			lastRealized.podOFPorts[svcHash] = newOFPorts
+		}
+	} else {
+		newIPs := r.getPodIPs(newRule.Pods)
+		from := ipsToOFAddresses(newIPs)
+		addedFrom := ipsToOFAddresses(newIPs.Difference(lastRealized.podIPs))
+		deletedFrom := ipsToOFAddresses(lastRealized.podIPs.Difference(newIPs))
+
+		podsByServicesMap, servicesMap := groupPodsByServices(newRule.Services, newRule.ToAddresses)
+		// If IPBlocks is present, ensure its corresponding servicesHash is present in podsByServicesMap,
+		// so its Openflow rule can be updated when `From` is updated.
+		if len(newRule.To.IPBlocks) > 0 {
+			// IPBlocks can't resolve named port, use the original services.
+			svcHash := hashServices(newRule.Services)
+			if _, exists := podsByServicesMap[svcHash]; !exists {
+				podsByServicesMap[svcHash] = v1beta1.NewGroupMemberPodSet()
+				servicesMap[svcHash] = newRule.Services
+			}
+		}
+		prevPodsByServicesMap, _ := groupPodsByServices(lastRealized.Services, lastRealized.ToAddresses)
+		for svcHash, pods := range podsByServicesMap {
+			ofID, exists := lastRealized.ofIDs[svcHash]
+			if !exists {
+				ofRule := &types.PolicyRule{
+					Direction: networkingv1.PolicyTypeEgress,
+					From:      from,
+					To:        podsToOFAddresses(pods),
+					Service:   servicesToNetworkPolicyPort(servicesMap[svcHash]),
+				}
+				ofID, err := r.installOFRule(ofRule)
+				if err != nil {
+					return err
+				}
+				lastRealized.ofIDs[svcHash] = ofID
+			} else {
+				addedTo := podsToOFAddresses(pods.Difference(prevPodsByServicesMap[svcHash]))
+				deletedTo := podsToOFAddresses(prevPodsByServicesMap[svcHash].Difference(pods))
+				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo); err != nil {
+					return err
+				}
+				// Delete valid servicesHash from staleOFIDs.
+				delete(staleOFIDs, svcHash)
+			}
+		}
+		lastRealized.podIPs = newIPs
+	}
+	// Remove stale Openflow rules.
+	for svcHash, ofID := range staleOFIDs {
+		if err := r.uninstallOFRule(ofID); err != nil {
+			return err
+		}
+		delete(lastRealized.ofIDs, svcHash)
+	}
+	lastRealized.CompletedRule = newRule
+	return nil
+}
+
+func (r *reconciler) installOFRule(ofRule *types.PolicyRule) (uint32, error) {
+	// Each pod group gets an Openflow ID.
+	ofID, err := r.idAllocator.allocate()
+	if err != nil {
+		return 0, fmt.Errorf("error allocating Openflow ID")
+	}
+	klog.V(2).Infof("Installing ofRule %d (Direction: %v, From: %d, ExceptFrom: %d, To: %d, ExceptTo: %d, Service: %d)",
+		ofID, ofRule.Direction, len(ofRule.From), len(ofRule.ExceptFrom), len(ofRule.To), len(ofRule.ExceptTo), len(ofRule.Service))
+	if err := r.ofClient.InstallPolicyRuleFlows(ofID, ofRule); err != nil {
+		r.idAllocator.release(ofID)
+		return 0, fmt.Errorf("error installing ofRule %v: %v", ofID, err)
+	}
+	return ofID, nil
+}
+
+func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedTo []types.Address, deletedFrom []types.Address, deletedTo []types.Address) error {
+	klog.V(2).Infof("Updating ofRule %d (addedFrom: %d, addedTo: %d, deleteFrom: %d, deletedTo: %d)",
+		ofID, len(addedFrom), len(addedTo), len(deletedFrom), len(deletedTo))
 	// TODO: This might be unnecessarily complex and hard for error handling, consider revising the Openflow interfaces.
 	if len(addedFrom) > 0 {
-		if err := r.ofClient.AddPolicyRuleAddress(lastRealized.ofID, types.SrcAddress, addedFrom); err != nil {
-			return fmt.Errorf("error adding policy rule source addresses for ofRule %v: %v", lastRealized.ofID, err)
+		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.SrcAddress, addedFrom); err != nil {
+			return fmt.Errorf("error adding policy rule source addresses for ofRule %v: %v", ofID, err)
 		}
 	}
 	if len(addedTo) > 0 {
-		if err := r.ofClient.AddPolicyRuleAddress(lastRealized.ofID, types.DstAddress, addedTo); err != nil {
-			return fmt.Errorf("error adding policy rule destination addresses for ofRule %v: %v", lastRealized.ofID, err)
+		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.DstAddress, addedTo); err != nil {
+			return fmt.Errorf("error adding policy rule destination addresses for ofRule %v: %v", ofID, err)
 		}
 	}
 	if len(deletedFrom) > 0 {
-		if err := r.ofClient.DeletePolicyRuleAddress(lastRealized.ofID, types.SrcAddress, deletedFrom); err != nil {
-			return fmt.Errorf("error deleting policy rule source addresses for ofRule %v: %v", lastRealized.ofID, err)
+		if err := r.ofClient.DeletePolicyRuleAddress(ofID, types.SrcAddress, deletedFrom); err != nil {
+			return fmt.Errorf("error deleting policy rule source addresses for ofRule %v: %v", ofID, err)
 		}
 	}
 	if len(deletedTo) > 0 {
-		if err := r.ofClient.DeletePolicyRuleAddress(lastRealized.ofID, types.DstAddress, deletedTo); err != nil {
-			return fmt.Errorf("error deleting policy rule destination addresses for ofRule %v: %v", lastRealized.ofID, err)
+		if err := r.ofClient.DeletePolicyRuleAddress(ofID, types.DstAddress, deletedTo); err != nil {
+			return fmt.Errorf("error deleting policy rule destination addresses for ofRule %v: %v", ofID, err)
 		}
 	}
+	return nil
+}
 
-	lastRealized.podOFPorts = newOFPorts
-	lastRealized.podIPs = newIPs
-	lastRealized.CompletedRule = newRule
+func (r *reconciler) uninstallOFRule(ofID uint32) error {
+	klog.V(2).Infof("Uninstalling ofRule %d", ofID)
+	if err := r.ofClient.UninstallPolicyRuleFlows(ofID); err != nil {
+		return fmt.Errorf("error uninstalling ofRule %v: %v", ofID, err)
+	}
+	if err := r.idAllocator.release(ofID); err != nil {
+		// This should never happen. If it does, it is a programming error.
+		klog.Errorf("Error releasing Openflow ID for ofRule %v: %v", ofID, err)
+	}
 	return nil
 }
 
@@ -298,21 +427,18 @@ func (r *reconciler) Forget(ruleID string) error {
 	}
 
 	lastRealized := value.(*lastRealized)
-	klog.V(3).Infof("Uninstalling ofRule %d", lastRealized.ofID)
-	if err := r.ofClient.UninstallPolicyRuleFlows(lastRealized.ofID); err != nil {
-		return fmt.Errorf("error uninstalling ofRule %v: %v", lastRealized.ofID, err)
-	}
-
-	if err := r.idAllocator.release(lastRealized.ofID); err != nil {
-		// This should never happen. If it does, it is a programming error.
-		klog.Errorf("Error releasing Openflow ID for ofRule %v: %v", lastRealized.ofID, err)
+	for svcHash, ofID := range lastRealized.ofIDs {
+		if err := r.uninstallOFRule(ofID); err != nil {
+			return err
+		}
+		delete(lastRealized.ofIDs, svcHash)
 	}
 
 	r.lastRealizeds.Delete(ruleID)
 	return nil
 }
 
-func (r *reconciler) podsToOFPorts(pods v1beta1.GroupMemberPodSet) sets.Int32 {
+func (r *reconciler) getPodOFPorts(pods v1beta1.GroupMemberPodSet) sets.Int32 {
 	ofPorts := sets.NewInt32()
 	for _, pod := range pods {
 		iface, found := r.ifaceStore.GetContainerInterface(pod.Pod.Name, pod.Pod.Namespace)
@@ -327,7 +453,7 @@ func (r *reconciler) podsToOFPorts(pods v1beta1.GroupMemberPodSet) sets.Int32 {
 	return ofPorts
 }
 
-func (r *reconciler) podsToIPs(pods v1beta1.GroupMemberPodSet) sets.String {
+func (r *reconciler) getPodIPs(pods v1beta1.GroupMemberPodSet) sets.String {
 	ips := sets.NewString()
 	for _, pod := range pods {
 		iface, found := r.ifaceStore.GetContainerInterface(pod.Pod.Name, pod.Pod.Namespace)
@@ -342,6 +468,58 @@ func (r *reconciler) podsToIPs(pods v1beta1.GroupMemberPodSet) sets.String {
 	return ips
 }
 
+// groupPodsByServices groups the provided Pods based on their services resolving result.
+// A map of servicesHash to the Pod groups and a map of servicesHash to the services resolving result will be returned.
+func groupPodsByServices(services []v1beta1.Service, pods v1beta1.GroupMemberPodSet) (map[servicesHash]v1beta1.GroupMemberPodSet, map[servicesHash][]v1beta1.Service) {
+	podsByServicesMap := map[servicesHash]v1beta1.GroupMemberPodSet{}
+	servicesMap := map[servicesHash][]v1beta1.Service{}
+	for _, pod := range pods {
+		var resolvedServices []v1beta1.Service
+		for _, service := range services {
+			resolvedService := resolveService(&service, pod)
+			resolvedServices = append(resolvedServices, *resolvedService)
+		}
+		svcHash := hashServices(resolvedServices)
+		if _, exists := podsByServicesMap[svcHash]; !exists {
+			podsByServicesMap[svcHash] = v1beta1.NewGroupMemberPodSet()
+			servicesMap[svcHash] = resolvedServices
+		}
+		podsByServicesMap[svcHash].Insert(pod)
+	}
+	return podsByServicesMap, servicesMap
+}
+
+func ofPortsToOFAddresses(ofPorts sets.Int32) []types.Address {
+	// Must not return nil as it means not restricted by addresses in Openflow implementation.
+	addresses := make([]types.Address, 0, len(ofPorts))
+	for _, ofPort := range ofPorts.List() {
+		addresses = append(addresses, openflow.NewOFPortAddress(ofPort))
+	}
+	return addresses
+}
+
+func podsToOFAddresses(podSet v1beta1.GroupMemberPodSet) []types.Address {
+	// Must not return nil as it means not restricted by addresses in Openflow implementation.
+	addresses := make([]types.Address, 0, len(podSet))
+	for _, p := range podSet {
+		addresses = append(addresses, openflow.NewIPAddress(net.IP(p.IP)))
+	}
+	return addresses
+}
+
+func ipBlocksToOFAddresses(ipBlocks []v1beta1.IPBlock) ([]types.Address, []types.Address) {
+	// Must not return nil as it means not restricted by addresses in Openflow implementation.
+	addresses := make([]types.Address, 0, len(ipBlocks))
+	var exceptAddresses []types.Address
+	for _, b := range ipBlocks {
+		addresses = append(addresses, ipNetToOFAddress(b.CIDR))
+		for _, e := range b.Except {
+			exceptAddresses = append(exceptAddresses, ipNetToOFAddress(e))
+		}
+	}
+	return addresses, exceptAddresses
+}
+
 func ipNetToOFAddress(in v1beta1.IPNet) *openflow.IPNetAddress {
 	ipNet := net.IPNet{
 		IP:   net.IP(in.IP),
@@ -350,10 +528,60 @@ func ipNetToOFAddress(in v1beta1.IPNet) *openflow.IPNetAddress {
 	return openflow.NewIPNetAddress(ipNet)
 }
 
-func ipAddressToOFAddress(in v1beta1.IPAddress) *openflow.IPAddress {
-	return openflow.NewIPAddress(net.IP(in))
+func ipsToOFAddresses(ips sets.String) []types.Address {
+	// Must not return nil as it means not restricted by addresses in Openflow implementation.
+	from := make([]types.Address, 0, len(ips))
+	for ip := range ips {
+		from = append(from, openflow.NewIPAddress(net.ParseIP((ip))))
+	}
+	return from
 }
 
-func ipStringToOFAddress(in string) *openflow.IPAddress {
-	return openflow.NewIPAddress(net.ParseIP(in))
+func servicesToNetworkPolicyPort(in []v1beta1.Service) []*networkingv1.NetworkPolicyPort {
+	// Empty or nil slice means allowing all ports in Kubernetes.
+	// nil must be returned to meet ofClient's expectation for this behavior.
+	if len(in) == 0 {
+		return nil
+	}
+	// It makes sure `out` won't be nil, so that even if only named ports are
+	// specified and none of them are resolvable, the rule just falls back to
+	// allowing no port, instead of all ports.
+	out := make([]*networkingv1.NetworkPolicyPort, 0, len(in))
+	for _, s := range in {
+		service := &networkingv1.NetworkPolicyPort{}
+		if s.Protocol != nil {
+			protoStr := string(*s.Protocol)
+			proto := corev1.Protocol(protoStr)
+			service.Protocol = &proto
+		}
+		if s.Port != nil {
+			// All resolvable named port have been converted to intstr.Int,
+			// ignore unresolvable ones.
+			if s.Port.Type == intstr.String {
+				continue
+			}
+			service.Port = s.Port
+		}
+		out = append(out, service)
+	}
+	return out
+}
+
+// resolveService resolves the port name of the provided service to a port number
+// for the provided Pod.
+func resolveService(service *v1beta1.Service, pod *v1beta1.GroupMemberPod) *v1beta1.Service {
+	// If port is not specified or is already a number, return it as is.
+	if service.Port == nil || service.Port.Type == intstr.Int {
+		return service
+	}
+	for _, port := range pod.Ports {
+		if port.Name == service.Port.StrVal && port.Protocol == *service.Protocol {
+			resolvedPort := intstr.FromInt(int(port.Port))
+			return &v1beta1.Service{Protocol: service.Protocol, Port: &resolvedPort}
+		}
+	}
+	klog.Warningf("Can not resolve port %s for Pod %v", service.Port.StrVal, pod)
+	// If not resolvable, return it as is.
+	// The Pods that cannot resolve it will be grouped together.
+	return service
 }
