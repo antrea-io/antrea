@@ -30,9 +30,13 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
+	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 const bridgeName = "dummy-br"
+
+var bridgeMgmtAddr = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
 
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	hostName := cacheKey
@@ -84,7 +88,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockFlowOperations(ctrl)
-			ofClient := NewClient(bridgeName)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
@@ -112,7 +116,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockFlowOperations(ctrl)
-			ofClient := NewClient(bridgeName)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
@@ -153,7 +157,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockFlowOperations(ctrl)
-			ofClient := NewClient(bridgeName)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
@@ -187,7 +191,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockFlowOperations(ctrl)
-			ofClient := NewClient(bridgeName)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}

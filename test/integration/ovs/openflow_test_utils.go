@@ -22,13 +22,8 @@ import (
 )
 
 func PrepareOVSBridge(brName string) error {
-	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s", brName)
+	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s -- set Bridge %s protocols=OpenFlow10,OpenFlow13", brName, brName)
 	err := exec.Command("/bin/sh", "-c", cmdStr).Run()
-	if err != nil {
-		return err
-	}
-	cmdStr = fmt.Sprintf("ovs-vsctl set Bridge %s protocols='OpenFlow10,OpenFlow13'", brName)
-	err = exec.Command("/bin/sh", "-c", cmdStr).Run()
 	if err != nil {
 		return err
 	}

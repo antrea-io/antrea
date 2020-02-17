@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 var (
@@ -65,6 +66,11 @@ var (
 	vMAC, _          = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 )
 
+func newOFBridge(brName string) binding.Bridge {
+	bridgeMgmtAddr := binding.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, brName)
+	return binding.NewOFBridge(brName, bridgeMgmtAddr)
+}
+
 func TestDeleteFlowStrict(t *testing.T) {
 	br := "br02"
 	err := PrepareOVSBridge(br)
@@ -78,7 +84,7 @@ func TestDeleteFlowStrict(t *testing.T) {
 		}
 	}()
 
-	bridge := binding.NewOFBridge(br)
+	bridge := newOFBridge(br)
 	table = bridge.CreateTable(3, 4, binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
@@ -165,7 +171,7 @@ func TestOFctrlFlow(t *testing.T) {
 		}
 	}()
 
-	bridge := binding.NewOFBridge(br)
+	bridge := newOFBridge(br)
 	table1 := bridge.CreateTable(1, 2, binding.TableMissActionNext)
 	table2 := bridge.CreateTable(2, 3, binding.TableMissActionNext)
 
@@ -310,7 +316,7 @@ func TestTransactions(t *testing.T) {
 		require.Nil(t, err, fmt.Sprintf("error while deleting OVS bridge: %v", err))
 	}()
 
-	bridge := binding.NewOFBridge(br)
+	bridge := newOFBridge(br)
 	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
@@ -367,7 +373,7 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 		require.Nil(t, err, fmt.Sprintf("error while deleting OVS bridge: %v", err))
 	}()
 
-	bridge := binding.NewOFBridge(br)
+	bridge := newOFBridge(br)
 	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
@@ -451,7 +457,7 @@ func TestReconnectOFSwitch(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer DeleteOVSBridge(br)
 
-	bridge := binding.NewOFBridge(br)
+	bridge := newOFBridge(br)
 	reconnectCh := make(chan struct{})
 	var connectCount int
 	go func() {
