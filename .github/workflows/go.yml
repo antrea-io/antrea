@@ -3,6 +3,7 @@ on:
   pull_request:
     branches:
     - master
+    - windows
     - release-*
   push:
     branches:
