@@ -119,8 +119,8 @@ func (r *dirtyRuleRecorder) Record(ruleID string) {
 	r.eventCh <- ruleID
 }
 
-func newAppliedToGroupMember(name, namespace string) *v1beta1.GroupMemberPod {
-	return &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{Name: name, Namespace: namespace}}
+func newAppliedToGroupMember(name, namespace string, containerPorts ...v1beta1.NamedPort) *v1beta1.GroupMemberPod {
+	return &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{Name: name, Namespace: namespace}, Ports: containerPorts}
 }
 
 func newAddressGroupMember(ip string) *v1beta1.GroupMemberPod {
