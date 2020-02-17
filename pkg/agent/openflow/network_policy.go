@@ -150,7 +150,29 @@ type conjunctiveMatch struct {
 }
 
 func (m *conjunctiveMatch) generateGlobalMapKey() string {
-	return fmt.Sprintf("table:%d,type:%d,value:%s", m.tableID, m.matchKey, m.matchValue)
+	var valueStr string
+	matchType := m.matchKey
+	switch v := m.matchValue.(type) {
+	case net.IP:
+		// Use the unique format "x.x.x.x/xx" for IP address and IP net, to avoid generating two different global map
+		// keys for IP and IP/32. Use MatchDstIPNet/MatchSrcIPNet as match type to generate global cache key for both IP
+		// and IPNet. This is because OVS treats IP and IP/32 as the same condition, if Antrea has two different
+		// conjunctive match flow contexts, only one flow entry is installed on OVS, and the conjunctive actions in the
+		// first context wil be overwritten by those in the second one.
+		valueStr = fmt.Sprintf("%s/32", v.String())
+		switch m.matchKey {
+		case MatchDstIP:
+			matchType = MatchDstIPNet
+		case MatchSrcIP:
+			matchType = MatchSrcIPNet
+		}
+	case net.IPNet:
+		valueStr = v.String()
+	default:
+		// The default cases include the matchValue is a Service port or an ofport Number.
+		valueStr = fmt.Sprintf("%s", m.matchValue)
+	}
+	return fmt.Sprintf("table:%d,type:%d,value:%s", m.tableID, matchType, valueStr)
 }
 
 // changeType is generally used to describe the change type of a conjMatchFlowContext. It is also used in "flowChange"
