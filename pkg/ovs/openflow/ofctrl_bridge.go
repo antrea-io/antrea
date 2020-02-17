@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	OVSRunDir          = "/var/run/openvswitch"
 	ofTableExistsError = "Table already exists"
 )
 
@@ -111,6 +110,8 @@ func newOFTable(id, next TableIDType, missAction MissActionType) *ofTable {
 // OFBridge implements openflow.Bridge.
 type OFBridge struct {
 	bridgeName string
+	// Management address
+	mgmtAddr string
 	// sync.RWMutex protects tableCache from concurrent modification and iteration.
 	sync.RWMutex
 	// tableCache is used to cache ofTables.
@@ -224,9 +225,8 @@ func (b *OFBridge) Connect(maxRetrySec int, connectionCh chan struct{}) error {
 	b.maxRetrySec = maxRetrySec
 	b.connected = make(chan bool)
 	errCh := make(chan error)
-	sockPath := fmt.Sprintf("%s/%s.mgmt", OVSRunDir, b.bridgeName)
 	go func() {
-		err := b.controller.Connect(sockPath)
+		err := b.controller.Connect(b.mgmtAddr)
 		if err != nil {
 			errCh <- err
 		}
@@ -382,9 +382,10 @@ func (b *OFBridge) RetryInterval() time.Duration {
 	return b.retryInterval
 }
 
-func NewOFBridge(br string) Bridge {
+func NewOFBridge(br string, mgmtAddr string) Bridge {
 	s := &OFBridge{
 		bridgeName:    br,
+		mgmtAddr:      mgmtAddr,
 		tableCache:    make(map[TableIDType]*ofTable),
 		retryInterval: 1 * time.Second,
 	}
