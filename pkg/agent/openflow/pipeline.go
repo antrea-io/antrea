@@ -625,8 +625,8 @@ func (c *client) localProbeFlow(localGatewayIP net.IP, category cookie.Category)
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName string) Client {
-	bridge := binding.NewOFBridge(bridgeName)
+func NewClient(bridgeName, mgmtAddr string) Client {
+	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	c := &client{
 		bridge: bridge,
 		pipeline: map[binding.TableIDType]binding.Table{

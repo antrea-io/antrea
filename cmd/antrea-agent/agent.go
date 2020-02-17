@@ -35,6 +35,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
+	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/version"
@@ -62,7 +63,8 @@ func run(o *Options) error {
 	}
 
 	// Create ovsdb and openflow clients.
-	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS("")
+	ovsdbAddress := ovsconfig.GetConnAddress(o.config.OVSRunDir)
+	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS(ovsdbAddress)
 	if err != nil {
 		// TODO: ovsconfig.NewOVSDBConnectionUDS might return timeout in the future, need to add retry
 		return fmt.Errorf("error connecting OVSDB: %v", err)
@@ -70,7 +72,8 @@ func run(o *Options) error {
 	defer ovsdbConnection.Close()
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
-	ofClient := openflow.NewClient(o.config.OVSBridge)
+	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
+	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr)
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
