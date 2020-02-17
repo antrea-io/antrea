@@ -127,6 +127,9 @@ func (o *Options) setDefaults() {
 	if o.config.OVSDatapathType == "" {
 		o.config.OVSDatapathType = ovsconfig.OVSDatapathSystem
 	}
+	if o.config.OVSRunDir == "" {
+		o.config.OVSRunDir = ovsconfig.DefaultOVSRunDir
+	}
 	if o.config.HostGateway == "" {
 		o.config.HostGateway = defaultHostGateway
 	}
