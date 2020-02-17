@@ -28,15 +28,18 @@ import (
 	ofClient "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	ofTestUtils "github.com/vmware-tanzu/antrea/test/integration/ovs"
 )
 
 var (
-	br           = "br01"
-	c            ofClient.Client
-	roundInfo    = types.RoundInfo{0, nil}
-	ovsCtlClient = ovsctl.NewClient(br)
+	br             = "br01"
+	c              ofClient.Client
+	roundInfo      = types.RoundInfo{0, nil}
+	ovsCtlClient   = ovsctl.NewClient(br)
+	bridgeMgmtAddr = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, br)
 )
 
 const (
@@ -80,7 +83,7 @@ type testConfig struct {
 }
 
 func TestConnectivityFlows(t *testing.T) {
-	c = ofClient.NewClient(br)
+	c = ofClient.NewClient(br, bridgeMgmtAddr)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -106,7 +109,7 @@ func TestConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsConnectivityFlows(t *testing.T) {
-	c = ofClient.NewClient(br)
+	c = ofClient.NewClient(br, bridgeMgmtAddr)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -133,7 +136,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
-	c = ofClient.NewClient(br)
+	c = ofClient.NewClient(br, bridgeMgmtAddr)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -273,7 +276,7 @@ func testUninstallPodFlows(t *testing.T, config *testConfig) {
 }
 
 func TestNetworkPolicyFlows(t *testing.T) {
-	c = ofClient.NewClient(br)
+	c = ofClient.NewClient(br, bridgeMgmtAddr)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 

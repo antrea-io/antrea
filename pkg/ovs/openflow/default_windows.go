@@ -12,26 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ovsconfig
+package openflow
 
 import (
 	"path/filepath"
 	"strings"
-	"time"
 )
 
-const (
-	DefaultOVSRunDir = `C:\openvswitch\var\run\openvswitch`
+const namedPipePrefix = `\\.\pipe\`
 
-	defaultConnNetwork = "winpipe"
-	namedPipePrefix    = `\\.\pipe\`
-	// Wait up to 2 seconds when get port, the operation of port creation
-	// takes longer on Windows platform than on Linux.
-	defaultGetPortTimeout = 2 * time.Second
-)
-
-func GetConnAddress(ovsRunDir string) string {
-	addr := filepath.Join(filepath.FromSlash(ovsRunDir), defaultOVSDBFile)
+func GetMgmtAddress(ovsRunDir, brName string) string {
+	sockFile := brName + ".mgmt"
+	addr := filepath.Join(filepath.FromSlash(ovsRunDir), sockFile)
 	addr = strings.Replace(addr, string(filepath.Separator), "", -1)
 	return namedPipePrefix + addr
 }
