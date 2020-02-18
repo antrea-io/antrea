@@ -23,6 +23,10 @@ import (
 
 const (
 	DefaultTunPortName = "tun0"
+	// Invalid ofport_request number is in range 1 to 65,279. For ofport_request number not in the range, OVS
+	// ignore the it and automatically assign a port number.
+	// Here we use an invalid port number "0" to request for automatically port allocation.
+	AutoAssignedOFPort = 0
 	DefaultTunOFPort   = 1
 	HostGatewayOFPort  = 2
 	UplinkOFPort       = 3
@@ -43,14 +47,24 @@ func (g *GatewayConfig) String() string {
 	return fmt.Sprintf("Name %s: IP %s, MAC %s", g.Name, g.IP, g.MAC)
 }
 
+type AdapterNetConfig struct {
+	Name       string
+	Index      int
+	MAC        net.HardwareAddr
+	IP         *net.IPNet
+	Gateway    string
+	DNSServers string
+}
+
 // Local Node configurations retrieved from K8s API or host networking state.
 type NodeConfig struct {
-	Name          string
-	OVSBridge     string
-	PodCIDR       *net.IPNet
-	NodeIPAddr    *net.IPNet
-	GatewayConfig *GatewayConfig
-	BridgeName    string
+	Name            string
+	OVSBridge       string
+	PodCIDR         *net.IPNet
+	NodeIPAddr      *net.IPNet
+	GatewayConfig   *GatewayConfig
+	BridgeName      string
+	UplinkNetConfig *AdapterNetConfig
 }
 
 func (n *NodeConfig) String() string {

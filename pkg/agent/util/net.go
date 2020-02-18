@@ -73,7 +73,7 @@ type LinkNotFound struct {
 	error
 }
 
-func newLinkNoteFoundError(name string) LinkNotFound {
+func newLinkNotFoundError(name string) LinkNotFound {
 	return LinkNotFound{
 		fmt.Errorf("link %s not found", name),
 	}
