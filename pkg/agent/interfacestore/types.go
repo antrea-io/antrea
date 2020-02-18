@@ -27,6 +27,8 @@ const (
 	GatewayInterface
 	// TunnelInterface is used to mark current interface is for tunnel port
 	TunnelInterface
+	// UplinkInterface is used to mark current interface is for uplink port
+	UplinkInterface
 )
 
 type InterfaceType uint8
@@ -117,4 +119,10 @@ func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType) *Int
 func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelType, nodeName string, nodeIP net.IP, psk string) *InterfaceConfig {
 	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, NodeName: nodeName, RemoteIP: nodeIP, PSK: psk}
 	return &InterfaceConfig{InterfaceName: interfaceName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
+}
+
+// NewUplinkInterface creates InterfaceConfig for the uplink interface.
+func NewUplinkInterface(uplinkName string) *InterfaceConfig {
+	uplinkConfig := &InterfaceConfig{InterfaceName: uplinkName, Type: UplinkInterface}
+	return uplinkConfig
 }
