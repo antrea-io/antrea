@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -120,6 +120,21 @@ func (m *MockOVSBridgeClient) CreateTunnelPortExt(arg0 string, arg1 ovsconfig.Tu
 func (mr *MockOVSBridgeClientMockRecorder) CreateTunnelPortExt(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTunnelPortExt", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateTunnelPortExt), arg0, arg1, arg2, arg3, arg4, arg5)
+}
+
+// CreateUplinkPort mocks base method
+func (m *MockOVSBridgeClient) CreateUplinkPort(arg0 string, arg1 int32, arg2 map[string]interface{}) (string, ovsconfig.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateUplinkPort", arg0, arg1, arg2)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(ovsconfig.Error)
+	return ret0, ret1
+}
+
+// CreateUplinkPort indicates an expected call of CreateUplinkPort
+func (mr *MockOVSBridgeClientMockRecorder) CreateUplinkPort(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUplinkPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateUplinkPort), arg0, arg1, arg2)
 }
 
 // Delete mocks base method
@@ -251,6 +266,20 @@ func (m *MockOVSBridgeClient) GetPortList() ([]ovsconfig.OVSPortData, ovsconfig.
 func (mr *MockOVSBridgeClientMockRecorder) GetPortList() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPortList", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetPortList))
+}
+
+// SetDatapathID mocks base method
+func (m *MockOVSBridgeClient) SetDatapathID(arg0 string) ovsconfig.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetDatapathID", arg0)
+	ret0, _ := ret[0].(ovsconfig.Error)
+	return ret0
+}
+
+// SetDatapathID indicates an expected call of SetDatapathID
+func (mr *MockOVSBridgeClientMockRecorder) SetDatapathID(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDatapathID", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetDatapathID), arg0)
 }
 
 // SetExternalIDs mocks base method

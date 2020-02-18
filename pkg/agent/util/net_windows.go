@@ -54,9 +54,17 @@ func ConfigureInterfaceAddress(ifaceName string, ipConfig *net.IPNet) error {
 	return InvokePSCommand(cmd)
 }
 
+// ConfigureInterfaceAddressWithDefaultGateway adds IPAddress on the specified interface and sets the default gateway
+// for the host.
+func ConfigureInterfaceAddressWithDefaultGateway(ifaceName string, ipConfig *net.IPNet, gateway string) error {
+	ipStr := strings.Split(ipConfig.String(), "/")
+	cmd := fmt.Sprintf("New-NetIPAddress -InterfaceAlias %s -IPAddress %s -PrefixLength %s -DefaultGateway %s", ifaceName, ipStr[0], ipStr[1], gateway)
+	return InvokePSCommand(cmd)
+}
+
 // EnableIPForwarding enables the IP interface to forward packets that arrive on this interface to other interfaces.
 func EnableIPForwarding(ifaceName string) error {
-	cmd := fmt.Sprintf("Set-NetIPInterface -InterfaceAlias %s -Forwarding Enabled", ifaceName)
+	cmd := fmt.Sprintf(`Set-NetIPInterface -InterfaceAlias "%s" -Forwarding Enabled`, ifaceName)
 	return InvokePSCommand(cmd)
 }
 
@@ -106,6 +114,14 @@ func RemoveManagementInterface(networkName string) error {
 	return err
 }
 
+// ConfigureMACAddress set specified MAC address on interface.
+func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error {
+	macAddr := strings.Replace(macConfig.String(), ":", "", -1)
+	cmd := fmt.Sprintf("Set-NetAdapterAdvancedProperty -Name %s -RegistryKeyword NetworkAddress -RegistryValue %s",
+		adapterName, macAddr)
+	return InvokePSCommand(cmd)
+}
+
 // WindowsHyperVInstalled checks if the Hyper-V feature is enabled on the host.
 func WindowsHyperVInstalled() (bool, error) {
 	cmd := "$(Get-WindowsFeature Hyper-V).InstallState"
@@ -119,11 +135,7 @@ func WindowsHyperVInstalled() (bool, error) {
 // CreateHNSNetwork creates a new HNS Network, whose type is "Transparent". The NetworkAdapter is using the host
 // interface which is configured with Node IP. HNS Network properties "ManagementIP" and "SourceMac" are used to record
 // the original IP and MAC addresses on the network adapter.
-func CreateHNSNetwork(hnsNetName string, subnetCIDR *net.IPNet, nodeIP *net.IPNet) (*hcsshim.HNSNetwork, error) {
-	_, adapter, err := GetIPNetDeviceFromIP(nodeIP.IP)
-	if err != nil {
-		return nil, err
-	}
+func CreateHNSNetwork(hnsNetName string, subnetCIDR *net.IPNet, nodeIP *net.IPNet, adapter *net.Interface) (*hcsshim.HNSNetwork, error) {
 	adapterMAC := adapter.HardwareAddr
 	adapterName := adapter.Name
 	gateway := ip.NextIP(subnetCIDR.IP.Mask(subnetCIDR.Mask))
@@ -145,6 +157,19 @@ func CreateHNSNetwork(hnsNetName string, subnetCIDR *net.IPNet, nodeIP *net.IPNe
 		return nil, err
 	}
 	return hnsNet, nil
+}
+
+func DeleteHNSNetwork(hnsNetName string) error {
+	hnsNet, err := hcsshim.GetHNSNetworkByName(hnsNetName)
+	if err != nil {
+		if _, ok := err.(hcsshim.NetworkNotFoundError); !ok {
+			return nil
+		} else {
+			return err
+		}
+	}
+	_, err = hnsNet.Delete()
+	return err
 }
 
 type vSwitchExtensionPolicy struct {
@@ -202,13 +227,16 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	// Set host gateway interface up.
 	if err := EnableHostInterface(name); err != nil {
 		klog.Errorf("Failed to set host link for %s up: %v", name, err)
+		if strings.Contains(err.Error(), "ObjectNotFound") {
+			return nil, 0, newLinkNotFoundError(name)
+		}
 		return nil, 0, err
 	}
 
 	iface, err := net.InterfaceByName(name)
 	if err != nil {
 		if opErr, ok := err.(*net.OpError); ok && opErr.Err.Error() == "no such network interface" {
-			return nil, 0, newLinkNoteFoundError(name)
+			return nil, 0, newLinkNotFoundError(name)
 		}
 		return nil, 0, err
 	}
@@ -243,17 +271,9 @@ func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
 	return nil
 }
 
-// PrepareHostNetworking creates HNS Network for containers.
-func PrepareHostNetworking(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet) error {
-	_, err := hcsshim.GetHNSNetworkByName(LocalHNSNetwork)
-	// If the HNS Network already exists, return immediately.
-	if err == nil {
-		return nil
-	}
-	if _, ok := err.(hcsshim.NetworkNotFoundError); !ok {
-		return err
-	}
-	hnsNet, err := CreateHNSNetwork(LocalHNSNetwork, subnetCIDR, nodeIPNet)
+// PrepareHNSNetwork creates HNS Network for containers.
+func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapter *net.Interface) error {
+	hnsNet, err := CreateHNSNetwork(LocalHNSNetwork, subnetCIDR, nodeIPNet, uplinkAdapter)
 	if err != nil {
 		return err
 	}
@@ -294,4 +314,60 @@ func GetLocalBroadcastIP(ipNet *net.IPNet) net.IP {
 	lastAddr := make(net.IP, len(ipNet.IP.To4()))
 	binary.BigEndian.PutUint32(lastAddr, binary.BigEndian.Uint32(ipNet.IP.To4())|^binary.BigEndian.Uint32(net.IP(ipNet.Mask).To4()))
 	return lastAddr
+}
+
+func RemoveIPv4AddrsFromAdapter(adapterName string) error {
+	cmd := fmt.Sprintf("Remove-NetIPAddress  -Confirm:$false -AddressFamily IPv4 -InterfaceAlias %s", adapterName)
+	return InvokePSCommand(cmd)
+}
+
+func GetAdapterIPv4Addr(adapterName string) (*net.IPNet, error) {
+	adapter, err := net.InterfaceByName(adapterName)
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := adapter.Addrs()
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range addrs {
+		if ip, ok := ip.(*net.IPNet); ok {
+			if ip.IP.To4() != nil {
+				return ip, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("failed to find a valid IP on adapter %s", adapterName)
+}
+
+// GetDefaultGatewayByInterfaceIndex returns the default gateway configured on the speicified interface.
+func GetDefaultGatewayByInterfaceIndex(ifIndex int) (string, error) {
+	cmd := fmt.Sprintf("$(Get-NetRoute -InterfaceIndex %d -DestinationPrefix 0.0.0.0/0 ).NextHop", ifIndex)
+	defaultGW, err := CallPSCommand(cmd)
+	if err != nil {
+		return "", err
+	}
+	defaultGW = strings.ReplaceAll(defaultGW, "\r\n", "")
+	return defaultGW, nil
+}
+
+// GetDNServersByInterfaceIndex returns the DNS servers configured on the specified interface.
+func GetDNServersByInterfaceIndex(ifIndex int) (string, error) {
+	cmd := fmt.Sprintf("$(Get-DnsClientServerAddress -InterfaceIndex %d -AddressFamily IPv4).ServerAddresses", ifIndex)
+	dnsServers, err := CallPSCommand(cmd)
+	if err != nil {
+		return "", err
+	}
+	dnsServers = strings.ReplaceAll(dnsServers, "\r\n", ",")
+	dnsServers = strings.TrimRight(dnsServers, ",")
+	return dnsServers, nil
+}
+
+// SetAdapterDNSServers configures DNSServers on network adapter.
+func SetAdapterDNSServers(adapterName, dnsServers string) error {
+	cmd := fmt.Sprintf("Set-DnsClientServerAddress -InterfaceAlias %s -ServerAddresses %s", adapterName, dnsServers)
+	if err := InvokePSCommand(cmd); err != nil {
+		return err
+	}
+	return nil
 }

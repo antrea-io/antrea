@@ -245,6 +245,51 @@ func (br *OVSBridge) SetExternalIDs(externalIDs map[string]interface{}) Error {
 	return nil
 }
 
+// SetDatapathID sets the provided datapath ID to the bridge.
+// If datapath ID is not configured, reconfigure bridge(add/delete port or set different Mac address for local port)
+// will change its datapath ID. And the change of datapath ID and interrupt OpenFlow connection.
+// See question "My bridge disconnects from my controller on add-port/del-port" in：
+// http://openvswitch.org/support/dist-docs-2.5/FAQ.md.html
+func (br *OVSBridge) SetDatapathID(datapathID string) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	otherConfig := map[string]interface{}{"datapath-id": datapathID}
+	tx.Update(dbtransaction.Update{
+		Table: "Bridge",
+		Where: [][]interface{}{{"name", "==", br.name}},
+		Row: map[string]interface{}{
+			"other_config": helpers.MakeOVSDBMap(otherConfig),
+		},
+	})
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}
+
+func (br *OVSBridge) GetDatapathID() (string, Error) {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Select(dbtransaction.Select{
+		Table:   "Bridge",
+		Columns: []string{"datapath_id"},
+		Where:   [][]interface{}{{"name", "==", br.name}},
+	})
+
+	res, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return "", NewTransactionError(err, temporary)
+	}
+	datapathID := res[0].Rows[0].(map[string]interface{})["datapath_id"]
+	switch datapathID.(type) {
+	case string:
+		return datapathID.(string), nil
+	default:
+		return "", nil
+	}
+}
+
 // GetPortUUIDList returns UUIDs of all ports on the bridge.
 func (br *OVSBridge) GetPortUUIDList() ([]string, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
@@ -395,6 +440,11 @@ func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, string) {
 
 	psk = portData.Options["psk"]
 	return remoteIP, psk
+}
+
+// CreateUplinkPort creates uplink port.
+func (br *OVSBridge) CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error) {
+	return br.createPort(name, name, "", ofPortRequest, externalIDs, nil)
 }
 
 // CreatePort creates a port with the specified name on the bridge, and connects
