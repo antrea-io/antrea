@@ -131,7 +131,7 @@ type client struct {
 	globalConjMatchFlowCache map[string]*conjMatchFlowContext
 	// replayMutex provides exclusive access to the OFSwitch to the ReplayFlows method.
 	replayMutex sync.RWMutex
-	nodeConfig  *types.NodeConfig
+	nodeConfig  *config.NodeConfig
 	encapMode   config.TrafficEncapModeType
 }
 

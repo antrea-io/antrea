@@ -35,7 +35,7 @@ type Client interface {
 	// be called to ensure that the set of OVS flows is correct. All flows programmed in the
 	// switch which match the current round number will be deleted before any new flow is
 	// installed.
-	Initialize(roundInfo types.RoundInfo, config *types.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error)
+	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
@@ -273,14 +273,14 @@ func (c *client) initialize() error {
 	}
 
 	if c.encapMode.SupportsNoEncap() {
-		if err := c.flowOperations.Add(c.l2ForwardOutputInPortFlow(types.HostGatewayOFPort, cookie.Default)); err != nil {
+		if err := c.flowOperations.Add(c.l2ForwardOutputInPortFlow(config.HostGatewayOFPort, cookie.Default)); err != nil {
 			return fmt.Errorf("failed to install L2 forward same in-port and out-port flow: %v", err)
 		}
 	}
 	return nil
 }
 
-func (c *client) Initialize(roundInfo types.RoundInfo, config *types.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error) {
+func (c *client) Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error) {
 	c.nodeConfig = config
 	c.encapMode = encapMode
 	// Initiate connections to target OFswitch, and create tables on the switch.

@@ -27,9 +27,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 )
 
 const bridgeName = "dummy-br"
@@ -39,7 +39,7 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	gwMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:FF")
 	IP, IPNet, _ := net.ParseCIDR("10.0.1.1/24")
 	peerNodeIP := net.ParseIP("192.168.1.1")
-	err := ofClient.InstallNodeFlows(hostName, gwMAC, IP, *IPNet, peerNodeIP, types.DefaultTunOFPort)
+	err := ofClient.InstallNodeFlows(hostName, gwMAC, IP, *IPNet, peerNodeIP, config.DefaultTunOFPort)
 	client := ofClient.(*client)
 	fCacheI, ok := client.nodeFlowCache.Load(hostName)
 	if ok {
@@ -87,7 +87,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
-			client.nodeConfig = &types.NodeConfig{}
+			client.nodeConfig = &config.NodeConfig{}
 			client.flowOperations = m
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
@@ -115,7 +115,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
-			client.nodeConfig = &types.NodeConfig{}
+			client.nodeConfig = &config.NodeConfig{}
 			client.flowOperations = m
 
 			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
@@ -156,7 +156,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
-			client.nodeConfig = &types.NodeConfig{}
+			client.nodeConfig = &config.NodeConfig{}
 			client.flowOperations = m
 
 			// We generate an error for AddAll call.
@@ -190,7 +190,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
-			client.nodeConfig = &types.NodeConfig{}
+			client.nodeConfig = &config.NodeConfig{}
 			client.flowOperations = m
 
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls

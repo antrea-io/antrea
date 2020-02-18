@@ -39,9 +39,9 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	ipamtest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam/testing"
 	cniservertest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/testing"
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	agenttypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnimsg "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -56,7 +56,6 @@ const (
 	testPod               = "test-1"
 	testPodNamespace      = "t1"
 	testPodInfraContainer = "test-111111"
-	bridge                = "br0"
 )
 
 const (
@@ -103,7 +102,7 @@ const (
 var ipamMock *ipamtest.MockIPAMDriver
 var ovsServiceMock *ovsconfigtest.MockOVSBridgeClient
 var ofServiceMock *openflowtest.MockClient
-var testNodeConfig *agenttypes.NodeConfig
+var testNodeConfig *config.NodeConfig
 
 type Net struct {
 	Name          string                 `json:"name"`
@@ -614,8 +613,8 @@ func init() {
 	nodeName := "node1"
 	gwIP := net.ParseIP("192.168.1.1")
 	gwMAC, _ := net.ParseMAC("11:11:11:11:11:11")
-	nodeGateway := &agenttypes.GatewayConfig{IP: gwIP, MAC: gwMAC, Link: ""}
+	nodeGateway := &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Link: ""}
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 
-	testNodeConfig = &agenttypes.NodeConfig{Bridge: bridge, Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: nodeGateway}
+	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: nodeGateway}
 }

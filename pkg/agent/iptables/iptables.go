@@ -26,7 +26,6 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 )
 
 const (
@@ -65,29 +64,17 @@ var (
 
 // Client knows how to set up host iptables rules Antrea requires.
 type Client struct {
-	ipt         *iptables.IPTables
 	hostGateway string
-	nodeConfig  *types.NodeConfig
 	serviceCIDR *net.IPNet
 	encapMode   config.TrafficEncapModeType
+	nodeConfig  *config.NodeConfig
+	ipt         *iptables.IPTables
 	store       *sync.Map
 }
 
 // key is chain name, value [][]string is rules in the chain. The first slice is rules in
 // the chain, the second slice represents tokens within the rule.
 type chainRules map[string][][]string
-
-// NewClient constructs a Client instance for iptables operations.
-func NewClient() (*Client, error) {
-	ipt, err := iptables.New()
-	if err != nil {
-		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
-	}
-	return &Client{
-		ipt:   ipt,
-		store: &sync.Map{},
-	}, nil
-}
 
 // rule is a generic struct that describes an iptables rule.
 type rule struct {
@@ -105,13 +92,25 @@ type rule struct {
 	comment string
 }
 
+// NewClient constructs a Client instance for iptables operations.
+func NewClient(hostGateway string, serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType) *Client {
+	return &Client{
+		hostGateway: hostGateway,
+		serviceCIDR: serviceCIDR,
+		encapMode:   encapMode,
+		store:       &sync.Map{}}
+}
+
 // Initialize sets up internal variables and ensures the iptables rules Antrea requires are set up.
 // It's idempotent and can be safely called on every startup.
-func (c *Client) Initialize(hostGateway string, serviceCIDR *net.IPNet, nodeConfig *types.NodeConfig, encapMode config.TrafficEncapModeType) error {
-	c.hostGateway = hostGateway
+func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
+	ipt, err := iptables.New()
+	if err != nil {
+		return fmt.Errorf("error creating IPTables instance: %v", err)
+	}
+
+	c.ipt = ipt
 	c.nodeConfig = nodeConfig
-	c.serviceCIDR = serviceCIDR
-	c.encapMode = encapMode
 
 	rules := []rule{
 		// Append ANTREA-FORWARD chain which contains Antrea related forwarding rules to FORWARD chain.
