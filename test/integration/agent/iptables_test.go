@@ -27,7 +27,6 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 )
 
 func TestSetupRules(t *testing.T) {
@@ -67,18 +66,15 @@ func TestSetupRules(t *testing.T) {
 
 		for _, mode := range modes {
 			t.Logf("Running test with Encap Mode %s", mode)
-			nodeConfig := &types.NodeConfig{}
+			nodeConfig := &config.NodeConfig{}
 			curExpected := expected
 			if !mode.SupportsNoEncap() {
 				curExpected = expected[:2]
 			}
 			_, serviceCIDR, _ = net.ParseCIDR("1.1.0.0/16")
 
-			client, err := iptables.NewClient()
-			if err != nil {
-				return fmt.Errorf("error creating iptables client: %v", err)
-			}
-			if err := client.Initialize("gw0", serviceCIDR, nodeConfig, mode); err != nil {
+			client := iptables.NewClient("gw0", serviceCIDR, mode)
+			if err := client.Initialize(nodeConfig); err != nil {
 				return fmt.Errorf("error setting up rules: %v", err)
 			}
 
