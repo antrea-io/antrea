@@ -65,7 +65,6 @@ type Controller struct {
 	interfaceStore   interfacestore.InterfaceStore
 	networkConfig    *config.NetworkConfig
 	nodeConfig       *config.NodeConfig
-	gatewayLink      netlink.Link
 	nodeInformer     coreinformers.NodeInformer
 	nodeLister       corelisters.NodeLister
 	nodeListerSynced cache.InformerSynced
@@ -101,7 +100,6 @@ func NewNodeRouteController(
 		interfaceStore:   interfaceStore,
 		networkConfig:    networkConfig,
 		nodeConfig:       nodeConfig,
-		gatewayLink:      util.GetNetLink(nodeConfig.GatewayConfig.Link),
 		nodeInformer:     nodeInformer,
 		nodeLister:       nodeInformer.Lister(),
 		nodeListerSynced: nodeInformer.Informer().HasSynced,
@@ -477,7 +475,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 		c.installedNodes.Store(nodeName, nil)
 	}
 
-	routes, err := c.routeClient.AddPeerCIDRRoute(peerPodCIDR, c.gatewayLink.Attrs().Index, peerNodeIP, peerGatewayIP)
+	routes, err := c.routeClient.AddPeerCIDRRoute(peerPodCIDR, c.nodeConfig.GatewayConfig.LinkIndex, peerNodeIP, peerGatewayIP)
 	if err == nil {
 		c.installedNodes.Store(nodeName, routes)
 		err = c.iptablesClient.AddPeerCIDR(peerPodCIDR, peerNodeIP)

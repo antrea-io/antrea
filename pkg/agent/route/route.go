@@ -26,7 +26,6 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 )
 
 const (
@@ -104,7 +103,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 	if gwConfig != nil && c.nodeConfig.PodCIDR != nil {
 		// Add local podCIDR if applicable to service rt table.
 		route := &netlink.Route{
-			LinkIndex: util.GetNetLink(gwConfig.Link).Attrs().Index,
+			LinkIndex: gwConfig.LinkIndex,
 			Scope:     netlink.SCOPE_LINK,
 			Dst:       c.nodeConfig.PodCIDR,
 			Table:     ServiceRtTable.Idx,
@@ -116,7 +115,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 
 	// create ip rule to select route table
 	ipRule := netlink.NewRule()
-	ipRule.IifName = c.nodeConfig.GatewayConfig.Link
+	ipRule.IifName = c.nodeConfig.GatewayConfig.Name
 	ipRule.Mark = iptables.RtTblSelectorValue
 	ipRule.Mask = 0xffffffff
 	ipRule.Table = ServiceRtTable.Idx
@@ -199,7 +198,7 @@ func (c *Client) ListPeerCIDRRoute() (map[string][]*netlink.Route, error) {
 	// get all routes on gw0 from service table.
 	filter := &netlink.Route{
 		Table:     ServiceRtTable.Idx,
-		LinkIndex: util.GetNetLink(c.nodeConfig.GatewayConfig.Link).Attrs().Index}
+		LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex}
 	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_TABLE|netlink.RT_FILTER_OIF)
 	if err != nil {
 		return nil, err
@@ -296,7 +295,7 @@ func (c *Client) RemoveServiceRouting() error {
 	// flush service table
 	filter := &netlink.Route{
 		Table:     AntreaServiceTableIdx,
-		LinkIndex: util.GetNetLink(c.nodeConfig.GatewayConfig.Link).Attrs().Index}
+		LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex}
 	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_TABLE|netlink.RT_FILTER_OIF)
 	if err != nil {
 		return fmt.Errorf("route table(list): %w", err)
@@ -309,7 +308,7 @@ func (c *Client) RemoveServiceRouting() error {
 
 	// delete ip rule for service table
 	ipRule := netlink.NewRule()
-	ipRule.IifName = c.nodeConfig.GatewayConfig.Link
+	ipRule.IifName = c.nodeConfig.GatewayConfig.Name
 	ipRule.Mark = iptables.RtTblSelectorValue
 	ipRule.Table = AntreaServiceTableIdx
 	ipRule.Priority = AntreaIPRulePriority
