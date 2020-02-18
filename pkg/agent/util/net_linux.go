@@ -136,7 +136,7 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	link, err := netlink.LinkByName(name)
 	if err != nil {
 		if _, ok := err.(netlink.LinkNotFoundError); ok {
-			return nil, 0, newLinkNoteFoundError(name)
+			return nil, 0, newLinkNotFoundError(name)
 		} else {
 			return nil, 0, err
 		}

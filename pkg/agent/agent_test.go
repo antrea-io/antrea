@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
@@ -50,6 +51,8 @@ func TestInitstore(t *testing.T) {
 
 	store := interfacestore.NewInterfaceStore()
 	initializer := newAgentInitializer(mockOVSBridgeClient, store)
+	uplinkNetConfig := config.AdapterNetConfig{Name: "eth-antrea-test-1"}
+	initializer.nodeConfig = &config.NodeConfig{UplinkNetConfig: &uplinkNetConfig}
 
 	err := initializer.initInterfaceStore()
 	if err == nil {
