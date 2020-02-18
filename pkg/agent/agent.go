@@ -100,7 +100,10 @@ func (i *Initializer) setupOVSBridge() error {
 		klog.Error("Failed to create OVS bridge: ", err)
 		return err
 	}
-	i.nodeConfig.BridgeName = i.ovsBridgeClient.GetBridgeName()
+
+	if err := i.prepareOVSBridge(); err != nil {
+		return err
+	}
 
 	// Initialize interface cache
 	if err := i.initInterfaceStore(); err != nil {
@@ -110,7 +113,6 @@ func (i *Initializer) setupOVSBridge() error {
 	if err := i.setupDefaultTunnelInterface(config.DefaultTunPortName); err != nil {
 		return err
 	}
-
 	// Setup host gateway interface
 	err := i.setupGatewayInterface()
 	if err != nil {
@@ -130,6 +132,7 @@ func (i *Initializer) initInterfaceStore() error {
 	}
 
 	ifaceList := make([]*interfacestore.InterfaceConfig, 0, len(ovsPorts))
+	uplinkIfName := i.nodeConfig.UplinkNetConfig.Name
 	for index := range ovsPorts {
 		port := &ovsPorts[index]
 		ovsPort := &interfacestore.OVSPortConfig{
@@ -142,6 +145,12 @@ func (i *Initializer) initInterfaceStore() error {
 				Type:          interfacestore.GatewayInterface,
 				InterfaceName: port.Name,
 				OVSPortConfig: ovsPort}
+		case port.Name == uplinkIfName:
+			intf = &interfacestore.InterfaceConfig{
+				Type:          interfacestore.UplinkInterface,
+				InterfaceName: port.Name,
+				OVSPortConfig: ovsPort,
+			}
 		case port.IFType == ovsconfig.VXLANTunnel:
 			fallthrough
 		case port.IFType == ovsconfig.GeneveTunnel:
@@ -174,7 +183,9 @@ func (i *Initializer) Initialize() error {
 	if err := i.readIPSecPSK(); err != nil {
 		return err
 	}
-
+	if err := i.prepareHostNetwork(); err != nil {
+		return err
+	}
 	if err := i.setupOVSBridge(); err != nil {
 		return err
 	}
@@ -243,6 +254,12 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig.TrafficEncapMode, gatewayOFPort)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
+		return err
+	}
+
+	// On windows platform, host network flows are needed for host traffic.
+	if err := i.initHostNetworkFlows(); err != nil {
+		klog.Errorf("Failed to setup openflow entires for host network: %v", err)
 		return err
 	}
 
@@ -480,7 +497,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		i.nodeConfig = &config.NodeConfig{Name: nodeName, NodeIPAddr: localAddr}
+		i.nodeConfig = &config.NodeConfig{Name: nodeName, NodeIPAddr: localAddr, BridgeName: i.ovsBridgeClient.GetBridgeName(), UplinkNetConfig: new(config.AdapterNetConfig)}
 		return nil
 	}
 
@@ -497,10 +514,12 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 
 	i.nodeConfig = &config.NodeConfig{
-		Name:       nodeName,
-		OVSBridge:  i.ovsBridge,
-		PodCIDR:    localSubnet,
-		NodeIPAddr: localAddr}
+		Name:            nodeName,
+		OVSBridge:       i.ovsBridge,
+		PodCIDR:         localSubnet,
+		NodeIPAddr:      localAddr,
+		BridgeName:      i.ovsBridgeClient.GetBridgeName(),
+		UplinkNetConfig: new(config.AdapterNetConfig)}
 	return nil
 }
 

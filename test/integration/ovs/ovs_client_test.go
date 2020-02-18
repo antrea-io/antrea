@@ -15,7 +15,9 @@
 package ovs
 
 import (
+	"crypto/rand"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -69,6 +71,15 @@ func (data *testData) teardown(t *testing.T) {
 	data.ovsdb.Close()
 }
 
+func randomDatapathID() (string, error) {
+	buf := make([]byte, 8)
+	_, err := rand.Read(buf)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%016x", buf), nil
+}
+
 func TestOVSBridge(t *testing.T) {
 	data := &testData{}
 	data.setup(t)
@@ -79,6 +90,21 @@ func TestOVSBridge(t *testing.T) {
 		require.Nil(t, err, "Error when retrieving port list")
 		assert.Equal(t, expectedCount, len(portList))
 	}
+
+	// Test set fixed datapath ID
+	expectedDatapathID, err := randomDatapathID()
+	require.Nilf(t, err, "Failed to generate datapath ID: %s", err)
+	err = data.br.SetDatapathID(expectedDatapathID)
+	require.Nilf(t, err, "Set datapath id failed: %s", err)
+	var datapathID string
+	for retry := 0; retry < 3; retry++ {
+		datapathID, _ = data.br.GetDatapathID()
+		if datapathID == expectedDatapathID {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	assert.Equal(t, expectedDatapathID, datapathID)
 
 	deleteAllPorts(t, data.br)
 	checkPorts(0)
