@@ -31,9 +31,9 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	ipamtest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam/testing"
 	cniservertest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/testing"
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
@@ -46,7 +46,6 @@ const (
 	ifname                  = "eth0"
 	testSocket              = "/tmp/test.sock"
 	testIpamType            = "test"
-	testBr                  = "br0"
 	testPodNamespace        = "test"
 	testPodName             = "test-1"
 	testPodInfraContainerID = "test-infra-11111111"
@@ -58,7 +57,7 @@ var routes = []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 var dns = []string{"192.168.100.1"}
 var ips = []string{"10.1.2.100/24,10.1.2.1,4"}
 var args = cniservertest.GenerateCNIArgs(testPodName, testPodNamespace, testPodInfraContainerID)
-var testNodeConfig *types.NodeConfig
+var testNodeConfig *config.NodeConfig
 var gwIP net.IP
 
 func TestLoadNetConfig(t *testing.T) {
@@ -497,6 +496,6 @@ func init() {
 	gwIP = net.ParseIP("192.168.1.1")
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 	gwMAC, _ := net.ParseMAC("00:00:00:00:00:01")
-	gateway := &types.GatewayConfig{Link: "", IP: gwIP, MAC: gwMAC}
-	testNodeConfig = &types.NodeConfig{Bridge: testBr, Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: gateway}
+	gateway := &config.GatewayConfig{Link: "", IP: gwIP, MAC: gwMAC}
+	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: gateway}
 }

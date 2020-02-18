@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"time"
 
 	"k8s.io/client-go/informers"
@@ -24,6 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	_ "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
@@ -68,31 +70,33 @@ func run(o *Options) error {
 	defer ovsdbConnection.Close()
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
-
 	ofClient := openflow.NewClient(o.config.OVSBridge)
-	routeClient := route.NewClient()
-	iptablesClient, err := iptables.NewClient()
-	if err != nil {
-		return fmt.Errorf("failed to get iptable: %w", err)
-	}
+
+	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
+	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
+	networkConfig := &config.NetworkConfig{
+		TunnelType:        ovsconfig.TunnelType(o.config.TunnelType),
+		TrafficEncapMode:  encapMode,
+		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
+
+	routeClient := route.NewClient(encapMode)
+	iptablesClient := iptables.NewClient(o.config.HostGateway, serviceCIDRNet, encapMode)
 
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
 
 	// Initialize agent and node network.
 	agentInitializer := agent.NewInitializer(
+		k8sClient,
 		ovsBridgeClient,
 		ofClient,
-		k8sClient,
+		routeClient,
+		iptablesClient,
 		ifaceStore,
-		o.config.ServiceCIDR,
 		o.config.HostGateway,
 		o.config.DefaultMTU,
-		ovsconfig.TunnelType(o.config.TunnelType),
-		o.config.EnableIPSecTunnel,
-		o.config.TrafficEncapMode,
-		routeClient,
-		iptablesClient)
+		serviceCIDRNet,
+		networkConfig)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -109,13 +113,11 @@ func run(o *Options) error {
 		informerFactory,
 		ofClient,
 		ovsBridgeClient,
-		ifaceStore,
-		nodeConfig,
-		ovsconfig.TunnelType(o.config.TunnelType),
-		agentInitializer.GetIPSecPSK(),
 		routeClient,
 		iptablesClient,
-		o.config.TrafficEncapMode)
+		ifaceStore,
+		networkConfig,
+		nodeConfig)
 
 	// podUpdates is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
@@ -152,7 +154,15 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
-	agentMonitor := monitor.NewAgentMonitor(crdClient, o.config.OVSBridge, nodeConfig.Name, nodeConfig.PodCIDR.String(), ifaceStore, ofClient, ovsBridgeClient, networkPolicyController)
+	agentMonitor := monitor.NewAgentMonitor(
+		crdClient,
+		o.config.OVSBridge,
+		nodeConfig.Name,
+		nodeConfig.PodCIDR.String(),
+		ifaceStore,
+		ofClient,
+		ovsBridgeClient,
+		networkPolicyController)
 
 	go agentMonitor.Run(stopCh)
 

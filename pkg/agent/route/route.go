@@ -26,7 +26,6 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 )
 
@@ -42,7 +41,7 @@ const (
 
 // Client is route client.
 type Client struct {
-	nodeConfig *types.NodeConfig
+	nodeConfig *config.NodeConfig
 	encapMode  config.TrafficEncapModeType
 }
 
@@ -65,14 +64,13 @@ var (
 )
 
 // NewClient returns a route client
-func NewClient() *Client {
-	return &Client{}
+func NewClient(encapMode config.TrafficEncapModeType) *Client {
+	return &Client{encapMode: encapMode}
 }
 
 // Initialize sets up route tables for Antrea.
-func (c *Client) Initialize(nodeConfig *types.NodeConfig, encapMode config.TrafficEncapModeType) error {
+func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 	c.nodeConfig = nodeConfig
-	c.encapMode = encapMode
 	if c.encapMode.SupportsNoEncap() {
 		ServiceRtTable.Idx = AntreaServiceTableIdx
 		ServiceRtTable.Name = AntreaServiceTable

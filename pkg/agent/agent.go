@@ -43,10 +43,10 @@ import (
 
 const (
 	maxRetryForHostLink = 5
-	// NodeNameEnvKey is environment variable.
-	NodeNameEnvKey = "NODE_NAME"
-	// IPSecPSKEnvKey is environment variable.
-	IPSecPSKEnvKey          = "ANTREA_IPSEC_PSK"
+	// nodeNameEnvKey is environment variable.
+	nodeNameEnvKey = "NODE_NAME"
+	// ipsecPSKEnvKey is environment variable.
+	ipsecPSKEnvKey          = "ANTREA_IPSEC_PSK"
 	roundNumKey             = "roundNum" // round number key in externalIDs.
 	initialRoundNum         = 1
 	maxRetryForRoundNumSave = 5
@@ -54,20 +54,17 @@ const (
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
-	hostGateway       string
-	tunnelType        ovsconfig.TunnelType
-	mtu               int
-	enableIPSecTunnel bool
-	client            clientset.Interface
-	ifaceStore        interfacestore.InterfaceStore
-	nodeConfig        *types.NodeConfig
-	ovsBridgeClient   ovsconfig.OVSBridgeClient
-	serviceCIDR       *net.IPNet
-	ofClient          openflow.Client
-	ipsecPSK          string
-	trafficEncapMode  config.TrafficEncapModeType
-	routeClient       *route.Client
-	iptablesClient    *iptables.Client
+	client          clientset.Interface
+	ovsBridgeClient ovsconfig.OVSBridgeClient
+	ofClient        openflow.Client
+	routeClient     *route.Client
+	iptablesClient  *iptables.Client
+	ifaceStore      interfacestore.InterfaceStore
+	hostGateway     string     // name of gateway port on the OVS bridge
+	mtu             int        // Pod network interface MTU
+	serviceCIDR     *net.IPNet // K8s Service ClusterIP CIDR
+	networkConfig   *config.NetworkConfig
+	nodeConfig      *config.NodeConfig
 }
 
 func disableICMPSendRedirects(intfName string) error {
@@ -81,45 +78,33 @@ func disableICMPSendRedirects(intfName string) error {
 }
 
 func NewInitializer(
+	k8sClient clientset.Interface,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
-	k8sClient clientset.Interface,
-	ifaceStore interfacestore.InterfaceStore,
-	serviceCIDR, hostGateway string,
-	mtu int,
-	tunnelType ovsconfig.TunnelType,
-	enableIPSecTunnel bool,
-	encapModeStr string,
 	routeClient *route.Client,
-	iptablesClient *iptables.Client) *Initializer {
-	// Parse service CIDR configuration. serviceCIDR is checked in option.validate, so
-	// it should be a valid configuration here.
-	_, serviceCIDRNet, _ := net.ParseCIDR(serviceCIDR)
-	_, encapMode := config.GetTrafficEncapModeFromStr(encapModeStr)
+	iptablesClient *iptables.Client,
+	ifaceStore interfacestore.InterfaceStore,
+	hostGateway string,
+	mtu int,
+	serviceCIDR *net.IPNet,
+	networkConfig *config.NetworkConfig) *Initializer {
 	return &Initializer{
-		ovsBridgeClient:   ovsBridgeClient,
-		hostGateway:       hostGateway,
-		tunnelType:        tunnelType,
-		mtu:               mtu,
-		enableIPSecTunnel: enableIPSecTunnel,
-		client:            k8sClient,
-		ifaceStore:        ifaceStore,
-		serviceCIDR:       serviceCIDRNet,
-		ofClient:          ofClient,
-		trafficEncapMode:  encapMode,
-		routeClient:       routeClient,
-		iptablesClient:    iptablesClient,
+		ovsBridgeClient: ovsBridgeClient,
+		client:          k8sClient,
+		ifaceStore:      ifaceStore,
+		ofClient:        ofClient,
+		routeClient:     routeClient,
+		iptablesClient:  iptablesClient,
+		hostGateway:     hostGateway,
+		mtu:             mtu,
+		serviceCIDR:     serviceCIDR,
+		networkConfig:   networkConfig,
 	}
 }
 
 // GetNodeConfig returns the NodeConfig.
-func (i *Initializer) GetNodeConfig() *types.NodeConfig {
+func (i *Initializer) GetNodeConfig() *config.NodeConfig {
 	return i.nodeConfig
-}
-
-// GetIPSecPSK returns PSK used for IPSec tunnel.
-func (i *Initializer) GetIPSecPSK() string {
-	return i.ipsecPSK
 }
 
 // setupOVSBridge sets up the OVS bridge and create host gateway interface and tunnel port
@@ -134,7 +119,7 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
-	if err := i.setupDefaultTunnelInterface(types.DefaultTunPortName); err != nil {
+	if err := i.setupDefaultTunnelInterface(config.DefaultTunPortName); err != nil {
 		return err
 	}
 
@@ -213,7 +198,7 @@ func (i *Initializer) Initialize() error {
 	}
 
 	// Setup iptables chains and rules.
-	if err := i.iptablesClient.Initialize(i.hostGateway, i.serviceCIDR, i.nodeConfig, i.trafficEncapMode); err != nil {
+	if err := i.iptablesClient.Initialize(i.nodeConfig); err != nil {
 		return fmt.Errorf("error setting up iptables rules: %v", err)
 	}
 
@@ -226,11 +211,11 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	if err := i.routeClient.Initialize(i.nodeConfig, i.trafficEncapMode); err != nil {
+	if err := i.routeClient.Initialize(i.nodeConfig); err != nil {
 		return err
 	}
 
-	klog.Infof("Agent initialized NodeConfig=%v, encapMode=%s", i.nodeConfig, i.trafficEncapMode)
+	klog.Infof("Agent initialized NodeConfig=%v, NetworkConfig=%v", i.nodeConfig, i.networkConfig)
 	return nil
 }
 
@@ -272,7 +257,7 @@ func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interva
 func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
 	// Setup all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.trafficEncapMode)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig.TrafficEncapMode)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
@@ -288,9 +273,9 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	}
 
 	// When IPSec encyption is enabled, no flow is needed for the default tunnel interface.
-	if i.trafficEncapMode.SupportsEncap() {
+	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
 		// Setup flow entries for the default tunnel port interface.
-		if err := i.ofClient.InstallDefaultTunnelFlows(types.DefaultTunOFPort); err != nil {
+		if err := i.ofClient.InstallDefaultTunnelFlows(config.DefaultTunOFPort); err != nil {
 			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
 			return err
 		}
@@ -345,13 +330,13 @@ func (i *Initializer) setupGatewayInterface() error {
 	gatewayIface, portExists := i.ifaceStore.GetInterface(i.hostGateway)
 	if !portExists {
 		klog.V(2).Infof("Creating gateway port %s on OVS bridge", i.hostGateway)
-		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, types.HostGatewayOFPort, nil)
+		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, config.HostGatewayOFPort, nil)
 		if err != nil {
 			klog.Errorf("Failed to add host interface %s on OVS: %v", i.hostGateway, err)
 			return err
 		}
 		gatewayIface = interfacestore.NewGatewayInterface(i.hostGateway)
-		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{gwPortUUID, types.HostGatewayOFPort}
+		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{gwPortUUID, config.HostGatewayOFPort}
 		i.ifaceStore.AddInterface(gatewayIface)
 	} else {
 		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
@@ -396,7 +381,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
 	gwAddr := &netlink.Addr{IPNet: gwIP, Label: ""}
 	gwMAC := link.Attrs().HardwareAddr
-	i.nodeConfig.GatewayConfig = &types.GatewayConfig{Link: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
+	i.nodeConfig.GatewayConfig = &config.GatewayConfig{Link: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
 	gatewayIface.IP = gwIP.IP
 	gatewayIface.MAC = gwMAC
 
@@ -432,7 +417,7 @@ func (i *Initializer) setupGatewayInterface() error {
 func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 	tunnelIface, portExists := i.ifaceStore.GetInterface(tunnelPortName)
 
-	if !i.trafficEncapMode.SupportsEncap() {
+	if !i.networkConfig.TrafficEncapMode.SupportsEncap() {
 		if portExists {
 			if err := i.ovsBridgeClient.DeletePort(tunnelIface.PortUUID); err != nil {
 				klog.Errorf("Failed to removed tunnel port %s in NoEncapMode, err %s", tunnelPortName, err)
@@ -448,13 +433,13 @@ func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 		klog.V(2).Infof("Tunnel port %s already exists on OVS", tunnelPortName)
 		return nil
 	}
-	tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPort(tunnelPortName, i.tunnelType, types.DefaultTunOFPort)
+	tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPort(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort)
 	if err != nil {
-		klog.Errorf("Failed to add tunnel port %s type %s on OVS: %v", tunnelPortName, i.tunnelType, err)
+		klog.Errorf("Failed to add tunnel port %s type %s on OVS: %v", tunnelPortName, i.networkConfig.TunnelType, err)
 		return err
 	}
-	tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.tunnelType)
-	tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{tunnelPortUUID, types.DefaultTunOFPort}
+	tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType)
+	tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{tunnelPortUUID, config.DefaultTunOFPort}
 	i.ifaceStore.AddInterface(tunnelIface)
 	return nil
 }
@@ -491,7 +476,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return fmt.Errorf("failed to get local IPNet:  %v", err)
 	}
 
-	i.nodeConfig = &types.NodeConfig{Name: nodeName, PodCIDR: localSubnet, NodeIPAddr: localAddr}
+	i.nodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: localSubnet, NodeIPAddr: localAddr}
 	return nil
 }
 
@@ -499,11 +484,11 @@ func (i *Initializer) initNodeLocalConfig() error {
 // - Environment variable NODE_NAME, which should be set by Downward API
 // - OS's hostname
 func getNodeName() (string, error) {
-	nodeName := os.Getenv(NodeNameEnvKey)
+	nodeName := os.Getenv(nodeNameEnvKey)
 	if nodeName != "" {
 		return nodeName, nil
 	}
-	klog.Infof("Environment variable %s not found, using hostname instead", NodeNameEnvKey)
+	klog.Infof("Environment variable %s not found, using hostname instead", nodeNameEnvKey)
 	var err error
 	nodeName, err = os.Hostname()
 	if err != nil {
@@ -516,17 +501,17 @@ func getNodeName() (string, error) {
 // readIPSecPSK reads the IPSec PSK value from environment variable
 // ANTREA_IPSEC_PSK, when enableIPSecTunnel is set to true.
 func (i *Initializer) readIPSecPSK() error {
-	if !i.enableIPSecTunnel {
+	if !i.networkConfig.EnableIPSecTunnel {
 		return nil
 	}
 
-	i.ipsecPSK = os.Getenv(IPSecPSKEnvKey)
-	if i.ipsecPSK == "" {
+	i.networkConfig.IPSecPSK = os.Getenv(ipsecPSKEnvKey)
+	if i.networkConfig.IPSecPSK == "" {
 		return fmt.Errorf("IPSec PSK environment variable is not set or is empty")
 	}
 
 	// Normally we want not to log the secret data.
-	klog.V(4).Infof("IPSec PSK value: %s", i.ipsecPSK)
+	klog.V(4).Infof("IPSec PSK value: %s", i.networkConfig.IPSecPSK)
 	return nil
 }
 
