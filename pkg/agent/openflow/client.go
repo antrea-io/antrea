@@ -40,6 +40,10 @@ type Client interface {
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
 
+	// InstallBridgeUplinkFlows installs Openflow flows between bridge local port and uplink port to support
+	// host networking. These flows are only needed on windows platform.
+	InstallBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32) error
+
 	// InstallClusterServiceCIDRFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once with
 	// the Cluster Service CIDR as a parameter.
@@ -311,6 +315,16 @@ func (c *client) InstallDefaultTunnelFlows(tunnelOFPort uint32) error {
 		return err
 	}
 	c.defaultTunnelFlows = []binding.Flow{flow}
+	return nil
+}
+
+func (c *client) InstallBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32) error {
+	flows := c.hostBridgeUplinkFlows(uplinkPort, bridgeLocalPort, cookie.Default)
+	c.hostNetworkingFlows = flows
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
+		return err
+	}
+	c.hostNetworkingFlows = flows
 	return nil
 }
 

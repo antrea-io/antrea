@@ -178,6 +178,20 @@ func (mr *MockClientMockRecorder) Initialize(arg0, arg1, arg2, arg3 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockClient)(nil).Initialize), arg0, arg1, arg2, arg3)
 }
 
+// InstallBridgeUplinkFlows mocks base method
+func (m *MockClient) InstallBridgeUplinkFlows(arg0, arg1 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallBridgeUplinkFlows", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallBridgeUplinkFlows indicates an expected call of InstallBridgeUplinkFlows
+func (mr *MockClientMockRecorder) InstallBridgeUplinkFlows(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallBridgeUplinkFlows", reflect.TypeOf((*MockClient)(nil).InstallBridgeUplinkFlows), arg0, arg1)
+}
+
 // InstallClusterServiceCIDRFlows mocks base method
 func (m *MockClient) InstallClusterServiceCIDRFlows(arg0 *net.IPNet, arg1 net.HardwareAddr, arg2 uint32) error {
 	m.ctrl.T.Helper()
