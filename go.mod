@@ -16,6 +16,7 @@ require (
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
 	github.com/fatih/structtag v1.2.0
+	github.com/go-openapi/spec v0.17.2
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/mock v1.3.1
 	github.com/golang/protobuf v1.3.2
@@ -48,6 +49,7 @@ require (
 	k8s.io/client-go v0.0.0-20190620085101-78d2af792bab
 	k8s.io/component-base v0.0.0-20190620085130-185d68e6e6ea
 	k8s.io/klog v0.3.3
+	k8s.io/kube-openapi v0.0.0-20190228160746-b3a7cee44a30
 	k8s.io/utils v0.0.0-20190607212802-c55fbcfc754a // indirect
 )
 
