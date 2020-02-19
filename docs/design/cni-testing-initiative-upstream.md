@@ -332,8 +332,8 @@ In some clusters, for example, namespace deletion is known to be slow - and in t
  
 - If network policys or pod CIDR's are not correct, its likely all tests can fail, and thus the network policy suite may take an hour to finish, based on the estimate of 3 minutes, for each failed test, alongside 23 tests (in general , NetworkPolicy tests on a healthy EC2 cluster, with no traffic and broken network policy's, take between 150 and 200 seconds complete).
 
-TODO: Solution using pod exec
- 
+Using `Pod Exec` Functionality, we've determined that 81 verifications can happen rapidly, within 30 seconds, when tests run inside of Kubernetes pods, compared with about the same time for a single test with < 5 verifications, using Pod status indicators.
+
 #### Relationship to Understandability: Logging verbosity is worse for slow tests.
  
 Slow running tests are also hard to understand, because logging and metadata is expanded over a larger period of time, increasing the amount
@@ -422,75 +422,34 @@ related to flagrantly allowing internamespace traffic.  Since it is obvious how 
 code snippet or API example.
  
 #### Part 2:
- 
-##### Only define whitelisted communication as part of the verification of connectivity
- 
-Since verification is quite extensive for these tests, the `Ginkgo.By` statements will be done iteratively,
-rather then using bespoke sentences for each case.  This can be done by mapping a set of predefined network policies to a change set, which defines exactly which namespace/pod pairs are allowed to talk to one another.  This can be expressed in go code as follows, using `AllowAllInnerNamespace` as an easy to understand example.
- 
-```
-
-// AllowAllInnerNamespace is a NP that allows local client 'a' via a pod selector
-var AllowAllInnerNamespace = &TruthTableEntry{
-	OldDescription: "should enforce policy to allow traffic from pods within server namespace based on PodSelector [Feature:NetworkPolicy]",
-	Description:    "ALLOW inner-namespace, PodSelector traffic to the server [Feature:NetworkPolicy]",
-	Policy: &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "allow-client-a-via-pod-selector",
-		},
-		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: serverPodSelector,
-			Ingress: []networkingv1.NetworkPolicyIngressRule{
-				ingressRuleClientA,
-			},
-		},
-	},
-	// A lone pod selector will apply only to inner namespace traffic.
-	Whitelist: map[string]bool{"AaAs": true},
-}
-```
-
-##### (Optional) Use builders to make creation of policy rules extremely information dense
-
-Note that, as an alternative to reusable structs, we've also prototyped an easy to use builder implementation, which makes it very easy to instrument the small number of non-null fields in each NetworkPolicy, using the builder defined here (prototype) https://gist.github.com/6a62266e0eec2b15e5250bd65daa4faa. 
-```
-	builder := &NetworkPolicySpecBuilder{}
-				builder = builder.SetName("allow-client-a-via-named-port-egress-rule").SetPodSelector(map[string]string{"pod-name": "client-a"})
-				builder = builder.SetTypeIngress()
-				builder.AddIngress(nil, nil, &s80, nil,
-					nil,
-					&map[string]string{"ns-name": *nsBNamePtr},
-					nil,
-					nil) // make sure named ports work
-
-```
-
-As a side note: the comingled `Whitelist` fields above makes the semantics of our network policy API highly explicit, helping significantly with the Documentation of NetworkPolicies.
-
-Note that this is naturally stackable, by nature of the fact that non-existent entries in the map are false, and existent entries can be idempotently overwritten.  Thus, a side-effect of using this model for defining tests is that we can build new, stacked tests very easily by combining multiple truth table entries, and then verifying the union of all whitelists.
-
-##### Reusable static snippets or builders for namespaces and pods
- 
-The definition of the 'policyForTest1' will be made concsie by the following mechanism.
- 
-Make resuable variables for podSelectors, namespace selectors, labels, and other verbose aspects of golang defined NetworkPolicyStructs
- 
-Currently almost every test had a clause such as:
-```
-            nsA := f.Namespace
-            nsBName := f.BaseName + "-b"
-            nsB, err := f.CreateNamespace(nsBName, map[string]string{
-                "ns-name": nsBName,
-            })
-```
- 
-And a verbose `policy := &networkingv1.NetworkPolicy{ ... }` declaration, which is 20 to 50 lines long (see problem statement for details). As demonstrated in the `AllowAllInnerNamespace` example, these verbose policy structs no long exist in the individual tests, and are also the actual declaration for said policies is much smaller, meaning that subtle differences highlighted in the *problems* section above will be easier to tease out and reason about.
- 
-##### Part 3:
- 
+  
 Rewrite each individual test, reviewing semantics, to be precisely worded (and possibly verbose), and to simply define a specific policy and
 set of 'whitelisted' communication associated with this policy.  The whitelisting would be defined as a map of namespace->pods, since all other
 information in the truth table is false.
+ 
+Example:
+
+Initially, to confirm the logical capacity of the builder mechanism for replacing existing tests, a prototype of inplace replacements of NetworkPolicy definitions was done here (prototype) https://gist.github.com/6a62266e0eec2b15e5250bd65daa4faa.  Now, this underlying API has been implemented in full, and the following repository https://github.com/jayunit100/k8sprototypes, demonstrates a working implementation and port of the network policy tests (Currently about half of these have been ported).  Each test follows a simple and easy to read pattern such as this:
+
+ ```
+ builder := &utils.NetworkPolicySpecBuilder{}
+	builder = builder.SetName("allow-x-via-pod-and-ns-selector").SetPodSelector(map[string]string{"pod": "a"})
+	builder.SetTypeIngress()
+	builder.AddIngress(nil, &p80, nil, nil, map[string]string{"pod":"b"}, map[string]string{"ns":"y"}, nil, nil)
+
+	k8s.CreateNetworkPolicy("x", builder.Get())
+	m := &utils.ReachableMatrix{
+		DefaultExpect: true,
+		Pods:          pods,
+		Namespaces:    namespaces,
+	}
+	reachability := utils.NewReachability(listAllPods())
+	m.ExpectAllIngress("x", "a", false)
+	m.Expect("y", "b", "x", "a", true)
+
+	return m, reachability
+  ```
+ This represents a significant reduction in code complexity, with the equivalent tests using the existing network_policy.go implementation being 3 to 4 times as long, mostly due to boiler plate around verification and go structures.
  
 ##### Note on Acceptance and Backwards compatibility
 
