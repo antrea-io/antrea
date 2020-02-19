@@ -44,8 +44,8 @@ import (
 
 const (
 	controllerName = "AntreaAgentNodeRouteController"
-	// Interval of synchronizing node status from apiserver
-	nodeSyncPeriod = 60 * time.Second
+	// Interval of reprocessing every node.
+	nodeResyncPeriod = 60 * time.Second
 	// How long to wait before retrying the processing of a node change
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
@@ -119,7 +119,7 @@ func NewNodeRouteController(
 				controller.enqueueNode(old)
 			},
 		},
-		nodeSyncPeriod,
+		nodeResyncPeriod,
 	)
 	return controller
 }

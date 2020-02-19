@@ -51,8 +51,10 @@ import (
 )
 
 const (
-	// Interval of synchronizing status from apiserver.
-	syncPeriod = 60 * time.Second
+	// NetworkPolicyController is the only writer of the antrea network policy
+	// storages and will keep re-enqueuing failed items until they succeed.
+	// Set resyncPeriod to 0 to disable resyncing.
+	resyncPeriod time.Duration = 0
 	// How long to wait before retrying the processing of a NetworkPolicy change.
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
@@ -174,7 +176,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			UpdateFunc: n.updatePod,
 			DeleteFunc: n.deletePod,
 		},
-		syncPeriod,
+		resyncPeriod,
 	)
 	// Add handlers for Namespace events.
 	namespaceInformer.Informer().AddEventHandlerWithResyncPeriod(
@@ -183,7 +185,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			UpdateFunc: n.updateNamespace,
 			DeleteFunc: n.deleteNamespace,
 		},
-		syncPeriod,
+		resyncPeriod,
 	)
 	// Add handlers for NetworkPolicy events.
 	networkPolicyInformer.Informer().AddEventHandlerWithResyncPeriod(
@@ -192,7 +194,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			UpdateFunc: n.updateNetworkPolicy,
 			DeleteFunc: n.deleteNetworkPolicy,
 		},
-		syncPeriod,
+		resyncPeriod,
 	)
 	return n
 }
