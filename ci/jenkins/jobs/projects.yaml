@@ -297,7 +297,7 @@
             - prepare-antrea
             - builder-conformance:
                 focus_regex: '\[Feature:NetworkPolicy\]'
-                skip_regex: '.*allow ingress access from updated pod.*'
+                skip_regex: ''
           trigger_phrase: .*/test-(networkpolicy|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
