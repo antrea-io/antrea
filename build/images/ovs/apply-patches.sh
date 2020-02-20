@@ -33,3 +33,15 @@ curl https://github.com/openvswitch/ovs/commit/586cd3101e7fda54d14fb5bf12d847f35
 # We exclude 2 files which are likely to cause conflicts.
 curl https://github.com/openvswitch/ovs/commit/79eadafeb1b47a3871cb792aa972f6e4d89d1a0b.patch | \
     git apply --exclude NEWS --exclude vswitchd/ovs-vswitchd.8.in
+
+# Inspired from https://stackoverflow.com/a/24067243/4538702
+# 'sort -V' is available on Ubuntu 18.04
+function version_get() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" == "$1"; }
+
+if version_get "$OVS_VERSION" "2.13.0"; then
+    # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
+    # does not seem to be in the Python path in Ubuntu 18.04. There may be a better way to do this,
+    # but this seems like an acceptable workaround.
+    sed -i 's/python3\.7/python3\.6/' debian/openvswitch-test.install
+    sed -i 's/python3\.7/python3\.6/' debian/python3-openvswitch.install
+fi

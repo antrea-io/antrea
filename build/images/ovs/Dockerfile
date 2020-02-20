@@ -1,13 +1,18 @@
 FROM ubuntu:18.04 as ovs-debs
 
 # Some patches may not apply cleanly if another version is provided.
-ARG OVS_VERSION=2.11.1
+ARG OVS_VERSION=2.13.0
 
 # Install dependencies for building OVS deb packages
+# We install both python2 and python3 packages (required to build the OVS debs)
+# so that this Dockerfile can be used to build different versions of OVS if
+# needed (python3 is required starting with OVS 2.13.0).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget curl git ca-certificates build-essential fakeroot graphviz \
             bzip2 autoconf automake debhelper dh-autoreconf libssl-dev libtool openssl procps \
-            python-all python-twisted-conch python-zopeinterface python-six libunbound-dev
+            python-all python-twisted-conch python-zopeinterface python-six \
+            python3-all python3-twisted python3-zope.interface \
+            libunbound-dev
 
 COPY apply-patches.sh /
 
@@ -18,7 +23,7 @@ RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-$OVS_VERSION.t
     /apply-patches.sh && \
     DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary && \
     cd /tmp && mkdir ovs-debs && \
-    mv libopenvswitch_*.deb openvswitch-common_*.deb openvswitch-switch_*.deb python-openvswitch_*.deb \
+    mv libopenvswitch_*.deb openvswitch-common_*.deb openvswitch-switch_*.deb python*-openvswitch_*.deb \
        openvswitch-ipsec_*.deb ovs-debs/ && \
     cd / && rm -rf /tmp/openvswitch*
 
