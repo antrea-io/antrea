@@ -46,6 +46,7 @@ As an overall improvement, this KEP will help to address the solutions for sever
 - https://github.com/projectcalico/felix/issues/2032 non-deterministic time frames for policy applications
 - https://github.com/projectcalico/felix/issues/2008 need to test postStart pods in networkpolicy upstream
 - https://github.com/vmware-tanzu/antrea/issues/381 "It's not detected by e2e test because it can only happen when more than one Pod is scheduled on a single node."
+- https://github.com/kubernetes/kubernetes/issues/88375 : The test matrix for Egress is almost entirely empty.
 
 
 ### Consequences of this problem
