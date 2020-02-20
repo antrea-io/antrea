@@ -9,6 +9,30 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 
 ## Unreleased
 
+## 0.4.0 - 2019-02-20
+
+### Added
+
+- Add support for new encapsulation modes: noEncap (inter-Node Pod traffic is never encapsulated) and hybrid (inter-Node Pod traffic is only encapsulated if Nodes are not on the same subnet).
+- Add support for "named ports" to Network Policy implementation.
+- Add user documentation for IPsec support.
+- Add antctl "agent-info" command: command must be run from within the Agent container and will display information about the Agent (Node subnet, OVS bridge information, ...).
+- Add support for new "table" output mode to antctl.
+
+### Changed
+
+- Changes in OpenFlow client:
+   * use OpenFlow "bundle" to install related Network Policy flows as part of the same transaction
+   * use flow-based tunnelling even when IPsec encryption is enabled
+- Use patched OVS version in Antrea Docker image to avoid cleaning-up datapath flows on graceful antrea-ovs container exit.
+- Reduce amount of Antrea Controller logs when computing Network Policies.
+
+### Fixed
+
+- Fix bug in the Agent that caused some Network Policies not to be enforced properly: for some flows the agent would overwrite existing conjunctive actions instead of adding new actions to the existing flow. This can notably happen when using a /32 ipBlock CIDR to select sources / destinations.
+- Install loopback plugin on Nodes if missing, from the Agent's initContainer.
+- Remove unnecessary periodical resync in Antrea K8s controllers to avoid overhead at scale.
+
 ## 0.3.0 - 2019-01-23
 
 ### Added
