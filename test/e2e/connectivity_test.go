@@ -25,9 +25,7 @@ import (
 
 const pingCount = 5
 
-// runPingMesh runs a ping mesh between all the provided Pods after first retrieveing their IP
-// addresses.
-func (data *TestData) runPingMesh(t *testing.T, podNames []string) {
+func waitForPodIPs(t *testing.T, data *TestData, podNames []string) map[string]string {
 	t.Logf("Waiting for Pods to be ready and retrieving IPs")
 	podIPs := make(map[string]string)
 	for _, podName := range podNames {
@@ -38,6 +36,13 @@ func (data *TestData) runPingMesh(t *testing.T, podNames []string) {
 		}
 	}
 	t.Logf("Retrieved all Pod IPs: %v", podIPs)
+	return podIPs
+}
+
+// runPingMesh runs a ping mesh between all the provided Pods after first retrieveing their IP
+// addresses.
+func (data *TestData) runPingMesh(t *testing.T, podNames []string) {
+	podIPs := waitForPodIPs(t, data, podNames)
 
 	t.Logf("Ping mesh test between all Pods")
 	for _, podName1 := range podNames {
@@ -302,4 +307,30 @@ func TestOVSFlowReplay(t *testing.T) {
 	// interval.
 	t.Logf("Running second ping mesh to check that flows have been restored")
 	data.runPingMesh(t, podNames)
+}
+
+// TestPingLargeMTU verifies that fragmented ICMP packets are handled correctly. Until OVS 2.12.0,
+// the conntrack implementation of the OVS userspace datapath did not support v4/v6 fragmentation
+// and this test was failing when Antrea was running on a Kind cluster.
+func TestPingLargeMTU(t *testing.T) {
+	skipIfNumNodesLessThan(t, 2)
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	podNames, deletePods := createPodsOnDifferentNodes(t, data, 2)
+	defer deletePods()
+	podName0 := podNames[0]
+	podName1 := podNames[1]
+	podIPs := waitForPodIPs(t, data, podNames)
+
+	pingSize := 2000
+	cmd := fmt.Sprintf("ping -c %d -s %d %s", pingCount, pingSize, podIPs[podName1])
+	t.Logf("Running ping with size %d between Pods %s and %s", pingSize, podName0, podName1)
+	stdout, stderr, err := data.runCommandFromPod(testNamespace, podName0, busyboxContainerName, strings.Fields(cmd))
+	if err != nil {
+		t.Errorf("Error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+	}
 }
