@@ -10,7 +10,7 @@ RUN mkdir -p /opt/cni/bin && \
     wget -q -O - https://dl.k8s.io/network-plugins/cni-plugins-amd64-v0.7.5.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
 
 
-FROM antrea/openvswitch:2.11.1
+FROM antrea/openvswitch:2.13.0
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image to deploy the Antrea CNI. Requires the Antrea binaries to be built prior to building the image."
