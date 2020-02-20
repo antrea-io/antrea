@@ -23,7 +23,7 @@ COPY . /antrea
 RUN make bin
 
 
-FROM antrea/openvswitch:2.11.1
+FROM antrea/openvswitch:2.13.0
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image to deploy the Antrea CNI. Takes care of building the Antrea binaries as part of building the image."
