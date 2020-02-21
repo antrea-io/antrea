@@ -47,12 +47,3 @@ func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, netlink.Link, error) {
 	}
 	return nil, nil, fmt.Errorf("unable to find local IP and device")
 }
-
-// GetNetLink returns dev link from name.
-func GetNetLink(dev string) netlink.Link {
-	link, err := netlink.LinkByName(dev)
-	if err != nil {
-		klog.Fatalf("cannot find dev %s: %w", dev, err)
-	}
-	return link
-}

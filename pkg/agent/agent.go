@@ -381,7 +381,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
 	gwAddr := &netlink.Addr{IPNet: gwIP, Label: ""}
 	gwMAC := link.Attrs().HardwareAddr
-	i.nodeConfig.GatewayConfig = &config.GatewayConfig{Link: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
+	i.nodeConfig.GatewayConfig = &config.GatewayConfig{LinkIndex: link.Attrs().Index, Name: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
 	gatewayIface.IP = gwIP.IP
 	gatewayIface.MAC = gwMAC
 
