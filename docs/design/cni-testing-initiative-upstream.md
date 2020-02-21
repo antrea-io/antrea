@@ -31,8 +31,10 @@ The current network policy tests have a few issues which, without increasing tec
 - *Understandability*: They are difficult to reason about, due to lack of consistency, completeness, and code duplication
 - *Extensibility*: Extending them is a verbose process, which leads to more sprawl in terms of test implementation.
 - *Performance*: They suffer from low performance due to the high number of pods created.  Network policy tests can take 30 minutes or longer.  The lack of completeness in positive controls, if fixed, could allow us to rapidly skip many tests destined for failure due to cluster health issues not related to network policy.
-- *Dynamic scale*: In addition to increasing the performance of these tests, we also should expand their ability to evaluate CNI's with highly dynamic, realistic workloads, outputting summary metrics.  
+- *Dynamic scale*: In addition to increasing the performance of these tests, we also should expand their ability to evaluate CNI's with highly dynamic, realistic workloads, outputting summary metrics.
 - *Documentation and Community*: The overall situation for these tests is that they are underdocumented and poorly understood by the community, and its not clear how these tests are vetted when they are modified; this makes it difficult for CNI providers to compare and contrast compatibility and conformance to K8s standards for NetworkPolicys.
+- *Continous Integration*: As part of this overall effort, once this test suite is more reliably and determined to be faster, running a basic verification of it in CI with some collection of CNI providers which could feed back into upstream K8s test results would be ideal, so that we know the NetworkPolicy test and specifications, as defined, are implemented/implementable correctly at least some CNI provider.
+ 
  
 ### Related issues
 
@@ -46,6 +48,7 @@ As an overall improvement, this KEP will help to address the solutions for sever
 - https://github.com/projectcalico/felix/issues/2032 non-deterministic time frames for policy applications
 - https://github.com/projectcalico/felix/issues/2008 need to test postStart pods in networkpolicy upstream
 - https://github.com/vmware-tanzu/antrea/issues/381 "It's not detected by e2e test because it can only happen when more than one Pod is scheduled on a single node."
+- https://github.com/kubernetes/kubernetes/issues/88375 : The test matrix for Egress is almost entirely empty.
 
 
 ### Consequences of this problem
