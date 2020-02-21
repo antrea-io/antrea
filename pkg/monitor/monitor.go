@@ -126,13 +126,12 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 // Then updates AntreaAgentInfo CRD every 60 seconds.
 func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting Antrea Agent Monitor")
-	crdName := monitor.GetSelfNode().Name
-	agentCRD := monitor.getAgentCRD(crdName)
+	agentCRD := monitor.getAgentCRD()
 	var err error = nil
 
 	// Initialize agent monitoring CRD.
 	if agentCRD == nil {
-		agentCRD, err = monitor.createAgentCRD(crdName)
+		agentCRD, err = monitor.createAgentCRD()
 		if err != nil {
 			klog.Errorf("Failed to create agent monitoring CRD %v : %v", agentCRD, err)
 			return
@@ -255,7 +254,8 @@ func (monitor *controllerMonitor) deleteAgentCRD(name string) {
 
 // getAgentCRD is used to check the existence of agent monitoring CRD.
 // So when the pod restarts, it will update this monitoring CRD instead of creating a new one.
-func (monitor *agentMonitor) getAgentCRD(crdName string) *v1beta1.AntreaAgentInfo {
+func (monitor *agentMonitor) getAgentCRD() *v1beta1.AntreaAgentInfo {
+	crdName := monitor.nodeName
 	agentCRD, err := monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Get(crdName, metav1.GetOptions{})
 	if err != nil {
 		klog.V(2).Infof("Agent monitoring CRD named %s doesn't exist, will create one", crdName)
@@ -264,12 +264,12 @@ func (monitor *agentMonitor) getAgentCRD(crdName string) *v1beta1.AntreaAgentInf
 	return agentCRD
 }
 
-func (monitor *agentMonitor) createAgentCRD(crdName string) (*v1beta1.AntreaAgentInfo, error) {
+func (monitor *agentMonitor) GetAgentInfo() *v1beta1.AntreaAgentInfo {
 	ovsVersion := monitor.GetOVSVersion()
 	ovsConnected := ovsVersion != ""
-	agentCRD := &v1beta1.AntreaAgentInfo{
+	return &v1beta1.AntreaAgentInfo{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: crdName,
+			Name: monitor.nodeName,
 		},
 		Version:                     version.GetFullVersion(),
 		PodRef:                      monitor.GetSelfPod(),
@@ -280,6 +280,10 @@ func (monitor *agentMonitor) createAgentCRD(crdName string) (*v1beta1.AntreaAgen
 		LocalPodNum:                 monitor.GetLocalPodNum(),
 		AgentConditions:             monitor.GetAgentConditions(ovsConnected),
 	}
+}
+
+func (monitor *agentMonitor) createAgentCRD() (*v1beta1.AntreaAgentInfo, error) {
+	agentCRD := monitor.GetAgentInfo()
 	klog.V(2).Infof("Creating agent monitoring CRD %v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Create(agentCRD)
 }
