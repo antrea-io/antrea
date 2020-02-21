@@ -613,7 +613,7 @@ func init() {
 	nodeName := "node1"
 	gwIP := net.ParseIP("192.168.1.1")
 	gwMAC, _ := net.ParseMAC("11:11:11:11:11:11")
-	nodeGateway := &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Link: ""}
+	nodeGateway := &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: ""}
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 
 	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: nodeGateway}

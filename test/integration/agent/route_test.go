@@ -56,7 +56,7 @@ var (
 	svcTblIdx         = route.AntreaServiceTableIdx
 	svcTblName        = route.AntreaServiceTable
 	mainTblIdx        = 254
-	gwConfig          = &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Link: ""}
+	gwConfig          = &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: gwName}
 	nodeConfig        = &config.NodeConfig{
 		Name:          "test",
 		PodCIDR:       nil,
@@ -66,7 +66,6 @@ var (
 )
 
 func TestRouteTable(t *testing.T) {
-
 	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
 		// test changes file system, routing table. Run in contain only
 		t.Skipf("Skip test runs only in container")
@@ -85,7 +84,7 @@ func TestRouteTable(t *testing.T) {
 		t.Error(err)
 	}
 
-	nodeConfig.GatewayConfig.Link = link.Attrs().Name
+	nodeConfig.GatewayConfig.LinkIndex = link.Attrs().Index
 
 	refRouteTablesStr, _ := ExecOutputTrim("cat /etc/iproute2/rt_tables")
 	tcs := []struct {

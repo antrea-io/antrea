@@ -28,13 +28,16 @@ const (
 )
 
 type GatewayConfig struct {
-	IP   net.IP
-	MAC  net.HardwareAddr
-	Link string
+	IP  net.IP
+	MAC net.HardwareAddr
+	// LinkIndex is the link index of host gateway.
+	LinkIndex int
+	// Name is the name of host gateway, e.g. gw0.
+	Name string
 }
 
 func (g *GatewayConfig) String() string {
-	return fmt.Sprintf("Name %s: IP %s, MAC %s", g.Link, g.IP, g.MAC)
+	return fmt.Sprintf("Name %s: IP %s, MAC %s", g.Name, g.IP, g.MAC)
 }
 
 // Local Node configurations retrieved from K8s API or host networking state.
