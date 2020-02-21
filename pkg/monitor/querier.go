@@ -45,6 +45,7 @@ type AgentQuerier interface {
 	Querier
 	GetOVSFlowTable() map[string]int32
 	GetLocalPodNum() int32
+	GetAgentInfo() *v1beta1.AntreaAgentInfo
 }
 
 type ControllerQuerier interface {
