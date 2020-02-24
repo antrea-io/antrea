@@ -23,6 +23,7 @@ This proposal suggest that we leverage truth tables, uniform positive controls t
 - Rearchitecting network policy tests to enhance readibility and reusability.
 - Improve coverage for NetworkPolicy functional tests.
 - Introduce time to conversion tests to measure performance against perturbed state at scale.
+- (Optional) Potentially moving *all* NetworkPolicy validation outside of Kubernetes core, and introducing a simple simulation unit test to validate the semantics of the existing API.
 
 ## Motivation 
 The current network policy tests have a few issues which, without increasing technical debt, can be addressed architecturally.
@@ -499,6 +500,10 @@ That said, the work proposed here might be a first step towared a more generic C
 #### Have the CNI organization create such tests
 
 We cannot proxy this work to the CNI organization, because in large part, the semantics of how network policy's are implemented and what we care about from an API perspective is defined by Kubernetes itself.  As we propose expansion of the Network Policy API, we need a way to express the effects of these new APIs in code, concisely, in a manner which is gauranteed to test robustly.
+
+## (Optional) Moving NetworkPolicy validation out of Kubernetes core and into another CNCF project
+
+Given that Kubernetes core itself isn't capable of evaluating network policies using a minimal setup (i.e. KubeNet doesnt support any extra network functionality outside the core Kubernetes requirements for Conformance, thus making it incapable of supporting NetworkPolicy tests), looking at cloud controller and other similar code bases - it may be time to reconsider wether NetworkPolicy testing and API validation is a core Kubernetes responsibility, or rather, a community effort which should reside in another upstream repository.  This idea has not been fully vetted in the community, so we leave it as a discussion point in the broader KEP, rather then a fleshed out proposal entity.  If we decide to do this, then the nature of this KEP would change towards removing existing code, and the existing implementation of this framework alongside this KEP would form the scaffold for a new (for lack of a better name) "cncf/networkpolicy-validation-suite" repository. 
 
 ## Performance and Concurrency of Tests
 TODO: Cody to write
