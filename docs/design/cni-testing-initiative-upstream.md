@@ -414,7 +414,18 @@ rows and columns are the lexically sorted list of all pod namespace pairs define
 | Bb | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 |
 | Ca | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 |
 | Cb | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 | 0,0 |
- 
+
+*Output suggestion*
+- expected (t/f)
+- result (T/F)
+- success / failed (1/0), pass = 1
+
+In the below matrix, both pods a and b could *succesfully* connect to pod a (s), as expected (T), passing the test (1) 
+```      x/a
+x/a      sT1
+x/b      sT1 
+```
+  
 Most of the Matrices for this table will be permuting the first row and column, since the server pod currently always resides in the framework namespace.  However, tests might confirm two way connectivity
 and other types of connectivity in the future, and such an expansion would work very cleanly with a matrix.
  
