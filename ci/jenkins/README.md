@@ -6,8 +6,7 @@ We have tests as Github Action but Jenkins allows tests running on a cluster of 
 ### List of Jenkins jobs
 * [e2e](https://github.com/vmware-tanzu/antrea/tree/master/test/e2e): end-to-end tests for Antrea.
 * conformance: community tests using sonobuoy, focusing on "Conformance", and skipping "Slow", "Serial", "Disruptive", "Flaky", "Feature", "sig-cli", "sig-storage", "sig-auth", "sig-api-machinery", "sig-apps" and "sig-node".
-* network policy: community tests using sonobuoy, focusing on "Feature:NetworkPolicy", and skipping "allow ingress access from updated pod" and "named port".
-Test "named port" will be supported soon, see issue [#122](https://github.com/vmware-tanzu/antrea/issues/122).  
+* network policy: community tests using sonobuoy, focusing on "Feature:NetworkPolicy", and skipping "allow ingress access from updated pod".
 Test "allow ingress access from updated pod" fails because of a bug in the test definition, see issue [#85908](https://github.com/kubernetes/kubernetes/issues/85908).
 
 ### Requirements
