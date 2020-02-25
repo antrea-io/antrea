@@ -453,6 +453,15 @@ Initially, to confirm the logical capacity of the builder mechanism for replacin
 	return m, reachability
   ```
  This represents a significant reduction in code complexity, with the equivalent tests using the existing network_policy.go implementation being 3 to 4 times as long, mostly due to boiler plate around verification and go structures.
+
+*Further improvements to the testing API*
+
+- Make the function calls in network policy builder *even* more DSL' like, for example, 
+```
+Pod(...).InNamespace(...).CanAccess(...)
+```
+- Infer `Egress,Ingress` rules rather then force them to be specified, based on buidler inputs.  They're redundant to begin w/ (i.e. calico doesn't even require them)
+- Add `From` and `To` semantics to the struct api calls in reachability.
  
 ##### Note on Acceptance and Backwards compatibility
 
