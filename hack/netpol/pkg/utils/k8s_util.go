@@ -103,11 +103,6 @@ func (k *Kubernetes) ExecuteRemoteCommand(pod v1.Pod, cname string, command []st
 	if err != nil {
 		return "", "", errors.WithMessagef(err, "unable to get rest config from kube config")
 	}
-	//coreClient, err := kubernetes.NewForConfig(restCfg)
-	//if err != nil {
-	//	return "", "", err
-	//}
-
 	buf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
 	request := k.ClientSet.CoreV1().RESTClient().Post().Namespace(pod.Namespace).Resource("pods").
@@ -123,7 +118,7 @@ func (k *Kubernetes) ExecuteRemoteCommand(pod v1.Pod, cname string, command []st
 	exec, err := remotecommand.NewSPDYExecutor(restCfg, "POST", request.URL())
 	err = exec.Stream(remotecommand.StreamOptions{
 		Stdout: buf,
-		Stderr: errBuf, ///home/jayunit100/go/src/github.com/jayunit100/k8sprototypes/netpol/pkg/utils/k8s_util.gohome/jayunit100/go/src/github.com/jayunit100/k8sprototypes/netpol/pkg/utils/k8s_util.go/home/jayunit100/go/src/github.com/jayunit100/k8sprototypes/netpol/pkg/utils/k8s_util.goome/jayunit100/go/src/github.com/jayunit100/k8sprototypes/netpol/pkg/utils/k8s_util.go
+		Stderr: errBuf,
 	})
 	if err != nil {
 		return buf.String(), errBuf.String(), errors.Wrapf(err, "Failed executing command %s on %v/%v------/%v/%v", command, pod.Namespace, pod.Name, buf.String(), errBuf.String())
