@@ -330,10 +330,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	toIPList2 := prepareIPAddresses(toList2)
 	port3 := intstr.FromInt(206)
 	udpProtocol := v1beta1.ProtocolUDP
-	npPort2 := v1beta1.Service{
-		Protocol: &udpProtocol,
-		Port: &port3,
-	}
+	npPort2 := v1beta1.Service{Protocol: &udpProtocol, Port: &port3}
 	rule2 := &types.PolicyRule{
 		Direction: v1beta1.DirectionIn,
 		To:        toIPList2,

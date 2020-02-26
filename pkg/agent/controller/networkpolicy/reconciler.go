@@ -196,7 +196,6 @@ func (r *reconciler) add(rule *CompletedRule) error {
 		for svcHash, pods := range podsByServicesMap {
 			ofPorts := r.getPodOFPorts(pods)
 			lastRealized.podOFPorts[svcHash] = ofPorts
-			// TODO: Update types.PolicyRule to use Antrea type to avoid unnecessary conversion.
 			ofRuleByServicesMap[svcHash] = &types.PolicyRule{
 				Direction:  v1beta1.DirectionIn,
 				From:       append(from1, from2...),
@@ -212,7 +211,6 @@ func (r *reconciler) add(rule *CompletedRule) error {
 
 		podsByServicesMap, servicesMap := groupPodsByServices(rule.Services, rule.ToAddresses)
 		for svcHash, pods := range podsByServicesMap {
-			// TODO: Update types.PolicyRule to use Antrea type to avoid unnecessary conversion.
 			ofRuleByServicesMap[svcHash] = &types.PolicyRule{
 				Direction: v1beta1.DirectionOut,
 				From:      from,
