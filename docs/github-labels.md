@@ -100,9 +100,8 @@ https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 
 | Label | Description | Added By |
 |-------|-------------|----------|
-| good first issue                   | Denotes an issue ready for a new contributor, according to the "help wanted" guidelines. | Anyone |
-| help wanted                        | Denotes an issue that needs help from a contributor. Must meet "help wanted" guidelines. | Anyone |
-
+| good first issue                   | Denotes an issue ready for a new contributor, according to the "help wanted" [guidelines](issue-management.md#good-first-issues-and-help-wanted). | Anyone |
+| help wanted                        | Denotes an issue that needs help from a contributor. Must meet "help wanted" [guidelines](issue-management.md#good-first-issues-and-help-wanted). | Anyone |
 
 ## Labels that apply only to PRs
 
