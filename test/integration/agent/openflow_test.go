@@ -227,7 +227,7 @@ func testInstallServiceFlows(t *testing.T, config *testConfig) {
 
 func testInstallNodeFlows(t *testing.T, config *testConfig) {
 	for _, node := range config.peers {
-		err := c.InstallNodeFlows(node.name, config.localGateway.mac, node.gateway, node.subnet, node.nodeAddress, config.tunnelOFPort)
+		err := c.InstallNodeFlows(node.name, config.localGateway.mac, node.subnet, node.gateway, node.nodeAddress, config.tunnelOFPort, 0)
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for node connectivity: %v", err)
 		}
