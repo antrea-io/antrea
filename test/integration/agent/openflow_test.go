@@ -16,14 +16,13 @@ package agent
 
 import (
 	"fmt"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"net"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	coreV1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	config1 "github.com/vmware-tanzu/antrea/pkg/agent/config"
@@ -152,15 +151,15 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	toList := []string{"192.168.3.4", "192.168.3.5"}
 
 	port2 := intstr.FromInt(8080)
-	tcpProtocol := coreV1.ProtocolTCP
-	npPort1 := &v1.NetworkPolicyPort{Protocol: &tcpProtocol, Port: &port2}
+	tcpProtocol := v1beta1.ProtocolTCP
+	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
-		Direction:  v1.PolicyTypeIngress,
+		Direction:  v1beta1.DirectionIn,
 		From:       prepareIPAddresses(fromList),
 		ExceptFrom: prepareIPAddresses(exceptFromList),
 		To:         toIPList,
-		Service:    []*v1.NetworkPolicyPort{npPort1},
+		Service:    []v1beta1.Service{npPort1},
 	}
 
 	err = c.InstallPolicyRuleFlows(ruleID, rule)
@@ -294,15 +293,15 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	toList := []string{"192.168.3.4", "192.168.3.5"}
 
 	port2 := intstr.FromInt(8080)
-	tcpProtocol := coreV1.ProtocolTCP
-	npPort1 := &v1.NetworkPolicyPort{Protocol: &tcpProtocol, Port: &port2}
+	tcpProtocol := v1beta1.ProtocolTCP
+	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
-		Direction:  v1.PolicyTypeIngress,
+		Direction:  v1beta1.DirectionIn,
 		From:       prepareIPAddresses(fromList),
 		ExceptFrom: prepareIPAddresses(exceptFromList),
 		To:         toIPList,
-		Service:    []*v1.NetworkPolicyPort{npPort1},
+		Service:    []v1beta1.Service{npPort1},
 	}
 
 	err = c.InstallPolicyRuleFlows(ruleID, rule)
@@ -330,12 +329,15 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	toList2 := []string{"192.168.3.4"}
 	toIPList2 := prepareIPAddresses(toList2)
 	port3 := intstr.FromInt(206)
-	udpProtocol := coreV1.ProtocolUDP
-	npPort2 := &v1.NetworkPolicyPort{Protocol: &udpProtocol, Port: &port3}
+	udpProtocol := v1beta1.ProtocolUDP
+	npPort2 := v1beta1.Service{
+		Protocol: &udpProtocol,
+		Port: &port3,
+	}
 	rule2 := &types.PolicyRule{
-		Direction: v1.PolicyTypeIngress,
+		Direction: v1beta1.DirectionIn,
 		To:        toIPList2,
-		Service:   []*v1.NetworkPolicyPort{npPort2},
+		Service:   []v1beta1.Service{npPort2},
 	}
 	err = c.InstallPolicyRuleFlows(ruleID2, rule2)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
