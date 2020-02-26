@@ -38,6 +38,7 @@ func NewKubernetes() (*Kubernetes, error) {
 	}, nil
 }
 
+// GetPods returns an array of all pods in the given namespace having a k/v label pair.
 func (k *Kubernetes) GetPods(ns string, key, val string) ([]v1.Pod, error) {
 	if p, ok := k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)]; ok {
 		return p, nil
@@ -49,7 +50,6 @@ func (k *Kubernetes) GetPods(ns string, key, val string) ([]v1.Pod, error) {
 	}
 	pods := []v1.Pod{}
 	for _, pod := range v1PodList.Items {
-		// log.Infof("check: %s, %s, %s, %s", pod.Name, pod.Labels, key, val)
 		if pod.Labels[key] == val {
 			pods = append(pods, pod)
 		}
@@ -61,9 +61,10 @@ func (k *Kubernetes) GetPods(ns string, key, val string) ([]v1.Pod, error) {
 	return pods, nil
 }
 
-func (k *Kubernetes) Probe(ns1 string, pod1 string, ns2 string, pod2 string, port int) (bool, error) {
-	toIP := "1.1.1.1"
-	// TODO add err return for GetPods and handle
+// Probe is execs into a pod and checks its connectivity to another pod.  Of course it assumes
+// that the target pod is serving on the input port, and also that wget is installed.  For perf it uses
+// spider rather then actually getting the full contents.
+func (k *Kubernetes) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) {
 	fromPods, err := k.GetPods(ns1, "pod", pod1)
 	if err != nil {
 		return false, errors.WithMessagef(err, "unable to get pods from ns %s", ns1)
@@ -82,7 +83,7 @@ func (k *Kubernetes) Probe(ns1 string, pod1 string, ns2 string, pod2 string, por
 	}
 	toPod := toPods[0]
 
-	toIP = toPod.Status.PodIP
+	toIP := toPod.Status.PodIP
 
 	// note some versions of wget want -s for spider mode, others, -S
 	exec := []string{"wget", "--spider", "--tries", "1", "--timeout", "1", "http://" + toIP + ":" + fmt.Sprintf("%v", port)}
@@ -155,6 +156,7 @@ func Client() (*kubernetes.Clientset, error) {
 	return clientset, nil
 }
 
+// CreateOrUpdateNamespace is a convenience function for idempotent setup of namespaces
 func (k *Kubernetes) CreateOrUpdateNamespace(n string, labels map[string]string) (*v1.Namespace, error) {
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -177,6 +179,7 @@ func (k *Kubernetes) CreateOrUpdateNamespace(n string, labels map[string]string)
 	return nsr, err
 }
 
+// CreateOrUpdateDeployment is a convenience function for idempotent setup of deployments
 func (k *Kubernetes) CreateOrUpdateDeployment(ns, deploymentName string, replicas int32, labels map[string]string ) (*appsv1.Deployment, error) {
 	zero := int64(0)
 	log.Infof("creating/updating deployment %s in ns %s", deploymentName, ns)
@@ -241,6 +244,7 @@ func (k *Kubernetes) CreateOrUpdateDeployment(ns, deploymentName string, replica
 	return d, err
 }
 
+// CleanNetworkPolicies is a convenience function for deleting network policies before startup of any new test.
 func (k *Kubernetes) CleanNetworkPolicies(namespaces []string) {
 	for _, ns := range namespaces {
 		l, err := k.ClientSet.NetworkingV1().NetworkPolicies(ns).List(metav1.ListOptions{})
@@ -259,6 +263,8 @@ func (k *Kubernetes) CleanNetworkPolicies(namespaces []string) {
 	}
 }
 
+// CreateOrUpdateNetworkPolicy is a convenience function for upsdating/creating netpols.  Updating is important since
+// some tests update a network policy to confirm that mutation works with a CNI.
 func (k *Kubernetes) CreateOrUpdateNetworkPolicy(ns string, netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {
 	log.Infof("creating/updating network policy %s in ns %s", netpol.Name, ns)
 	netpol.ObjectMeta.Namespace = ns

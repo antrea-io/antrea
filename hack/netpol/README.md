@@ -1,5 +1,3 @@
-To build this repository, cd to antrea/ and run `go build -o hack/netpol/pkg/main/main.go`.  Then, execute the binary.
-
 # A Truth-table based Network Policy construction and validation library.
 
 This repo implements https://github.com/vmware-tanzu/antrea/blob/community-network-policy-tests/docs/design/cni-testing-initiative-upstream.md, a fast, comprehensive truth table matrix for network policies which can be used to ensure that your CNI provider is fast, reliable, and air-tight.
@@ -124,7 +122,7 @@ Create the policy probe tests:
 ```
 kubectl create clusterrolebinding netpol --clusterrole=admin --serviceaccount=kube-system:netpol
 kubectl create sa netpol -n kube-system
-kubectl create -f https://raw.githubusercontent.com/jayunit100/k8sprototypes/master/netpol/install.yml
+kubectl create -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/netpol/install.yml
 ```
 
 Now, look at the results of the network policy probe:
@@ -135,17 +133,4 @@ Now, look at the results of the network policy probe:
  
 ## Developers
 
-Would love help with this!  If you want to get started hacking .... 
- 
-### Create a cluster if you don't have one and run from source
-```
-git clone git@github.com:jayunit100/k8sprototypes.git 
-cd k8sprototypes
-
-cd kind
-./kind-local-up.sh
-cd ..
-
-cd netpol
-go run pkg/main/main.go
-```
+This is a new library for building complex, comprehensive network policy tests.  To build it, cd to antrea/ and run `go build -o hack/netpol/pkg/main/main.go`.  Then, execute the binary.
