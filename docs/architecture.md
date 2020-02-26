@@ -262,6 +262,6 @@ IP address to two OVS interface options of the tunnel interface. Then
 `ovs-monitor-ipsec` can detect the tunnel and create IPsec Security Policies
 with PSK for the remote Node, and strongSwan can create the IPsec Security
 Associations based on the Security Policies. These additional tunnel ports are
-not really used for any traffic, but are just for triggering IPsec Security
-Policy creation by `ovs-monitor-ipsec`. All tunnel traffic still goes through
-the default tunnel port (`tun0`) with OVS flow based tunneling.
+not used to send traffic to a remote Node - the tunnel traffic is still output
+to the default tunnel port (`tun0`) with OVS flow based tunneling. However, the
+traffic from a remote Node will be received from the Node's IPsec tunnel port.
