@@ -16,7 +16,6 @@ package agent
 
 import (
 	"fmt"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"net"
 	"strings"
 	"testing"
@@ -28,6 +27,7 @@ import (
 	config1 "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	ofClient "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	ofTestUtils "github.com/vmware-tanzu/antrea/test/integration/ovs"
 )
 

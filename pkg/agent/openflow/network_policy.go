@@ -16,12 +16,12 @@ package openflow
 
 import (
 	"fmt"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"net"
 
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
