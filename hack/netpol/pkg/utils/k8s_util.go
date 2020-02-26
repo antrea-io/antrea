@@ -44,21 +44,14 @@ func (k *Kubernetes) GetPods(ns string, key, val string) ([]v1.Pod, error) {
 		return p, nil
 	}
 
-	v1PodList, err := k.ClientSet.CoreV1().Pods(ns).List(metav1.ListOptions{})
+	v1PodList, err := k.ClientSet.CoreV1().Pods(ns).List(metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%v=%v",key,val),
+	})
 	if err != nil {
 		return nil, errors.WithMessage(err, "unable to list pods")
 	}
-	pods := []v1.Pod{}
-	for _, pod := range v1PodList.Items {
-		if pod.Labels[key] == val {
-			pods = append(pods, pod)
-		}
-	}
-
-	//log.Infof("list in ns %s: %d -> %d", ns, len(v1PodList.Items), len(pods))
-	k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)] = pods
-
-	return pods, nil
+	k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)] = v1PodList.Items
+	return v1PodList.Items, nil
 }
 
 // Probe is execs into a pod and checks its connectivity to another pod.  Of course it assumes
