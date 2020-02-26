@@ -37,6 +37,9 @@ const (
 	defaultMTUGRE             = 1462
 	defaultMTUSTT             = 1500
 	defaultMTU                = 1500
+	// IPsec ESP can add a maximum of 38 bytes to the packet including the ESP
+	// header and trailer.
+	ipsecESPOverhead = 38
 )
 
 type Options struct {
@@ -152,6 +155,10 @@ func (o *Options) setDefaults() {
 			o.config.DefaultMTU = defaultMTUGRE
 		} else if o.config.TunnelType == ovsconfig.STTTunnel {
 			o.config.DefaultMTU = defaultMTUSTT
+		}
+
+		if o.config.EnableIPSecTunnel {
+			o.config.DefaultMTU -= ipsecESPOverhead
 		}
 	}
 }
