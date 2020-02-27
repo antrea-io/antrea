@@ -38,27 +38,7 @@ This policy is then validated using the following three-liner:
 The output of these tests shows all probes, in the logs, so you can reproduce them, and also output the entire truth table of pod<->pod connectivity for you once the test is done. 
 
 ```
-time="2020-02-18T20:09:31Z" level=info msg=".... Done"
-time="2020-02-18T20:09:31Z" level=info msg="Running: kubectl exec -t -i zc-7655cf9dd6-jcpqv -n z -- wget -s -T 1 http://100.96.0.48:80"
-time="2020-02-18T20:09:31Z" level=info msg=".... Done"
-y_a
---> map[x_a:false x_b:true x_c:true y_a:true y_b:true y_c:true z_a:true z_b:true z_c:true]
-y_c
---> map[x_a:false x_b:true x_c:true y_a:true y_b:true y_c:true z_a:true z_b:true z_c:true]
-z_a
---> map[x_a:false x_b:true x_c:true y_a:true y_b:true y_c:true z_a:true z_b:true z_c:true]
-z_b
---> map[x_a:true x_b:true x_c:true y_a:true y_b:true y_c:true z_a:true z_b:true z_c:true]
-z_c
---> map[x_a:false x_b:true x_c:true y_a:true y_b:true y_c:true z_a:true z_b:true z_c:true]
-x_a
---> map[x_a:true x_b:true x_c:true y_a:true y_b:true y_c:true z_a:true z_b:true z_c:true]
-x_b
---> map[x_a:true x_b:true x_c:true y_a:true y_b:true y_c:true z_a:true z_b:true z_c:true]
-x_c
---> map[x_a:false x_b:true x_c:true y_a:true y_b:true y_c:true z_a:true z_b:true z_c:true]
-y_b
---> map[x_a:true x_b:true x_c:true y_a:true y_b:true y_c:true z_a:true z_b:true z_c:true]
+
 correct:81, incorrect:0, result=%!(EXTRA bool=true) true
 
 -	x/a	y/a	z/a	x/b	y/b	z/b	x/c	y/c	z/c
