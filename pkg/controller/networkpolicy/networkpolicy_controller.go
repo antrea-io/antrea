@@ -222,56 +222,22 @@ func (n *NetworkPolicyController) GetConnectedAgentNum() int {
 // toGroupSelector converts the podSelector and namespaceSelector
 // and NetworkPolicy Namespace to a networkpolicy.GroupSelector object.
 func toGroupSelector(namespace string, podSelector, nsSelector *metav1.LabelSelector) *antreatypes.GroupSelector {
-	groupSelector := antreatypes.GroupSelector{
-		PodSelector: podSelector,
+	groupSelector := antreatypes.GroupSelector{}
+	if podSelector != nil {
+		pSelector, _ := metav1.LabelSelectorAsSelector(podSelector)
+		groupSelector.PodSelector = pSelector
 	}
 	if nsSelector == nil {
 		// No namespaceSelector indicates that the pods must be selected within
 		// the NetworkPolicy's Namespace.
 		groupSelector.Namespace = namespace
 	} else {
-		groupSelector.NamespaceSelector = nsSelector
+		nSelector, _ := metav1.LabelSelectorAsSelector(nsSelector)
+		groupSelector.NamespaceSelector = nSelector
 	}
 	name := generateNormalizedName(groupSelector.Namespace, groupSelector.PodSelector, groupSelector.NamespaceSelector)
 	groupSelector.NormalizedName = name
 	return &groupSelector
-}
-
-// normalizeExpr converts an expression to the form "key1 OP [value1...]".
-func normalizeExpr(key string, operator metav1.LabelSelectorOperator, values []string) string {
-	if len(values) == 0 {
-		return fmt.Sprintf("%s %s", key, operator)
-	} else {
-		return fmt.Sprintf("%s %s %s", key, operator, values)
-	}
-}
-
-// selectorToString creates a string corresponding to a labelSelector in the form of
-// "key1 IN [value1,...] And key2 NotIn [value2,...] And ...".
-func selectorToString(selector *metav1.LabelSelector) string {
-	selSlice := make([]string, 0, len(selector.MatchLabels)+len(selector.MatchExpressions))
-	// emptyValue is a placeholder empty slice to send to normalizeExpr for Exists, NotExist operators.
-	var emptyValue []string
-	// Append labels in matchLabels as "key In [value]".
-	for key, value := range selector.MatchLabels {
-		valueSlice := []string{value}
-		selSlice = append(selSlice, normalizeExpr(key, metav1.LabelSelectorOpIn, valueSlice))
-	}
-	for _, expr := range selector.MatchExpressions {
-		switch expr.Operator {
-		case metav1.LabelSelectorOpIn:
-			selSlice = append(selSlice, normalizeExpr(expr.Key, metav1.LabelSelectorOpIn, expr.Values))
-		case metav1.LabelSelectorOpNotIn:
-			selSlice = append(selSlice, normalizeExpr(expr.Key, metav1.LabelSelectorOpNotIn, expr.Values))
-		case metav1.LabelSelectorOpExists:
-			selSlice = append(selSlice, normalizeExpr(expr.Key, metav1.LabelSelectorOpExists, emptyValue))
-		case metav1.LabelSelectorOpDoesNotExist:
-			selSlice = append(selSlice, normalizeExpr(expr.Key, metav1.LabelSelectorOpDoesNotExist, emptyValue))
-		}
-	}
-	sort.Strings(selSlice)
-	normalizedStr := strings.Join(selSlice, " And ")
-	return normalizedStr
 }
 
 // getNormalizedUID generates a unique UUID based on a given string.
@@ -285,15 +251,15 @@ func getNormalizedUID(name string) string {
 // the following format: "namespace=NamespaceName And podSelector=normalizedPodSelector".
 // Note: Namespace and nsSelector may or may not be set depending on the
 // selector. However, they cannot be set simultaneously.
-func generateNormalizedName(namespace string, podSelector, nsSelector *metav1.LabelSelector) string {
+func generateNormalizedName(namespace string, podSelector, nsSelector labels.Selector) string {
 	normalizedName := []string{}
 	if nsSelector != nil {
-		normalizedName = append(normalizedName, fmt.Sprintf("namespaceSelector=%s", selectorToString(nsSelector)))
+		normalizedName = append(normalizedName, fmt.Sprintf("namespaceSelector=%s", nsSelector.String()))
 	} else if namespace != "" {
 		normalizedName = append(normalizedName, fmt.Sprintf("namespace=%s", namespace))
 	}
 	if podSelector != nil {
-		normalizedName = append(normalizedName, fmt.Sprintf("podSelector=%s", selectorToString(podSelector)))
+		normalizedName = append(normalizedName, fmt.Sprintf("podSelector=%s", podSelector.String()))
 	}
 	sort.Strings(normalizedName)
 	return strings.Join(normalizedName, " And ")
@@ -329,27 +295,20 @@ func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v
 			// Pods must be matched within the same Namespace.
 			return false
 		}
-		// Convert labelSelector to a Selector.
-		selector, _ := metav1.LabelSelectorAsSelector(sel.PodSelector)
-		if !selector.Matches(labels.Set(pod.Labels)) {
+		if !sel.PodSelector.Matches(labels.Set(pod.Labels)) {
 			// podSelector does not match the Pod's labels.
 			return false
 		}
 		// podSelector matches the Pod's labels.
 		return true
 	} else if sel.NamespaceSelector != nil && sel.PodSelector != nil {
-		// Selector is a multi-selector where Pods must be selected if namespaceSelector matches Pod's Namespace.
-		// Convert Namespace labelSelector to a Selector.
-		nSelector, _ := metav1.LabelSelectorAsSelector(sel.NamespaceSelector)
 		// Pod event may arrive before Pod's Namespace event. In this case, we must
 		// ensure that the Pod Namespace is not nil.
-		if podNS == nil || !nSelector.Matches(labels.Set(podNS.Labels)) {
+		if podNS == nil || !sel.NamespaceSelector.Matches(labels.Set(podNS.Labels)) {
 			// Pod's Namespace do not match namespaceSelector.
 			return false
 		}
-		// Convert Pod labelSelector to a Selector.
-		pSelector, _ := metav1.LabelSelectorAsSelector(sel.PodSelector)
-		if !pSelector.Matches(labels.Set(pod.Labels)) {
+		if !sel.PodSelector.Matches(labels.Set(pod.Labels)) {
 			// Pod's Namespace matches namespaceSelector but Pod's labels do not match
 			// the podSelector.
 			return false
@@ -359,10 +318,9 @@ func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v
 		return true
 	} else if sel.NamespaceSelector != nil {
 		// Selector only has a NamespaceSelector.
-		nSelector, _ := metav1.LabelSelectorAsSelector(sel.NamespaceSelector)
 		// Pod event may arrive before Pod's Namespace event. In this case, we must
 		// ensure that the Pod Namespace is not nil.
-		if podNS == nil || !nSelector.Matches(labels.Set(podNS.Labels)) {
+		if podNS == nil || !sel.NamespaceSelector.Matches(labels.Set(podNS.Labels)) {
 			// Namespace labels do not match namespaceSelector.
 			return false
 		}
@@ -384,8 +342,7 @@ func (n *NetworkPolicyController) filterAddressGroupsForNamespace(namespace *v1.
 			// skip processing.
 			continue
 		}
-		nSelector, _ := metav1.LabelSelectorAsSelector(addrGroup.Selector.NamespaceSelector)
-		if nSelector.Matches(labels.Set(namespace.Labels)) {
+		if addrGroup.Selector.NamespaceSelector.Matches(labels.Set(namespace.Labels)) {
 			matchingKeys.Insert(addrGroup.Name)
 			klog.V(2).Infof("Namespace %s matched AddressGroup %s", namespace.Name, addrGroup.Name)
 			continue
@@ -1035,21 +992,19 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	}
 	// Find all Pods matching its selectors and update store.
 	groupSelector := addressGroup.Selector
-	pSelector, _ := metav1.LabelSelectorAsSelector(groupSelector.PodSelector)
-	nSelector, _ := metav1.LabelSelectorAsSelector(groupSelector.NamespaceSelector)
 	if groupSelector.Namespace != "" {
 		// Namespace presence indicates Pods must be selected from the same Namespace.
-		pods, _ = n.podLister.Pods(groupSelector.Namespace).List(pSelector)
+		pods, _ = n.podLister.Pods(groupSelector.Namespace).List(groupSelector.PodSelector)
 	} else if groupSelector.NamespaceSelector != nil && groupSelector.PodSelector != nil {
 		// Pods must be selected from Namespaces matching nsSelector.
-		namespaces, _ := n.namespaceLister.List(nSelector)
+		namespaces, _ := n.namespaceLister.List(groupSelector.NamespaceSelector)
 		for _, ns := range namespaces {
-			nsPods, _ := n.podLister.Pods(ns.Name).List(pSelector)
+			nsPods, _ := n.podLister.Pods(ns.Name).List(groupSelector.PodSelector)
 			pods = append(pods, nsPods...)
 		}
 	} else if groupSelector.NamespaceSelector != nil {
 		// All the Pods from Namespaces matching the nsSelector must be selected.
-		namespaces, _ := n.namespaceLister.List(nSelector)
+		namespaces, _ := n.namespaceLister.List(groupSelector.NamespaceSelector)
 		for _, ns := range namespaces {
 			nsPods, _ := n.podLister.Pods(ns.Name).List(labels.Everything())
 			pods = append(pods, nsPods...)
@@ -1128,9 +1083,8 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
 	// AppliedToGroup will not have NamespaceSelector.
 	podSelector := appliedToGroup.Selector.PodSelector
-	selector, _ := metav1.LabelSelectorAsSelector(podSelector)
 	// Retrieve all Pods matching the podSelector.
-	pods, err = n.podLister.Pods(appliedToGroup.Selector.Namespace).List(selector)
+	pods, err = n.podLister.Pods(appliedToGroup.Selector.Namespace).List(podSelector)
 	scheduledPodNum := 0
 	for _, pod := range pods {
 		if pod.Spec.NodeName == "" {
