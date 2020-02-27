@@ -15,7 +15,7 @@
 package types
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -38,9 +38,9 @@ type GroupSelector struct {
 	Namespace string
 	// This is a label selector which selects pods. If Namespace is also set, it selects the pods in the namespace.
 	// If NamespaceSelector is also set, it selects the pods in the namespaces selected by NamespaceSelector.
-	PodSelector *metav1.LabelSelector
+	PodSelector labels.Selector
 	// This is a label selector which selects namespaces. It this field is set, Namespace can not be set.
-	NamespaceSelector *metav1.LabelSelector
+	NamespaceSelector labels.Selector
 }
 
 // AppliedToGroup describes a set of Pods to apply Network Policies to.
