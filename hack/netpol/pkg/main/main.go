@@ -37,7 +37,6 @@ func init() {
 }
 
 func bootstrap(k8s *Kubernetes) {
-	k8s.CleanNetworkPolicies([]string{"x","y","z"})
 	//p81 := 81
 	for _, ns := range namespaces {
 		k8s.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
@@ -152,22 +151,8 @@ func testWrapperStacked(k8s *Kubernetes, theTest func(*Kubernetes, bool) (stack 
 		reachability.PrintSummary(true, true, true)
 	}
 }
-
-// For dual port tests... confirms both ports 80 and 81
-func testWrapperPort8081(k8s *Kubernetes, theTest func(k8s *Kubernetes) (*Reachability, *Reachability)) {
-	bootstrap(k8s)
-	reachability80, reachability81 := theTest(k8s)
-	validate(k8s, reachability80, 80)
-	validate(k8s, reachability81, 81)
-
-	for _, reachability := range []*Reachability{reachability80, reachability81} {
-		reachability.PrintSummary(true, true, true)
-	}
-}
-
 // simple type of test, majority of tests use this, just port 80
 func testWrapperPort80(k8s *Kubernetes, theTest func(k8s *Kubernetes) *Reachability) {
-	bootstrap(k8s)
 	reachability := theTest(k8s)
 	validate(k8s, reachability, 80)
 
@@ -188,8 +173,6 @@ CIDR tests.... todo
 	ginkgo.It("should stop enforcing policies after they are deleted [Feature:NetworkPolicy]", func() {
 **/
 func TestMultipleUpdates(k8s *Kubernetes) {
-	bootstrap(k8s)
-
 	func() {
 		builder := &NetworkPolicySpecBuilder{}
 		builder = builder.SetName("x", "deny-all").SetPodSelector(map[string]string{"pod": "a"})

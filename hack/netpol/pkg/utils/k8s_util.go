@@ -161,7 +161,7 @@ func (k *Kubernetes) CreateOrUpdateNamespace(n string, labels map[string]string)
 	log.Debugf("unable to create namespace %s, let's try updating it instead (error: %s)", ns.Name, err)
 	nsr, err = k.ClientSet.CoreV1().Namespaces().Update(ns)
 	if err != nil {
-		log.Debugf("unable to create namespace %s: %s", ns, err)
+		log.Debugf("unable to update namespace %s: %s", ns, err)
 	}
 
 	return nsr, err
