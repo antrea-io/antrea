@@ -22,15 +22,17 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/openapi"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -40,9 +42,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
-// Determine how often we go through reconciliation (between current and desired state)
-// Same as in https://github.com/kubernetes/sample-controller/blob/master/main.go
-const informerDefaultResync time.Duration = 30 * time.Second
+// informerDefaultResync is the default resync period if a handler doesn't specify one.
+// Use the same default value as kube-controller-manager:
+// https://github.com/kubernetes/kubernetes/blob/release-1.17/pkg/controller/apis/config/v1alpha1/defaults.go#L120
+const informerDefaultResync = 12 * time.Hour
 
 // run starts Antrea Controller with the given options and waits for termination signal.
 func run(o *Options) error {
@@ -187,6 +190,9 @@ func createAPIServerConfig(kubeconfig string,
 	if err := authorization.ApplyTo(&serverConfig.Authorization); err != nil {
 		return nil, err
 	}
+
+	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, genericopenapi.NewDefinitionNamer(apiserver.Scheme))
+	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
 
 	return &apiserver.Config{
 		GenericConfig: serverConfig,

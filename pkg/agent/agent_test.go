@@ -48,8 +48,8 @@ func TestGetNodeName(t *testing.T) {
 
 func compareNodeName(k, v string, t *testing.T) {
 	if k != "" {
-		_ = os.Setenv(NodeNameEnvKey, k)
-		defer os.Unsetenv(NodeNameEnvKey)
+		_ = os.Setenv(nodeNameEnvKey, k)
+		defer os.Unsetenv(nodeNameEnvKey)
 	}
 	nodeName, err := getNodeName()
 	if err != nil {

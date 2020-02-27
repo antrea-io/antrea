@@ -29,7 +29,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 )
 
@@ -57,8 +56,8 @@ var (
 	svcTblIdx         = route.AntreaServiceTableIdx
 	svcTblName        = route.AntreaServiceTable
 	mainTblIdx        = 254
-	gwConfig          = &types.GatewayConfig{IP: gwIP, MAC: gwMAC, Link: ""}
-	nodeConfig        = &types.NodeConfig{
+	gwConfig          = &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: gwName}
+	nodeConfig        = &config.NodeConfig{
 		Name:          "test",
 		PodCIDR:       nil,
 		NodeIPAddr:    nodeIP,
@@ -67,7 +66,6 @@ var (
 )
 
 func TestRouteTable(t *testing.T) {
-
 	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
 		// test changes file system, routing table. Run in contain only
 		t.Skipf("Skip test runs only in container")
@@ -86,7 +84,7 @@ func TestRouteTable(t *testing.T) {
 		t.Error(err)
 	}
 
-	nodeConfig.GatewayConfig.Link = link.Attrs().Name
+	nodeConfig.GatewayConfig.LinkIndex = link.Attrs().Index
 
 	refRouteTablesStr, _ := ExecOutputTrim("cat /etc/iproute2/rt_tables")
 	tcs := []struct {
@@ -115,12 +113,12 @@ func TestRouteTable(t *testing.T) {
 	for _, tc := range tcs {
 		nodeConfig.PodCIDR = tc.podCIDR
 		t.Logf("Running test with mode %s peer cidr %s peer ip %s node config %s", tc.mode, tc.peerCIDR, tc.peerIP, nodeConfig)
-		routeClient := route.NewClient()
-		if err := routeClient.Initialize(nodeConfig, tc.mode); err != nil {
+		routeClient := route.NewClient(tc.mode)
+		if err := routeClient.Initialize(nodeConfig); err != nil {
 			t.Error(err)
 		}
 		// Call initialize twice and verify no duplicates
-		if err := routeClient.Initialize(nodeConfig, tc.mode); err != nil {
+		if err := routeClient.Initialize(nodeConfig); err != nil {
 			t.Error(err)
 		}
 		// verify route tables

@@ -38,15 +38,14 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
 	controllerName = "AntreaAgentNodeRouteController"
-	// Interval of synchronizing node status from apiserver
-	nodeSyncPeriod = 60 * time.Second
+	// Interval of reprocessing every node.
+	nodeResyncPeriod = 60 * time.Second
 	// How long to wait before retrying the processing of a node change
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
@@ -59,22 +58,17 @@ const (
 // Controller is responsible for setting up necessary IP routes and Openflow entries for inter-node traffic.
 type Controller struct {
 	kubeClient       clientset.Interface
+	ovsBridgeClient  ovsconfig.OVSBridgeClient
+	ofClient         openflow.Client
+	routeClient      *route.Client
+	iptablesClient   *iptables.Client
+	interfaceStore   interfacestore.InterfaceStore
+	networkConfig    *config.NetworkConfig
+	nodeConfig       *config.NodeConfig
 	nodeInformer     coreinformers.NodeInformer
 	nodeLister       corelisters.NodeLister
 	nodeListerSynced cache.InformerSynced
 	queue            workqueue.RateLimitingInterface
-	ofClient         openflow.Client
-	ovsBridgeClient  ovsconfig.OVSBridgeClient
-	interfaceStore   interfacestore.InterfaceStore
-	nodeConfig       *types.NodeConfig
-	tunnelType       ovsconfig.TunnelType
-	// Pre-shared key for IPSec IKE authentication. If not empty IPSec tunnels will
-	// be enabled.
-	ipsecPSK       string
-	gatewayLink    netlink.Link
-	routeClient    *route.Client
-	iptablesClient *iptables.Client
-	encapMode      config.TrafficEncapModeType
 	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the route to the Node.
 	// If the flows of the Node are installed, the installedNodes must contains a key which is the host name.
@@ -91,34 +85,26 @@ func NewNodeRouteController(
 	informerFactory informers.SharedInformerFactory,
 	client openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
-	interfaceStore interfacestore.InterfaceStore,
-	nodeConfig *types.NodeConfig,
-	tunnelType ovsconfig.TunnelType,
-	ipsecPSK string,
 	routeClient *route.Client,
 	iptablesClient *iptables.Client,
-	encapModeStr string,
-) *Controller {
+	interfaceStore interfacestore.InterfaceStore,
+	networkConfig *config.NetworkConfig,
+	nodeConfig *config.NodeConfig) *Controller {
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	_, encapMode := config.GetTrafficEncapModeFromStr(encapModeStr)
 	controller := &Controller{
 		kubeClient:       kubeClient,
+		ovsBridgeClient:  ovsBridgeClient,
+		ofClient:         client,
+		routeClient:      routeClient,
+		iptablesClient:   iptablesClient,
+		interfaceStore:   interfaceStore,
+		networkConfig:    networkConfig,
+		nodeConfig:       nodeConfig,
 		nodeInformer:     nodeInformer,
 		nodeLister:       nodeInformer.Lister(),
 		nodeListerSynced: nodeInformer.Informer().HasSynced,
 		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
-		ofClient:         client,
-		ovsBridgeClient:  ovsBridgeClient,
-		interfaceStore:   interfaceStore,
-		nodeConfig:       nodeConfig,
-		gatewayLink:      util.GetNetLink(nodeConfig.GatewayConfig.Link),
-		installedNodes:   &sync.Map{},
-		tunnelType:       tunnelType,
-		ipsecPSK:         ipsecPSK,
-		routeClient:      routeClient,
-		iptablesClient:   iptablesClient,
-		encapMode:        encapMode,
-	}
+		installedNodes:   &sync.Map{}}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(cur interface{}) {
@@ -131,7 +117,7 @@ func NewNodeRouteController(
 				controller.enqueueNode(old)
 			},
 		},
-		nodeSyncPeriod,
+		nodeResyncPeriod,
 	)
 	return controller
 }
@@ -215,7 +201,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 	// knownInterfaces is the list of interfaces currently in the local cache.
 	knownInterfaces := c.interfaceStore.GetInterfaceKeysByType(interfacestore.TunnelInterface)
 
-	if c.ipsecPSK != "" {
+	if c.networkConfig.EnableIPSecTunnel {
 		for _, node := range nodes {
 			interfaceConfig, found := c.interfaceStore.GetNodeTunnelInterface(node.Name)
 			if !found {
@@ -230,9 +216,9 @@ func (c *Controller) removeStaleTunnelPorts() error {
 			}
 
 			ifaceID := util.GenerateNodeTunnelInterfaceKey(node.Name)
-			validConfiguration := interfaceConfig.PSK == c.ipsecPSK &&
+			validConfiguration := interfaceConfig.PSK == c.networkConfig.IPSecPSK &&
 				interfaceConfig.RemoteIP.Equal(peerNodeIP) &&
-				interfaceConfig.TunnelInterfaceConfig.Type == c.tunnelType
+				interfaceConfig.TunnelInterfaceConfig.Type == c.networkConfig.TunnelType
 			if validConfiguration {
 				desiredInterfaces[ifaceID] = true
 			}
@@ -253,7 +239,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 			klog.Errorf("Interface %s can no longer be found in the interface store", ifaceID)
 			continue
 		}
-		if interfaceConfig.InterfaceName == types.DefaultTunPortName {
+		if interfaceConfig.InterfaceName == config.DefaultTunPortName {
 			continue
 		}
 		if err := c.ovsBridgeClient.DeletePort(interfaceConfig.PortUUID); err != nil {
@@ -423,7 +409,7 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 		c.installedNodes.Delete(nodeName)
 	}
 
-	if c.ipsecPSK != "" {
+	if c.networkConfig.EnableIPSecTunnel {
 		interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
 		if !ok {
 			// Tunnel port not created for this Node.
@@ -466,7 +452,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 	}
 	peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
-	if c.ipsecPSK != "" {
+	if c.networkConfig.EnableIPSecTunnel {
 		// Create a separate tunnel port for the Node, as OVS IPSec monitor needs to
 		// read PSK and remote IP from the Node's tunnel interface to create IPSec
 		// security policies.
@@ -482,14 +468,14 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 			peerGatewayIP,
 			*peerPodCIDR,
 			peerNodeIP,
-			types.DefaultTunOFPort)
+			config.DefaultTunOFPort)
 		if err != nil {
 			return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 		}
 		c.installedNodes.Store(nodeName, nil)
 	}
 
-	routes, err := c.routeClient.AddPeerCIDRRoute(peerPodCIDR, c.gatewayLink.Attrs().Index, peerNodeIP, peerGatewayIP)
+	routes, err := c.routeClient.AddPeerCIDRRoute(peerPodCIDR, c.nodeConfig.GatewayConfig.LinkIndex, peerNodeIP, peerGatewayIP)
 	if err == nil {
 		c.installedNodes.Store(nodeName, routes)
 		err = c.iptablesClient.AddPeerCIDR(peerPodCIDR, peerNodeIP)
@@ -512,10 +498,10 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) error
 	ovsExternalIDs := map[string]interface{}{ovsExternalIDNodeName: nodeName}
 	portUUID, err := c.ovsBridgeClient.CreateTunnelPortExt(
 		portName,
-		c.tunnelType,
+		c.networkConfig.TunnelType,
 		0, // ofPortRequest - let OVS allocate OFPort number.
 		nodeIP.String(),
-		c.ipsecPSK,
+		c.networkConfig.IPSecPSK,
 		ovsExternalIDs)
 	if err != nil {
 		klog.Errorf("Failed to create OVS IPSec tunnel port for Node %s: %v", nodeName, err)
@@ -526,10 +512,10 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) error
 	ovsPortConfig := &interfacestore.OVSPortConfig{PortUUID: portUUID}
 	interfaceConfig = interfacestore.NewIPSecTunnelInterface(
 		portName,
-		c.tunnelType,
+		c.networkConfig.TunnelType,
 		nodeName,
 		nodeIP,
-		c.ipsecPSK)
+		c.networkConfig.IPSecPSK)
 	interfaceConfig.OVSPortConfig = ovsPortConfig
 	c.interfaceStore.AddInterface(interfaceConfig)
 	return nil

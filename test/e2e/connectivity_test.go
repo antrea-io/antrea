@@ -16,7 +16,9 @@ package e2e
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
@@ -185,10 +187,73 @@ func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
 	data.runPingMesh(t, podNames)
 }
 
-// TestOVSRestart checks that when OVS restarts unexpectedly the Antrea agent takes care of
-// replaying flows. More precisely this tests check that Pod connectivity is not broken after a
-// restart.
-func TestOVSRestart(t *testing.T) {
+// TestOVSRestartSameNode verifies that datapath flows are not removed when the Antrea Agent Pod is
+// stopped gracefully (e.g. as part of a RollingUpdate). The test sends ARP requests every 1s and
+// checks that there is no packet loss during the restart. This test does not apply to the userspace
+// ndetdev datapath, since in this case the datapath functionality is implemented by the
+// ovs-vswitchd daemon itself. When ovs-vswitchd restarts, datapath flows are flushed and it may
+// take some time for the Agent to replay the flows. This will not impact this test, since we are
+// just testing L2 connectivity betwwen 2 Pods on the same Node, and the default behavior of the
+// br-int bridge is to implement normal L2 forwarding.
+func TestOVSRestartSameNode(t *testing.T) {
+	skipIfProviderIs(t, "kind", "test not valid for the netdev datapath type")
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	workerNode := workerNodeName(1)
+	t.Logf("Creating two busybox test Pods on '%s'", workerNode)
+	podNames, podIPs, cleanupFn := createTestBusyboxPods(t, data, 2, workerNode)
+	defer cleanupFn()
+
+	resCh := make(chan error, 1)
+
+	runArping := func() error {
+		// we send arp pings for 25 seconds; this duration is a bit arbitrary and we assume
+		// that restarting Antrea takes less than that time. Unfortunately, the arping
+		// utility in busybox does not let us choose a smaller interval than 1 second.
+		count := 25
+		cmd := fmt.Sprintf("arping -c %d %s", count, podIPs[1])
+		stdout, stderr, err := data.runCommandFromPod(testNamespace, podNames[0], busyboxContainerName, strings.Fields(cmd))
+		if err != nil {
+			return fmt.Errorf("error when running arping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+		}
+		// if the datapath flows have been flushed, there will be some unanswered ARP
+		// requests.
+		_, _, lossRate, err := parseArpingStdout(stdout)
+		if err != nil {
+			return err
+		}
+		t.Logf("Arping loss rate: %f%%", lossRate)
+		if lossRate > 0 {
+			t.Logf(stdout)
+			return fmt.Errorf("arping loss rate is %f%%", lossRate)
+		}
+		return nil
+	}
+	go func() {
+		resCh <- runArping()
+	}()
+	// make sure that by the time we delete the Antrea agent, at least one unicast ARP has been
+	// sent (and cached in the OVS kernel datapath).
+	time.Sleep(3 * time.Second)
+
+	t.Logf("Restarting antrea-agent on Node '%s'", workerNode)
+	if _, err := data.deleteAntreaAgentOnNode(workerNode, 30 /* grace period in seconds */, defaultTimeout); err != nil {
+		t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", workerNode, err)
+	}
+
+	if err := <-resCh; err != nil {
+		t.Errorf("Arping test failed: %v", err)
+	}
+}
+
+// TestOVSFlowReplay checks that when OVS restarts unexpectedly the Antrea agent takes care of
+// replaying flows. More precisely this test checks that Pod connectivity still works after deleting
+// the flows and force-restarting the OVS dameons.
+func TestOVSFlowReplay(t *testing.T) {
 	skipIfProviderIs(t, "kind", "stopping OVS daemons create connectivity issues")
 	data, err := setupTest(t)
 	if err != nil {
@@ -219,17 +284,18 @@ func TestOVSRestart(t *testing.T) {
 	}
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", workerNode, antreaPodName)
 
-	t.Logf("Restarting OVS daemons on Node '%s'", workerNode)
-	// We cannot use "ovs-ctl restart" as it takes care of saving / restoring the flows, while
-	// we are trying to test whether the Antrea agent takes care of replaying the flows after an
-	// unscheduled restart.
-	stopCmd := []string{"/usr/share/openvswitch/scripts/ovs-ctl", "stop"}
-	if stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, stopCmd); err != nil {
-		t.Fatalf("Error when stopping OVS with ovs-ctl: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+	t.Logf("Deleting flows and restarting OVS daemons on Node '%s'", workerNode)
+	delFlows := func() {
+		cmd := []string{"ovs-ofctl", "del-flows", defaultBridgeName}
+		_, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+		if err != nil {
+			t.Fatalf("error when deleting flows: <%v>, err: <%v>", stderr, err)
+		}
 	}
-	startCmd := []string{"/usr/share/openvswitch/scripts/ovs-ctl", "--system-id=random", "start", "--db-file=/var/run/openvswitch/conf.db"}
-	if stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, startCmd); err != nil {
-		t.Fatalf("Error when starting OVS with ovs-ctl: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+	delFlows()
+	restartCmd := []string{"/usr/share/openvswitch/scripts/ovs-ctl", "--system-id=random", "restart", "--db-file=/var/run/openvswitch/conf.db"}
+	if stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, restartCmd); err != nil {
+		t.Fatalf("Error when restarting OVS with ovs-ctl: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 	}
 
 	// This should give Antrea ~10s to restore flows, since we generate 10 "pings" with a 1s

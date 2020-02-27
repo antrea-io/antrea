@@ -72,6 +72,7 @@ implementation.
 * [Octant](https://github.com/vmware-tanzu/octant) UI plugin for monitoring
 Antrea components, which publish runtime information as
 [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
+* [IPsec encyption](/docs/ipsec-tunnel.md) of GRE tunnel traffic.
 
 ## Roadmap
 

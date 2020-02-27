@@ -1,17 +1,22 @@
 FROM ubuntu:18.04 as ovs-debs
 
+# Some patches may not apply cleanly if another version is provided.
 ARG OVS_VERSION=2.11.1
 
 # Install dependencies for building OVS deb packages
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends wget ca-certificates build-essential fakeroot graphviz \
+    apt-get install -y --no-install-recommends wget curl git ca-certificates build-essential fakeroot graphviz \
             bzip2 autoconf automake debhelper dh-autoreconf libssl-dev libtool openssl procps \
             python-all python-twisted-conch python-zopeinterface python-six libunbound-dev
+
+COPY apply-patches.sh /
 
 # Download OVS source code and build debs
 RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-$OVS_VERSION.tar.gz  | tar xz -C /tmp && \
     rm -rf openvswitch-$OVS_VERSION.tar.gz && \
-    cd /tmp/openvswitch* && DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary && \
+    cd /tmp/openvswitch* && \
+    /apply-patches.sh && \
+    DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary && \
     cd /tmp && mkdir ovs-debs && \
     mv libopenvswitch_*.deb openvswitch-common_*.deb openvswitch-switch_*.deb python-openvswitch_*.deb \
        openvswitch-ipsec_*.deb ovs-debs/ && \

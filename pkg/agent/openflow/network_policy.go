@@ -18,11 +18,10 @@ import (
 	"fmt"
 	"net"
 
-	coreV1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/networking/v1"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -150,7 +149,29 @@ type conjunctiveMatch struct {
 }
 
 func (m *conjunctiveMatch) generateGlobalMapKey() string {
-	return fmt.Sprintf("table:%d,type:%d,value:%s", m.tableID, m.matchKey, m.matchValue)
+	var valueStr string
+	matchType := m.matchKey
+	switch v := m.matchValue.(type) {
+	case net.IP:
+		// Use the unique format "x.x.x.x/xx" for IP address and IP net, to avoid generating two different global map
+		// keys for IP and IP/32. Use MatchDstIPNet/MatchSrcIPNet as match type to generate global cache key for both IP
+		// and IPNet. This is because OVS treats IP and IP/32 as the same condition, if Antrea has two different
+		// conjunctive match flow contexts, only one flow entry is installed on OVS, and the conjunctive actions in the
+		// first context wil be overwritten by those in the second one.
+		valueStr = fmt.Sprintf("%s/32", v.String())
+		switch m.matchKey {
+		case MatchDstIP:
+			matchType = MatchDstIPNet
+		case MatchSrcIP:
+			matchType = MatchSrcIPNet
+		}
+	case net.IPNet:
+		valueStr = v.String()
+	default:
+		// The default cases include the matchValue is a Service port or an ofport Number.
+		valueStr = fmt.Sprintf("%s", m.matchValue)
+	}
+	return fmt.Sprintf("table:%d,type:%d,value:%s", m.tableID, matchType, valueStr)
 }
 
 // changeType is generally used to describe the change type of a conjMatchFlowContext. It is also used in "flowChange"
@@ -511,20 +532,20 @@ func (c *clause) generateAddressConjMatch(addr types.Address, addrType types.Add
 	return match
 }
 
-func getServiceMatchType(protocol *coreV1.Protocol) int {
+func getServiceMatchType(protocol *v1beta1.Protocol) int {
 	switch *protocol {
-	case coreV1.ProtocolTCP:
+	case v1beta1.ProtocolTCP:
 		return MatchTCPDstPort
-	case coreV1.ProtocolUDP:
+	case v1beta1.ProtocolUDP:
 		return MatchUDPDstPort
-	case coreV1.ProtocolSCTP:
+	case v1beta1.ProtocolSCTP:
 		return MatchSCTPDstPort
 	default:
 		return MatchTCPDstPort
 	}
 }
 
-func (c *clause) generateServicePortConjMatch(port *v1.NetworkPolicyPort) *conjunctiveMatch {
+func (c *clause) generateServicePortConjMatch(port v1beta1.Service) *conjunctiveMatch {
 	matchKey := getServiceMatchType(port.Protocol)
 	matchValue := uint16(port.Port.IntVal)
 	match := &conjunctiveMatch{
@@ -552,7 +573,7 @@ func (c *clause) addAddrFlows(client *client, addrType types.AddressType, addres
 
 // addServiceFlows translates the specified NetworkPolicyPorts to conjunctiveMatchFlow, and returns corresponding
 // conjMatchFlowContextChange.
-func (c *clause) addServiceFlows(client *client, ports []*v1.NetworkPolicyPort) []*conjMatchFlowContextChange {
+func (c *clause) addServiceFlows(client *client, ports []v1beta1.Service) []*conjMatchFlowContextChange {
 	var conjMatchFlowContextChanges []*conjMatchFlowContextChange
 	for _, port := range ports {
 		match := c.generateServicePortConjMatch(port)
@@ -673,19 +694,19 @@ func (c *policyRuleConjunction) getAddressClause(addrType types.AddressType) *cl
 // If there is an error in any clause's addAddrFlows or addServiceFlows, the conjunction action flow will never be hit.
 // If the default drop flow is already installed before this error, all packets will be dropped by the default drop flow,
 // Otherwise all packets will be allowed.
-func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
+func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
 	// Check if the policyRuleConjunction is added into cache or not. If yes, return nil.
-	conj := c.getPolicyRuleConjunction(rule.ID)
+	conj := c.getPolicyRuleConjunction(ruleID)
 	if conj != nil {
-		klog.V(2).Infof("PolicyRuleConjunction %d is already added in cache", rule.ID)
+		klog.V(2).Infof("PolicyRuleConjunction %d is already added in cache", ruleID)
 		return nil
 	}
 
 	conj = &policyRuleConjunction{
-		id: rule.ID,
+		id: ruleID,
 	}
 	nClause, ruleTable, dropTable := conj.calculateClauses(rule, c)
 
@@ -695,17 +716,17 @@ func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
 	if nClause > 1 {
 		// Install action flows.
 		var actionFlows = []binding.Flow{
-			c.conjunctionActionFlow(rule.ID, ruleTable.GetID(), dropTable.GetNext()),
+			c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext()),
 		}
 		if rule.ExceptFrom != nil {
 			for _, addr := range rule.ExceptFrom {
-				flow := c.conjunctionExceptionFlow(rule.ID, ruleTable.GetID(), dropTable.GetID(), addr.GetMatchKey(types.SrcAddress), addr.GetValue())
+				flow := c.conjunctionExceptionFlow(ruleID, ruleTable.GetID(), dropTable.GetID(), addr.GetMatchKey(types.SrcAddress), addr.GetValue())
 				actionFlows = append(actionFlows, flow)
 			}
 		}
 		if rule.ExceptTo != nil {
 			for _, addr := range rule.ExceptTo {
-				flow := c.conjunctionExceptionFlow(rule.ID, ruleTable.GetID(), dropTable.GetID(), addr.GetMatchKey(types.DstAddress), addr.GetValue())
+				flow := c.conjunctionExceptionFlow(ruleID, ruleTable.GetID(), dropTable.GetID(), addr.GetMatchKey(types.DstAddress), addr.GetValue())
 				actionFlows = append(actionFlows, flow)
 			}
 		}
@@ -726,7 +747,7 @@ func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
 		return err
 	}
 	// Add the policyRuleConjunction into policyCache.
-	c.policyCache.Store(rule.ID, conj)
+	c.policyCache.Store(ruleID, conj)
 	return nil
 }
 
@@ -788,7 +809,7 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 	var ruleTable, dropTable binding.Table
 	var isEgressRule = false
 	switch rule.Direction {
-	case v1.PolicyTypeEgress:
+	case v1beta1.DirectionOut:
 		ruleTable = clnt.pipeline[egressRuleTable]
 		dropTable = clnt.pipeline[egressDefaultTable]
 		isEgressRule = true

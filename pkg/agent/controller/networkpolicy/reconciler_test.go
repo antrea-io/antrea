@@ -19,8 +19,8 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
@@ -31,33 +31,63 @@ import (
 )
 
 var (
-	addressGroup1   = v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))
-	addressGroup2   = v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.2"))
-	appliedToGroup1 = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))
-	appliedToGroup2 = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod2", "ns1"))
-	appliedToGroup3 = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod3", "ns1"))
+	addressGroup1 = v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))
+	addressGroup2 = v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.2"))
+
+	appliedToGroup1                     = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))
+	appliedToGroup2                     = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod2", "ns1"))
+	appliedToGroup3                     = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod3", "ns1"))
+	appliedToGroupWithSameContainerPort = v1beta1.NewGroupMemberPodSet(
+		newAppliedToGroupMember("pod1", "ns1", v1beta1.NamedPort{Name: "http", Protocol: v1beta1.ProtocolTCP, Port: 80}),
+		newAppliedToGroupMember("pod3", "ns1", v1beta1.NamedPort{Name: "http", Protocol: v1beta1.ProtocolTCP, Port: 80}),
+	)
+	appliedToGroupWithDiffContainerPort = v1beta1.NewGroupMemberPodSet(
+		newAppliedToGroupMember("pod1", "ns1", v1beta1.NamedPort{Name: "http", Protocol: v1beta1.ProtocolTCP, Port: 80}),
+		newAppliedToGroupMember("pod3", "ns1", v1beta1.NamedPort{Name: "http", Protocol: v1beta1.ProtocolTCP, Port: 443}),
+	)
+
+	protocolTCP   = v1beta1.ProtocolTCP
+	port80        = intstr.FromInt(80)
+	port443       = intstr.FromInt(443)
+	portHTTP      = intstr.FromString("http")
+	serviceTCP80  = v1beta1.Service{Protocol: &protocolTCP, Port: &port80}
+	serviceTCP443 = v1beta1.Service{Protocol: &protocolTCP, Port: &port443}
+	serviceTCP    = v1beta1.Service{Protocol: &protocolTCP}
+	serviceHTTP   = v1beta1.Service{Protocol: &protocolTCP, Port: &portHTTP}
+
+	services1     = []v1beta1.Service{serviceTCP80}
+	servicesHash1 = hashServices(services1)
+	services2     = []v1beta1.Service{serviceTCP}
+	servicesHash2 = hashServices(services2)
 )
 
 func TestReconcilerForget(t *testing.T) {
 	tests := []struct {
-		name             string
-		lastRealizeds    map[string]*lastRealized
-		args             string
-		expectedOFRuleID uint32
-		wantErr          bool
+		name              string
+		lastRealizeds     map[string]*lastRealized
+		args              string
+		expectedOFRuleIDs []uint32
+		wantErr           bool
 	}{
 		{
 			"unknown-rule",
-			map[string]*lastRealized{"foo": {ofID: 8}},
+			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8}}},
 			"unknown-rule-id",
-			0,
+			nil,
 			false,
 		},
 		{
-			"known-rule",
-			map[string]*lastRealized{"foo": {ofID: 8}},
+			"known-single-ofrule",
+			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8}}},
 			"foo",
-			uint32(8),
+			[]uint32{8},
+			false,
+		},
+		{
+			"known-multiple-ofrule",
+			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8, servicesHash2: 9}}},
+			"foo",
+			[]uint32{8, 9},
 			false,
 		},
 	}
@@ -67,10 +97,12 @@ func TestReconcilerForget(t *testing.T) {
 			defer controller.Finish()
 			ifaceStore := interfacestore.NewInterfaceStore()
 			mockOFClient := openflowtest.NewMockClient(controller)
-			if tt.expectedOFRuleID == 0 {
+			if len(tt.expectedOFRuleIDs) == 0 {
 				mockOFClient.EXPECT().UninstallPolicyRuleFlows(gomock.Any()).Times(0)
 			} else {
-				mockOFClient.EXPECT().UninstallPolicyRuleFlows(tt.expectedOFRuleID)
+				for _, ofID := range tt.expectedOFRuleIDs {
+					mockOFClient.EXPECT().UninstallPolicyRuleFlows(ofID)
+				}
 			}
 			r := newReconciler(mockOFClient, ifaceStore)
 			for key, value := range tt.lastRealizeds {
@@ -89,14 +121,14 @@ func TestReconcilerReconcile(t *testing.T) {
 		InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1"),
 		IP:                       net.ParseIP("2.2.2.2"),
 		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1"},
-		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1}})
-	protocolTCP := v1beta1.ProtocolTCP
-	port80 := intstr.FromInt(80)
-	// It represents named port that we can't resolve for now.
-	portHTTP := intstr.FromString("http")
-	service1 := v1beta1.Service{Protocol: &protocolTCP, Port: &port80}
-	service2 := v1beta1.Service{Protocol: &protocolTCP}
-	service3 := v1beta1.Service{Protocol: &protocolTCP, Port: &portHTTP}
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1},
+	})
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("pod3", "ns1"),
+		IP:                       net.ParseIP("3.3.3.3"),
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod3", PodNamespace: "ns1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 3},
+	})
 	_, ipNet1, _ := net.ParseCIDR("10.10.0.0/16")
 	_, ipNet2, _ := net.ParseCIDR("10.20.0.0/16")
 	_, ipNet3, _ := net.ParseCIDR("10.20.1.0/24")
@@ -113,27 +145,28 @@ func TestReconcilerReconcile(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		args           *CompletedRule
-		expectedOFRule *types.PolicyRule
-		wantErr        bool
+		name            string
+		args            *CompletedRule
+		expectedOFRules []*types.PolicyRule
+		wantErr         bool
 	}{
 		{
 			"ingress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{service1, service2}},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceTCP80, serviceTCP}},
 				FromAddresses: addressGroup1,
 				ToAddresses:   nil,
 				Pods:          appliedToGroup1,
 			},
-			&types.PolicyRule{
-				ID:         1,
-				Direction:  networkingv1.PolicyTypeIngress,
-				From:       []types.Address{ipStringToOFAddress("1.1.1.1")},
-				ExceptFrom: nil,
-				To:         []types.Address{openflow.NewOFPortAddress(1)},
-				ExceptTo:   nil,
-				Service:    servicesToNetworkPolicyPort([]v1beta1.Service{service1, service2}),
+			[]*types.PolicyRule{
+				{
+					Direction:  v1beta1.DirectionIn,
+					From:       ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					ExceptFrom: nil,
+					To:         ofPortsToOFAddresses(sets.NewInt32(1)),
+					ExceptTo:   nil,
+					Service:    []v1beta1.Service{serviceTCP80, serviceTCP},
+				},
 			},
 			false,
 		},
@@ -145,14 +178,15 @@ func TestReconcilerReconcile(t *testing.T) {
 				ToAddresses:   nil,
 				Pods:          appliedToGroup2,
 			},
-			&types.PolicyRule{
-				ID:         1,
-				Direction:  networkingv1.PolicyTypeIngress,
-				From:       []types.Address{ipStringToOFAddress("1.1.1.1")},
-				ExceptFrom: nil,
-				To:         []types.Address{},
-				ExceptTo:   nil,
-				Service:    nil,
+			[]*types.PolicyRule{
+				{
+					Direction:  v1beta1.DirectionIn,
+					From:       ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					ExceptFrom: nil,
+					To:         []types.Address{},
+					ExceptTo:   nil,
+					Service:    nil,
+				},
 			},
 			false,
 		},
@@ -163,27 +197,28 @@ func TestReconcilerReconcile(t *testing.T) {
 					ID:        "ingress-rule",
 					Direction: v1beta1.DirectionIn,
 					From:      v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2}},
-					Services:  []v1beta1.Service{service1, service2},
+					Services:  []v1beta1.Service{serviceTCP80, serviceTCP},
 				},
 				FromAddresses: addressGroup1,
 				ToAddresses:   nil,
 				Pods:          appliedToGroup1,
 			},
-			&types.PolicyRule{
-				ID:        1,
-				Direction: networkingv1.PolicyTypeIngress,
-				From: []types.Address{
-					ipStringToOFAddress("1.1.1.1"),
-					openflow.NewIPNetAddress(*ipNet1),
-					openflow.NewIPNetAddress(*ipNet2),
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From: []types.Address{
+						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
+						openflow.NewIPNetAddress(*ipNet1),
+						openflow.NewIPNetAddress(*ipNet2),
+					},
+					ExceptFrom: []types.Address{
+						openflow.NewIPNetAddress(*ipNet3),
+						openflow.NewIPNetAddress(*ipNet4),
+					},
+					To:       ofPortsToOFAddresses(sets.NewInt32(1)),
+					ExceptTo: nil,
+					Service:  []v1beta1.Service{serviceTCP80, serviceTCP},
 				},
-				ExceptFrom: []types.Address{
-					openflow.NewIPNetAddress(*ipNet3),
-					openflow.NewIPNetAddress(*ipNet4),
-				},
-				To:       []types.Address{openflow.NewOFPortAddress(1)},
-				ExceptTo: nil,
-				Service:  servicesToNetworkPolicyPort([]v1beta1.Service{service1, service2}),
 			},
 			false,
 		},
@@ -197,31 +232,79 @@ func TestReconcilerReconcile(t *testing.T) {
 				},
 				Pods: appliedToGroup1,
 			},
-			&types.PolicyRule{
-				ID:        1,
-				Direction: networkingv1.PolicyTypeIngress,
-				From:      []types.Address{},
-				To:        []types.Address{openflow.NewOFPortAddress(1)},
-				Service:   nil,
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   nil,
+				},
 			},
 			false,
 		},
 		{
-			"ingress-rule-with-unsupported-namedport",
+			"ingress-rule-with-unresolvable-namedport",
 			&CompletedRule{
 				rule: &rule{
 					ID:        "ingress-rule",
 					Direction: v1beta1.DirectionIn,
-					Services:  []v1beta1.Service{service3},
+					Services:  []v1beta1.Service{serviceHTTP},
 				},
 				Pods: appliedToGroup1,
 			},
-			&types.PolicyRule{
-				ID:        1,
-				Direction: networkingv1.PolicyTypeIngress,
-				From:      []types.Address{},
-				To:        []types.Address{openflow.NewOFPortAddress(1)},
-				Service:   []*networkingv1.NetworkPolicyPort{},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{},
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-same-namedport",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{serviceHTTP},
+				},
+				Pods: appliedToGroupWithSameContainerPort,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1, 3)),
+					Service:   []v1beta1.Service{serviceTCP80},
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-diff-namedport",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{serviceHTTP},
+				},
+				Pods: appliedToGroupWithDiffContainerPort,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{serviceTCP80},
+				},
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(3)),
+					Service:   []v1beta1.Service{serviceTCP443},
+				},
 			},
 			false,
 		},
@@ -233,14 +316,15 @@ func TestReconcilerReconcile(t *testing.T) {
 				ToAddresses:   addressGroup1,
 				Pods:          appliedToGroup1,
 			},
-			&types.PolicyRule{
-				ID:         1,
-				Direction:  networkingv1.PolicyTypeEgress,
-				From:       []types.Address{ipStringToOFAddress("2.2.2.2")},
-				ExceptFrom: nil,
-				To:         []types.Address{ipStringToOFAddress("1.1.1.1")},
-				ExceptTo:   nil,
-				Service:    nil,
+			[]*types.PolicyRule{
+				{
+					Direction:  v1beta1.DirectionOut,
+					From:       ipsToOFAddresses(sets.NewString("2.2.2.2")),
+					ExceptFrom: nil,
+					To:         ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					ExceptTo:   nil,
+					Service:    nil,
+				},
 			},
 			false,
 		},
@@ -256,21 +340,22 @@ func TestReconcilerReconcile(t *testing.T) {
 				ToAddresses:   addressGroup1,
 				Pods:          appliedToGroup1,
 			},
-			&types.PolicyRule{
-				ID:         1,
-				Direction:  networkingv1.PolicyTypeEgress,
-				From:       []types.Address{ipStringToOFAddress("2.2.2.2")},
-				ExceptFrom: nil,
-				To: []types.Address{
-					ipStringToOFAddress("1.1.1.1"),
-					openflow.NewIPNetAddress(*ipNet1),
-					openflow.NewIPNetAddress(*ipNet2),
+			[]*types.PolicyRule{
+				{
+					Direction:  v1beta1.DirectionOut,
+					From:       ipsToOFAddresses(sets.NewString("2.2.2.2")),
+					ExceptFrom: nil,
+					To: []types.Address{
+						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
+						openflow.NewIPNetAddress(*ipNet1),
+						openflow.NewIPNetAddress(*ipNet2),
+					},
+					ExceptTo: []types.Address{
+						openflow.NewIPNetAddress(*ipNet3),
+						openflow.NewIPNetAddress(*ipNet4),
+					},
+					Service: nil,
 				},
-				ExceptTo: []types.Address{
-					openflow.NewIPNetAddress(*ipNet3),
-					openflow.NewIPNetAddress(*ipNet4),
-				},
-				Service: nil,
 			},
 			false,
 		},
@@ -280,7 +365,9 @@ func TestReconcilerReconcile(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
-			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Eq(tt.expectedOFRule))
+			for _, ofRule := range tt.expectedOFRules {
+				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any(), gomock.Eq(ofRule))
+			}
 			r := newReconciler(mockOFClient, ifaceStore)
 			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
 				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
@@ -325,10 +412,10 @@ func TestReconcilerUpdate(t *testing.T) {
 				FromAddresses: addressGroup2,
 				Pods:          appliedToGroup2,
 			},
-			[]types.Address{ipStringToOFAddress("1.1.1.2")},
-			[]types.Address{openflow.NewOFPortAddress(2)},
-			[]types.Address{ipStringToOFAddress("1.1.1.1")},
-			[]types.Address{openflow.NewOFPortAddress(1)},
+			ipsToOFAddresses(sets.NewString("1.1.1.2")),
+			ofPortsToOFAddresses(sets.NewInt32(2)),
+			ipsToOFAddresses(sets.NewString("1.1.1.1")),
+			ofPortsToOFAddresses(sets.NewInt32(1)),
 			false,
 		},
 		{
@@ -343,10 +430,10 @@ func TestReconcilerUpdate(t *testing.T) {
 				ToAddresses: addressGroup2,
 				Pods:        appliedToGroup2,
 			},
-			[]types.Address{ipStringToOFAddress("3.3.3.3")},
-			[]types.Address{ipStringToOFAddress("1.1.1.2")},
-			[]types.Address{ipStringToOFAddress("2.2.2.2")},
-			[]types.Address{ipStringToOFAddress("1.1.1.1")},
+			ipsToOFAddresses(sets.NewString("3.3.3.3")),
+			ipsToOFAddresses(sets.NewString("1.1.1.2")),
+			ipsToOFAddresses(sets.NewString("2.2.2.2")),
+			ipsToOFAddresses(sets.NewString("1.1.1.1")),
 			false,
 		},
 		{
@@ -361,10 +448,10 @@ func TestReconcilerUpdate(t *testing.T) {
 				FromAddresses: addressGroup2,
 				Pods:          appliedToGroup3,
 			},
-			[]types.Address{ipStringToOFAddress("1.1.1.2")},
+			ipsToOFAddresses(sets.NewString("1.1.1.2")),
 			[]types.Address{},
-			[]types.Address{ipStringToOFAddress("1.1.1.1")},
-			[]types.Address{openflow.NewOFPortAddress(1)},
+			ipsToOFAddresses(sets.NewString("1.1.1.1")),
+			ofPortsToOFAddresses(sets.NewInt32(1)),
 			false,
 		},
 		{
@@ -380,9 +467,9 @@ func TestReconcilerUpdate(t *testing.T) {
 				Pods:        appliedToGroup3,
 			},
 			[]types.Address{},
-			[]types.Address{ipStringToOFAddress("1.1.1.2")},
-			[]types.Address{ipStringToOFAddress("2.2.2.2")},
-			[]types.Address{ipStringToOFAddress("1.1.1.1")},
+			ipsToOFAddresses(sets.NewString("1.1.1.2")),
+			ipsToOFAddresses(sets.NewString("2.2.2.2")),
+			ipsToOFAddresses(sets.NewString("1.1.1.1")),
 			false,
 		},
 	}
@@ -391,7 +478,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
-			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
+			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any(), gomock.Any())
 			if len(tt.expectedAddedFrom) > 0 {
 				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedAddedFrom))
 			}

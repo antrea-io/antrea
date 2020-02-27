@@ -35,9 +35,9 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
@@ -91,7 +91,7 @@ type CNIServer struct {
 	cniSocket            string
 	supportedCNIVersions map[string]bool
 	serverVersion        string
-	nodeConfig           *types.NodeConfig
+	nodeConfig           *config.NodeConfig
 	hostProcPathPrefix   string
 	defaultMTU           int
 	kubeClient           clientset.Interface
@@ -467,7 +467,7 @@ func New(
 	cniSocket, hostProcPathPrefix string,
 	defaultMTU int,
 	ovsDatapathType string,
-	nodeConfig *types.NodeConfig,
+	nodeConfig *config.NodeConfig,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,

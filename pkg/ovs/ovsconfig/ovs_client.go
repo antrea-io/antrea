@@ -60,11 +60,10 @@ const (
 // "/run/openvswitch/db.sock" will be used.
 // Returns the OVSDB struct on success.
 func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
-	klog.Infof("Connecting to OVSDB at address %s", address)
-
 	if address == "" {
 		address = defaultUDSAddress
 	}
+	klog.Infof("Connecting to OVSDB at address %s", address)
 
 	// For the sake of debugging, we keep logging messages until the
 	// connection is successful. We use exponential backoff to determine the

@@ -49,6 +49,20 @@ func (m *MockAgentQuerier) EXPECT() *MockAgentQuerierMockRecorder {
 	return m.recorder
 }
 
+// GetAgentInfo mocks base method
+func (m *MockAgentQuerier) GetAgentInfo() *v1beta1.AntreaAgentInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAgentInfo")
+	ret0, _ := ret[0].(*v1beta1.AntreaAgentInfo)
+	return ret0
+}
+
+// GetAgentInfo indicates an expected call of GetAgentInfo
+func (mr *MockAgentQuerierMockRecorder) GetAgentInfo() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAgentInfo", reflect.TypeOf((*MockAgentQuerier)(nil).GetAgentInfo))
+}
+
 // GetLocalPodNum mocks base method
 func (m *MockAgentQuerier) GetLocalPodNum() int32 {
 	m.ctrl.T.Helper()

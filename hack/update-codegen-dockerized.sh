@@ -43,6 +43,13 @@ $GOPATH/bin/conversion-gen  \
   -O zz_generated.conversion \
   --go-header-file hack/boilerplate/license_header.go.txt
 
+$GOPATH/bin/openapi-gen  \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
+  --input-dirs "k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/util/intstr" \
+  --output-package "${ANTREA_PKG}/pkg/apiserver/openapi" \
+  -O zz_generated.openapi \
+  --go-header-file hack/boilerplate/license_header.go.txt
+
 # Generate mocks for testing with mockgen.
 MOCKGEN_TARGETS=(
   "pkg/agent/cniserver/ipam IPAMDriver"
