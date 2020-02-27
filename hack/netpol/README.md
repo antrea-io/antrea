@@ -133,4 +133,4 @@ Now, look at the results of the network policy probe:
  
 ## Developers
 
-This is a new library for building complex, comprehensive network policy tests.  To build it, cd to antrea/ and run `go build -o hack/netpol/pkg/main/main.go`.  Then, execute the binary.
+This is a new library for building complex, comprehensive network policy tests.  To build it, cd to antrea/hack/netpol and run `go run ./pkg/main/main.go`.  Then, execute the binary.
