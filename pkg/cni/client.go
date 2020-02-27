@@ -37,9 +37,6 @@ const (
 	ActionDel
 )
 
-// AntreaCNISocketAddr is the UNIX socket used by the CNI Protobuf / gRPC service.
-const AntreaCNISocketAddr = "/var/run/antrea/cni.sock"
-
 // AntreaCNIVersion is the full semantic version (https://semver.org/) of our CNI Protobuf / gRPC
 // service.
 //
