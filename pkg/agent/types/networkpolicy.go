@@ -15,7 +15,7 @@
 package types
 
 import (
-	"k8s.io/api/networking/v1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
 
 type AddressCategory uint8
@@ -41,10 +41,10 @@ type Address interface {
 
 // PolicyRule groups configurations to set up conjunctive match for egress/ingress policy rules.
 type PolicyRule struct {
-	Direction  v1.PolicyType
+	Direction  v1beta1.Direction
 	From       []Address
 	ExceptFrom []Address
 	To         []Address
 	ExceptTo   []Address
-	Service    []*v1.NetworkPolicyPort
+	Service    []v1beta1.Service
 }

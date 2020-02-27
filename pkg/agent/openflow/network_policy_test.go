@@ -11,13 +11,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	coreV1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	mocks "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
 )
@@ -121,7 +120,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	c = prepareClient(ctrl)
 	ruleID1 := uint32(101)
 	rule1 := &types.PolicyRule{
-		Direction: v1.PolicyTypeEgress,
+		Direction: v1beta1.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.30", "192.168.1.50"}),
 	}
 
@@ -143,7 +142,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 	ruleID2 := uint32(102)
 	rule2 := &types.PolicyRule{
-		Direction: v1.PolicyTypeEgress,
+		Direction: v1beta1.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
 		To:        parseAddresses([]string{"0.0.0.0/0"}),
 	}
@@ -168,15 +167,15 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	ruleID3 := uint32(103)
 	port1 := intstr.FromInt(8080)
 	port2 := intstr.FromInt(8081)
-	tcpProtocol := coreV1.ProtocolTCP
-	npPort1 := &v1.NetworkPolicyPort{Protocol: &tcpProtocol, Port: &port1}
-	npPort2 := &v1.NetworkPolicyPort{Protocol: &tcpProtocol, Port: &port2}
+	tcpProtocol := v1beta1.ProtocolTCP
+	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port1}
+	npPort2 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	rule3 := &types.PolicyRule{
-		Direction: v1.PolicyTypeEgress,
+		Direction: v1beta1.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.60"}),
 		To:        parseAddresses([]string{"192.168.2.0/24"}),
 		ExceptTo:  parseAddresses([]string{"192.168.2.100", "192.168.2.150"}),
-		Service:   []*v1.NetworkPolicyPort{npPort1, npPort2},
+		Service:   []v1beta1.Service{npPort1, npPort2},
 	}
 	conj3 := &policyRuleConjunction{id: ruleID3}
 	conj3.calculateClauses(rule3, c)
