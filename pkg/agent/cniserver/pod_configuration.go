@@ -426,6 +426,21 @@ func (pc *podConfigurator) removeInterfaces(podName, podNamespace, containerID s
 		return nil
 	}
 
+	klog.V(2).Infof("Deleting Openflow entries for container %s", containerID)
+	if err := pc.ofClient.UninstallPodFlows(containerConfig.InterfaceName); err != nil {
+		return fmt.Errorf("failed to delete Openflow entries for container %s: %v", containerID, err)
+	}
+
+	// Deleting veth devices and OVS port must be called after Openflows are uninstalled.
+	// Otherwise there could be a race condition:
+	// 1. Pod A's ofport was released
+	// 2. Pod B got the ofport released above
+	// 3. Flows for Pod B were installed
+	// 4. Flows for Pod A were uninstalled
+	// Because Pod A and Pod B had same ofport, they had overlapping flows, e.g. the
+	// classifier flow in table 0 which has only in_port as the match condition, then
+	// step 4 can remove flows owned by Pod B by mistake.
+	// Note that deleting the interface attached to an OVS port can release the ofport.
 	klog.V(2).Infof("Deleting veth devices for container %s", containerID)
 	// Don't return an error if the device is already removed as CniDel can be called multiple times.
 	if err := ip.DelLinkByName(containerConfig.InterfaceName); err != nil {
@@ -433,11 +448,6 @@ func (pc *podConfigurator) removeInterfaces(podName, podNamespace, containerID s
 			return fmt.Errorf("failed to delete veth devices for container %s: %v", containerID, err)
 		}
 		klog.V(2).Infof("Did not find interface %s for container %s", containerConfig.InterfaceName, containerID)
-	}
-
-	klog.V(2).Infof("Deleting Openflow entries for container %s", containerID)
-	if err := pc.ofClient.UninstallPodFlows(containerConfig.InterfaceName); err != nil {
-		return fmt.Errorf("failed to delete Openflow entries for container %s: %v", containerID, err)
 	}
 
 	klog.V(2).Infof("Deleting OVS port %s for container %s", containerConfig.PortUUID, containerID)
