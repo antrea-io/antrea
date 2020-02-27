@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -161,12 +160,12 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction:  networkingv1.PolicyTypeIngress,
+					Direction:  v1beta1.DirectionIn,
 					From:       ipsToOFAddresses(sets.NewString("1.1.1.1")),
 					ExceptFrom: nil,
 					To:         ofPortsToOFAddresses(sets.NewInt32(1)),
 					ExceptTo:   nil,
-					Service:    servicesToNetworkPolicyPort([]v1beta1.Service{serviceTCP80, serviceTCP}),
+					Service:    []v1beta1.Service{serviceTCP80, serviceTCP},
 				},
 			},
 			false,
@@ -181,7 +180,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction:  networkingv1.PolicyTypeIngress,
+					Direction:  v1beta1.DirectionIn,
 					From:       ipsToOFAddresses(sets.NewString("1.1.1.1")),
 					ExceptFrom: nil,
 					To:         []types.Address{},
@@ -206,7 +205,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: networkingv1.PolicyTypeIngress,
+					Direction: v1beta1.DirectionIn,
 					From: []types.Address{
 						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
 						openflow.NewIPNetAddress(*ipNet1),
@@ -218,7 +217,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					},
 					To:       ofPortsToOFAddresses(sets.NewInt32(1)),
 					ExceptTo: nil,
-					Service:  servicesToNetworkPolicyPort([]v1beta1.Service{serviceTCP80, serviceTCP}),
+					Service:  []v1beta1.Service{serviceTCP80, serviceTCP},
 				},
 			},
 			false,
@@ -235,7 +234,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: networkingv1.PolicyTypeIngress,
+					Direction: v1beta1.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 					Service:   nil,
@@ -255,10 +254,10 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: networkingv1.PolicyTypeIngress,
+					Direction: v1beta1.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
-					Service:   []*networkingv1.NetworkPolicyPort{},
+					Service:   []v1beta1.Service{},
 				},
 			},
 			false,
@@ -275,10 +274,10 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: networkingv1.PolicyTypeIngress,
+					Direction: v1beta1.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1, 3)),
-					Service:   servicesToNetworkPolicyPort([]v1beta1.Service{serviceTCP80}),
+					Service:   []v1beta1.Service{serviceTCP80},
 				},
 			},
 			false,
@@ -295,16 +294,16 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: networkingv1.PolicyTypeIngress,
+					Direction: v1beta1.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
-					Service:   servicesToNetworkPolicyPort([]v1beta1.Service{serviceTCP80}),
+					Service:   []v1beta1.Service{serviceTCP80},
 				},
 				{
-					Direction: networkingv1.PolicyTypeIngress,
+					Direction: v1beta1.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(3)),
-					Service:   servicesToNetworkPolicyPort([]v1beta1.Service{serviceTCP443}),
+					Service:   []v1beta1.Service{serviceTCP443},
 				},
 			},
 			false,
@@ -319,7 +318,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction:  networkingv1.PolicyTypeEgress,
+					Direction:  v1beta1.DirectionOut,
 					From:       ipsToOFAddresses(sets.NewString("2.2.2.2")),
 					ExceptFrom: nil,
 					To:         ipsToOFAddresses(sets.NewString("1.1.1.1")),
@@ -343,7 +342,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction:  networkingv1.PolicyTypeEgress,
+					Direction:  v1beta1.DirectionOut,
 					From:       ipsToOFAddresses(sets.NewString("2.2.2.2")),
 					ExceptFrom: nil,
 					To: []types.Address{

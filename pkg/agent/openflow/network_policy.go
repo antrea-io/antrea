@@ -18,11 +18,10 @@ import (
 	"fmt"
 	"net"
 
-	coreV1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/networking/v1"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -533,20 +532,20 @@ func (c *clause) generateAddressConjMatch(addr types.Address, addrType types.Add
 	return match
 }
 
-func getServiceMatchType(protocol *coreV1.Protocol) int {
+func getServiceMatchType(protocol *v1beta1.Protocol) int {
 	switch *protocol {
-	case coreV1.ProtocolTCP:
+	case v1beta1.ProtocolTCP:
 		return MatchTCPDstPort
-	case coreV1.ProtocolUDP:
+	case v1beta1.ProtocolUDP:
 		return MatchUDPDstPort
-	case coreV1.ProtocolSCTP:
+	case v1beta1.ProtocolSCTP:
 		return MatchSCTPDstPort
 	default:
 		return MatchTCPDstPort
 	}
 }
 
-func (c *clause) generateServicePortConjMatch(port *v1.NetworkPolicyPort) *conjunctiveMatch {
+func (c *clause) generateServicePortConjMatch(port v1beta1.Service) *conjunctiveMatch {
 	matchKey := getServiceMatchType(port.Protocol)
 	matchValue := uint16(port.Port.IntVal)
 	match := &conjunctiveMatch{
@@ -574,7 +573,7 @@ func (c *clause) addAddrFlows(client *client, addrType types.AddressType, addres
 
 // addServiceFlows translates the specified NetworkPolicyPorts to conjunctiveMatchFlow, and returns corresponding
 // conjMatchFlowContextChange.
-func (c *clause) addServiceFlows(client *client, ports []*v1.NetworkPolicyPort) []*conjMatchFlowContextChange {
+func (c *clause) addServiceFlows(client *client, ports []v1beta1.Service) []*conjMatchFlowContextChange {
 	var conjMatchFlowContextChanges []*conjMatchFlowContextChange
 	for _, port := range ports {
 		match := c.generateServicePortConjMatch(port)
@@ -810,7 +809,7 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 	var ruleTable, dropTable binding.Table
 	var isEgressRule = false
 	switch rule.Direction {
-	case v1.PolicyTypeEgress:
+	case v1beta1.DirectionOut:
 		ruleTable = clnt.pipeline[egressRuleTable]
 		dropTable = clnt.pipeline[egressDefaultTable]
 		isEgressRule = true

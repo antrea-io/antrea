@@ -22,8 +22,6 @@ import (
 	"sync"
 
 	"github.com/davecgh/go-spew/spew"
-	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
@@ -198,13 +196,12 @@ func (r *reconciler) add(rule *CompletedRule) error {
 		for svcHash, pods := range podsByServicesMap {
 			ofPorts := r.getPodOFPorts(pods)
 			lastRealized.podOFPorts[svcHash] = ofPorts
-			// TODO: Update types.PolicyRule to use Antrea type to avoid unnecessary conversion.
 			ofRuleByServicesMap[svcHash] = &types.PolicyRule{
-				Direction:  networkingv1.PolicyTypeIngress,
+				Direction:  v1beta1.DirectionIn,
 				From:       append(from1, from2...),
 				ExceptFrom: exceptFrom,
 				To:         ofPortsToOFAddresses(ofPorts),
-				Service:    servicesToNetworkPolicyPort(servicesMap[svcHash]),
+				Service:    filterUnresolvablePort(servicesMap[svcHash]),
 			}
 		}
 	} else {
@@ -214,12 +211,11 @@ func (r *reconciler) add(rule *CompletedRule) error {
 
 		podsByServicesMap, servicesMap := groupPodsByServices(rule.Services, rule.ToAddresses)
 		for svcHash, pods := range podsByServicesMap {
-			// TODO: Update types.PolicyRule to use Antrea type to avoid unnecessary conversion.
 			ofRuleByServicesMap[svcHash] = &types.PolicyRule{
-				Direction: networkingv1.PolicyTypeEgress,
+				Direction: v1beta1.DirectionOut,
 				From:      from,
 				To:        podsToOFAddresses(pods),
-				Service:   servicesToNetworkPolicyPort(servicesMap[svcHash]),
+				Service:   filterUnresolvablePort(servicesMap[svcHash]),
 			}
 		}
 
@@ -230,11 +226,10 @@ func (r *reconciler) add(rule *CompletedRule) error {
 			ofRule, exists := ofRuleByServicesMap[svcHash]
 			// Create a new Openflow rule if the group doesn't exist.
 			if !exists {
-				ofService := servicesToNetworkPolicyPort(rule.Services)
 				ofRule = &types.PolicyRule{
-					Direction: networkingv1.PolicyTypeEgress,
+					Direction: v1beta1.DirectionOut,
 					From:      from,
-					Service:   ofService,
+					Service:   filterUnresolvablePort(rule.Services),
 				}
 				ofRuleByServicesMap[svcHash] = ofRule
 				servicesMap[svcHash] = rule.Services
@@ -283,11 +278,11 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 			// Install a new Openflow rule if this group doesn't exist, otherwise do incremental update.
 			if !exists {
 				ofRule := &types.PolicyRule{
-					Direction:  networkingv1.PolicyTypeIngress,
+					Direction:  v1beta1.DirectionIn,
 					From:       append(from1, from2...),
 					ExceptFrom: exceptFrom,
 					To:         ofPortsToOFAddresses(newOFPorts),
-					Service:    servicesToNetworkPolicyPort(servicesMap[svcHash]),
+					Service:    filterUnresolvablePort(servicesMap[svcHash]),
 				}
 				ofID, err := r.installOFRule(ofRule)
 				if err != nil {
@@ -327,10 +322,10 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 			ofID, exists := lastRealized.ofIDs[svcHash]
 			if !exists {
 				ofRule := &types.PolicyRule{
-					Direction: networkingv1.PolicyTypeEgress,
+					Direction: v1beta1.DirectionOut,
 					From:      from,
 					To:        podsToOFAddresses(pods),
-					Service:   servicesToNetworkPolicyPort(servicesMap[svcHash]),
+					Service:   filterUnresolvablePort(servicesMap[svcHash]),
 				}
 				ofID, err := r.installOFRule(ofRule)
 				if err != nil {
@@ -537,7 +532,7 @@ func ipsToOFAddresses(ips sets.String) []types.Address {
 	return from
 }
 
-func servicesToNetworkPolicyPort(in []v1beta1.Service) []*networkingv1.NetworkPolicyPort {
+func filterUnresolvablePort(in []v1beta1.Service) []v1beta1.Service {
 	// Empty or nil slice means allowing all ports in Kubernetes.
 	// nil must be returned to meet ofClient's expectation for this behavior.
 	if len(in) == 0 {
@@ -546,23 +541,16 @@ func servicesToNetworkPolicyPort(in []v1beta1.Service) []*networkingv1.NetworkPo
 	// It makes sure `out` won't be nil, so that even if only named ports are
 	// specified and none of them are resolvable, the rule just falls back to
 	// allowing no port, instead of all ports.
-	out := make([]*networkingv1.NetworkPolicyPort, 0, len(in))
+	out := make([]v1beta1.Service, 0, len(in))
 	for _, s := range in {
-		service := &networkingv1.NetworkPolicyPort{}
-		if s.Protocol != nil {
-			protoStr := string(*s.Protocol)
-			proto := corev1.Protocol(protoStr)
-			service.Protocol = &proto
-		}
 		if s.Port != nil {
 			// All resolvable named port have been converted to intstr.Int,
 			// ignore unresolvable ones.
 			if s.Port.Type == intstr.String {
 				continue
 			}
-			service.Port = s.Port
 		}
-		out = append(out, service)
+		out = append(out, s)
 	}
 	return out
 }
