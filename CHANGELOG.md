@@ -9,6 +9,16 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 
 ## Unreleased
 
+## 0.4.1 - 2019-02-27
+
+### Fixed
+
+- Fix issues with IPsec support, which was broken in 0.4.0:
+   * reduce MTU when IPsec is enabled to accommodate for IPsec overhead
+   * add required flows to accept traffic received from IPsec tunnels
+- Check and update (if needed) the type of the default tunnel port (tun0) after Agent starts.
+- Fix race condition when the same OF port is reused for a new Pod.
+
 ## 0.4.0 - 2019-02-20
 
 ### Added
