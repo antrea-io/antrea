@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -375,7 +376,8 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	npObj := getK8sNetworkPolicyObj()
 	ns := npObj.ObjectMeta.Namespace
 	pSelector := npObj.Spec.PodSelector
-	apgID := getNormalizedUID(generateNormalizedName(ns, &pSelector, nil))
+	pLabelSelector, _ := metav1.LabelSelectorAsSelector(&pSelector)
+	apgID := getNormalizedUID(generateNormalizedName(ns, pLabelSelector, nil))
 	_, npc := newController()
 	npc.addNetworkPolicy(npObj)
 	npc.deleteNetworkPolicy(npObj)
@@ -1046,10 +1048,11 @@ func TestDeletePod(t *testing.T) {
 	matchSelector := metav1.LabelSelector{
 		MatchLabels: matchLabels,
 	}
+	mLabelSelector, _ := metav1.LabelSelectorAsSelector(&matchSelector)
 	inPSelector := metav1.LabelSelector{
 		MatchLabels: ruleLabels,
 	}
-	matchAppGID := getNormalizedUID(generateNormalizedName(ns, &matchSelector, nil))
+	matchAppGID := getNormalizedUID(generateNormalizedName(ns, mLabelSelector, nil))
 	ingressRules := []networkingv1.NetworkPolicyIngressRule{
 		{
 			From: []networkingv1.NetworkPolicyPeer{
@@ -1350,112 +1353,97 @@ func TestDeleteNamespace(t *testing.T) {
 
 func TestToGroupSelector(t *testing.T) {
 	pSelector := metav1.LabelSelector{}
+	pLabelSelector, _ := metav1.LabelSelectorAsSelector(&pSelector)
 	nSelector := metav1.LabelSelector{}
-	tables := []struct {
+	nLabelSelector, _ := metav1.LabelSelectorAsSelector(&nSelector)
+	tests := []struct {
+		name             string
 		namespace        string
 		podSelector      *metav1.LabelSelector
 		nsSelector       *metav1.LabelSelector
 		expGroupSelector *antreatypes.GroupSelector
 	}{
 		{
+			"to-group-selector-ns-pod-selector",
 			"nsName",
 			&pSelector,
 			nil,
 			&antreatypes.GroupSelector{
 				Namespace:         "nsName",
 				NamespaceSelector: nil,
-				PodSelector:       &pSelector,
-				NormalizedName:    generateNormalizedName("nsName", &pSelector, nil),
+				PodSelector:       pLabelSelector,
+				NormalizedName:    generateNormalizedName("nsName", pLabelSelector, nil),
 			},
 		},
 		{
+			"to-group-selector-ns-selector",
 			"nsName",
 			nil,
 			&nSelector,
 			&antreatypes.GroupSelector{
 				Namespace:         "",
-				NamespaceSelector: &nSelector,
+				NamespaceSelector: nLabelSelector,
 				PodSelector:       nil,
-				NormalizedName:    generateNormalizedName("", nil, &nSelector),
+				NormalizedName:    generateNormalizedName("", nil, nLabelSelector),
 			},
 		},
 		{
-			"",
+			"to-group-selector-pod-selector",
+			"nsName",
+			&pSelector,
 			nil,
-			&nSelector,
 			&antreatypes.GroupSelector{
-				Namespace:         "",
-				NamespaceSelector: &nSelector,
-				PodSelector:       nil,
-				NormalizedName:    generateNormalizedName("", nil, &nSelector),
+				Namespace:         "nsName",
+				NamespaceSelector: nil,
+				PodSelector:       pLabelSelector,
+				NormalizedName:    generateNormalizedName("nsName", pLabelSelector, nil),
 			},
 		},
 		{
+			"to-group-selector-ns-selector-pod-selector",
 			"nsName",
 			&pSelector,
 			&nSelector,
 			&antreatypes.GroupSelector{
 				Namespace:         "",
-				NamespaceSelector: &nSelector,
-				PodSelector:       &pSelector,
-				NormalizedName:    generateNormalizedName("", &pSelector, &nSelector),
+				NamespaceSelector: nLabelSelector,
+				PodSelector:       pLabelSelector,
+				NormalizedName:    generateNormalizedName("", pLabelSelector, nLabelSelector),
 			},
 		},
 	}
-	for _, table := range tables {
-		group := toGroupSelector(table.namespace, table.podSelector, table.nsSelector)
-		if group.Namespace != table.expGroupSelector.Namespace {
-			t.Errorf("Group Namespace incorrectly set. Expected %s, got: %s", table.expGroupSelector.Namespace, group.Namespace)
-		}
-		if group.NormalizedName != table.expGroupSelector.NormalizedName {
-			t.Errorf("Group normalized Name incorrectly set. Expected %s, got: %s", table.expGroupSelector.NormalizedName, group.NormalizedName)
-		}
-		if group.NamespaceSelector != table.expGroupSelector.NamespaceSelector {
-			t.Errorf("Group NamespaceSelector incorrectly set. Expected %v, got: %v", table.expGroupSelector.NamespaceSelector, group.NamespaceSelector)
-		}
-		if group.PodSelector != table.expGroupSelector.PodSelector {
-			t.Errorf("Group PodSelector incorrectly set. Expected %v, got: %v", table.expGroupSelector.PodSelector, group.PodSelector)
-		}
-	}
-}
-
-func TestNormalizeExpr(t *testing.T) {
-	tables := []struct {
-		key     string
-		op      metav1.LabelSelectorOperator
-		values  []string
-		expName string
-	}{
-		{
-			"role",
-			metav1.LabelSelectorOpIn,
-			[]string{"db", "app"},
-			fmt.Sprintf("%s %s %s", "role", metav1.LabelSelectorOpIn, []string{"db", "app"}),
-		},
-		{
-			"role",
-			metav1.LabelSelectorOpExists,
-			[]string{},
-			fmt.Sprintf("%s %s", "role", metav1.LabelSelectorOpExists),
-		},
-	}
-	for _, table := range tables {
-		name := normalizeExpr(table.key, table.op, table.values)
-		if name != table.expName {
-			t.Errorf("Name not normalized correctly. Expected %s, got %s", table.expName, name)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			group := toGroupSelector(tt.namespace, tt.podSelector, tt.nsSelector)
+			if group.Namespace != tt.expGroupSelector.Namespace {
+				t.Errorf("Group Namespace incorrectly set. Expected %s, got: %s", tt.expGroupSelector.Namespace, group.Namespace)
+			}
+			if group.NormalizedName != tt.expGroupSelector.NormalizedName {
+				t.Errorf("Group normalized Name incorrectly set. Expected %s, got: %s", tt.expGroupSelector.NormalizedName, group.NormalizedName)
+			}
+			if group.NamespaceSelector != nil && tt.expGroupSelector.NamespaceSelector != nil {
+				if !reflect.DeepEqual(group.NamespaceSelector, tt.expGroupSelector.NamespaceSelector) {
+					t.Errorf("Group NamespaceSelector incorrectly set. Expected %v, got: %v", tt.expGroupSelector.NamespaceSelector, group.NamespaceSelector)
+				}
+			}
+			if group.PodSelector != nil && tt.expGroupSelector.PodSelector != nil {
+				if !reflect.DeepEqual(group.PodSelector, tt.expGroupSelector.PodSelector) {
+					t.Errorf("Group PodSelector incorrectly set. Expected %v, got: %v", tt.expGroupSelector.PodSelector, group.PodSelector)
+				}
+			}
+		})
 	}
 }
 
 func TestGenerateNormalizedName(t *testing.T) {
-	pLabels := map[string]string{"user": "dev"}
+	pLabels := map[string]string{"app": "client"}
 	req1 := metav1.LabelSelectorRequirement{
 		Key:      "role",
 		Operator: metav1.LabelSelectorOpIn,
 		Values:   []string{"db", "app"},
 	}
 	pExprs := []metav1.LabelSelectorRequirement{req1}
-	normalizedPodSelector := "role In [db app] And user In [dev]"
+	normalizedPodSelector := "app=client,role in (app,db)"
 	nLabels := map[string]string{"scope": "test"}
 	req2 := metav1.LabelSelectorRequirement{
 		Key:      "env",
@@ -1463,24 +1451,26 @@ func TestGenerateNormalizedName(t *testing.T) {
 		Values:   []string{"staging", "prod"},
 	}
 	nExprs := []metav1.LabelSelectorRequirement{req2}
+	normalizedNSSelector := "env notin (prod,staging),scope=test"
 	pSelector := metav1.LabelSelector{
 		MatchLabels:      pLabels,
 		MatchExpressions: pExprs,
 	}
+	pLabelSelector, _ := metav1.LabelSelectorAsSelector(&pSelector)
 	nSelector := metav1.LabelSelector{
 		MatchLabels:      nLabels,
 		MatchExpressions: nExprs,
 	}
-	normalizedNSSelector := "env NotIn [staging prod] And scope In [test]"
+	nLabelSelector, _ := metav1.LabelSelectorAsSelector(&nSelector)
 	tables := []struct {
 		namespace string
-		pSelector *metav1.LabelSelector
-		nSelector *metav1.LabelSelector
+		pSelector labels.Selector
+		nSelector labels.Selector
 		expName   string
 	}{
 		{
 			"nsName",
-			&pSelector,
+			pLabelSelector,
 			nil,
 			fmt.Sprintf("namespace=nsName And podSelector=%s", normalizedPodSelector),
 		},
@@ -1493,13 +1483,13 @@ func TestGenerateNormalizedName(t *testing.T) {
 		{
 			"nsName",
 			nil,
-			&nSelector,
+			nLabelSelector,
 			fmt.Sprintf("namespaceSelector=%s", normalizedNSSelector),
 		},
 		{
 			"nsName",
-			&pSelector,
-			&nSelector,
+			pLabelSelector,
+			nLabelSelector,
 			fmt.Sprintf("namespaceSelector=%s And podSelector=%s", normalizedNSSelector, normalizedPodSelector),
 		},
 	}
