@@ -19,8 +19,10 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -266,6 +268,91 @@ func TestTransactions(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestBundleErrorWhenOVSRestart(t *testing.T) {
+	br := "br06"
+	err := PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	defer func() {
+		err = DeleteOVSBridge(br)
+		require.Nil(t, err, fmt.Sprintf("error while deleting OVS bridge: %v", err))
+	}()
+
+	bridge := binding.NewOFBridge(br)
+	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
+
+	err = bridge.Connect(maxRetry, make(chan struct{}))
+	require.Nil(t, err, "Failed to start OFService")
+	defer bridge.Disconnect()
+
+	// Ensure OVS is connected before sending bundle messages.
+	select {
+	case <-time.Tick(1 * time.Second):
+		if bridge.IsConnected() {
+			break
+		}
+	}
+
+	// Restart OVS in another goroutine.
+	go func() {
+		select {
+		case <-time.After(100 * time.Millisecond):
+			DeleteOVSBridge(br)
+			PrepareOVSBridge(br)
+		}
+	}()
+
+	expectedErrorMsgs := map[string]bool{
+		"bundle reply is timeout": true,
+		"bundle reply is canceled because of disconnection from the Switch": true,
+		"message is timeout": true,
+		"message is canceled because of disconnection from the Switch": true,
+	}
+
+	var failCount, successCount int
+	loop := 10000
+	var wg sync.WaitGroup
+	wg.Add(loop)
+	i := 0
+	for i < loop {
+		// Sending Bundle message in parallel.
+		go func() {
+			// Sending OpenFlow messages when OVS is disconnected is not in this case's scope.
+			if !bridge.IsConnected() {
+				return
+			}
+			ch := make(chan struct{})
+			go func() {
+				flows := []binding.Flow{table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+					Cookie(getCookieID()).
+					MatchInPort(uint32(count + 1)).
+					Action().ResubmitToTable(table.GetNext()).
+					Done()}
+				err = bridge.AddFlowsInBundle(flows, nil, nil)
+				if err != nil {
+					errMsg := err.Error()
+					_, found := expectedErrorMsgs[errMsg]
+					// Check if the bundle message is canceled or the Bundle reply is timeout.
+					require.True(t, found, errMsg)
+				}
+				ch <- struct{}{}
+			}()
+
+			select {
+			// Wait for Bundle timeout or canceled.
+			case <-time.After(15 * time.Second):
+				failCount++
+			case <-ch:
+				successCount++
+			}
+			wg.Done()
+		}()
+		i++
+	}
+
+	wg.Wait()
+	require.Equal(t, 0, failCount, "No fail case expected")
 }
 
 func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
