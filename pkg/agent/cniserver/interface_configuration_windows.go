@@ -148,7 +148,7 @@ func (ic *ifConfigurator) createContainerLink(podName string, podNameSpace strin
 		Name:           epName,
 		VirtualNetwork: ic.hnsNetwork.Id,
 		DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
-		DNSSuffix:      result.DNS.Domain,
+		DNSSuffix:      strings.Join(result.DNS.Search, ","),
 		GatewayAddress: containerIP.Gateway.String(),
 		IPAddress:      containerIP.Address.IP,
 	}
