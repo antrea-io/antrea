@@ -111,6 +111,15 @@ const (
 
 var supportedCNIVersionSet map[string]bool
 
+type RuntimeDNS struct {
+	Nameservers []string `json:"servers,omitempty"`
+	Search      []string `json:"searches,omitempty"`
+}
+
+type RuntimeConfig struct {
+	DNS RuntimeDNS `json:"dns"`
+}
+
 type NetworkConfig struct {
 	CNIVersion string          `json:"cniVersion,omitempty"`
 	Name       string          `json:"name,omitempty"`
@@ -118,6 +127,8 @@ type NetworkConfig struct {
 	MTU        int             `json:"mtu,omitempty"`
 	DNS        cnitypes.DNS    `json:"dns"`
 	IPAM       ipam.IPAMConfig `json:"ipam,omitempty"`
+	// Options to be passed in by the runtime.
+	RuntimeConfig RuntimeConfig `json:"runtimeConfig"`
 
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
 	PrevResult    cnitypes.Result        `json:"-"`
@@ -396,6 +407,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	// Setup pod interfaces and connect to ovs bridge
 	podName := string(cniConfig.K8S_POD_NAME)
 	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
+	updateResultDNSConfig(result, cniConfig)
 	if err = s.podConfigurator.configureInterfaces(
 		podName,
 		podNamespace,
@@ -412,7 +424,6 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	// Notify the Pod update event to required components.
 	s.podUpdates <- v1beta1.PodReference{Name: podName, Namespace: podNamespace}
 
-	result.DNS = cniConfig.DNS
 	var resultBytes bytes.Buffer
 	_ = result.PrintTo(&resultBytes)
 	klog.Infof("CmdAdd succeeded")
