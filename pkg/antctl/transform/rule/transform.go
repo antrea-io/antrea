@@ -1,0 +1,100 @@
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package rule
+
+import (
+	"net"
+
+	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+)
+
+type service struct {
+	Protocol string `json:"protocol,omitempty" yaml:"protocol,omitempty"`
+	Port     string `json:"port,omitempty" yaml:"port,omitempty"`
+}
+
+type ipBlock struct {
+	CIDR   string   `json:"cidr" yaml:"cidr"`
+	Except []string `json:"except,omitempty" yaml:"except,omitempty"`
+}
+
+type peer struct {
+	AddressGroups []string  `json:"addressGroups,omitempty" yaml:"addressGroups,omitempty"`
+	IPBlocks      []ipBlock `json:"ipBlocks,omitempty" json:"ipBlocks,omitempty"`
+}
+
+type Response struct {
+	Direction string    `json:"direction,omitempty" yaml:"direction,omitempty"`
+	From      peer      `json:"from,omitempty" yaml:"from,omitempty"`
+	To        peer      `json:"to,omitempty" yaml:"to,omitempty"`
+	Services  []service `json:"services,omitempty" yaml:"services,omitempty"`
+}
+
+func serviceTransform(services ...networkingv1beta1.Service) []service {
+	var ret []service
+	for _, s := range services {
+		ret = append(ret, service{
+			Protocol: string(*s.Protocol),
+			Port:     s.Port.String(),
+		})
+	}
+	return ret
+}
+
+func ipNetTransform(ipNet networkingv1beta1.IPNet) *net.IPNet {
+	ip := net.IP(ipNet.IP)
+	var bits int
+	if ip.To4() != nil {
+		bits = net.IPv4len * 8
+	} else {
+		bits = net.IPv6len * 8
+	}
+	return &net.IPNet{IP: ip, Mask: net.CIDRMask(int(ipNet.PrefixLength), bits)}
+}
+
+func ipBlockTransform(block networkingv1beta1.IPBlock) ipBlock {
+	var ib ipBlock
+	except := []string{}
+	for i := range block.Except {
+		except = append(except, ipNetTransform(block.Except[i]).String())
+	}
+	ib.Except = except
+	if len(block.CIDR.IP) >= 4 {
+		ib.CIDR = ipNetTransform(block.CIDR).String()
+	}
+	return ib
+}
+
+func peerTransform(p networkingv1beta1.NetworkPolicyPeer) peer {
+	blocks := []ipBlock{}
+	for _, originBlock := range p.IPBlocks {
+		blocks = append(blocks, ipBlockTransform(originBlock))
+	}
+	return peer{AddressGroups: p.AddressGroups, IPBlocks: blocks}
+}
+
+func ObjectTransform(o interface{}) (interface{}, error) {
+	originRules := o.(*[]networkingv1beta1.NetworkPolicyRule)
+	var rules []Response
+	for _, rule := range *originRules {
+		rules = append(rules, Response{
+			Direction: string(rule.Direction),
+			From:      peerTransform(rule.From),
+			To:        peerTransform(rule.To),
+			Services:  serviceTransform(rule.Services...),
+		})
+	}
+	return rules, nil
+}
