@@ -31,7 +31,7 @@ metadata:
   name: CLUSTERNAME-md-0
   namespace: CLUSTERNAMESPACE
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       cluster.x-k8s.io/cluster-name: CLUSTERNAME
