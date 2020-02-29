@@ -22,7 +22,7 @@ jobs:
         go-version: 1.13
 
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Run unit tests
       run: make test-unit
@@ -37,7 +37,7 @@ jobs:
       with:
         go-version: 1.13
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
     - name: Run golangci-lint
       run: make golangci
 
@@ -53,7 +53,7 @@ jobs:
         go-version: 1.13
 
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Build Antrea binaries
       run: make bin
@@ -69,7 +69,7 @@ jobs:
           go-version: 1.13
 
       - name: Check-out code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
 
       - name: Build antctl binaries
         run: make antctl
@@ -86,7 +86,7 @@ jobs:
         go-version: 1.13
 
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Check code generation
       run: ./ci/check-codegen.sh
@@ -103,7 +103,7 @@ jobs:
         go-version: 1.13
 
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Check manifest
       run: ./ci/check-manifest.sh
@@ -120,7 +120,7 @@ jobs:
         go-version: 1.13
 
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Check tidy
       run: make test-tidy
