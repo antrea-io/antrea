@@ -10,7 +10,7 @@ jobs:
     if: github.repository == 'vmware-tanzu/antrea'
     runs-on: [ubuntu-18.04]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Build Antrea Docker image and push to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -23,7 +23,7 @@ jobs:
     if: github.repository == 'vmware-tanzu/antrea'
     runs-on: [ubuntu-18.04]
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - name: Build octant-antrea-ubuntu Docker image and push to registry
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
