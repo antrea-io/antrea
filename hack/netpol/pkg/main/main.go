@@ -74,7 +74,7 @@ func main() {
 	err = k8s.CleanNetworkPolicies(namespaces)
 	failOnError(err)
 
-	testList := []func(*Kubernetes)[]*TestStep{
+	testList := []func(*Kubernetes) []*TestStep{
 		testDefaultDeny,
 		testPodLabelWhitelistingFromBToA,
 		testInnerNamespaceTraffic,
@@ -86,11 +86,9 @@ func main() {
 		testNamedPortWNamespace,
 		testEgressOnNamedPort,
 		testEgressAndIngressIntegration,
-
-		// TODO: not tested
-		//testAllowAllPrecedenceIngress,
-		//testPortsPoliciesStackedOrUpdated,
-		//testMultipleUpdates,
+		testAllowAllPrecedenceIngress,
+		testPortsPoliciesStackedOrUpdated,
+		//testMultipleUpdates,  // Todo: not suitable in new stacked structure
 	}
 	executeTests(k8s, testList)
 }
@@ -419,7 +417,6 @@ func testNamedPort(k8s *Kubernetes) []*TestStep {
 			builder.Get(),
 			81,
 		},
-
 	}
 }
 
@@ -442,8 +439,7 @@ func testAllowAll(k8s *Kubernetes) []*TestStep {
 // This covers two test cases: stacked policy's and updated policies.
 // 1) should enforce policy based on Ports [Feature:NetworkPolicy] (disallow 80) (stacked == false)
 // 2) should enforce updated policy (stacked == true)
-// TODO: This test should get rid of stackInsteadOfUpdate field by dividing this to 2 seperate funcs.
-func testPortsPoliciesStackedOrUpdated(k8s *Kubernetes, stackInsteadOfUpdate bool) []*TestStep {
+func testPortsPoliciesStackedOrUpdated(k8s *Kubernetes) []*TestStep {
 	blocked := func() *Reachability {
 		r := NewReachability(allPods, true)
 		r.ExpectAllIngress(Pod("x/a"), false)
@@ -465,13 +461,6 @@ func testPortsPoliciesStackedOrUpdated(k8s *Kubernetes, stackInsteadOfUpdate boo
 	builder.AddIngress(nil, &p80, nil, nil, nil, nil, nil, nil)
 	policy1 := builder.Get()
 
-	/***
-	  Now, whitelist port 81, and verify 81 it is open.
-	*/
-	// using false makes this a test for 'updated' policies...
-	if stackInsteadOfUpdate {
-		policyName = "policy-that-will-update-for-ports-2"
-	}
 	builder2 := &NetworkPolicySpecBuilder{}
 	// by preserving the same name, this policy will also serve to test the 'updated policy' scenario.
 	builder2 = builder2.SetName("x", policyName).SetPodSelector(map[string]string{"pod": "a"})
@@ -483,10 +472,6 @@ func testPortsPoliciesStackedOrUpdated(k8s *Kubernetes, stackInsteadOfUpdate boo
 	// The second policy was on port 81, which was whitelisted.
 	// At this point, if we stacked, make sure 80 is still unblocked
 	// Whereas if we DIDNT stack, make sure 80 is blocked.
-	r3 := blocked()
-	if stackInsteadOfUpdate {
-		r3 = NewReachability(allPods, true)
-	}
 	return []*TestStep{
 		&TestStep{
 			blocked(), // 81 blocked
@@ -499,8 +484,8 @@ func testPortsPoliciesStackedOrUpdated(k8s *Kubernetes, stackInsteadOfUpdate boo
 			81,
 		},
 		&TestStep{
-			r3,
-			nil, // nil policy wont be created, this is just a 2nd validation, this time, of port 81.
+			blocked(),
+			policy2,
 			80,
 		},
 	}
@@ -514,7 +499,6 @@ func testPortsPolicies(k8s *Kubernetes) []*TestStep {
 	builder.SetTypeIngress()
 	// anyone on port 81 is ok...
 	builder.AddIngress(nil, &p81, nil, nil, nil, nil, nil, nil)
-
 
 	// disallow port 80
 	reachability1 := func() *Reachability {
