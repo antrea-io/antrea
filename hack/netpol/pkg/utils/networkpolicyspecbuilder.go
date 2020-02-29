@@ -38,12 +38,11 @@ func (n *NetworkPolicySpecBuilder) SetName(namespace string, name string) *Netwo
 	return n
 }
 
+// TODO: Add tests to match expressions
 func (n *NetworkPolicySpecBuilder) AddIngress(protoc *v1.Protocol, port *int, portName *string, cidr *string, podSelector map[string]string, nsSelector map[string]string, podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement) *NetworkPolicySpecBuilder {
 
 	var ps *metav1.LabelSelector
-
 	var ns *metav1.LabelSelector
-
 	if n.Spec.Ingress == nil {
 		n.Spec.Ingress = []networkingv1.NetworkPolicyIngressRule{}
 	}
@@ -52,18 +51,28 @@ func (n *NetworkPolicySpecBuilder) AddIngress(protoc *v1.Protocol, port *int, po
 		ps = &metav1.LabelSelector{
 			MatchLabels: podSelector,
 		}
-	} else if podSelectorMatchExp != nil {
+		if podSelectorMatchExp != nil{
+			ps.MatchExpressions = *podSelectorMatchExp
+		}
+	}
+
+	if podSelectorMatchExp != nil {
 		ps = &metav1.LabelSelector{
 			MatchExpressions: *podSelectorMatchExp,
 		}
 	}
-	
+
 	if nsSelector != nil {
 		ns = &metav1.LabelSelector{
 			MatchLabels: nsSelector,
 		}
-	} else if nsSelectorMatchExp != nil {
-		ps = &metav1.LabelSelector{
+		if nsSelectorMatchExp != nil {
+			ns.MatchExpressions = *nsSelectorMatchExp
+		}
+	}
+
+	if nsSelectorMatchExp != nil {
+		ns = &metav1.LabelSelector{
 			MatchExpressions: *nsSelectorMatchExp,
 		}
 	}
@@ -99,8 +108,6 @@ func (n *NetworkPolicySpecBuilder) AddIngress(protoc *v1.Protocol, port *int, po
 		From:  policyPeer,
 		Ports: ports,
 	}
-	
-	
 	n.Spec.Ingress = append(n.Spec.Ingress, newRule)
 	return n
 }
