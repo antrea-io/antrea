@@ -1,10 +1,13 @@
 package main
 
 import (
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	. "github.com/vmware-tanzu/antrea/hack/netpol/pkg/utils"
+	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"time"
 )
 
 // common for all tests.  these get hardcoded into the Expect() clauses,
@@ -29,14 +32,45 @@ func init() {
 	}
 }
 
-func bootstrap(k8s *Kubernetes) {
+func waitForPodInNamespace(k8s *Kubernetes, ns string, pod string) error {
+	log.Infof("waiting for pod %s/%s", ns, pod)
+	for {
+		k8sPod, err := k8s.GetPod(ns, pod)
+		if err != nil {
+			return errors.WithMessagef(err, "unable to get pod %s/%s", ns, pod)
+		}
+		if k8sPod != nil && k8sPod.Status.Phase == v1.PodRunning {
+			log.Infof("pod running: %+v", k8sPod)
+			return nil
+		}
+		log.Infof("pod %s/%s not ready, waiting ...", ns, pod)
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func bootstrap(k8s *Kubernetes) error {
 	for _, ns := range namespaces {
-		k8s.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
+		_, err := k8s.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
+		if err != nil {
+			return errors.WithMessagef(err, "unable to create/update ns %s", ns)
+		}
 		for _, pod := range pods {
 			log.Infof("creating/updating pod %s/%s", ns, pod)
-			k8s.CreateOrUpdateDeployment(ns, ns+pod, 1, map[string]string{"pod": pod,})
+			_, err := k8s.CreateOrUpdateDeployment(ns, ns+pod, 1, map[string]string{"pod": pod})
+			if err != nil {
+				return errors.WithMessagef(err, "unable to create/update deployment %s/%s", ns, pod)
+			}
 		}
 	}
+
+	for _, pod := range allPods {
+		err := waitForPodInNamespace(k8s, pod.Namespace(), pod.PodName())
+		if err != nil {
+			return errors.WithMessagef(err, "unable to wait for pod %s/%s", pod.Namespace(), pod.PodName())
+		}
+	}
+
+	return nil
 }
 
 func validate(k8s *Kubernetes, reachability *Reachability, port int) {
@@ -101,10 +135,11 @@ type TestStep struct {
 
 // executeTests runs all the tests in testList and print results
 func executeTests(k8s *Kubernetes, testList []func(*Kubernetes) []*TestStep) {
-	bootstrap(k8s)
+	err := bootstrap(k8s)
+	failOnError(err)
 
 	for _, test := range testList {
-		err := k8s.CleanNetworkPolicies(namespaces)
+		err = k8s.CleanNetworkPolicies(namespaces)
 		failOnError(err)
 		testStep := test(k8s)
 		for _, s := range testStep {

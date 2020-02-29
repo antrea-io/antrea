@@ -38,20 +38,40 @@ func NewKubernetes() (*Kubernetes, error) {
 	}, nil
 }
 
-// GetPods returns an array of all pods in the given namespace having a k/v label pair.
-func (k *Kubernetes) GetPods(ns string, key, val string) ([]v1.Pod, error) {
-	if p, ok := k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)]; ok {
-		return p, nil
+// GetPod returns a pod with the matching namespace and name
+func (k *Kubernetes) GetPod(ns string, name string) (*v1.Pod, error) {
+	pods, err := k.getPodsUncached(ns, "pod", name)
+	if err != nil {
+		return nil, errors.WithMessagef(err, "unable to get pod %s/%s", ns, name)
 	}
+	if len(pods) == 0 {
+		return nil, nil
+	}
+	return &pods[0], nil
+}
 
+func (k *Kubernetes) getPodsUncached(ns string, key, val string) ([]v1.Pod, error) {
 	v1PodList, err := k.ClientSet.CoreV1().Pods(ns).List(metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%v=%v",key,val),
 	})
 	if err != nil {
 		return nil, errors.WithMessage(err, "unable to list pods")
 	}
-	k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)] = v1PodList.Items
 	return v1PodList.Items, nil
+}
+
+// GetPods returns an array of all pods in the given namespace having a k/v label pair.
+func (k *Kubernetes) GetPods(ns string, key string, val string) ([]v1.Pod, error) {
+	if p, ok := k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)]; ok {
+		return p, nil
+	}
+
+	v1PodList, err := k.getPodsUncached(ns, key, val)
+	if err != nil {
+		return nil, errors.WithMessage(err, "unable to list pods")
+	}
+	k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)] = v1PodList
+	return v1PodList, nil
 }
 
 // Probe is execs into a pod and checks its connectivity to another pod.  Of course it assumes
@@ -155,7 +175,7 @@ func (k *Kubernetes) CreateOrUpdateNamespace(n string, labels map[string]string)
 	nsr, err := k.ClientSet.CoreV1().Namespaces().Create(ns)
 	if err == nil {
 		log.Infof("created namespace %s", ns)
-		return nsr, err
+		return nsr, nil
 	}
 
 	log.Debugf("unable to create namespace %s, let's try updating it instead (error: %s)", ns.Name, err)
