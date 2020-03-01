@@ -136,8 +136,8 @@ func (tt *TruthTable) Compare(other *TruthTable) *TruthTable {
 	}
 }
 
-func (tt *TruthTable) PrettyPrint() string {
-	header := strings.Join(append([]string{"-"}, tt.Items...), "\t")
+func (tt *TruthTable) PrettyPrint(indent string) string {
+	header := indent + strings.Join(append([]string{"-"}, tt.Items...), "\t")
 	lines := []string{header}
 	for _, from := range tt.Items {
 		line := []string{from}
@@ -148,7 +148,7 @@ func (tt *TruthTable) PrettyPrint() string {
 			}
 			line = append(line, val)
 		}
-		lines = append(lines, strings.Join(line, "\t"))
+		lines = append(lines, indent + strings.Join(line, "\t"))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -210,13 +210,13 @@ func (r *Reachability) Observe(pod1 Pod, pod2 Pod, isConnected bool) {
 	r.Observed.Set(string(pod1), string(pod2), isConnected)
 }
 
-func (r *Reachability) summary() (int, int, *TruthTable) {
-	comparison := r.Expected.Compare(r.Observed)
+func (r *Reachability) Summary() (trueObs int, falseObs int, comparison *TruthTable) {
+	comparison = r.Expected.Compare(r.Observed)
 	if !comparison.IsComplete() {
 		panic("observations not complete!")
 	}
-	falseObs := 0
-	trueObs := 0
+	falseObs = 0
+	trueObs = 0
 	for _, dict := range comparison.Values {
 		for _, val := range dict {
 			if val {
@@ -230,15 +230,15 @@ func (r *Reachability) summary() (int, int, *TruthTable) {
 }
 
 func (r *Reachability) PrintSummary(printExpected bool, printObserved bool, printComparison bool) {
-	right, wrong, comparison := r.summary()
+	right, wrong, comparison := r.Summary()
 	fmt.Printf("reachability: correct:%v, incorrect:%v, result=%t\n\n", right, wrong, wrong == 0)
 	if printExpected {
-		fmt.Printf("expected:\n\n%s\n\n\n", r.Expected.PrettyPrint())
+		fmt.Printf("expected:\n\n%s\n\n\n", r.Expected.PrettyPrint(""))
 	}
 	if printObserved {
-		fmt.Printf("observed:\n\n%s\n\n\n", r.Observed.PrettyPrint())
+		fmt.Printf("observed:\n\n%s\n\n\n", r.Observed.PrettyPrint(""))
 	}
 	if printComparison {
-		fmt.Printf("comparison:\n\n%s\n\n\n", comparison.PrettyPrint())
+		fmt.Printf("comparison:\n\n%s\n\n\n", comparison.PrettyPrint(""))
 	}
 }

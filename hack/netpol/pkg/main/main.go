@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	. "github.com/vmware-tanzu/antrea/hack/netpol/pkg/utils"
@@ -81,7 +82,8 @@ func validate(k8s *Kubernetes, reachability *Reachability, port int) {
 			connected, err := k8s.Probe(pod1.Namespace(), pod1.PodName(), pod2.Namespace(), pod2.PodName(), port)
 			log.Debugf("... expected %v , got %v", reachability.Expected.Get(string(pod1), string(pod2)), connected)
 			if err != nil {
-				log.Errorf("unable to make main observation on %s -> %s: %s", string(pod1), string(pod2), err)
+				// log this error as debug since it's an expected failure
+				log.Debugf("unable to make main observation on %s -> %s: %s", string(pod1), string(pod2), err)
 			}
 			reachability.Observe(pod1, pod2, connected)
 			if !connected {
@@ -108,48 +110,76 @@ func main() {
 	err = k8s.CleanNetworkPolicies(namespaces)
 	failOnError(err)
 
-	testList := []func(*Kubernetes) []*TestStep{
-		testDefaultDeny,
-		testPodLabelWhitelistingFromBToA,
-		testInnerNamespaceTraffic,
-		testEnforcePodAndNSSelector,
-		testEnforcePodOrNSSelector,
-		testPortsPolicies,
-		testAllowAll,
-		testNamedPort,
-		testNamedPortWNamespace,
-		testEgressOnNamedPort,
-		testEgressAndIngressIntegration,
-		testAllowAllPrecedenceIngress,
-		testPortsPoliciesStackedOrUpdated,
+	testList := []*TestCase{
+		&TestCase{"DefaultDeny", testDefaultDeny, nil},
+		&TestCase{"PodLabelWhitelistingFromBToA", testPodLabelWhitelistingFromBToA, nil},
+		&TestCase{"InnerNamespaceTraffic", testInnerNamespaceTraffic, nil},
+		&TestCase{"EnforcePodAndNSSelector", testEnforcePodAndNSSelector, nil},
+		&TestCase{"EnforcePodOrNSSelector", testEnforcePodOrNSSelector, nil},
+		&TestCase{"PortsPolicies", testPortsPolicies, nil},
+		&TestCase{"AllowAll", testAllowAll, nil},
+		&TestCase{"NamedPort", testNamedPort, nil},
+		&TestCase{"NamedPortWithNamespace", testNamedPortWNamespace, nil},
+		&TestCase{"EgressOnNamedPort", testEgressOnNamedPort, nil},
+		&TestCase{"EgressAndIngressIntegration", testEgressAndIngressIntegration, nil},
+		&TestCase{"AllowAllPrecedenceIngress", testAllowAllPrecedenceIngress, nil},
+		&TestCase{"PortsPoliciesStackedOrUpdated", testPortsPoliciesStackedOrUpdated, nil},
 		//testMultipleUpdates,  // Todo: not suitable in new stacked structure
 	}
 	executeTests(k8s, testList)
+
+	fmt.Printf("\n\n---------------- Test Results ------------------\n\n")
+	for _, testCase := range testList {
+		fmt.Printf("Test %s:\n", testCase.Name)
+		for _, step := range testCase.Steps {
+			_, wrong, comparison := step.Reachability.Summary()
+			var result string
+			if wrong == 0 {
+				result = "success"
+			} else {
+				result = fmt.Sprintf("failure -- %d wrong results", wrong)
+			}
+			fmt.Printf("\tStep %s on port %d: -- %s\n", step.Name, step.Port, result)
+			fmt.Printf("\n%s\n", comparison.PrettyPrint("\t\t"))
+			fmt.Printf("\n\n")
+		}
+		fmt.Printf("\n\n\n")
+	}
+}
+
+type TestCase struct {
+	Name string
+	Test func(*Kubernetes) []*TestStep
+	// TODO if we can remove the need for `Test` to be a function, and instead just model it as a slice of steps,
+	// we can get rid of the need for this ugly hack where we write the steps from `Test` into another field
+	Steps []*TestStep
 }
 
 type TestStep struct {
+	Name          string
 	Reachability  *Reachability
 	NetworkPolicy *networkingv1.NetworkPolicy
 	Port          int
 }
 
 // executeTests runs all the tests in testList and print results
-func executeTests(k8s *Kubernetes, testList []func(*Kubernetes) []*TestStep) {
+func executeTests(k8s *Kubernetes, testList []*TestCase) {
 	err := bootstrap(k8s)
 	failOnError(err)
 
-	for _, test := range testList {
+	for _, testCase := range testList {
 		err = k8s.CleanNetworkPolicies(namespaces)
 		failOnError(err)
-		testStep := test(k8s)
-		for _, s := range testStep {
-			reachability := s.Reachability
-			policy := s.NetworkPolicy
+		testSteps := testCase.Test(k8s)
+		testCase.Steps = testSteps
+		for _, step := range testSteps {
+			reachability := step.Reachability
+			policy := step.NetworkPolicy
 			if policy != nil {
 				_, err := k8s.CreateOrUpdateNetworkPolicy(policy.Namespace, policy)
 				failOnError(err)
 			}
-			validate(k8s, reachability, s.Port)
+			validate(k8s, reachability, step.Port)
 			reachability.PrintSummary(true, true, true)
 		}
 	}
@@ -297,16 +327,19 @@ func testEgressAndIngressIntegration(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80 -- 1",
 			reachability1,
 			policy1,
 			p80,
 		},
 		&TestStep{
+			"Port 80 -- 2",
 			reachability2,
 			policy2,
 			p80,
 		},
 		&TestStep{
+			"Port 80 -- 3",
 			reachability3,
 			policy3,
 			p80,
@@ -337,11 +370,13 @@ func testAllowAllPrecedenceIngress(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 81",
 			reachability1,
 			policy1,
 			p81,
 		},
 		&TestStep{
+			"Port 80",
 			reachability2,
 			policy2,
 			p80,
@@ -382,11 +417,13 @@ func testEgressOnNamedPort(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability80,
 			builder.Get(),
 			80,
 		},
 		&TestStep{
+			"Port 81",
 			reachability81(),
 			builder.Get(),
 			81,
@@ -423,7 +460,7 @@ func testNamedPortWNamespace(k8s *Kubernetes) []*TestStep {
 			IsConnected: true,
 		})
 		reachability.ExpectConn(&Connectivity{
-			From:        Pod("x/b"),
+			From:        Pod("x/c"),
 			To:          Pod("x/a"),
 			IsConnected: true,
 		})
@@ -449,11 +486,13 @@ func testNamedPortWNamespace(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability80(),
 			builder.Get(),
 			80,
 		},
 		&TestStep{
+			"Port 81",
 			reachability81(),
 			builder.Get(),
 			81,
@@ -481,11 +520,13 @@ func testNamedPort(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability80,
 			builder.Get(),
 			80,
 		},
 		&TestStep{
+			"Port 81",
 			reachability81(),
 			builder.Get(),
 			81,
@@ -502,6 +543,7 @@ func testAllowAll(k8s *Kubernetes) []*TestStep {
 	reachability := NewReachability(allPods, true)
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability,
 			builder.Get(),
 			80,
@@ -547,16 +589,19 @@ func testPortsPoliciesStackedOrUpdated(k8s *Kubernetes) []*TestStep {
 	// Whereas if we DIDNT stack, make sure 80 is blocked.
 	return []*TestStep{
 		&TestStep{
+			"Port 81 -- blocked",
 			blocked(), // 81 blocked
 			policy1,
 			81,
 		},
 		&TestStep{
+			"Port 81 -- unblocked",
 			unblocked(), // 81 open now
 			policy2,
 			81,
 		},
 		&TestStep{
+			"Port 80 -- blocked",
 			blocked(),
 			policy2,
 			80,
@@ -590,11 +635,13 @@ func testPortsPolicies(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability1(),
 			builder.Get(),
 			80,
 		},
 		&TestStep{
+			"Port 81",
 			// Applying the same nw policy to test a different port
 			reachability2(),
 			builder.Get(),
@@ -621,6 +668,7 @@ func testEnforcePodAndNSSelector(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability(),
 			builder.Get(),
 			80,
@@ -649,6 +697,7 @@ func testEnforcePodOrNSSelector(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability(),
 			builder.Get(),
 			80,
@@ -679,6 +728,7 @@ func testNamespaceSelectorMatchExpressions(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability(),
 			builder.Get(),
 			80,
@@ -708,6 +758,7 @@ func testPodSelectorMatchExpressions(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability(),
 			builder.Get(),
 			80,
@@ -732,6 +783,7 @@ func testIntraNamespaceTrafficOnly(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability(),
 			builder.Get(),
 			80,
@@ -757,6 +809,7 @@ func testInnerNamespaceTraffic(k8s *Kubernetes) []*TestStep {
 
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability(),
 			builder.Get(),
 			80,
@@ -783,6 +836,7 @@ func testDefaultDeny(k8s *Kubernetes) []*TestStep {
 	}
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability(),
 			builder.Get(),
 			80,
@@ -812,6 +866,7 @@ func testPodLabelWhitelistingFromBToA(k8s *Kubernetes) []*TestStep {
 	}
 	return []*TestStep{
 		&TestStep{
+			"Port 80",
 			reachability(),
 			builder.Get(),
 			80,

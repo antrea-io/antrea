@@ -106,7 +106,8 @@ func (k *Kubernetes) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) 
 	out, out2, err := k.ExecuteRemoteCommand(fromPod, containerName, exec)
 	log.Debug(".... Done")
 	if err != nil {
-		log.Errorf("failed connect.... %v %v %v %v %v %v", out, out2, ns1, pod1, ns2, pod2)
+		// log this error as debug since it's an expected failure
+		log.Debugf("failed connect.... %v %v %v %v %v %v", out, out2, ns1, pod1, ns2, pod2)
 		return false, errors.WithMessagef(err, "unable to execute remote command %+v", exec)
 	}
 	return true, nil
