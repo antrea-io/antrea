@@ -52,7 +52,7 @@ func (k *Kubernetes) GetPod(ns string, name string) (*v1.Pod, error) {
 
 func (k *Kubernetes) getPodsUncached(ns string, key, val string) ([]v1.Pod, error) {
 	v1PodList, err := k.ClientSet.CoreV1().Pods(ns).List(metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%v=%v",key,val),
+		LabelSelector: fmt.Sprintf("%v=%v", key, val),
 	})
 	if err != nil {
 		return nil, errors.WithMessage(err, "unable to list pods")
@@ -104,7 +104,7 @@ func (k *Kubernetes) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) 
 	containerName := fmt.Sprintf("c%v", port)
 	log.Info("Running: kubectl exec -t -i " + fromPod.Name + " -c " + containerName + " -n " + fromPod.Namespace + " -- " + strings.Join(exec, " "))
 	out, out2, err := k.ExecuteRemoteCommand(fromPod, containerName, exec)
-	log.Info(".... Done")
+	log.Debug(".... Done")
 	if err != nil {
 		log.Errorf("failed connect.... %v %v %v %v %v %v", out, out2, ns1, pod1, ns2, pod2)
 		return false, errors.WithMessagef(err, "unable to execute remote command %+v", exec)
@@ -174,7 +174,7 @@ func (k *Kubernetes) CreateOrUpdateNamespace(n string, labels map[string]string)
 	}
 	nsr, err := k.ClientSet.CoreV1().Namespaces().Create(ns)
 	if err == nil {
-		log.Infof("created namespace %s", ns)
+		log.Infof("created namespace %s", n)
 		return nsr, nil
 	}
 
@@ -188,7 +188,7 @@ func (k *Kubernetes) CreateOrUpdateNamespace(n string, labels map[string]string)
 }
 
 // CreateOrUpdateDeployment is a convenience function for idempotent setup of deployments
-func (k *Kubernetes) CreateOrUpdateDeployment(ns, deploymentName string, replicas int32, labels map[string]string ) (*appsv1.Deployment, error) {
+func (k *Kubernetes) CreateOrUpdateDeployment(ns, deploymentName string, replicas int32, labels map[string]string) (*appsv1.Deployment, error) {
 	zero := int64(0)
 	log.Infof("creating/updating deployment %s in ns %s", deploymentName, ns)
 	deployment := &appsv1.Deployment{

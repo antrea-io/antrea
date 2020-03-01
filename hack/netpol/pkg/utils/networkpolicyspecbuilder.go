@@ -51,7 +51,7 @@ func (n *NetworkPolicySpecBuilder) AddIngress(protoc *v1.Protocol, port *int, po
 		ps = &metav1.LabelSelector{
 			MatchLabels: podSelector,
 		}
-		if podSelectorMatchExp != nil{
+		if podSelectorMatchExp != nil {
 			ps.MatchExpressions = *podSelectorMatchExp
 		}
 	}

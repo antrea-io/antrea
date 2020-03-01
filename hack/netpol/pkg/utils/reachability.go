@@ -32,8 +32,8 @@ func (pod Pod) PodName() string {
 }
 
 type Connectivity struct {
-	From Pod
-	To Pod
+	From        Pod
+	To          Pod
 	IsConnected bool
 }
 
@@ -172,7 +172,8 @@ func NewReachability(pods []Pod, defaultExpectation bool) *Reachability {
 	return r
 }
 
-func (r *Reachability)ExpectConn(spec *Connectivity) {
+// ExpectConn is an experimental way to describe connectivity with named fields
+func (r *Reachability) ExpectConn(spec *Connectivity) {
 	if spec.From == "" && spec.To == "" {
 		panic("at most one of From and To may be empty, but both are empty")
 	}

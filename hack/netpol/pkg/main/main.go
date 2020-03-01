@@ -77,9 +77,9 @@ func validate(k8s *Kubernetes, reachability *Reachability, port int) {
 	// better as metrics, obviously, this is only for POC.
 	for _, pod1 := range allPods {
 		for _, pod2 := range allPods {
-			log.Infof("Probing: %s, %s", string(pod1), string(pod2))
+			log.Debugf("Probing: %s, %s", string(pod1), string(pod2))
 			connected, err := k8s.Probe(pod1.Namespace(), pod1.PodName(), pod2.Namespace(), pod2.PodName(), port)
-			log.Infof("... expected %v , got %v", reachability.Expected.Get(string(pod1), string(pod2)), connected)
+			log.Debugf("... expected %v , got %v", reachability.Expected.Get(string(pod1), string(pod2)), connected)
 			if err != nil {
 				log.Errorf("unable to make main observation on %s -> %s: %s", string(pod1), string(pod2), err)
 			}
