@@ -148,7 +148,7 @@ func (tt *TruthTable) PrettyPrint(indent string) string {
 			}
 			line = append(line, val)
 		}
-		lines = append(lines, indent + strings.Join(line, "\t"))
+		lines = append(lines, indent+strings.Join(line, "\t"))
 	}
 	return strings.Join(lines, "\n")
 }
