@@ -31,6 +31,12 @@ func (pod Pod) PodName() string {
 	return podName
 }
 
+type Connectivity struct {
+	From Pod
+	To Pod
+	IsConnected bool
+}
+
 type TruthTable struct {
 	Items   []string
 	itemSet map[string]bool
@@ -151,7 +157,6 @@ type Reachability struct {
 	Expected *TruthTable
 	Observed *TruthTable
 	Pods     []Pod
-	podSet   map[Pod]bool
 }
 
 func NewReachability(pods []Pod, defaultExpectation bool) *Reachability {
@@ -163,9 +168,21 @@ func NewReachability(pods []Pod, defaultExpectation bool) *Reachability {
 		Expected: NewTruthTable(items, &defaultExpectation),
 		Observed: NewTruthTable(items, nil),
 		Pods:     pods,
-		podSet:   nil, // TODO remove ?
 	}
 	return r
+}
+
+func (r *Reachability)ExpectConn(spec *Connectivity) {
+	if spec.From == "" && spec.To == "" {
+		panic("at most one of From and To may be empty, but both are empty")
+	}
+	if spec.From == "" {
+		r.ExpectAllIngress(spec.To, spec.IsConnected)
+	} else if spec.To == "" {
+		r.ExpectAllEgress(spec.From, spec.IsConnected)
+	} else {
+		r.Expect(spec.From, spec.To, spec.IsConnected)
+	}
 }
 
 func (r *Reachability) Expect(pod1 Pod, pod2 Pod, isConnected bool) {

@@ -40,7 +40,7 @@ func waitForPodInNamespace(k8s *Kubernetes, ns string, pod string) error {
 			return errors.WithMessagef(err, "unable to get pod %s/%s", ns, pod)
 		}
 		if k8sPod != nil && k8sPod.Status.Phase == v1.PodRunning {
-			log.Infof("pod running: %+v", k8sPod)
+			log.Debugf("pod running: %+v", k8sPod)
 			return nil
 		}
 		log.Infof("pod %s/%s not ready, waiting ...", ns, pod)
@@ -358,15 +358,25 @@ func testEgressOnNamedPort(k8s *Kubernetes) []*TestStep {
 	// note egress DNS isnt necessary to test egress over a named port.
 	builder.SetTypeEgress().WithEgressDNS().AddEgress(nil, nil, &namedPorts, nil, nil, nil, nil, nil)
 
-	k8s.CreateOrUpdateNetworkPolicy("x", builder.Get())
+	_, err := k8s.CreateOrUpdateNetworkPolicy("x", builder.Get())
+	failOnError(err)
 	reachability80 := NewReachability(allPods, true)
 
 	// TODO: test if this works for egress
 	// disallow port 81
 	reachability81 := func() *Reachability {
 		reachability := NewReachability(allPods, true)
-		reachability.ExpectAllEgress(Pod("x/a"), false)
-		reachability.Expect(Pod("x/a"), Pod("x/a"), true)
+		//reachability.ExpectAllEgress(Pod("x/a"), false)
+		//reachability.Expect(Pod("x/a"), Pod("x/a"), true)
+		reachability.ExpectConn(&Connectivity{
+			From:        Pod("x/a"),
+			IsConnected: false,
+		})
+		reachability.ExpectConn(&Connectivity{
+			From:        Pod("x/a"),
+			To:          Pod("x/a"),
+			IsConnected: true,
+		})
 		return reachability
 	}
 
@@ -394,18 +404,46 @@ func testNamedPortWNamespace(k8s *Kubernetes) []*TestStep {
 
 	reachability80 := func() *Reachability {
 		reachability := NewReachability(allPods, true)
-		reachability.ExpectAllIngress(Pod("x/a"), false)
-		reachability.Expect(Pod("x/a"), Pod("x/a"), true)
-		reachability.Expect(Pod("x/b"), Pod("x/a"), true)
-		reachability.Expect(Pod("x/c"), Pod("x/a"), true)
+		//reachability.ExpectAllIngress(Pod("x/a"), false)
+		//reachability.Expect(Pod("x/a"), Pod("x/a"), true)
+		//reachability.Expect(Pod("x/b"), Pod("x/a"), true)
+		//reachability.Expect(Pod("x/c"), Pod("x/a"), true)
+		reachability.ExpectConn(&Connectivity{
+			To:          Pod("x/a"),
+			IsConnected: false,
+		})
+		reachability.ExpectConn(&Connectivity{
+			From:        Pod("x/a"),
+			To:          Pod("x/a"),
+			IsConnected: true,
+		})
+		reachability.ExpectConn(&Connectivity{
+			From:        Pod("x/b"),
+			To:          Pod("x/a"),
+			IsConnected: true,
+		})
+		reachability.ExpectConn(&Connectivity{
+			From:        Pod("x/b"),
+			To:          Pod("x/a"),
+			IsConnected: true,
+		})
 		return reachability
 	}
 
 	// disallow port 81
 	reachability81 := func() *Reachability {
 		reachability := NewReachability(allPods, true)
-		reachability.ExpectAllIngress(Pod("x/a"), false)
-		reachability.Expect(Pod("x/a"), Pod("x/a"), true)
+		//reachability.ExpectAllIngress(Pod("x/a"), false)
+		//reachability.Expect(Pod("x/a"), Pod("x/a"), true)
+		reachability.ExpectConn(&Connectivity{
+			To:          Pod("x/a"),
+			IsConnected: false,
+		})
+		reachability.ExpectConn(&Connectivity{
+			From:        Pod("x/a"),
+			To:          Pod("x/a"),
+			IsConnected: true,
+		})
 		return reachability
 	}
 
