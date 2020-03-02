@@ -12,6 +12,6 @@ spec:
       containers:
         - name: jay-netpol
           imagePullPolicy: Always
-          image: jayunit100/netpol:alpha4
+          image: jayunit100/netpol:alpha5
           command: ["/netpol/main"]
       serviceAccount: netpol
