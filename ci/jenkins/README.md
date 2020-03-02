@@ -4,13 +4,24 @@
 We have tests as Github Actions but Jenkins allows tests running on a cluster of
 multiple nodes and offers better environment setup options.
 
+### Jenkins on cloud
+At the moment these Jenkins jobs are running on VMC (VMware on AWS). As a
+result, all jobs' results and details are available publicly
+[here](https://jenkins.antrea-ci.rocks/). We are using Cluster API for vSphere
+([CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere)) for
+creating and managing workload clusters. For each job build, a completely new
+workload cluster will be created. As soon as the build finishes, the cluster
+should be deleted. This ensures that all tests are run on a clean testbed.
+
 ### List of Jenkins jobs
-* e2e: [end-to-end tests](/test/e2e) for Antrea.
-* conformance: community tests using sonobuoy, focusing on "Conformance", and
-  skipping "Slow", "Serial", "Disruptive", "Flaky", "Feature", "sig-cli",
+* [e2e](https://jenkins.antrea-ci.rocks/job/antrea-e2e-for-pull-request/):
+  [end-to-end tests](/test/e2e) for Antrea.
+* [conformance](https://jenkins.antrea-ci.rocks/job/antrea-conformance-for-pull-request/):
+  community tests using sonobuoy, focusing on "Conformance", and skipping "Slow",
+  "Serial", "Disruptive", "Flaky", "Feature", "sig-cli",
   "sig-storage", "sig-auth", "sig-api-machinery", "sig-apps" and "sig-node".
-* network policy: community tests using sonobuoy, focusing on
-  "Feature:NetworkPolicy".
+* [network policy](https://jenkins.antrea-ci.rocks/job/antrea-networkpolicy-for-pull-request/):
+  community tests using sonobuoy, focusing on "Feature:NetworkPolicy".
 
 If you need to run the K8s community tests locally, you may use the
 [ci/run-k8s-e2e-tests.sh](/ci/run-k8s-e2e-tests.sh) script. It takes care of
@@ -49,3 +60,9 @@ Run the command to apply these jobs.
 ```bash
 jenkins-jobs update -r ci/jenkins/jobs
 ```
+
+### Jenkins job updater
+To follow GitOps best practices, there is a job-updater job in Jenkins to detect
+any change in [ci/jenkins/jobs](/ci/jenkins/jobs) for every 15 min. As long as
+a PR to modify code under that path is merged, Jenkins jobs on cloud should be
+updated with new code.
