@@ -6,7 +6,6 @@
     builders: '{builders}'
     concurrent: true
     description: '{description}'
-    disabled: false
     project-type: freestyle
     properties:
     - build-discarder:
@@ -25,13 +24,13 @@
     publishers: '{publishers}'
     scm:
     - git:
-        branches: '{branches}'
+        branches:
+          - ${{sha1}}
         credentials-id: '{git_credentials_id}'
         name: origin
         refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
         url: 'https://github.com/{org_repo}'
         wipe-workspace: true
-        included-regions: '{included_regions}'
     triggers:
     - github-pull-request:
         admin-list: '{admin_list}'
@@ -53,7 +52,56 @@
         error-status: '{error_status}'
         triggered-status: '{triggered_status}'
         started-status: '{started_status}'
+    wrappers: '{wrappers}'
+
+- job-template:
+    name: '{name}-{test_name}-for-testbed'
+    node: '{node}'
+    block-downstream: false
+    block-upstream: false
+    builders: '{builders}'
+    concurrent: true
+    description: '{description}'
+    project-type: freestyle
+    parameters: '{parameters}'
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: -1
+        artifact-num-to-keep: -1
+        days-to-keep: 7
+        num-to-keep: 30
+
+- job-template:
+    name: '{name}-{test_name}-for-period'
+    block-downstream: false
+    block-upstream: false
+    builders: '{builders}'
+    concurrent: true
+    description: '{description}'
+    project-type: freestyle
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: -1
+        artifact-num-to-keep: -1
+        days-to-keep: 7
+        num-to-keep: 30
+    triggers:
     - pollscm:
         cron: '{cron}'
         ignore-post-commit-hooks: '{ignore_post_commit_hooks}'
-    wrappers: '{wrappers}'
+    scm:
+    - git:
+        branches: '{branches}'
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
+        included-regions: '{included_regions}'
+
+- job-template:
+    name: '{name}-{test_name}-for-gc'
+    builders: '{builders}'
+    description: '{description}'
+    triggers:
+    - timed: '{timed}'
