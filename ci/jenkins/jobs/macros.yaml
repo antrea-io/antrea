@@ -173,7 +173,7 @@
           docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi || true
           docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
           make
-          
+
           sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" build/yamls/antrea.yml
       - shell: |-
           echo ====== Delivering Antrea to all the Nodes ======
@@ -274,9 +274,11 @@
             ssh -o StrictHostKeyChecking=no -i jenkins/key/antrea-ci-key -n capv@${{master_ip}} "mkdir .kube"
             scp -o StrictHostKeyChecking=no -i jenkins/key/antrea-ci-key jenkins/out/kubeconfig capv@${{master_ip}}:~/.kube/config
 
-            echo  "=== Run sonobouy ==="
+            conformance_image_version=$(head -n1 ci/k8s-conformance-image-version)
+            echo  "=== Run sonobuoy with conformance image version ${conformance_image_version} ==="
+
             sonobuoy delete --wait --kubeconfig jenkins/out/kubeconfig
-            sonobuoy run --wait --e2e-focus '{focus_regex}' --e2e-skip '{skip_regex}' --e2e-parallel y --kube-conformance-image-version v1.18.0-beta.1 --kubeconfig jenkins/out/kubeconfig
+            sonobuoy run --wait --e2e-focus '{focus_regex}' --e2e-skip '{skip_regex}' --e2e-parallel y --kube-conformance-image-version ${conformance_image_version} --kubeconfig jenkins/out/kubeconfig
             sonobuoy retrieve --kubeconfig jenkins/out/kubeconfig
             echo '=== Print all results ==='
             sonobuoy results *sonobuoy*.tar.gz
@@ -302,7 +304,7 @@
           do
             kubectl delete -f ${{antrea_yml}} --ignore-not-found=true || true
           done
-          
+
           kubectl delete ns antrea-test || true
 
           if !(test -f TEST_FAILURE); then

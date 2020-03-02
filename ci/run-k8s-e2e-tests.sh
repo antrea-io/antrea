@@ -24,7 +24,6 @@ RUN_CONFORMANCE=false
 RUN_NETWORK_POLICY=false
 RUN_E2E_FOCUS=""
 KUBECONFIG_OPTION=""
-KUBE_CONFORMANCE_IMAGE_VERSION="v1.18.0-beta.0"
 
 _usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]
 Run the K8s e2e community tests (Conformance & Network Policy) which are relevant to Project Antrea,
@@ -49,6 +48,9 @@ function print_usage {
 function print_help {
     echoerr "Try '$0 --help' for more information."
 }
+
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+KUBE_CONFORMANCE_IMAGE_VERSION="$(head -n1 $THIS_DIR/k8s-conformance-image-version)"
 
 while [[ $# -gt 0 ]]
 do
@@ -90,8 +92,6 @@ case $key in
     ;;
 esac
 done
-
-THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 source $THIS_DIR/verify-sonobuoy.sh
 
