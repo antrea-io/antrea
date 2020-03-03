@@ -125,7 +125,7 @@ already been assigned and apply the `lifecycle/active` label to signal that the
 issue is actively being worked on.
 
 Making code changes is covered in detail in
-[../CONTRIBUTING.md](../CONTRIBUTING.md#github-workflow).
+[CONTRIBUTING.md](../CONTRIBUTING.md#github-workflow).
 
 If the issue kind is a `kind/bug`, ensure that the issue can be reproduced. If
 not, assign the `triage/not-reproducible` and request feedback from the original
@@ -235,7 +235,7 @@ To create a deprecation issue or PR:
 * title the issue or PR with the feature you are deprecating
 * describe the deprecation in the issue or PR body making sure to:
   * explain why the feature is being deprecated
-  * discuss time-to-live for the feat
+  * discuss time-to-live for the feature and when deprecation will take place
   * discuss any impacts to existing APIs
 
 #### Design
@@ -374,7 +374,7 @@ The following schedule will be used to determine an issue's lifecycle:
 
 Issue lifecycle management ensures that the project backlog remains fresh and
 relevent. Project maintainers and contributors will need to revisit issues to
-periodically assess their relevence and progress.
+periodically assess their relevance and progress.
 
 TODO: Additional CI automation (GitHub actions) will be used to automatically
 apply and manage some of these lifecycle labels.
