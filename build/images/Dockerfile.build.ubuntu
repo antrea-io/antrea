@@ -30,6 +30,10 @@ LABEL description="A Docker image to deploy the Antrea CNI. Takes care of buildi
 
 USER root
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ipset \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
 
 COPY --from=antrea-build /antrea/build/images/scripts/* /usr/local/bin/
