@@ -14,36 +14,16 @@ func TestGetTrafficEncapModeFromStr(t *testing.T) {
 		expBool bool
 		expMode TrafficEncapModeType
 	}{
-		{
-			name:    "encap-mode-valid",
-			mode:    "enCap",
-			expBool: true,
-			expMode: 0,
-		},
-		{
-			name:    "no-encap-mode-valid",
-			mode:    "Noencap",
-			expBool: true,
-			expMode: 1,
-		},
-		{
-			name:    "hybrid-mode-valid",
-			mode:    "Hybrid",
-			expBool: true,
-			expMode: 2,
-		},
-		{
-			name:    "invalid-str",
-			mode:    "en cap",
-			expBool: false,
-			expMode: -1,
-		},
+		{"encap-mode-valid", "enCap", true, 0},
+		{"no-encap-mode-valid", "Noencap", true, 1},
+		{"hybrid-mode-valid", "Hybrid", true, 2},
+		{"invalid-str", "en cap", false, -1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualBool, actualMode := GetTrafficEncapModeFromStr(tt.mode)
-			assert.Equal(t, actualBool, tt.expBool, "GetTrafficEncapModeFromStr not return correct boolean")
-			assert.Equal(t, actualMode, tt.expMode, "GetTrafficEncapModeFromStr not return correct traffic type")
+			assert.Equal(t, actualBool, tt.expBool, "GetTrafficEncapModeFromStr did not return correct boolean")
+			assert.Equal(t, actualMode, tt.expMode, "GetTrafficEncapModeFromStr did not return correct traffic type")
 		})
 	}
 }
@@ -60,87 +40,36 @@ func TestTrafficEncapModeTypeString(t *testing.T) {
 		modeType TrafficEncapModeType
 		expMode  string
 	}{
-		{
-			name:     "encap-mode",
-			modeType: 0,
-			expMode:  "Encap",
-		},
-		{
-			name:     "no-encap-mode",
-			modeType: 1,
-			expMode:  "NoEncap",
-		},
-		{
-			name:     "hybrid-mode",
-			modeType: 2,
-			expMode:  "Hybrid",
-		},
+		{"encap-mode", 0, "Encap"},
+		{"no-encap-mode", 1, "NoEncap"},
+		{"hybrid-mode", 2, "Hybrid"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualMode := tt.modeType.String()
-			assert.Equal(t, actualMode, tt.expMode, "String not return correct traffic type in string format")
+			assert.Equal(t, actualMode, tt.expMode, "String did not return correct traffic type in string format")
 		})
 	}
 }
 
-func TestTrafficEncapModeTypeSupportsNoEncap(t *testing.T) {
+func TestTrafficEncapModeTypeSupports(t *testing.T) {
 	tests := []struct {
-		name    string
-		mode    TrafficEncapModeType
-		expBool bool
+		name       string
+		mode       TrafficEncapModeType
+		expNoEncap bool
+		expEncap   bool
 	}{
-		{
-			name:    "encap-mode",
-			mode:    0,
-			expBool: false,
-		},
-		{
-			name:    "no-encap-mode",
-			mode:    1,
-			expBool: true,
-		},
-		{
-			name:    "hybrid-mode",
-			mode:    2,
-			expBool: true,
-		},
+		{"encap-mode", 0, false, true},
+		{"no-encap-mode", 1, true, false},
+		{"hybrid-mode", 2, true, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualBool := tt.mode.SupportsNoEncap()
-			assert.Equal(t, tt.expBool, actualBool, "SupportsNoEncap not return correct result")
-		})
-	}
-}
-
-func TestTrafficEncapModeTypeSupportsEncap(t *testing.T) {
-	tests := []struct {
-		name    string
-		mode    TrafficEncapModeType
-		expBool bool
-	}{
-		{
-			name:    "encap-mode",
-			mode:    0,
-			expBool: true,
-		},
-		{
-			name:    "no-encap-mode",
-			mode:    1,
-			expBool: false,
-		},
-		{
-			name:    "hybrid-mode",
-			mode:    2,
-			expBool: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actualBool := tt.mode.SupportsEncap()
-			assert.Equal(t, tt.expBool, actualBool, "SupportsEncap not return correct result")
+			actualNoEncap := tt.mode.SupportsNoEncap()
+			actualEncap := tt.mode.SupportsEncap()
+			assert.Equal(t, tt.expNoEncap, actualNoEncap, "SupportsNoEncap did not return correct result")
+			assert.Equal(t, tt.expEncap, actualEncap, "SupportsEncap did not return correct result")
 		})
 	}
 }
@@ -197,7 +126,7 @@ func TestTrafficEncapModeTypeNeedsEncapToPeer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualBool := tt.mode.NeedsEncapToPeer(tt.peerIP, tt.localIP)
-			assert.Equal(t, tt.expBool, actualBool, "NeedsEncapToPeer not return correct result")
+			assert.Equal(t, tt.expBool, actualBool, "NeedsEncapToPeer did not return correct result")
 		})
 	}
 }
@@ -254,7 +183,7 @@ func TestTrafficEncapModeTypeNeedsRoutingToPeer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualBool := tt.mode.NeedsRoutingToPeer(tt.peerIP, tt.localIP)
-			assert.Equal(t, tt.expBool, actualBool, "NeedsRoutingToPeer not return correct result")
+			assert.Equal(t, tt.expBool, actualBool, "NeedsRoutingToPeer did not return correct result")
 		})
 	}
 }
