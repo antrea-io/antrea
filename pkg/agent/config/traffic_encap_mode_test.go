@@ -43,7 +43,7 @@ func TestGetTrafficEncapModeFromStr(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			actualBool, actualMode := GetTrafficEncapModeFromStr(tt.mode)
 			assert.Equal(t, actualBool, tt.expBool, "GetTrafficEncapModeFromStr not return correct boolean")
-			assert.Equal(t, actualMode, tt.expMode, "GetTrafficEncapModeFromStr not return correct traffic type")
+			assert.Equal(t, actualMode, tt.expMode, "GetTrafficEncapModes received unexpected encap modes.")
 		})
 	}
 }
