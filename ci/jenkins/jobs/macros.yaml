@@ -143,6 +143,12 @@
           fi
 
 - builder:
+    name: builder-job-validator
+    builders:
+      - shell: |-
+          jenkins-jobs test -r ci/jenkins/jobs/
+
+- builder:
     name: builder-pending-label
     builders:
       - shell: 'exit 1 # fail on purpose'
