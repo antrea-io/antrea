@@ -160,12 +160,12 @@ func TestGetRoundInfo(t *testing.T) {
 	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("Failed to get external IDs"), true))
 	roundInfo := getRoundInfo(mockOVSBridgeClient)
 	if roundInfo.RoundNum != 1 {
-		t.Errorf("Failed to get expected round info")
+		t.Errorf("Failed to get expected round info with RoundNum %v, actual RoundNum returned :%v", 1, roundInfo.RoundNum)
 	}
 	externalIDs := make(map[string]string)
 	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(externalIDs, nil)
 	roundInfo = getRoundInfo(mockOVSBridgeClient)
 	if roundInfo.RoundNum != 1 {
-		t.Errorf("Failed to get expected round info")
+		t.Errorf("Failed to get expected round info with RoundNum %v, actual RoundNum returned :%v", 1, roundInfo.RoundNum)
 	}
 }
