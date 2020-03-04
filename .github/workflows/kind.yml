@@ -49,8 +49,6 @@ jobs:
       run: |
         ./ci/kind/test-e2e-kind.sh encap
 
-
-
   test-e2e-noencap:
     name: E2e tests on a Kind cluster on Linux (noEncap)
     needs: build-antrea-image
@@ -77,8 +75,6 @@ jobs:
       run: |
         ./ci/kind/test-e2e-kind.sh noEncap
 
-
-
   test-e2e-hybrid:
     name: E2e tests on a Kind cluster on Linux (hybrid)
     needs: build-antrea-image
@@ -104,3 +100,32 @@ jobs:
     - name: Run e2e tests
       run: |
         ./ci/kind/test-e2e-kind.sh hybrid
+
+  test-netpol-tmp:
+    name: Run experimental network policy tests (netpol) on Kind cluster
+    needs: build-antrea-image
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+    - name: Download Antrea image from previous job
+      uses: actions/download-artifact@v1
+      with:
+        name: antrea-ubuntu
+    - name: Load Antrea image
+      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+    - name: Install Kind
+      env:
+        KIND_VERSION: v0.7.0
+      run: |
+        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+        chmod +x ./kind
+        sudo mv kind /usr/local/bin
+    - name: Build netpol Docker image
+      working-directory: hack/netpol
+      run: make
+    - name: Run netpol tests
+      working-directory: hack/netpol
+      run: ./test-kind.sh
