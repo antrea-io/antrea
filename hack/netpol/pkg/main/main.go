@@ -13,7 +13,7 @@ import (
 
 // common for all tests.  these get hardcoded into the Expect() clauses,
 // so, we cant easily parameterize them (well, we could, but that would
-// make the code harder to interpret.
+// make the code harder to interpret).
 var pods []string
 var namespaces []string
 var p80 int
