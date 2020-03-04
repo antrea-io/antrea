@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/server"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
 )
 
 // requestOption describes options to issue requests.
@@ -90,7 +90,7 @@ func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) 
 	if runtimeComponent == componentAgent {
 		kubeconfig.Insecure = true
 		kubeconfig.CAFile = ""
-		kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(server.Port))
+		kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apiserver.Port))
 	}
 	restClient, err := rest.UnversionedRESTClientFor(kubeconfig)
 	if err != nil {

@@ -55,16 +55,19 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	nodeAntctlPath := "~/antctl"
 	podName, err := data.getAntreaPodOnNode(masterNodeName())
 	require.Nil(t, err, "Error when retrieving antrea controller pod name")
 
+	// Just try best to clean up.
+	RunCommandOnNode(masterNodeName(), fmt.Sprintf("rm -f %s", nodeAntctlPath))
 	// Copy antctl from the controller Pod to the master Node.
-	cmd := fmt.Sprintf("kubectl cp %s/%s:/usr/local/bin/antctl ~/antctl", antreaNamespace, podName)
+	cmd := fmt.Sprintf("kubectl cp %s/%s:/usr/local/bin/antctl %s", antreaNamespace, podName, nodeAntctlPath)
 	rc, stdout, stderr, err := RunCommandOnNode(masterNodeName(), cmd)
 	require.Zero(t, rc)
 	require.Nil(t, err, "Error when copying antctl from %s, stdout: %s, stderr: %s", podName, stdout, stderr)
 	// Make sure the antctl binary executable on the master Node.
-	rc, stdout, stderr, err = RunCommandOnNode(masterNodeName(), "chmod 0755 ~/antctl")
+	rc, stdout, stderr, err = RunCommandOnNode(masterNodeName(), fmt.Sprintf("chmod +x %s", nodeAntctlPath))
 	require.Zero(t, rc)
 	require.Nil(t, err, "Error when make the antctl on master node executable, stdout: %s, stderr: %s", podName, stdout, stderr)
 
@@ -73,11 +76,11 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 		expectedReturnCode int
 	}{
 		"CorrectConfig": {
-			commands:           []string{"~/antctl", "-v", "version"},
+			commands:           []string{nodeAntctlPath, "-v", "version"},
 			expectedReturnCode: 0,
 		},
 		"MalformedConfig": {
-			commands:           []string{"~/antctl", "-v", "version", "--kubeconfig", "/dev/null"},
+			commands:           []string{nodeAntctlPath, "-v", "version", "--kubeconfig", "/dev/null"},
 			expectedReturnCode: 1,
 		},
 	} {
