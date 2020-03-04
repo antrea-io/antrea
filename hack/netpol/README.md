@@ -106,7 +106,7 @@ kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/ha
 Now, look at the results of the network policy probe:
 
 ```
- kubectl logs `kubectl get pods -n kube-system | grep netpol | cut -d' ' -f 1` -n kube-system  
+kubectl logs -n kube-system job.batch/netpol
 ```
  
 ## Developers

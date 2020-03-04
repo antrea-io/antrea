@@ -12,6 +12,6 @@ spec:
       restartPolicy: Never
       containers:
         - name: netpol
-          imagePullPolicy: Always
-          image: antrea/netpol:alpha6
+          imagePullPolicy: IfNotPresent
+          image: antrea/netpol:latest
       serviceAccount: netpol
