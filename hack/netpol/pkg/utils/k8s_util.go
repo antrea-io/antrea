@@ -1,7 +1,6 @@
 package utils
 
 import (
-
 	"bytes"
 	"fmt"
 	"k8s.io/client-go/rest"
@@ -98,7 +97,10 @@ func (k *Kubernetes) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) 
 	toIP := toPod.Status.PodIP
 
 	// note some versions of wget want -s for spider mode, others, -S
-	exec := []string{"wget", "--spider", "--tries", "1", "--timeout", "1", "http://" + toIP + ":" + fmt.Sprintf("%v", port)}
+	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
+	// first. This leads to the first test being run consistently failing. To avoid this issue
+	// until it is resolved, we set "--tries" to 4.
+	exec := []string{"wget", "--spider", "--tries", "4", "--timeout", "0.5", "--waitretry", "0", "http://" + toIP + ":" + fmt.Sprintf("%v", port)}
 	// HACK: inferring container name as c80, c81, etc, for simplicity.
 	containerName := fmt.Sprintf("c%v", port)
 	log.Info("Running: kubectl exec -t -i " + fromPod.Name + " -c " + containerName + " -n " + fromPod.Namespace + " -- " + strings.Join(exec, " "))
@@ -191,6 +193,26 @@ func (k *Kubernetes) CreateOrUpdateNamespace(n string, labels map[string]string)
 func (k *Kubernetes) CreateOrUpdateDeployment(ns, deploymentName string, replicas int32, labels map[string]string) (*appsv1.Deployment, error) {
 	zero := int64(0)
 	log.Infof("creating/updating deployment %s in ns %s", deploymentName, ns)
+	makeContainerSpec := func(port int32) v1.Container {
+		return v1.Container{
+			Name:            fmt.Sprintf("c%d", port),
+			ImagePullPolicy: v1.PullIfNotPresent,
+			// This image is a bit large. busybox does come with a very lightweight http
+			// server (httpd) but we also need this image to run wget, and the version
+			// of wget included in busybox is quite limited in terms of available
+			// options.
+			Image:           "antrea/netpol-test:latest",
+			Command:         []string{"python", "-m", "http.server", fmt.Sprintf("%d", port)},
+			SecurityContext: &v1.SecurityContext{},
+			Ports: []v1.ContainerPort{
+				v1.ContainerPort{
+					ContainerPort: port,
+					Name:          fmt.Sprintf("serve-%d", port),
+				},
+			},
+		}
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deploymentName,
@@ -208,30 +230,7 @@ func (k *Kubernetes) CreateOrUpdateDeployment(ns, deploymentName string, replica
 				Spec: v1.PodSpec{
 					TerminationGracePeriodSeconds: &zero,
 					Containers: []v1.Container{
-						{
-							Name:            "c80",
-							Image:           "python:latest",
-							Command:         []string{"python", "-m", "http.server", "80"},
-							SecurityContext: &v1.SecurityContext{},
-							Ports: []v1.ContainerPort{
-								v1.ContainerPort{
-									ContainerPort: 80,
-									Name:          "serve-80",
-								},
-							},
-						},
-						{
-							Name:            "c81",
-							Image:           "python:latest",
-							Command:         []string{"python", "-m", "http.server", "81"},
-							SecurityContext: &v1.SecurityContext{},
-							Ports: []v1.ContainerPort{
-								v1.ContainerPort{
-									ContainerPort: 81,
-									Name:          "serve-81",
-								},
-							},
-						},
+						makeContainerSpec(80), makeContainerSpec(81),
 					},
 				},
 			},

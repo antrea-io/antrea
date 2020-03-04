@@ -145,8 +145,10 @@ func main() {
 
 func printResults(testList []*TestCase) {
 	fmt.Printf("\n\n---------------- Test Results ------------------\n\n")
+	failCount := 0
 	for _, testCase := range testList {
 		fmt.Printf("Test %s:\n", testCase.Name)
+		testFailed := false
 		for _, step := range testCase.Steps {
 			_, wrong, comparison := step.Reachability.Summary()
 			var result string
@@ -154,13 +156,19 @@ func printResults(testList []*TestCase) {
 				result = "success"
 			} else {
 				result = fmt.Sprintf("failure -- %d wrong results", wrong)
+				testFailed = true
 			}
 			fmt.Printf("\tStep %s on port %d, duration %d seconds, result: %s\n", step.Name, step.Port, int(step.Duration.Seconds()), result)
 			fmt.Printf("\n%s\n", comparison.PrettyPrint("\t\t"))
 			fmt.Printf("\n\n")
 		}
+		if testFailed {
+			failCount += 1
+		}
 		fmt.Printf("\n\n\n")
 	}
+	fmt.Printf("=== TEST FAILURES: %d/%d ===\n", failCount, len(testList))
+	fmt.Printf("\n\n\n")
 }
 
 // executeTests runs all the tests in testList and print results
