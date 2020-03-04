@@ -2,7 +2,6 @@ package utils
 
 import (
 
-	//	"context"
 	"bytes"
 	"fmt"
 	"k8s.io/client-go/rest"
@@ -74,7 +73,7 @@ func (k *Kubernetes) GetPods(ns string, key string, val string) ([]v1.Pod, error
 	return v1PodList, nil
 }
 
-// Probe is execs into a pod and checks its connectivity to another pod.  Of course it assumes
+// Probe execs into a pod and checks its connectivity to another pod.  Of course it assumes
 // that the target pod is serving on the input port, and also that wget is installed.  For perf it uses
 // spider rather then actually getting the full contents.
 func (k *Kubernetes) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) {
@@ -271,7 +270,7 @@ func (k *Kubernetes) CleanNetworkPolicies(namespaces []string) error {
 	return nil
 }
 
-// CreateOrUpdateNetworkPolicy is a convenience function for upsdating/creating netpols.  Updating is important since
+// CreateOrUpdateNetworkPolicy is a convenience function for updating/creating netpols. Updating is important since
 // some tests update a network policy to confirm that mutation works with a CNI.
 func (k *Kubernetes) CreateOrUpdateNetworkPolicy(ns string, netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {
 	log.Infof("creating/updating network policy %s in ns %s", netpol.Name, ns)

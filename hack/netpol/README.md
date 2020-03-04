@@ -1,12 +1,10 @@
 # A Truth-table based Network Policy construction and validation library.
 
-This repo implements https://github.com/vmware-tanzu/antrea/blob/community-network-policy-tests/docs/design/cni-testing-initiative-upstream.md, a fast, comprehensive truth table matrix for network policies which can be used to ensure that your CNI provider is fast, reliable, and air-tight.
-
-(Note this is a new repo, so some features not implemented yet, like Egress Builders)
+This repo implements upstream [CNI testing initiative](https://github.com/vmware-tanzu/antrea/blob/community-network-policy-tests/docs/design/cni-testing-initiative-upstream.md), a fast, comprehensive truth table matrix for network policies which can be used to ensure that your CNI provider is fast, reliable, and air-tight.
 
 ## A super-simple builder for experimenting with and validating your own network policies
 
-One hard thing about network policies is *testing* that they do *exactly* what you thought they did.  You can fork this repo and code up a network policy quickly, and in a few lines of code, verify that it works perfectly.
+One hard thing about network policies is *testing* that they do *exactly* what you thought they did. You can fork this repo and code up a network policy quickly, and in a few lines of code, verify that it works perfectly.
 
 You can add a new test in just a few lines of code, for example, this test creates a network policy which ensures that 
 only traffic from `b` pods in the 3 namespaces `x,y,z` can access the `a` pod, which lives in namespace `x`.
@@ -100,9 +98,9 @@ We are working to merge this into upstream Kubernetes, in the meanwhile, here's 
 Create the policy probe tests:
 
 ```
-kubectl create clusterrolebinding netpol --clusterrole=admin --serviceaccount=kube-system:netpol
+kubectl create clusterrolebinding netpol --clusterrole=cluster-admin --serviceaccount=kube-system:netpol
 kubectl create sa netpol -n kube-system
-kubectl create -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/netpol/install.yml
+kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/netpol/install.yml
 ```
 
 Now, look at the results of the network policy probe:
@@ -113,4 +111,4 @@ Now, look at the results of the network policy probe:
  
 ## Developers
 
-This is a new library for building complex, comprehensive network policy tests.  To build it, cd to antrea/hack/netpol and run `go run ./pkg/main/main.go`.  Then, execute the binary.
+This is a new library for building complex, comprehensive network policy tests. To build it, cd to antrea/hack/netpol and run `go run ./pkg/main/main.go`. Then, execute the binary.
