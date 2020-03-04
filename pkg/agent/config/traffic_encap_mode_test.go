@@ -10,31 +10,31 @@ import (
 func TestGetTrafficEncapModeFromStr(t *testing.T) {
 	tests := []struct {
 		name    string
-		mode     string
+		mode    string
 		expBool bool
 		expMode TrafficEncapModeType
 	}{
 		{
 			name:    "encap-mode-valid",
-			mode:     "enCap",
+			mode:    "enCap",
 			expBool: true,
 			expMode: 0,
 		},
 		{
 			name:    "no-encap-mode-valid",
-			mode:     "Noencap",
+			mode:    "Noencap",
 			expBool: true,
 			expMode: 1,
 		},
 		{
 			name:    "hybrid-mode-valid",
-			mode:     "Hybrid",
+			mode:    "Hybrid",
 			expBool: true,
 			expMode: 2,
 		},
 		{
 			name:    "invalid-str",
-			mode:     "en cap",
+			mode:    "en cap",
 			expBool: false,
 			expMode: -1,
 		},
