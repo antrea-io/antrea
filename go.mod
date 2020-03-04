@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20190103132138-cf96a9e61bd1
+	github.com/blang/semver v3.5.0+incompatible
 	github.com/cenk/hub v1.0.1 // indirect
 	github.com/cenkalti/hub v1.0.1 // indirect
 	github.com/cenkalti/rpc2 v0.0.0-20180727162946-9642ea02d0aa // indirect
@@ -15,17 +16,14 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
-	github.com/fatih/structtag v1.2.0
 	github.com/go-openapi/spec v0.17.2
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/mock v1.3.1
 	github.com/golang/protobuf v1.3.2
-	github.com/google/gofuzz v1.0.0 // indirect
 	github.com/google/uuid v1.1.1
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/j-keck/arping v1.0.0
-	github.com/json-iterator/go v1.1.6 // indirect
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/cobra v0.0.5

@@ -100,6 +100,17 @@ func (c *Controller) GetAppliedToGroupNum() int {
 	return c.ruleCache.GetAppliedToGroupNum()
 }
 
+func (c *Controller) GetNetworkPolicies() []v1beta1.NetworkPolicy {
+	return c.ruleCache.GetNetworkPolicies()
+}
+func (c *Controller) GetAddressGroups() []v1beta1.AddressGroup {
+	return c.ruleCache.GetAddressGroups()
+}
+
+func (c *Controller) GetAppliedToGroups() []v1beta1.AppliedToGroup {
+	return c.ruleCache.GetAppliedToGroups()
+}
+
 func (c *Controller) GetControllerConnectionStatus() bool {
 	// When the watchers are connected, controller connection status is true. Otherwise, it is false.
 	return c.addressGroupWatcherConnected && c.appliedToGroupWatcherConnected && c.networkPolicyWatcherConnected
