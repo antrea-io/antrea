@@ -196,8 +196,7 @@
 
           kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no -i jenkins/key/antrea-ci-key" antrea-ubuntu.tar capv@${IP}:/home/capv/antrea-ubuntu.tar
-            ssh -o StrictHostKeyChecking=no -i jenkins/key/antrea-ci-key -n capv@${IP} "sudo ctr -n=k8s.io images tag antrea/antrea-ubuntu:${DOCKER_IMG_VERSION} antrea/antrea-ubuntu"
-            ssh -o StrictHostKeyChecking=no -i jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/antrea-ubuntu.tar ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi" || true
+            ssh -o StrictHostKeyChecking=no -i jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/antrea-ubuntu.tar ; sudo ctr -n=k8s.io images tag docker.io/antrea/antrea-ubuntu:${DOCKER_IMG_VERSION} docker.io/antrea/antrea-ubuntu:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi" || true
           done
 
 - builder:
