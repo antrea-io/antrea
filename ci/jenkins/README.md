@@ -22,6 +22,9 @@ should be deleted. This ensures that all tests are run on a clean testbed.
   "sig-storage", "sig-auth", "sig-api-machinery", "sig-apps" and "sig-node".
 * [network policy](https://jenkins.antrea-ci.rocks/job/antrea-networkpolicy-for-pull-request/):
   community tests using sonobuoy, focusing on "Feature:NetworkPolicy".
+* jenkins jobs validator: this job only executes for PRs that include changes to
+  [ci/jenkins/jobs](/ci/jenkins/jobs). It validates the syntax of the jenkins jobs'
+  configuration.
 
 If you need to run the K8s community tests locally, you may use the
 [ci/run-k8s-e2e-tests.sh](/ci/run-k8s-e2e-tests.sh) script. It takes care of
@@ -66,3 +69,6 @@ To follow GitOps best practices, there is a job-updater job in Jenkins to detect
 any change in [ci/jenkins/jobs](/ci/jenkins/jobs) for every 15 min. As long as
 a PR to modify code under that path is merged, Jenkins jobs on cloud should be
 updated with new code.
+
+### Tips for Developer
+* [macro.yaml](/ci/jenkins/jobs/macros.yaml): Use "{{}}" instead of "{}" in "builder-list-tests" and "builder-conformance".
