@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/healthzcheck"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
@@ -55,6 +56,7 @@ type agentMonitor struct {
 	ofClient                 openflow.Client
 	ovsBridgeClient          ovsconfig.OVSBridgeClient
 	networkPolicyInfoQuerier AgentNetworkPolicyInfoQuerier
+	healthCheckClient        healthzcheck.HealthCheckClient
 }
 
 func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers.NodeInformer, networkPolicyInfoQuerier ControllerNetworkPolicyInfoQuerier) *controllerMonitor {
@@ -77,8 +79,9 @@ func NewAgentMonitor(
 	ofClient openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	networkPolicyInfoQuerier AgentNetworkPolicyInfoQuerier,
+	healthCheckClient healthzcheck.HealthCheckClient,
 ) *agentMonitor {
-	return &agentMonitor{client: client, ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient, networkPolicyInfoQuerier: networkPolicyInfoQuerier}
+	return &agentMonitor{client: client, ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient, networkPolicyInfoQuerier: networkPolicyInfoQuerier, healthCheckClient: healthCheckClient}
 }
 
 // Run creates AntreaControllerInfo CRD first after controller is running.

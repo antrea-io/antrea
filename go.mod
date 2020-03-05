@@ -48,6 +48,7 @@ require (
 	k8s.io/component-base v0.0.0-20190620085130-185d68e6e6ea
 	k8s.io/klog v0.3.3
 	k8s.io/kube-openapi v0.0.0-20190228160746-b3a7cee44a30
+	k8s.io/kubernetes v1.13.2
 	k8s.io/utils v0.0.0-20190607212802-c55fbcfc754a // indirect
 )
 

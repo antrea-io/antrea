@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/healthcheck"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
@@ -159,6 +160,19 @@ var CommandList = &commandList{
 			},
 			commandGroup:        flat,
 			transformedResponse: reflect.TypeOf(agentinfo.AntreaAgentInfoResponse{}),
+		},
+		{
+			use:   "health-check",
+			short: "Return the health status of Antrea agent",
+			long:  "Implement all health checkers installed and return the health status",
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:     "/healthcheck",
+					isSingle: true,
+				},
+			},
+			commandGroup:        flat,
+			transformedResponse: reflect.TypeOf(healthcheck.AntreaAgentHealthCheckResponse{}),
 		},
 	},
 	codec: scheme.Codecs,
