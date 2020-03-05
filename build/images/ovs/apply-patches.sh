@@ -20,6 +20,24 @@
 
 set -eo pipefail
 
+function echoerr {
+    >&2 echo "$@"
+}
+
+# Inspired from https://stackoverflow.com/a/24067243/4538702
+# 'sort -V' is available on Ubuntu 18.04
+# less than
+function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
+# greater than
+function version_gt() { test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"; }
+# greater than or equal to
+function version_get() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" == "$1"; }
+
+if version_lt "$OVS_VERSION" "2.11.0" || version_gt "$OVS_VERSION" "2.13.0"; then
+    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.11.0 and <= 2.13.0)"
+    exit 1
+fi
+
 # We cannot use 3-way merge unless we are in a git repository. If we need 3-way
 # merge, we will need to clone the repository with git instead of downloading a
 # release tarball (see Dockerfile).
@@ -34,9 +52,10 @@ curl https://github.com/openvswitch/ovs/commit/586cd3101e7fda54d14fb5bf12d847f35
 curl https://github.com/openvswitch/ovs/commit/79eadafeb1b47a3871cb792aa972f6e4d89d1a0b.patch | \
     git apply --exclude NEWS --exclude vswitchd/ovs-vswitchd.8.in
 
-# Inspired from https://stackoverflow.com/a/24067243/4538702
-# 'sort -V' is available on Ubuntu 18.04
-function version_get() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" == "$1"; }
+# This patch (post 2.13.0) ensures that ovs-vswitchd does not delete datapath
+# ports on exit.
+curl https://github.com/openvswitch/ovs/commit/7cc77b301f80a63cd4893198d82be0eef303f731.patch | \
+    git apply
 
 if version_get "$OVS_VERSION" "2.13.0"; then
     # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
