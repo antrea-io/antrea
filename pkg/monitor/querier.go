@@ -167,7 +167,19 @@ func (monitor *agentMonitor) GetVersion() string {
 }
 
 func (monitor *agentMonitor) GetHealthCheckStatus(r *http.Request) bool {
-	return monitor.healthCheckClient.HealthCheck(r)
+	klog.Infof("Begin antrea agent health check")
+	for _, checker := range monitor.healthzCheckers {
+		name := checker.Name()
+		klog.V(2).Infof("Implementing health checker %s ... ", name)
+		if err := checker.Check(r); err != nil {
+			klog.Errorf("Error when implementing health checker %s, error: %s", checker.Name(), err)
+			return false
+		} else {
+			klog.V(2).Infof("Successfully implemented health checker %s!", checker.Name())
+		}
+	}
+	klog.Infof("Successfully completed antrea agent health check")
+	return true
 }
 
 func (monitor *controllerMonitor) GetSelfPod() v1.ObjectReference {

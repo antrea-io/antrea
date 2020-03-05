@@ -19,6 +19,7 @@ import (
 	"net"
 	"time"
 
+	"k8s.io/apiserver/pkg/server/healthz"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
-	"github.com/vmware-tanzu/antrea/pkg/agent/healthzcheck"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
@@ -84,7 +84,6 @@ func run(o *Options) error {
 
 	routeClient := route.NewClient(encapMode)
 	iptablesClient := iptables.NewClient(o.config.HostGateway, serviceCIDRNet, encapMode)
-	healthCheckClient := healthzcheck.NewHealthCheckClient()
 
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -153,6 +152,7 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
+	healthzCheckers := make([]healthz.HealthzChecker, 0)
 	agentMonitor := monitor.NewAgentMonitor(
 		crdClient,
 		o.config.OVSBridge,
@@ -162,17 +162,13 @@ func run(o *Options) error {
 		ofClient,
 		ovsBridgeClient,
 		networkPolicyController,
-		healthCheckClient)
+		healthzCheckers)
 
 	go agentMonitor.Run(stopCh)
 
 	apiServer, err := apiserver.New(agentMonitor, networkPolicyController)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
-	}
-	err = healthCheckClient.InstallHealthChecker(apiServer.GenericAPIServer)
-	if err != nil {
-		return fmt.Errorf("error when installing health checkers for agent API server: %v", err)
 	}
 	go apiServer.Run(stopCh)
 
