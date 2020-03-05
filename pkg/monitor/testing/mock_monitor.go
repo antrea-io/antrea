@@ -23,6 +23,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	v1 "k8s.io/api/core/v1"
+	http "net/http"
 	reflect "reflect"
 )
 
@@ -61,6 +62,20 @@ func (m *MockAgentQuerier) GetAgentInfo() *v1beta1.AntreaAgentInfo {
 func (mr *MockAgentQuerierMockRecorder) GetAgentInfo() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAgentInfo", reflect.TypeOf((*MockAgentQuerier)(nil).GetAgentInfo))
+}
+
+// GetHealthCheckStatus mocks base method
+func (m *MockAgentQuerier) GetHealthCheckStatus(arg0 *http.Request) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHealthCheckStatus", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// GetHealthCheckStatus indicates an expected call of GetHealthCheckStatus
+func (mr *MockAgentQuerierMockRecorder) GetHealthCheckStatus(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHealthCheckStatus", reflect.TypeOf((*MockAgentQuerier)(nil).GetHealthCheckStatus), arg0)
 }
 
 // GetLocalPodNum mocks base method
