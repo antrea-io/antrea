@@ -16,13 +16,15 @@ package healthzcheck
 
 import (
 	"fmt"
+	"net/http"
 
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/klog"
 	"k8s.io/kubernetes/staging/src/k8s.io/apiserver/pkg/server/healthz"
 )
 
 type HealthCheckClient struct {
-	HealthzCheckers []healthz.HealthzChecker
+	healthzCheckers []healthz.HealthzChecker
 }
 
 // NewHealthCheckClient constructs a Client instance for health checking.
@@ -34,16 +36,32 @@ func NewHealthCheckClient() HealthCheckClient {
 	healthzCheckers := make([]healthz.HealthzChecker, 0)
 	healthzCheckers = append(healthzCheckers, healthz.PingHealthz)
 	return HealthCheckClient{
-		HealthzCheckers: healthzCheckers,
+		healthzCheckers: healthzCheckers,
 	}
 }
 
 func (c *HealthCheckClient) InstallHealthChecker(apiServer *genericapiserver.GenericAPIServer) error {
-	for _, healthzChecker := range c.HealthzCheckers {
+	for _, healthzChecker := range c.healthzCheckers {
 		err := apiServer.AddHealthzChecks(healthzChecker)
 		if err != nil {
 			return fmt.Errorf("error when adding healthz checks: %v", err)
 		}
 	}
 	return nil
+}
+
+func (c *HealthCheckClient) HealthCheck(r *http.Request) bool {
+	klog.Infof("Begin antrea agent health check")
+	for _, checker := range c.healthzCheckers {
+		name := checker.Name()
+		klog.V(2).Infof("Implementing health checker %s ... ", name)
+		if err := checker.Check(r); err != nil {
+			klog.Errorf("Error when implementing health checker %s, error: %s", checker.Name(), err)
+			return false
+		} else {
+			klog.V(2).Infof("Successfully implemented health checker %s!", checker.Name())
+		}
+	}
+	klog.Infof("Successfully completed antrea agent health check")
+	return true
 }
