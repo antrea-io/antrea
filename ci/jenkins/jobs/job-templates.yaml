@@ -87,7 +87,6 @@
         refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
         url: 'https://github.com/{org_repo}'
         wipe-workspace: true
-        included-regions: '{included_regions}'
     triggers:
     - github-pull-request:
         admin-list: '{admin_list}'
@@ -109,6 +108,7 @@
         error-status: '{error_status}'
         triggered-status: '{triggered_status}'
         started-status: '{started_status}'
+        included-regions: '{included_regions}'
     wrappers: '{wrappers}'
 
 - job-template:
