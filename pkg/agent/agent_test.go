@@ -22,6 +22,7 @@ import (
 
 	mock "github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
@@ -150,4 +151,18 @@ func TestPersistRoundNum(t *testing.T) {
 	// persistRoundNum should retry immediately and the second call will succeed (as per the
 	// expectations above).
 	persistRoundNum(roundNum, mockOVSBridgeClient, 0, maxRetries)
+}
+
+func TestGetRoundInfo(t *testing.T) {
+	controller := mock.NewController(t)
+	defer controller.Finish()
+	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
+
+	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("Failed to get external IDs"), true))
+	roundInfo := getRoundInfo(mockOVSBridgeClient)
+	assert.Equal(t, uint64(initialRoundNum), roundInfo.RoundNum, "Unexpected round number")
+	externalIDs := make(map[string]string)
+	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(externalIDs, nil)
+	roundInfo = getRoundInfo(mockOVSBridgeClient)
+	assert.Equal(t, uint64(initialRoundNum), roundInfo.RoundNum, "Unexpected round number")
 }

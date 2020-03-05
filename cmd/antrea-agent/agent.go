@@ -23,6 +23,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	_ "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
@@ -32,7 +33,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	"github.com/vmware-tanzu/antrea/pkg/agent/server"
+
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
@@ -162,7 +163,7 @@ func run(o *Options) error {
 
 	go agentMonitor.Run(stopCh)
 
-	apiServer, err := server.New(agentMonitor, networkPolicyController)
+	apiServer, err := apiserver.New(agentMonitor, networkPolicyController)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}

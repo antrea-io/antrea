@@ -30,7 +30,7 @@ require (
 	github.com/spf13/pflag v1.0.3
 	github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 // indirect
 	github.com/stretchr/testify v1.4.0
-	github.com/vishvananda/netlink v1.0.0
+	github.com/vishvananda/netlink v1.1.0
 	github.com/vmware/octant v0.8.0
 	golang.org/x/crypto v0.0.0-20191128160524-b544559bb6d1
 	golang.org/x/exp v0.0.0-20190121172915-509febef88a4
@@ -52,7 +52,7 @@ require (
 )
 
 replace (
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200116061148-fd9e64ac3ebb
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200228165500-75bbd38b6265
 	// Octant is renamed from vmware/octant to vmware-tanzu/octant since v0.9.0.
 	// However, Octant v0.9.0 K8s API is not compatible with Antrea K8s API version.
 	// Furthermore, octant v0.8 and v0.9 do not check-in some generated code required for testing

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package server
+package apiserver
 
 import (
 	"fmt"
@@ -24,10 +24,10 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/server/handlers/addressgroup"
-	"github.com/vmware-tanzu/antrea/pkg/agent/server/handlers/agentinfo"
-	"github.com/vmware-tanzu/antrea/pkg/agent/server/handlers/appliedtogroup"
-	"github.com/vmware-tanzu/antrea/pkg/agent/server/handlers/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/addressgroup"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	antreaversion "github.com/vmware-tanzu/antrea/pkg/version"
 )
