@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/server/healthz"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
@@ -55,6 +56,7 @@ type agentMonitor struct {
 	ofClient                 openflow.Client
 	ovsBridgeClient          ovsconfig.OVSBridgeClient
 	networkPolicyInfoQuerier AgentNetworkPolicyInfoQuerier
+	healthzCheckers          []healthz.HealthzChecker
 }
 
 func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers.NodeInformer, networkPolicyInfoQuerier ControllerNetworkPolicyInfoQuerier) *controllerMonitor {
@@ -77,8 +79,9 @@ func NewAgentMonitor(
 	ofClient openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	networkPolicyInfoQuerier AgentNetworkPolicyInfoQuerier,
+	healthzCheckers []healthz.HealthzChecker,
 ) *agentMonitor {
-	return &agentMonitor{client: client, ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient, networkPolicyInfoQuerier: networkPolicyInfoQuerier}
+	return &agentMonitor{client: client, ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient, networkPolicyInfoQuerier: networkPolicyInfoQuerier, healthzCheckers: healthzCheckers}
 }
 
 // Run creates AntreaControllerInfo CRD first after controller is running.

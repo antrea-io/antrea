@@ -19,6 +19,7 @@ import (
 	"net"
 	"time"
 
+	"k8s.io/apiserver/pkg/server/healthz"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
@@ -150,6 +151,7 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
+	healthzCheckers := make([]healthz.HealthzChecker, 0)
 	agentMonitor := monitor.NewAgentMonitor(
 		crdClient,
 		o.config.OVSBridge,
@@ -158,7 +160,8 @@ func run(o *Options) error {
 		ifaceStore,
 		ofClient,
 		ovsBridgeClient,
-		networkPolicyController)
+		networkPolicyController,
+		healthzCheckers)
 
 	go agentMonitor.Run(stopCh)
 

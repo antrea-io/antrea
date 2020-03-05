@@ -15,6 +15,7 @@
 package monitor
 
 import (
+	"net/http"
 	"os"
 	"strconv"
 
@@ -47,6 +48,7 @@ type AgentQuerier interface {
 	GetOVSFlowTable() map[string]int32
 	GetLocalPodNum() int32
 	GetAgentInfo() *v1beta1.AntreaAgentInfo
+	GetHealthCheckStatus(r *http.Request) bool
 }
 
 type ControllerQuerier interface {
@@ -120,9 +122,13 @@ func (monitor *agentMonitor) GetLocalPodNum() int32 {
 
 func (monitor *agentMonitor) GetAgentConditions(ovsConnected bool) []v1beta1.AgentCondition {
 	lastHeartbeatTime := metav1.Now()
+	healthStatus := v1.ConditionTrue
 	controllerConnectionStatus := v1.ConditionTrue
 	ovsdbConnectionStatus := v1.ConditionTrue
 	openflowConnectionStatus := v1.ConditionTrue
+	if !monitor.GetHealthCheckStatus(nil) {
+		healthStatus = v1.ConditionFalse
+	}
 	if !monitor.networkPolicyInfoQuerier.GetControllerConnectionStatus() {
 		controllerConnectionStatus = v1.ConditionFalse
 	}
@@ -135,7 +141,7 @@ func (monitor *agentMonitor) GetAgentConditions(ovsConnected bool) []v1beta1.Age
 	return []v1beta1.AgentCondition{
 		{
 			Type:              v1beta1.AgentHealthy,
-			Status:            v1.ConditionTrue,
+			Status:            healthStatus,
 			LastHeartbeatTime: lastHeartbeatTime,
 		},
 		{
@@ -158,6 +164,22 @@ func (monitor *agentMonitor) GetAgentConditions(ovsConnected bool) []v1beta1.Age
 
 func (monitor *agentMonitor) GetVersion() string {
 	return version.GetFullVersion()
+}
+
+func (monitor *agentMonitor) GetHealthCheckStatus(r *http.Request) bool {
+	klog.Infof("Begin antrea agent health check")
+	for _, checker := range monitor.healthzCheckers {
+		name := checker.Name()
+		klog.V(2).Infof("Implementing health checker %s ... ", name)
+		if err := checker.Check(r); err != nil {
+			klog.Errorf("Error when implementing health checker %s, error: %s", checker.Name(), err)
+			return false
+		} else {
+			klog.V(2).Infof("Successfully implemented health checker %s!", checker.Name())
+		}
+	}
+	klog.Infof("Successfully completed antrea agent health check")
+	return true
 }
 
 func (monitor *controllerMonitor) GetSelfPod() v1.ObjectReference {
