@@ -1,41 +1,39 @@
 - project:
-    name: antrea-automation
-    git_credentials_id: ANTREA_GIT_CREDENTIAL
-    org_repo: vmware-tanzu/antrea
     # ghpr_auth, antrea_admin_list, antrea_org_list and antrea_white_list
     # should be defined as a global variable somewhere else
+    name: antrea
+    git_credentials_id: ANTREA_GIT_CREDENTIAL
+    org_repo: vmware-tanzu/antrea
     jobs:
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-for-period':
           test_name: job-updater
-          node: null
           description: 'This is for updating all antrea jobs.'
           builders:
             - builder-job-updater
-          trigger_phrase: null
-          allow_whitelist_orgs_as_admins: false
-          admin_list: []
-          org_list: []
-          white_list:
-          - nobody123_nobody123_
-          only_trigger_phrase: false
-          trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
-          status_context: should_disappear # this value doesn't matter.
-          status_url: null
-          success_status: --none--
-          failure_status: --none--
-          error_status: --none--
-          triggered_status: --none--
-          started_status: --none--
-          wrappers: []
-          publishers: []
           branches:
           - '*/master'
           included_regions:
           - ci/jenkins/jobs/.*
-          cron: 'H/10 * * * *'
+          cron: 'H/15 * * * *'
           ignore_post_commit_hooks: false
+      - '{name}-{test_name}-for-gc':
+          test_name: workload-cluster
+          description: 'This is for deleting useless workload clusters.'
+          builders:
+            - builder-workload-cluster-gc
+          timed: 'H * * * *'
+      - '{name}-{test_name}-for-testbed':
+          test_name: cleanup
+          node: null
+          description: 'This is for deleting workload clusters.'
+          builders:
+            - builder-workload-cluster-cleanup
+          parameters:
+            - string:
+                default: ''
+                description: 'The cluster name of the last finished build.'
+                name: CLUSTERNAME
+                trim: 'true'
       - '{name}-{test_name}-for-pull-request':
           test_name: list-tests
           node: null
@@ -66,11 +64,32 @@
                     credential-id: '{git_credentials_id}'
                     variable: GH_CREDENTIAL
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
+      - '{name}-{test_name}-job-validator':
+          test_name: jenkins-job-validator
+          node: null
+          description: 'This is for validating jenkins jobs code.'
+          builders:
+            - builder-job-validator
+          trigger_phrase: null
+          allow_whitelist_orgs_as_admins: false
+          admin_list: []
+          org_list: []
+          white_list: []
+          only_trigger_phrase: false
+          trigger_permit_all: true
+          throttle_concurrent_builds_category:
+          throttle_concurrent_builds_enabled: 'false'
+          status_context: jenkins-jobs-validator
+          status_url: null
+          success_status: Validator passed.
+          failure_status: Failed.
+          error_status: Failed.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+          included_regions:
+          - ci/jenkins/jobs/.*
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e-pending-label
           node: null
@@ -95,17 +114,13 @@
           started_status: null
           wrappers: []
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e
           node: 'antrea-e2e-test'
           description: 'This is the {test_name} test for {name}.'
           builders:
-            - prepare-antrea
+            - builder-workload-cluster-setup
+            - builder-prepare-antrea
             - builder-e2e
           trigger_phrase: .*/test-(e2e|all).*
           allow_whitelist_orgs_as_admins: true
@@ -118,7 +133,7 @@
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-e2e
-          status_url: --none--
+          status_url: null
           success_status: Build finished.
           failure_status: Failed. Add comment /test-e2e to re-trigger.
           error_status: Failed. Add comment /test-e2e to re-trigger.
@@ -133,11 +148,10 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
+          - trigger-parameterized-builds:
+            - project:
+              - antrea-cleanup-for-testbed
+              property-file: 'ci_properties.txt'
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e-skip
           node: null
@@ -163,11 +177,6 @@
           started_status: null
           wrappers: []
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance-pending-label
           node: null
@@ -192,17 +201,13 @@
           started_status: null
           wrappers: []
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance
           node: 'antrea-e2e-test'
           description: 'This is the {test_name} test for {name}.'
           builders:
-            - prepare-antrea
+            - builder-workload-cluster-setup
+            - builder-prepare-antrea
             - builder-conformance:
                 focus_regex: '\[Conformance\]'
                 skip_regex: '\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]'
@@ -217,19 +222,25 @@
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-conformance
-          status_url: --none--
+          status_url: null
           success_status: Build finished.
           failure_status: Failed. Add comment /test-conformance to re-trigger.
           error_status: Failed. Add comment /test-conformance to re-trigger.
           triggered_status: null
           started_status: null
           wrappers: []
-          publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - trigger-parameterized-builds:
+            - project:
+              - antrea-cleanup-for-testbed
+              property-file: 'ci_properties.txt'
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance-skip
           node: null
@@ -255,11 +266,6 @@
           started_status: null
           wrappers: []
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy-pending-label
           node: null
@@ -284,20 +290,16 @@
           started_status: null
           wrappers: []
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy
           node: 'antrea-e2e-test'
           description: 'This is the {test_name} test for {name}.'
           builders:
-            - prepare-antrea
+            - builder-workload-cluster-setup
+            - builder-prepare-antrea
             - builder-conformance:
                 focus_regex: '\[Feature:NetworkPolicy\]'
-                skip_regex: ''
+                skip_regex: 'SKIP_NO_TESTCASE'
           trigger_phrase: .*/test-(networkpolicy|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -309,19 +311,25 @@
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-networkpolicy
-          status_url: --none--
+          status_url: null
           success_status: Build finished.
           failure_status: Failed. Add comment /test-networkpolicy to re-trigger.
           error_status: Failed. Add comment /test-networkpolicy to re-trigger.
           triggered_status: null
           started_status: null
           wrappers: []
-          publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - trigger-parameterized-builds:
+            - project:
+              - antrea-cleanup-for-testbed
+              property-file: 'ci_properties.txt'
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy-skip
           node: null
@@ -347,8 +355,3 @@
           started_status: null
           wrappers: []
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
