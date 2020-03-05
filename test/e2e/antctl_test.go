@@ -55,10 +55,7 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-<<<<<<< HEAD
-=======
 	nodeAntctlPath := "~/antctl"
->>>>>>> 8687e60fec1727f28dfec30a464aeda88dda6901
 	podName, err := data.getAntreaPodOnNode(masterNodeName())
 	require.Nil(t, err, "Error when retrieving antrea controller pod name")
 
@@ -79,19 +76,11 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 		expectedReturnCode int
 	}{
 		"CorrectConfig": {
-<<<<<<< HEAD
-			commands:           []string{"~/antctl", "-v", "version"},
-			expectedReturnCode: 0,
-		},
-		"MalformedConfig": {
-			commands:           []string{"~/antctl", "-v", "version", "--kubeconfig", "/dev/null"},
-=======
 			commands:           []string{nodeAntctlPath, "-v", "version"},
 			expectedReturnCode: 0,
 		},
 		"MalformedConfig": {
 			commands:           []string{nodeAntctlPath, "-v", "version", "--kubeconfig", "/dev/null"},
->>>>>>> 8687e60fec1727f28dfec30a464aeda88dda6901
 			expectedReturnCode: 1,
 		},
 	} {
