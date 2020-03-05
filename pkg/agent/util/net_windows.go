@@ -18,15 +18,12 @@ package util
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
 
-	"github.com/Microsoft/hcsshim"
 	ps "github.com/benmoss/go-powershell"
 	"github.com/benmoss/go-powershell/backend"
-	"github.com/containernetworking/plugins/pkg/ip"
 	"k8s.io/klog"
 )
 
@@ -34,7 +31,6 @@ const (
 	ContainerVNICPrefix = "vEthernet"
 	HNSNetworkType      = "Transparent"
 	LocalHNSNetwork     = "antrea-hnsnetwork"
-	OVSExtensionID      = "583CC151-73EC-4A6A-8B47-578297AD7623"
 )
 
 func GetNSPath(containerNetNS string) (string, error) {
@@ -88,24 +84,6 @@ func CallPSCommand(cmd string) (string, error) {
 	return stdout, nil
 }
 
-// RemoveManagementInterface removes the management interface of the HNS Network, and then the physical interface can be
-// added to the OVS bridge. This function is called only if Hyper-V feature is installed on the host.
-func RemoveManagementInterface(networkName string) error {
-	var err error
-	var maxRetry = 3
-	var i = 0
-	cmd := fmt.Sprintf("Get-VMSwitch -Name %s  | Set-VMSwitch -AllowManagementOS $false ", networkName)
-	// Retry the operation here because an error is returned at the first invocation.
-	for i < maxRetry {
-		err = InvokePSCommand(cmd)
-		if err == nil {
-			return nil
-		}
-		i++
-	}
-	return err
-}
-
 // WindowsHyperVInstalled checks if the Hyper-V feature is enabled on the host.
 func WindowsHyperVInstalled() (bool, error) {
 	cmd := "$(Get-WindowsFeature Hyper-V).InstallState"
@@ -114,65 +92,6 @@ func WindowsHyperVInstalled() (bool, error) {
 		return true, err
 	}
 	return strings.HasPrefix(result, "Installed"), nil
-}
-
-// CreateHNSNetwork creates a new HNS Network, whose type is "Transparent". The NetworkAdapter is using the host
-// interface which is configured with Node IP. HNS Network properties "ManagementIP" and "SourceMac" are used to record
-// the original IP and MAC addresses on the network adapter.
-func CreateHNSNetwork(hnsNetName string, subnetCIDR *net.IPNet, nodeIP *net.IPNet) (*hcsshim.HNSNetwork, error) {
-	_, adapter, err := GetIPNetDeviceFromIP(nodeIP.IP)
-	if err != nil {
-		return nil, err
-	}
-	adapterMAC := adapter.HardwareAddr
-	adapterName := adapter.Name
-	gateway := ip.NextIP(subnetCIDR.IP.Mask(subnetCIDR.Mask))
-	network := &hcsshim.HNSNetwork{
-		Name:               hnsNetName,
-		Type:               HNSNetworkType,
-		NetworkAdapterName: adapterName,
-		Subnets: []hcsshim.Subnet{
-			{
-				AddressPrefix:  subnetCIDR.String(),
-				GatewayAddress: gateway.String(),
-			},
-		},
-		ManagementIP: nodeIP.String(),
-		SourceMac:    adapterMAC.String(),
-	}
-	hnsNet, err := network.Create()
-	if err != nil {
-		return nil, err
-	}
-	return hnsNet, nil
-}
-
-type vSwitchExtensionPolicy struct {
-	ExtensionID string `json:"Id,omitempty"`
-	IsEnabled   bool
-}
-
-type ExtensionsPolicy struct {
-	Extensions []vSwitchExtensionPolicy `json:"Extensions"`
-}
-
-// EnableHNSNetworkExtension enables the specified vSwitchExtension on the target HNS Network. Antrea calls this function
-// to enable OVS Extension on the HNS Network.
-func EnableHNSNetworkExtension(hnsNetID string, vSwitchExtension string) error {
-	extensionPolicy := vSwitchExtensionPolicy{
-		ExtensionID: vSwitchExtension,
-		IsEnabled:   true,
-	}
-	jsonString, _ := json.Marshal(
-		ExtensionsPolicy{
-			Extensions: []vSwitchExtensionPolicy{extensionPolicy},
-		})
-
-	_, err := hcsshim.HNSNetworkRequest("POST", hnsNetID, string(jsonString))
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // GetIPNetDeviceFromIP returns a local IP/mask and associated device from IP.
@@ -241,50 +160,6 @@ func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
 		return err
 	}
 	return nil
-}
-
-// PrepareHostNetworking creates HNS Network for containers.
-func PrepareHostNetworking(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet) error {
-	_, err := hcsshim.GetHNSNetworkByName(LocalHNSNetwork)
-	// If the HNS Network already exists, return immediately.
-	if err == nil {
-		return nil
-	}
-	if _, ok := err.(hcsshim.NetworkNotFoundError); !ok {
-		return err
-	}
-	hnsNet, err := CreateHNSNetwork(LocalHNSNetwork, subnetCIDR, nodeIPNet)
-	if err != nil {
-		return err
-	}
-
-	// Enable OVS Extension on the HNS Network. If an error occurs, delete the HNS Network and return the error.
-	if err = enableHNSOnOVS(hnsNet); err != nil {
-		hnsNet.Delete()
-		return err
-	}
-	klog.Infof("Created HNSNetwork with name %s id %s", hnsNet.Name, hnsNet.Id)
-	return nil
-}
-
-func enableHNSOnOVS(hnsNet *hcsshim.HNSNetwork) error {
-	// Release OS management for HNS Network if Hyper-V is enabled.
-	hypervEnabled, err := WindowsHyperVInstalled()
-	if err != nil {
-		return err
-	}
-	if hypervEnabled {
-		if err := RemoveManagementInterface(LocalHNSNetwork); err != nil {
-			klog.Errorf("Failed to remove the interface managed by OS for HNSNetwork %s", LocalHNSNetwork)
-			return err
-		}
-	}
-
-	// Enable the HNS Network with OVS extension.
-	if err := EnableHNSNetworkExtension(hnsNet.Id, OVSExtensionID); err != nil {
-		return err
-	}
-	return err
 }
 
 // GetLocalBroadcastIP returns the last IP address in a subnet. This IP is always working as the broadcast address in

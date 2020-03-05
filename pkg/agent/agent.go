@@ -425,40 +425,45 @@ func (i *Initializer) initNodeLocalConfig() error {
 	if err != nil {
 		return err
 	}
-	node, err := i.client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	i.nodeConfig, err = GetNodeConfig(i.client, nodeName, i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetNodeConfig(nodeClient clientset.Interface, nodeName string, networkPolicyOnly bool) (*config.NodeConfig, error) {
+	node, err := nodeClient.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("Failed to get node from K8s with name %s: %v", nodeName, err)
-		return err
+		return nil, err
 	}
 
 	ipAddr, err := noderoute.GetNodeAddr(node)
 	if err != nil {
-		return fmt.Errorf("failed to obtain local IP address from k8s: %w", err)
+		return nil, fmt.Errorf("failed to obtain local IP address from k8s: %w", err)
 	}
 	localAddr, _, err := util.GetIPNetDeviceFromIP(ipAddr)
 	if err != nil {
-		return fmt.Errorf("failed to get local IPNet:  %v", err)
+		return nil, fmt.Errorf("failed to get local IPNet:  %v", err)
 	}
 
-	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		i.nodeConfig = &config.NodeConfig{Name: nodeName, NodeIPAddr: localAddr}
-		return nil
+	if networkPolicyOnly {
+		return &config.NodeConfig{Name: nodeName, NodeIPAddr: localAddr}, nil
 	}
 
 	// Spec.PodCIDR can be empty due to misconfiguration
 	if node.Spec.PodCIDR == "" {
 		klog.Errorf("Spec.PodCIDR is empty for Node %s. Please make sure --allocate-node-cidrs is enabled "+
 			"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", nodeName)
-		return fmt.Errorf("CIDR string is empty for node %s", nodeName)
+		return nil, fmt.Errorf("CIDR string is empty for node %s", nodeName)
 	}
 	_, localSubnet, err := net.ParseCIDR(node.Spec.PodCIDR)
 	if err != nil {
 		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
-		return err
+		return nil, err
 	}
-
-	i.nodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: localSubnet, NodeIPAddr: localAddr}
-	return nil
+	return &config.NodeConfig{Name: nodeName, PodCIDR: localSubnet, NodeIPAddr: localAddr}, nil
 }
 
 // getNodeName returns the node's name used in Kubernetes, based on the priority:
