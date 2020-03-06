@@ -100,6 +100,7 @@ func (k *Kubernetes) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) 
 	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
 	// first. This leads to the first test being run consistently failing. To avoid this issue
 	// until it is resolved, we set "--tries" to 4.
+	// See https://github.com/vmware-tanzu/antrea/issues/467.
 	exec := []string{"wget", "--spider", "--tries", "4", "--timeout", "0.5", "--waitretry", "0", "http://" + toIP + ":" + fmt.Sprintf("%v", port)}
 	// HACK: inferring container name as c80, c81, etc, for simplicity.
 	containerName := fmt.Sprintf("c%v", port)
