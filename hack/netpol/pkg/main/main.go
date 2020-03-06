@@ -62,6 +62,26 @@ func waitForPodInNamespace(k8s *Kubernetes, ns string, pod string) error {
 	}
 }
 
+func waitForHTTPServers(k8s *Kubernetes) error {
+	const maxTries = 10
+	const sleepInterval = 1 * time.Second
+	log.Infof("waiting for HTTP servers (ports 80 and 81) to become ready")
+	var wrong int
+	for i := 0; i < maxTries; i++ {
+		reachability := NewReachability(allPods, true)
+		validate(k8s, reachability, 80)
+		validate(k8s, reachability, 81)
+		_, wrong, _ = reachability.Summary()
+		if wrong == 0 {
+			log.Infof("all HTTP servers are ready")
+			return nil
+		}
+		log.Debugf("%d HTTP servers not ready", wrong)
+		time.Sleep(sleepInterval)
+	}
+	return errors.Errorf("after %d tries, %d HTTP servers are not ready", maxTries, wrong)
+}
+
 func bootstrap(k8s *Kubernetes) error {
 	for _, ns := range namespaces {
 		_, err := k8s.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
@@ -82,6 +102,12 @@ func bootstrap(k8s *Kubernetes) error {
 		if err != nil {
 			return errors.WithMessagef(err, "unable to wait for pod %s/%s", pod.Namespace(), pod.PodName())
 		}
+	}
+
+	// Ensure that all the HTTP servers have time to start properly.
+	// See https://github.com/vmware-tanzu/antrea/issues/472.
+	if err := waitForHTTPServers(k8s); err != nil {
+		return err
 	}
 
 	return nil
