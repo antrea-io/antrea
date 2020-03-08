@@ -1553,7 +1553,7 @@ func TestToAntreaServices(t *testing.T) {
 }
 
 func TestToAntreaIPBlock(t *testing.T) {
-	expIpNet := networking.IPNet{
+	expIPNet := networking.IPNet{
 		IP:           ipStrToIPAddress("10.0.0.0"),
 		PrefixLength: 24,
 	}
@@ -1567,7 +1567,7 @@ func TestToAntreaIPBlock(t *testing.T) {
 				CIDR: "10.0.0.0/24",
 			},
 			networking.IPBlock{
-				CIDR: expIpNet,
+				CIDR: expIPNet,
 			},
 			nil,
 		},
