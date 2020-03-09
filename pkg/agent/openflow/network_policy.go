@@ -608,14 +608,14 @@ func (c *clause) deleteConjunctiveMatchFlow(flowContextKey string) *conjMatchFlo
 		if found {
 			ctxChange.matchFlow = context.deleteAction(conjID)
 			ctxChange.actChange.action = action
-			expectedConjunctiveActions -= 1
+			expectedConjunctiveActions--
 		}
 	} else {
 		// Delete the DENY-ALL rule if it is in context denyAllRules.
 		ctxChange.matchFlow = &flowChange{
 			changeType: deletion,
 		}
-		expectedDenyAllRules -= 1
+		expectedDenyAllRules--
 	}
 
 	// Uninstall default drop flow if the deleted conjunctiveAction is the last action or the rule is the last one in
@@ -821,15 +821,15 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 	var fromID, toID, serviceID, nClause uint8
 	// Calculate clause IDs and the total number of clauses.
 	if rule.From != nil {
-		nClause += 1
+		nClause++
 		fromID = nClause
 	}
 	if rule.To != nil {
-		nClause += 1
+		nClause++
 		toID = nClause
 	}
 	if rule.Service != nil {
-		nClause += 1
+		nClause++
 		serviceID = nClause
 	}
 

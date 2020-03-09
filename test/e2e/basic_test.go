@@ -447,10 +447,10 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 		return 0, fmt.Errorf("error when unmarshalling OVSDB result: %v", err)
 	}
 	externalIds := result[0].Rows[0].ExternalIds[1].([]interface{})
-	for _, externalId := range externalIds {
-		externalIdArray := externalId.([]interface{})
-		key := externalIdArray[0].(string)
-		value := externalIdArray[1].(string)
+	for _, externalID := range externalIds {
+		externalIDArray := externalID.([]interface{})
+		key := externalIDArray[0].(string)
+		value := externalIDArray[1].(string)
 		if key == "roundNum" {
 			if roundNum, err := strconv.ParseUint(value, 10, 64); err != nil {
 				return 0, fmt.Errorf("cannot convert roundNum to uint64: %v", err)

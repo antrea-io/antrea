@@ -65,7 +65,7 @@ func TestLoadNetConfig(t *testing.T) {
 
 	cniService := newCNIServer(t)
 	networkCfg := generateNetworkConfiguration("testCfg", supportedCNIVersion)
-	requestMsg, containerId := newRequest(args, networkCfg, "", t)
+	requestMsg, containerID := newRequest(args, networkCfg, "", t)
 	netCfg, err := cniService.loadNetworkConfig(&requestMsg)
 
 	// just make sure that cniService.nodeConfig matches the testNodeConfig.
@@ -73,7 +73,7 @@ func TestLoadNetConfig(t *testing.T) {
 
 	assert.Nil(err, "Error while parsing request message, %v", err)
 	assert.Equal(supportedCNIVersion, netCfg.CNIVersion)
-	assert.Equal(containerId, netCfg.ContainerId)
+	assert.Equal(containerID, netCfg.ContainerId)
 	assert.Equal(netns, netCfg.Netns)
 	assert.Equal(ifname, netCfg.Ifname)
 	assert.Equal(networkCfg.Name, netCfg.Name)
@@ -307,8 +307,8 @@ func TestValidateOVSInterface(t *testing.T) {
 	podConfigurator := &podConfigurator{ifaceStore: ifaceStore}
 	containerID := uuid.New().String()
 	containerMACStr := "11:22:33:44:55:66"
-	containerIp := []string{"10.1.2.100/24,10.1.2.1,4"}
-	result := ipamtest.GenerateIPAMResult(supportedCNIVersion, containerIp, routes, dns)
+	containerIP := []string{"10.1.2.100/24,10.1.2.1,4"}
+	result := ipamtest.GenerateIPAMResult(supportedCNIVersion, containerIP, routes, dns)
 	containerIface := &current.Interface{Name: ifname, Sandbox: netns, Mac: containerMACStr}
 	hostIfaceName := util.GenerateContainerInterfaceName(testPodName, testPodNamespace)
 	hostIface := &current.Interface{Name: hostIfaceName}
@@ -464,7 +464,7 @@ func generateNetworkConfiguration(name string, cniVersion string) *NetworkConfig
 }
 
 func newRequest(args string, netCfg *NetworkConfig, path string, t *testing.T) (cnipb.CniCmdRequest, string) {
-	containerId := generateUUID(t)
+	containerID := generateUUID(t)
 	networkConfig, err := json.Marshal(netCfg)
 	if err != nil {
 		t.Error("Failed to generate Network configuration")
@@ -472,7 +472,7 @@ func newRequest(args string, netCfg *NetworkConfig, path string, t *testing.T) (
 
 	cmdRequest := cnipb.CniCmdRequest{
 		CniArgs: &cnipb.CniCmdArgs{
-			ContainerId:          containerId,
+			ContainerId:          containerID,
 			Ifname:               ifname,
 			Args:                 args,
 			Netns:                netns,
@@ -480,15 +480,15 @@ func newRequest(args string, netCfg *NetworkConfig, path string, t *testing.T) (
 			Path:                 path,
 		},
 	}
-	return cmdRequest, containerId
+	return cmdRequest, containerID
 }
 
 func generateUUID(t *testing.T) string {
-	newId, err := uuid.NewUUID()
+	newID, err := uuid.NewUUID()
 	if err != nil {
 		t.Fatal("Failed to generate UUID")
 	}
-	return newId.String()
+	return newID.String()
 }
 
 func init() {
