@@ -206,7 +206,7 @@ func (k *Kubernetes) CreateOrUpdateDeployment(ns, deploymentName string, replica
 			Command:         []string{"python", "-m", "http.server", fmt.Sprintf("%d", port)},
 			SecurityContext: &v1.SecurityContext{},
 			Ports: []v1.ContainerPort{
-				v1.ContainerPort{
+				{
 					ContainerPort: port,
 					Name:          fmt.Sprintf("serve-%d", port),
 				},
