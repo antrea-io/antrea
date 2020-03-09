@@ -189,7 +189,7 @@ func printResults(testList []*TestCase) {
 			fmt.Printf("\n\n")
 		}
 		if testFailed {
-			failCount += 1
+			failCount++
 		}
 		fmt.Printf("\n\n\n")
 	}

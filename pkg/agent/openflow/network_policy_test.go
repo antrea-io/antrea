@@ -292,7 +292,7 @@ func getDenyAllRuleOPCount(flows []*flowChange, operType changeType) int {
 	var count int
 	for _, changedFlow := range flows {
 		if changedFlow.flow == nil && changedFlow.changeType == operType {
-			count += 1
+			count++
 		}
 	}
 	return count

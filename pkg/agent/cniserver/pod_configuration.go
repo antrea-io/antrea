@@ -149,7 +149,7 @@ func configureContainerAddr(netns ns.NetNS, containerInterface *current.Interfac
 							}
 						}
 					}
-					count += 1
+					count++
 				}
 				return nil
 			})

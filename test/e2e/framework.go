@@ -167,7 +167,7 @@ func collectClusterInfo() error {
 			clusterInfo.masterNodeName = node.Name
 		} else {
 			nodeIdx = workerIdx
-			workerIdx += 1
+			workerIdx++
 		}
 
 		clusterInfo.nodes[nodeIdx] = ClusterNode{
