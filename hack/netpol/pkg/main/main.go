@@ -150,19 +150,19 @@ func main() {
 	failOnError(err)
 
 	testList := []*TestCase{
-		&TestCase{"DefaultDeny", testDefaultDeny()},
-		&TestCase{"PodLabelWhitelistingFromBToA", testPodLabelWhitelistingFromBToA()},
-		&TestCase{"InnerNamespaceTraffic", testInnerNamespaceTraffic()},
-		&TestCase{"EnforcePodAndNSSelector", testEnforcePodAndNSSelector()},
-		&TestCase{"EnforcePodOrNSSelector", testEnforcePodOrNSSelector()},
-		&TestCase{"PortsPolicies", testPortsPolicies()},
-		&TestCase{"AllowAll", testAllowAll()},
-		&TestCase{"NamedPort", testNamedPort()},
-		&TestCase{"NamedPortWithNamespace", testNamedPortWNamespace()},
-		&TestCase{"EgressOnNamedPort", testEgressOnNamedPort()},
-		&TestCase{"EgressAndIngressIntegration", testEgressAndIngressIntegration()},
-		&TestCase{"AllowAllPrecedenceIngress", testAllowAllPrecedenceIngress()},
-		&TestCase{"PortsPoliciesStackedOrUpdated", testPortsPoliciesStackedOrUpdated()},
+		{"DefaultDeny", testDefaultDeny()},
+		{"PodLabelWhitelistingFromBToA", testPodLabelWhitelistingFromBToA()},
+		{"InnerNamespaceTraffic", testInnerNamespaceTraffic()},
+		{"EnforcePodAndNSSelector", testEnforcePodAndNSSelector()},
+		{"EnforcePodOrNSSelector", testEnforcePodOrNSSelector()},
+		{"PortsPolicies", testPortsPolicies()},
+		{"AllowAll", testAllowAll()},
+		{"NamedPort", testNamedPort()},
+		{"NamedPortWithNamespace", testNamedPortWNamespace()},
+		{"EgressOnNamedPort", testEgressOnNamedPort()},
+		{"EgressAndIngressIntegration", testEgressAndIngressIntegration()},
+		{"AllowAllPrecedenceIngress", testAllowAllPrecedenceIngress()},
+		{"PortsPoliciesStackedOrUpdated", testPortsPoliciesStackedOrUpdated()},
 		//testMultipleUpdates,  // Todo: not suitable in new stacked structure
 	}
 	executeTests(k8s, testList)
@@ -362,21 +362,21 @@ func testEgressAndIngressIntegration() []*TestStep {
 	reachability3 := NewReachability(allPods, true)
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80 -- 1",
 			reachability1,
 			policy1,
 			p80,
 			0,
 		},
-		&TestStep{
+		{
 			"Port 80 -- 2",
 			reachability2,
 			policy2,
 			p80,
 			0,
 		},
-		&TestStep{
+		{
 			"Port 80 -- 3",
 			reachability3,
 			policy3,
@@ -408,14 +408,14 @@ func testAllowAllPrecedenceIngress() []*TestStep {
 	reachability2 := NewReachability(allPods, true)
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 81",
 			reachability1,
 			policy1,
 			p81,
 			0,
 		},
-		&TestStep{
+		{
 			"Port 80",
 			reachability2,
 			policy2,
@@ -455,14 +455,14 @@ func testEgressOnNamedPort() []*TestStep {
 	}
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability80,
 			builder.Get(),
 			80,
 			0,
 		},
-		&TestStep{
+		{
 			"Port 81",
 			reachability81(),
 			builder.Get(),
@@ -526,14 +526,14 @@ func testNamedPortWNamespace() []*TestStep {
 	}
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability80(),
 			builder.Get(),
 			80,
 			0,
 		},
-		&TestStep{
+		{
 			"Port 81",
 			reachability81(),
 			builder.Get(),
@@ -562,14 +562,14 @@ func testNamedPort() []*TestStep {
 	}
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability80,
 			builder.Get(),
 			80,
 			0,
 		},
-		&TestStep{
+		{
 			"Port 81",
 			reachability81(),
 			builder.Get(),
@@ -587,7 +587,7 @@ func testAllowAll() []*TestStep {
 
 	reachability := NewReachability(allPods, true)
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability,
 			builder.Get(),
@@ -634,21 +634,21 @@ func testPortsPoliciesStackedOrUpdated() []*TestStep {
 	// At this point, if we stacked, make sure 80 is still unblocked
 	// Whereas if we DIDNT stack, make sure 80 is blocked.
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 81 -- blocked",
 			blocked(), // 81 blocked
 			policy1,
 			81,
 			0,
 		},
-		&TestStep{
+		{
 			"Port 81 -- unblocked",
 			unblocked(), // 81 open now
 			policy2,
 			81,
 			0,
 		},
-		&TestStep{
+		{
 			"Port 80 -- blocked",
 			blocked(),
 			policy2,
@@ -682,14 +682,14 @@ func testPortsPolicies() []*TestStep {
 	}
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability1(),
 			builder.Get(),
 			80,
 			0,
 		},
-		&TestStep{
+		{
 			"Port 81",
 			// Applying the same nw policy to test a different port
 			reachability2(),
@@ -717,7 +717,7 @@ func testEnforcePodAndNSSelector() []*TestStep {
 	}
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability(),
 			builder.Get(),
@@ -747,7 +747,7 @@ func testEnforcePodOrNSSelector() []*TestStep {
 	}
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability(),
 			builder.Get(),
@@ -779,7 +779,7 @@ func testNamespaceSelectorMatchExpressions() []*TestStep {
 	}
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability(),
 			builder.Get(),
@@ -810,7 +810,7 @@ func testPodSelectorMatchExpressions() []*TestStep {
 	}
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability(),
 			builder.Get(),
@@ -836,7 +836,7 @@ func testIntraNamespaceTrafficOnly() []*TestStep {
 	}
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability(),
 			builder.Get(),
@@ -863,7 +863,7 @@ func testInnerNamespaceTraffic() []*TestStep {
 	}
 
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability(),
 			builder.Get(),
@@ -891,7 +891,7 @@ func testDefaultDeny() []*TestStep {
 		return reachability
 	}
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability(),
 			builder.Get(),
@@ -920,7 +920,7 @@ func testPodLabelWhitelistingFromBToA() []*TestStep {
 		return reachability
 	}
 	return []*TestStep{
-		&TestStep{
+		{
 			"Port 80",
 			reachability(),
 			builder.Get(),
