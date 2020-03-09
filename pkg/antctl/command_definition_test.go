@@ -106,16 +106,16 @@ func TestFormat(t *testing.T) {
 func TestCommandDefinitionGenerateExample(t *testing.T) {
 	runtimeComponent = componentAgent
 	for k, tc := range map[string]struct {
-		use          string
-		cmdChain     string
-		singleObject bool
-		expect       string
+		use        string
+		cmdChain   string
+		outputType OutputType
+		expect     string
 	}{
 		"SingleObject": {
-			use:          "test",
-			cmdChain:     "first second third",
-			singleObject: true,
-			expect:       "  Get the test\n  $ first second third test\n",
+			use:        "test",
+			cmdChain:   "first second third",
+			outputType: single,
+			expect:     "  Get the test\n  $ first second third test\n",
 		},
 		"KeyList": {
 			use:      "test",
@@ -135,7 +135,7 @@ func TestCommandDefinitionGenerateExample(t *testing.T) {
 
 			co := &commandDefinition{
 				use:           tc.use,
-				agentEndpoint: &endpoint{nonResourceEndpoint: &nonResourceEndpoint{isSingle: tc.singleObject}},
+				agentEndpoint: &endpoint{nonResourceEndpoint: &nonResourceEndpoint{outputType: tc.outputType}},
 			}
 			co.applyExampleToCommand(cmd)
 			assert.Equal(t, tc.expect, cmd.Example)
