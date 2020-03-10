@@ -96,21 +96,25 @@ func (k *Kubernetes) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) 
 
 	toIP := toPod.Status.PodIP
 
-	// note some versions of wget want -s for spider mode, others, -S
 	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
 	// first. This leads to the first test being run consistently failing. To avoid this issue
-	// until it is resolved, we set "--tries" to 4.
+	// until it is resolved, we try to connect 3 times.
 	// See https://github.com/vmware-tanzu/antrea/issues/467.
-	exec := []string{"wget", "--spider", "--tries", "4", "--timeout", "0.5", "--waitretry", "0", "http://" + toIP + ":" + fmt.Sprintf("%v", port)}
+	cmd := []string{
+		"/bin/sh",
+		"-c",
+		// 3 tries, timeout is 1 second
+		fmt.Sprintf("for i in $(seq 1 3); do ncat -vz -w 1 %s %d && exit 0 || true; done; exit 1", toIP, port),
+	}
 	// HACK: inferring container name as c80, c81, etc, for simplicity.
 	containerName := fmt.Sprintf("c%v", port)
-	log.Info("Running: kubectl exec -t -i " + fromPod.Name + " -c " + containerName + " -n " + fromPod.Namespace + " -- " + strings.Join(exec, " "))
-	out, out2, err := k.ExecuteRemoteCommand(fromPod, containerName, exec)
-	log.Debug(".... Done")
+	log.Infof("Running: kubectl exec %s -c %s -n %s -- %s", fromPod.Name, containerName, fromPod.Namespace, strings.Join(cmd, " "))
+	stdout, stderr, err := k.ExecuteRemoteCommand(fromPod, containerName, cmd)
 	if err != nil {
-		// log this error as debug since it's an expected failure
-		log.Debugf("failed connect.... %v %v %v %v %v %v", out, out2, ns1, pod1, ns2, pod2)
-		return false, errors.WithMessagef(err, "unable to execute remote command %+v", exec)
+		// log this error as debug since may be an expected failure
+		log.Debugf("%s/%s -> %s/%s: error when running command: err - %v /// stdout - %s /// stderr - %s", ns1, pod1, ns2, pod2, err, stdout, stderr)
+		// do not return an error
+		return false, nil
 	}
 	return true, nil
 }
@@ -135,16 +139,19 @@ func (k *Kubernetes) ExecuteRemoteCommand(pod v1.Pod, cname string, command []st
 		Stdin:     false,
 		Stdout:    true,
 		Stderr:    true,
-		TTY:       true},
+		TTY:       false},
 		scheme.ParameterCodec)
 
 	exec, err := remotecommand.NewSPDYExecutor(restCfg, "POST", request.URL())
+	if err != nil {
+		return "", "", errors.Wrapf(err, "failed to create SPDYExecutor")
+	}
 	err = exec.Stream(remotecommand.StreamOptions{
 		Stdout: buf,
 		Stderr: errBuf,
 	})
 	if err != nil {
-		return buf.String(), errBuf.String(), errors.Wrapf(err, "Failed executing command %s on %v/%v------/%v/%v", command, pod.Namespace, pod.Name, buf.String(), errBuf.String())
+		return buf.String(), errBuf.String(), err
 	}
 	return buf.String(), errBuf.String(), nil
 }
@@ -198,12 +205,9 @@ func (k *Kubernetes) CreateOrUpdateDeployment(ns, deploymentName string, replica
 		return v1.Container{
 			Name:            fmt.Sprintf("c%d", port),
 			ImagePullPolicy: v1.PullIfNotPresent,
-			// This image is a bit large. busybox does come with a very lightweight http
-			// server (httpd) but we also need this image to run wget, and the version
-			// of wget included in busybox is quite limited in terms of available
-			// options.
 			Image:           "antrea/netpol-test:latest",
-			Command:         []string{"python", "-m", "http.server", fmt.Sprintf("%d", port)},
+			// "-k" for persistent server
+			Command:         []string{"ncat", "-lk", "-p", fmt.Sprintf("%d", port)},
 			SecurityContext: &v1.SecurityContext{},
 			Ports: []v1.ContainerPort{
 				{

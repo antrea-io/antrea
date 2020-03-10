@@ -29,7 +29,7 @@ kubectl create -f $THIS_DIR/install-latest.yml
 
 echo "===> Waiting for netpol Job to complete. This can take a while... <==="
 
-kubectl wait --for=condition=complete --timeout=$WAIT_TIMEOUT -n kube-system $JOB_NAME
+time kubectl wait --for=condition=complete --timeout=$WAIT_TIMEOUT -n kube-system $JOB_NAME
 
 echo "===> Checking netpol results <==="
 
