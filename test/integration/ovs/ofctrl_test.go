@@ -355,6 +355,42 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 	require.Equal(t, 0, failCount, "No fail case expected")
 }
 
+// TestReconnectOFSwitch verifies that the OpenFlow connection to OVS can be restored, even when OVS is down for a long
+// amount of time.
+func TestReconnectOFSwitch(t *testing.T) {
+	br := "br07"
+	err := PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	defer DeleteOVSBridge(br)
+
+	bridge := binding.NewOFBridge(br)
+	reconnectCh := make(chan struct{})
+	var connectCount int
+	go func() {
+		for range reconnectCh {
+			connectCount++
+		}
+	}()
+	err = bridge.Connect(maxRetry, reconnectCh)
+	require.Nil(t, err, "Failed to start OFService")
+	defer bridge.Disconnect()
+
+	require.Equal(t, connectCount, 1)
+	// The max delay for the initial connection is 5s. Here we assume the OVS is stopped then started after 8s, and
+	// check that we can re-connect to it after that delay.
+	go func() {
+		DeleteOVSBridge(br)
+		time.Sleep(8 * time.Second)
+		err := PrepareOVSBridge(br)
+		require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	}()
+
+	err = DeleteOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to delete bridge: %v", err))
+	time.Sleep(12 * time.Second)
+	require.Equal(t, 2, connectCount)
+}
+
 func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	var flows []binding.Flow
 	_, AllIPs, _ := net.ParseCIDR("0.0.0.0/0")
