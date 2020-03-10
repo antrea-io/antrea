@@ -49,8 +49,6 @@
           - nobody123_nobody123_
           only_trigger_phrase: false
           trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: should_disappear # this value doesn't matter.
           status_url: null
           success_status: --none--
@@ -66,7 +64,7 @@
           publishers: []
       - '{name}-{test_name}-job-validator':
           test_name: jenkins-job-validator
-          node: null
+          node: 'antrea-e2e-test'
           description: 'This is for validating jenkins jobs code.'
           builders:
             - builder-job-validator
@@ -74,11 +72,10 @@
           allow_whitelist_orgs_as_admins: false
           admin_list: []
           org_list: []
-          white_list: []
+          white_list:
+          - nobody123_nobody123_
           only_trigger_phrase: false
           trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: jenkins-jobs-validator
           status_url: null
           success_status: Validator passed.
@@ -103,8 +100,6 @@
           white_list: []
           only_trigger_phrase: false
           trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: jenkins-e2e
           status_url: --none--
           success_status: Pending test. Mark as failure. Add comment /test-e2e to trigger.
@@ -129,9 +124,6 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          throttle_concurrent_builds_category:
-            - e2e-lock-per-testbed
-          throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-e2e
           status_url: null
           success_status: Build finished.
@@ -159,15 +151,11 @@
           builders: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
-          org_list: []
-          white_list: []
-          only_trigger_phrase: true
           org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
           trigger_permit_all: false
           trigger_phrase: .*/skip-(e2e|all).*
-          white_list: '{antrea_white_list}'
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: jenkins-e2e
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
@@ -190,8 +178,6 @@
           white_list: []
           only_trigger_phrase: false
           trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: jenkins-conformance
           status_url: --none--
           success_status: Pending test. Mark as failure. Add comment /test-conformance to trigger.
@@ -218,9 +204,6 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          throttle_concurrent_builds_category:
-            - e2e-lock-per-testbed
-          throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-conformance
           status_url: null
           success_status: Build finished.
@@ -248,15 +231,11 @@
           builders: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
-          org_list: []
-          white_list: []
-          only_trigger_phrase: true
           org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
           trigger_permit_all: false
           trigger_phrase: .*/skip-(conformance|all).*
-          white_list: '{antrea_white_list}'
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: jenkins-conformance
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
@@ -279,8 +258,6 @@
           white_list: []
           only_trigger_phrase: false
           trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: jenkins-networkpolicy
           status_url: --none--
           success_status: Pending test. Mark as failure. Add comment /test-networkpolicy to trigger.
@@ -307,9 +284,6 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          throttle_concurrent_builds_category:
-            - e2e-lock-per-testbed
-          throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-networkpolicy
           status_url: null
           success_status: Build finished.
@@ -337,15 +311,11 @@
           builders: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
-          org_list: []
-          white_list: []
-          only_trigger_phrase: true
           org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
           trigger_permit_all: false
           trigger_phrase: .*/skip-(networkpolicy|all).*
-          white_list: '{antrea_white_list}'
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: jenkins-networkpolicy
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
