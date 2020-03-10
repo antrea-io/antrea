@@ -108,6 +108,7 @@ Now, look at the results of the network policy probe:
 ```
 kubectl logs -n kube-system job.batch/netpol
 ```
+(or add `-f` to stream the logs while the tests are running)
  
 ## Developers
 
