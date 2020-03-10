@@ -114,22 +114,33 @@ func bootstrap(k8s *Kubernetes) error {
 }
 
 func validate(k8s *Kubernetes, reachability *Reachability, port int) {
-	// better as metrics, obviously, this is only for POC.
+	type probeResult struct {
+		podFrom   Pod
+		podTo     Pod
+		connected bool
+		err       error
+	}
+	numProbes := len(allPods) * len(allPods)
+	resultsCh := make(chan *probeResult, numProbes)
+	// TODO: find better metrics, this is only for POC.
+	oneProbe := func(podFrom, podTo Pod) {
+		log.Debugf("Probing: %s -> %s", podFrom, podTo)
+		connected, err := k8s.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port)
+		resultsCh <- &probeResult{podFrom, podTo, connected, err}
+	}
 	for _, pod1 := range allPods {
 		for _, pod2 := range allPods {
-			log.Debugf("Probing: %s, %s", string(pod1), string(pod2))
-			connected, err := k8s.Probe(pod1.Namespace(), pod1.PodName(), pod2.Namespace(), pod2.PodName(), port)
-			log.Debugf("... expected %v , got %v", reachability.Expected.Get(string(pod1), string(pod2)), connected)
-			if err != nil {
-				// log this error as debug since it's an expected failure
-				log.Debugf("unable to make main observation on %s -> %s: %s", string(pod1), string(pod2), err)
-			}
-			reachability.Observe(pod1, pod2, connected)
-			if !connected {
-				if reachability.Expected.Get(string(pod1), string(pod2)) {
-					log.Warnf("FAILED CONNECTION FOR WHITELISTED PODS %s -> %s !!!! ", string(pod1), string(pod2))
-				}
-			}
+			go oneProbe(pod1, pod2)
+		}
+	}
+	for i := 0; i < numProbes; i++ {
+		r := <-resultsCh
+		if r.err != nil {
+			log.Errorf("unable to perform probe %s -> %s: %v", r.podFrom, r.podTo, r.err)
+		}
+		reachability.Observe(r.podFrom, r.podTo, r.connected)
+		if !r.connected && reachability.Expected.Get(r.podFrom.String(), r.podTo.String()) {
+			log.Warnf("FAILED CONNECTION FOR WHITELISTED PODS %s -> %s !!!! ", r.podFrom, r.podTo)
 		}
 	}
 }

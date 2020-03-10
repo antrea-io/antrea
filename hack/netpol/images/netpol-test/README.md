@@ -1,6 +1,7 @@
 # images/perftool
 
-This Docker image is a very lightweight Alpine which includes python and wget.
+This Docker image is a very lightweight Alpine image which includes
+[ncat](https://nmap.org/ncat/).
 
 If you need to build a new version of the image and push it to Dockerhub, you
 can run the following from this directory:

@@ -13,6 +13,10 @@ func NewPod(namespace string, podName string) Pod {
 	return Pod(fmt.Sprintf("%s/%s", namespace, podName))
 }
 
+func (pod Pod) String() string {
+	return string(pod)
+}
+
 func (pod Pod) split() (string, string) {
 	pieces := strings.Split(string(pod), "/")
 	if len(pieces) != 2 {
