@@ -179,7 +179,9 @@
           make clean
           docker pull antrea/openvswitch --all-tags
           docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi || true
-          docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+          # Clean up dangling images generated in previous builds. Recent ones must be excluded
+          # because they might be being used in other builds running simultaneously.
+          docker image prune -f --filter "until=1h"
           VERSION="$JOB_NAME-$BUILD_NUMBER" make
 
           sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" build/yamls/antrea.yml
