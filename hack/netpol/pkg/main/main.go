@@ -54,7 +54,7 @@ func waitForPodInNamespace(k8s *Kubernetes, ns string, pod string) error {
 			return errors.WithMessagef(err, "unable to get pod %s/%s", ns, pod)
 		}
 		if k8sPod != nil && k8sPod.Status.Phase == v1.PodRunning {
-			log.Debugf("pod running: %+v", k8sPod)
+			log.Debugf("pod running: %s/%s", ns, pod)
 			return nil
 		}
 		log.Infof("pod %s/%s not ready, waiting ...", ns, pod)
