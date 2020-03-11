@@ -146,6 +146,11 @@ func testDeleteSingleFlow(t *testing.T, br string, table binding.Table, flows []
 	CheckFlowExists(t, br, dumpTable, false, []*ExpectFlow{expectFlows[1]})
 }
 
+type tableFlows struct {
+	table         binding.Table
+	flowGenerator func(table binding.Table) ([]binding.Flow, []*ExpectFlow)
+}
+
 func TestOFctrlFlow(t *testing.T) {
 	br := "br03"
 	err := PrepareOVSBridge(br)
@@ -160,7 +165,8 @@ func TestOFctrlFlow(t *testing.T) {
 	}()
 
 	bridge := binding.NewOFBridge(br)
-	table = bridge.CreateTable(1, 2, binding.TableMissActionNext)
+	table1 := bridge.CreateTable(1, 2, binding.TableMissActionNext)
+	table2 := bridge.CreateTable(2, 3, binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	if err != nil {
@@ -168,48 +174,55 @@ func TestOFctrlFlow(t *testing.T) {
 	}
 	defer bridge.Disconnect()
 
-	flows, expectflows := prepareFlows(table)
-	for id, flow := range flows {
-		if err := flow.Add(); err != nil {
-			t.Errorf("Failed to install flow%d: %v", id, err)
-		}
-	}
-
-	dumpTable := uint8(table.GetID())
-	flowList := CheckFlowExists(t, br, dumpTable, true, expectflows)
-
-	// Test: DumpTableStatus
-	for _, tableStates := range bridge.DumpTableStatus() {
-		if tableStates.ID == uint(dumpTable) {
-			if int(tableStates.FlowCount) != len(flowList) {
-				t.Errorf("Flow count of table %d in the cache is incorrect, expect: %d, actual %d", dumpTable, len(flowList), tableStates.FlowCount)
+	for _, test := range []tableFlows{
+		{table: table1, flowGenerator: prepareFlows},
+		{table: table2, flowGenerator: prepareNATflows},
+	} {
+		myTable := test.table
+		myFunc := test.flowGenerator
+		flows, expectflows := myFunc(myTable)
+		for id, flow := range flows {
+			if err := flow.Add(); err != nil {
+				t.Errorf("Failed to install flow%d: %v", id, err)
 			}
 		}
-	}
 
-	// Test: DumpFlows
-	dumpCookieID, dumpCookieMask := getCookieIDMask()
-	flowStates := bridge.DumpFlows(dumpCookieID, dumpCookieMask)
-	if len(flowStates) != len(flowList) {
-		t.Errorf("Flow count in dump result is incorrect")
-	}
+		dumpTable := uint8(myTable.GetID())
+		flowList := CheckFlowExists(t, br, dumpTable, true, expectflows)
 
-	// Test: Flow.Delete
-	for _, f := range flows[0:4] {
-		if err := f.Delete(); err != nil {
-			t.Errorf("Failed to uninstall flow1 %v", err)
+		// Test: DumpTableStatus
+		for _, tableStates := range bridge.DumpTableStatus() {
+			if tableStates.ID == uint(dumpTable) {
+				if int(tableStates.FlowCount) != len(flowList) {
+					t.Errorf("Flow count of table %d in the cache is incorrect, expect: %d, actual %d", dumpTable, len(flowList), tableStates.FlowCount)
+				}
+			}
 		}
-	}
-	CheckFlowExists(t, br, dumpTable, false, expectflows[0:4])
 
-	// Test: DeleteFlowsByCookie
-	err = bridge.DeleteFlowsByCookie(dumpCookieID, dumpCookieMask)
-	if err != nil {
-		t.Errorf("Failed to DeleteFlowsByCookie: %v", err)
-	}
-	flowList, _ = OfctlDumpTableFlows(br, uint8(table.GetID()))
-	if len(flowList) > 0 {
-		t.Errorf("Failed to delete flows by CookieID")
+		// Test: DumpFlows
+		dumpCookieID, dumpCookieMask := getCookieIDMask()
+		flowStates := bridge.DumpFlows(dumpCookieID, dumpCookieMask)
+		if len(flowStates) != len(flowList) {
+			t.Errorf("Flow count in dump result is incorrect")
+		}
+
+		// Test: Flow.Delete
+		for _, f := range flows[0:2] {
+			if err := f.Delete(); err != nil {
+				t.Errorf("Failed to uninstall flow1 %v", err)
+			}
+		}
+		CheckFlowExists(t, br, dumpTable, false, expectflows[0:2])
+
+		// Test: DeleteFlowsByCookie
+		err = bridge.DeleteFlowsByCookie(dumpCookieID, dumpCookieMask)
+		if err != nil {
+			t.Errorf("Failed to DeleteFlowsByCookie: %v", err)
+		}
+		flowList, _ = OfctlDumpTableFlows(br, uint8(myTable.GetID()))
+		if len(flowList) > 0 {
+			t.Errorf("Failed to delete flows by CookieID")
+		}
 	}
 }
 
@@ -556,6 +569,79 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		&ExpectFlow{"priority=220,conj_id=1001,ip", resubmitAction},
 		&ExpectFlow{"priority=220,conj_id=1001,ip,nw_src=192.168.1.1", resubmitAction},
 	)
+
+	return flows, flowStrs
+}
+
+func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
+	natedIP1 := net.ParseIP("10.10.0.1")
+	natedIP2 := net.ParseIP("10.10.0.10")
+	natIPRange1 := &binding.IPRange{natedIP1, natedIP1}
+	natIPRange2 := &binding.IPRange{natedIP1, natedIP2}
+	snatCTMark := uint32(0x40)
+	natRequireMark := uint32(0x1)
+	snatMarkRange1 := binding.Range{17, 17}
+	snatMarkRange2 := binding.Range{18, 18}
+	dnatMarkRange1 := binding.Range{19, 19}
+	dnatMarkRange2 := binding.Range{20, 20}
+	flows := []binding.Flow{
+		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			Action().CT(false, table.GetNext(), ctZone).NAT().CTDone().
+			Cookie(getCookieID()).
+			Done(),
+		table.BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(marksReg, natRequireMark, snatMarkRange1).
+			Action().CT(true, table.GetNext(), ctZone).
+			SNAT(natIPRange1, nil).
+			LoadToMark(snatCTMark).CTDone().
+			Cookie(getCookieID()).
+			Done(),
+		table.BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(marksReg, natRequireMark, snatMarkRange2).
+			Action().CT(true, table.GetNext(), ctZone).
+			SNAT(natIPRange2, nil).
+			LoadToMark(snatCTMark).CTDone().
+			Cookie(getCookieID()).
+			Done(),
+		table.BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(marksReg, natRequireMark, dnatMarkRange1).
+			Action().CT(true, table.GetNext(), ctZone).
+			DNAT(natIPRange1, nil).
+			LoadToMark(snatCTMark).CTDone().
+			Cookie(getCookieID()).
+			Done(),
+		table.BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(marksReg, natRequireMark, dnatMarkRange2).
+			Action().CT(true, table.GetNext(), ctZone).
+			DNAT(natIPRange2, nil).
+			LoadToMark(snatCTMark).CTDone().
+			Cookie(getCookieID()).
+			Done(),
+	}
+
+	flowStrs := []*ExpectFlow{
+		{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=65520,nat)", table.GetNext())},
+		{"priority=200,ip,reg0=0x20000/0x20000",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[]))",
+				table.GetNext(), natedIP1.String()),
+		},
+		{"priority=200,ip,reg0=0x40000/0x40000",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[]))",
+				table.GetNext(), natedIP1.String(), natedIP2.String()),
+		},
+		{"priority=200,ip,reg0=0x80000/0x80000",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s),exec(load:0x40->NXM_NX_CT_MARK[]))",
+				table.GetNext(), natedIP1.String()),
+		},
+		{"priority=200,ip,reg0=0x100000/0x100000",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[]))",
+				table.GetNext(), natedIP1.String(), natedIP2.String()),
+		},
+	}
 
 	return flows, flowStrs
 }
