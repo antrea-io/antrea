@@ -46,6 +46,7 @@
         error-status: '{error_status}'
         triggered-status: '{triggered_status}'
         started-status: '{started_status}'
+        excluded-regions: '{excluded_regions}'
     wrappers: '{wrappers}'
 
 - job-template:

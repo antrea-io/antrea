@@ -62,6 +62,7 @@
                     credential-id: '{git_credentials_id}'
                     variable: GH_CREDENTIAL
           publishers: []
+          excluded_regions: []
       - '{name}-{test_name}-job-validator':
           test_name: jenkins-job-validator
           node: 'antrea-e2e-test'
@@ -109,6 +110,10 @@
           started_status: null
           wrappers: []
           publishers: []
+          excluded_regions:
+          - docs/.*
+          - ci/jenkins/jobs/.*
+          - .*\.md
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e
           node: 'antrea-e2e-test'
@@ -144,6 +149,7 @@
             - project:
               - antrea-cleanup-for-testbed
               property-file: 'ci_properties.txt'
+          excluded_regions: []
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e-skip
           node: null
@@ -165,6 +171,7 @@
           started_status: null
           wrappers: []
           publishers: []
+          excluded_regions: []
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance-pending-label
           node: null
@@ -187,6 +194,10 @@
           started_status: null
           wrappers: []
           publishers: []
+          excluded_regions:
+          - docs/.*
+          - ci/jenkins/jobs/.*
+          - .*\.md
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance
           node: 'antrea-e2e-test'
@@ -224,6 +235,7 @@
             - project:
               - antrea-cleanup-for-testbed
               property-file: 'ci_properties.txt'
+          excluded_regions: []
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance-skip
           node: null
@@ -245,6 +257,7 @@
           started_status: null
           wrappers: []
           publishers: []
+          excluded_regions: []
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy-pending-label
           node: null
@@ -267,6 +280,10 @@
           started_status: null
           wrappers: []
           publishers: []
+          excluded_regions:
+          - docs/.*
+          - ci/jenkins/jobs/.*
+          - .*\.md
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy
           node: 'antrea-e2e-test'
@@ -304,6 +321,7 @@
             - project:
               - antrea-cleanup-for-testbed
               property-file: 'ci_properties.txt'
+          excluded_regions: []
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy-skip
           node: null
@@ -325,3 +343,4 @@
           started_status: null
           wrappers: []
           publishers: []
+          excluded_regions: []
