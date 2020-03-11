@@ -80,6 +80,16 @@ spec:
           ports:
             - containerPort: 443
               protocol: TCP
+          readinessProbe:
+            httpGet:
+              host: 127.0.0.1
+              path: /healthz
+              port: 443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
           volumeMounts:
             - name: antrea-config
               mountPath: /etc/antrea/antrea-controller.conf
