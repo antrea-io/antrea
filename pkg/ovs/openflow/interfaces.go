@@ -170,6 +170,17 @@ type CTAction interface {
 	LoadToMark(value uint32) CTAction
 	LoadToLabelRange(value uint64, rng *Range) CTAction
 	MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction
+	// NAT action is used if the packet is not committed into the conntrack zone, and is required to leverage the
+	// original NAT configurations.
+	NAT() CTAction
+	// SNAT actions is used to translate the source IP to a specific address or address in a pool when committing the
+	// packet into the conntrack zone. If a single IP is used as the target address, StartIP and EndIP in the range
+	// should be the same. portRange could be nil.
+	SNAT(ipRange *IPRange, portRange *PortRange) CTAction
+	// DNAT actions is used to translate the destination IP to a specific address or address in a pool when committing
+	// the packet into the conntrack zone. If a single IP is used as the target address, StartIP and EndIP in the range
+	// should be the same. portRange could be nil.
+	DNAT(ipRange *IPRange, portRange *PortRange) CTAction
 	CTDone() FlowBuilder
 }
 
@@ -178,4 +189,14 @@ type ctBase struct {
 	force   bool
 	ctTable uint8
 	ctZone  uint16
+}
+
+type IPRange struct {
+	StartIP net.IP
+	EndIP   net.IP
+}
+
+type PortRange struct {
+	StartPort uint16
+	EndPort   uint16
 }
