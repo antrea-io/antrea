@@ -30,7 +30,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -80,8 +79,7 @@ func run(o *Options) error {
 		TrafficEncapMode:  encapMode,
 		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
 
-	routeClient := route.NewClient(encapMode)
-	iptablesClient := iptables.NewClient(o.config.HostGateway, serviceCIDRNet, encapMode)
+	routeClient, err := route.NewClient(o.config.HostGateway, serviceCIDRNet, encapMode)
 
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -92,7 +90,6 @@ func run(o *Options) error {
 		ovsBridgeClient,
 		ofClient,
 		routeClient,
-		iptablesClient,
 		ifaceStore,
 		o.config.HostGateway,
 		o.config.DefaultMTU,
@@ -110,7 +107,6 @@ func run(o *Options) error {
 		ofClient,
 		ovsBridgeClient,
 		routeClient,
-		iptablesClient,
 		ifaceStore,
 		networkConfig,
 		nodeConfig)

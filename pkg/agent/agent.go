@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"strconv"
 	"time"
 
@@ -32,7 +31,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
@@ -57,8 +55,7 @@ type Initializer struct {
 	client          clientset.Interface
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 	ofClient        openflow.Client
-	routeClient     *route.Client
-	iptablesClient  *iptables.Client
+	routeClient     route.Interface
 	ifaceStore      interfacestore.InterfaceStore
 	hostGateway     string     // name of gateway port on the OVS bridge
 	mtu             int        // Pod network interface MTU
@@ -67,22 +64,11 @@ type Initializer struct {
 	nodeConfig      *config.NodeConfig
 }
 
-func disableICMPSendRedirects(intfName string) error {
-	cmdStr := fmt.Sprintf("echo 0 > /proc/sys/net/ipv4/conf/%s/send_redirects", intfName)
-	cmd := exec.Command("/bin/sh", "-c", cmdStr)
-	if err := cmd.Run(); err != nil {
-		klog.Errorf("Failed to disable send_redirect for interface %s: %v", intfName, err)
-		return err
-	}
-	return nil
-}
-
 func NewInitializer(
 	k8sClient clientset.Interface,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
-	routeClient *route.Client,
-	iptablesClient *iptables.Client,
+	routeClient route.Interface,
 	ifaceStore interfacestore.InterfaceStore,
 	hostGateway string,
 	mtu int,
@@ -94,7 +80,6 @@ func NewInitializer(
 		ifaceStore:      ifaceStore,
 		ofClient:        ofClient,
 		routeClient:     routeClient,
-		iptablesClient:  iptablesClient,
 		hostGateway:     hostGateway,
 		mtu:             mtu,
 		serviceCIDR:     serviceCIDR,
@@ -129,16 +114,6 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
-	// send_redirects for the interface will be enabled if at least one of
-	// conf/{all,interface}/send_redirects is set to TRUE, so "all" and the
-	// interface must be disabled together.
-	// See https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt.
-	if err := disableICMPSendRedirects("all"); err != nil {
-		return err
-	}
-	if err := disableICMPSendRedirects(i.hostGateway); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -195,11 +170,6 @@ func (i *Initializer) Initialize() error {
 
 	if err := i.readIPSecPSK(); err != nil {
 		return err
-	}
-
-	// Setup iptables chains and rules.
-	if err := i.iptablesClient.Initialize(i.nodeConfig); err != nil {
-		return fmt.Errorf("error setting up iptables rules: %v", err)
 	}
 
 	if err := i.setupOVSBridge(); err != nil {

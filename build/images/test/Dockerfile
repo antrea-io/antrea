@@ -4,7 +4,7 @@ LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image for antrea integration tests."
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openvswitch-switch iproute2 iptables && \
+    apt-get install -y --no-install-recommends openvswitch-switch iproute2 iptables ipset && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/*
 
 COPY build/images/scripts/* /usr/local/bin/
