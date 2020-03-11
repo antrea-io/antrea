@@ -87,6 +87,16 @@ spec:
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              host: 127.0.0.1
+              path: /healthz
+              port: 10443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
           securityContext:
             # antrea-agent needs to manipulate /proc/sys/net/ipv4/conf/XXX/send_redirects"
             privileged: true
