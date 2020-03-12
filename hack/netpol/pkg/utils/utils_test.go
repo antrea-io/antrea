@@ -24,7 +24,7 @@ func TestNetworkPolicyBuilder(t *testing.T) {
 	if *policy1.Spec.Ingress[0].Ports[0].Protocol != v1.ProtocolUDP {
 		t.Error("Protocol mismatched")
 	}
-	if policy1.Spec.Ingress[0].Ports[0].Port.IntVal !=  80 {
+	if policy1.Spec.Ingress[0].Ports[0].Port.IntVal != 80 {
 		t.Error("ingress rule port value should be 80")
 	}
 
@@ -37,7 +37,7 @@ func TestNetworkPolicyBuilder(t *testing.T) {
 	if *policy1.Spec.Egress[0].Ports[0].Protocol != v1.ProtocolUDP {
 		t.Error("Protocol mismatched")
 	}
-	if policy1.Spec.Egress[0].Ports[0].Port.IntVal !=  80 {
+	if policy1.Spec.Egress[0].Ports[0].Port.IntVal != 80 {
 		t.Error("ingress rule port value should be 80")
 	}
 }

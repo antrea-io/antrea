@@ -129,6 +129,11 @@ To develop locally, you can follow these steps:
  3. To build all Go files and install them under `bin`, run `make bin`
  4. To run all Go unit tests, run `make test-unit`
 
+### CI testing
+
+For more information about the tests we run as part of CI, please refer to
+[ci/README.md](ci/README.md).
+
 ### Running the end-to-end tests
 
 In addition to the unit tests, we provide a suite of end-to-end tests, which

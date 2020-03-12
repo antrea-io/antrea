@@ -38,7 +38,7 @@ endif
 build: build-ubuntu
 
 .PHONY: test
-test: test-fmt
+test: golangci
 test: build
 test: docker-test-unit
 test: docker-test-integration
@@ -125,11 +125,6 @@ tidy:
 	@echo "SOME TESTS WILL FAIL IF NOT RUN AS ROOT!"
 	$(GO) test github.com/vmware-tanzu/antrea/test/integration/...
 
-test-fmt:
-	@echo
-	@echo "===> Checking format of Go files <==="
-	@test -z "$$(gofmt -s -l -d $(GO_FILES) | tee /dev/stderr)"
-
 test-tidy:
 	@echo
 	@echo "===> Checking go.mod tidiness <==="
@@ -148,6 +143,10 @@ fmt:
 .PHONY: golangci
 golangci: .golangci-bin
 	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml
+
+.PHONY: golangci-fix
+golangci-fix: .golangci-bin
+	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml --fix
 
 .PHONY: lint
 lint: .golangci-bin
