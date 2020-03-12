@@ -1,3 +1,5 @@
+// +build linux
+
 // Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -524,15 +526,12 @@ func newTester() *cmdAddDelTester {
 	tester.server = cniserver.New(testSock,
 		"",
 		1450,
-		"",
 		testNodeConfig,
-		ovsServiceMock,
-		ofServiceMock,
-		ifaceStore,
 		k8sFake.NewSimpleClientset(),
 		make(chan v1beta1.PodReference, 100),
 		false,
 		nil)
+	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
 	ctx, _ := context.WithCancel(context.Background())
 	tester.ctx = ctx
 	return tester
@@ -663,18 +662,11 @@ func setupChainTest(
 	server *cniserver.CNIServer, hostVeth, containerVeth net.Interface, err error) {
 
 	if newServer {
-		ovsServiceMock = ovsconfigtest.NewMockOVSBridgeClient(controller)
-		ofServiceMock = openflowtest.NewMockClient(controller)
 		routeMock = routetest.NewMockInterface(controller)
-		ifaceStore := interfacestore.NewInterfaceStore()
 		server = cniserver.New(testSock,
 			"",
 			1500,
-			"",
 			testNodeConfig,
-			ovsServiceMock,
-			ofServiceMock,
-			ifaceStore,
 			k8sFake.NewSimpleClientset(),
 			make(chan v1beta1.PodReference, 100),
 			true,
@@ -732,7 +724,10 @@ func TestCNIServerChaining(t *testing.T) {
 		server, hostVeth, _, err = setupChainTest(controller, server, netNS, newServer)
 		testRequire.Nil(err)
 		if newServer {
-			err := server.Initialize()
+			ovsServiceMock = ovsconfigtest.NewMockOVSBridgeClient(controller)
+			ofServiceMock = openflowtest.NewMockClient(controller)
+			ifaceStore := interfacestore.NewInterfaceStore()
+			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
 			testRequire.Nil(err)
 		}
 
