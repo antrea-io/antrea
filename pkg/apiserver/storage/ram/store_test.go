@@ -494,10 +494,12 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 		store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}})
 	}
 
+	// Terminating watchers is asynchronous, leave it some reaction time to avoid flakes.
+	terminationReactionTime := time.Millisecond * 100
 	select {
 	case <-w2.(*storeWatcher).done:
 		t.Fatal("w2 was stopped, expected not stopped")
-	case <-time.After(watcherAddTimeout + time.Millisecond*10):
+	case <-time.After(watcherAddTimeout + terminationReactionTime):
 	}
 
 	// w2 can't take one more event as it's buffer has been full, it should be terminated.
@@ -505,7 +507,7 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 
 	select {
 	case <-w2.(*storeWatcher).done:
-	case <-time.After(watcherAddTimeout + time.Millisecond*10):
+	case <-time.After(watcherAddTimeout + terminationReactionTime):
 		t.Error("w2 was not stopped, expected stopped")
 	}
 	assert.Equal(t, 1, store.GetWatchersNum(), "Unexpected watchers number")
