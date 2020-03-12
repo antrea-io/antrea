@@ -7,7 +7,6 @@ import (
 	. "github.com/vmware-tanzu/antrea/hack/netpol/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 )
 
@@ -246,8 +245,8 @@ CIDR tests.... todo
 	ginkgo.It("should deny ingress access to updated pod [Feature:NetworkPolicy]", func() {
 	ginkgo.It("should stop enforcing policies after they are deleted [Feature:NetworkPolicy]", func() {
 **/
+/* TODO rewrite this using steps
 func testMultipleUpdates() {
-	/* TODO rewrite this using steps
 	func() {
 		builder := &NetworkPolicySpecBuilder{}
 		builder = builder.SetName("x", "deny-all").SetPodSelector(map[string]string{"pod": "a"})
@@ -309,7 +308,7 @@ func testMultipleUpdates() {
 	}()
 
 	// NOTE THIS TEST IS COPIED FROM THE ABOVE TEST, only delta being that we
-	// dont have the udpated=true annotation above.
+	// dont have the updated=true annotation above.
 	func() {
 		k8s.CreateOrUpdateDeployment("z", "zb", 1,
 			map[string]string{
@@ -328,8 +327,8 @@ func testMultipleUpdates() {
 
 		reachability1.PrintSummary(true, true, true)
 	}()
-	*/
 }
+*/
 
 /**
 ginkgo.It("should enforce multiple egress policies with egress allow-all policy taking precedence [Feature:NetworkPolicy]", func() {
@@ -769,93 +768,93 @@ func testEnforcePodOrNSSelector() []*TestStep {
 }
 
 // testNamespaceSelectorMatchExpressions should enforce policy based on NamespaceSelector with MatchExpressions[Feature:NetworkPolicy]
-func testNamespaceSelectorMatchExpressions() []*TestStep {
-	builder := &NetworkPolicySpecBuilder{}
-	selector := []metav1.LabelSelectorRequirement{{
-		Key:      "ns",
-		Operator: metav1.LabelSelectorOpIn,
-		Values:   []string{"y"},
-	}}
-	builder = builder.SetName("x", "allow-a-via-ns-selector").SetPodSelector(map[string]string{"pod": "a"})
-	builder.SetTypeIngress().AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, &selector, nil)
+// func testNamespaceSelectorMatchExpressions() []*TestStep {
+// 	builder := &NetworkPolicySpecBuilder{}
+// 	selector := []metav1.LabelSelectorRequirement{{
+// 		Key:      "ns",
+// 		Operator: metav1.LabelSelectorOpIn,
+// 		Values:   []string{"y"},
+// 	}}
+// 	builder = builder.SetName("x", "allow-a-via-ns-selector").SetPodSelector(map[string]string{"pod": "a"})
+// 	builder.SetTypeIngress().AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, &selector, nil)
 
-	reachability := func() *Reachability {
-		reachability := NewReachability(allPods, true)
-		reachability.ExpectAllIngress(Pod("x/a"), false)
-		reachability.Expect(Pod("y/a"), Pod("x/a"), true)
-		reachability.Expect(Pod("y/b"), Pod("x/a"), true)
-		reachability.Expect(Pod("y/c"), Pod("x/a"), true)
-		reachability.Expect(Pod("x/a"), Pod("x/a"), true)
-		return reachability
-	}
+// 	reachability := func() *Reachability {
+// 		reachability := NewReachability(allPods, true)
+// 		reachability.ExpectAllIngress(Pod("x/a"), false)
+// 		reachability.Expect(Pod("y/a"), Pod("x/a"), true)
+// 		reachability.Expect(Pod("y/b"), Pod("x/a"), true)
+// 		reachability.Expect(Pod("y/c"), Pod("x/a"), true)
+// 		reachability.Expect(Pod("x/a"), Pod("x/a"), true)
+// 		return reachability
+// 	}
 
-	return []*TestStep{
-		{
-			"Port 80",
-			reachability(),
-			builder.Get(),
-			80,
-			0,
-		},
-	}
-}
+// 	return []*TestStep{
+// 		{
+// 			"Port 80",
+// 			reachability(),
+// 			builder.Get(),
+// 			80,
+// 			0,
+// 		},
+// 	}
+// }
 
 // testPodSelectorMatchExpressions should enforce policy based on PodSelector with MatchExpressions[Feature:NetworkPolicy]
-func testPodSelectorMatchExpressions() []*TestStep {
-	builder := &NetworkPolicySpecBuilder{}
-	selector := []metav1.LabelSelectorRequirement{{
-		Key:      "pod",
-		Operator: metav1.LabelSelectorOpIn,
-		Values:   []string{"b"},
-	}}
-	builder = builder.SetName("x", "allow-client-b-via-pod-selector").SetPodSelector(map[string]string{"pod": "a"})
-	builder.SetTypeIngress().AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, &selector, nil)
+// func testPodSelectorMatchExpressions() []*TestStep {
+// 	builder := &NetworkPolicySpecBuilder{}
+// 	selector := []metav1.LabelSelectorRequirement{{
+// 		Key:      "pod",
+// 		Operator: metav1.LabelSelectorOpIn,
+// 		Values:   []string{"b"},
+// 	}}
+// 	builder = builder.SetName("x", "allow-client-b-via-pod-selector").SetPodSelector(map[string]string{"pod": "a"})
+// 	builder.SetTypeIngress().AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, &selector, nil)
 
-	reachability := func() *Reachability {
-		reachability := NewReachability(allPods, true)
-		reachability.ExpectAllIngress(Pod("x/a"), false)
+// 	reachability := func() *Reachability {
+// 		reachability := NewReachability(allPods, true)
+// 		reachability.ExpectAllIngress(Pod("x/a"), false)
 
-		reachability.Expect(Pod("x/b"), Pod("x/a"), true)
-		reachability.Expect(Pod("x/a"), Pod("x/a"), true)
-		return reachability
-	}
+// 		reachability.Expect(Pod("x/b"), Pod("x/a"), true)
+// 		reachability.Expect(Pod("x/a"), Pod("x/a"), true)
+// 		return reachability
+// 	}
 
-	return []*TestStep{
-		{
-			"Port 80",
-			reachability(),
-			builder.Get(),
-			80,
-			0,
-		},
-	}
-}
+// 	return []*TestStep{
+// 		{
+// 			"Port 80",
+// 			reachability(),
+// 			builder.Get(),
+// 			80,
+// 			0,
+// 		},
+// 	}
+// }
 
 // TODO: Find the matching upstream test
-func testIntraNamespaceTrafficOnly() []*TestStep {
-	builder := &NetworkPolicySpecBuilder{}
-	builder = builder.SetName("x", "allow-client-b-via-pod-selector").SetPodSelector(map[string]string{"pod": "a"})
-	builder.SetTypeIngress().AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "y"}, nil, nil)
+// func testIntraNamespaceTrafficOnly() []*TestStep {
+// 	builder := &NetworkPolicySpecBuilder{}
+// 	builder = builder.SetName("x", "allow-client-b-via-pod-selector").SetPodSelector(map[string]string{"pod": "a"})
+// 	builder.SetTypeIngress().AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "y"}, nil, nil)
 
-	reachability := func() *Reachability {
-		reachability := NewReachability(allPods, true)
-		reachability.ExpectAllIngress(Pod("x/a"), false)
-		reachability.Expect(Pod("y/a"), Pod("x/a"), true)
-		reachability.Expect(Pod("y/b"), Pod("x/a"), true)
-		reachability.Expect(Pod("y/c"), Pod("x/a"), true)
-		return reachability
-	}
+// 	reachability := func() *Reachability {
+// 		reachability := NewReachability(allPods, true)
+// 		reachability.ExpectAllIngress(Pod("x/a"), false)
+// 		reachability.Expect(Pod("y/a"), Pod("x/a"), true)
+// 		reachability.Expect(Pod("y/b"), Pod("x/a"), true)
+// 		reachability.Expect(Pod("y/c"), Pod("x/a"), true)
+// 		return reachability
+// 	}
 
-	return []*TestStep{
-		{
-			"Port 80",
-			reachability(),
-			builder.Get(),
-			80,
-			0,
-		},
-	}
-}
+// 	return []*TestStep{
+// 		{
+// 			"Port 80",
+// 			reachability(),
+// 			builder.Get(),
+// 			80,
+// 			0,
+// 		},
+// 	}
+// }
 
 // testInnerNamespaceTraffic should enforce policy to allow traffic from pods within server namespace, based on PodSelector [Feature:NetworkPolicy]
 // note : network policies are applied to a namespace by default, meaning that you need a specific policy to select pods in external namespaces.

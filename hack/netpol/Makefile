@@ -20,3 +20,15 @@ push: build
 .PHONY: push-release
 push-release: build
 	docker push antrea/netpol:$(VERSION)
+
+.golangci-bin:
+	@echo "===> Installing Golangci-lint <==="
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.21.0
+
+.PHONY: golangci
+golangci: .golangci-bin
+	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml
+
+.PHONY: golangci-fix
+golangci-fix: .golangci-bin
+	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml --fix

@@ -95,7 +95,7 @@ func (n *NetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol, port *int, por
 		fmt.Println("port not nil")
 		ports = []networkingv1.NetworkPolicyPort{
 			{
-				Port: &intstr.IntOrString{IntVal: int32(*port)},
+				Port:     &intstr.IntOrString{IntVal: int32(*port)},
 				Protocol: &protoc,
 			},
 		}
@@ -104,7 +104,7 @@ func (n *NetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol, port *int, por
 		fmt.Println("portName not nil")
 		ports = []networkingv1.NetworkPolicyPort{
 			{
-				Port: &intstr.IntOrString{Type: intstr.String, StrVal: *portName},
+				Port:     &intstr.IntOrString{Type: intstr.String, StrVal: *portName},
 				Protocol: &protoc,
 			},
 		}
