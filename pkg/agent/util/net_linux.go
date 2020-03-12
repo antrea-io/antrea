@@ -122,3 +122,12 @@ func GetNSDevInterface(nsPath, dev string) (*net.Interface, error) {
 	}
 	return intf, nil
 }
+
+func GetNSPath(containerNetNS string) (string, error) {
+	netNS, err := ns.GetNS(containerNetNS)
+	if err != nil {
+		return "", fmt.Errorf("failed to open netns %s: %v", containerNetNS, err)
+	}
+	defer netNS.Close()
+	return netNS.Path(), nil
+}
