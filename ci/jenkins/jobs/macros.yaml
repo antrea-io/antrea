@@ -78,14 +78,35 @@
     name: builder-workload-cluster-cleanup
     builders:
       - shell: |-
+          #!/bin/bash
           cluster="${CLUSTERNAME}"
 
           echo '=== Clean up cluster ==='
           export KUBECONFIG="/var/lib/jenkins/kubeconfig-mgmt"
-          kubectl delete Machine ${cluster}-controlplane-0 -n ${cluster} || true
-          kubectl delete MachineDeployment ${cluster}-md-0 -n ${cluster} || true
-          kubectl delete cluster ${cluster} -n ${cluster} || true
-          kubectl delete ns ${cluster} || true
+
+          kubectl delete --ignore-not-found=true Machine ${cluster}-controlplane-0 -n ${cluster}
+          kubectl delete --ignore-not-found=true MachineDeployment ${cluster}-md-0 -n ${cluster}
+
+          retry=12
+          while [ "${retry}" -gt 0 ]; do
+            echo '=== Waiting for Machines to be deleted ==='
+            machines="$(kubectl get machine -n ${cluster} --no-headers=true 2>/dev/null | wc -l)"
+            if [ "${machines}" -eq 0 ]; then
+              break
+            fi
+            echo '=== Remaining Machines ==='
+            kubectl get machine -n ${cluster}
+            sleep 10
+            retry=$((retry-1))
+          done
+          if [ "${retry}" -eq 0 ]; then
+            echo "=== Failed to delete machines! ==="
+            exit 1
+          fi
+
+          kubectl delete --ignore-not-found=true VSphereCluster ${cluster} -n ${cluster}
+          kubectl delete --ignore-not-found=true Cluster ${cluster} -n ${cluster}
+          kubectl delete --ignore-not-found=true ns ${cluster}
 
           rm -rf "${WORKSPACE}/jenkins"
           echo "=== Cleanup cluster ${cluster} succeeded ==="
@@ -100,10 +121,29 @@
 
           kubectl get namespace -l antrea-ci | awk '$3 ~ "[0-9][hd]" && $2 ~ "Active" {print $1}' | while read cluster_name; do
             echo "=== Currently ${cluster_name} has been live for more than 1h ==="
-            kubectl delete Machine ${cluster_name}-controlplane-0 -n ${cluster_name} || true
-            kubectl delete MachineDeployment ${cluster_name}-md-0 -n ${cluster_name} || true
-            kubectl delete Cluster ${cluster_name} -n ${cluster_name} || true
-            kubectl delete ns ${cluster_name} || true
+            kubectl delete --ignore-not-found=true Machine ${cluster_name}-controlplane-0 -n ${cluster_name}
+            kubectl delete --ignore-not-found=true MachineDeployment ${cluster_name}-md-0 -n ${cluster_name}
+
+            retry=12
+            while [ "${retry}" -gt 0 ]; do
+              echo '=== Waiting for Machines to be deleted ==='
+              machines="$(kubectl get machine -n ${cluster_name} --no-headers=true 2>/dev/null | wc -l)"
+              if [ "${machines}" -eq 0 ]; then
+                break
+              fi
+              echo '=== Remaining Machines ==='
+              kubectl get machine -n ${cluster_name}
+              sleep 10
+              retry=$((retry-1))
+            done
+            if [ "${retry}" -eq 0 ]; then
+              echo "=== Failed to delete machines! ==="
+              continue
+            fi
+
+            kubectl delete --ignore-not-found=true VSphereCluster ${cluster_name} -n ${cluster_name}
+            kubectl delete --ignore-not-found=true Cluster ${cluster_name} -n ${cluster_name}
+            kubectl delete --ignore-not-found=true ns ${cluster_name}
             echo "=== Old namespace ${cluster_name} is deleted !!! ==="
           done
 
