@@ -39,6 +39,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
@@ -328,13 +329,7 @@ func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8
 	podNamespace := string(k8sCNIArgs.K8S_POD_NAMESPACE)
 
 	// Find interfaces from previous configuration
-	var containerIntf *current.Interface
-	for _, intf := range prevResult.Interfaces {
-		if intf.Name == cfgArgs.Ifname {
-			containerIntf = intf
-			break
-		}
-	}
+	containerIntf := parseContainerIfaceFromResults(cfgArgs, prevResult)
 	if containerIntf == nil {
 		klog.Errorf("Failed to find interface %s of container %s", cfgArgs.Ifname, containerID)
 		return s.invalidNetworkConfigResponse("prevResult does not match network configuration"), nil
@@ -386,8 +381,9 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		return resp, err
 	}
 
+	podKey := util.GenerateContainerInterfaceName(string(cniConfig.K8S_POD_NAME), string(cniConfig.K8S_POD_NAMESPACE))
 	// Request IP Address from IPAM driver
-	ipamResult, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type)
+	ipamResult, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, podKey)
 	if err != nil {
 		klog.Errorf("Failed to add IP addresses from IPAM driver: %v", err)
 		return s.ipamFailureResponse(err), nil
@@ -440,9 +436,9 @@ func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (
 	if s.isChaining {
 		return s.interceptDel(cniConfig)
 	}
-
+	podKey := util.GenerateContainerInterfaceName(string(cniConfig.K8S_POD_NAME), string(cniConfig.K8S_POD_NAMESPACE))
 	// Release IP to IPAM driver
-	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.IPAM.Type); err != nil {
+	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, podKey); err != nil {
 		klog.Errorf("Failed to delete IP addresses by IPAM driver: %v", err)
 		return s.ipamFailureResponse(err), nil
 	}
@@ -493,11 +489,7 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 func New(
 	cniSocket, hostProcPathPrefix string,
 	defaultMTU int,
-	ovsDatapathType string,
 	nodeConfig *config.NodeConfig,
-	ovsBridgeClient ovsconfig.OVSBridgeClient,
-	ofClient openflow.Client,
-	ifaceStore interfacestore.InterfaceStore,
 	kubeClient clientset.Interface,
 	podUpdates chan<- v1beta1.PodReference,
 	isChaining bool,
@@ -512,14 +504,23 @@ func New(
 		defaultMTU:           defaultMTU,
 		kubeClient:           kubeClient,
 		containerAccess:      newContainerAccessArbitrator(),
-		podConfigurator:      newPodConfigurator(ovsBridgeClient, ofClient, routeClient, ifaceStore, nodeConfig.GatewayConfig.MAC, ovsDatapathType),
 		podUpdates:           podUpdates,
 		isChaining:           isChaining,
 		routeClient:          routeClient,
 	}
 }
 
-func (s *CNIServer) Initialize() error {
+func (s *CNIServer) Initialize(
+	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	ofClient openflow.Client,
+	ifaceStore interfacestore.InterfaceStore,
+	ovsDatapathType string,
+) error {
+	var err error
+	s.podConfigurator, err = newPodConfigurator(ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC, ovsDatapathType)
+	if err != nil {
+		return fmt.Errorf("error during initialize podConfigurator: %v", err)
+	}
 	if err := s.reconcile(); err != nil {
 		return fmt.Errorf("error during initial reconciliation for CNI server: %v", err)
 	}
