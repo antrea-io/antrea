@@ -42,6 +42,21 @@ jobs:
       run: make golangci
 
 
+  golangci-lint-netpol-tmp:
+    name: Golangci-lint for netpol code
+    runs-on: [ubuntu-18.04]
+    steps:
+    - name: Set up Go 1.13
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+    - name: Check-out code
+      uses: actions/checkout@v2
+    - name: Run golangci-lint
+      working-directory: hack/netpol
+      run: make golangci
+
+
   bin:
     name: Build Antrea binaries
     runs-on: [ubuntu-18.04]
