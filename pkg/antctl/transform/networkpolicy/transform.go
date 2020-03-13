@@ -17,8 +17,10 @@ package networkpolicy
 import (
 	"io"
 	"reflect"
+	"strconv"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/rule"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
@@ -59,4 +61,17 @@ func Transform(reader io.Reader, single bool) (interface{}, error) {
 		objectTransform,
 		listTransform,
 	)(reader, single)
+}
+
+var _ common.TableOutput = new(Response)
+
+func (r Response) GetTableHeader() []string {
+	return []string{"NAME", "APPLIED-TO", "RULES"}
+}
+
+func (r Response) GetTableRow(maxColumnLength int) []string {
+	row := []string{r.Name}
+	row = append(row, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength))
+	row = append(row, strconv.Itoa(len(r.Rules)))
+	return row
 }
