@@ -15,7 +15,9 @@
 package common
 
 import (
+	"fmt"
 	"net"
+	"sort"
 
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
@@ -34,4 +36,44 @@ func GroupMemberPodTransform(pod networkingv1beta1.GroupMemberPod) GroupMemberPo
 		ipStr = net.IP(pod.IP).String()
 	}
 	return GroupMemberPod{Pod: pod.Pod, IP: ipStr, Ports: pod.Ports}
+}
+
+type TableOutput interface {
+	GetTableHeader() []string
+	GetTableRow(maxColumnLength int) []string
+}
+
+func GenerateTableElementWithSummary(list []string, maxColumnLength int) string {
+	element := ""
+	sort.Strings(list)
+	for i, ele := range list {
+		val := ele
+		if i != 0 {
+			val = "," + val
+		}
+
+		// If we can't show the information in one line, generate a summary.
+		summary := fmt.Sprintf(" + %d more...", len(list)-i)
+		if len(element)+len(val) > maxColumnLength {
+			element += summary
+			if len(element) > maxColumnLength {
+				newEle := ""
+				for i, ele := range list {
+					val := ele
+					if i != 0 {
+						val = "," + val
+					}
+					if i != 0 && len(newEle)+len(val)+len(summary) > maxColumnLength {
+						break
+					}
+					newEle += val
+				}
+				newEle += summary
+				return newEle
+			}
+			break
+		}
+		element += val
+	}
+	return element
 }

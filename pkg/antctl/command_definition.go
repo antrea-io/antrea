@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -29,6 +30,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 )
 
 type formatterType string
@@ -37,6 +40,10 @@ const (
 	jsonFormatter  formatterType = "json"
 	yamlFormatter  formatterType = "yaml"
 	tableFormatter formatterType = "table"
+)
+
+const (
+	maxTableOutputColumnLength int = 50
 )
 
 // commandGroup is used to group commands, it could be specified in commandDefinition.
@@ -340,6 +347,85 @@ func respTransformer(obj interface{}) (interface{}, error) {
 	return target, nil
 }
 
+// tableOutputForGetCommands formats the table output for "get" commands.
+func (cd *commandDefinition) tableOutputForGetCommands(obj interface{}, writer io.Writer) error {
+	var list []common.TableOutput
+	if reflect.TypeOf(obj).Kind() == reflect.Slice {
+		s := reflect.ValueOf(obj)
+		if s.Len() == 0 || s.Index(0).Interface() == nil {
+			var buffer bytes.Buffer
+			buffer.WriteString("\n")
+			if _, err := io.Copy(writer, &buffer); err != nil {
+				return fmt.Errorf("error when copy output into writer: %w", err)
+			}
+			return nil
+		}
+		if _, ok := s.Index(0).Interface().(common.TableOutput); !ok {
+			return cd.tableOutput(obj, writer)
+		}
+		for i := 0; i < s.Len(); i++ {
+			ele := s.Index(i)
+			list = append(list, ele.Interface().(common.TableOutput))
+		}
+	} else {
+		ele, ok := obj.(common.TableOutput)
+		if !ok {
+			return cd.tableOutput(obj, writer)
+		}
+		list = []common.TableOutput{ele}
+	}
+
+	// Get the elements and headers of table.
+	args := list[0].GetTableHeader()
+	rows := make([][]string, len(list)+1)
+	rows[0] = list[0].GetTableHeader()
+	for i, element := range list {
+		rows[i+1] = element.GetTableRow(maxTableOutputColumnLength)
+	}
+	body := rows[1:]
+	sort.Slice(body, func(i, j int) bool {
+		return body[i][0] < body[j][0]
+	})
+
+	widths := make([]int, len(args))
+	// Get the width of every column.
+	for j := 0; j < len(args); j++ {
+		width := len(rows[0][j])
+		for i := 1; i < len(list)+1; i++ {
+			if len(rows[i][j]) == 0 {
+				rows[i][j] = "<NONE>"
+			}
+			if width < len(rows[i][j]) {
+				width = len(rows[i][j])
+			}
+		}
+		widths[j] = width
+		if j != 0 {
+			widths[j]++
+		}
+	}
+
+	// Construct the table.
+	var buffer bytes.Buffer
+	for i := 0; i < len(list)+1; i++ {
+		for j := 0; j < len(args); j++ {
+			val := ""
+			if j != 0 {
+				val = " " + val
+			}
+			val += rows[i][j]
+			val += strings.Repeat(" ", widths[j]-len(val))
+			buffer.WriteString(val)
+		}
+		buffer.WriteString("\n")
+	}
+	if _, err := io.Copy(writer, &buffer); err != nil {
+		return fmt.Errorf("error when copy output into writer: %w", err)
+	}
+
+	return nil
+}
+
 func (cd *commandDefinition) tableOutput(obj interface{}, writer io.Writer) error {
 	target, err := respTransformer(obj)
 	if err != nil {
@@ -442,7 +528,11 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 	case yamlFormatter:
 		return cd.yamlOutput(obj, writer)
 	case tableFormatter:
-		return cd.tableOutput(obj, writer)
+		if cd.commandGroup == get {
+			return cd.tableOutputForGetCommands(obj, writer)
+		} else {
+			return cd.tableOutput(obj, writer)
+		}
 	default:
 		return fmt.Errorf("unsupport format type: %v", ft)
 	}
