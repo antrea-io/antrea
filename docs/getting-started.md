@@ -25,6 +25,10 @@ with the following flags:
 * To enable `CNI` network plugins, `kubelet` should be started with the
 `--network-plugin=cni` flag.
 
+* To enable masquerading of traffic for Service cluster IP via iptables,
+`kube-proxy` should be started with the `--cluster-cidr=<CIDR Range for Pods>`
+flag.
+
 As for OVS, when using the built-in kernel module, kernel version >= 4.4 is
 required. On the other hand, when building it from OVS sources, OVS
 version >= 2.6.0 is required.
@@ -73,8 +77,9 @@ following:
 1. Delete Flannel with `kubectl delete -f <path to your Flannel YAML manifest>`.
 2. Delete Flannel bridge and tunnel interface with `ip link delete flannel.1 &&
 ip link delete flannel cni0` **on each Node**.
-3. [Deploy Antrea](#installation).
-4. Drain and uncordon Nodes one-by-one. For each Node, run `kubectl drain
+3. Ensure [requirements](#ensuring-requirements-are-satisfied) are satisfied.
+4. [Deploy Antrea](#installation).
+5. Drain and uncordon Nodes one-by-one. For each Node, run `kubectl drain
 --ignore-daemonsets <node name> && kubectl uncordon <node name>`. The
 `--ignore-daemonsets` flag will ignore DaemonSet-managed Pods, including the
 Antrea Agent Pods. If you have any other DaemonSet-managed Pods (besides the
