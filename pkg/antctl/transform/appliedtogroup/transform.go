@@ -55,3 +55,21 @@ func Transform(reader io.Reader, single bool) (interface{}, error) {
 		listTransform,
 	)(reader, single)
 }
+
+var _ common.TableOutput = new(Response)
+
+func (r Response) GetTableHeader() []string {
+	return []string{"NAME", "PODS"}
+}
+
+func (r Response) GetTableRow(maxColumnLength int) []string {
+	row := []string{r.Name}
+
+	list := make([]string, len(r.Pods))
+	for i, pod := range r.Pods {
+		list[i] = pod.Pod.Namespace + "/" + pod.Pod.Name
+	}
+	row = append(row, common.GenerateTableElementWithSummary(list, maxColumnLength))
+
+	return row
+}
