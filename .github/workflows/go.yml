@@ -28,6 +28,39 @@ jobs:
       run: make test-unit
 
 
+  golint:
+    name: Run golint
+    runs-on: [ubuntu-18.04]
+    steps:
+      - name: Set up Go 1.13
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.13
+      - name: Install golint
+        run: go get -u golang.org/x/lint/golint
+      - name: Check-out code
+        uses: actions/checkout@v2
+      - name: Run golint
+        run: |
+          GOLINT_PATH=$(go list -f {{.Target}} golang.org/x/lint/golint)
+          $GOLINT_PATH ./... | tee golint-report.txt
+      - name: Upload and Add Link to PR
+        if: github.event.pull_request != null
+        run: |
+          PULL_NUMBER=$(jq -r .pull_request.number "${{ github.event_path }}")
+          echo "Pull Request: $PULL_NUMBER"
+
+          # Upload report to https://transfer.sh (upload expires after 2 week by default)
+          DOWNLOAD_LINK_QUOTED=\"$(curl --upload-file ./golint-report.txt https://transfer.sh/golint-report.txt | sed 's|https://transfer.sh|https://transfer.sh/get|')\"
+          echo "Download Link: $DOWNLOAD_LINK_QUOTED"
+
+          # Add comment to Pull Request
+          # JQ String Interpolation used to build POST body. Ref: https://stedolan.github.io/jq/manual/#Stringinterpolation-\(foo)
+          POST_COMMENT_TARGET="https://api.github.com/repos/${{ github.repository }}/issues/${PULL_NUMBER}/comments"
+          POST_COMMENT_BODY=$(echo $DOWNLOAD_LINK_QUOTED | jq -c '{"body": "Golint report for a recent push to this PR can be [downloaded here](\(.))"}')
+          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "$POST_COMMENT_BODY" "${POST_COMMENT_TARGET}"
+
+
   golangci-lint:
     name: Golangci-lint
     runs-on: [ubuntu-18.04]
