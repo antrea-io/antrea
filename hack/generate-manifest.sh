@@ -25,6 +25,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
         --encap-mode          Traffic encapsulation mode. (default is 'encap')
         --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
+        --cloud               Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
         --keep                Debug flag which will preserve the generated kustomization.yml
         --help, -h            Print this message and exit
@@ -49,6 +50,7 @@ KIND=false
 IPSEC=false
 KEEP=false
 ENCAP_MODE=""
+CLOUD=""
 
 while [[ $# -gt 0 ]]
 do
@@ -63,7 +65,10 @@ case $key in
     ENCAP_MODE="$2"
     shift 2
     ;;
-
+    --cloud)
+    CLOUD="$2"
+    shift 2
+    ;;
     --kind)
     KIND=true
     shift
@@ -144,6 +149,12 @@ if [[ $ENCAP_MODE != "" ]]; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: $ENCAP_MODE/" antrea-agent.conf
 fi
 
+if [[ $CLOUD != "" ]]; then
+    if [[ $CLOUD == "GKE" ]]; then
+        sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: noEncap/" antrea-agent.conf
+    fi
+fi
+
 # unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,
 # which is why we use a template kustomization file.
 sed -e "s/<CONF_FILE>/antrea-agent.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
@@ -166,6 +177,18 @@ if $IPSEC; then
     $KUSTOMIZE edit add patch pskEnv.yml
     BASE=../ipsec
     cd ..
+fi
+
+if [[ $CLOUD != "" ]]; then
+    if [[ $CLOUD == "GKE" ]]; then
+        mkdir gke && cd gke
+        cp ../../patches/gke/*.yml .
+        touch kustomization.yml
+        $KUSTOMIZE edit add base $BASE
+        $KUSTOMIZE edit add patch cniPath.yml
+        BASE=../gke
+        cd ..
+    fi
 fi
 
 if $KIND; then
