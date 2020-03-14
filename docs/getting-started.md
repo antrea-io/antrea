@@ -107,6 +107,12 @@ Antrea can be deployed in NetworkPolicy only mode to an AWS EKS cluster, and
 enforce NetworkPolicies for the EKS cluster. To deploy Antrea in an EKS cluster,
 please refer to this [guide](/docs/eks-installation.md).
 
+### Deploying Antrea in GKE
+
+Antrea can be deployed in NetworkPolicy only mode to a GKE cluster, and
+enforce NetworkPolicies for the GKE cluster. To deploy Antrea in a GKE cluster,
+please refer to this [guide](/docs/gke-installation.md).
+
 ### Deploying Antrea with IPsec Encyption
 
 Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
