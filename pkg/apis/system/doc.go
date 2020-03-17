@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +k8s:deepcopy-gen=package
-// +groupName=networking.antrea.tanzu.vmware.com
-
-// Package networking contains the latest (or "internal") version of the Antrea
-// NetworkPolicy API messages. This is the API messages as represented in memory.
+// Package system contains the Antrea "system" API group definitions.
 // The contract presented to clients is located in the versioned packages,
-// which are sub-directories. The first one is "v1beta1".
-// The messages are generated based on the stored NetworkPolicy objects, i.e.
-// the objects defined in antrea/pkg/controller/types/networkpolicy.go.
-package networking
+// which are sub-directories. Right now, only version "v1beta1" is supported
+// for the API group; the internal version is not needed.
+package system

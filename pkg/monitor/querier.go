@@ -54,6 +54,7 @@ type AgentQuerier interface {
 type ControllerQuerier interface {
 	Querier
 	GetService() v1.ObjectReference
+	GetControllerInfo() *v1beta1.AntreaControllerInfo
 }
 
 type NetworkPolicyInfoQuerier interface {

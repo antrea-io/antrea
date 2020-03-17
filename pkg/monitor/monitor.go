@@ -116,7 +116,6 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 		controllerCRD, err = monitor.partialUpdateControllerCRD(controllerCRD)
 		if err != nil {
 			klog.Errorf("Failed to partially update controller monitoring CRD %v : %v", controllerCRD, err)
-			return true, err
 		}
 		return false, nil
 	}, stopCh)
@@ -149,7 +148,6 @@ func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 		agentCRD, err = monitor.partialUpdateAgentCRD(agentCRD)
 		if err != nil {
 			klog.Errorf("Failed to partially update agent monitoring CRD %v : %v", agentCRD, err)
-			return true, err
 		}
 		return false, nil
 	}, stopCh)
@@ -166,11 +164,8 @@ func (monitor *controllerMonitor) getControllerCRD(crdName string) *v1beta1.Antr
 	return controllerCRD
 }
 
-func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
-	controllerCRD := &v1beta1.AntreaControllerInfo{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: crdName,
-		},
+func (monitor *controllerMonitor) GetControllerInfo() *v1beta1.AntreaControllerInfo {
+	return &v1beta1.AntreaControllerInfo{
 		Version:                     version.GetFullVersion(),
 		PodRef:                      monitor.GetSelfPod(),
 		NodeRef:                     monitor.GetSelfNode(),
@@ -185,6 +180,11 @@ func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.
 			},
 		},
 	}
+}
+
+func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
+	controllerCRD := monitor.GetControllerInfo()
+	controllerCRD.ObjectMeta.Name = crdName
 	klog.V(2).Infof("Creating controller monitoring CRD %v", controllerCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Create(controllerCRD)
 }

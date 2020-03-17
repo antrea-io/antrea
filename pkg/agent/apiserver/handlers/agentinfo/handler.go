@@ -38,8 +38,8 @@ type AntreaAgentInfoResponse struct {
 	AgentConditions             []v1beta1.AgentCondition            `json:"agentConditions,omitempty"`             // Agent condition contains types like AgentHealthy
 }
 
-// Handler returns the function which can handle queries issued by agent-info commands,
-// the handler function populate component's agent-info to the response.
+// HandleFunc returns the function which can handle queries issued by agent-info commands.
+// The handler function populates Antrea agent information to the response.
 func HandleFunc(aq monitor.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var info *AntreaAgentInfoResponse

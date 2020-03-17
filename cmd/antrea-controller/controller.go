@@ -68,10 +68,13 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore)
 
+	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, networkPolicyController)
+
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		addressGroupStore,
 		appliedToGroupStore,
-		networkPolicyStore)
+		networkPolicyStore,
+		controllerMonitor)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
@@ -80,14 +83,13 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating API server: %v", err)
 	}
 
-	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
+	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
 
 	informerFactory.Start(stopCh)
 
-	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, networkPolicyController)
 	go controllerMonitor.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
@@ -102,7 +104,8 @@ func run(o *Options) error {
 func createAPIServerConfig(kubeconfig string,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
-	networkPolicyStore storage.Interface) (*apiserver.Config, error) {
+	networkPolicyStore storage.Interface,
+	controllerQuerier monitor.ControllerQuerier) (*apiserver.Config, error) {
 	// TODO:
 	// 1. Support user-provided certificate.
 	// 2. Support configurable https port.
@@ -134,11 +137,15 @@ func createAPIServerConfig(kubeconfig string,
 		return nil, err
 	}
 
-	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, genericopenapi.NewDefinitionNamer(apiserver.Scheme))
+	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(
+		openapi.GetOpenAPIDefinitions,
+		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
 	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
 
-	return &apiserver.Config{
-		GenericConfig: serverConfig,
-		ExtraConfig:   apiserver.ExtraConfig{addressGroupStore, appliedToGroupStore, networkPolicyStore},
-	}, nil
+	return apiserver.NewConfig(
+		serverConfig,
+		addressGroupStore,
+		appliedToGroupStore,
+		networkPolicyStore,
+		controllerQuerier), nil
 }
