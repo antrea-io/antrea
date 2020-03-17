@@ -185,6 +185,20 @@ func (m *MockControllerQuerier) EXPECT() *MockControllerQuerierMockRecorder {
 	return m.recorder
 }
 
+// GetControllerInfo mocks base method
+func (m *MockControllerQuerier) GetControllerInfo() *v1beta1.AntreaControllerInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetControllerInfo")
+	ret0, _ := ret[0].(*v1beta1.AntreaControllerInfo)
+	return ret0
+}
+
+// GetControllerInfo indicates an expected call of GetControllerInfo
+func (mr *MockControllerQuerierMockRecorder) GetControllerInfo() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetControllerInfo", reflect.TypeOf((*MockControllerQuerier)(nil).GetControllerInfo))
+}
+
 // GetNetworkPolicyControllerInfo mocks base method
 func (m *MockControllerQuerier) GetNetworkPolicyControllerInfo() v1beta1.NetworkPolicyControllerInfo {
 	m.ctrl.T.Helper()
