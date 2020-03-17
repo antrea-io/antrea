@@ -21,13 +21,15 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
-
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/version"
 	clusterinfov1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
+	controllerinforest "github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
 )
 
@@ -66,11 +68,7 @@ var CommandList = &commandList{
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &schema.GroupVersionResource{
-						Group:    networkingv1beta1.SchemeGroupVersion.Group,
-						Version:  networkingv1beta1.SchemeGroupVersion.Version,
-						Resource: "networkpolicies",
-					},
+					groupVersionResource: &networkingv1beta1.NetworkPolicyVersionResource,
 				},
 				addonTransform: networkpolicy.Transform,
 			},
@@ -96,11 +94,7 @@ var CommandList = &commandList{
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &schema.GroupVersionResource{
-						Group:    networkingv1beta1.SchemeGroupVersion.Group,
-						Version:  networkingv1beta1.SchemeGroupVersion.Version,
-						Resource: "appliedtogroups",
-					},
+					groupVersionResource: &networkingv1beta1.AppliedToGroupVersionResource,
 				},
 				addonTransform: appliedtogroup.Transform,
 			},
@@ -126,11 +120,7 @@ var CommandList = &commandList{
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &schema.GroupVersionResource{
-						Group:    networkingv1beta1.SchemeGroupVersion.Group,
-						Version:  networkingv1beta1.SchemeGroupVersion.Version,
-						Resource: "addressgroups",
-					},
+					groupVersionResource: &networkingv1beta1.AddressGroupVersionResource,
 				},
 				addonTransform: addressgroup.Transform,
 			},
@@ -150,16 +140,30 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(addressgroup.Response{}),
 		},
 		{
+			use:   "controller-info",
+			short: "Print Antrea controller's basic information",
+			long:  "Print Antrea controller's basic information including version, deployment, NetworkPolicy controller, ControllerConditions, etc.",
+			controllerEndpoint: &endpoint{
+				resourceEndpoint: &resourceEndpoint{
+					resourceName:         controllerinforest.ControllerInfoResourceName,
+					groupVersionResource: &systemv1beta1.ControllerInfoVersionResource,
+				},
+				addonTransform: controllerinfo.Transform,
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(controllerinfo.Response{}),
+		},
+		{
 			use:   "agent-info",
 			short: "Print agent's basic information",
-			long:  "Print agent's basic information including version, node subnet, OVS info, AgentConditions, etc.",
+			long:  "Print agent's basic information including version, deployment, Node subnet, OVS info, AgentConditions, etc.",
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path:       "/agentinfo",
 					outputType: single,
 				},
 			},
-			commandGroup:        flat,
+			commandGroup:        get,
 			transformedResponse: reflect.TypeOf(agentinfo.AntreaAgentInfoResponse{}),
 		},
 		{

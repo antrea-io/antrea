@@ -25,6 +25,20 @@ spec:
     name: antrea
     namespace: kube-system
 ---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.system.antrea.tanzu.vmware.com
+spec:
+  insecureSkipTLSVerify: true
+  group: system.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  version: v1beta1
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

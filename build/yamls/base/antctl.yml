@@ -25,6 +25,12 @@ rules:
     verbs:
       - get
       - list
+  - apiGroups:
+      - system.antrea.tanzu.vmware.com
+    resources:
+      - controllerinfos
+    verbs:
+      - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
