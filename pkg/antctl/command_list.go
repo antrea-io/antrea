@@ -56,6 +56,7 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
 		klog.Infof("Added command %s", def.use)
 	}
 	cl.applyPersistentFlagsToRoot(root)
+	root.SilenceUsage = true
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		enableVerbose, err := root.PersistentFlags().GetBool("verbose")
 		if err != nil {
