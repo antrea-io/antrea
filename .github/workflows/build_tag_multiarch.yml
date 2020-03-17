@@ -1,0 +1,32 @@
+name: Build and push a multi-architecture release image
+
+on:
+  push:
+    tags:
+      - v*
+
+env:
+  OVS_VERSION: 2.13.0
+
+jobs:
+  buildx:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Docker Buildx
+      id: buildx
+      uses: crazy-max/ghaction-docker-buildx@v1
+      with:
+        version: latest
+    - name: Show available platforms
+      run: echo ${{ steps.buildx.outputs.platforms }}
+    - name: Run Buildx
+      env:
+        PLATFORMS: "linux/amd64,linux/arm/v7,linux/arm64"
+        NAME: antrea/antrea-ubuntu-multiarch
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: |
+        cd build/images/ovs && docker buildx build -t antrea/openvswitch:$OVS_VERSION --platform $PLATFORMS --build-arg OVS_VERSION=$OVS_VERSION . && cd -
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        docker buildx build -t $NAME --platform $PLATFORMS --push -f build/images/Dockerfile.build.ubuntu .

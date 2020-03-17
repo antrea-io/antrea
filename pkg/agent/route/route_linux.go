@@ -60,7 +60,14 @@ const (
 var (
 	// RtTblSelectorValue selects which route table to use to forward service traffic back to host gateway gw0.
 	RtTblSelectorValue = 1 << 11
-	rtTblSelectorMark  = fmt.Sprintf("%#x/%#x", RtTblSelectorValue, RtTblSelectorValue)
+	// the type of ipRule.Mask is int so 0xffffffff cannot be used on 32-bit
+	// architectures (e.g. arm/v7). Using -1 does not seem to work (mismatch
+	// when reading the route back, we get 0xffffffff).
+	// TODO: it should be fixed in netlink package, see https://github.com/vishvananda/netlink/issues/528
+	// RtTblSelectorMask  = 0xffffffff
+	// RtTblSelectorMask = -1
+	RtTblSelectorMask = 0x8fffffff
+	rtTblSelectorMark = fmt.Sprintf("%#x/%#x", RtTblSelectorValue, RtTblSelectorValue)
 )
 
 // Client implements Interface.
@@ -463,7 +470,7 @@ func (c *Client) addServiceRouting() error {
 	ipRule := netlink.NewRule()
 	ipRule.IifName = c.nodeConfig.GatewayConfig.Name
 	ipRule.Mark = RtTblSelectorValue
-	ipRule.Mask = 0xffffffff
+	ipRule.Mask = RtTblSelectorMask
 	ipRule.Table = c.serviceRtTable.Idx
 	ipRule.Priority = AntreaIPRulePriority
 
@@ -537,6 +544,7 @@ func (c *Client) removeServiceRouting() error {
 	ipRule := netlink.NewRule()
 	ipRule.IifName = c.nodeConfig.GatewayConfig.Name
 	ipRule.Mark = RtTblSelectorValue
+	ipRule.Mask = RtTblSelectorMask
 	ipRule.Table = AntreaServiceTableIdx
 	ipRule.Priority = AntreaIPRulePriority
 	if err = netlink.RuleDel(ipRule); err != nil {

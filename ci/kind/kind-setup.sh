@@ -26,6 +26,7 @@ POD_CIDR="10.10.0.0/16"
 NUM_WORKERS=2
 SUBNETS=""
 ENCAP_MODE=""
+NODE_IMAGE=""
 
 set -eo pipefail
 function echoerr {
@@ -33,10 +34,10 @@ function echoerr {
 }
 
 _usage="
-Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni true|false ] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS]
-                  destroy CLUSTER_NAME
-                  modify-node NODE_NAME
-                  help
+Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni true|false ] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--node-image IMAGE]
+          destroy CLUSTER_NAME
+          modify-node NODE_NAME
+          help
 where:
   create: create a kind cluster with name CLUSTER_NAME
   destroy: delete a kind cluster with name CLUSTER_NAME
@@ -48,6 +49,7 @@ where:
   --images: specifies images loaded to kind cluster, default is $IMAGES
   --subnets: a subnet creates a seperate docker bridge network with assigned subnet that worker nodes may connect to. Default is empty all worker
     Node connected to docker0 bridge network
+  --node-image: Kind node image to use when creating cluster.
 "
 
 function print_usage {
@@ -225,7 +227,11 @@ EOF
   for i in $(seq 1 $NUM_WORKERS); do
     echo -e "- role: worker" >> $config_file
   done
-  kind create cluster --name $CLUSTER_NAME --config $config_file
+  args="--name $CLUSTER_NAME --config $config_file"
+  if [[ ! -z $NODE_IMAGE ]]; then
+      args="$args --image $NODE_IMAGE"
+  fi
+  kind create cluster $args
 
   # force coredns to run on control-plane node because it
   # is attached to docker0 bridge and uses host dns.
@@ -314,6 +320,10 @@ while [[ $# -gt 0 ]]
       ;;
     --num-workers)
       NUM_WORKERS="$2"
+      shift 2
+      ;;
+    --node-image)
+      NODE_IMAGE="$2"
       shift 2
       ;;
     help)

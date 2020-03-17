@@ -145,8 +145,14 @@ func TestInitialize(t *testing.T) {
 		// verify ip rules
 		expIPRulesStr := ""
 		if tc.expIPRule {
-			expIPRulesStr = fmt.Sprintf("%d: from all fwmark %#x iif %s lookup %s", route.AntreaIPRulePriority, route.RtTblSelectorValue,
-				gwName, svcTblName)
+			expIPRulesStr = fmt.Sprintf(
+				"%d: from all fwmark %#x/%#x iif %s lookup %s",
+				route.AntreaIPRulePriority,
+				route.RtTblSelectorValue,
+				route.RtTblSelectorMask,
+				gwName,
+				svcTblName,
+			)
 			expIPRulesStr = strings.Join(strings.Fields(expIPRulesStr), "")
 		}
 		ipRule, _ := ExecOutputTrim(fmt.Sprintf("ip rule | grep %x", route.RtTblSelectorValue))
