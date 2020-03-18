@@ -388,7 +388,7 @@ spec:
           subPath: antrea-controller.conf
       hostNetwork: true
       nodeSelector:
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
       priorityClassName: system-cluster-critical
       serviceAccountName: antrea-controller
       tolerations:
@@ -588,7 +588,7 @@ spec:
           name: host-depmod
           readOnly: true
       nodeSelector:
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
       priorityClassName: system-node-critical
       serviceAccountName: antrea-agent
       tolerations:
