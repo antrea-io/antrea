@@ -18,6 +18,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/version"
@@ -47,6 +48,7 @@ type AgentQuerier interface {
 	GetOVSFlowTable() map[string]int32
 	GetLocalPodNum() int32
 	GetAgentInfo() *v1beta1.AntreaAgentInfo
+	GetInterfaceStore() interfacestore.InterfaceStore
 }
 
 type ControllerQuerier interface {
@@ -116,6 +118,10 @@ func (monitor *agentMonitor) GetNetworkPolicyControllerInfo() v1beta1.NetworkPol
 // GetLocalPodNum gets the number of Pod which the Agent is in charge of.
 func (monitor *agentMonitor) GetLocalPodNum() int32 {
 	return int32(monitor.interfaceStore.GetContainerInterfaceNum())
+}
+
+func (monitor *agentMonitor) GetInterfaceStore() interfacestore.InterfaceStore {
+	return monitor.interfaceStore
 }
 
 func (monitor *agentMonitor) GetAgentConditions(ovsConnected bool) []v1beta1.AgentCondition {

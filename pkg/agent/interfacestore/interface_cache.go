@@ -102,6 +102,18 @@ func (c *interfaceCache) GetContainerInterfaceNum() int {
 	return num
 }
 
+func (c *interfaceCache) GetInterfacesByType(interfaceType InterfaceType) []*InterfaceConfig {
+	c.RLock()
+	defer c.RUnlock()
+	var interfaces []*InterfaceConfig
+	for _, v := range c.cache {
+		if v.Type == interfaceType {
+			interfaces = append(interfaces, v)
+		}
+	}
+	return interfaces
+}
+
 func (c *interfaceCache) Len() int {
 	c.RLock()
 	defer c.RUnlock()
