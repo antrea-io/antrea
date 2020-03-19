@@ -26,7 +26,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
-	monitortest "github.com/vmware-tanzu/antrea/pkg/monitor/testing"
+	queriertest "github.com/vmware-tanzu/antrea/pkg/agent/querier/testing"
 )
 
 // There are 3 pod-interfaces:
@@ -173,7 +173,7 @@ func TestPodInterfaceQuery(t *testing.T) {
 		i := interfacestoretest.NewMockInterfaceStore(ctrl)
 		i.EXPECT().GetInterfacesByType(interfacestore.ContainerInterface).Return(testInterfaceConfigs).AnyTimes()
 
-		q := monitortest.NewMockAgentQuerier(ctrl)
+		q := queriertest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetInterfaceStore().Return(i).AnyTimes()
 		handler := HandleFunc(q)
 
@@ -223,7 +223,7 @@ func TestPodInterfaceListQuery(t *testing.T) {
 		i := interfacestoretest.NewMockInterfaceStore(ctrl)
 		i.EXPECT().GetInterfacesByType(interfacestore.ContainerInterface).Return(testInterfaceConfigs).AnyTimes()
 
-		q := monitortest.NewMockAgentQuerier(ctrl)
+		q := queriertest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetInterfaceStore().Return(i).AnyTimes()
 		handler := HandleFunc(q)
 

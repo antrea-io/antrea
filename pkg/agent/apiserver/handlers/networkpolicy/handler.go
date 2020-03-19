@@ -19,12 +19,12 @@ import (
 	"net/http"
 
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/monitor"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query network policy rules in current agent.
-func HandleFunc(npq monitor.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
+func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
 		groups := npq.GetNetworkPolicies()
