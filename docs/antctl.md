@@ -36,11 +36,10 @@ antctl version
 
 For Linux, we also publish binaries for Arm-based systems.
 
-On Windows:
+On Windows, using PowerShell:
 ```
-# if you have curl / curl.exe installed (otherwise download antctl with a browser)
-curl -Lo antctl.exe https://github.com/vmware-tanzu/antrea/releases/download/v0.5.0/antctl-windows-x86_64
-Move-Item .\antctl-windows-x86_64.exe c:\some-dir-in-your-PATH\kubectl.exe
+Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/v0.5.0/antctl-windows-x86_64.exe -Outfile antctl.exe
+Move-Item .\antctl.exe c:\some-dir-in-your-PATH\antctl.exe
 antctl version
 ```
 
