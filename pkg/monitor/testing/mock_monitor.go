@@ -21,6 +21,7 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	interfacestore "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	reflect "reflect"
@@ -61,6 +62,20 @@ func (m *MockAgentQuerier) GetAgentInfo() *v1beta1.AntreaAgentInfo {
 func (mr *MockAgentQuerierMockRecorder) GetAgentInfo() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAgentInfo", reflect.TypeOf((*MockAgentQuerier)(nil).GetAgentInfo))
+}
+
+// GetInterfaceStore mocks base method
+func (m *MockAgentQuerier) GetInterfaceStore() interfacestore.InterfaceStore {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfaceStore")
+	ret0, _ := ret[0].(interfacestore.InterfaceStore)
+	return ret0
+}
+
+// GetInterfaceStore indicates an expected call of GetInterfaceStore
+func (mr *MockAgentQuerierMockRecorder) GetInterfaceStore() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceStore", reflect.TypeOf((*MockAgentQuerier)(nil).GetInterfaceStore))
 }
 
 // GetLocalPodNum mocks base method

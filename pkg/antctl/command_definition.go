@@ -47,6 +47,19 @@ const (
 // as:
 //   antctl <commandGroup> <command>
 type commandGroup uint
+type OutputType uint
+
+// There are two output types: single item or list and the actual type is decided by
+// OutputType value here and command's arguments.
+const (
+	// defaultType represents the output type is single item if there is an argument
+	// and its value is provided. If not, the output type is list.
+	defaultType OutputType = iota
+	// single represents the output type is always single item.
+	single
+	// multiple represents the output type is always list.
+	multiple
+)
 
 const (
 	flat commandGroup = iota
@@ -62,7 +75,7 @@ var groupCommands = map[commandGroup]*cobra.Command{
 }
 
 type endpointResponder interface {
-	single() bool
+	OutputType() OutputType
 	flags() []flagInfo
 }
 
@@ -72,8 +85,11 @@ type resourceEndpoint struct {
 	namespaced           bool
 }
 
-func (e *resourceEndpoint) single() bool {
-	return len(e.resourceName) != 0
+func (e *resourceEndpoint) OutputType() OutputType {
+	if len(e.resourceName) != 0 {
+		return single
+	}
+	return defaultType
 }
 
 func (e *resourceEndpoint) flags() []flagInfo {
@@ -98,17 +114,17 @@ func (e *resourceEndpoint) flags() []flagInfo {
 }
 
 type nonResourceEndpoint struct {
-	path     string
-	params   []flagInfo
-	isSingle bool
+	path       string
+	params     []flagInfo
+	outputType OutputType
 }
 
 func (e *nonResourceEndpoint) flags() []flagInfo {
 	return e.params
 }
 
-func (e *nonResourceEndpoint) single() bool {
-	return e.isSingle
+func (e *nonResourceEndpoint) OutputType() OutputType {
+	return e.outputType
 }
 
 // endpoint is used to specified the API for an antctl running against antrea-controller.
@@ -146,8 +162,6 @@ type commandDefinition struct {
 	// response struct of the handler, but it is still needed to guide the formatter.
 	// It should always be filled.
 	transformedResponse reflect.Type
-	// flags is a list of all possible flags for this command.
-	flags []flagInfo
 }
 
 func (cd *commandDefinition) namespaced() bool {
@@ -170,15 +184,19 @@ func (cd *commandDefinition) getAddonTransform() func(reader io.Reader, single b
 
 func (cd *commandDefinition) getEndpoint() endpointResponder {
 	if runtimeComponent == componentAgent {
-		if cd.agentEndpoint.resourceEndpoint != nil {
-			return cd.agentEndpoint.resourceEndpoint
+		if cd.agentEndpoint != nil {
+			if cd.agentEndpoint.resourceEndpoint != nil {
+				return cd.agentEndpoint.resourceEndpoint
+			}
+			return cd.agentEndpoint.nonResourceEndpoint
 		}
-		return cd.agentEndpoint.nonResourceEndpoint
 	} else if runtimeComponent == componentController {
-		if cd.controllerEndpoint.resourceEndpoint != nil {
-			return cd.controllerEndpoint.resourceEndpoint
+		if cd.controllerEndpoint != nil {
+			if cd.controllerEndpoint.resourceEndpoint != nil {
+				return cd.controllerEndpoint.resourceEndpoint
+			}
+			return cd.controllerEndpoint.nonResourceEndpoint
 		}
-		return cd.controllerEndpoint.nonResourceEndpoint
 	}
 	return nil
 }
@@ -231,17 +249,19 @@ func (cd *commandDefinition) validate() []error {
 	}
 	empty := struct{}{}
 	existingFlags := map[string]struct{}{"output": empty, "help": empty, "kubeconfig": empty, "timeout": empty, "verbose": empty}
-	for _, f := range cd.flags {
-		if len(f.name) == 0 {
-			errs = append(errs, fmt.Errorf("%s: flag name cannot be empty", cd.use))
-		} else {
-			if _, ok := existingFlags[f.name]; ok {
-				errs = append(errs, fmt.Errorf("%s: flag redefined: %s", cd.use, f.name))
+	if endpoint := cd.getEndpoint(); endpoint != nil {
+		for _, f := range endpoint.flags() {
+			if len(f.name) == 0 {
+				errs = append(errs, fmt.Errorf("%s: flag name cannot be empty", cd.use))
+			} else {
+				if _, ok := existingFlags[f.name]; ok {
+					errs = append(errs, fmt.Errorf("%s: flag redefined: %s", cd.use, f.name))
+				}
+				existingFlags[f.name] = empty
 			}
-			existingFlags[f.name] = empty
-		}
-		if len(f.shorthand) > 1 {
-			errs = append(errs, fmt.Errorf("%s: length of a flag shorthand cannot be larger than 1: %s", cd.use, f.shorthand))
+			if len(f.shorthand) > 1 {
+				errs = append(errs, fmt.Errorf("%s: length of a flag shorthand cannot be larger than 1: %s", cd.use, f.shorthand))
+			}
 		}
 	}
 	return errs
@@ -433,10 +453,13 @@ func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) map
 	if len(args) > 0 {
 		argMap["name"] = args[0]
 	}
-	for _, f := range cd.flags {
-		v, err := cmd.Flags().GetString(f.name)
-		if err == nil && len(v) != 0 {
-			argMap[f.name] = v
+	if endpoint := cd.getEndpoint(); endpoint != nil {
+		for _, f := range endpoint.flags() {
+			vs, err := cmd.Flags().GetString(f.name)
+			if err == nil && len(vs) != 0 {
+				argMap[f.name] = vs
+				continue
+			}
 		}
 	}
 	if cd.namespaced() {
@@ -473,7 +496,8 @@ func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []st
 		if err != nil {
 			return err
 		}
-		return cd.output(resp, os.Stdout, formatterType(outputFormat), cd.getEndpoint().single() || argGet)
+		isSingle := cd.getEndpoint().OutputType() != multiple && (cd.getEndpoint().OutputType() == single || argGet)
+		return cd.output(resp, os.Stdout, formatterType(outputFormat), isSingle)
 	}
 }
 
@@ -518,7 +542,7 @@ func (cd *commandDefinition) applyExampleToCommand(cmd *cobra.Command) {
 	var buf bytes.Buffer
 	dataName := strings.ToLower(cd.use)
 
-	if cd.getEndpoint().single() {
+	if cd.getEndpoint().OutputType() == single {
 		fmt.Fprintf(&buf, "  Get the %s\n", dataName)
 		fmt.Fprintf(&buf, "  $ %s\n", strings.Join(commands, " "))
 	} else {

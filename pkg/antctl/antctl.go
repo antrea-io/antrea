@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
@@ -154,12 +155,45 @@ var CommandList = &commandList{
 			long:  "Print agent's basic information including version, node subnet, OVS info, AgentConditions, etc.",
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
-					path:     "/agentinfo",
-					isSingle: true,
+					path:       "/agentinfo",
+					outputType: single,
 				},
 			},
 			commandGroup:        flat,
 			transformedResponse: reflect.TypeOf(agentinfo.AntreaAgentInfoResponse{}),
+		},
+		{
+			use:   "pod-interface",
+			short: "Print Pod's basic interface information",
+			long:  "Print information about the network interface(s) created by the Antrea agent for the specified Pod.",
+			example: `  Get a pod-interface
+  $ antctl get pod-interface pod0 -n ns0
+  Get the list of pod-interfaces in a namespace
+  $ antctl get pod-interface -n ns0
+  Get the list of pod-interfaces whose names match in all namespaces
+  $ antctl get pod-interface pod0
+  Get the list of pod-interfaces in all namespaces
+  $ antctl get pod-interface`,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/podinterfaces",
+					params: []flagInfo{
+						{
+							name:  "name",
+							usage: "Retrieve Pod interface by name. If present, make sure namespace is provided.",
+							arg:   true,
+						},
+						{
+							name:      "namespace",
+							usage:     "Get all Pod interfaces from specific Namespace",
+							shorthand: "n",
+						},
+					},
+					outputType: multiple,
+				},
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(podinterface.Response{}),
 		},
 	},
 	codec: scheme.Codecs,
