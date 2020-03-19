@@ -1,12 +1,13 @@
-SHELL			:= /bin/bash
+SHELL              := /bin/bash
 # go options
-GO              ?= go
-LDFLAGS         :=
-GOFLAGS         :=
-BINDIR          := $(CURDIR)/bin
-GO_FILES        := $(shell find . -type d -name '.cache' -prune -o -type f -name '*.go' -print)
-GOPATH          ?= $$($(GO) env GOPATH)
-DOCKER_CACHE    := $(CURDIR)/.cache
+GO                 ?= go
+LDFLAGS            :=
+GOFLAGS            :=
+BINDIR             ?= $(CURDIR)/bin
+GO_FILES           := $(shell find . -type d -name '.cache' -prune -o -type f -name '*.go' -print)
+GOPATH             ?= $$($(GO) env GOPATH)
+DOCKER_CACHE       := $(CURDIR)/.cache
+ANTCTL_BINARY_NAME ?= antctl
 
 .PHONY: all
 all: build
@@ -94,7 +95,6 @@ docker-tidy: $(DOCKER_CACHE)
 .linux-bin:
 	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
 
-# TODO: strip binary when building releases
 ANTCTL_BINARIES := antctl-darwin antctl-linux antctl-windows
 $(ANTCTL_BINARIES): antctl-%:
 	@GOOS=$* $(GO) build -o $(BINDIR)/$@ $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
@@ -106,6 +106,10 @@ $(ANTCTL_BINARIES): antctl-%:
 
 .PHONY: antctl
 antctl: $(ANTCTL_BINARIES)
+
+.PHONY: antctl-release
+antctl-release:
+	@$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
 
 .PHONY: .linux-test-unit
 .linux-test-unit:
