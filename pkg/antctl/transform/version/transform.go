@@ -22,20 +22,18 @@ import (
 	k8sversion "k8s.io/apimachinery/pkg/version"
 	"k8s.io/klog"
 
-	clusterinfov1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	antreaversion "github.com/vmware-tanzu/antrea/pkg/version"
 )
 
 type Response struct {
-	AgentVersion      string `json:"agentVersion,omitempty" yaml:"agentVersion,omitempty"`
-	ControllerVersion string `json:"controllerVersion,omitempty" yaml:"controllerVersion,omitempty"`
-	AntctlVersion     string `json:"antctlVersion,omitempty" yaml:"antctlVersion,omitempty"`
+	ServerVersion string `json:"serverVersion,omitempty" yaml:"serverVersion,omitempty"`
+	ClientVersion string `json:"clientVersion,omitempty" yaml:"clientVersion,omitempty"`
 }
 
-// AgentVersion is the AddonTransform for the version command. This function
-// will try to parse the response as a AgentVersionResponse and then populate
-// it with the version of antctl to a transformedVersionResponse object.
-func AgentTransform(reader io.Reader, _ bool) (interface{}, error) {
+// Transform is the AddonTransform for the version command. This function
+// will try to parse the response as the ServerVersion, get the ClientVersion,
+// and return a Response object.
+func Transform(reader io.Reader, _ bool) (interface{}, error) {
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
@@ -46,34 +44,16 @@ func AgentTransform(reader io.Reader, _ bool) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	agentVersion := v.GitVersion
+	serverVersion := v.GitVersion
 	if len(v.GitCommit) > 0 {
-		agentVersion += "-" + v.GitCommit
+		serverVersion += "-" + v.GitCommit
 	}
 	if len(v.GitTreeState) > 0 {
-		agentVersion += "." + v.GitTreeState
+		serverVersion += "." + v.GitTreeState
 	}
 	resp := &Response{
-		AgentVersion:  agentVersion,
-		AntctlVersion: antreaversion.GetFullVersion(),
-	}
-	return resp, nil
-}
-
-func ControllerTransform(reader io.Reader, _ bool) (interface{}, error) {
-	b, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-	klog.Infof("version transform received: %s", string(b))
-	controllerInfo := new(clusterinfov1beta1.AntreaControllerInfo)
-	err = json.Unmarshal(b, controllerInfo)
-	if err != nil {
-		return nil, err
-	}
-	resp := &Response{
-		ControllerVersion: controllerInfo.Version,
-		AntctlVersion:     antreaversion.GetFullVersion(),
+		ServerVersion: serverVersion,
+		ClientVersion: antreaversion.GetFullVersion(),
 	}
 	return resp, nil
 }

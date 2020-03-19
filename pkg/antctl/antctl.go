@@ -25,7 +25,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/version"
-	clusterinfov1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
 )
@@ -40,21 +39,16 @@ var CommandList = &commandList{
 			long:         "Print version information of the antctl and the ${component}",
 			commandGroup: flat,
 			controllerEndpoint: &endpoint{
-				resourceEndpoint: &resourceEndpoint{
-					resourceName: "antrea-controller",
-					groupVersionResource: &schema.GroupVersionResource{
-						Group:    clusterinfov1beta1.SchemeGroupVersion.Group,
-						Version:  clusterinfov1beta1.SchemeGroupVersion.Version,
-						Resource: "antreacontrollerinfos",
-					},
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/version",
 				},
-				addonTransform: version.ControllerTransform,
+				addonTransform: version.Transform,
 			},
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/version",
 				},
-				addonTransform: version.AgentTransform,
+				addonTransform: version.Transform,
 			},
 			transformedResponse: reflect.TypeOf(version.Response{}),
 		},

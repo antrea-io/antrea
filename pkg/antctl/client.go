@@ -25,6 +25,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -87,27 +88,36 @@ func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) 
 	if err != nil {
 		return nil, err
 	}
-	if runtimeComponent == componentAgent {
+	var raw []byte
+	if runtimeComponent == componentController {
+		// Access antrea service via K8s apiserver proxy.
+		// See https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-services/#manually-constructing-apiserver-proxy-urls
+		coreV1Client, err := v1.NewForConfig(kubeconfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create CoreV1Client: %w", err)
+		}
+		raw, err = coreV1Client.Services("kube-system").ProxyGet("https", "antrea", "", e.path, opt.args).DoRaw()
+	} else {
 		kubeconfig.Insecure = true
 		kubeconfig.CAFile = ""
 		kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apiserver.Port))
+		restClient, err := rest.UnversionedRESTClientFor(kubeconfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create rest client: %w", err)
+		}
+		u := url.URL{Path: e.path}
+		q := u.Query()
+		for k, v := range opt.args {
+			q.Set(k, v)
+		}
+		u.RawQuery = q.Encode()
+		getter := restClient.Get().RequestURI(u.RequestURI()).Timeout(opt.timeout)
+		result := getter.Do()
+		if result.Error() != nil {
+			return nil, generateMessage(opt, result)
+		}
+		raw, err = result.Raw()
 	}
-	restClient, err := rest.UnversionedRESTClientFor(kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create rest client: %w", err)
-	}
-	u := url.URL{Path: e.path}
-	q := u.Query()
-	for k, v := range opt.args {
-		q.Set(k, v)
-	}
-	u.RawQuery = q.Encode()
-	getter := restClient.Get().RequestURI(u.RequestURI()).Timeout(opt.timeout)
-	result := getter.Do()
-	if result.Error() != nil {
-		return nil, generateMessage(opt, result)
-	}
-	raw, err := result.Raw()
 	if err != nil {
 		return nil, err
 	}

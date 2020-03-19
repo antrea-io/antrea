@@ -19,6 +19,7 @@ import (
 	"runtime"
 
 	"github.com/blang/semver"
+	"k8s.io/apimachinery/pkg/version"
 )
 
 // These variables are set at build-time.
@@ -35,9 +36,15 @@ var (
 	ReleaseStatus = "unreleased"
 )
 
-func GetVersion() semver.Version {
+func GetVersionInfo() *version.Info {
 	v, _ := semver.Parse(Version[1:])
-	return v
+	return &version.Info{
+		Major:        fmt.Sprint(v.Major),
+		Minor:        fmt.Sprint(v.Minor),
+		GitVersion:   v.String(),
+		GitTreeState: GitTreeState,
+		GitCommit:    GetGitSHA(),
+	}
 }
 
 func GetGitSHA() string {

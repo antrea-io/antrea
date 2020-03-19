@@ -70,9 +70,12 @@ metadata:
   name: antctl
 rules:
 - apiGroups:
-  - clusterinformation.antrea.tanzu.vmware.com
+  - ""
+  resourceNames:
+  - antrea
+  - 'https:antrea:'
   resources:
-  - antreacontrollerinfos
+  - services/proxy
   verbs:
   - get
 - apiGroups:

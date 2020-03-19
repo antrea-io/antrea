@@ -134,6 +134,8 @@ func createAPIServerConfig(kubeconfig string,
 		return nil, err
 	}
 
+	serverConfig.Version = version.GetVersionInfo()
+
 	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, genericopenapi.NewDefinitionNamer(apiserver.Scheme))
 	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
 

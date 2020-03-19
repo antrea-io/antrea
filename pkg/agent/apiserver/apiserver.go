@@ -20,7 +20,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	k8sversion "k8s.io/apimachinery/pkg/version"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
@@ -29,7 +28,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
-	antreaversion "github.com/vmware-tanzu/antrea/pkg/version"
+	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
 const (
@@ -84,15 +83,8 @@ func newConfig() (*genericapiserver.CompletedConfig, error) {
 	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
-	v := antreaversion.GetVersion()
 	serverCfg := genericapiserver.NewConfig(codecs)
-	serverCfg.Version = &k8sversion.Info{
-		Major:        fmt.Sprint(v.Major),
-		Minor:        fmt.Sprint(v.Minor),
-		GitVersion:   v.String(),
-		GitTreeState: antreaversion.GitTreeState,
-		GitCommit:    antreaversion.GetGitSHA(),
-	}
+	serverCfg.Version = version.GetVersionInfo()
 	if err := secureServing.ApplyTo(&serverCfg.SecureServing, &serverCfg.LoopbackClientConfig); err != nil {
 		return nil, err
 	}
