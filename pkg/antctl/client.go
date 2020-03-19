@@ -105,7 +105,7 @@ func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) 
 	getter := restClient.Get().RequestURI(u.RequestURI()).Timeout(opt.timeout)
 	result := getter.Do()
 	if result.Error() != nil {
-		return nil, fmt.Errorf("error when requesting %s: %w", getter.URL(), result.Error())
+		return nil, generateMessage(opt, result)
 	}
 	raw, err := result.Raw()
 	if err != nil {
@@ -147,7 +147,7 @@ func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Re
 	}
 	result := resGetter.Do()
 	if result.Error() != nil {
-		return nil, fmt.Errorf("error when requesting %s: %w", resGetter.URL(), result.Error())
+		return nil, generateMessage(opt, result)
 	}
 	raw, err := result.Raw()
 	if err != nil {
