@@ -206,6 +206,9 @@ subjects:
 - kind: ServiceAccount
   name: antctl
   namespace: kube-system
+- kind: ServiceAccount
+  name: anntrea-controller
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
