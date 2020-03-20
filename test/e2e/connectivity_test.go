@@ -59,15 +59,7 @@ func (data *TestData) runPingMesh(t *testing.T, podNames []string) {
 	}
 }
 
-// TestPodConnectivitySameNode checks that Pods running on the same Node can reach each other, by
-// creating multiple Pods on the same Node and having them ping each other.
-func TestPodConnectivitySameNode(t *testing.T) {
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 	numPods := 2 // can be increased
 	podNames := make([]string, numPods)
 	for idx := range podNames {
@@ -84,6 +76,18 @@ func TestPodConnectivitySameNode(t *testing.T) {
 	}
 
 	data.runPingMesh(t, podNames)
+}
+
+// TestPodConnectivitySameNode checks that Pods running on the same Node can reach each other, by
+// creating multiple Pods on the same Node and having them ping each other.
+func TestPodConnectivitySameNode(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	data.testPodConnectivitySameNode(t)
 }
 
 // createPodsOnDifferentNodes creates numPods busybox test Pods and assign them to all the different
