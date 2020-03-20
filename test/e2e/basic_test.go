@@ -74,30 +74,12 @@ func TestPodAssignIP(t *testing.T) {
 	}
 }
 
-// TestDeletePod creates a Pod, then deletes it, and checks that the veth interface (in the Node
-// network namespace) and the OVS port for the container get removed.
-func TestDeletePod(t *testing.T) {
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
-	nodeName := nodeName(0)
-	podName := randName("test-pod-")
-
-	t.Logf("Creating a busybox test Pod on '%s'", nodeName)
-	if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
-		t.Fatalf("Error when creating busybox test Pod: %v", err)
-	}
-	if err := data.podWaitForRunning(defaultTimeout, podName); err != nil {
-		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
-	}
-
+func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName string) {
 	ifName := util.GenerateContainerInterfaceName(podName, testNamespace)
 	t.Logf("Host interface name for Pod is '%s'", ifName)
 
 	var antreaPodName string
+	var err error
 	if antreaPodName, err = data.getAntreaPodOnNode(nodeName); err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
@@ -141,6 +123,29 @@ func TestDeletePod(t *testing.T) {
 	if doesOVSPortExist() {
 		t.Errorf("OVS port '%s' still exists on Node '%s' after Pod deletion", ifName, nodeName)
 	}
+}
+
+// TestDeletePod creates a Pod, then deletes it, and checks that the veth interface (in the Node
+// network namespace) and the OVS port for the container get removed.
+func TestDeletePod(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	nodeName := nodeName(0)
+	podName := randName("test-pod-")
+
+	t.Logf("Creating a busybox test Pod on '%s'", nodeName)
+	if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	if err := data.podWaitForRunning(defaultTimeout, podName); err != nil {
+		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
+	}
+
+	data.testDeletePod(t, podName, nodeName)
 }
 
 // TestAntreaGracefulExit verifies that Antrea Pods can terminate gracefully.

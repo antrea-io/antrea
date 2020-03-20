@@ -202,49 +202,55 @@ func collectClusterInfo() error {
 	return nil
 }
 
-func (data *TestData) createTestNamespace() error {
+// createNamespace creates the provided namespace.
+func (data *TestData) createNamespace(namespace string) error {
 	ns := v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: testNamespace,
+			Name: namespace,
 		},
 	}
 	if ns, err := data.clientset.CoreV1().Namespaces().Create(&ns); err != nil {
 		// Ignore error if the namespace already exists
 		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("error when creating '%s' Namespace: %v", testNamespace, err)
+			return fmt.Errorf("error when creating '%s' Namespace: %v", namespace, err)
 		}
 		// When namespace already exists, check phase
 		if ns.Status.Phase == v1.NamespaceTerminating {
-			return fmt.Errorf("error when creating '%s' Namespace: namespace exists but is in 'Terminating' phase", testNamespace)
+			return fmt.Errorf("error when creating '%s' Namespace: namespace exists but is in 'Terminating' phase", namespace)
 		}
 	}
 	return nil
 }
 
-// deleteTestNamespace deletes test namespace and waits for deletion to actually complete.
-func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
+// createTestNamespace creates the namespace used for tests.
+func (data *TestData) createTestNamespace() error {
+	return data.createNamespace(testNamespace)
+}
+
+// deleteNamespace deletes the provided namespace and waits for deletion to actually complete.
+func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) error {
 	var gracePeriodSeconds int64 = 0
 	var propagationPolicy metav1.DeletionPropagation = metav1.DeletePropagationForeground
 	deleteOptions := &metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-	if err := data.clientset.CoreV1().Namespaces().Delete(testNamespace, deleteOptions); err != nil {
+	if err := data.clientset.CoreV1().Namespaces().Delete(namespace, deleteOptions); err != nil {
 		if errors.IsNotFound(err) {
 			// namespace does not exist, we return right away
 			return nil
 		}
-		return fmt.Errorf("error when deleting '%s' Namespace: %v", testNamespace, err)
+		return fmt.Errorf("error when deleting '%s' Namespace: %v", namespace, err)
 	}
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if ns, err := data.clientset.CoreV1().Namespaces().Get(testNamespace, metav1.GetOptions{}); err != nil {
+		if ns, err := data.clientset.CoreV1().Namespaces().Get(namespace, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				// Success
 				return true, nil
 			}
-			return false, fmt.Errorf("error when getting Namespace '%s' after delete: %v", testNamespace, err)
+			return false, fmt.Errorf("error when getting Namespace '%s' after delete: %v", namespace, err)
 		} else if ns.Status.Phase != v1.NamespaceTerminating {
-			return false, fmt.Errorf("deleted Namespace '%s' should be in 'Terminating' phase", testNamespace)
+			return false, fmt.Errorf("deleted Namespace '%s' should be in 'Terminating' phase", namespace)
 		}
 
 		// Keep trying
@@ -253,34 +259,31 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 	return err
 }
 
+// deleteTestNamespace deletes test namespace and waits for deletion to actually complete.
+func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
+	return data.deleteNamespace(testNamespace, timeout)
+}
+
 // deployAntreaCommon deploys Antrea using kubectl on the master node.
-func (data *TestData) deployAntreaCommon(ipsec bool) error {
+func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
-
-	var yamlFile string
-	if ipsec {
-		yamlFile = antreaIPSecYML
-	} else {
-		yamlFile = antreaYML
-	}
-
-	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName(), "kubectl apply -f "+yamlFile)
+	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
 	if err != nil || rc != 0 {
+		fmt.Println(stdout)
 		return fmt.Errorf("error when deploying Antrea; is %s available on the master Node?", yamlFile)
 	}
-	fmt.Println(stdout)
 	return nil
 }
 
 // deployAntrea deploys Antrea with the standard manifest.
 func (data *TestData) deployAntrea() error {
-	return data.deployAntreaCommon(false)
+	return data.deployAntreaCommon(antreaYML, "")
 }
 
 // deployAntreaIPSec deploys Antrea with IPSec tunnel enabled.
 func (data *TestData) deployAntreaIPSec() error {
-	return data.deployAntreaCommon(true)
+	return data.deployAntreaCommon(antreaIPSecYML, "")
 }
 
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
@@ -292,7 +295,10 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
 		}
 
-		if daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled {
+		// Make sure that all Daemon Pods are available and that there is no ongoing rolling
+		// update.
+		if daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled &&
+			daemonSet.Status.UpdatedNumberScheduled == daemonSet.Status.DesiredNumberScheduled {
 			// Success
 			return true, nil
 		}
