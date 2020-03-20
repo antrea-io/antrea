@@ -15,7 +15,9 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strconv"
 	"strings"
 	"testing"
@@ -27,11 +29,11 @@ func BenchmarkBandwidthIntraNode(b *testing.B) {
 		b.StartTimer()
 
 		podDefA := createPerfTestPodDefinition("perftest-a", perftoolContainerName, perftoolImage)
-		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(podDefA); err != nil {
+		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), podDefA, metav1.CreateOptions{}); err != nil {
 			b.Fatalf("Error when creating the first perftest Pod: %v", err)
 		}
 		podDefB := createPerfTestPodDefinition("perftest-b", perftoolContainerName, perftoolImage)
-		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(podDefB); err != nil {
+		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), podDefB, metav1.CreateOptions{}); err != nil {
 			b.Fatalf("Error when creating the second perftest Pod: %v", err)
 		}
 		podBIP, err := data.podWaitForIP(defaultTimeout, podDefB.Name)

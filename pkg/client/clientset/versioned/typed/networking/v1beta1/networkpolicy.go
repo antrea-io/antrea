@@ -17,6 +17,7 @@
 package v1beta1
 
 import (
+	"context"
 	"time"
 
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -62,7 +63,7 @@ func (c *networkPolicies) Get(name string, options v1.GetOptions) (result *v1bet
 		Resource("networkpolicies").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -79,7 +80,7 @@ func (c *networkPolicies) List(opts v1.ListOptions) (result *v1beta1.NetworkPoli
 		Resource("networkpolicies").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -96,5 +97,5 @@ func (c *networkPolicies) Watch(opts v1.ListOptions) (watch.Interface, error) {
 		Resource("networkpolicies").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }

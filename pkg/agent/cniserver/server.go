@@ -526,7 +526,7 @@ func (s *CNIServer) Run(stopCh <-chan struct{}) {
 // K8s apiserver and replay the necessary flows.
 func (s *CNIServer) reconcile() error {
 	klog.Infof("Reconciliation for CNI server")
-	pods, err := s.kubeClient.CoreV1().Pods("").List(metav1.ListOptions{
+	pods, err := s.kubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
 		FieldSelector: "spec.nodeName=" + s.nodeConfig.Name,
 	})
 	if err != nil {

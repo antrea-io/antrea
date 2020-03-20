@@ -17,6 +17,7 @@
 package v1beta1
 
 import (
+	"context"
 	"time"
 
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -59,7 +60,7 @@ func (c *appliedToGroups) Get(name string, options v1.GetOptions) (result *v1bet
 		Resource("appliedtogroups").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -75,7 +76,7 @@ func (c *appliedToGroups) List(opts v1.ListOptions) (result *v1beta1.AppliedToGr
 		Resource("appliedtogroups").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -91,5 +92,5 @@ func (c *appliedToGroups) Watch(opts v1.ListOptions) (watch.Interface, error) {
 		Resource("appliedtogroups").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }

@@ -17,6 +17,7 @@
 package v1beta1
 
 import (
+	"context"
 	"time"
 
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
@@ -65,7 +66,7 @@ func (c *antreaAgentInfos) Get(name string, options v1.GetOptions) (result *v1be
 		Resource("antreaagentinfos").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -81,7 +82,7 @@ func (c *antreaAgentInfos) List(opts v1.ListOptions) (result *v1beta1.AntreaAgen
 		Resource("antreaagentinfos").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -97,7 +98,7 @@ func (c *antreaAgentInfos) Watch(opts v1.ListOptions) (watch.Interface, error) {
 		Resource("antreaagentinfos").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a antreaAgentInfo and creates it.  Returns the server's representation of the antreaAgentInfo, and an error, if there is any.
@@ -106,7 +107,7 @@ func (c *antreaAgentInfos) Create(antreaAgentInfo *v1beta1.AntreaAgentInfo) (res
 	err = c.client.Post().
 		Resource("antreaagentinfos").
 		Body(antreaAgentInfo).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -118,7 +119,7 @@ func (c *antreaAgentInfos) Update(antreaAgentInfo *v1beta1.AntreaAgentInfo) (res
 		Resource("antreaagentinfos").
 		Name(antreaAgentInfo.Name).
 		Body(antreaAgentInfo).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -129,7 +130,7 @@ func (c *antreaAgentInfos) Delete(name string, options *v1.DeleteOptions) error 
 		Resource("antreaagentinfos").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -144,7 +145,7 @@ func (c *antreaAgentInfos) DeleteCollection(options *v1.DeleteOptions, listOptio
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -156,7 +157,7 @@ func (c *antreaAgentInfos) Patch(name string, pt types.PatchType, data []byte, s
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

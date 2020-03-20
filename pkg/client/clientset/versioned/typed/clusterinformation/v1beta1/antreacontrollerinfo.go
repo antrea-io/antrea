@@ -17,6 +17,7 @@
 package v1beta1
 
 import (
+	"context"
 	"time"
 
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
@@ -65,7 +66,7 @@ func (c *antreaControllerInfos) Get(name string, options v1.GetOptions) (result 
 		Resource("antreacontrollerinfos").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -81,7 +82,7 @@ func (c *antreaControllerInfos) List(opts v1.ListOptions) (result *v1beta1.Antre
 		Resource("antreacontrollerinfos").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -97,7 +98,7 @@ func (c *antreaControllerInfos) Watch(opts v1.ListOptions) (watch.Interface, err
 		Resource("antreacontrollerinfos").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a antreaControllerInfo and creates it.  Returns the server's representation of the antreaControllerInfo, and an error, if there is any.
@@ -106,7 +107,7 @@ func (c *antreaControllerInfos) Create(antreaControllerInfo *v1beta1.AntreaContr
 	err = c.client.Post().
 		Resource("antreacontrollerinfos").
 		Body(antreaControllerInfo).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -118,7 +119,7 @@ func (c *antreaControllerInfos) Update(antreaControllerInfo *v1beta1.AntreaContr
 		Resource("antreacontrollerinfos").
 		Name(antreaControllerInfo.Name).
 		Body(antreaControllerInfo).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -129,7 +130,7 @@ func (c *antreaControllerInfos) Delete(name string, options *v1.DeleteOptions) e
 		Resource("antreacontrollerinfos").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -144,7 +145,7 @@ func (c *antreaControllerInfos) DeleteCollection(options *v1.DeleteOptions, list
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -156,7 +157,7 @@ func (c *antreaControllerInfos) Patch(name string, pt types.PatchType, data []by
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
