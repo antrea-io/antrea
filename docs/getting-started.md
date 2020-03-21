@@ -111,3 +111,8 @@ please refer to this [guide](/docs/eks-installation.md).
 
 Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
 IPsec encyption enabled, please refer to this [guide](/docs/ipsec-tunnel.md).
+
+### Antctl: Installation and Usage
+
+To use antctl, the Antrea command-line tool, please refer to this
+[guide](/docs/antctl.md).
