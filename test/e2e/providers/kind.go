@@ -18,12 +18,9 @@ import (
 	"fmt"
 	"os"
 	"path"
-
+	"strings"
 	"github.com/vmware-tanzu/antrea/test/e2e/providers/exec"
 )
-
-// TODO: try not to hardcode this name if possible.
-const masterNodeName = "kind-control-plane"
 
 type KindProvider struct{}
 
@@ -47,7 +44,7 @@ func (provider *KindProvider) GetKubeconfigPath() (string, error) {
 
 // enableKubectlOnMaster copies the Kubeconfig file on the Kind control-plane / master Node to the
 // default location, in order to make sure that we can run kubectl on the Node.
-func (provider *KindProvider) enableKubectlOnMaster() error {
+func (provider *KindProvider) enableKubectlOnMaster(masterNodeName string) error {
 	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName, "cp /etc/kubernetes/admin.conf /root/.kube/config")
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when copying Kubeconfig file to /root/.kube/config on '%s': %s", masterNodeName, stdout)
@@ -65,8 +62,8 @@ func (provider *KindProvider) enableKubectlOnMaster() error {
 // YAML manifest is changed). This issue does not seem to affect clusters which use the OVS kernel
 // datapath as much.
 // TODO: revert changes at the end of tests?
-func (provider *KindProvider) moveCoreDNSPodsToMaster() error {
-	patch := `{"spec":{"template":{"spec":{"nodeName":"kind-control-plane"}}}}`
+func (provider *KindProvider) moveCoreDNSPodsToMaster(masterNodeName string) error {
+	patch := `{"spec":{"template":{"spec":{"nodeName":"` + masterNodeName + `"}}}}`
 	cmd := fmt.Sprintf("kubectl patch -v 8 deployment coredns -n kube-system -p %s", patch)
 	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName, cmd)
 	if err != nil || rc != 0 {
@@ -80,10 +77,18 @@ func (provider *KindProvider) moveCoreDNSPodsToMaster() error {
 // configPath is unused for the kind provider
 func NewKindProvider(configPath string) (ProviderInterface, error) {
 	provider := &KindProvider{}
-	if err := provider.enableKubectlOnMaster(); err != nil {
+	//Run docker ps to fetch master node name
+	rc, stdout, _, err := exec.RunDockerPsCommand("filter", "name=control-plane")
+        if err != nil || rc != 0 {
+                return nil, fmt.Errorf("Error when running docker ps command: %s", stdout)
+        }
+	slicedOutput := strings.Fields(stdout)
+	masterNodeName := slicedOutput[len(slicedOutput) - 1]
+
+	if err := provider.enableKubectlOnMaster(masterNodeName); err != nil {
 		return nil, err
 	}
-	if err := provider.moveCoreDNSPodsToMaster(); err != nil {
+	if err := provider.moveCoreDNSPodsToMaster(masterNodeName); err != nil {
 		return nil, err
 	}
 	return provider, nil
