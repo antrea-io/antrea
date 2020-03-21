@@ -16,16 +16,21 @@ package providers
 
 import (
 	"fmt"
+	"github.com/vmware-tanzu/antrea/test/e2e/providers/exec"
 	"os"
 	"path"
-
-	"github.com/vmware-tanzu/antrea/test/e2e/providers/exec"
+	"strings"
 )
 
-// TODO: try not to hardcode this name if possible.
-const masterNodeName = "kind-control-plane"
+type KindProvider struct {
+	masterNodeName string
+}
 
-type KindProvider struct{}
+func (provider *KindProvider) RunCommandOnMasterNode(cmd string) (
+	code int, stdout string, stderr string, err error,
+) {
+	return exec.RunDockerExecCommand(provider.masterNodeName, cmd, "/root")
+}
 
 func (provider *KindProvider) RunCommandOnNode(nodeName string, cmd string) (
 	code int, stdout string, stderr string, err error,
@@ -48,9 +53,9 @@ func (provider *KindProvider) GetKubeconfigPath() (string, error) {
 // enableKubectlOnMaster copies the Kubeconfig file on the Kind control-plane / master Node to the
 // default location, in order to make sure that we can run kubectl on the Node.
 func (provider *KindProvider) enableKubectlOnMaster() error {
-	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName, "cp /etc/kubernetes/admin.conf /root/.kube/config")
+	rc, stdout, _, err := provider.RunCommandOnMasterNode("cp /etc/kubernetes/admin.conf /root/.kube/config")
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when copying Kubeconfig file to /root/.kube/config on '%s': %s", masterNodeName, stdout)
+		return fmt.Errorf("error when copying Kubeconfig file to /root/.kube/config on '%s': %s", provider.masterNodeName, stdout)
 	}
 	return nil
 }
@@ -66,11 +71,11 @@ func (provider *KindProvider) enableKubectlOnMaster() error {
 // datapath as much.
 // TODO: revert changes at the end of tests?
 func (provider *KindProvider) moveCoreDNSPodsToMaster() error {
-	patch := `{"spec":{"template":{"spec":{"nodeName":"kind-control-plane"}}}}`
+	patch := `{"spec":{"template":{"spec":{"nodeName":"` + provider.masterNodeName + `"}}}}`
 	cmd := fmt.Sprintf("kubectl patch -v 8 deployment coredns -n kube-system -p %s", patch)
-	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName, cmd)
+	rc, stdout, _, err := provider.RunCommandOnMasterNode(cmd)
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when scheduling CoreDNS Pods to '%s': %s", masterNodeName, stdout)
+		return fmt.Errorf("error when scheduling CoreDNS Pods to '%s': %s", provider.masterNodeName, stdout)
 	}
 	return nil
 }
@@ -80,6 +85,14 @@ func (provider *KindProvider) moveCoreDNSPodsToMaster() error {
 // configPath is unused for the kind provider
 func NewKindProvider(configPath string) (ProviderInterface, error) {
 	provider := &KindProvider{}
+	// Run docker ps to fetch master node name
+	rc, stdout, _, err := exec.RunDockerPsFilterCommand("name=control-plane")
+	if err != nil || rc != 0 {
+		return nil, fmt.Errorf("Error when running docker ps filter command: %s", stdout)
+	}
+	slicedOutput := strings.Fields(stdout)
+	provider.masterNodeName = slicedOutput[len(slicedOutput)-1]
+
 	if err := provider.enableKubectlOnMaster(); err != nil {
 		return nil, err
 	}
