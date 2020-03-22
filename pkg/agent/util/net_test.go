@@ -58,5 +58,5 @@ func TestGetDefaultLocalNodeAddr(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	t.Logf("IP obtained %s, %s", ip, dev)
+	t.Logf("IP obtained %s, %v", ip, dev)
 }
