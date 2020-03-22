@@ -17,8 +17,6 @@ package antctl
 import (
 	"reflect"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
@@ -26,7 +24,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/version"
-	clusterinfov1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	controllerinforest "github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
@@ -44,12 +41,8 @@ var CommandList = &commandList{
 			commandGroup: flat,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					resourceName: "antrea-controller",
-					groupVersionResource: &schema.GroupVersionResource{
-						Group:    clusterinfov1beta1.SchemeGroupVersion.Group,
-						Version:  clusterinfov1beta1.SchemeGroupVersion.Version,
-						Resource: "antreacontrollerinfos",
-					},
+					resourceName:         controllerinforest.ControllerInfoResourceName,
+					groupVersionResource: &systemv1beta1.ControllerInfoVersionResource,
 				},
 				addonTransform: version.ControllerTransform,
 			},
