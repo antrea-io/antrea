@@ -68,3 +68,13 @@ func GenerateContainerInterfaceName(podName string, podNamespace string) string 
 func GenerateNodeTunnelInterfaceName(nodeName string) string {
 	return generateInterfaceName(GenerateNodeTunnelInterfaceKey(nodeName), nodeName, false)
 }
+
+type LinkNotFound struct {
+	error
+}
+
+func newLinkNoteFoundError(name string) LinkNotFound {
+	return LinkNotFound{
+		fmt.Errorf("link %s not found", name),
+	}
+}
