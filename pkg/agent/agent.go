@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
-	"github.com/vishvananda/netlink"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -179,7 +178,7 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	// Install Openflow entries on OVS bridge
+	// Install OpenFlow entries on OVS bridge.
 	if err := i.initOpenFlowPipeline(); err != nil {
 		return err
 	}
@@ -354,76 +353,62 @@ func (i *Initializer) setupGatewayInterface() error {
 	// whether or not the gateway interface already exists, as the desired MTU may change across
 	// restarts.
 	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.mtu)
-	_ = i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.mtu)
-	// host link might not be queried at once after create OVS internal port, retry max 5 times with 1s
-	// delay each time to ensure the link is ready. If still failed after max retry return error.
-	link, err := func() (netlink.Link, error) {
-		for retry := 0; retry < maxRetryForHostLink; retry++ {
-			if link, err := netlink.LinkByName(i.hostGateway); err != nil {
-				klog.V(2).Infof("Not found host link for gateway %s, retry after 1s", i.hostGateway)
-				if _, ok := err.(netlink.LinkNotFoundError); ok {
-					time.Sleep(1 * time.Second)
-				} else {
-					return link, err
-				}
-			} else {
-				return link, nil
-			}
+
+	i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.mtu)
+	if err := i.configureGatewayInterface(gatewayIface); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.InterfaceConfig) error {
+	var gwMAC net.HardwareAddr
+	var gwLinkIdx int
+	var err error
+	// Host link might not be queried at once after creating OVS internal port; retry max 5 times with 1s
+	// delay each time to ensure the link is ready.
+	for retry := 0; retry < maxRetryForHostLink; retry++ {
+		gwMAC, gwLinkIdx, err = util.SetLinkUp(i.hostGateway)
+		if err == nil {
+			break
 		}
-		return nil, fmt.Errorf("link %s not found", i.hostGateway)
-	}()
+		if _, ok := err.(util.LinkNotFound); ok {
+			klog.V(2).Infof("Not found host link for gateway %s, retry after 1s", i.hostGateway)
+			time.Sleep(1 * time.Second)
+			continue
+		} else {
+			return err
+		}
+	}
+
 	if err != nil {
 		klog.Errorf("Failed to find host link for gateway %s: %v", i.hostGateway, err)
 		return err
 	}
 
-	// Set host gateway interface up
-	if err := netlink.LinkSetUp(link); err != nil {
-		klog.Errorf("Failed to set host link for %s up: %v", i.hostGateway, err)
-		return err
-	}
-
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, Node IP is also assigned to local gateway for masquerade.
-		i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: link.Attrs().HardwareAddr, IP: i.nodeConfig.NodeIPAddr.IP}
+		i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: gwMAC, IP: i.nodeConfig.NodeIPAddr.IP}
 		gatewayIface.MAC = i.nodeConfig.GatewayConfig.MAC
 		gatewayIface.IP = i.nodeConfig.NodeIPAddr.IP
 		return nil
 	}
 
-	// Configure host gateway IP using the first address of node localSubnet
+	// Configure host gateway IP using the first address of node localSubnet.
 	localSubnet := i.nodeConfig.PodCIDR
 	subnetID := localSubnet.IP.Mask(localSubnet.Mask)
 	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
-	gwAddr := &netlink.Addr{IPNet: gwIP, Label: ""}
-	gwMAC := link.Attrs().HardwareAddr
-	i.nodeConfig.GatewayConfig = &config.GatewayConfig{LinkIndex: link.Attrs().Index, Name: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
+	i.nodeConfig.GatewayConfig = &config.GatewayConfig{LinkIndex: gwLinkIdx, Name: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
 	gatewayIface.IP = gwIP.IP
 	gatewayIface.MAC = gwMAC
 
-	// Check IP address configuration on existing interface, return if already has target
-	// address
-	// We perform this check unconditionally, even if the OVS port did not exist when this
-	// function was called (i.e. portExists is false). Indeed, it may be possible for the Linux
-	// interface to exist even if the OVS bridge does not exist.
-	if addrs, err := netlink.AddrList(link, netlink.FAMILY_V4); err != nil {
-		klog.Errorf("Failed to query IPv4 address list for interface %s: %v", i.hostGateway, err)
-		return err
-	} else if addrs != nil {
-		for _, addr := range addrs {
-			klog.V(4).Infof("Found IPv4 address %s for interface %s", addr.IP.String(), i.hostGateway)
-			if addr.IP.Equal(gwAddr.IPNet.IP) {
-				klog.V(2).Infof("IPv4 address %s already assigned to interface %s", addr.IP.String(), i.hostGateway)
-				return nil
-			}
-		}
-	} else {
-		klog.V(2).Infof("Link %s has no configured IPv4 address", i.hostGateway)
-	}
-
-	klog.V(2).Infof("Adding address %v to gateway interface %s", gwAddr, i.hostGateway)
-	if err := netlink.AddrAdd(link, gwAddr); err != nil {
-		klog.Errorf("Failed to set gateway interface %s with address %v: %v", i.hostGateway, gwAddr, err)
+	// Check IP address configuration on existing interface first, return if the interface has the desired address.
+	// We perform this check unconditionally, even if the OVS port does not exist when this function is called
+	// (i.e. portExists is false). Indeed, it may be possible for the interface to exist even if the OVS bridge does
+	// not exist.
+	// Configure the IP address on the interface if it does not exist.
+	if err := util.ConfigureLinkAddress(gwLinkIdx, gwIP); err != nil {
 		return err
 	}
 
