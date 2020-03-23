@@ -46,7 +46,7 @@ where:
   --antrea-cni: specifies install Antrea CNI in kind cluster, default is true.
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
   --images: specifies images loaded to kind cluster, default is $IMAGES
-  --subnets: a subnet creates a seperate docker bridge network with assigned subnet that worker nodes may connect to. Default is empty all worker
+  --subnets: a subnet creates a separate docker bridge network with assigned subnet that worker nodes may connect to. Default is empty all worker
     Node connected to docker0 bridge network
 "
 

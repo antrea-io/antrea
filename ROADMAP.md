@@ -43,5 +43,5 @@ OVS datapath performance.
 Leverage OVS with DPDK or AF_XDP for high performance.
 
 * **OVS hardware offloading**
-Enable hardware accelaration of the NICs that support OVS offloading.
+Enable hardware acceleration of the NICs that support OVS offloading.
 

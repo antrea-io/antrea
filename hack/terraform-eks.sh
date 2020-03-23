@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# NOTE: terraform enviroment variables need to be set
+# NOTE: terraform environment variables need to be set
 AWS_CLI="aws"
 TERRAFORM="terraform"
 KUBECTL="kubectl"
@@ -55,7 +55,7 @@ function validate {
   for env in ${ENV_ARRAY[@]}; do
      printenv $env > /dev/null 2>&1
      if [ $? -ne 0 ]; then
-       echo required enviroment variable $env is not set.
+       echo required environment variable $env is not set.
        exit 1
      fi
   done
