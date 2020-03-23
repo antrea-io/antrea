@@ -70,5 +70,6 @@ type AgentConfig struct {
 	// NoEncap: Inter-node Pod traffic is not encapsulated, but Pod to outbound traffic is masqueraded.
 	//          Underlying network must be capable of supporting Pod traffic across IP subnet.
 	// Hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
+	// NetworkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
 	TrafficEncapMode string `yaml:"trafficEncapMode,omitempty"`
 }

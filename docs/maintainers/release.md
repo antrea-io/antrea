@@ -11,7 +11,10 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v0.1.0`).
  * Generate the manifest files for the release:
     1. `IMG_NAME=antrea/antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest.sh --mode release > antrea.yml`
     2. `IMG_NAME=antrea/antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest.sh --mode release --ipsec > antrea-ipsec.yml`
-    3. `IMG_NAME=antrea/octant-antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest-octant.sh --mode release > antrea-octant.yml`
+    3. `IMG_NAME=antrea/antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest-sh --mode release
+     --encapMode networkPolicyOnly > antrea-eks.yml`
+    4. `IMG_NAME=antrea/octant-antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest-octant.sh
+     --mode release > antrea-octant.yml`
 
  * Make the release on Github with the release branch as the target: copy the
    relevant section of the [CHANGELOG](/CHANGELOG.md) for the release

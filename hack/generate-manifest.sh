@@ -63,7 +63,6 @@ case $key in
     ENCAP_MODE="$2"
     shift 2
     ;;
-
     --kind)
     KIND=true
     shift
@@ -165,6 +164,17 @@ if $IPSEC; then
     # add an environment variable to the antrea-agent container for passing the PSK to Agent.
     $KUSTOMIZE edit add patch pskEnv.yml
     BASE=../ipsec
+    cd ..
+fi
+
+if [[ $ENCAP_MODE == "networkPolicyOnly" ]] ; then
+    mkdir chaining && cd chaining
+    cp ../../patches/chaining/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    # change initContainer script and add antrea to CNI chain
+    $KUSTOMIZE edit add patch installCni.yml
+    BASE=../chaining
     cd ..
 fi
 

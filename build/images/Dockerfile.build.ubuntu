@@ -25,6 +25,9 @@ RUN make bin
 
 FROM antrea/openvswitch:2.13.0
 
+RUN apt-get update && apt-get install -y --no-install-recommends jq && \
+    rm -rf /var/cache/apt/* /var/lib/apt/lists/*
+
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image to deploy the Antrea CNI. Takes care of building the Antrea binaries as part of building the image."
 

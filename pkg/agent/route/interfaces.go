@@ -36,4 +36,11 @@ type Interface interface {
 	// DeleteRoutes should delete routes to the provided podCIDR.
 	// It should do nothing if the routes don't exist, without error.
 	DeleteRoutes(podCIDR *net.IPNet) error
+
+	// MigrateRoutesToGw should move routes from device linkname to local gateway.
+	MigrateRoutesToGw(linkName string) error
+
+	// UnMigrateRoutesFromGw should move routes back from local gateway to original device linkName
+	// if linkName is nil, it should remove the routes.
+	UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error
 }

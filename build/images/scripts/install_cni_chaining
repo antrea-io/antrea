@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+# Find the cni conf file with lowest name
+cni_conf=$(ls /host/etc/cni/net.d | head -n1)
+cni_conf="/host/etc/cni/net.d/$cni_conf"
+cat $cni_conf | jq '.plugins[] | .type' | grep antrea > /dev/null 2>&1
+if [[ $? != 0 ]]; then
+  content=$(cat $cni_conf | jq '.plugins += [{"type": "antrea"}]')
+  echo "$content" > $cni_conf
+fi
+
+# Install Antrea binary file
+install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
+
+id
+# Load the OVS kernel module
+modprobe openvswitch

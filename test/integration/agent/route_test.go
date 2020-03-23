@@ -69,9 +69,8 @@ var (
 
 func createDummyGW(t *testing.T) netlink.Link {
 	// create dummy gw interface
-	gwLink := &netlink.Veth{}
+	gwLink := &netlink.Dummy{}
 	gwLink.Name = gwName
-	gwLink.PeerName = gwLink.Name + "-peer"
 	if err := netlink.LinkAdd(gwLink); err != nil {
 		t.Error(err)
 	}
@@ -80,6 +79,7 @@ func createDummyGW(t *testing.T) netlink.Link {
 		t.Error(err)
 	}
 	nodeConfig.GatewayConfig.LinkIndex = link.Attrs().Index
+	nodeConfig.GatewayConfig.Name = gwLink.Attrs().Name
 	return link
 }
 
@@ -115,10 +115,12 @@ func TestInitialize(t *testing.T) {
 		if err := routeClient.Initialize(nodeConfig); err != nil {
 			t.Error(err)
 		}
+
 		// Call initialize twice and verify no duplicates
 		if err := routeClient.Initialize(nodeConfig); err != nil {
 			t.Error(err)
 		}
+
 		// verify route tables
 		expRouteTablesStr := refRouteTablesStr
 		if tc.expSvcTbl {
@@ -145,7 +147,7 @@ func TestInitialize(t *testing.T) {
 		// verify ip rules
 		expIPRulesStr := ""
 		if tc.expIPRule {
-			expIPRulesStr = fmt.Sprintf("%d: from all fwmark %#x iif %s lookup %s", route.AntreaIPRulePriority, route.RtTblSelectorValue,
+			expIPRulesStr = fmt.Sprintf("%d: from all fwmark %#x/%#x iif %s lookup %s", route.AntreaIPRulePriority, route.RtTblSelectorValue, route.RtTblSelectorValue,
 				gwName, svcTblName)
 			expIPRulesStr = strings.Join(strings.Fields(expIPRulesStr), "")
 		}
@@ -183,6 +185,7 @@ func TestInitialize(t *testing.T) {
 			expectedIPTables["mangle"] = `:ANTREA-MANGLE - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea mangle rules" -j ANTREA-MANGLE
 -A ANTREA-MANGLE -d 200.200.0.0/16 -i gw0 -m comment --comment "Antrea: mark pod to service packets" -j MARK --set-xmark 0x800/0x800
+-A ANTREA-MANGLE ! -d 200.200.0.0/16 -i gw0 -m comment --comment "Antrea: unmark post LB service packets" -j MARK --set-xmark 0x0/0xffffffff
 `
 			expectedIPTables["raw"] = `:ANTREA-RAW - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea raw rules" -j ANTREA-RAW
@@ -363,4 +366,89 @@ func TestReconcile(t *testing.T) {
 		assert.NoError(t, err, "list ipset entries failed")
 		assert.ElementsMatch(t, entries, tc.desiredPeerCIDRs, "mismatch ipset entries")
 	}
+}
+
+func TestRouteTablePolicyOnly(t *testing.T) {
+	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
+		// test changes file system, routing table. Run in contain only
+		t.Skipf("Skip test runs only in container")
+	}
+
+	gwLink := createDummyGW(t)
+	defer netlink.LinkDel(gwLink)
+
+	routeClient, err := route.NewClient(gwName, serviceCIDR, config.TrafficEncapModeNetworkPolicyOnly)
+	if err != nil {
+		t.Error(err)
+	}
+	if err := routeClient.Initialize(nodeConfig); err != nil {
+		t.Error(err)
+	}
+	//verify gw IP
+	gwName := nodeConfig.GatewayConfig.Name
+	gwIPOut, err := ExecOutputTrim(fmt.Sprintf("ip addr show %s", gwName))
+	if err != nil {
+		t.Error(err)
+	}
+	gwIP := net.IPNet{
+		IP:   nodeConfig.NodeIPAddr.IP,
+		Mask: net.CIDRMask(32, 32),
+	}
+	assert.Contains(t, gwIPOut, gwIP.String())
+	// verify default routes and neigh
+	expRoute := strings.Join(strings.Fields(
+		"default via 169.254.253.1 dev gw0 onlink"), "")
+	routeOut, err := ExecOutputTrim(fmt.Sprintf("ip route show table %d", svcTblIdx))
+	assert.Equal(t, expRoute, routeOut)
+	expNeigh := strings.Join(strings.Fields(
+		"169.254.253.1 dev gw0 lladdr 12:34:56:78:9a:bc PERMANENT"), "")
+	neighOut, err := ExecOutputTrim(fmt.Sprintf("ip neigh | grep %s", gwName))
+	assert.Equal(t, expNeigh, neighOut)
+
+	cLink := &netlink.Dummy{}
+	cLink.Name = "containerLink"
+	err = netlink.LinkAdd(cLink)
+	if err == nil {
+		err = netlink.LinkSetUp(cLink)
+	}
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, ipAddr, _ := net.ParseCIDR("10.10.1.1/32")
+	_, hostRt, _ := net.ParseCIDR("10.10.1.2/32")
+	if err := netlink.AddrAdd(cLink, &netlink.Addr{IPNet: ipAddr}); err != nil {
+		t.Error(err)
+	}
+	rt := &netlink.Route{
+		LinkIndex: cLink.Index,
+		Scope:     netlink.SCOPE_LINK,
+		Dst:       hostRt,
+	}
+	if err := netlink.RouteAdd(rt); err != nil {
+		t.Error(err)
+	}
+	t.Logf("route %v indx %d, iindx %d added", rt, rt.LinkIndex, rt.ILinkIndex)
+
+	// verify route is migrated.
+	if err := routeClient.MigrateRoutesToGw(cLink.Name); err != nil {
+		t.Error(err)
+	}
+	expRoute = strings.Join(strings.Fields(
+		fmt.Sprintf("%s dev %s scope link", hostRt.IP, gwName)), "")
+	output, _ := ExecOutputTrim(fmt.Sprintf("ip route show"))
+	assert.Containsf(t, output, expRoute, output)
+	output, _ = ExecOutputTrim(fmt.Sprintf("ip add show %s", gwName))
+	assert.Containsf(t, output, ipAddr.String(), output)
+
+	// verify route being removed after unmigrate
+	if err := routeClient.UnMigrateRoutesFromGw(hostRt, ""); err != nil {
+		t.Error(err)
+	}
+	output, _ = ExecOutputTrim(fmt.Sprintf("ip route show"))
+	assert.NotContainsf(t, output, expRoute, output)
+	// note unmigrate does not remove ip addresses given to gw0
+	output, _ = ExecOutputTrim(fmt.Sprintf("ip add show %s", gwName))
+	assert.Containsf(t, output, ipAddr.String(), output)
+	_ = netlink.LinkDel(gwLink)
 }

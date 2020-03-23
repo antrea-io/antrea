@@ -226,8 +226,14 @@ func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interva
 // time.
 func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
+	gateway, ok := i.ifaceStore.GetInterface(i.hostGateway)
+	if !ok {
+		return fmt.Errorf("cannot find local gateway %s from interface store", i.hostGateway)
+	}
+	gatewayOFPort := uint32(gateway.OFPort)
+
 	// Setup all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig.TrafficEncapMode)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig.TrafficEncapMode, gatewayOFPort)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
@@ -235,8 +241,6 @@ func (i *Initializer) initOpenFlowPipeline() error {
 
 	// Setup flow entries for gateway interface, including classifier, skip spoof guard check,
 	// L3 forwarding and L2 forwarding
-	gateway, _ := i.ifaceStore.GetInterface(i.hostGateway)
-	gatewayOFPort := uint32(gateway.OFPort)
 	if err := i.ofClient.InstallGatewayFlows(gateway.IP, gateway.MAC, gatewayOFPort); err != nil {
 		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
 		return err
@@ -256,7 +260,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	// from local Pods to any Service address can be forwarded to the host gateway interface
 	// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
 	// backend Pods.
-	if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gatewayOFPort); err != nil {
+	if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gateway.MAC, gatewayOFPort); err != nil {
 		klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
 		return err
 	}
@@ -306,7 +310,7 @@ func (i *Initializer) setupGatewayInterface() error {
 			return err
 		}
 		gatewayIface = interfacestore.NewGatewayInterface(i.hostGateway)
-		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{gwPortUUID, config.HostGatewayOFPort}
+		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: gwPortUUID, OFPort: config.HostGatewayOFPort}
 		i.ifaceStore.AddInterface(gatewayIface)
 	} else {
 		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
@@ -343,6 +347,14 @@ func (i *Initializer) setupGatewayInterface() error {
 	if err := netlink.LinkSetUp(link); err != nil {
 		klog.Errorf("Failed to set host link for %s up: %v", i.hostGateway, err)
 		return err
+	}
+
+	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		// In policy-only mode, Node IP is also assigned to local gateway for masquerade.
+		i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: link.Attrs().HardwareAddr, IP: i.nodeConfig.NodeIPAddr.IP}
+		gatewayIface.MAC = i.nodeConfig.GatewayConfig.MAC
+		gatewayIface.IP = i.nodeConfig.NodeIPAddr.IP
+		return nil
 	}
 
 	// Configure host gateway IP using the first address of node localSubnet
@@ -433,6 +445,21 @@ func (i *Initializer) initNodeLocalConfig() error {
 		klog.Errorf("Failed to get node from K8s with name %s: %v", nodeName, err)
 		return err
 	}
+
+	ipAddr, err := noderoute.GetNodeAddr(node)
+	if err != nil {
+		return fmt.Errorf("failed to obtain local IP address from k8s: %w", err)
+	}
+	localAddr, _, err := util.GetIPNetDeviceFromIP(ipAddr)
+	if err != nil {
+		return fmt.Errorf("failed to get local IPNet:  %v", err)
+	}
+
+	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		i.nodeConfig = &config.NodeConfig{Name: nodeName, NodeIPAddr: localAddr}
+		return nil
+	}
+
 	// Spec.PodCIDR can be empty due to misconfiguration
 	if node.Spec.PodCIDR == "" {
 		klog.Errorf("Spec.PodCIDR is empty for Node %s. Please make sure --allocate-node-cidrs is enabled "+
@@ -443,14 +470,6 @@ func (i *Initializer) initNodeLocalConfig() error {
 	if err != nil {
 		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
 		return err
-	}
-	ip, err := noderoute.GetNodeAddr(node)
-	if err != nil {
-		return fmt.Errorf("failed to obtain local IP address from k8s: %w", err)
-	}
-	localAddr, _, err := util.GetIPNetDeviceFromIP(ip)
-	if err != nil {
-		return fmt.Errorf("failed to get local IPNet:  %v", err)
 	}
 
 	i.nodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: localSubnet, NodeIPAddr: localAddr}
