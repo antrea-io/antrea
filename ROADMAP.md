@@ -11,9 +11,6 @@ features. Reach us through Issues, Slack and / or Google Group!
 # Planned Features
 The following features are considered for the near future:
 
-* **No-encapsulation mode**
-Route Pod traffic across Nodes without overlay tunneling.
-
 * **Windows Kubernetes Node**
 Support Windows Kubernetes Nodes. At the moment Antrea supports only Linux Nodes.
 
