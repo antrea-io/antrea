@@ -306,7 +306,7 @@ func (i *Initializer) setupGatewayInterface() error {
 		klog.V(2).Infof("Creating gateway port %s on OVS bridge", i.hostGateway)
 		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, config.HostGatewayOFPort, nil)
 		if err != nil {
-			klog.Errorf("Failed to add host interface %s on OVS: %v", i.hostGateway, err)
+			klog.Errorf("Failed to create gateway port %s on OVS bridge: %v", i.hostGateway, err)
 			return err
 		}
 		gatewayIface = interfacestore.NewGatewayInterface(i.hostGateway)
@@ -403,7 +403,7 @@ func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 	if portExists {
 		if i.networkConfig.TrafficEncapMode.SupportsEncap() &&
 			tunnelIface.TunnelInterfaceConfig.Type == i.networkConfig.TunnelType {
-			klog.V(2).Infof("Tunnel port %s already exists on OVS", tunnelPortName)
+			klog.V(2).Infof("Tunnel port %s already exists on OVS bridge", tunnelPortName)
 			return nil
 		}
 
@@ -411,7 +411,7 @@ func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 			if i.networkConfig.TrafficEncapMode.SupportsEncap() {
 				return fmt.Errorf("failed to remove tunnel port %s with wrong tunnel type: %s", tunnelPortName, err)
 			} else {
-				klog.Errorf("Failed to removed tunnel port %s in NoEncapMode, err %s", tunnelPortName, err)
+				klog.Errorf("Failed to remove tunnel port %s in NoEncapMode: %v", tunnelPortName, err)
 			}
 		} else {
 			klog.Infof("Removed tunnel port %s with tunnel type: %s", tunnelPortName, tunnelIface.TunnelInterfaceConfig.Type)
@@ -423,7 +423,7 @@ func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
 		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPort(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort)
 		if err != nil {
-			klog.Errorf("Failed to add tunnel port %s type %s on OVS: %v", tunnelPortName, i.networkConfig.TunnelType, err)
+			klog.Errorf("Failed to create tunnel port %s type %s on OVS bridge: %v", tunnelPortName, i.networkConfig.TunnelType, err)
 			return err
 		}
 		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType)
