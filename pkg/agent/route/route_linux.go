@@ -30,6 +30,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
 )
@@ -45,6 +46,10 @@ const (
 	routeTableConfigPath = "/etc/iproute2/rt_tables"
 	// AntreaIPRulePriority is Antrea IP rule priority
 	AntreaIPRulePriority = 300
+	// Service route table default route next hop IP, used in policy-only mode.
+	svcTblVirtualDefaultGWIP = "169.254.253.1"
+	// Service route table default route next hop MAC, used in policy-only mode.
+	svcTblVirtualDefaultGWMAC = "12:34:56:78:9a:bc"
 
 	// Antrea managed ipset.
 	// antreaPodIPSet contains all Pod CIDRs of this cluster.
@@ -147,11 +152,16 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 	if err := disableICMPSendRedirects(c.hostGateway); err != nil {
 		return err
 	}
+
 	return nil
 }
 
 // initIPSet ensures that the required ipset exists and it has the initial members.
 func (c *Client) initIPSet() error {
+	// In policy-only mode, Node Pod CIDR is undefined.
+	if c.encapMode.IsNetworkPolicyOnly() {
+		return nil
+	}
 	if err := ipset.CreateIPSet(antreaPodIPSet, ipset.HashNet); err != nil {
 		return err
 	}
@@ -198,6 +208,12 @@ func (c *Client) initIPTables() error {
 			"-i", c.hostGateway, "-d", c.serviceCIDR.String(),
 			"-j", iptables.MarkTarget, "--set-xmark", rtTblSelectorMark,
 		}...)
+		writeLine(iptablesData, []string{
+			"-A", antreaMangleChain,
+			"-m", "comment", "--comment", `"Antrea: unmark post LB service packets"`,
+			"-i", c.hostGateway, "!", "-d", c.serviceCIDR.String(),
+			"-j", iptables.MarkTarget, "--set-xmark", "0/0xffffffff",
+		}...)
 	}
 	writeLine(iptablesData, "COMMIT")
 
@@ -217,14 +233,18 @@ func (c *Client) initIPTables() error {
 	}...)
 	writeLine(iptablesData, "COMMIT")
 
+	// In policy-only mode, masquerade is managed by primary CNI.
+	// Antrea should not get involved.
 	writeLine(iptablesData, "*nat")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
-	writeLine(iptablesData, []string{
-		"-A", antreaPostRoutingChain,
-		"-m", "comment", "--comment", `"Antrea: masquerade pod to external packets"`,
-		"-s", c.nodeConfig.PodCIDR.String(), "-m", "set", "!", "--match-set", antreaPodIPSet, "dst",
-		"-j", iptables.MasqueradeTarget,
-	}...)
+	if !c.encapMode.IsNetworkPolicyOnly() {
+		writeLine(iptablesData, []string{
+			"-A", antreaPostRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: masquerade pod to external packets"`,
+			"-s", c.nodeConfig.PodCIDR.String(), "-m", "set", "!", "--match-set", antreaPodIPSet, "dst",
+			"-j", iptables.MasqueradeTarget,
+		}...)
+	}
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*raw")
@@ -251,12 +271,22 @@ func (c *Client) initIPRoutes() error {
 		_ = c.removeServiceRouting()
 		return nil
 	}
-	return c.addServiceRouting()
+	if err := c.addServiceRouting(); err != nil {
+		return err
+	}
+	if c.encapMode.IsNetworkPolicyOnly() {
+		if err := c.setupPolicyOnlyMode(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
 // based on the desired podCIDRs.
 func (c *Client) Reconcile(podCIDRs []string) error {
+	// TODO add an IPSet for migrated routes for reconciliation too.
+
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 
 	// Remove orphaned podCIDRs from antreaPodIPSet.
@@ -446,7 +476,7 @@ func (c *Client) addServiceRouting() error {
 	}
 
 	gwConfig := c.nodeConfig.GatewayConfig
-	if gwConfig != nil && c.nodeConfig.PodCIDR != nil {
+	if !c.encapMode.IsNetworkPolicyOnly() {
 		// Add local podCIDR if applicable to service rt table.
 		route := &netlink.Route{
 			LinkIndex: gwConfig.LinkIndex,
@@ -463,7 +493,7 @@ func (c *Client) addServiceRouting() error {
 	ipRule := netlink.NewRule()
 	ipRule.IifName = c.nodeConfig.GatewayConfig.Name
 	ipRule.Mark = RtTblSelectorValue
-	ipRule.Mask = 0xffffffff
+	ipRule.Mask = RtTblSelectorValue
 	ipRule.Table = c.serviceRtTable.Idx
 	ipRule.Priority = AntreaIPRulePriority
 
@@ -537,6 +567,7 @@ func (c *Client) removeServiceRouting() error {
 	ipRule := netlink.NewRule()
 	ipRule.IifName = c.nodeConfig.GatewayConfig.Name
 	ipRule.Mark = RtTblSelectorValue
+	ipRule.Mask = RtTblSelectorValue
 	ipRule.Table = AntreaServiceTableIdx
 	ipRule.Priority = AntreaIPRulePriority
 	if err = netlink.RuleDel(ipRule); err != nil {
@@ -564,6 +595,113 @@ func disableICMPSendRedirects(intfName string) error {
 	if err := cmd.Run(); err != nil {
 		klog.Errorf("Failed to disable send_redirect for interface %s: %v", intfName, err)
 		return err
+	}
+	return nil
+}
+
+// resolveDefaultRouteNHMAC resolves the MAC of default route next
+// hop on service route table.
+func (c *Client) resolveDefaultRouteNHMAC() (net.HardwareAddr, error) {
+	return net.ParseMAC(svcTblVirtualDefaultGWMAC)
+}
+
+// setupPolicyOnlyMode configures routing needed by traffic in policy-only mode.
+func (c *Client) setupPolicyOnlyMode() error {
+	gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
+	_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/32", c.nodeConfig.NodeIPAddr.IP.String()))
+	if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
+		return fmt.Errorf("failed to add address %s to gw %s: %v", gwIP, gwLink.Attrs().Name, err)
+	}
+
+	// Add default route to service table.
+	_, defaultRt, _ := net.ParseCIDR("0/0")
+	nhIP := net.ParseIP(svcTblVirtualDefaultGWIP)
+	route := &netlink.Route{
+		LinkIndex: gwLink.Attrs().Index,
+		Table:     c.serviceRtTable.Idx,
+		Flags:     int(netlink.FLAG_ONLINK),
+		Dst:       defaultRt,
+		Gw:        nhIP,
+	}
+	if err := netlink.RouteReplace(route); err != nil {
+		return fmt.Errorf("failed to add default route to service table: %v", err)
+	}
+	// Add static neighbor to next hop so that no ARPING is ever required on gw0.
+	nhMAC, _ := c.resolveDefaultRouteNHMAC()
+	neigh := &netlink.Neigh{
+		LinkIndex:    gwLink.Attrs().Index,
+		Family:       netlink.FAMILY_V4,
+		State:        netlink.NUD_PERMANENT,
+		IP:           nhIP,
+		HardwareAddr: nhMAC,
+	}
+	if err := netlink.NeighSet(neigh); err != nil {
+		return fmt.Errorf("failed to add neigh %v to gw %s: %v", neigh, gwLink.Attrs().Name, err)
+	}
+	return nil
+}
+
+// MigrateRoutesToGw moves routes (including assigned IP addresses if any) from link linkName to
+// host gateway.
+func (c *Client) MigrateRoutesToGw(linkName string) error {
+	gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
+	link, err := netlink.LinkByName(linkName)
+	if err != nil {
+		return fmt.Errorf("failed to get link %s: %w", linkName, err)
+	}
+
+	// Swap route first then address, otherwise route gets removed when address is removed.
+	routes, err := netlink.RouteList(link, netlink.FAMILY_V4)
+	if err != nil {
+		return fmt.Errorf("failed to get routes for link %s: %w", linkName, err)
+	}
+	for _, route := range routes {
+		route.LinkIndex = gwLink.Attrs().Index
+		if err = netlink.RouteReplace(&route); err != nil {
+			return fmt.Errorf("failed to add route %v to link %s: %w", &route, gwLink.Attrs().Name, err)
+		}
+	}
+
+	// Swap address if any.
+	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	if err != nil {
+		return fmt.Errorf("failed to get addresses for %s: %w", linkName, err)
+	}
+	for _, addr := range addrs {
+		if err = netlink.AddrDel(link, &addr); err != nil {
+			klog.Errorf("failed to delete addr %v from %s: %w", addr, link, err)
+		}
+		tmpAddr := &netlink.Addr{IPNet: addr.IPNet}
+		if err = netlink.AddrReplace(gwLink, tmpAddr); err != nil {
+			return fmt.Errorf("failed to add addr %v to gw %s: %w", addr, gwLink.Attrs().Name, err)
+		}
+	}
+	return nil
+}
+
+// UnMigrateRoutesFromGw moves route from gw to link linkName if provided; otherwise route is deleted
+func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error {
+	gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
+	var link netlink.Link = nil
+	var err error
+	if len(linkName) > 0 {
+		link, err = netlink.LinkByName(linkName)
+		if err != nil {
+			return fmt.Errorf("failed to get link %s: %w", linkName, err)
+		}
+	}
+	routes, err := netlink.RouteList(gwLink, netlink.FAMILY_V4)
+	if err != nil {
+		return fmt.Errorf("failed to get routes for link %s: %w", gwLink.Attrs().Name, err)
+	}
+	for _, rt := range routes {
+		if route.String() == rt.Dst.String() {
+			if link != nil {
+				rt.LinkIndex = link.Attrs().Index
+				return netlink.RouteReplace(&rt)
+			}
+			return netlink.RouteDel(&rt)
+		}
 	}
 	return nil
 }

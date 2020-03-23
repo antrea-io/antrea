@@ -51,10 +51,9 @@ const (
 	priorityMiss   = uint16(0)
 
 	// Traffic marks
-	markTrafficFromTunnel    = 0
-	markTrafficFromGateway   = 1
-	markTrafficFromLocal     = 2
-	markTrafficFromPatchPort = 3
+	markTrafficFromTunnel  = 0
+	markTrafficFromGateway = 1
+	markTrafficFromLocal   = 2
 )
 
 var (
@@ -84,6 +83,7 @@ const (
 	// traffic-source resides in [0..15], pod-found resides in [16].
 	marksReg     regType = 0
 	portCacheReg regType = 1
+	swapReg      regType = 2
 
 	ctZone = 0xfff0
 
@@ -133,6 +133,7 @@ type client struct {
 	replayMutex sync.RWMutex
 	nodeConfig  *config.NodeConfig
 	encapMode   config.TrafficEncapModeType
+	gatewayPort uint32 // OVSOFPort number
 }
 
 func (c *client) Add(flow binding.Flow) error {
@@ -197,32 +198,6 @@ func (c *client) gatewayClassifierFlow(gatewayOFPort uint32, category cookie.Cat
 		Done()
 }
 
-// patchPortClassifierIPFlow generates generates the flow to mark IP traffic comes from the patch port and
-// are destined to local Pod.
-func (c *client) patchPortClassifierIPFlow(patchPort uint32, podIP net.IP) binding.Flow {
-	classifierTable := c.pipeline[classifierTable]
-	return classifierTable.BuildFlow(priorityNormal).
-		MatchProtocol(binding.ProtocolIP).
-		MatchInPort(patchPort).
-		MatchDstIP(podIP).
-		Action().LoadRegRange(int(marksReg), markTrafficFromPatchPort, binding.Range{0, 15}).
-		Action().ResubmitToTable(classifierTable.GetNext()).
-		Done()
-}
-
-// patchPortClassifierARPFlow generates the flow to mark ARP traffic comes from the patch port and
-// are destined to local Pod.
-func (c *client) patchPortClassifierARPFlow(patchPort uint32, podIP net.IP) binding.Flow {
-	classifierTable := c.pipeline[classifierTable]
-	return classifierTable.BuildFlow(priorityNormal).
-		MatchProtocol(binding.ProtocolARP).
-		MatchInPort(patchPort).
-		MatchARPTpa(podIP).
-		Action().LoadRegRange(int(marksReg), markTrafficFromPatchPort, binding.Range{0, 15}).
-		Action().ResubmitToTable(classifierTable.GetNext()).
-		Done()
-}
-
 // podClassifierFlow generates the flow to mark traffic comes from the podOFPort.
 func (c *client) podClassifierFlow(podOFPort uint32, category cookie.Category) binding.Flow {
 	classifierTable := c.pipeline[classifierTable]
@@ -276,6 +251,20 @@ func (c *client) connectionTrackFlows(category cookie.Category) (flows []binding
 	return
 }
 
+// reEntranceBypassCTFlow generates flow that bypass CT for traffic re-entering host network space.
+// In host network space, we disable conntrack for re-entrance traffic so not to confuse conntrack
+// in host namespace, This however has inverse effect on conntrack in Antrea conntrack zone as well,
+// all subsequent re-entrance traffic becomes invalid.
+func (c *client) reEntranceBypassCTFlow(gwPort, reentPort uint32, category cookie.Category) binding.Flow {
+	conntrackCommitTable := c.pipeline[conntrackCommitTable]
+	return conntrackCommitTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+		MatchInPort(gwPort).MatchRegRange(int(portCacheReg), reentPort, ofPortRegRange).
+		Action().ResubmitToTable(conntrackCommitTable.GetNext()).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
 // ctRewriteDstMACFlow rewrites the destination MAC with local host gateway MAC if the packets has set ct_mark but not sent from the host gateway.
 func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
@@ -310,14 +299,26 @@ func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
 		Done()
 }
 
-// l2ForwardOutputInPortFlow generates the flow that forward peer node traffic via gw0.
+// l2ForwardOutputReentInPortFlow generates the flow that forward re-entrance peer Node traffic via gw0.
 // This flow supersedes default output flow because ovs by default auto-skips packets with output = input port.
-func (c *client) l2ForwardOutputInPortFlow(gwPort uint32, category cookie.Category) binding.Flow {
+func (c *client) l2ForwardOutputReentInPortFlow(gwPort uint32, category cookie.Category) binding.Flow {
 	return c.pipeline[l2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		MatchInPort(gwPort).MatchRegRange(int(portCacheReg), gwPort, ofPortRegRange).
 		Action().SetSrcMAC(ReentranceMAC).
 		Action().OutputInPort().
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
+// l3BypassMACRewriteFlow bypasses remaining l3forwarding flows if the MAC is set via ctRewriteDstMACFlow in
+// conntrackState stage.
+func (c *client) l3BypassMACRewriteFlow(gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
+	l3FwdTable := c.pipeline[l3ForwardingTable]
+	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		MatchCTMark(gatewayCTMark).
+		MatchDstMAC(gatewayMAC).
+		Action().ResubmitToTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -331,6 +332,31 @@ func (c *client) l3FlowsToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP n
 		MatchDstIP(podInterfaceIP).
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(podInterfaceMAC).
+		Action().DecTTL().
+		Action().ResubmitToTable(l3FwdTable.GetNext()).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
+// l3ToPodFromGwFlow generates the flow to rewrite MAC if the packet IP matches an local IP.
+// This flow is used in policy only traffic mode.
+func (c *client) l3ToPodFlow(podInterfaceIP net.IP, podInterfaceMAC net.HardwareAddr, category cookie.Category) binding.Flow {
+	l3FwdTable := c.pipeline[l3ForwardingTable]
+	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		MatchDstIP(podInterfaceIP).
+		Action().SetDstMAC(podInterfaceMAC).
+		Action().DecTTL().
+		Action().ResubmitToTable(l3FwdTable.GetNext()).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
+// l3ToGWFlow generates the flow to rewrite MAC to gw port if the packet received is unmatched by local Pod flows.
+// This flow is used in policy only traffic mode.
+func (c *client) l3ToGWFlow(gwMAC net.HardwareAddr, category cookie.Category) binding.Flow {
+	l3FwdTable := c.pipeline[l3ForwardingTable]
+	return l3FwdTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
+		Action().SetDstMAC(gwMAC).
 		Action().DecTTL().
 		Action().ResubmitToTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -375,8 +401,8 @@ func (c *client) l3FwdFlowToRemote(
 		Done()
 }
 
-// l3FwdFlowToRemoteViaGw generates the L3 forward flow on source node to support traffic to remote via gateway.
-func (c *client) l3FwdFlowToRemoteViaGw(
+// l3FwdFlowToRemoteViaGW generates the L3 forward flow on source node to support traffic to remote via gateway.
+func (c *client) l3FwdFlowToRemoteViaGW(
 	localGatewayMAC net.HardwareAddr,
 	peerSubnet net.IPNet,
 	category cookie.Category) binding.Flow {
@@ -406,6 +432,25 @@ func (c *client) arpResponderFlow(peerGatewayIP net.IP, category cookie.Category
 		Action().OutputInPort().
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
+}
+
+// arpResponderStaticFlow generates ARP reply for any ARP request with the same global virtual MAC.
+// This flow is used in policy-only mode, where traffic are routed via IP not MAC.
+func (c *client) arpResponderStaticFlow(category cookie.Category) binding.Flow {
+	return c.pipeline[arpResponderTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
+		MatchARPOp(1).
+		Action().Move(binding.NxmFieldSrcMAC, binding.NxmFieldDstMAC).
+		Action().SetSrcMAC(globalVirtualMAC).
+		Action().LoadARPOperation(2).
+		Action().Move(binding.NxmFieldARPSha, binding.NxmFieldARPTha).
+		Action().SetARPSha(globalVirtualMAC).
+		Action().Move(binding.NxmFieldARPTpa, swapReg.nxm()).
+		Action().Move(binding.NxmFieldARPSpa, binding.NxmFieldARPTpa).
+		Action().Move(swapReg.nxm(), binding.NxmFieldARPSpa).
+		Action().OutputInPort().
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+
 }
 
 // podIPSpoofGuardFlow generates the flow to check IP traffic sent out from local pod. Traffic from host gateway interface
@@ -456,9 +501,10 @@ func (c *client) gatewayIPSpoofGuardFlow(gatewayOFPort uint32, category cookie.C
 }
 
 // serviceCIDRDNATFlow generates flows to match dst IP in service CIDR and output to host gateway interface directly.
-func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayOFPort uint32, category cookie.Category) binding.Flow {
+func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32, category cookie.Category) binding.Flow {
 	return c.pipeline[dnatTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstIPNet(*serviceCIDR).
+		Action().SetDstMAC(gatewayMAC).
 		Action().LoadRegRange(int(portCacheReg), gatewayOFPort, ofPortRegRange).
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		Action().ResubmitToTable(conntrackCommitTable).
