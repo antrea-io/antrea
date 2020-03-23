@@ -45,5 +45,5 @@ subjects:
     # This is to allow antctl to be executed inside the Antrea Controller Pod
     # and authenticate with Controller API server using the Controller's
     # ServiceAccount token.
-    name: anntrea-controller
+    name: antrea-controller
     namespace: kube-system
