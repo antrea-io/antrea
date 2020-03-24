@@ -49,20 +49,13 @@ type addressGroupEvent struct {
 // 1. Added event will be generated if the Selectors was not interested in the object but is now.
 // 2. Modified event will be generated if the Selectors was and is interested in the object.
 // 3. Deleted event will be generated if the Selectors was interested in the object but is not now.
-func (event *addressGroupEvent) ToWatchEvent(selectors *storage.Selectors) *watch.Event {
-	prevObjSelected, currObjSelected := false, false
-	if event.CurrGroup != nil {
-		currObjSelected = filter(selectors, event.Key, event.CurrGroup.NodeNames)
-	}
-	if event.PrevGroup != nil {
-		prevObjSelected = filter(selectors, event.Key, event.PrevGroup.NodeNames)
-	}
-	if !currObjSelected && !prevObjSelected {
-		// Watcher is not interested in that object.
-		return nil
-	}
+func (event *addressGroupEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
+	prevObjSelected, currObjSelected := isSelected(event.Key, event.PrevGroup, event.CurrGroup, selectors, isInitEvent)
 
 	switch {
+	case !currObjSelected && !prevObjSelected:
+		// Watcher is not interested in that object.
+		return nil
 	case currObjSelected && !prevObjSelected:
 		// Watcher was not interested in that object but is now, an added event will be generated.
 		return &watch.Event{Type: watch.Added, Object: event.CurrObject}
@@ -159,5 +152,5 @@ func AddressGroupKeyFunc(obj interface{}) (string, error) {
 
 // NewAddressGroupStore creates a store of AddressGroup.
 func NewAddressGroupStore() storage.Interface {
-	return ram.NewStore(AddressGroupKeyFunc, cache.Indexers{}, genAddressGroupEvent)
+	return ram.NewStore(AddressGroupKeyFunc, cache.Indexers{}, genAddressGroupEvent, keyAndSpanSelectFunc)
 }
