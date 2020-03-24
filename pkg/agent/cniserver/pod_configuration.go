@@ -680,7 +680,12 @@ func (pc *podConfigurator) disconnectInterfaceFromOVS(containerConfig *interface
 	klog.V(2).Infof("Deleting Openflow entries for container %s", containerID)
 	if err := pc.ofClient.UninstallPodFlows(containerConfig.InterfaceName); err != nil {
 		return fmt.Errorf("failed to delete Openflow entries for container %s: %v", containerID, err)
+		// We should not delete OVS port if Pod flows deletion fails, otherwise
+		// it is possible a new Pod will reuse the reclaimed ofport number, and
+		// the OVS flows added for the new Pod can conflict with the stale
+		// flows of the deleted Pod.
 	}
+
 	klog.V(2).Infof("Deleting OVS port %s for container %s", containerConfig.PortUUID, containerID)
 	// TODO: handle error and introduce garbage collection for failure on deletion
 	if err := pc.ovsBridgeClient.DeletePort(containerConfig.PortUUID); err != nil {
