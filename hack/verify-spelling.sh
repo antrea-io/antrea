@@ -48,6 +48,7 @@ failing_packages=$(sed "s| | -e |g" "${skipping_file}")
 git ls-files | grep -v -e "${failing_packages}"| xargs misspell > "${ERROR_LOG}"
 if [[ -s "${ERROR_LOG}" ]]; then
   sed 's/^/error: /' "${ERROR_LOG}"
+  echo "Found spelling errors!"
   RES=1
 fi
 exit "${RES}"

@@ -191,3 +191,8 @@ octant-antrea-ubuntu:
 	@echo "===> Building antrea/octant-antrea-ubuntu Docker image <==="
 	docker build -t antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.octant.ubuntu .
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/octant-antrea-ubuntu
+
+.PHONY: verify-spelling
+verify-spelling:
+	@echo "===> Verifying spellings <==="
+	$(CURDIR)/hack/verify-spelling.sh
