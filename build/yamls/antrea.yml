@@ -301,7 +301,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-5gb7c9t5kg
+  name: antrea-config-b2b5bdkh8t
   namespace: kube-system
 ---
 apiVersion: v1
@@ -394,7 +394,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-5gb7c9t5kg
+          name: antrea-config-b2b5bdkh8t
         name: antrea-config
 ---
 apiVersion: apiregistration.k8s.io/v1
@@ -578,7 +578,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-5gb7c9t5kg
+          name: antrea-config-b2b5bdkh8t
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
