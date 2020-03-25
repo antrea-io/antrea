@@ -169,7 +169,7 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 // Reconcile checks whether the provided rule have been enforced or not, and
 // invoke the add or update method accordingly.
 func (r *reconciler) Reconcile(rule *CompletedRule) error {
-	klog.Infof("Reconciling rule %v", rule.ID)
+	klog.Infof("Reconciling rule %s of NetworkPolicy %s/%s", rule.ID, rule.PolicyNamespace, rule.PolicyName)
 
 	value, exists := r.lastRealizeds.Load(rule.ID)
 	if !exists {

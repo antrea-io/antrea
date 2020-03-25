@@ -563,7 +563,7 @@ func (n *NetworkPolicyController) addNetworkPolicy(obj interface{}) {
 	// Create an internal NetworkPolicy object corresponding to this NetworkPolicy
 	// and enqueue task to internal NetworkPolicy Workqueue.
 	internalNP := n.processNetworkPolicy(np)
-	klog.V(2).Infof("Creating new internal NetworkPolicy %s/%s", internalNP.Namespace, internalNP.Name)
+	klog.Infof("Creating new internal NetworkPolicy %s/%s", internalNP.Namespace, internalNP.Name)
 	n.internalNetworkPolicyStore.Create(internalNP)
 	key, _ := keyFunc(np)
 	n.enqueueInternalNetworkPolicy(key)
@@ -627,7 +627,7 @@ func (n *NetworkPolicyController) deleteNetworkPolicy(old interface{}) {
 	oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
 	// AppliedToGroups currently only supports a single member.
 	oldAppliedToGroupUID := oldInternalNP.AppliedToGroups[0]
-	klog.V(2).Infof("Deleting internal NetworkPolicy %s/%s", np.Namespace, np.Name)
+	klog.Infof("Deleting internal NetworkPolicy %s/%s", np.Namespace, np.Name)
 	// Delete corresponding internal NetworkPolicy from store.
 	err := n.internalNetworkPolicyStore.Delete(key)
 	if err != nil {

@@ -60,6 +60,10 @@ type rule struct {
 	// The parent Policy ID. Used to identify rules belong to a specified
 	// policy for deletion.
 	PolicyUID types.UID
+	// The metadata of parent Policy. Used to associate the rule with Policy
+	// for troubleshooting purpose (logging and CLI).
+	PolicyName      string
+	PolicyNamespace string
 }
 
 // hashRule calculates a string based on the rule's content.
@@ -380,6 +384,8 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
 		PolicyUID:       policy.UID,
 	}
 	rule.ID = hashRule(rule)
+	rule.PolicyNamespace = policy.Namespace
+	rule.PolicyName = policy.Name
 	return rule
 }
 
