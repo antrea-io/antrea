@@ -29,7 +29,7 @@ on both VPC-native Enable/Disable modes.
 
 ## Creating the cluster
 
-You can use any method to create a GKE cluster (gcloud SDK, gcloud Console etc). The example
+You can use any method to create a GKE cluster (gcloud SDK, gcloud Console, etc). The example
 given here is using the Google Cloud SDK.
 
 **Note:** Antrea is supported on Ubuntu Nodes only for GKE cluster. Also, it is a must to select service
@@ -81,7 +81,7 @@ assign this permission.
 2. Download and Update Antrea YAML
 
     Deploy a released version of Antrea from the [list of releases](https://github.com/vmware-tanzu/antrea/releases).
-Note that GKE support was added in release 0.5.0, which means you can not pick a release older than 0.5.0.
+Note that GKE support was added in release 0.5.0, which means you cannot pick a release older than 0.5.0.
 For any given release `<TAG>` (e.g. `v0.5.0`), get the Antrea GKE deployment yaml at:
 
     ````
