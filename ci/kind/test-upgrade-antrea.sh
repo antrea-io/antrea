@@ -60,9 +60,7 @@ esac
 done
 
 rc=0
-# adding retry since there seems to be some transient failures when this is run
-# in CI as part of a Github workflow.
-curl -s --retry 5 --retry-delay 1 https://api.github.com/repos/vmware-tanzu/antrea/releases/tags/$FROM_TAG | grep -q tag_name || rc=$?
+git ls-remote --heads --tags https://github.com/vmware-tanzu/antrea.git | grep -q "refs/tags/$FROM_TAG" || rc=$?
 if [ $rc -ne 0 ]; then
     echoerr "$FROM_TAG is not a valid Antrea tag"
     exit 1
