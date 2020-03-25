@@ -83,12 +83,12 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			m := oftest.NewMockFlowOperations(ctrl)
+			m := oftest.NewMockOFEntryOperations(ctrl)
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
-			client.flowOperations = m
+			client.ofEntryOperations = m
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			// Installing the flows should succeed, and all the flows should be added into the cache.
@@ -111,12 +111,12 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			m := oftest.NewMockFlowOperations(ctrl)
+			m := oftest.NewMockOFEntryOperations(ctrl)
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
-			client.flowOperations = m
+			client.ofEntryOperations = m
 
 			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).After(errorCall)
@@ -152,12 +152,12 @@ func TestFlowInstallationFailed(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			m := oftest.NewMockFlowOperations(ctrl)
+			m := oftest.NewMockOFEntryOperations(ctrl)
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
-			client.flowOperations = m
+			client.ofEntryOperations = m
 
 			// We generate an error for AddAll call.
 			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
@@ -186,12 +186,12 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			m := oftest.NewMockFlowOperations(ctrl)
+			m := oftest.NewMockOFEntryOperations(ctrl)
 			ofClient := NewClient(bridgeName)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
-			client.flowOperations = m
+			client.ofEntryOperations = m
 
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls
 			timeoutCh := make(chan struct{})

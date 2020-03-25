@@ -55,7 +55,7 @@ $GOPATH/bin/openapi-gen  \
 MOCKGEN_TARGETS=(
   "pkg/agent/cniserver/ipam IPAMDriver"
   "pkg/agent/interfacestore InterfaceStore"
-  "pkg/agent/openflow Client,FlowOperations"
+  "pkg/agent/openflow Client,OFEntryOperations"
   "pkg/agent/route Interface"
   "pkg/ovs/openflow Bridge,Table,Flow,Action,FlowBuilder"
   "pkg/ovs/ovsconfig OVSBridgeClient"
