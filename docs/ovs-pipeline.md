@@ -143,7 +143,7 @@ If you dump the flows for this table, you may see the following:
 ```
 
 Flow 1 is for traffic coming in on the local gateway. Flow 2 is for traffic
-comming in through a VXLAN or Geneve tunnel (i.e. from another Node). The next
+coming in through a VXLAN or Geneve tunnel (i.e. from another Node). The next
 two flows (3 and 4) are for local Pods (in this case Pods from the coredns
 deployment).
 
@@ -169,7 +169,7 @@ on the local gateway port is not as trivial. Traffic from local Pods destined to
 services will first go through the gateway, get load-balanced by the kube-proxy
 datapath (DNAT) then sent back through the gateway. This means that legitimate
 traffic can be received on the gateway port with a source IP belonging to a
-local Pod. We may add some fine-grained rules in the future to accomodate for
+local Pod. We may add some fine-grained rules in the future to accommodate for
 this, but for now we just allow all IP traffic received from the gateway. We do
 have an ARP spoofing check for the gateway however, since there is no reason for
 the host to advertise a different MAC address on gw0.

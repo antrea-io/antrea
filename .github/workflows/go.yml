@@ -139,3 +139,19 @@ jobs:
 
     - name: Check tidy
       run: make test-tidy
+
+  verify-spelling:
+    name: Verify common spelling mistakes
+    runs-on: [ubuntu-18.04]
+    steps:
+
+    - name: Set up Go 1.13
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+
+    - name: Check-out code
+      uses: actions/checkout@v2
+
+    - name: Run verify scripts
+      run: make verify-spelling
