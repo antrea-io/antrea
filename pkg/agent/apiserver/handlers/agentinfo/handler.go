@@ -25,7 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 )
 
-// AntreaAgentInfoResponse is the struct for the response of agent-info command.
+// AntreaAgentInfoResponse is the struct for the response of agentinfo command.
 // It includes all fields except meta info from v1beta1.AntreaAgentInfo struct.
 type AntreaAgentInfoResponse struct {
 	Version                     string                              `json:"version,omitempty"`                     // Antrea binary version
@@ -38,7 +38,7 @@ type AntreaAgentInfoResponse struct {
 	AgentConditions             []v1beta1.AgentCondition            `json:"agentConditions,omitempty"`             // Agent condition contains types like AgentHealthy
 }
 
-// HandleFunc returns the function which can handle queries issued by agent-info commands.
+// HandleFunc returns the function which can handle queries issued by agentinfo commands.
 // The handler function populates Antrea agent information to the response.
 func HandleFunc(aq monitor.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
