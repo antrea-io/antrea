@@ -101,11 +101,12 @@ information.
 To deploy Antrea in a [Kind](https://github.com/kubernetes-sigs/kind) cluster,
 please refer to this [guide](/docs/kind.md).
 
-### Deploying Antrea in EKS
+### Deploying Antrea in EKS and GKE
 
-Antrea can be deployed in NetworkPolicy only mode to an AWS EKS cluster, and
-enforce NetworkPolicies for the EKS cluster. To deploy Antrea in an EKS cluster,
-please refer to this [guide](/docs/eks-installation.md).
+Antrea can be deployed in NetworkPolicy only mode to an EKS cluster or a GKE
+cluster, and enforce NetworkPolicies for the cluster. To deploy Antrea in an
+EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
+To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
 
 ### Deploying Antrea with IPsec Encyption
 
