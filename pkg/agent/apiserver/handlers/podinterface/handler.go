@@ -24,7 +24,7 @@ import (
 
 // Response describes the response struct of pod-interface command.
 type Response struct {
-	PodName       string `json:"name,omitempty" yaml:"name,omitempty" antctl:"name,The name of the pod"`
+	PodName       string `json:"name,omitempty" yaml:"name,omitempty" antctl:"name,Name of the Pod"`
 	PodNamespace  string `json:"podNamespace,omitempty" yaml:"podNamespace,omitempty"`
 	InterfaceName string `json:"interfaceName,omitempty" yaml:"interfaceName,omitempty"`
 	IP            string `json:"ip,omitempty" yaml:"ip,omitempty"`

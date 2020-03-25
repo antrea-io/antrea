@@ -55,7 +55,7 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(version.Response{}),
 		},
 		{
-			use:          "network-policy",
+			use:          "networkpolicy",
 			short:        "Print network policies",
 			long:         "Print network policies in ${component}",
 			commandGroup: get,
@@ -81,9 +81,9 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(networkpolicy.Response{}),
 		},
 		{
-			use:          "applied-to-group",
-			short:        "Print applied-to-groups",
-			long:         "Print applied-to-groups in ${component}",
+			use:          "appliedtogroup",
+			short:        "Print appliedto groups",
+			long:         "Print appliedto groups in ${component}",
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
@@ -107,7 +107,7 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(appliedtogroup.Response{}),
 		},
 		{
-			use:          "address-group",
+			use:          "addressgroup",
 			short:        "Print address groups",
 			long:         "Print address groups in ${component}",
 			commandGroup: get,
@@ -133,7 +133,7 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(addressgroup.Response{}),
 		},
 		{
-			use:   "controller-info",
+			use:   "controllerinfo",
 			short: "Print Antrea controller's basic information",
 			long:  "Print Antrea controller's basic information including version, deployment, NetworkPolicy controller, ControllerConditions, etc.",
 			controllerEndpoint: &endpoint{
@@ -147,7 +147,7 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(controllerinfo.Response{}),
 		},
 		{
-			use:   "agent-info",
+			use:   "agentinfo",
 			short: "Print agent's basic information",
 			long:  "Print agent's basic information including version, deployment, Node subnet, OVS info, AgentConditions, etc.",
 			agentEndpoint: &endpoint{
@@ -160,29 +160,29 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(agentinfo.AntreaAgentInfoResponse{}),
 		},
 		{
-			use:   "pod-interface",
-			short: "Print Pod's basic interface information",
+			use:   "podinterface",
+			short: "Print Pod's network interface information",
 			long:  "Print information about the network interface(s) created by the Antrea agent for the specified Pod.",
 			example: `  Get a pod-interface
-  $ antctl get pod-interface pod0 -n ns0
-  Get the list of pod-interfaces in a namespace
-  $ antctl get pod-interface -n ns0
-  Get the list of pod-interfaces whose names match in all namespaces
-  $ antctl get pod-interface pod0
-  Get the list of pod-interfaces in all namespaces
-  $ antctl get pod-interface`,
+  $ antctl get podinterface pod1 -n ns1
+  Get the list of podinterfaces in a Namespace
+  $ antctl get podinterface -n ns1
+  Get the list of podinterfaces whose names match in all Namespaces
+  $ antctl get podinterface pod1
+  Get the list of podinterfaces in all Namespaces
+  $ antctl get podinterface`,
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/podinterfaces",
 					params: []flagInfo{
 						{
 							name:  "name",
-							usage: "Retrieve Pod interface by name. If present, make sure namespace is provided.",
+							usage: "Retrieve Pod interface by name. If present, Namespace must be provided.",
 							arg:   true,
 						},
 						{
 							name:      "namespace",
-							usage:     "Get all Pod interfaces from specific Namespace",
+							usage:     "Get Pod interfaces from specific Namespace",
 							shorthand: "n",
 						},
 					},
