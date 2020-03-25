@@ -121,6 +121,20 @@ func (mr *MockClientMockRecorder) GetFlowTableStatus() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFlowTableStatus", reflect.TypeOf((*MockClient)(nil).GetFlowTableStatus))
 }
 
+// GetPodFlowKeys mocks base method
+func (m *MockClient) GetPodFlowKeys(arg0 string) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPodFlowKeys", arg0)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GetPodFlowKeys indicates an expected call of GetPodFlowKeys
+func (mr *MockClientMockRecorder) GetPodFlowKeys(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPodFlowKeys", reflect.TypeOf((*MockClient)(nil).GetPodFlowKeys), arg0)
+}
+
 // Initialize mocks base method
 func (m *MockClient) Initialize(arg0 types.RoundInfo, arg1 *config.NodeConfig, arg2 config.TrafficEncapModeType, arg3 uint32) (<-chan struct{}, error) {
 	m.ctrl.T.Helper()
