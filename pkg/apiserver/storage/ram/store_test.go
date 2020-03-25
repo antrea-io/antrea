@@ -47,24 +47,24 @@ type testEvent struct {
 	ResourceVersion uint64
 }
 
-func (event *testEvent) ToWatchEvent(selectors *antreastorage.Selectors) *watch.Event {
-	filter := func(s *antreastorage.Selectors, key string, labels labels.Set, fields fields.Set) bool {
-		if s.Key != "" && key != s.Key {
-			return false
-		}
-		if s.Label.Empty() && s.Field.Empty() {
-			return true
-		}
-		if !s.Label.Matches(labels) {
-			return false
-		}
-		return s.Field.Matches(fields)
+func testFilter(s *antreastorage.Selectors, key string, labels labels.Set, fields fields.Set) bool {
+	if s.Key != "" && key != s.Key {
+		return false
 	}
+	if s.Label.Empty() && s.Field.Empty() {
+		return true
+	}
+	if !s.Label.Matches(labels) {
+		return false
+	}
+	return s.Field.Matches(fields)
+}
 
-	curObjPasses := event.Type != watch.Deleted && filter(selectors, event.Key, event.ObjLabels, event.ObjFields)
+func (event *testEvent) ToWatchEvent(selectors *antreastorage.Selectors, isInitEvent bool) *watch.Event {
+	curObjPasses := event.Type != watch.Deleted && testFilter(selectors, event.Key, event.ObjLabels, event.ObjFields)
 	oldObjPasses := false
 	if event.PrevObject != nil {
-		oldObjPasses = filter(selectors, event.Key, event.PrevObjLabels, event.PrevObjFields)
+		oldObjPasses = testFilter(selectors, event.Key, event.PrevObjLabels, event.PrevObjFields)
 	}
 	if !curObjPasses && !oldObjPasses {
 		// Watcher is not interested in that object.
@@ -121,6 +121,11 @@ func testGenEvent(key string, prevObj, obj interface{}, resourceVersion uint64) 
 	return event, nil
 }
 
+func testSelectFunc(selectors *antreastorage.Selectors, key string, obj interface{}) bool {
+	objLabels, objFields, _ := storage.DefaultClusterScopedAttr(obj.(runtime.Object))
+	return testFilter(selectors, key, objLabels, objFields)
+}
+
 func TestRamStoreCRUD(t *testing.T) {
 	key := "pod1"
 	testCases := []struct {
@@ -152,7 +157,7 @@ func TestRamStoreCRUD(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, nil)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, nil, nil)
 
 		testCase.operations(store)
 		obj, _, err := store.Get(key)
@@ -218,7 +223,7 @@ func TestRamStoreGetByIndex(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, indexers, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, indexers, testGenEvent, nil)
 
 		testCase.operations(store)
 		objs, err := store.GetByIndex(indexName, indexKey)
@@ -262,7 +267,7 @@ func TestRamStoreList(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, nil)
 
 		testCase.operations(store)
 		objs := store.List()
@@ -304,7 +309,7 @@ func TestRamStoreWatchAll(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc)
 		w, err := store.Watch(context.Background(), "", labels.Everything(), fields.Everything())
 		if err != nil {
 			t.Errorf("%d: failed to watch object: %v", i, err)
@@ -367,7 +372,7 @@ func TestRamStoreWatchWithInitOperations(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc)
 		// Init the storage before watching
 		testCase.initOperations(store)
 		w, err := store.Watch(context.Background(), "", labels.Everything(), fields.Everything())
@@ -435,7 +440,7 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc)
 		w, err := store.Watch(context.Background(), "", testCase.labelSelector, fields.Everything())
 		if err != nil {
 			t.Errorf("%d: failed to watch object: %v", i, err)
@@ -457,7 +462,7 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 }
 
 func TestRamStoreWatchTimeout(t *testing.T) {
-	store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+	store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc)
 	// watcherChanSize*2+1 events can fill a watcher's buffer: input channel buffer + result channel buffer + 1 in-flight.
 	maxBuffered := watcherChanSize*2 + 1
 

@@ -43,23 +43,16 @@ type appliedToGroupEvent struct {
 // 2. Modified event will be generated if the Selectors was and is interested in the object.
 // 3. Deleted event will be generated if the Selectors was interested in the object but is not now.
 // 4. If nodeName is specified, only Pods that hosted by the Node will be in the event.
-func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors) *watch.Event {
-	prevObjSelected, currObjSelected := false, false
-	if event.CurrGroup != nil {
-		currObjSelected = filter(selectors, event.Key, event.CurrGroup.NodeNames)
-	}
-	if event.PrevGroup != nil {
-		prevObjSelected = filter(selectors, event.Key, event.PrevGroup.NodeNames)
-	}
-	if !currObjSelected && !prevObjSelected {
-		// Watcher is not interested in that object.
-		return nil
-	}
+func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
+	prevObjSelected, currObjSelected := isSelected(event.Key, event.PrevGroup, event.CurrGroup, selectors, isInitEvent)
 
 	// If nodeName is specified in selectors, only Pods that hosted by the Node should be in the event.
 	nodeName, nodeSpecified := selectors.Field.RequiresExactMatch("nodeName")
 
 	switch {
+	case !currObjSelected && !prevObjSelected:
+		// Watcher is not interested in that object.
+		return nil
 	case currObjSelected && !prevObjSelected:
 		// Watcher was not interested in that object but is now, an added event will be generated.
 		obj := new(networking.AppliedToGroup)
@@ -172,5 +165,5 @@ func AppliedToGroupKeyFunc(obj interface{}) (string, error) {
 
 // NewAppliedToGroupStore creates a store of AppliedToGroup.
 func NewAppliedToGroupStore() storage.Interface {
-	return ram.NewStore(AppliedToGroupKeyFunc, cache.Indexers{}, genAppliedToGroupEvent)
+	return ram.NewStore(AppliedToGroupKeyFunc, cache.Indexers{}, genAppliedToGroupEvent, keyAndSpanSelectFunc)
 }

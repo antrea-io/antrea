@@ -87,7 +87,7 @@ func (w *storeWatcher) add(event storage.InternalEvent, timer *time.Timer) bool 
 // if they are newer than the specified resourceVersion.
 func (w *storeWatcher) process(ctx context.Context, initEvents []storage.InternalEvent, resourceVersion uint64) {
 	for _, event := range initEvents {
-		w.sendWatchEvent(event)
+		w.sendWatchEvent(event, true)
 	}
 	defer close(w.result)
 	for {
@@ -98,7 +98,7 @@ func (w *storeWatcher) process(ctx context.Context, initEvents []storage.Interna
 				return
 			}
 			if event.GetResourceVersion() > resourceVersion {
-				w.sendWatchEvent(event)
+				w.sendWatchEvent(event, false)
 			}
 		case <-ctx.Done():
 			klog.Info("The context had been canceled, stopping process")
@@ -109,8 +109,8 @@ func (w *storeWatcher) process(ctx context.Context, initEvents []storage.Interna
 
 // sendWatchEvent converts an InternalEvent to watch.Event based on the watcher's selectors.
 // It sends the converted event to result channel, if not nil.
-func (w *storeWatcher) sendWatchEvent(event storage.InternalEvent) {
-	watchEvent := event.ToWatchEvent(w.selectors)
+func (w *storeWatcher) sendWatchEvent(event storage.InternalEvent, isInitEvent bool) {
+	watchEvent := event.ToWatchEvent(w.selectors, isInitEvent)
 	if watchEvent == nil {
 		// Watcher is not interested in that object.
 		return
