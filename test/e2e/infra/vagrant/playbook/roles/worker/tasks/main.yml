@@ -26,7 +26,7 @@
   when: kubeconfig_diff.changed
 
 # We copy the config file last, as we use it to determine whether the join was
-# succesful in future runs.
+# successful in future runs.
 - name: Setup kubeconfig for test user
   block:
     - name: Create /home/{{ test_user }}/.kube directory
