@@ -1,0 +1,614 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com
+spec:
+  group: clusterinformation.antrea.tanzu.vmware.com
+  names:
+    kind: AntreaAgentInfo
+    plural: antreaagentinfos
+    shortNames:
+    - aai
+    singular: antreaagentinfo
+  scope: Cluster
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com
+spec:
+  group: clusterinformation.antrea.tanzu.vmware.com
+  names:
+    kind: AntreaControllerInfo
+    plural: antreacontrollerinfos
+    shortNames:
+    - aci
+    singular: antreacontrollerinfo
+  scope: Cluster
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: antrea
+  name: antctl
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: antrea
+  name: antrea-agent
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: antrea
+  name: antrea-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
+  name: antctl
+rules:
+- apiGroups:
+  - networking.antrea.tanzu.vmware.com
+  resources:
+  - networkpolicies
+  - appliedtogroups
+  - addressgroups
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - system.antrea.tanzu.vmware.com
+  resources:
+  - controllerinfos
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
+  name: antrea-agent
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - pods
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - clusterinformation.antrea.tanzu.vmware.com
+  resources:
+  - antreaagentinfos
+  verbs:
+  - get
+  - create
+  - update
+  - delete
+- apiGroups:
+  - networking.antrea.tanzu.vmware.com
+  resources:
+  - networkpolicies
+  - appliedtogroups
+  - addressgroups
+  verbs:
+  - get
+  - watch
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
+  name: antrea-controller
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - pods
+  - namespaces
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - clusterinformation.antrea.tanzu.vmware.com
+  resources:
+  - antreacontrollerinfos
+  verbs:
+  - get
+  - create
+  - update
+  - delete
+- apiGroups:
+  - clusterinformation.antrea.tanzu.vmware.com
+  resources:
+  - antreaagentinfos
+  verbs:
+  - list
+  - delete
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: antrea-controller-authentication-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: antrea-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: antctl
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antctl
+subjects:
+- kind: ServiceAccount
+  name: antctl
+  namespace: kube-system
+- kind: ServiceAccount
+  name: antrea-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: antrea-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-agent
+subjects:
+- kind: ServiceAccount
+  name: antrea-agent
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: antrea-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-controller
+subjects:
+- kind: ServiceAccount
+  name: antrea-controller
+  namespace: kube-system
+---
+apiVersion: v1
+data:
+  antrea-agent.conf: |
+    # Name of the OpenVSwitch bridge antrea-agent will create and use.
+    # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
+    #ovsBridge: br-int
+
+    # Datapath type to use for the OpenVSwitch bridge created by Antrea. Supported values are:
+    # - system
+    # - netdev
+    # 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
+    # OVS in userspace mode. Userspace mode requires the tun device driver to be available.
+    #ovsDatapathType: system
+
+    # Name of the interface antrea-agent will create and use for host <--> pod communication.
+    # Make sure it doesn't conflict with your existing interfaces.
+    #hostGateway: gw0
+
+    # Encapsulation mode for communication between Pods across Nodes, supported values:
+    # - vxlan (default)
+    # - geneve
+    # - gre
+    # - stt
+    #tunnelType: vxlan
+
+    # Default MTU to use for the host gateway interface and the network interface of each Pod. If
+    # omitted, antrea-agent will default this value to 1450 to accommodate for tunnel encapsulate
+    # overhead.
+    #defaultMTU: 1450
+
+    # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
+    # for the GRE tunnel type.
+    #enableIPSecTunnel: false
+
+    # CIDR Range for services in cluster. It's required to support egress network policy, should
+    # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
+    #serviceCIDR: 10.96.0.0/12
+
+    # Determines how traffic is encapsulated. It has the following options
+    # encap(default): Inter-node Pod traffic is always encapsulated and Pod to outbound traffic is masqueraded.
+    # noEncap: Inter-node Pod traffic is not encapsulated, but Pod to outbound traffic is masqueraded.
+    #          Underlying network must be capable of supporting Pod traffic across IP subnet.
+    # hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
+    # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
+    #
+    trafficEncapMode: noEncap
+  antrea-cni.conf: |
+    {
+        "cniVersion":"0.3.0",
+        "name": "antrea",
+        "type": "antrea",
+        "ipam": {
+            "type": "host-local"
+        }
+    }
+  antrea-controller.conf: ""
+kind: ConfigMap
+metadata:
+  annotations: {}
+  labels:
+    app: antrea
+  name: antrea-config-cggb5bctb9
+  namespace: kube-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: antrea
+  name: antrea
+  namespace: kube-system
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 443
+  selector:
+    app: antrea
+    component: antrea-controller
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: antrea
+    component: antrea-controller
+  name: antrea-controller
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-controller
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: antrea
+        component: antrea-controller
+    spec:
+      containers:
+      - args:
+        - --config
+        - /etc/antrea/antrea-controller.conf
+        command:
+        - antrea-controller
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        image: antrea/antrea-ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        name: antrea-controller
+        ports:
+        - containerPort: 443
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 5
+          httpGet:
+            host: 127.0.0.1
+            path: /healthz
+            port: 443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+        volumeMounts:
+        - mountPath: /etc/antrea/antrea-controller.conf
+          name: antrea-config
+          readOnly: true
+          subPath: antrea-controller.conf
+      hostNetwork: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: system-cluster-critical
+      serviceAccountName: antrea-controller
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      volumes:
+      - configMap:
+          name: antrea-config-cggb5bctb9
+        name: antrea-config
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    app: antrea
+  name: v1beta1.networking.antrea.tanzu.vmware.com
+spec:
+  group: networking.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: antrea
+    namespace: kube-system
+  version: v1beta1
+  versionPriority: 100
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    app: antrea
+  name: v1beta1.system.antrea.tanzu.vmware.com
+spec:
+  group: system.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: antrea
+    namespace: kube-system
+  version: v1beta1
+  versionPriority: 100
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: antrea
+    component: antrea-agent
+  name: antrea-agent
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-agent
+  template:
+    metadata:
+      labels:
+        app: antrea
+        component: antrea-agent
+    spec:
+      containers:
+      - args:
+        - --config
+        - /etc/antrea/antrea-agent.conf
+        command:
+        - antrea-agent
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        image: antrea/antrea-ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - container_liveness_probe agent
+          failureThreshold: 5
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+        name: antrea-agent
+        readinessProbe:
+          failureThreshold: 5
+          httpGet:
+            host: 127.0.0.1
+            path: /healthz
+            port: 10443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /etc/antrea/antrea-agent.conf
+          name: antrea-config
+          readOnly: true
+          subPath: antrea-agent.conf
+        - mountPath: /var/run/antrea
+          name: host-var-run-antrea
+        - mountPath: /var/run/openvswitch
+          name: host-var-run-antrea
+          subPath: openvswitch
+        - mountPath: /var/lib/cni
+          name: host-var-run-antrea
+          subPath: cni
+        - mountPath: /host/proc
+          name: host-proc
+          readOnly: true
+        - mountPath: /host/var/run/netns
+          mountPropagation: HostToContainer
+          name: host-var-run-netns
+          readOnly: true
+        - mountPath: /run/xtables.lock
+          name: xtables-lock
+      - command:
+        - start_ovs
+        image: antrea/antrea-ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - timeout 5 container_liveness_probe ovs
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        name: antrea-ovs
+        securityContext:
+          capabilities:
+            add:
+            - SYS_NICE
+            - NET_ADMIN
+            - SYS_ADMIN
+            - IPC_LOCK
+        volumeMounts:
+        - mountPath: /var/run/openvswitch
+          name: host-var-run-antrea
+          subPath: openvswitch
+        - mountPath: /var/log/openvswitch
+          name: host-var-log-antrea
+          subPath: openvswitch
+      hostNetwork: true
+      initContainers:
+      - command:
+        - install_cni
+        image: antrea/antrea-ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        name: install-cni
+        securityContext:
+          capabilities:
+            add:
+            - SYS_MODULE
+        volumeMounts:
+        - mountPath: /etc/antrea/antrea-cni.conf
+          name: antrea-config
+          readOnly: true
+          subPath: antrea-cni.conf
+        - mountPath: /host/etc/cni/net.d
+          name: host-cni-conf
+        - mountPath: /host/opt/cni/bin
+          name: host-cni-bin
+        - mountPath: /lib/modules
+          name: host-lib-modules
+          readOnly: true
+        - mountPath: /sbin/depmod
+          name: host-depmod
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: system-node-critical
+      serviceAccountName: antrea-agent
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        operator: Exists
+      volumes:
+      - configMap:
+          name: antrea-config-cggb5bctb9
+        name: antrea-config
+      - hostPath:
+          path: /etc/cni/net.d
+        name: host-cni-conf
+      - hostPath:
+          path: /home/kubernetes/bin
+        name: host-cni-bin
+      - hostPath:
+          path: /proc
+        name: host-proc
+      - hostPath:
+          path: /var/run/netns
+        name: host-var-run-netns
+      - hostPath:
+          path: /var/run/antrea
+          type: DirectoryOrCreate
+        name: host-var-run-antrea
+      - hostPath:
+          path: /var/log/antrea
+          type: DirectoryOrCreate
+        name: host-var-log-antrea
+      - hostPath:
+          path: /lib/modules
+        name: host-lib-modules
+      - hostPath:
+          path: /sbin/depmod
+        name: host-depmod
+      - hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate
+        name: xtables-lock
+  updateStrategy:
+    type: RollingUpdate
