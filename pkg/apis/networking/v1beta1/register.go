@@ -30,7 +30,7 @@ var (
 	AppliedToGroupVersionResource = schema.GroupVersionResource{
 		Group:    SchemeGroupVersion.Group,
 		Version:  SchemeGroupVersion.Version,
-		Resource: "applitedtogroups"}
+		Resource: "appliedtogroups"}
 	AddressGroupVersionResource = schema.GroupVersionResource{
 		Group:    SchemeGroupVersion.Group,
 		Version:  SchemeGroupVersion.Version,
