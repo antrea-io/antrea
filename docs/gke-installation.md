@@ -75,7 +75,7 @@ assign this permission.
     Deploy ``antrea-node-init`` DaemonSet to enable ``kubelet`` to operate in CNI mode.
 
     ```bash
-    kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/v0.5.0/antrea-gke-node-init.yml
+    kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke-node-init.yml
     ```
 
 2. Download and Update Antrea YAML
