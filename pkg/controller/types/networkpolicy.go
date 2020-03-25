@@ -28,6 +28,15 @@ type SpanMeta struct {
 	NodeNames sets.String
 }
 
+// Span provides methods to work with SpanMeta and objects composed of it.
+type Span interface {
+	Has(nodeName string) bool
+}
+
+func (meta *SpanMeta) Has(nodeName string) bool {
+	return meta.NodeNames.Has(nodeName)
+}
+
 // GroupSelector describes how to select pods.
 type GroupSelector struct {
 	// The normalized name is calculated from Namespace, PodSelector, and NamespaceSelector.

@@ -56,6 +56,8 @@ type store struct {
 	storage cache.Indexer
 	// keyFunc is used to get a key in the underlying storage for a given object.
 	keyFunc cache.KeyFunc
+	// selectFunc is used to check whether a watcher is interested in a given object.
+	selectFunc antreastorage.SelectFunc
 	// genEventFunc is used to generate InternalEvent from update of an object.
 	genEventFunc antreastorage.GenEventFunc
 
@@ -77,7 +79,7 @@ type store struct {
 // KeyFunc decides how to get the key from an object.
 // Indexers decides how to build indices for an object.
 // GenEventFunc decides how to generate InternalEvent for an update of an object.
-func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc) *store {
+func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc, selectorFunc antreastorage.SelectFunc) *store {
 	stopCh := make(chan struct{})
 	storage := cache.NewIndexer(keyFunc, indexers)
 	timer := time.NewTimer(time.Duration(0))
@@ -92,6 +94,7 @@ func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antre
 		watchers:     make(map[int]*storeWatcher),
 		keyFunc:      keyFunc,
 		genEventFunc: genEventFunc,
+		selectFunc:   selectorFunc,
 		timer:        timer,
 	}
 
@@ -224,23 +227,34 @@ func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Sele
 	s.eventMutex.RLock()
 	defer s.eventMutex.RUnlock()
 
+	selectors := &antreastorage.Selectors{
+		Key:   key,
+		Label: labelSelector,
+		Field: fieldSelector,
+	}
+
 	allObjects := s.storage.List()
-	initEvents := make([]antreastorage.InternalEvent, len(allObjects))
-	for i, obj := range allObjects {
+	initEvents := make([]antreastorage.InternalEvent, 0, len(allObjects))
+	for _, obj := range allObjects {
 		// Objects retrieved from storage have been verified with keyFunc when they are inserted.
 		key, _ := s.keyFunc(obj)
+		// Check whether the watcher is interested in this object, don't generate an initEvent if not.
+		if s.selectFunc != nil && !s.selectFunc(selectors, key, obj) {
+			continue
+		}
+
 		event, err := s.genEventFunc(key, nil, obj, s.resourceVersion)
 		if err != nil {
 			return nil, err
 		}
-		initEvents[i] = event
+		initEvents = append(initEvents, event)
 	}
 
 	watcher := func() *storeWatcher {
 		s.watcherMutex.Lock()
 		defer s.watcherMutex.Unlock()
 
-		w := newStoreWatcher(watcherChanSize, &antreastorage.Selectors{key, labelSelector, fieldSelector}, forgetWatcher(s, s.watcherIdx))
+		w := newStoreWatcher(watcherChanSize, selectors, forgetWatcher(s, s.watcherIdx))
 		s.watchers[s.watcherIdx] = w
 		s.watcherIdx++
 		return w

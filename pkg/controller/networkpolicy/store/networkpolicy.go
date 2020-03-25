@@ -53,20 +53,12 @@ type networkPolicyEvent struct {
 // 1. Added event will be generated if the Selectors was not interested in the object but is now.
 // 2. Modified event will be generated if the Selectors was and is interested in the object.
 // 3. Deleted event will be generated if the Selectors was interested in the object but is not now.
-func (event *networkPolicyEvent) ToWatchEvent(selectors *storage.Selectors) *watch.Event {
-	prevObjSelected, currObjSelected := false, false
-	if event.CurrPolicy != nil {
-		currObjSelected = filter(selectors, event.Key, event.CurrPolicy.NodeNames)
-	}
-	if event.PrevPolicy != nil {
-		prevObjSelected = filter(selectors, event.Key, event.PrevPolicy.NodeNames)
-	}
-	if !currObjSelected && !prevObjSelected {
-		// Watcher is not interested in that object.
-		return nil
-	}
+func (event *networkPolicyEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
+	prevObjSelected, currObjSelected := isSelected(event.Key, event.PrevPolicy, event.CurrPolicy, selectors, isInitEvent)
 
 	switch {
+	case !currObjSelected && !prevObjSelected:
+		return nil
 	case currObjSelected && !prevObjSelected:
 		return &watch.Event{Type: watch.Added, Object: event.CurrObject}
 	case currObjSelected && prevObjSelected:
@@ -165,5 +157,5 @@ func NewNetworkPolicyStore() storage.Interface {
 			return groupNames, nil
 		},
 	}
-	return ram.NewStore(NetworkPolicyKeyFunc, indexers, genNetworkPolicyEvent)
+	return ram.NewStore(NetworkPolicyKeyFunc, indexers, genNetworkPolicyEvent, keyAndSpanSelectFunc)
 }
