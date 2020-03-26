@@ -157,6 +157,7 @@ type flagInfo struct {
 type commandDefinition struct {
 	// Cobra related
 	use     string
+	aliases []string
 	short   string
 	long    string
 	example string // It will be filled with generated examples if it is not provided.
@@ -213,9 +214,10 @@ func (cd *commandDefinition) getEndpoint() endpointResponder {
 // appropriate RunE function for it according to the commandDefinition.
 func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client *client) {
 	cmd := &cobra.Command{
-		Use:   cd.use,
-		Short: cd.short,
-		Long:  cd.long,
+		Use:     cd.use,
+		Aliases: cd.aliases,
+		Short:   cd.short,
+		Long:    cd.long,
 	}
 	renderDescription(cmd)
 	cd.applyFlagsToCommand(cmd)
@@ -235,6 +237,16 @@ func (cd *commandDefinition) validate() []error {
 	var errs []error
 	if len(cd.use) == 0 {
 		errs = append(errs, fmt.Errorf("the command does not have name"))
+	}
+	existingAliases := make(map[string]bool)
+	for _, a := range cd.aliases {
+		if a == cd.use {
+			errs = append(errs, fmt.Errorf("%s: command alias is the same with use of the command", cd.use))
+		}
+		if _, ok := existingAliases[a]; ok {
+			errs = append(errs, fmt.Errorf("%s: command alias is provided twice: %s", cd.use, a))
+		}
+		existingAliases[a] = true
 	}
 	if cd.transformedResponse == nil {
 		errs = append(errs, fmt.Errorf("%s: command does not define output struct", cd.use))
