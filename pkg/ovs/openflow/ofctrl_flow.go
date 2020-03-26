@@ -66,6 +66,14 @@ func (f *ofFlow) Delete() error {
 	return nil
 }
 
+func (f *ofFlow) Type() EntryType {
+	return FlowEntry
+}
+
+func (f *ofFlow) KeyString() string {
+	return f.MatchString()
+}
+
 func (f *ofFlow) MatchString() string {
 	repr := fmt.Sprintf("table=%d,priority=%d", f.table.GetID(), f.Flow.Match.Priority)
 	if f.protocol != "" {
