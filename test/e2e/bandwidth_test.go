@@ -60,7 +60,7 @@ func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string) {
 	}
 	defer teardownTest(t, data)
 
-	svc, err := data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"})
+	svc, err := data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false)
 	if err != nil {
 		t.Fatalf("Error when creating perftest service: %v", err)
 	}

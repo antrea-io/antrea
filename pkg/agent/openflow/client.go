@@ -22,6 +22,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
@@ -48,6 +49,10 @@ type Client interface {
 	// the different Services running in the Cluster. This method needs to be invoked once with
 	// the Cluster Service CIDR as a parameter.
 	InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
+
+	// InstallClusterServiceFlows sets up the appropriate flows so that traffic can reach
+	// the different Services running in the Cluster. This method needs to be invoked once.
+	InstallClusterServiceFlows() error
 
 	// InstallDefaultTunnelFlows sets up the classification flow for the default (flow based) tunnel.
 	InstallDefaultTunnelFlows(tunnelOFPort uint32) error
@@ -82,6 +87,32 @@ type Client interface {
 	// UninstallPodFlows removes the connection to the local Pod specified with the
 	// interfaceName. UninstallPodFlows will do nothing if no connection to the Pod was established.
 	UninstallPodFlows(interfaceName string) error
+
+	// InstallServiceEndpointsGroup installs a group for Service LB. Each endpoint
+	// is a bucket of the group. For now, each bucket has the same weight.
+	InstallServiceEndpointsGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...upstream.Endpoint) error
+	// UninstallServiceEndpointsGroup removes the group and its buckets that are
+	// installed by InstallServiceEndpointsGroup.
+	UninstallServiceEndpointsGroup(groupID binding.GroupIDType) error
+
+	// InstallServiceEndpointsFlows installs flows for accessing an Endpoint. If
+	// the mac argument is not nil, it means the Endpoint is on the current Node.
+	// If the Endpoint is on the current Node, then flows for hairpin and endpoint
+	// l2 forwarding should also be installed.
+	InstallServiceEndpointsFlows(protocol binding.Protocol, mac net.HardwareAddr, endpoint upstream.Endpoint) error
+	// UninstallServiceEndpointsFlows removes flows of the Endpoint installed by
+	// InstallServiceEndpointsFlows.
+	UninstallServiceEndpointsFlows(protocol binding.Protocol, endpoints ...upstream.Endpoint) error
+
+	// InstallServiceFlows installs flows for accessing Service with clusterIP.
+	// It installs the flow that uses the group/bucket to do service LB. If the
+	// affinityTimeout is not zero, it also installs the flow which has a learn
+	// action to maintain the LB decision.
+	// The group with the groupID MUST be installed before, otherwise the
+	// installation will be failed.
+	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error
+	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
+	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
@@ -274,12 +305,118 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 	return flowKeys
 }
 
+func (c *client) InstallServiceEndpointsGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...upstream.Endpoint) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	group := c.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
+	if err := group.Add(); err != nil {
+		return fmt.Errorf("error when installing Service Endpoints Group: %w", err)
+	}
+	c.groupCache.Store(groupID, group)
+	return nil
+}
+
+func (c *client) UninstallServiceEndpointsGroup(groupID binding.GroupIDType) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	if !c.bridge.DeleteGroup(groupID) {
+		return fmt.Errorf("group %d was not installed", groupID)
+	}
+	c.groupCache.Delete(groupID)
+	return nil
+}
+
+func (c *client) InstallServiceEndpointsFlows(protocol binding.Protocol, mac net.HardwareAddr, endpoint upstream.Endpoint) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	var flows []binding.Flow
+	endpointPort, _ := endpoint.Port()
+	endpointIP := net.ParseIP(endpoint.IP()).To4()
+	portVal := uint16(endpointPort)
+	cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpointIP, endpointPort, protocol)
+	flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
+	if len(mac) > 0 {
+		flows = append(flows,
+			c.endpointHairpinFlow(endpointIP),
+			c.localEndpointForwardFlow(endpointIP, mac),
+		)
+	}
+	if err := c.addFlows(c.serviceFlowCache, cacheKey, flows); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *client) UninstallServiceEndpointsFlows(protocol binding.Protocol, endpoints ...upstream.Endpoint) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	var keys []string
+	var flows []binding.Flow
+	for _, endpoint := range endpoints {
+		port, err := endpoint.Port()
+		if err != nil {
+			return fmt.Errorf("error when getting port: %w", err)
+		}
+		cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpoint.IP(), port, protocol)
+		fCacheI, ok := c.serviceFlowCache.Load(cacheKey)
+		if !ok {
+			continue
+		}
+		fCache := fCacheI.(flowCache)
+		for _, flow := range fCache {
+			flows = append(flows, flow)
+		}
+		keys = append(keys, cacheKey)
+	}
+	if err := c.DeleteAll(flows); err != nil {
+		return err
+	}
+	for _, key := range keys {
+		c.serviceFlowCache.Delete(key)
+	}
+	return nil
+}
+
+func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	var flows []binding.Flow
+	flows = append(flows, c.serviceLBFlow(groupID, svcIP, svcPort, protocol))
+	if affinityTimeout != 0 {
+		flows = append(flows, c.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout))
+	}
+	cacheKey := fmt.Sprintf("Service:%s:%d:%s", svcIP, svcPort, protocol)
+	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	cacheKey := fmt.Sprintf("Service:%s:%d:%s", svcIP, svcPort, protocol)
+	return c.deleteFlows(c.serviceFlowCache, cacheKey)
+}
+
+func (c *client) InstallClusterServiceFlows() error {
+	flows := []binding.Flow{
+		c.l2ForwardOutputServiceHairpinFlow(),
+		c.serviceHairpinResponseDNATFlow(cookie.Service),
+		c.serviceNeedLBFlow(cookie.Service),
+		c.sessionAffinityReselectFlow(cookie.Service),
+		c.hairpinDNATFlow(cookie.Service),
+	}
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
+		return err
+	}
+	c.defaultServiceFlows = flows
+	return nil
+}
+
 func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
 	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayMAC, gatewayOFPort, cookie.Service)
 	if err := c.ofEntryOperations.Add(flow); err != nil {
 		return err
 	}
-	c.clusterServiceCIDRFlows = []binding.Flow{flow}
+	c.defaultServiceFlows = []binding.Flow{flow}
 	return nil
 }
 
@@ -415,7 +552,7 @@ func (c *client) ReplayFlows() {
 	}
 
 	addFixedFlows(c.gatewayFlows)
-	addFixedFlows(c.clusterServiceCIDRFlows)
+	addFixedFlows(c.defaultServiceFlows)
 	addFixedFlows(c.defaultTunnelFlows)
 	// hostNetworkingFlows is used only on Windows. Replay the flows only when there are flows in this cache.
 	if len(c.hostNetworkingFlows) > 0 {
@@ -437,8 +574,15 @@ func (c *client) ReplayFlows() {
 		return true
 	}
 
+	c.groupCache.Range(func(id, gEntry interface{}) bool {
+		if err := gEntry.(binding.Group).Add(); err != nil {
+			klog.Errorf("Error when replaying cached group %d: %v", id, err)
+		}
+		return true
+	})
 	c.nodeFlowCache.Range(installCachedFlows)
 	c.podFlowCache.Range(installCachedFlows)
+	c.serviceFlowCache.Range(installCachedFlows)
 
 	c.replayPolicyFlows()
 }

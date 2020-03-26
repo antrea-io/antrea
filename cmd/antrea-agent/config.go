@@ -83,4 +83,7 @@ type AgentConfig struct {
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to false.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// Enable antrea proxy.
+	// Defaults to false.
+	EnableAntreaProxy bool `yaml:"enableAntreaProxy,omitempty"`
 }

@@ -62,6 +62,7 @@ type Initializer struct {
 	serviceCIDR     *net.IPNet // K8s Service ClusterIP CIDR
 	networkConfig   *config.NetworkConfig
 	nodeConfig      *config.NodeConfig
+	enableProxy     bool
 }
 
 func NewInitializer(
@@ -74,7 +75,8 @@ func NewInitializer(
 	hostGateway string,
 	mtu int,
 	serviceCIDR *net.IPNet,
-	networkConfig *config.NetworkConfig) *Initializer {
+	networkConfig *config.NetworkConfig,
+	enableProxy bool) *Initializer {
 	return &Initializer{
 		ovsBridgeClient: ovsBridgeClient,
 		client:          k8sClient,
@@ -86,6 +88,7 @@ func NewInitializer(
 		mtu:             mtu,
 		serviceCIDR:     serviceCIDR,
 		networkConfig:   networkConfig,
+		enableProxy:     enableProxy,
 	}
 }
 
@@ -279,14 +282,24 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		}
 	}
 
-	// Setup flow entries to enable service connectivity. Upstream kube-proxy is leveraged to
-	// provide load-balancing, and the flows installed by this method ensure that traffic sent
-	// from local Pods to any Service address can be forwarded to the host gateway interface
-	// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
-	// backend Pods.
-	if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gateway.MAC, gatewayOFPort); err != nil {
-		klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
-		return err
+	if !i.enableProxy {
+		// Setup flow entries to enable Service connectivity. Upstream kube-proxy is leveraged to
+		// provide load-balancing, and the flows installed by this method ensure that traffic sent
+		// from local Pods to any Service address can be forwarded to the host gateway interface
+		// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
+		// backend Pods.
+		if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gateway.MAC, gatewayOFPort); err != nil {
+			klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
+			return err
+		}
+	} else {
+		// Setup flow entries to enable Service connectivity. The agent proxy handles
+		// the ClusterIP Service while the upstream kube-proxy is leveraged to handle
+		// any other kinds of Services.
+		if err := i.ofClient.InstallClusterServiceFlows(); err != nil {
+			klog.Errorf("Failed to setup openflow entries for Cluster Service: %v", err)
+			return err
+		}
 	}
 
 	go func() {
