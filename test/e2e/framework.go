@@ -514,12 +514,18 @@ func (data *TestData) createBusyboxPod(name string) error {
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
-	return data.createPodOnNode(name, nodeName, "nginx", []string{}, nil, nil, nil)
+	return data.createPodOnNode(name, nodeName, "nginx", []string{}, nil, nil, []v1.ContainerPort{
+		{
+			Name:          "http",
+			ContainerPort: 80,
+			Protocol:      v1.ProtocolTCP,
+		},
+	})
 }
 
 // createNginxPod creates a Pod in the test namespace with a single nginx container.
-func (data *TestData) createNginxPod(name string) error {
-	return data.createNginxPodOnNode(name, "")
+func (data *TestData) createNginxPod(name, nodeName string) error {
+	return data.createNginxPodOnNode(name, nodeName)
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
@@ -774,7 +780,11 @@ func validatePodIP(podNetworkCIDR, podIP string) (bool, error) {
 }
 
 // createService creates a service with port and targetPort.
-func (data *TestData) createService(serviceName string, port, targetPort int, selector map[string]string) (*v1.Service, error) {
+func (data *TestData) createService(serviceName string, port, targetPort int, selector map[string]string, affinity bool) (*v1.Service, error) {
+	affinityType := v1.ServiceAffinityNone
+	if affinity {
+		affinityType = v1.ServiceAffinityClientIP
+	}
 	service := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -785,6 +795,7 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 			},
 		},
 		Spec: v1.ServiceSpec{
+			SessionAffinity: affinityType,
 			Ports: []v1.ServicePort{{
 				Port:       int32(port),
 				TargetPort: intstr.FromInt(targetPort),
@@ -796,8 +807,8 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 }
 
 // createNginxService create a nginx service with the given name.
-func (data *TestData) createNginxService() (*v1.Service, error) {
-	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"})
+func (data *TestData) createNginxService(affinity bool) (*v1.Service, error) {
+	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity)
 }
 
 // deleteService deletes the service.

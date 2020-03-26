@@ -243,16 +243,19 @@ type LearnAction interface {
 	MatchTransportDst(protocol Protocol) LearnAction
 	MatchLearnedTCPDstPort() LearnAction
 	MatchLearnedUDPDstPort() LearnAction
+	MatchLearnedSCTPDstPort() LearnAction
 	MatchLearnedSrcIP() LearnAction
 	MatchLearnedDstIP() LearnAction
 	MatchReg(regID int, data uint32, rng Range) LearnAction
 	LoadReg(regID int, data uint32, rng Range) LearnAction
 	LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
+	SetDstMAC(mac net.HardwareAddr) LearnAction
 	Done() FlowBuilder
 }
 
 type Group interface {
 	OFEntry
+	ResetBuckets() Group
 	Bucket() BucketBuilder
 }
 

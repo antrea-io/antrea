@@ -24,6 +24,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 const maxRetryForOFSwitch = 5
@@ -48,6 +49,10 @@ type Client interface {
 	// the different Services running in the Cluster. This method needs to be invoked once with
 	// the Cluster Service CIDR as a parameter.
 	InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
+
+	// InstallClusterServiceFlows sets up the appropriate flows so that traffic can reach
+	// the different Services running in the Cluster. This method needs to be invoked once.
+	InstallClusterServiceFlows() error
 
 	// InstallDefaultTunnelFlows sets up the classification flow for the default (flow based) tunnel.
 	InstallDefaultTunnelFlows(tunnelOFPort uint32) error
@@ -82,6 +87,31 @@ type Client interface {
 	// UninstallPodFlows removes the connection to the local Pod specified with the
 	// interfaceName. UninstallPodFlows will do nothing if no connection to the Pod was established.
 	UninstallPodFlows(interfaceName string) error
+
+	// InstallServiceGroup installs a group for Service LB. Each endpoint
+	// is a bucket of the group. For now, each bucket has the same weight.
+	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error
+	// UninstallServiceGroup removes the group and its buckets that are
+	// installed by InstallServiceGroup.
+	UninstallServiceGroup(groupID binding.GroupIDType) error
+
+	// InstallEndpointFlows installs flows for accessing Endpoints.
+	// If an Endpoint is on the current Node, then flows for hairpin and endpoint
+	// L2 forwarding should also be installed.
+	InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error
+	// UninstallEndpointFlows removes flows of the Endpoint installed by
+	// InstallEndpointFlows.
+	UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error
+
+	// InstallServiceFlows installs flows for accessing Service with clusterIP.
+	// It installs the flow that uses the group/bucket to do service LB. If the
+	// affinityTimeout is not zero, it also installs the flow which has a learn
+	// action to maintain the LB decision.
+	// The group with the groupID must be installed before, otherwise the
+	// installation will fail.
+	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error
+	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
+	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
@@ -234,12 +264,9 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIP net.IP, po
 		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.arpSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, cookie.Pod),
+		c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod),
 	}
 
-	// NoEncap mode has no tunnel.
-	if c.encapMode.SupportsEncap() {
-		flows = append(flows, c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod))
-	}
 	if c.encapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, traffic to local Pod is routed based on destination IP.
 		flows = append(flows,
@@ -274,12 +301,100 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 	return flowKeys
 }
 
+func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	group := c.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
+	if err := group.Add(); err != nil {
+		return fmt.Errorf("error when installing Service Endpoints Group: %w", err)
+	}
+	c.groupCache.Store(groupID, group)
+	return nil
+}
+
+func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	if !c.bridge.DeleteGroup(groupID) {
+		return fmt.Errorf("group %d delete failed", groupID)
+	}
+	c.groupCache.Delete(groupID)
+	return nil
+}
+
+func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	for _, endpoint := range endpoints {
+		var flows []binding.Flow
+		endpointPort, _ := endpoint.Port()
+		endpointIP := net.ParseIP(endpoint.IP()).To4()
+		portVal := uint16(endpointPort)
+		cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpointIP, endpointPort, protocol)
+		flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
+		if endpoint.GetIsLocal() {
+			flows = append(flows, c.hairpinSNATFlow(endpointIP))
+		}
+		if err := c.addFlows(c.serviceFlowCache, cacheKey, flows); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	port, err := endpoint.Port()
+	if err != nil {
+		return fmt.Errorf("error when getting port: %w", err)
+	}
+	cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpoint.IP(), port, protocol)
+	return c.deleteFlows(c.serviceFlowCache, cacheKey)
+}
+
+func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	var flows []binding.Flow
+	flows = append(flows, c.serviceLBFlow(groupID, svcIP, svcPort, protocol))
+	if affinityTimeout != 0 {
+		flows = append(flows, c.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout))
+	}
+	cacheKey := fmt.Sprintf("Service:%s:%d:%s", svcIP, svcPort, protocol)
+	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	cacheKey := fmt.Sprintf("Service:%s:%d:%s", svcIP, svcPort, protocol)
+	return c.deleteFlows(c.serviceFlowCache, cacheKey)
+}
+
+func (c *client) InstallClusterServiceFlows() error {
+	flows := []binding.Flow{
+		c.l2ForwardOutputServiceHairpinFlow(),
+		c.serviceHairpinResponseDNATFlow(),
+		c.serviceNeedLBFlow(),
+		c.sessionAffinityReselectFlow(),
+		c.serviceLBBypassFlow(),
+	}
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
+		return err
+	}
+	c.defaultServiceFlows = flows
+	return nil
+}
+
 func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
-	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayMAC, gatewayOFPort, cookie.Service)
+	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayMAC, gatewayOFPort)
 	if err := c.ofEntryOperations.Add(flow); err != nil {
 		return err
 	}
-	c.clusterServiceCIDRFlows = []binding.Flow{flow}
+	c.defaultServiceFlows = []binding.Flow{flow}
 	return nil
 }
 
@@ -344,7 +459,6 @@ func (c *client) initialize() error {
 	if err := c.ofEntryOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip established connections: %v", err)
 	}
-
 	if c.encapMode.SupportsNoEncap() {
 		if err := c.ofEntryOperations.Add(c.l2ForwardOutputReentInPortFlow(c.gatewayPort, cookie.Default)); err != nil {
 			return fmt.Errorf("failed to install L2 forward same in-port and out-port flow: %v", err)
@@ -415,7 +529,7 @@ func (c *client) ReplayFlows() {
 	}
 
 	addFixedFlows(c.gatewayFlows)
-	addFixedFlows(c.clusterServiceCIDRFlows)
+	addFixedFlows(c.defaultServiceFlows)
 	addFixedFlows(c.defaultTunnelFlows)
 	// hostNetworkingFlows is used only on Windows. Replay the flows only when there are flows in this cache.
 	if len(c.hostNetworkingFlows) > 0 {
@@ -437,8 +551,15 @@ func (c *client) ReplayFlows() {
 		return true
 	}
 
+	c.groupCache.Range(func(id, gEntry interface{}) bool {
+		if err := gEntry.(binding.Group).Add(); err != nil {
+			klog.Errorf("Error when replaying cached group %d: %v", id, err)
+		}
+		return true
+	})
 	c.nodeFlowCache.Range(installCachedFlows)
 	c.podFlowCache.Range(installCachedFlows)
+	c.serviceFlowCache.Range(installCachedFlows)
 
 	c.replayPolicyFlows()
 }

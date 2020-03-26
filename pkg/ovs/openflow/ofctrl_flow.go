@@ -132,6 +132,6 @@ func (r *Range) ToNXRange() *openflow13.NXRange {
 	return openflow13.NewNXRange(int(r[0]), int(r[1]))
 }
 
-func (r *Range) length() uint32 {
+func (r *Range) Length() uint32 {
 	return r[1] - r[0] + 1
 }

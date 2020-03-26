@@ -24,6 +24,7 @@ import (
 	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	openflow "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	proxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 	net "net"
 	reflect "reflect"
 )
@@ -206,6 +207,20 @@ func (mr *MockClientMockRecorder) InstallClusterServiceCIDRFlows(arg0, arg1, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallClusterServiceCIDRFlows", reflect.TypeOf((*MockClient)(nil).InstallClusterServiceCIDRFlows), arg0, arg1, arg2)
 }
 
+// InstallClusterServiceFlows mocks base method
+func (m *MockClient) InstallClusterServiceFlows() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallClusterServiceFlows")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallClusterServiceFlows indicates an expected call of InstallClusterServiceFlows
+func (mr *MockClientMockRecorder) InstallClusterServiceFlows() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallClusterServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallClusterServiceFlows))
+}
+
 // InstallDefaultTunnelFlows mocks base method
 func (m *MockClient) InstallDefaultTunnelFlows(arg0 uint32) error {
 	m.ctrl.T.Helper()
@@ -218,6 +233,20 @@ func (m *MockClient) InstallDefaultTunnelFlows(arg0 uint32) error {
 func (mr *MockClientMockRecorder) InstallDefaultTunnelFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallDefaultTunnelFlows", reflect.TypeOf((*MockClient)(nil).InstallDefaultTunnelFlows), arg0)
+}
+
+// InstallEndpointFlows mocks base method
+func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 []proxy.Endpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallEndpointFlows", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallEndpointFlows indicates an expected call of InstallEndpointFlows
+func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).InstallEndpointFlows), arg0, arg1)
 }
 
 // InstallExternalFlows mocks base method
@@ -290,6 +319,34 @@ func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0, arg1, arg2, arg3 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyRuleFlows), arg0, arg1, arg2, arg3)
 }
 
+// InstallServiceFlows mocks base method
+func (m *MockClient) InstallServiceFlows(arg0 openflow.GroupIDType, arg1 net.IP, arg2 uint16, arg3 openflow.Protocol, arg4 uint16) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallServiceFlows", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallServiceFlows indicates an expected call of InstallServiceFlows
+func (mr *MockClientMockRecorder) InstallServiceFlows(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallServiceFlows), arg0, arg1, arg2, arg3, arg4)
+}
+
+// InstallServiceGroup mocks base method
+func (m *MockClient) InstallServiceGroup(arg0 openflow.GroupIDType, arg1 bool, arg2 []proxy.Endpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallServiceGroup", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallServiceGroup indicates an expected call of InstallServiceGroup
+func (mr *MockClientMockRecorder) InstallServiceGroup(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceGroup", reflect.TypeOf((*MockClient)(nil).InstallServiceGroup), arg0, arg1, arg2)
+}
+
 // IsConnected mocks base method
 func (m *MockClient) IsConnected() bool {
 	m.ctrl.T.Helper()
@@ -314,6 +371,20 @@ func (m *MockClient) ReplayFlows() {
 func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplayFlows", reflect.TypeOf((*MockClient)(nil).ReplayFlows))
+}
+
+// UninstallEndpointFlows mocks base method
+func (m *MockClient) UninstallEndpointFlows(arg0 openflow.Protocol, arg1 proxy.Endpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallEndpointFlows", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallEndpointFlows indicates an expected call of UninstallEndpointFlows
+func (mr *MockClientMockRecorder) UninstallEndpointFlows(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).UninstallEndpointFlows), arg0, arg1)
 }
 
 // UninstallNodeFlows mocks base method
@@ -356,6 +427,34 @@ func (m *MockClient) UninstallPolicyRuleFlows(arg0 uint32) error {
 func (mr *MockClientMockRecorder) UninstallPolicyRuleFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).UninstallPolicyRuleFlows), arg0)
+}
+
+// UninstallServiceFlows mocks base method
+func (m *MockClient) UninstallServiceFlows(arg0 net.IP, arg1 uint16, arg2 openflow.Protocol) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallServiceFlows", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallServiceFlows indicates an expected call of UninstallServiceFlows
+func (mr *MockClientMockRecorder) UninstallServiceFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallServiceFlows", reflect.TypeOf((*MockClient)(nil).UninstallServiceFlows), arg0, arg1, arg2)
+}
+
+// UninstallServiceGroup mocks base method
+func (m *MockClient) UninstallServiceGroup(arg0 openflow.GroupIDType) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallServiceGroup", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallServiceGroup indicates an expected call of UninstallServiceGroup
+func (mr *MockClientMockRecorder) UninstallServiceGroup(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallServiceGroup", reflect.TypeOf((*MockClient)(nil).UninstallServiceGroup), arg0)
 }
 
 // MockOFEntryOperations is a mock of OFEntryOperations interface
