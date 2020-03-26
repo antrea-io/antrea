@@ -27,6 +27,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
         --cloud               Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
+        --disable-portmap     Generate a manifest with portMap CNI plugin disabled
         --keep                Debug flag which will preserve the generated kustomization.yml
         --help, -h            Print this message and exit
 
@@ -51,6 +52,7 @@ IPSEC=false
 KEEP=false
 ENCAP_MODE=""
 CLOUD=""
+CNI_PORTMAP=true
 
 while [[ $# -gt 0 ]]
 do
@@ -75,6 +77,10 @@ case $key in
     ;;
     --ipsec)
     IPSEC=true
+    shift
+    ;;
+    --disable-portmap)
+    CNI_PORTMAP=false
     shift
     ;;
     --keep)
@@ -194,6 +200,17 @@ if [[ $CLOUD != "" ]]; then
         BASE=../gke
         cd ..
     fi
+fi
+
+if $CNI_PORTMAP ; then
+    mkdir chaining-portmap && cd chaining-portmap
+    cp ../../patches/chaining-portmap/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    # change initContainer script and add portmap to CNI chain
+    $KUSTOMIZE edit add patch installCniPortMap.yml
+    BASE=../chaining-portmap
+    cd ..
 fi
 
 if $KIND; then

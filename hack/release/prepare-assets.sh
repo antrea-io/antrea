@@ -61,6 +61,7 @@ export IMG_TAG=$VERSION
 ./hack/generate-manifest.sh --mode release --ipsec > $1/antrea-ipsec.yml
 ./hack/generate-manifest.sh --mode release --encap-mode networkPolicyOnly > $1/antrea-eks.yml
 ./hack/generate-manifest.sh --mode release --cloud GKE --encap-mode noEncap > $1/antrea-gke.yml
+./hack/generate-manifest.sh --mode release --disable-portmap > $1/antrea-no-portmap.yml
 ./hack/generate-manifest-octant.sh --mode release > $1/antrea-octant.yml
 
 ls $1 | cat

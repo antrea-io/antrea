@@ -39,8 +39,8 @@ spec:
                 - SYS_MODULE
           volumeMounts:
           - name: antrea-config
-            mountPath: /etc/antrea/antrea-cni.conf
-            subPath: antrea-cni.conf
+            mountPath: /etc/antrea/antrea-cni.conflist
+            subPath: antrea-cni.conflist
             readOnly: true
           - name: host-cni-conf
             mountPath: /host/etc/cni/net.d

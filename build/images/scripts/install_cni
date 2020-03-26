@@ -5,7 +5,7 @@ set -euo pipefail
 # Todo: check version and continue installation only for a newer version
 
 # Install Antrea configuration file
-install -m 644 /etc/antrea/antrea-cni.conf /host/etc/cni/net.d/10-antrea.conf
+install -m 644 /etc/antrea/antrea-cni.conflist /host/etc/cni/net.d/10-antrea.conflist
 
 # Install Antrea binary file
 install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
