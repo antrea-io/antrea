@@ -149,6 +149,7 @@ type Action interface {
 	Normal() FlowBuilder
 	Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder
 	Group(id GroupIDType) FlowBuilder
+	Learn(id TableIDType, priority uint16, idleTimeout uint16, cookie uint64) LearnAction
 }
 
 type FlowBuilder interface {
@@ -181,6 +182,17 @@ type FlowBuilder interface {
 	Cookie(cookieID uint64) FlowBuilder
 	Action() Action
 	Done() Flow
+}
+
+type LearnAction interface {
+	MatchLearntTCPDSTPort() LearnAction
+	MatchLearntUDPDSTPort() LearnAction
+	MatchLearntSrcIP() LearnAction
+	MatchLearntDstIP() LearnAction
+	MatchReg(regID int, data uint32, rng Range) LearnAction
+	LoadReg(regID int, data uint32, rng Range) LearnAction
+	LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
+	Done() FlowBuilder
 }
 
 type Group interface {

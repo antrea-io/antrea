@@ -1,6 +1,7 @@
 package openflow
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 
@@ -284,6 +285,89 @@ func (a *ofFlowAction) Group(id GroupIDType) FlowBuilder {
 	}
 	a.builder.ofFlow.lastAction = group
 	return a.builder
+}
+
+//  Learn is an action adds or modifies a flow in an OpenFlow table.
+func (a *ofFlowAction) Learn(id TableIDType, priority uint16, idleTimeout uint16, cookie uint64) LearnAction {
+	la := &ofLearnAction{
+		flowBuilder: a.builder,
+		nxLearn:     ofctrl.NewLearnAction(uint8(id), priority, idleTimeout, 0, 0, 0, cookie),
+	}
+	la.nxLearn.DeleteLearnedFlowsAfterDeletion()
+	return la
+}
+
+// ofLearnAction is used to describe actions in the learn flow.
+type ofLearnAction struct {
+	flowBuilder *ofFlowBuilder
+	nxLearn     *ofctrl.FlowLearn
+}
+
+// MatchLearntTCPDSTPort makes the learnt flow to match the tp_dst of current TCP packet.
+func (a *ofLearnAction) MatchLearntTCPDSTPort() LearnAction {
+	ethTypeVal := make([]byte, 2)
+	binary.BigEndian.PutUint16(ethTypeVal, 0x800)
+	ipTypeVal := make([]byte, 2)
+	ipTypeVal[1] = byte(ofctrl.IP_PROTO_TCP)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_ETH_TYPE"}, 2*8, nil, ethTypeVal)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_PROTO"}, 1*8, nil, ipTypeVal)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_TCP_DST"}, 2*8, &ofctrl.LearnField{Name: "NXM_OF_TCP_DST"}, nil)
+	return a
+}
+
+// MatchLearntTCPDSTPort makes the learnt flow to match the tp_dst of current UDP packet.
+func (a *ofLearnAction) MatchLearntUDPDSTPort() LearnAction {
+	ethTypeVal := make([]byte, 2)
+	binary.BigEndian.PutUint16(ethTypeVal, 0x800)
+	ipTypeVal := make([]byte, 2)
+	ipTypeVal[1] = byte(ofctrl.IP_PROTO_UDP)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_ETH_TYPE"}, 2*8, nil, ethTypeVal)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_PROTO"}, 1*8, nil, ipTypeVal)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_UDP_DST"}, 2*8, &ofctrl.LearnField{Name: "NXM_OF_UDP_DST"}, nil)
+	return a
+}
+
+// MatchLearntTCPDSTPort makes the learnt flow to match the nw_src of current IP packet.
+func (a *ofLearnAction) MatchLearntSrcIP() LearnAction {
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, nil)
+	return a
+}
+
+// MatchLearntTCPDSTPort makes the learnt flow to match the nw_dst of current IP packet.
+func (a *ofLearnAction) MatchLearntDstIP() LearnAction {
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_DST"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_DST"}, nil)
+	return a
+}
+
+// MatchLearntTCPDSTPort makes the learnt flow to match the data in the reg of specific range.
+func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction {
+	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
+	valBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(valBuf, data)
+	a.nxLearn.AddMatch(toField, uint16(rng.length()), nil, valBuf[4-rng.length()/8:])
+	return a
+}
+
+// LoadRegToReg makes the learnt flow to load reg[fromRegID] to reg[toRegID] with specific ranges.
+func (a *ofLearnAction) LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction {
+	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", fromRegID), Start: uint16(fromRng[0])}
+	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", toRegID), Start: uint16(toRng[0])}
+	a.nxLearn.AddLoadAction(toField, uint16(toRng.length()), fromField, nil)
+	return a
+}
+
+// LoadRegToReg makes the learnt flow to load data to reg[regID] with specific range.
+func (a *ofLearnAction) LoadReg(regID int, data uint32, rng Range) LearnAction {
+	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
+	valBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(valBuf, data)
+	a.nxLearn.AddLoadAction(toField, uint16(rng.length()), nil, valBuf[4-rng.length()/8:])
+	return a
+}
+
+func (a *ofLearnAction) Done() FlowBuilder {
+	a.flowBuilder.Learn(a.nxLearn)
+	return a.flowBuilder
 }
 
 func getFieldRange(name string) (*openflow13.MatchField, Range, error) {
