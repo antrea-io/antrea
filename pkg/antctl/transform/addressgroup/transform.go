@@ -62,14 +62,14 @@ func (r Response) GetTableHeader() []string {
 	return []string{"NAME", "POD-IPS"}
 }
 
-func (r Response) GetTableRow(maxColumnLength int) []string {
-	row := []string{r.Name}
-
+func (r Response) GetPodNames(maxColumnLength int) string {
 	list := make([]string, len(r.Pods))
 	for i, pod := range r.Pods {
 		list[i] = pod.IP
 	}
-	row = append(row, common.GenerateTableElementWithSummary(list, maxColumnLength))
+	return common.GenerateTableElementWithSummary(list, maxColumnLength)
+}
 
-	return row
+func (r Response) GetTableRow(maxColumnLength int) []string {
+	return []string{r.Name, r.GetPodNames(maxColumnLength)}
 }

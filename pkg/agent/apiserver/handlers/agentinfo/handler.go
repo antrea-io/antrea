@@ -21,6 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 )
@@ -59,4 +60,37 @@ func HandleFunc(aq monitor.AgentQuerier) http.HandlerFunc {
 			klog.Errorf("Error when encoding AntreaAgentInfo to json: %v", err)
 		}
 	}
+}
+
+var _ common.TableOutput = new(AntreaAgentInfoResponse)
+
+func (r AntreaAgentInfoResponse) GetTableHeader() []string {
+	return []string{"POD", "NODE", "STATUS", "NODE-SUBNET", "NETWORK-POLICIES", "ADDRESS-GROUPS", "APPLIED-TO-GROUPS", "LOCAL-PODS"}
+}
+
+func (r AntreaAgentInfoResponse) GetAgentConditionStr() string {
+	if r.AgentConditions == nil {
+		return ""
+	}
+	agentCondition := "Healthy"
+	for _, cond := range r.AgentConditions {
+		if cond.Status == corev1.ConditionUnknown {
+			agentCondition = "Unknown"
+		}
+		if cond.Status == corev1.ConditionFalse {
+			return "Unhealthy"
+		}
+	}
+	return agentCondition
+}
+
+func (r AntreaAgentInfoResponse) GetTableRow(maxColumnLength int) []string {
+	return []string{r.PodRef.Namespace + "/" + r.PodRef.Name,
+		r.NodeRef.Name,
+		r.GetAgentConditionStr(),
+		common.GenerateTableElementWithSummary(r.NodeSubnet, maxColumnLength),
+		common.Int32ToString(r.NetworkPolicyControllerInfo.NetworkPolicyNum),
+		common.Int32ToString(r.NetworkPolicyControllerInfo.AddressGroupNum),
+		common.Int32ToString(r.NetworkPolicyControllerInfo.AppliedToGroupNum),
+		common.Int32ToString(r.LocalPodNum)}
 }
