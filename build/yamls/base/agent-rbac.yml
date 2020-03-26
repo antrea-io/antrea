@@ -22,9 +22,11 @@ rules:
       - ""
     resources:
       - pods
+      - endpoints
       - services
     verbs:
       - get
+      - watch
       - list
   - apiGroups:
       - clusterinformation.antrea.tanzu.vmware.com

@@ -641,6 +641,7 @@ func TestPacketOutIn(t *testing.T) {
 	err = bridge.AddFlowsInBundle([]binding.Flow{flow0, flow1}, nil, nil)
 	require.Nil(t, err)
 	err = bridge.SendPacketOut(pkt)
+	require.NoError(t, err)
 	<-stopCh
 }
 

@@ -59,13 +59,12 @@ func (b *ofFlowBuilder) MatchReg(regID int, data uint32) FlowBuilder {
 
 // MatchRegRange adds match condition for matching data in the target register at specified range.
 func (b *ofFlowBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBuilder {
-	var regData = data
 	if rng[0] > 0 {
-		regData = data << rng[0]
+		data <<= rng[0]
 	}
 	reg := &ofctrl.NXRegister{
 		ID:    regID,
-		Data:  regData,
+		Data:  data,
 		Range: rng.ToNXRange(),
 	}
 	b.Match.NxRegs = append(b.Match.NxRegs, reg)

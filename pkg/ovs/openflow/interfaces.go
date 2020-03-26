@@ -243,6 +243,7 @@ type LearnAction interface {
 	MatchTransportDst(protocol Protocol) LearnAction
 	MatchLearnedTCPDstPort() LearnAction
 	MatchLearnedUDPDstPort() LearnAction
+	MatchLearnedSCTPDstPort() LearnAction
 	MatchLearnedSrcIP() LearnAction
 	MatchLearnedDstIP() LearnAction
 	MatchReg(regID int, data uint32, rng Range) LearnAction
@@ -253,6 +254,7 @@ type LearnAction interface {
 
 type Group interface {
 	OFEntry
+	ResetBuckets() Group
 	Bucket() BucketBuilder
 }
 

@@ -71,6 +71,11 @@ func (f *ofGroup) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMes
 	return message, nil
 }
 
+func (g *ofGroup) ResetBuckets() Group {
+	g.ofctrl.Buckets = nil
+	return g
+}
+
 type bucketBuilder struct {
 	group  *ofGroup
 	bucket *openflow13.Bucket
