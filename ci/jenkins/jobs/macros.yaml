@@ -69,6 +69,26 @@
 
           if !(test -f jenkins/SECRET_EXIST); then
             echo "=== Fail to get secret ==="
+            
+            echo "=== Remove too many logs ==="
+            export LOG_DIR=/var/lib/jenkins/antrea_logs
+            find ${LOG_DIR}/* -type d -mmin +10080 | xargs rm -rf
+
+            CLUSTER_LOG_DIR="${LOG_DIR}/${cluster}"
+            echo "=== Saving capi logs ==="
+            mkdir -p ${CLUSTER_LOG_DIR}/capi
+            kubectl get -n capi-system pods -o name | awk '{print $1}' | while read capi_pod; do
+              capi_pod_name=$(echo ${capi_pod} | cut -d'/' -f 2)
+              kubectl logs ${capi_pod_name} -n capi-system --tail=100 > ${CLUSTER_LOG_DIR}/capi/${capi_pod_name}
+            done
+
+            echo "=== Saving capv logs ==="
+            mkdir -p ${CLUSTER_LOG_DIR}/capv
+            kubectl get -n capv-system pods -o name | awk '{print $1}' | while read capv_pod; do
+              capv_pod_name=$(echo ${capv_pod} | cut -d'/' -f 2)
+              kubectl logs ${capv_pod_name} -n capv-system --tail=100 > ${CLUSTER_LOG_DIR}/capv/${capv_pod_name}
+            done
+            
             exit 1
           else
             echo "=== Setup cluster succeeded ==="
@@ -198,13 +218,6 @@
 - builder:
     name: builder-prepare-antrea
     builders:
-      - shell: |-
-          echo ====== Cleanup Antrea Installation ======
-
-          export KUBECONFIG="${WORKSPACE}/jenkins/out/kubeconfig"
-          kubectl delete daemonset antrea-agent -n kube-system || true
-          kubectl delete -f "${WORKSPACE}/build/yamls/antrea.yml" || true
-          kubectl delete ns antrea-test || true
       - shell: |-
           echo ====== Building Antrea for the Following Commit ======
 
