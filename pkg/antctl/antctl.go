@@ -56,6 +56,7 @@ var CommandList = &commandList{
 		},
 		{
 			use:          "networkpolicy",
+			aliases:      []string{"networkpolicies", "netpol"},
 			short:        "Print network policies",
 			long:         "Print network policies in ${component}",
 			commandGroup: get,
@@ -82,6 +83,7 @@ var CommandList = &commandList{
 		},
 		{
 			use:          "appliedtogroup",
+			aliases:      []string{"appliedtogroups", "atg"},
 			short:        "Print appliedto groups",
 			long:         "Print appliedto groups in ${component}",
 			commandGroup: get,
@@ -108,6 +110,7 @@ var CommandList = &commandList{
 		},
 		{
 			use:          "addressgroup",
+			aliases:      []string{"addressgroups", "ag"},
 			short:        "Print address groups",
 			long:         "Print address groups in ${component}",
 			commandGroup: get,
@@ -133,9 +136,10 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(addressgroup.Response{}),
 		},
 		{
-			use:   "controllerinfo",
-			short: "Print Antrea controller's basic information",
-			long:  "Print Antrea controller's basic information including version, deployment, NetworkPolicy controller, ControllerConditions, etc.",
+			use:     "controllerinfo",
+			aliases: []string{"controllerinfos", "ci"},
+			short:   "Print Antrea controller's basic information",
+			long:    "Print Antrea controller's basic information including version, deployment, NetworkPolicy controller, ControllerConditions, etc.",
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
 					resourceName:         controllerinforest.ControllerInfoResourceName,
@@ -147,9 +151,10 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(controllerinfo.Response{}),
 		},
 		{
-			use:   "agentinfo",
-			short: "Print agent's basic information",
-			long:  "Print agent's basic information including version, deployment, Node subnet, OVS info, AgentConditions, etc.",
+			use:     "agentinfo",
+			aliases: []string{"agentinfos", "ai"},
+			short:   "Print agent's basic information",
+			long:    "Print agent's basic information including version, deployment, Node subnet, OVS info, AgentConditions, etc.",
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path:       "/agentinfo",
@@ -160,9 +165,10 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(agentinfo.AntreaAgentInfoResponse{}),
 		},
 		{
-			use:   "podinterface",
-			short: "Print Pod's network interface information",
-			long:  "Print information about the network interface(s) created by the Antrea agent for the specified Pod.",
+			use:     "podinterface",
+			aliases: []string{"podinterfaces", "pi"},
+			short:   "Print Pod's network interface information",
+			long:    "Print information about the network interface(s) created by the Antrea agent for the specified Pod.",
 			example: `  Get a pod-interface
   $ antctl get podinterface pod1 -n ns1
   Get the list of podinterfaces in a Namespace
