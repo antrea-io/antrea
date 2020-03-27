@@ -165,5 +165,14 @@ func AppliedToGroupKeyFunc(obj interface{}) (string, error) {
 
 // NewAppliedToGroupStore creates a store of AppliedToGroup.
 func NewAppliedToGroupStore() storage.Interface {
-	return ram.NewStore(AppliedToGroupKeyFunc, cache.Indexers{}, genAppliedToGroupEvent, keyAndSpanSelectFunc)
+	indexers := cache.Indexers{
+		cache.NamespaceIndex: func(obj interface{}) ([]string, error) {
+			atg, ok := obj.(*types.AppliedToGroup)
+			if !ok {
+				return []string{}, nil
+			}
+			return []string{atg.Selector.Namespace}, nil
+		},
+	}
+	return ram.NewStore(AppliedToGroupKeyFunc, indexers, genAppliedToGroupEvent, keyAndSpanSelectFunc)
 }
