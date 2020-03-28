@@ -17,5 +17,10 @@ if [ ! -f /host/opt/cni/bin/loopback ]; then
     install -m 755 /opt/cni/bin/loopback /host/opt/cni/bin/loopback
 fi
 
+# Install PortMap CNI binary file
+if [ ! -f /host/opt/cni/bin/portmap ]; then
+    install -m 755 /opt/cni/bin/portmap /host/opt/cni/bin/portmap
+fi
+
 # Load the OVS kernel module
 modprobe openvswitch

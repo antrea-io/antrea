@@ -296,6 +296,10 @@ data:
                 "ipam": {
                     "type": "host-local"
                 }
+            },
+            {
+                "type": "portmap",
+                "capabilities": {"portMappings": true}
             }
         ]
     }
@@ -305,7 +309,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-g72kdkd8hc
+  name: antrea-config-mmd74dm2m9
   namespace: kube-system
 ---
 apiVersion: v1
@@ -413,7 +417,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-g72kdkd8hc
+          name: antrea-config-mmd74dm2m9
         name: antrea-config
       - hostPath:
           path: /var/log/antrea
@@ -605,7 +609,7 @@ spec:
       hostNetwork: true
       initContainers:
       - command:
-        - install_cni_chaining_portmap
+        - install_cni
         image: antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: install-cni
@@ -639,7 +643,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-g72kdkd8hc
+          name: antrea-config-mmd74dm2m9
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
