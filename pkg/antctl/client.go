@@ -58,7 +58,9 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 	var kubeconfig *rest.Config
 	if _, err = os.Stat(opt.kubeconfig); opt.kubeconfig == clientcmd.RecommendedHomeFile && os.IsNotExist(err) {
 		kubeconfig, err = rest.InClusterConfig()
-		err = nil
+		if err != nil {
+			err = fmt.Errorf("Unable to resolve in-cluster configuration: %v. Please specify the kubeconfig file", err)
+		}
 	} else {
 		kubeconfig, err = clientcmd.BuildConfigFromFlags("", opt.kubeconfig)
 	}
