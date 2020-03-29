@@ -73,7 +73,8 @@ spec:
         - name: antrea-controller
           image: antrea
           command: ["antrea-controller"]
-          args: ["--config", "/etc/antrea/antrea-controller.conf"]
+          # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).
+          args: ["--config", "/etc/antrea/antrea-controller.conf", "--logtostderr=false", "--log_dir", "/var/log/antrea", "--alsologtostderr"]
           env:
             # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME
@@ -106,7 +107,13 @@ spec:
               mountPath: /etc/antrea/antrea-controller.conf
               subPath: antrea-controller.conf
               readOnly: true
+            - name: host-var-log-antrea
+              mountPath: /var/log/antrea
       volumes:
         - name: antrea-config
           configMap:
             name: antrea-config
+        - name: host-var-log-antrea
+          hostPath:
+            path: /var/log/antrea
+            type: DirectoryOrCreate

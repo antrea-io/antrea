@@ -59,7 +59,8 @@ spec:
         - name: antrea-agent
           image: antrea
           command: ["antrea-agent"]
-          args: ["--config", "/etc/antrea/antrea-agent.conf"]
+          # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).
+          args: ["--config", "/etc/antrea/antrea-agent.conf", "--logtostderr=false", "--log_dir", "/var/log/antrea", "--alsologtostderr"]
           env:
             # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME
@@ -95,7 +96,7 @@ spec:
             periodSeconds: 10
             failureThreshold: 5
           securityContext:
-            # antrea-agent needs to manipulate /proc/sys/net/ipv4/conf/XXX/send_redirects"
+            # antrea-agent needs to manipulate "/proc/sys/net/ipv4/conf/XXX/send_redirects".
             privileged: true
           volumeMounts:
           - name: antrea-config
@@ -116,6 +117,8 @@ spec:
           # antrea-agent can open the network namespace path when setting up Pod
           # networking. Different container runtimes may use /proc or /var/run/netns when invoking
           # the CNI commands. Docker uses /proc and containerd uses /var/run/netns.
+          - name: host-var-log-antrea
+            mountPath: /var/log/antrea
           - name: host-proc
             mountPath: /host/proc
             readOnly: true
