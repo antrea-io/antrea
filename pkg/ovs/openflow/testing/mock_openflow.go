@@ -92,7 +92,7 @@ func (mr *MockBridgeMockRecorder) CreateGroup(arg0 interface{}) *gomock.Call {
 }
 
 // CreateTable mocks base method
-func (m *MockBridge) CreateTable(arg0, arg1 openflow.TableIDType, arg2 openflow.MissActionType) openflow.Table {
+func (m *MockBridge) CreateTable(arg0, arg1 openflow.TableIDType, arg2 uint32) openflow.Table {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateTable", arg0, arg1, arg2)
 	ret0, _ := ret[0].(openflow.Table)
@@ -255,10 +255,10 @@ func (mr *MockTableMockRecorder) GetID() *gomock.Call {
 }
 
 // GetMissAction mocks base method
-func (m *MockTable) GetMissAction() openflow.MissActionType {
+func (m *MockTable) GetMissAction() uint32 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMissAction")
-	ret0, _ := ret[0].(openflow.MissActionType)
+	ret0, _ := ret[0].(uint32)
 	return ret0
 }
 
