@@ -110,7 +110,6 @@ this Node. Then access the local endpoint directly:
 ```
 curl --insecure https://127.0.0.1:10443/
 ```
-
 ## Debugging OVS
 
 OVS agents (`ovsdb-server` and `ovs-vswitchd`) run inside the `antrea-ovs`

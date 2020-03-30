@@ -24,7 +24,6 @@ You can follow the sample below to run Octant and antrea-octant-plugin in Pod.
 In this example, we expose UI as a NodePort service for accessing externally.
 You can update [antrea-octant.yaml](build/yamls/antrea-octant.yml) according to
 your environment and preference.
-
 1. Create a secret that contains your kubeconfig.
 
     ```
@@ -35,7 +34,6 @@ your environment and preference.
 2. You may need to update [build/yamls/antrea-octant.yml](/build/yamls/antrea-octant.yml) according to your kubeconfig file name.
 
 3. You can change the sample yaml according to your requirements and environment, then apply the yaml to create both deployment and NodePort service.
-
     ```
     kubectl apply -f build/yamls/antrea-octant.yml
     ```

@@ -23,7 +23,6 @@ Use `antrea-agent -h` to see complete options.
   # Path of the kubeconfig file that is used to configure access to the Antrea Controller
   # apiserver. If not specified, InClusterConfig will be used.
   #kubeconfig: <PATH_TO_ANTREA_KUBE_CONF>
-
 # Name of the OpenVSwitch bridge antrea-agent will create and use.
 # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
 #ovsBridge: br-int

@@ -41,7 +41,6 @@
 
 **This documentation currently assumes that Antrea is used in encap mode (an
   overlay network is created between all Nodes).**
-
 ## Dumping the Flows
 
 This guide includes a representative flow dump for every table in the pipeline,
@@ -143,6 +142,7 @@ If you dump the flows for this table, you may see the following:
 ```
 
 Flow 1 is for traffic coming in on the local gateway. Flow 2 is for traffic
+
 coming in through a VXLAN or Geneve tunnel (i.e. from another Node). The next
 two flows (3 and 4) are for local Pods (in this case Pods from the coredns
 deployment).
