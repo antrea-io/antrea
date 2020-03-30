@@ -25,7 +25,7 @@ type GroupIDType = uint32
 
 const LastTableID TableIDType = 0xff
 
-type MissActionType uint32
+type MissActionType = uint32
 type Range [2]uint32
 
 const (
@@ -63,7 +63,6 @@ type Bridge interface {
 	DeleteTable(id TableIDType) bool
 	CreateGroup(id GroupIDType) Group
 	DeleteGroup(id GroupIDType) bool
-	// Conn
 	DumpTableStatus() []TableStatus
 	// DumpFlows queries the Openflow entries from OFSwitch. The filter of the query is Openflow cookieID; the result is
 	// a map from flow cookieID to FlowStates.

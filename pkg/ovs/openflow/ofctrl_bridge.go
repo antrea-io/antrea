@@ -304,7 +304,6 @@ func (b *OFBridge) IsConnected() bool {
 	return b.ofSwitch.IsReady()
 }
 
-// TODO: @wenying, handle group also
 func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows []Flow) error {
 	// If no Openflow entries are requested to be added or modified or deleted on the OVS bridge, return immediately.
 	if len(addflows) == 0 && len(modFlows) == 0 && len(delFlows) == 0 {

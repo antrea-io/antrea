@@ -103,6 +103,23 @@ func OfctlDumpFlows(brName string, args ...string) ([]string, error) {
 	return flowList, nil
 }
 
+func OfctlDumpGroups(brName string, args ...string) ([][]string, error) {
+	groupsDump, err := runOfctlCmd("dump-groups", brName, args...)
+	if err != nil {
+		return nil, err
+	}
+	groupsDumpStr := strings.TrimSpace(string(groupsDump))
+	rawGroupItems := strings.Split(groupsDumpStr, "\n")[1:]
+	var groupList [][]string
+	for _, rawGroupItem := range rawGroupItems {
+		rawGroupItem = strings.TrimSpace(rawGroupItem)
+		elems := strings.Split(rawGroupItem, ",bucket=")
+		groupList = append(groupList, elems)
+	}
+	//fmt.Printf("group dumps: %v\n", groupList)
+	return groupList, nil
+}
+
 func OfctlDumpTableFlows(brName string, table uint8) ([]string, error) {
 	return OfctlDumpFlows(brName, fmt.Sprintf("table=%d", table))
 }

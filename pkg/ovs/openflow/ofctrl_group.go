@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/contiv/libOpenflow/openflow13"
-
 	"github.com/contiv/ofnet/ofctrl"
 )
 
@@ -49,7 +48,7 @@ func (g *ofGroup) Type() EntryType {
 }
 
 func (g *ofGroup) KeyString() string {
-	return fmt.Sprintf("group_id:%d,bucket_num:%d", g.ofctrl.ID, len(g.ofctrl.Buckets))
+	return fmt.Sprintf("group_id:%d", g.ofctrl.ID)
 }
 
 func (g *ofGroup) Bucket() BucketBuilder {
