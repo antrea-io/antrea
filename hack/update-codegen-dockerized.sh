@@ -62,6 +62,10 @@ MOCKGEN_TARGETS=(
   "pkg/monitor AgentQuerier,ControllerQuerier"
 )
 
+# Command mockgen does not automatically replace variable YEAR with current year
+# like others do, e.g. client-gen.
+current_year=$(date +"%Y")
+sed -i "s/YEAR/${current_year}/g" hack/boilerplate/license_header.raw.txt
 for target in "${MOCKGEN_TARGETS[@]}"; do
   read -r package interfaces <<<"${target}"
   package_name=$(basename "${package}")
@@ -71,6 +75,7 @@ for target in "${MOCKGEN_TARGETS[@]}"; do
     -package=testing \
     "${ANTREA_PKG}/${package}" "${interfaces}"
 done
+git checkout HEAD -- hack/boilerplate/license_header.raw.txt
 
 # Download vendored modules to the vendor directory so it's easier to
 # specify the search path of required protobuf files.
@@ -81,4 +86,12 @@ $GOPATH/bin/go-to-protobuf \
   --go-header-file hack/boilerplate/license_header.go.txt
 # Clean up vendor directory.
 rm -rf vendor
+
+echo "=== Start resetting changes introduced by YEAR ==="
+git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | while read file; do
+  if [[ "$(git diff ${file})" == *"-// Copyright "*" Antrea Authors"* ]]; then
+    git checkout HEAD -- "${file}"
+    echo "=== ${file} is reset ==="
+  fi
+done
 
