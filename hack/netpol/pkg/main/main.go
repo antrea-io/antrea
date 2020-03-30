@@ -19,6 +19,9 @@ var p80 int
 var p81 int
 var allPods []Pod
 
+// provide enough time for policies to be enforced & deleted by the CNI plugin.
+const networkPolicyDelay = 2 * time.Second
+
 func init() {
 	p80 = 80
 	p81 = 81
@@ -123,7 +126,7 @@ func validate(k8s *Kubernetes, reachability *Reachability, port int) {
 	resultsCh := make(chan *probeResult, numProbes)
 	// TODO: find better metrics, this is only for POC.
 	oneProbe := func(podFrom, podTo Pod) {
-		log.Debugf("Probing: %s -> %s", podFrom, podTo)
+		log.Tracef("Probing: %s -> %s", podFrom, podTo)
 		connected, err := k8s.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port)
 		resultsCh <- &probeResult{podFrom, podTo, connected, err}
 	}
@@ -214,15 +217,19 @@ func executeTests(k8s *Kubernetes, testList []*TestCase) {
 
 	for _, testCase := range testList {
 		log.Infof("running test case %s", testCase.Name)
+		log.Debugf("cleaning-up previous policies and sleeping for %v", networkPolicyDelay)
 		err = k8s.CleanNetworkPolicies(namespaces)
+		time.Sleep(networkPolicyDelay)
 		failOnError(err)
 		for _, step := range testCase.Steps {
 			log.Infof("running step %s of test case %s", step.Name, testCase.Name)
 			reachability := step.Reachability
 			policy := step.NetworkPolicy
 			if policy != nil {
+				log.Debugf("creating policy and sleeping for %v", networkPolicyDelay)
 				_, err := k8s.CreateOrUpdateNetworkPolicy(policy.Namespace, policy)
 				failOnError(err)
+				time.Sleep(networkPolicyDelay)
 			}
 			start := time.Now()
 			validate(k8s, reachability, step.Port)
