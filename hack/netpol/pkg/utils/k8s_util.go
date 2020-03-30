@@ -108,11 +108,11 @@ func (k *Kubernetes) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) 
 	}
 	// HACK: inferring container name as c80, c81, etc, for simplicity.
 	containerName := fmt.Sprintf("c%v", port)
-	log.Infof("Running: kubectl exec %s -c %s -n %s -- %s", fromPod.Name, containerName, fromPod.Namespace, strings.Join(cmd, " "))
+	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", fromPod.Name, containerName, fromPod.Namespace, strings.Join(cmd, " "))
 	stdout, stderr, err := k.ExecuteRemoteCommand(fromPod, containerName, cmd)
 	if err != nil {
-		// log this error as debug since may be an expected failure
-		log.Debugf("%s/%s -> %s/%s: error when running command: err - %v /// stdout - %s /// stderr - %s", ns1, pod1, ns2, pod2, err, stdout, stderr)
+		// log this error as trace since may be an expected failure
+		log.Tracef("%s/%s -> %s/%s: error when running command: err - %v /// stdout - %s /// stderr - %s", ns1, pod1, ns2, pod2, err, stdout, stderr)
 		// do not return an error
 		return false, nil
 	}
