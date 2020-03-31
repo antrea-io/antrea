@@ -78,7 +78,7 @@ func (mr *MockBridgeMockRecorder) Connect(arg0, arg1 interface{}) *gomock.Call {
 }
 
 // CreateGroup mocks base method
-func (m *MockBridge) CreateGroup(arg0 uint32) openflow.Group {
+func (m *MockBridge) CreateGroup(arg0 openflow.GroupIDType) openflow.Group {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateGroup", arg0)
 	ret0, _ := ret[0].(openflow.Group)
@@ -92,7 +92,7 @@ func (mr *MockBridgeMockRecorder) CreateGroup(arg0 interface{}) *gomock.Call {
 }
 
 // CreateTable mocks base method
-func (m *MockBridge) CreateTable(arg0, arg1 openflow.TableIDType, arg2 uint32) openflow.Table {
+func (m *MockBridge) CreateTable(arg0, arg1 openflow.TableIDType, arg2 openflow.MissActionType) openflow.Table {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateTable", arg0, arg1, arg2)
 	ret0, _ := ret[0].(openflow.Table)
@@ -120,7 +120,7 @@ func (mr *MockBridgeMockRecorder) DeleteFlowsByCookie(arg0, arg1 interface{}) *g
 }
 
 // DeleteGroup mocks base method
-func (m *MockBridge) DeleteGroup(arg0 uint32) bool {
+func (m *MockBridge) DeleteGroup(arg0 openflow.GroupIDType) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteGroup", arg0)
 	ret0, _ := ret[0].(bool)
@@ -255,10 +255,10 @@ func (mr *MockTableMockRecorder) GetID() *gomock.Call {
 }
 
 // GetMissAction mocks base method
-func (m *MockTable) GetMissAction() uint32 {
+func (m *MockTable) GetMissAction() openflow.MissActionType {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMissAction")
-	ret0, _ := ret[0].(uint32)
+	ret0, _ := ret[0].(openflow.MissActionType)
 	return ret0
 }
 
@@ -509,7 +509,7 @@ func (mr *MockActionMockRecorder) Drop() *gomock.Call {
 }
 
 // Group mocks base method
-func (m *MockAction) Group(arg0 uint32) openflow.FlowBuilder {
+func (m *MockAction) Group(arg0 openflow.GroupIDType) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Group", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
@@ -1120,7 +1120,7 @@ func (mr *MockFlowBuilderMockRecorder) MatchInPort(arg0 interface{}) *gomock.Cal
 }
 
 // MatchProtocol mocks base method
-func (m *MockFlowBuilder) MatchProtocol(arg0 string) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchProtocol(arg0 openflow.Protocol) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MatchProtocol", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)

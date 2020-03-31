@@ -132,16 +132,16 @@ type OFBridge struct {
 }
 
 func (b *OFBridge) CreateGroup(id GroupIDType) Group {
-	ofctrlGroup, err := b.ofSwitch.NewGroup(id, ofctrl.GroupSelect)
+	ofctrlGroup, err := b.ofSwitch.NewGroup(uint32(id), ofctrl.GroupSelect)
 	if err != nil {
-		ofctrlGroup = b.ofSwitch.GetGroup(id)
+		ofctrlGroup = b.ofSwitch.GetGroup(uint32(id))
 	}
 	g := &ofGroup{bridge: b, ofctrl: ofctrlGroup}
 	return g
 }
 
 func (b *OFBridge) DeleteGroup(id GroupIDType) bool {
-	err := b.ofSwitch.DeleteGroup(id)
+	err := b.ofSwitch.DeleteGroup(uint32(id))
 	if err != nil {
 		return false
 	}

@@ -277,10 +277,10 @@ func (a *ofFlowAction) Conjunction(conjID uint32, clauseID uint8, nClause uint8)
 }
 
 // Group is an action to forward packets to groups to do load-balance.
-func (a *ofFlowAction) Group(id uint32) FlowBuilder {
+func (a *ofFlowAction) Group(id GroupIDType) FlowBuilder {
 	group := &ofctrl.Group{
 		Switch: a.builder.Flow.Table.Switch,
-		ID:     id,
+		ID:     uint32(id),
 	}
 	a.builder.ofFlow.lastAction = group
 	return a.builder

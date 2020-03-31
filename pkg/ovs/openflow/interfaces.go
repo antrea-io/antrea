@@ -19,22 +19,22 @@ import (
 	"time"
 )
 
-type protocol = string
+type Protocol string
 type TableIDType uint8
-type GroupIDType = uint32
+type GroupIDType uint32
 
 const LastTableID TableIDType = 0xff
 
-type MissActionType = uint32
+type MissActionType uint32
 type Range [2]uint32
 
 const (
-	ProtocolIP   protocol = "ip"
-	ProtocolARP  protocol = "arp"
-	ProtocolTCP  protocol = "tcp"
-	ProtocolUDP  protocol = "udp"
-	ProtocolSCTP protocol = "sctp"
-	ProtocolICMP protocol = "icmp"
+	ProtocolIP   Protocol = "ip"
+	ProtocolARP  Protocol = "arp"
+	ProtocolTCP  Protocol = "tcp"
+	ProtocolUDP  Protocol = "udp"
+	ProtocolSCTP Protocol = "sctp"
+	ProtocolICMP Protocol = "icmp"
 )
 
 const (
@@ -152,7 +152,7 @@ type Action interface {
 }
 
 type FlowBuilder interface {
-	MatchProtocol(name protocol) FlowBuilder
+	MatchProtocol(name Protocol) FlowBuilder
 	MatchReg(regID int, data uint32) FlowBuilder
 	MatchRegRange(regID int, data uint32, rng Range) FlowBuilder
 	MatchInPort(inPort uint32) FlowBuilder
