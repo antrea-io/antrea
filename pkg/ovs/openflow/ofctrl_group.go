@@ -22,9 +22,8 @@ import (
 )
 
 type ofGroup struct {
-	ofctrl  *ofctrl.Group
-	bridge  *OFBridge
-	builder *ofGroup
+	ofctrl *ofctrl.Group
+	bridge *OFBridge
 }
 
 func (g *ofGroup) Reset() {
