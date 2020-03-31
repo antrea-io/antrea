@@ -116,7 +116,6 @@ func OfctlDumpGroups(brName string, args ...string) ([][]string, error) {
 		elems := strings.Split(rawGroupItem, ",bucket=")
 		groupList = append(groupList, elems)
 	}
-	//fmt.Printf("group dumps: %v\n", groupList)
 	return groupList, nil
 }
 
