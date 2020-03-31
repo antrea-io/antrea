@@ -22,15 +22,22 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/rule"
+	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
 
@@ -44,6 +51,81 @@ func TestCommandList_tableOutputForGetCommands(t *testing.T) {
 		rawResponseData interface{}
 		expected        string
 	}{
+		{
+			name: "StructureData-ControllerInfo-Single",
+			rawResponseData: controllerinfo.Response{
+				Version: "v0.4.0",
+				PodRef: v1.ObjectReference{
+					Kind:      "Pod",
+					Namespace: "kube-system",
+					Name:      "antrea-controller-55b9bcd59f-h9ll4",
+				},
+				NodeRef: v1.ObjectReference{
+					Kind: "Node",
+					Name: "node-master",
+				},
+				ServiceRef: v1.ObjectReference{
+					Kind: "Service",
+					Name: "antrea",
+				},
+				NetworkPolicyControllerInfo: v1beta1.NetworkPolicyControllerInfo{
+					NetworkPolicyNum:  1,
+					AddressGroupNum:   1,
+					AppliedToGroupNum: 2,
+				},
+				ConnectedAgentNum: 2,
+				ControllerConditions: []v1beta1.ControllerCondition{
+					{
+						Type:              "ControllerHealthy",
+						Status:            "True",
+						LastHeartbeatTime: metav1.NewTime(time.Now()),
+					},
+				},
+			},
+			expected: `POD                                            NODE        STATUS  NETWORK-POLICIES ADDRESS-GROUPS APPLIED-TO-GROUPS CONNECTED-AGENTS
+kube-system/antrea-controller-55b9bcd59f-h9ll4 node-master Healthy 1                1              2                 2               
+`,
+		},
+		{
+			name: "StructureData-AgentInfo-Single",
+			rawResponseData: agentinfo.AntreaAgentInfoResponse{
+				Version: "v0.4.0",
+				PodRef: v1.ObjectReference{
+					Kind:      "Pod",
+					Namespace: "kube-system",
+					Name:      "antrea-agent-0",
+				},
+				NodeRef: v1.ObjectReference{
+					Kind: "Node",
+					Name: "node-worker",
+				},
+				NodeSubnet: []string{"192.168.1.0/24", "192.168.1.1/24"},
+				OVSInfo: v1beta1.OVSInfo{
+					Version:    "1.0",
+					BridgeName: "br-int",
+					FlowTable: map[string]int32{
+						"0":  5,
+						"10": 7,
+					},
+				},
+				NetworkPolicyControllerInfo: v1beta1.NetworkPolicyControllerInfo{
+					NetworkPolicyNum:  1,
+					AddressGroupNum:   1,
+					AppliedToGroupNum: 2,
+				},
+				LocalPodNum: 3,
+				AgentConditions: []v1beta1.AgentCondition{
+					{
+						Type:              "AgentHealthy",
+						Status:            "True",
+						LastHeartbeatTime: metav1.NewTime(time.Now()),
+					},
+				},
+			},
+			expected: `POD                        NODE        STATUS  NODE-SUBNET                   NETWORK-POLICIES ADDRESS-GROUPS APPLIED-TO-GROUPS LOCAL-PODS
+kube-system/antrea-agent-0 node-worker Healthy 192.168.1.0/24,192.168.1.1/24 1                1              2                 3         
+`,
+		},
 		{
 			name:            "StructureData-NonTableOutput-Single",
 			rawResponseData: Foobar{Foo: "foo"},
@@ -147,6 +229,35 @@ GroupName PodNamespace/nginx-6db489d4b7-324rc + 1 more...
 			},
 			expected: `NAME      PODS  
 GroupName <NONE>
+`,
+		},
+		{
+			name: "StructureData-PodInterface-List",
+			rawResponseData: []podinterface.Response{
+				{
+					PodName:       "nginx-6db489d4b7-vgv7v",
+					PodNamespace:  "default",
+					InterfaceName: "Interface",
+					IP:            "127.0.0.1",
+					MAC:           "07-16-76-00-02-86",
+					PortUUID:      "portuuid0",
+					OFPort:        80,
+					ContainerID:   "dve7a2d6c224otm9m0eas8dtwr78",
+				},
+				{
+					PodName:       "nginx-32b489d4b7-vgv7v",
+					PodNamespace:  "default",
+					InterfaceName: "Interface2",
+					IP:            "127.0.0.2",
+					MAC:           "07-16-76-00-02-87",
+					PortUUID:      "portuuid1",
+					OFPort:        35572,
+					ContainerID:   "uci2ucsd6dx87dasuk232312csse",
+				},
+			},
+			expected: `NAMESPACE NAME                   INTERFACE-NAME IP        MAC               PORT-UUID OF-PORT CONTAINER-ID
+default   nginx-6db489d4b7-vgv7v Interface      127.0.0.1 07-16-76-00-02-86 portuuid0 80      dve7a2d6c22 
+default   nginx-32b489d4b7-vgv7v Interface2     127.0.0.2 07-16-76-00-02-87 portuuid1 35572   uci2ucsd6dx 
 `,
 		},
 	} {

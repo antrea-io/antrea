@@ -70,8 +70,5 @@ func (r Response) GetTableHeader() []string {
 }
 
 func (r Response) GetTableRow(maxColumnLength int) []string {
-	row := []string{r.Name}
-	row = append(row, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength))
-	row = append(row, strconv.Itoa(len(r.Rules)))
-	return row
+	return []string{r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength), strconv.Itoa(len(r.Rules))}
 }

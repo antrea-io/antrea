@@ -19,6 +19,7 @@ import (
 	"net/http"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 )
 
@@ -71,4 +72,21 @@ func HandleFunc(aq monitor.AgentQuerier) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
+}
+
+var _ common.TableOutput = new(Response)
+
+func (r Response) GetTableHeader() []string {
+	return []string{"NAMESPACE", "NAME", "INTERFACE-NAME", "IP", "MAC", "PORT-UUID", "OF-PORT", "CONTAINER-ID"}
+}
+
+func (r Response) GetContainerIDStr() string {
+	if len(r.ContainerID) > 12 {
+		return r.ContainerID[0:11]
+	}
+	return r.ContainerID
+}
+
+func (r Response) GetTableRow(maxColumnLength int) []string {
+	return []string{r.PodNamespace, r.PodName, r.InterfaceName, r.IP, r.MAC, r.PortUUID, common.Int32ToString(r.OFPort), r.GetContainerIDStr()}
 }

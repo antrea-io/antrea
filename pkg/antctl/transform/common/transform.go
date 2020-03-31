@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
@@ -41,6 +42,10 @@ func GroupMemberPodTransform(pod networkingv1beta1.GroupMemberPod) GroupMemberPo
 type TableOutput interface {
 	GetTableHeader() []string
 	GetTableRow(maxColumnLength int) []string
+}
+
+func Int32ToString(val int32) string {
+	return strconv.Itoa(int(val))
 }
 
 func GenerateTableElementWithSummary(list []string, maxColumnLength int) string {

@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 	clusterinfo "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 )
 
@@ -58,4 +59,36 @@ func Transform(reader io.Reader, _ bool) (interface{}, error) {
 		ControllerConditions:        controllerInfo.ControllerConditions,
 	}
 	return resp, nil
+}
+
+var _ common.TableOutput = new(Response)
+
+func (r Response) GetTableHeader() []string {
+	return []string{"POD", "NODE", "STATUS", "NETWORK-POLICIES", "ADDRESS-GROUPS", "APPLIED-TO-GROUPS", "CONNECTED-AGENTS"}
+}
+
+func (r Response) GetControllerConditionStr() string {
+	if r.ControllerConditions == nil {
+		return ""
+	}
+	controllerCondition := "Healthy"
+	for _, cond := range r.ControllerConditions {
+		if cond.Status == corev1.ConditionUnknown {
+			controllerCondition = "Unknown"
+		}
+		if cond.Status == corev1.ConditionFalse {
+			return "Unhealthy"
+		}
+	}
+	return controllerCondition
+}
+
+func (r Response) GetTableRow(maxColumnLength int) []string {
+	return []string{r.PodRef.Namespace + "/" + r.PodRef.Name,
+		r.NodeRef.Name,
+		r.GetControllerConditionStr(),
+		common.Int32ToString(r.NetworkPolicyControllerInfo.NetworkPolicyNum),
+		common.Int32ToString(r.NetworkPolicyControllerInfo.AddressGroupNum),
+		common.Int32ToString(r.NetworkPolicyControllerInfo.AppliedToGroupNum),
+		common.Int32ToString(r.ConnectedAgentNum)}
 }
