@@ -619,7 +619,11 @@ func (cd *commandDefinition) applyFlagsToCommand(cmd *cobra.Command) {
 	if !hasFlag {
 		cmd.Args = cobra.NoArgs
 	}
-	cmd.Flags().StringP("output", "o", "json", "output format: json|yaml|table")
+	if cd.commandGroup == get {
+		cmd.Flags().StringP("output", "o", "table", "output format: json|yaml|table")
+	} else {
+		cmd.Flags().StringP("output", "o", "json", "output format: json|yaml|table")
+	}
 }
 
 // applyExampleToCommand generates examples according to the commandDefinition.
