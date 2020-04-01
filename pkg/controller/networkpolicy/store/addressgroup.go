@@ -152,5 +152,15 @@ func AddressGroupKeyFunc(obj interface{}) (string, error) {
 
 // NewAddressGroupStore creates a store of AddressGroup.
 func NewAddressGroupStore() storage.Interface {
-	return ram.NewStore(AddressGroupKeyFunc, cache.Indexers{}, genAddressGroupEvent, keyAndSpanSelectFunc)
+	indexers := cache.Indexers{
+		cache.NamespaceIndex: func(obj interface{}) ([]string, error) {
+			ag, ok := obj.(*types.AddressGroup)
+			if !ok {
+				return []string{}, nil
+			}
+			// ag.Selector.Namespace == "" means it's a cluster scoped group, we index it as it is.
+			return []string{ag.Selector.Namespace}, nil
+		},
+	}
+	return ram.NewStore(AddressGroupKeyFunc, indexers, genAddressGroupEvent, keyAndSpanSelectFunc)
 }

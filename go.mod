@@ -59,4 +59,11 @@ replace (
 	// (mocks), which breaks "go mod". This has been fixed in master.
 	// Will remove this and upgrade Octant version after finding another compatible Octant release.
 	github.com/vmware/octant => github.com/antoninbas/octant v0.8.1-0.20191116223915-811df1acc59f
+	// fake.NewSimpleClientset is quite slow when it's initialized with massive objects due to
+	// https://github.com/kubernetes/kubernetes/issues/89574. It takes more than tens of minutes to
+	// init a fake client with 200k objects, which makes it hard to run the NetworkPolicy scale test.
+	// There is an optimization https://github.com/kubernetes/kubernetes/pull/89575 but will only be
+	// available from 1.18.1 and later releases. Use this commit before Antrea bumps up its K8s
+	// dependency version.
+	k8s.io/client-go => github.com/tnqn/client-go v0.0.0-20200330154227-d0a165c8fbd8
 )
