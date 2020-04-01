@@ -21,7 +21,7 @@ type ofFlow struct {
 	// matchers is string slice, it is used to generate a readable match string of the Flow.
 	matchers []string
 	// protocol adds a readable protocol type in the match string of ofFlow.
-	protocol protocol
+	protocol Protocol
 	// ctStateString is a temporary variable for the readable ct_state configuration. Its value is changed when the client
 	// updates the matching condition of "ct_states". When FlowBuilder.Done is called, its value is added into the matchers.
 	ctStateString string
@@ -64,6 +64,14 @@ func (f *ofFlow) Delete() error {
 	}
 	f.table.UpdateStatus(-1)
 	return nil
+}
+
+func (f *ofFlow) Type() EntryType {
+	return FlowEntry
+}
+
+func (f *ofFlow) KeyString() string {
+	return f.MatchString()
 }
 
 func (f *ofFlow) MatchString() string {

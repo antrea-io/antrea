@@ -246,17 +246,14 @@ func (a *ofFlowAction) MoveRange(fromField, toField string, fromRange, toRange R
 
 // Resubmit is an action to resubmit packet to the specified table with the port as new in_port. If port is empty string,
 // the in_port field is not changed.
-func (a *ofFlowAction) Resubmit(ofPort uint16, table TableIDType) FlowBuilder {
-	ofTableID := uint8(table)
-	resubmit := ofctrl.NewResubmit(&ofPort, &ofTableID)
-	a.builder.ofFlow.lastAction = resubmit
+func (a *ofFlowAction) Resubmit(ofPort uint16, tableID TableIDType) FlowBuilder {
+	a.builder.ofFlow.Resubmit(ofPort, uint8(tableID))
 	return a.builder
 }
 
 func (a *ofFlowAction) ResubmitToTable(table TableIDType) FlowBuilder {
 	ofTableID := uint8(table)
-	resubmit := ofctrl.NewResubmit(nil, &ofTableID)
-	a.builder.ofFlow.lastAction = resubmit
+	a.builder.ofFlow.Resubmit(openflow13.OFPP_IN_PORT, ofTableID)
 	return a.builder
 }
 
@@ -276,6 +273,16 @@ func (a *ofFlowAction) Normal() FlowBuilder {
 // Conjunction is an action to add new conjunction configuration to conjunctive match flow.
 func (a *ofFlowAction) Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder {
 	a.builder.ofFlow.AddConjunction(conjID, clauseID, nClause)
+	return a.builder
+}
+
+// Group is an action to forward packets to groups to do load-balance.
+func (a *ofFlowAction) Group(id GroupIDType) FlowBuilder {
+	group := &ofctrl.Group{
+		Switch: a.builder.Flow.Table.Switch,
+		ID:     uint32(id),
+	}
+	a.builder.ofFlow.lastAction = group
 	return a.builder
 }
 
