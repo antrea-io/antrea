@@ -20,15 +20,16 @@ UNAME_S := $(shell uname -s)
 USERID  := $(shell id -u)
 GRPID   := $(shell id -g)
 
-.PHONY: bin test-unit test-integration
+.PHONY: bin
+bin:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
 
+.PHONY: test-unit test-integration
 ifeq ($(UNAME_S),Linux)
-bin: .linux-bin
 test-unit: .linux-test-unit
 test-integration: .linux-test-integration
 else
-bin:
-	$(error Cannot use target 'bin' on a non-Linux OS, but you can build Antrea with 'docker-bin')
 test-unit:
 	$(error Cannot use target 'test-unit' on a non-Linux OS, but you can run unit tests with 'docker-test-unit')
 test-integration:
@@ -90,10 +91,6 @@ docker-tidy: $(DOCKER_CACHE)
 	@$(DOCKER_ENV) $(GO) mod tidy
 	@chmod -R 0755 $<
 	@chmod 0644 go.sum
-
-.PHONY: .linux-bin
-.linux-bin:
-	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
 
 ANTCTL_BINARIES := antctl-darwin antctl-linux antctl-windows
 $(ANTCTL_BINARIES): antctl-%:
