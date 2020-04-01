@@ -121,3 +121,54 @@ func TestDifferentNamedPorts(t *testing.T) {
 		t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", client1Name, server1IP, server1Port)
 	}
 }
+
+func TestDefaultDenyEgressPolicy(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	serverName := randName("test-server-")
+	serverPort := 80
+	if err = data.createServerPod(serverName, "http", serverPort); err != nil {
+		t.Fatalf("Error when creating server pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, serverName)
+	serverIP, err := data.podWaitForIP(defaultTimeout, serverName)
+	if err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", serverName, err)
+	}
+
+	clientName := randName("test-client-")
+	if err := data.createBusyboxPod(clientName); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, clientName)
+	if _, err := data.podWaitForIP(defaultTimeout, clientName); err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
+	}
+
+	if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err != nil {
+		t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, serverIP, serverPort)
+	}
+
+	spec := &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+		Egress:      []networkingv1.NetworkPolicyEgressRule{},
+	}
+	np, err := data.createNetworkPolicy("test-networkpolicy-deny-all-egress", spec)
+	if err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(np); err != nil {
+			t.Fatalf("Error when deleting network policy: %v", err)
+		}
+	}()
+
+	if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err == nil {
+		t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", clientName, serverIP, serverPort)
+	}
+}
