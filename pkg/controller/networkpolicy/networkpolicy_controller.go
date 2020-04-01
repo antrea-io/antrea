@@ -637,8 +637,21 @@ func (n *NetworkPolicyController) updateNetworkPolicy(old, cur interface{}) {
 // deleteNetworkPolicy receives NetworkPolicy DELETED events and deletes resources
 // which can be consumed by agents to delete corresponding rules on the Nodes.
 func (n *NetworkPolicyController) deleteNetworkPolicy(old interface{}) {
+	np, ok := old.(*networkingv1.NetworkPolicy)
+	if !ok {
+		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Error decoding object when deleting NetworkPolicy, invalid type: %v", old)
+			return
+		}
+		np, ok = tombstone.Obj.(*networkingv1.NetworkPolicy)
+		if !ok {
+			klog.Errorf("Error decoding object tombstone when deleting NetworkPolicy, invalid type: %v", tombstone.Obj)
+			return
+		}
+	}
 	defer n.heartbeat("deleteNetworkPolicy")
-	np := old.(*networkingv1.NetworkPolicy)
+
 	klog.V(2).Infof("Processing NetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
 	key, _ := keyFunc(np)
 	oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
@@ -728,8 +741,21 @@ func (n *NetworkPolicyController) updatePod(oldObj, curObj interface{}) {
 // deletePod retrieves all AddressGroups and AppliedToGroups which match the Pod's
 // labels and enqueues the groups key for further processing.
 func (n *NetworkPolicyController) deletePod(old interface{}) {
+	pod, ok := old.(*v1.Pod)
+	if !ok {
+		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Error decoding object when deleting Pod, invalid type: %v", old)
+			return
+		}
+		pod, ok = tombstone.Obj.(*v1.Pod)
+		if !ok {
+			klog.Errorf("Error decoding object tombstone when deleting Pod, invalid type: %v", tombstone.Obj)
+			return
+		}
+	}
 	defer n.heartbeat("deletePod")
-	pod := old.(*v1.Pod)
+
 	klog.V(2).Infof("Processing Pod %s/%s DELETE event, labels: %v", pod.Namespace, pod.Name, pod.Labels)
 	// Find all AppliedToGroup keys which match the Pod's labels.
 	appliedToGroupKeys := n.filterAppliedToGroupsForPod(pod)
@@ -785,8 +811,21 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 // deleteNamespace retrieves all AddressGroups which match the Namespace's
 // labels and enqueues the group keys for further processing.
 func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
+	namespace, ok := old.(*v1.Namespace)
+	if !ok {
+		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Error decoding object when deleting Namespace, invalid type: %v", old)
+			return
+		}
+		namespace, ok = tombstone.Obj.(*v1.Namespace)
+		if !ok {
+			klog.Errorf("Error decoding object tombstone when deleting Namespace, invalid type: %v", tombstone.Obj)
+			return
+		}
+	}
 	defer n.heartbeat("deleteNamespace")
-	namespace := old.(*v1.Namespace)
+
 	klog.V(2).Infof("Processing Namespace %s DELETE event, labels: %v", namespace.Name, namespace.Labels)
 	// Find groups matching deleted Namespace's labels and enqueue them
 	// for further processing.
