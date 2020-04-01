@@ -219,21 +219,24 @@ func (r *reconciler) add(rule *CompletedRule) error {
 			}
 		}
 
-		if len(rule.To.IPBlocks) > 0 {
-			// IPBlocks cannot resolve named ports, use the original services.
-			// It will be merged to the same group as Pods that cannot resolve any named port.
-			svcHash := hashServices(rule.Services)
-			ofRule, exists := ofRuleByServicesMap[svcHash]
-			// Create a new Openflow rule if the group doesn't exist.
-			if !exists {
-				ofRule = &types.PolicyRule{
-					Direction: v1beta1.DirectionOut,
-					From:      from,
-					Service:   filterUnresolvablePort(rule.Services),
-				}
-				ofRuleByServicesMap[svcHash] = ofRule
-				servicesMap[svcHash] = rule.Services
+		// If there are no "ToAddresses", the above process doesn't create any PolicyRule.
+		// We must ensure there is at least one PolicyRule, otherwise the Pods won't be
+		// isolated, so we create a PolicyRule with the original services if it doesn't exist.
+		// If there are IPBlocks or Pods that cannot resolve any named port, they will share
+		// this PolicyRule.
+		svcHash := hashServices(rule.Services)
+		ofRule, exists := ofRuleByServicesMap[svcHash]
+		// Create a new Openflow rule if the group doesn't exist.
+		if !exists {
+			ofRule = &types.PolicyRule{
+				Direction: v1beta1.DirectionOut,
+				From:      from,
+				To:        []types.Address{},
+				Service:   filterUnresolvablePort(rule.Services),
 			}
+			ofRuleByServicesMap[svcHash] = ofRule
+		}
+		if len(rule.To.IPBlocks) > 0 {
 			to, exceptTo := ipBlocksToOFAddresses(rule.To.IPBlocks)
 			ofRule.To = append(ofRule.To, to...)
 			ofRule.ExceptTo = append(ofRule.ExceptTo, exceptTo...)
@@ -307,15 +310,12 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 		deletedFrom := ipsToOFAddresses(lastRealized.podIPs.Difference(newIPs))
 
 		podsByServicesMap, servicesMap := groupPodsByServices(newRule.Services, newRule.ToAddresses)
-		// If IPBlocks is present, ensure its corresponding servicesHash is present in podsByServicesMap,
-		// so its Openflow rule can be updated when `From` is updated.
-		if len(newRule.To.IPBlocks) > 0 {
-			// IPBlocks can't resolve named port, use the original services.
-			svcHash := hashServices(newRule.Services)
-			if _, exists := podsByServicesMap[svcHash]; !exists {
-				podsByServicesMap[svcHash] = v1beta1.NewGroupMemberPodSet()
-				servicesMap[svcHash] = newRule.Services
-			}
+		// Same as the process in `add`, we must ensure the group for the original services is present
+		// in podsByServicesMap, so that this group won't be removed and its "From" will be updated.
+		svcHash := hashServices(newRule.Services)
+		if _, exists := podsByServicesMap[svcHash]; !exists {
+			podsByServicesMap[svcHash] = v1beta1.NewGroupMemberPodSet()
+			servicesMap[svcHash] = newRule.Services
 		}
 		prevPodsByServicesMap, _ := groupPodsByServices(lastRealized.Services, lastRealized.ToAddresses)
 		for svcHash, pods := range podsByServicesMap {
