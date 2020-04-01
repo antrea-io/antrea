@@ -9,7 +9,18 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 
 ## Unreleased
 
-## 0.5.0 - 2019-03-25
+## 0.5.1 - 2020-04-01
+
+### Changed
+
+- Remove performance bottleneck during NetworkPolicy computation in the Controller: add namespace-based indexers to quickly determine which internal objects need to be updated when a Pod is added / deleted.
+
+### Fixed
+
+- Fix implementation of deny-all egress policy (no egress traffic should be allowed for any Pod to which the policy is applied).
+- Fix antctl segfault when kubeconfig cannot be resolved and print error instead.
+
+## 0.5.0 - 2020-03-25
 
 ### Added
 
@@ -41,7 +52,7 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 - Reduce memory usage of Antrea Controller when an Agent establishes a connection.
 - Clean-up the appropriate iptables rules when a Node leaves the cluster.
 
-## 0.4.1 - 2019-02-27
+## 0.4.1 - 2020-02-27
 
 ### Fixed
 
@@ -51,7 +62,7 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 - Check and update (if needed) the type of the default tunnel port (tun0) after Agent starts.
 - Fix race condition when the same OF port is reused for a new Pod.
 
-## 0.4.0 - 2019-02-20
+## 0.4.0 - 2020-02-20
 
 ### Added
 
@@ -75,7 +86,7 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 - Install loopback plugin on Nodes if missing, from the Agent's initContainer.
 - Remove unnecessary periodical resync in Antrea K8s controllers to avoid overhead at scale.
 
-## 0.3.0 - 2019-01-23
+## 0.3.0 - 2020-01-23
 
 ### Added
 
