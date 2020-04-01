@@ -346,6 +346,10 @@ spec:
       - args:
         - --config
         - /etc/antrea/antrea-controller.conf
+        - --logtostderr=false
+        - --log_dir
+        - /var/log/antrea
+        - --alsologtostderr
         command:
         - antrea-controller
         env:
@@ -382,6 +386,8 @@ spec:
           name: antrea-config
           readOnly: true
           subPath: antrea-controller.conf
+        - mountPath: /var/log/antrea
+          name: host-var-log-antrea
       hostNetwork: true
       nodeSelector:
         kubernetes.io/os: linux
@@ -396,6 +402,10 @@ spec:
       - configMap:
           name: antrea-config-57hfkfg8kd
         name: antrea-config
+      - hostPath:
+          path: /var/log/antrea
+          type: DirectoryOrCreate
+        name: host-var-log-antrea
 ---
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
@@ -452,6 +462,10 @@ spec:
       - args:
         - --config
         - /etc/antrea/antrea-agent.conf
+        - --logtostderr=false
+        - --log_dir
+        - /var/log/antrea
+        - --alsologtostderr
         command:
         - antrea-agent
         env:
@@ -505,6 +519,8 @@ spec:
         - mountPath: /var/lib/cni
           name: host-var-run-antrea
           subPath: cni
+        - mountPath: /var/log/antrea
+          name: host-var-log-antrea
         - mountPath: /host/proc
           name: host-proc
           readOnly: true
