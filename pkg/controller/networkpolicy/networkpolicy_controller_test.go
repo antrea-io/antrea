@@ -53,10 +53,11 @@ type networkPolicyController struct {
 	appliedToGroupStore        storage.Interface
 	addressGroupStore          storage.Interface
 	internalNetworkPolicyStore storage.Interface
+	informerFactory            informers.SharedInformerFactory
 }
 
-func newController() (*fake.Clientset, *networkPolicyController) {
-	client := newClientset()
+func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyController) {
+	client := newClientset(objects...)
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	addressGroupStore := store.NewAddressGroupStore()
@@ -73,11 +74,12 @@ func newController() (*fake.Clientset, *networkPolicyController) {
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
+		informerFactory,
 	}
 }
 
-func newClientset() *fake.Clientset {
-	client := fake.NewSimpleClientset()
+func newClientset(objects ...runtime.Object) *fake.Clientset {
+	client := fake.NewSimpleClientset(objects...)
 
 	client.PrependReactor("create", "networkpolicies", k8stesting.ReactionFunc(func(action k8stesting.Action) (bool, runtime.Object, error) {
 		np := action.(k8stesting.CreateAction).GetObject().(*networkingv1.NetworkPolicy)

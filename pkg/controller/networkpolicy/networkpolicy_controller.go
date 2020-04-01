@@ -141,6 +141,15 @@ type NetworkPolicyController struct {
 	// internalNetworkPolicyMutex protects the internalNetworkPolicyStore from
 	// concurrent access during updates to the internal NetworkPolicy object.
 	internalNetworkPolicyMutex sync.RWMutex
+
+	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
+	// processed, and to count executions of each function.
+	heartbeatCh chan heartbeat
+}
+
+type heartbeat struct {
+	name      string
+	timestamp time.Time
 }
 
 // NewNetworkPolicyController returns a new *NetworkPolicyController.
@@ -197,6 +206,15 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		resyncPeriod,
 	)
 	return n
+}
+
+func (n *NetworkPolicyController) heartbeat(name string) {
+	if n.heartbeatCh != nil {
+		n.heartbeatCh <- heartbeat{
+			name:      name,
+			timestamp: time.Now(),
+		}
+	}
 }
 
 func (n *NetworkPolicyController) GetNetworkPolicyNum() int {
@@ -289,7 +307,7 @@ func (n *NetworkPolicyController) createAppliedToGroup(np *networkingv1.NetworkP
 // labelsMatchGroupSelector matches a Pod's labels to the
 // GroupSelector object and returns true, if and only if the labels
 // match any of the selector criteria present in the GroupSelector.
-func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v1.Namespace, sel antreatypes.GroupSelector) bool {
+func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v1.Namespace, sel *antreatypes.GroupSelector) bool {
 	if sel.Namespace != "" {
 		if sel.Namespace != pod.Namespace {
 			// Pods must be matched within the same Namespace.
@@ -334,18 +352,13 @@ func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v
 // match the Namespace's labels.
 func (n *NetworkPolicyController) filterAddressGroupsForNamespace(namespace *v1.Namespace) sets.String {
 	matchingKeys := sets.String{}
-	addressGroups := n.addressGroupStore.List()
+	// Only cluster scoped groups can possibly select this Namespace.
+	addressGroups, _ := n.addressGroupStore.GetByIndex(cache.NamespaceIndex, "")
 	for _, group := range addressGroups {
 		addrGroup := group.(*antreatypes.AddressGroup)
-		if addrGroup.Selector.NamespaceSelector == nil {
-			// This addressGroup selector does not have a namespaceSelector,
-			// skip processing.
-			continue
-		}
 		if addrGroup.Selector.NamespaceSelector.Matches(labels.Set(namespace.Labels)) {
 			matchingKeys.Insert(addrGroup.Name)
 			klog.V(2).Infof("Namespace %s matched AddressGroup %s", namespace.Name, addrGroup.Name)
-			continue
 		}
 	}
 	return matchingKeys
@@ -355,14 +368,15 @@ func (n *NetworkPolicyController) filterAddressGroupsForNamespace(namespace *v1.
 // match the Pod's labels.
 func (n *NetworkPolicyController) filterAddressGroupsForPod(pod *v1.Pod) sets.String {
 	matchingKeySet := sets.String{}
-	addressGroups := n.addressGroupStore.List()
+	// AddressGroups that are in this namespace or that are cluster scoped can possibly select this Pod.
+	localAddressGroups, _ := n.addressGroupStore.GetByIndex(cache.NamespaceIndex, pod.Namespace)
+	clusterScopedAddressGroups, _ := n.addressGroupStore.GetByIndex(cache.NamespaceIndex, "")
 	podNS, _ := n.namespaceLister.Get(pod.Namespace)
-	for _, group := range addressGroups {
+	for _, group := range append(localAddressGroups, clusterScopedAddressGroups...) {
 		addrGroup := group.(*antreatypes.AddressGroup)
-		if n.labelsMatchGroupSelector(pod, podNS, addrGroup.Selector) {
+		if n.labelsMatchGroupSelector(pod, podNS, &addrGroup.Selector) {
 			matchingKeySet.Insert(addrGroup.Name)
 			klog.V(2).Infof("Pod %s/%s matched AddressGroup %s", pod.Namespace, pod.Name, addrGroup.Name)
-			continue
 		}
 	}
 	return matchingKeySet
@@ -372,14 +386,15 @@ func (n *NetworkPolicyController) filterAddressGroupsForPod(pod *v1.Pod) sets.St
 // match the Pod's labels.
 func (n *NetworkPolicyController) filterAppliedToGroupsForPod(pod *v1.Pod) sets.String {
 	matchingKeySet := sets.String{}
-	appliedToGroups := n.appliedToGroupStore.List()
+	// Only AppliedToGroups that are in this namespace can possibly select this Pod as there are
+	// no cluster scoped AppliedToGroups right now.
+	appliedToGroups, _ := n.appliedToGroupStore.GetByIndex(cache.NamespaceIndex, pod.Namespace)
 	podNS, _ := n.namespaceLister.Get(pod.Namespace)
 	for _, group := range appliedToGroups {
 		appGroup := group.(*antreatypes.AppliedToGroup)
-		if n.labelsMatchGroupSelector(pod, podNS, appGroup.Selector) {
+		if n.labelsMatchGroupSelector(pod, podNS, &appGroup.Selector) {
 			matchingKeySet.Insert(appGroup.Name)
 			klog.V(2).Infof("Pod %s/%s matched AppliedToGroup %s", pod.Namespace, pod.Name, appGroup.Name)
-			continue
 		}
 	}
 	return matchingKeySet
@@ -558,6 +573,7 @@ func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolic
 // addNetworkPolicy receives NetworkPolicy ADD events and creates resources
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) addNetworkPolicy(obj interface{}) {
+	defer n.heartbeat("addNetworkPolicy")
 	np := obj.(*networkingv1.NetworkPolicy)
 	klog.V(2).Infof("Processing NetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
 	// Create an internal NetworkPolicy object corresponding to this NetworkPolicy
@@ -572,6 +588,7 @@ func (n *NetworkPolicyController) addNetworkPolicy(obj interface{}) {
 // updateNetworkPolicy receives NetworkPolicy UPDATE events and updates resources
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) updateNetworkPolicy(old, cur interface{}) {
+	defer n.heartbeat("updateNetworkPolicy")
 	np := cur.(*networkingv1.NetworkPolicy)
 	klog.V(2).Infof("Processing NetworkPolicy %s/%s UPDATE event", np.Namespace, np.Name)
 	// Update an internal NetworkPolicy ID, corresponding to this NetworkPolicy and
@@ -620,6 +637,7 @@ func (n *NetworkPolicyController) updateNetworkPolicy(old, cur interface{}) {
 // deleteNetworkPolicy receives NetworkPolicy DELETED events and deletes resources
 // which can be consumed by agents to delete corresponding rules on the Nodes.
 func (n *NetworkPolicyController) deleteNetworkPolicy(old interface{}) {
+	defer n.heartbeat("deleteNetworkPolicy")
 	np := old.(*networkingv1.NetworkPolicy)
 	klog.V(2).Infof("Processing NetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
 	key, _ := keyFunc(np)
@@ -641,6 +659,7 @@ func (n *NetworkPolicyController) deleteNetworkPolicy(old interface{}) {
 // addPod retrieves all AddressGroups and AppliedToGroups which match the Pod's
 // labels and enqueues the groups key for further processing.
 func (n *NetworkPolicyController) addPod(obj interface{}) {
+	defer n.heartbeat("addPod")
 	pod := obj.(*v1.Pod)
 	klog.V(2).Infof("Processing Pod %s/%s ADD event, labels: %v", pod.Namespace, pod.Name, pod.Labels)
 	// Find all AppliedToGroup keys which match the Pod's labels.
@@ -660,6 +679,7 @@ func (n *NetworkPolicyController) addPod(obj interface{}) {
 // updated and old Pod's labels and enqueues the group keys for further
 // processing.
 func (n *NetworkPolicyController) updatePod(oldObj, curObj interface{}) {
+	defer n.heartbeat("updatePod")
 	oldPod := oldObj.(*v1.Pod)
 	curPod := curObj.(*v1.Pod)
 	klog.V(2).Infof("Processing Pod %s/%s UPDATE event, labels: %v", curPod.Namespace, curPod.Name, curPod.Labels)
@@ -708,6 +728,7 @@ func (n *NetworkPolicyController) updatePod(oldObj, curObj interface{}) {
 // deletePod retrieves all AddressGroups and AppliedToGroups which match the Pod's
 // labels and enqueues the groups key for further processing.
 func (n *NetworkPolicyController) deletePod(old interface{}) {
+	defer n.heartbeat("deletePod")
 	pod := old.(*v1.Pod)
 	klog.V(2).Infof("Processing Pod %s/%s DELETE event, labels: %v", pod.Namespace, pod.Name, pod.Labels)
 	// Find all AppliedToGroup keys which match the Pod's labels.
@@ -726,6 +747,7 @@ func (n *NetworkPolicyController) deletePod(old interface{}) {
 // addNamespace retrieves all AddressGroups which match the Namespace
 // labels and enqueues the group keys for further processing.
 func (n *NetworkPolicyController) addNamespace(obj interface{}) {
+	defer n.heartbeat("addNamespace")
 	namespace := obj.(*v1.Namespace)
 	klog.V(2).Infof("Processing Namespace %s ADD event, labels: %v", namespace.Name, namespace.Labels)
 	addressGroupKeys := n.filterAddressGroupsForNamespace(namespace)
@@ -737,6 +759,7 @@ func (n *NetworkPolicyController) addNamespace(obj interface{}) {
 // updateNamespace retrieves all AddressGroups which match the current and old
 // Namespace labels and enqueues the group keys for further processing.
 func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
+	defer n.heartbeat("updateNamespace")
 	oldNamespace := oldObj.(*v1.Namespace)
 	curNamespace := curObj.(*v1.Namespace)
 	klog.V(2).Infof("Processing Namespace %s UPDATE event, labels: %v", curNamespace.Name, curNamespace.Labels)
@@ -762,6 +785,7 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 // deleteNamespace retrieves all AddressGroups which match the Namespace's
 // labels and enqueues the group keys for further processing.
 func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
+	defer n.heartbeat("deleteNamespace")
 	namespace := old.(*v1.Namespace)
 	klog.V(2).Infof("Processing Namespace %s DELETE event, labels: %v", namespace.Name, namespace.Labels)
 	// Find groups matching deleted Namespace's labels and enqueue them
@@ -884,6 +908,7 @@ func (n *NetworkPolicyController) internalNetworkPolicyWorker() {
 // return false if and only if the work queue was shutdown (no more items will
 // be processed).
 func (n *NetworkPolicyController) processNextInternalNetworkPolicyWorkItem() bool {
+	defer n.heartbeat("processNextInternalNetworkPolicyWorkItem")
 	key, quit := n.internalNetworkPolicyQueue.Get()
 	if quit {
 		return false
@@ -915,6 +940,7 @@ func (n *NetworkPolicyController) processNextInternalNetworkPolicyWorkItem() boo
 // of a new change. This function return false if and only if the work queue
 // was shutdown (no more items will be processed).
 func (n *NetworkPolicyController) processNextAddressGroupWorkItem() bool {
+	defer n.heartbeat("processNextAddressGroupWorkItem")
 	key, quit := n.addressGroupQueue.Get()
 	if quit {
 		return false
@@ -942,6 +968,7 @@ func (n *NetworkPolicyController) processNextAddressGroupWorkItem() bool {
 // queue until we get notify of a new change. This function return false if
 // and only if the work queue was shutdown (no more items will be processed).
 func (n *NetworkPolicyController) processNextAppliedToGroupWorkItem() bool {
+	defer n.heartbeat("processNextAppliedToGroupWorkItem")
 	key, quit := n.appliedToGroupQueue.Get()
 	if quit {
 		return false
