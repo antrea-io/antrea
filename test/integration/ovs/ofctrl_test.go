@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -223,6 +224,80 @@ func TestOFctrlFlow(t *testing.T) {
 		if len(flowList) > 0 {
 			t.Errorf("Failed to delete flows by CookieID")
 		}
+	}
+}
+
+func TestOFctrlGroup(t *testing.T) {
+	brName := "br05"
+	err := PrepareOVSBridge(brName)
+	if err != nil {
+		t.Fatalf("Failed to prepare OVS bridge: %v", err)
+	}
+	defer func() {
+		err = DeleteOVSBridge(brName)
+		if err != nil {
+			t.Errorf("error while deleting OVS bridge: %v", err)
+		}
+	}()
+
+	br := binding.NewOFBridge(brName)
+	err = br.Connect(maxRetry, make(chan struct{}))
+	if err != nil {
+		t.Fatal("Failed to start OFService")
+	}
+	defer br.Disconnect()
+
+	for name, buckets := range map[string][]struct {
+		weight        uint16      // Must have non-zero value.
+		reg2reg       [][4]uint32 // regNum, data, startIndex, endIndex
+		resubmitTable binding.TableIDType
+	}{
+		"Normal": {
+			{weight: 100, reg2reg: [][4]uint32{{0, 1, 0, 31}, {1, 2, 15, 31}}, resubmitTable: 31},
+			{weight: 110, resubmitTable: 42},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			group := br.CreateGroup(1)
+			for _, bucket := range buckets {
+				require.NotZero(t, bucket.weight, "Weight value of a bucket must be specified")
+				bucketBuilder := group.Bucket().Weight(bucket.weight)
+				if bucket.resubmitTable != 0 {
+					bucketBuilder = bucketBuilder.ResubmitToTable(bucket.resubmitTable)
+				}
+				for _, loading := range bucket.reg2reg {
+					bucketBuilder = bucketBuilder.LoadRegRange(int(loading[0]), loading[1], [2]uint32{loading[2], loading[3]})
+				}
+				group = bucketBuilder.Done()
+			}
+			// Check if the group could be added.
+			require.Nil(t, group.Add())
+			groups, err := OfctlDumpGroups(brName)
+			require.Nil(t, err)
+			require.Len(t, groups, 1)
+			dumpedGroup := groups[0]
+			for i, bucket := range buckets {
+				// Must have weight
+				assert.True(t, strings.Contains(dumpedGroup[i+1], fmt.Sprintf("weight:%d", bucket.weight)))
+				for _, loading := range bucket.reg2reg {
+					rngStr := "[]"
+					if !(loading[2] == 0 && loading[3] == 31) {
+						rngStr = fmt.Sprintf("[%d..%d]", loading[2], loading[3])
+					}
+					loadStr := fmt.Sprintf("load:0x%x->NXM_NX_REG%d%s", loading[1], loading[0], rngStr)
+					assert.Contains(t, dumpedGroup[i+1], loadStr)
+				}
+				if bucket.resubmitTable != 0 {
+					resubmitStr := fmt.Sprintf("resubmit(,%d)", bucket.resubmitTable)
+					assert.Contains(t, dumpedGroup[i+1], resubmitStr)
+				}
+			}
+			// Check if the group could be deleted.
+			require.Nil(t, group.Delete())
+			groups, err = OfctlDumpGroups(brName)
+			require.Nil(t, err)
+			require.Len(t, groups, 0)
+		})
 	}
 }
 

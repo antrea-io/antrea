@@ -19,8 +19,9 @@ import (
 	"time"
 )
 
-type protocol = string
+type Protocol string
 type TableIDType uint8
+type GroupIDType uint32
 
 const LastTableID TableIDType = 0xff
 
@@ -28,12 +29,12 @@ type MissActionType uint32
 type Range [2]uint32
 
 const (
-	ProtocolIP   protocol = "ip"
-	ProtocolARP  protocol = "arp"
-	ProtocolTCP  protocol = "tcp"
-	ProtocolUDP  protocol = "udp"
-	ProtocolSCTP protocol = "sctp"
-	ProtocolICMP protocol = "icmp"
+	ProtocolIP   Protocol = "ip"
+	ProtocolARP  Protocol = "arp"
+	ProtocolTCP  Protocol = "tcp"
+	ProtocolUDP  Protocol = "udp"
+	ProtocolSCTP Protocol = "sctp"
+	ProtocolICMP Protocol = "icmp"
 )
 
 const (
@@ -60,6 +61,8 @@ const (
 type Bridge interface {
 	CreateTable(id, next TableIDType, missAction MissActionType) Table
 	DeleteTable(id TableIDType) bool
+	CreateGroup(id GroupIDType) Group
+	DeleteGroup(id GroupIDType) bool
 	DumpTableStatus() []TableStatus
 	// DumpFlows queries the Openflow entries from OFSwitch. The filter of the query is Openflow cookieID; the result is
 	// a map from flow cookieID to FlowStates.
@@ -93,17 +96,30 @@ type Table interface {
 	GetNext() TableIDType
 }
 
-type Flow interface {
+type EntryType string
+
+const (
+	FlowEntry  EntryType = "FlowEntry"
+	GroupEntry EntryType = "GroupEntry"
+)
+
+type Entry interface {
 	Add() error
 	Modify() error
 	Delete() error
+	Type() EntryType
+	KeyString() string
+	// Reset ensures that the entry is "correct" and that the Add /
+	// Modify / Delete methods can be called on this object. This method
+	// should be called if a reconnection event happened.
+	Reset()
+}
+
+type Flow interface {
+	Entry
 	MatchString() string
 	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions.
 	CopyToBuilder() FlowBuilder
-	// Reset ensures that the ofFlow object is "correct" and that the Add /
-	// Modify / Delete methods can be called on this object. This method
-	// should be called if a reconnection event happenened.
-	Reset()
 }
 
 type Action interface {
@@ -132,10 +148,11 @@ type Action interface {
 	DecTTL() FlowBuilder
 	Normal() FlowBuilder
 	Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder
+	Group(id GroupIDType) FlowBuilder
 }
 
 type FlowBuilder interface {
-	MatchProtocol(name protocol) FlowBuilder
+	MatchProtocol(name Protocol) FlowBuilder
 	MatchReg(regID int, data uint32) FlowBuilder
 	MatchRegRange(regID int, data uint32, rng Range) FlowBuilder
 	MatchInPort(inPort uint32) FlowBuilder
@@ -164,6 +181,19 @@ type FlowBuilder interface {
 	Cookie(cookieID uint64) FlowBuilder
 	Action() Action
 	Done() Flow
+}
+
+type Group interface {
+	Entry
+	Bucket() BucketBuilder
+}
+
+type BucketBuilder interface {
+	Weight(val uint16) BucketBuilder
+	LoadReg(regID int, data uint32) BucketBuilder
+	LoadRegRange(regID int, data uint32, rng Range) BucketBuilder
+	ResubmitToTable(tableID TableIDType) BucketBuilder
+	Done() Group
 }
 
 type CTAction interface {

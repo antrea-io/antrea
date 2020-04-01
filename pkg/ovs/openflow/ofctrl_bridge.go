@@ -131,6 +131,23 @@ type OFBridge struct {
 	connected chan bool
 }
 
+func (b *OFBridge) CreateGroup(id GroupIDType) Group {
+	ofctrlGroup, err := b.ofSwitch.NewGroup(uint32(id), ofctrl.GroupSelect)
+	if err != nil {
+		ofctrlGroup = b.ofSwitch.GetGroup(uint32(id))
+	}
+	g := &ofGroup{bridge: b, ofctrl: ofctrlGroup}
+	return g
+}
+
+func (b *OFBridge) DeleteGroup(id GroupIDType) bool {
+	err := b.ofSwitch.DeleteGroup(uint32(id))
+	if err != nil {
+		return false
+	}
+	return true
+}
+
 func (b *OFBridge) CreateTable(id, next TableIDType, missAction MissActionType) Table {
 	t := newOFTable(id, next, missAction)
 
@@ -280,8 +297,7 @@ func (b *OFBridge) DeleteFlowsByCookie(cookieID, cookieMask uint64) error {
 	flowMod.OutPort = openflow13.P_ANY
 	flowMod.OutGroup = openflow13.OFPG_ANY
 	flowMod.TableId = openflow13.OFPTT_ALL
-	b.ofSwitch.Send(flowMod)
-	return nil
+	return b.ofSwitch.Send(flowMod)
 }
 
 func (b *OFBridge) IsConnected() bool {
