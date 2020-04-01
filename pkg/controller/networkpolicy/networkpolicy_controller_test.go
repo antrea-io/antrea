@@ -63,9 +63,9 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	npController := NewNetworkPolicyController(client, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), informerFactory.Networking().V1().NetworkPolicies(), addressGroupStore, appliedToGroupStore, internalNetworkPolicyStore)
-	npController.podListerSynced = alwaysReady
-	npController.namespaceListerSynced = alwaysReady
-	npController.networkPolicyListerSynced = alwaysReady
+	//npController.podListerSynced = alwaysReady
+	//npController.namespaceListerSynced = alwaysReady
+	//npController.networkPolicyListerSynced = alwaysReady
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),
