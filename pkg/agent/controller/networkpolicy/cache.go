@@ -125,18 +125,21 @@ type ruleCache struct {
 	podUpdates <-chan v1beta1.PodReference
 }
 
-// TODO: save namespace information in cache.
 func (c *ruleCache) GetNetworkPolicies() []v1beta1.NetworkPolicy {
 	var ret []v1beta1.NetworkPolicy
 	c.policySetLock.RLock()
 	defer c.policySetLock.RUnlock()
 	for uid := range c.policySet {
 		np := v1beta1.NetworkPolicy{
-			ObjectMeta: metav1.ObjectMeta{Name: uid},
+			ObjectMeta: metav1.ObjectMeta{UID: types.UID(uid)},
 		}
 		rules, _ := c.rules.ByIndex(policyIndex, uid)
-		for _, ruleObj := range rules {
+		for i, ruleObj := range rules {
 			rule := ruleObj.(*rule)
+			if i == 0 {
+				np.Name = rule.PolicyName
+				np.Namespace = rule.PolicyNamespace
+			}
 			np.Rules = append(np.Rules, v1beta1.NetworkPolicyRule{
 				Direction: rule.Direction,
 				From:      rule.From,

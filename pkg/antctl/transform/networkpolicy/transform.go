@@ -26,6 +26,7 @@ import (
 )
 
 type Response struct {
+	NameSpace       string          `json:"namespace" yaml:"namespace"`
 	Name            string          `json:"name" yaml:"name"`
 	Rules           []rule.Response `json:"rules" yaml:"rules"`
 	AppliedToGroups []string        `json:"appliedToGroups" yaml:"appliedToGroups"`
@@ -38,6 +39,7 @@ func objectTransform(o interface{}) (interface{}, error) {
 		policy.AppliedToGroups = []string{}
 	}
 	return Response{
+		NameSpace:       policy.Namespace,
 		Name:            policy.Name,
 		Rules:           rules.([]rule.Response),
 		AppliedToGroups: policy.AppliedToGroups,
@@ -66,9 +68,9 @@ func Transform(reader io.Reader, single bool) (interface{}, error) {
 var _ common.TableOutput = new(Response)
 
 func (r Response) GetTableHeader() []string {
-	return []string{"NAME", "APPLIED-TO", "RULES"}
+	return []string{"NAMESPACE", "NAME", "APPLIED-TO", "RULES"}
 }
 
 func (r Response) GetTableRow(maxColumnLength int) []string {
-	return []string{r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength), strconv.Itoa(len(r.Rules))}
+	return []string{r.NameSpace, r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength), strconv.Itoa(len(r.Rules))}
 }

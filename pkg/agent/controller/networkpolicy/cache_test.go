@@ -282,12 +282,12 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 		Services:  nil,
 	}
 	networkPolicy1 := &v1beta1.NetworkPolicy{
-		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
+		ObjectMeta:      metav1.ObjectMeta{UID: "policy1", Namespace: "ns1", Name: "name1"},
 		Rules:           nil,
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
 	networkPolicy2 := &v1beta1.NetworkPolicy{
-		ObjectMeta:      metav1.ObjectMeta{UID: "policy2"},
+		ObjectMeta:      metav1.ObjectMeta{UID: "policy2", Namespace: "ns2", Name: "name2"},
 		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1, *networkPolicyRule2},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
@@ -351,7 +351,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 			"delete-zero-rule",
 			[]*rule{rule1, rule2, rule3},
 			&v1beta1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{UID: "policy0"},
+				ObjectMeta: metav1.ObjectMeta{UID: "policy0", Namespace: "ns0", Name: "name0"},
 			},
 			[]*rule{rule1, rule2, rule3},
 			sets.NewString(),
@@ -360,7 +360,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 			"delete-one-rule",
 			[]*rule{rule1, rule2, rule3},
 			&v1beta1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{UID: "policy1"},
+				ObjectMeta: metav1.ObjectMeta{UID: "policy1", Namespace: "ns1", Name: "name1"},
 			},
 			[]*rule{rule2, rule3},
 			sets.NewString("rule1"),
@@ -369,7 +369,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 			"delete-two-rule",
 			[]*rule{rule1, rule2, rule3},
 			&v1beta1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{UID: "policy2"},
+				ObjectMeta: metav1.ObjectMeta{UID: "policy2", Namespace: "ns2", Name: "name2"},
 			},
 			[]*rule{rule1},
 			sets.NewString("rule2", "rule3"),

@@ -78,11 +78,15 @@ func (r *REST) Get(ctx context.Context, name string, options *v1.GetOptions) (ru
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
+	ns, namespaceScoped := request.NamespaceFrom(ctx)
 	networkPolicies := r.networkPolicyStore.List()
 	list := new(networking.NetworkPolicyList)
-	list.Items = make([]networking.NetworkPolicy, len(networkPolicies))
 	for i := range networkPolicies {
-		store.ToNetworkPolicyMsg(networkPolicies[i].(*types.NetworkPolicy), &list.Items[i], true)
+		if !namespaceScoped || len(ns) == 0 || networkPolicies[i].(*types.NetworkPolicy).Namespace == ns {
+			policy := networking.NetworkPolicy{}
+			store.ToNetworkPolicyMsg(networkPolicies[i].(*types.NetworkPolicy), &policy, true)
+			list.Items = append(list.Items, policy)
+		}
 	}
 	return list, nil
 }
