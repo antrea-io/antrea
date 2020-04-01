@@ -2193,6 +2193,61 @@ func TestIPStrToIPAddress(t *testing.T) {
 	}
 }
 
+func TestDeleteFinalStateUnknownPod(t *testing.T) {
+	_, c := newController()
+	c.heartbeatCh = make(chan heartbeat, 2)
+	ns := metav1.NamespaceDefault
+	pod := getPod("p1", ns, "", "1.1.1.1", false)
+	c.addPod(pod)
+	key, _ := cache.MetaNamespaceKeyFunc(pod)
+	c.deletePod(cache.DeletedFinalStateUnknown{Key: key, Obj: pod})
+	close(c.heartbeatCh)
+	var ok bool
+	_, ok = <-c.heartbeatCh
+	assert.True(t, ok, "Missing event on channel")
+	_, ok = <-c.heartbeatCh
+	assert.True(t, ok, "Missing event on channel")
+}
+
+func TestDeleteFinalStateUnknownNamespace(t *testing.T) {
+	_, c := newController()
+	c.heartbeatCh = make(chan heartbeat, 2)
+	ns := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "nsA",
+		},
+	}
+	c.addNamespace(ns)
+	c.deleteNamespace(cache.DeletedFinalStateUnknown{Key: "nsA", Obj: ns})
+	close(c.heartbeatCh)
+	var ok bool
+	_, ok = <-c.heartbeatCh
+	assert.True(t, ok, "Missing event on channel")
+	_, ok = <-c.heartbeatCh
+	assert.True(t, ok, "Missing event on channel")
+}
+
+func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
+	_, c := newController()
+	c.heartbeatCh = make(chan heartbeat, 2)
+	np := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		},
+	}
+	c.addNetworkPolicy(np)
+	key, _ := cache.MetaNamespaceKeyFunc(np)
+	c.deleteNetworkPolicy(cache.DeletedFinalStateUnknown{Key: key, Obj: np})
+	close(c.heartbeatCh)
+	var ok bool
+	_, ok = <-c.heartbeatCh
+	assert.True(t, ok, "Missing event on channel")
+	_, ok = <-c.heartbeatCh
+	assert.True(t, ok, "Missing event on channel")
+}
+
 // util functions for testing.
 func getK8sNetworkPolicyPorts(proto v1.Protocol) []networkingv1.NetworkPolicyPort {
 	portNum := intstr.FromInt(80)
