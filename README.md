@@ -1,4 +1,4 @@
-![Antrea Logo](/docs/assets/logo/antrea_logo.svg)
+![Antrea Logo](docs/assets/logo/antrea_logo.svg)
 
 ![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vmware-tanzu/antrea)](https://goreportcard.com/report/github.com/vmware-tanzu/antrea)
@@ -13,7 +13,7 @@ security services for a Kubernetes cluster, leveraging
 [Open vSwitch](https://www.openvswitch.org/) as the networking data plane.
 
 <p align="center">
-<img src="/docs/assets/antrea_overview.svg.png" width="500" alt="Antrea Overview">
+<img src="assets/antrea_overview.svg.png" width="500" alt="Antrea Overview">
 </p>
 
 Open vSwitch is a widely adopted high-performance programmable virtual
@@ -41,9 +41,9 @@ The Antrea community welcomes new contributors. We are waiting for your PRs!
 
 * Before contributing, please get familiar with our
 [Code of Conduct](CODE_OF_CONDUCT.md).
-* Check out the Antrea [Contributor Guide](/CONTRIBUTING.md) for information
+* Check out the Antrea [Contributor Guide](CONTRIBUTING.md) for information
 about setting up your development environment and our contribution workflow.
-* Learn about Antrea's [Architecture and design](/docs/architecture.md).
+* Learn about Antrea's [Architecture and design](docs/architecture.md).
 Your feedback is more than welcome!
 * Check out [Open Issues](https://github.com/vmware-tanzu/antrea/issues).
 * Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
@@ -72,7 +72,7 @@ implementation.
 * [Octant](https://github.com/vmware-tanzu/octant) UI plugin for monitoring
 Antrea components, which publish runtime information as
 [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
-* [IPsec encyption](/docs/ipsec-tunnel.md) of GRE tunnel traffic.
+* [IPsec encyption](docs/ipsec-tunnel.md) of GRE tunnel traffic.
 
 ## Roadmap
 

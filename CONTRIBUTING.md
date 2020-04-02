@@ -27,8 +27,7 @@ To get started, let's ensure you have completed the following prerequisites for
 contributing to project Antrea:
 1. Read and observe the [code of conduct](CODE_OF_CONDUCT.md).
 2. Sign the [CLA](#cla).
-3. Check out the [Architecture document](/docs/architecture.md) for the Antrea
-   architecture and design.
+3. Check out the [Architecture document](docs/architecture.md) for the Antrea architecture and design.
 4. Set up necessary [accounts](#accounts-setup).
 5. Set up your [development environment](docs/manual-installation.md)
 

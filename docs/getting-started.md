@@ -108,13 +108,13 @@ To build the image locally, you can follow the instructions in the [Contributor
 Guide](/CONTRIBUTING.md#building-and-testing-your-change).
 
 Antrea components can also be run manually as processes for development
-purposes. See [Manual Installation](/docs/manual-installation.md) for
+purposes. See [Manual Installation](manual-installation.md) for
 information.
 
 ### Deploying Antrea in Kind
 
 To deploy Antrea in a [Kind](https://github.com/kubernetes-sigs/kind) cluster,
-please refer to this [guide](/docs/kind.md).
+please refer to this [guide](kind.md).
 
 ### Deploying Antrea in EKS and GKE
 
@@ -137,4 +137,4 @@ provide your own certificates, please refer to [Securing Control Plane](/docs/se
 ### Antctl: Installation and Usage
 
 To use antctl, the Antrea command-line tool, please refer to this
-[guide](/docs/antctl.md).
+[guide](antctl.md).
