@@ -40,7 +40,7 @@
   address and initiate MAC learning if the address is unknown).
 
 **This documentation currently assumes that Antrea is used in encap mode (an
-  overlay network is created between all Nodes), without IPsec enabled.**
+  overlay network is created between all Nodes).**
 
 ## Dumping the Flows
 
@@ -57,7 +57,6 @@ that Node and `<BRIDGE_NAME>` is the name of the bridge created by Antrea
 ## Registers
 
 We use 2 32-bit OVS registers to carry information throughout the pipeline:
-
  * reg0 (NXM_NX_REG0):
    - bits [0..15] are used to store the traffic source (from tunnel: 0, from
    local gateway: 1, from local Pod: 2). It is set in the [ClassifierTable].
@@ -135,7 +134,6 @@ ingress port for the packet. The appropriate value is then written to bits
 local Pod. This information is used by matches in subsequent tables.
 
 If you dump the flows for this table, you may see the following:
-
 ```
 1. table=0, priority=200,in_port=gw0 actions=load:0x1->NXM_NX_REG0[0..15],resubmit(,10)
 2. table=0, priority=200,in_port=tun0 actions=load:0->NXM_NX_REG0[0..15],resubmit(,30)
@@ -145,7 +143,7 @@ If you dump the flows for this table, you may see the following:
 ```
 
 Flow 1 is for traffic coming in on the local gateway. Flow 2 is for traffic
-comming in through a VXLAN or Geneve tunnel (i.e. from another Node). The next
+coming in through a VXLAN or Geneve tunnel (i.e. from another Node). The next
 two flows (3 and 4) are for local Pods (in this case Pods from the coredns
 deployment).
 
@@ -159,7 +157,6 @@ be used).
 This table prevents IP and ARP
 [spoofing](https://en.wikipedia.org/wiki/Spoofing_attack) from local Pods. For
 each Pod (as identified by the ingress port), we ensure that:
-
  * for IP traffic, the source IP and MAC addresses are correct, i.e. match the
  values configured on the interface when Antrea set-up networking for the Pod.
  * for ARP traffic, the advertised IP and MAC addresses are correct, i.e. match
@@ -172,13 +169,12 @@ on the local gateway port is not as trivial. Traffic from local Pods destined to
 services will first go through the gateway, get load-balanced by the kube-proxy
 datapath (DNAT) then sent back through the gateway. This means that legitimate
 traffic can be received on the gateway port with a source IP belonging to a
-local Pod. We may add some fine-grained rules in the future to accomodate for
+local Pod. We may add some fine-grained rules in the future to accommodate for
 this, but for now we just allow all IP traffic received from the gateway. We do
 have an ARP spoofing check for the gateway however, since there is no reason for
 the host to advertise a different MAC address on gw0.
 
 If you dump the flows for this table, you may see the following:
-
 ```
 1. table=10, priority=200,ip,in_port=gw0 actions=resubmit(,30)
 2. table=10, priority=200,arp,in_port=gw0,arp_spa=10.10.0.1,arp_sha=e2:e5:a4:9b:1c:b1 actions=resubmit(,20)
@@ -208,7 +204,6 @@ going through the gateway. The Virtual MAC is used as the destination MAC
 address for all the traffic being tunnelled.
 
 If you dump the flows for this table, you may see the following:
-
 ```
 1. table=20, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],mod_dl_src:aa:bb:cc:dd:ee:ff,load:0x2->NXM_OF_ARP_OP[],move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],load:0xaabbccddeeff->NXM_NX_ARP_SHA[],move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],load:0xa0a0101->NXM_OF_ARP_SPA[],IN_PORT
 2. table=20, priority=190,arp actions=NORMAL
@@ -218,7 +213,6 @@ If you dump the flows for this table, you may see the following:
 Flow 1 is the "ARP responder" for the peer Node whose local Pod subnet is
 10.10.1.0/24. If we were to look at the routing table for the local Node, we
 would see the following "onlink" route:
-
 ```
 10.10.1.0/24 via 10.10.1.1 dev gw0 onlink
 ```
@@ -243,7 +237,6 @@ The sole purpose of this table is to invoke the `ct` action on all packets and
 set the `ct_zone` (connection tracking context) to an hard-coded value, then
 resubmit traffic to [ConntrackStateTable]. If you dump the flows for this table,
 you should only see 1 flow:
-
 ```
 1. table=30, priority=200,ip actions=ct(table=31,zone=65520)
 ```
@@ -266,7 +259,6 @@ more information on connection tracking in OVS.
 This table handles all "tracked" packets (all packets are moved to the tracked
 state by the previous table, [ConntrackTable]). It serves the following
 purposes:
-
  * keeps track of connections going through the gateway port; for all reply
  packets belonging to such connections we overwrite the destination MAC to the
  local gateway MAC on their way to the gateway port. This is required to handle
@@ -281,7 +273,6 @@ purposes:
  * drop packets reported as invalid by conntrack
 
 If you dump the flows for this table, you should see the following:
-
 ```
 1. table=31, priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff actions=resubmit(,40)
 2. table=31, priority=200,ct_state=+inv+trk,ip actions=drop
@@ -305,7 +296,6 @@ care of load-balancing the connections across the different backends for each
 service.
 
 If you dump the flows for this table, you should see something like this:
-
 ```
 1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,105)
 2. table=40, priority=0 actions=resubmit(,50)
@@ -343,7 +333,6 @@ are allowed to talk to each other using TCP on port 80, but nothing else.
 
 This table is used to implement the egress rules across all Network Policies. If
 you dump the flows for this table, you should see something like this:
-
 ```
 1. table=50, priority=210,ct_state=-new+est,ip actions=resubmit(,70)
 2. table=50, priority=200,ip,nw_src=10.10.1.2 actions=conjunction(2,1/3)
@@ -406,7 +395,6 @@ whitelist rules.
 Accordingly, based on our Network Policy example, we would expect to see flows
 to drop traffic originating from our 2 Pods (10.10.1.2 and 10.10.1.3), which is
 confirmed by dumping the flows:
-
 ```
 1. table=60, priority=200,ip,nw_src=10.10.1.2 actions=drop
 2. table=60, priority=200,ip,nw_src=10.10.1.3 actions=drop
@@ -428,7 +416,6 @@ This is the L3 routing table. It implements the following functionality:
    tunnelled traffic) and its destination IP address (should match the IP
    address of a local Pod). We therefore install one flow for each Pod created
    locally on the Node. For example:
-   
 ```
 table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,dec_ttl,resubmit(,80)
 ```
@@ -437,7 +424,6 @@ table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_
    destination IP matches the local gateway's IP) is forwarded to the gateway
    port by rewriting the destination MAC (from the Global Virtual MAC to the
    local gateway's MAC).
-   
 ```
 table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,resubmit(,80)
 ```
@@ -453,7 +439,6 @@ table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_
    are not relevant for traffic destined to a tunnel (the destination port is
    the tunnel port and the ingress policy rules will be enforced at the
    destination Node). For a given peer Node, the flow may look like this:
-   
 ```
 table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=dec_ttl,mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],resubmit(,105)
 ```
@@ -469,7 +454,6 @@ required), as well as for local Pod-to-Pod traffic.
 This is essentially the "dmac" table of the switch. We program one flow for each
 port (gateway port, Pod ports and tunnel port), as you can see if you dump the
 flows:
-
 ```
 1. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)
 2. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)
@@ -508,7 +492,6 @@ Pods running on the same Node, with IP addresses 10.10.1.2 to 10.10.1.3. They
 are allowed to talk to each other using TCP on port 80, but nothing else.
 
 If you dump the flows for this table, you should see something like this:
-
 ```
 1. table=90, priority=210,ct_state=-new+est,ip actions=resubmit(,105)
 2. table=90, priority=210,ip,nw_src=10.10.1.1 actions=resubmit(,105)
@@ -558,7 +541,6 @@ whitelist rules.
 Accordingly, based on our Network Policy example, we would expect to see flows
 to drop traffic destined to our 2 Pods (3 and 4), which is confirmed by dumping
 the flows:
-
 ```
 1. table=100, priority=200,ip,reg1=0x3 actions=drop
 2. table=100, priority=200,ip,reg1=0x4 actions=drop
