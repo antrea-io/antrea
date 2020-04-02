@@ -135,8 +135,3 @@ All flags of performance tests includes:
 - `performance.http.requests (int)`: Total Number of http requests
 - `performance.http.policy_rules (int)`: Number of CIDRs in the network policy
 - `performance.realize.timeout (duration)`: Timeout of the realization of network policies (default 5m0s)
-
-## Tests to be added
-
- * Network policy tests
- * Reconciliation on start-up tests
