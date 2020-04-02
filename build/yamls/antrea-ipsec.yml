@@ -286,14 +286,22 @@ data:
     # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
     #
     #trafficEncapMode: encap
-  antrea-cni.conf: |
+  antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
         "name": "antrea",
-        "type": "antrea",
-        "ipam": {
-            "type": "host-local"
-        }
+        "plugins": [
+            {
+                "type": "antrea",
+                "ipam": {
+                    "type": "host-local"
+                }
+            },
+            {
+                "type": "portmap",
+                "capabilities": {"portMappings": true}
+            }
+        ]
     }
   antrea-controller.conf: ""
 kind: ConfigMap
@@ -301,7 +309,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-f59cfh8thg
+  name: antrea-config-mmd74dm2m9
   namespace: kube-system
 ---
 apiVersion: v1
@@ -409,7 +417,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-f59cfh8thg
+          name: antrea-config-mmd74dm2m9
         name: antrea-config
       - hostPath:
           path: /var/log/antrea
@@ -610,10 +618,10 @@ spec:
             add:
             - SYS_MODULE
         volumeMounts:
-        - mountPath: /etc/antrea/antrea-cni.conf
+        - mountPath: /etc/antrea/antrea-cni.conflist
           name: antrea-config
           readOnly: true
-          subPath: antrea-cni.conf
+          subPath: antrea-cni.conflist
         - mountPath: /host/etc/cni/net.d
           name: host-cni-conf
         - mountPath: /host/opt/cni/bin
@@ -635,7 +643,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-f59cfh8thg
+          name: antrea-config-mmd74dm2m9
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

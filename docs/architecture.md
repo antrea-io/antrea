@@ -16,12 +16,12 @@ of networking and security features and services on top of Open vSwitch.
 
 In a Kubernetes cluster, Antrea creates a Deployment that runs Antrea
 Controller, and a DaemonSet that includes two containers to run Antrea Agent
-and OVS daemons respectively, on every Node. The DaemonSet also includes an init
-container that installs the CNI plugin - `antrea-cni` - on the Node and ensures
-that the OVS kernel module is loaded. All Antrea Controller, Agent, OVS daemons,
-and `antrea-cni` bits are included in a single Docker image. Antrea also has a
-command-line tool called `antctl`, and an [Octant](https://github.com/vmware-tanzu/octant)
-UI plugin.
+and OVS daemons respectively, on every Node. The DaemonSet also includes an
+init container that installs the CNI plugin - `antrea-cni` - on the Node and
+ensures that the OVS kernel module is loaded and it is chained with the portmap
+CNI plugin. All Antrea Controller, Agent, OVS daemons, and `antrea-cni` bits
+are included in a single Docker image. Antrea also has a command-line tool
+called `antctl`, and an [Octant](https://github.com/vmware-tanzu/octant) UI plugin.
 
 <img src="/docs/assets/arch.svg.png" width="600" alt="Antrea Architecture Overview">
 
