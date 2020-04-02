@@ -13,10 +13,16 @@ Use `antrea-agent -h` to see complete options.
 ```yaml
 # clientConnection specifies the kubeconfig file and client connection settings for the agent
 # to communicate with the apiserver.
-clientConnection:
+#clientConnection:
   # Path of the kubeconfig file that is used to configure access to a K8s cluster.
   # If not specified, InClusterConfig will be used.
   #kubeconfig: <PATH_TO_KUBE_CONF>
+# antreaClientConnection specifies the kubeconfig file and client connection settings for the
+# agent to communicate with the Antrea Controller apiserver.
+#antreaClientConnection:
+  # Path of the kubeconfig file that is used to configure access to the Antrea Controller
+  # apiserver. If not specified, InClusterConfig will be used.
+  #kubeconfig: <PATH_TO_ANTREA_KUBE_CONF>
 
 # Name of the OpenVSwitch bridge antrea-agent will create and use.
 # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -36,12 +42,22 @@ clientConnection:
 # Encapsulation mode for communication between Pods across Nodes, supported values:
 # - vxlan (default)
 # - geneve
+# - gre
+# - stt
 #tunnelType: vxlan
+
+# Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
+# for the GRE tunnel type.
+#enableIPSecTunnel: false
 
 # Default MTU to use for the host gateway interface and the network interface of
 # each Pod. If omitted, antrea-agent will default this value to 1450 to accommodate
 # for tunnel encapsulate overhead.
 #defaultMTU: 1450
+
+# CIDR Range for services in cluster. It's required to support egress network policy, should
+# be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
+#serviceCIDR: 10.96.0.0/12
 
 # Mount location of the /proc directory. The default is "/host", which is appropriate when
 # antrea-agent is run as part of the Antrea DaemonSet (and the host's /proc directory is mounted
