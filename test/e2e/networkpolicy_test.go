@@ -31,7 +31,7 @@ func TestDifferentNamedPorts(t *testing.T) {
 
 	server0Name := randName("test-server-")
 	server0Port := 80
-	if err = data.createServerPod(server0Name, "http", server0Port); err != nil {
+	if err = data.createServerPod(server0Name, "http", server0Port, false); err != nil {
 		t.Fatalf("Error when creating server pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, server0Name)
@@ -42,7 +42,7 @@ func TestDifferentNamedPorts(t *testing.T) {
 
 	server1Name := randName("test-server-")
 	server1Port := 8080
-	if err = data.createServerPod(server1Name, "http", server1Port); err != nil {
+	if err = data.createServerPod(server1Name, "http", server1Port, false); err != nil {
 		t.Fatalf("Error when creating server pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, server1Name)
@@ -131,7 +131,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 
 	serverName := randName("test-server-")
 	serverPort := 80
-	if err = data.createServerPod(serverName, "http", serverPort); err != nil {
+	if err = data.createServerPod(serverName, "http", serverPort, false); err != nil {
 		t.Fatalf("Error when creating server pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, serverName)

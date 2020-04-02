@@ -5,16 +5,26 @@ set -euo pipefail
 # Todo: check version and continue installation only for a newer version
 
 # Install Antrea configuration file
-install -m 644 /etc/antrea/antrea-cni.conf /host/etc/cni/net.d/10-antrea.conf
+install -m 644 /etc/antrea/antrea-cni.conflist /host/etc/cni/net.d/10-antrea.conflist
 
 # Install Antrea binary file
 install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
+
+# If more than one CNI config file exists, the file with the lowest name is
+# chosen i.e. existing 10-antrea.conf will be chosen over 10-antrea.conflist.
+# Hence, delete older 10-antrea.conf file.
+rm -f /host/etc/cni/net.d/10-antrea.conf
 
 # Install the loopback plugin if not already present
 # It is required by kubelet on Linux when using docker as the container runtime
 
 if [ ! -f /host/opt/cni/bin/loopback ]; then
     install -m 755 /opt/cni/bin/loopback /host/opt/cni/bin/loopback
+fi
+
+# Install PortMap CNI binary file
+if [ ! -f /host/opt/cni/bin/portmap ]; then
+    install -m 755 /opt/cni/bin/portmap /host/opt/cni/bin/portmap
 fi
 
 # Load the OVS kernel module
