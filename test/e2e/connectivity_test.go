@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/api/core/v1"
+
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
 
@@ -88,6 +90,48 @@ func TestPodConnectivitySameNode(t *testing.T) {
 	defer teardownTest(t, data)
 
 	data.testPodConnectivitySameNode(t)
+}
+
+func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
+	// Create a server Pod with hostPort set to 80.
+	hpPodName := randName("test-host-port-pod-")
+	hpPodPort := 80
+	if err := data.createServerPod(hpPodName, "", hpPodPort, true); err != nil {
+		t.Fatalf("Error when creating HostPort server Pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, hpPodName)
+	// Retrieve the IP Address of the Node on which the Pod is scheduled.
+	hpPod, err := data.podWaitFor(defaultTimeout, hpPodName, func(pod *v1.Pod) (bool, error) {
+		return pod.Status.Phase == v1.PodRunning, nil
+	})
+	if err != nil {
+		t.Fatalf("Error when waiting for Pod '%s': %v", hpPodName, err)
+	}
+	hpPodHostIP := hpPod.Status.HostIP
+	// Create client Pod to test connectivity.
+	clientName := randName("test-client-")
+	if err := data.createBusyboxPod(clientName); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, clientName)
+	if _, err := data.podWaitForIP(defaultTimeout, clientName); err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
+	}
+
+	if err = data.runNetcatCommandFromTestPod(clientName, hpPodHostIP, hpPodPort); err != nil {
+		t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, hpPodHostIP, hpPodPort)
+	}
+}
+
+// TestHostPortPodConnectivity checks that a Pod with hostPort set is reachable.
+func TestHostPortPodConnectivity(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	data.testHostPortPodConnectivity(t)
 }
 
 // createPodsOnDifferentNodes creates numPods busybox test Pods and assign them to all the different
