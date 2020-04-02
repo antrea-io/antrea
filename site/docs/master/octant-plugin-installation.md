@@ -15,14 +15,15 @@ antrea-octant-plugin depends on the Antrea monitoring CRDs, AntreaControllerInfo
 To run Octant together with antrea-octant-plugin, please make sure you have these two CRDs defined in you K8s cluster.
 
 If Antrea is deployed before antrea-octant-plugin starts by using the standard deployment yaml, Antrea monitoring
-CRDs should already be added. If not, please refer to [antrea.yaml](https://github.com/vmware-tanzu/antrea/blob/master/build/yamls/antrea.yml) to
+CRDs should already be added. If not, please refer to [antrea.yaml](/build/yamls/antrea.yml) to
 create these two CRDs first.
 
 ### Deploy Octant and antrea-octant-plugin as a Pod
 
 You can follow the sample below to run Octant and antrea-octant-plugin in Pod.
 In this example, we expose UI as a NodePort service for accessing externally.
-You can update antrea-octant.yaml according to your environment and preference.
+You can update [antrea-octant.yaml](build/yamls/antrea-octant.yml) according to
+your environment and preference.
 
 1. Create a secret that contains your kubeconfig.
 
@@ -31,9 +32,9 @@ You can update antrea-octant.yaml according to your environment and preference.
     kubectl create secret generic octant-kubeconfig --from-file=/etc/kubernetes/admin.conf -n kube-system
     ```
 
-2. You may need to update build/yamls/antrea-octant.yml according to your kubeconfig file name.
+2. You may need to update [build/yamls/antrea-octant.yml](/build/yamls/antrea-octant.yml) according to your kubeconfig file name.
 
-3. You can change the sample according to your requirements and environment, then apply the yaml to create both deployment and NodePort service.
+3. You can change the sample yaml according to your requirements and environment, then apply the yaml to create both deployment and NodePort service.
 
     ```
     kubectl apply -f build/yamls/antrea-octant.yml
@@ -48,11 +49,21 @@ You can update antrea-octant.yaml according to your environment and preference.
 Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):NodePort.
 
 Note:
-1. Docker image antrea/octant-antrea-ubuntu should be automatically downloaded when you apply antrea-octant.yml in step 3.
-If the image is not successfully downloaded which may be due to network issues, you can run command `make octant-antrea-ubuntu` to build the image locally.
-If it is the case, you need to make sure that the image exists on all the K8s Nodes since the antrea-octant Pod may run on any of them.
-2. If the Pod is running without any explicit issue but you can not access the URL, please take a further look at the network configurations
-in your environment. It may be due to the network policies or other security rules configured on your hosts.
+1. Docker image antrea/octant-antrea-ubuntu should be automatically downloaded
+when you apply antrea-octant.yml in step 3. If the image is not successfully
+downloaded which may be due to network issues, you can run command `make
+octant-antrea-ubuntu` to build the image locally. If it is the case, you need
+to make sure that the image exists on all the K8s Nodes since the antrea-octant
+Pod may run on any of them.
+2. If the Pod is running without any explicit issue but you can not access the
+URL, please take a further look at the network configurations in your
+environment. It may be due to the network policies or other security rules
+configured on your hosts.
+3. To deploy a released version of the plugin, you can download
+`https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-octant.yml`,
+where `<TAG>` (e.g. `v0.3.0`) is the desired version (should match the version
+of Antrea you are using). After making the necessary edits, you can apply the
+yaml with `kubectl`.
 
 ### Deploy Octant and antrea-octant-plugin as a process
 
