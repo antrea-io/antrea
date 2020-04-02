@@ -69,10 +69,10 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 	}
 	workerNode := workerNodeName(1)
 
-	t.Logf("Creating two busybox test Pods on '%s'", workerNode)
+	t.Logf("Creating %d busybox test Pods on '%s'", numPods, workerNode)
 	for _, podName := range podNames {
 		if err := data.createBusyboxPodOnNode(podName, workerNode); err != nil {
-			t.Fatalf("Error when creating busybox test Pod: %v", err)
+			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
 		}
 		defer deletePodWrapper(t, data, podName)
 	}
@@ -152,7 +152,7 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, numPods int) (podN
 		t.Logf("Creating busybox test Pods '%s' on '%s'", podName, nodeName)
 		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
 			cleanup()
-			t.Fatalf("Error when creating busybox test Pod: %v", err)
+			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
 		}
 		podNames = append(podNames, podName)
 	}
@@ -321,10 +321,10 @@ func TestOVSFlowReplay(t *testing.T) {
 	}
 	workerNode := workerNodeName(1)
 
-	t.Logf("Creating two busybox test Pods on '%s'", workerNode)
+	t.Logf("Creating %d busybox test Pods on '%s'", numPods, workerNode)
 	for _, podName := range podNames {
 		if err := data.createBusyboxPodOnNode(podName, workerNode); err != nil {
-			t.Fatalf("Error when creating busybox test Pod: %v", err)
+			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
 		}
 		defer deletePodWrapper(t, data, podName)
 	}
