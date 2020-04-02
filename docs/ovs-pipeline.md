@@ -123,7 +123,7 @@ you will see these addresses show up in the OVS flows.
 
 ## Tables
 
-![OVS pipeline](/docs/assets/ovs-pipeline.svg)
+![OVS pipeline](assets/ovs-pipeline.svg)
 
 ### ClassifierTable (0)
 
