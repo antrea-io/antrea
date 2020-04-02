@@ -5,7 +5,11 @@ toc:
         url: /index.html
       - page: Getting Started
         url: /getting-started
+<<<<<<< HEAD
       - page: Deploying on kind
+=======
+      - page: Deploying Antrea on a Kind cluster
+>>>>>>> Updated navigation for documentation.
         url: /kind
       - page: Manual Installation
         url: /manual-installation
