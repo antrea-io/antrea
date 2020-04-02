@@ -89,7 +89,8 @@ Antrea Agent exposes a gRPC service (`Cni` service) which is invoked by the
 `antrea-cni` binary to perform CNI operations. For each new Pod to be created on
 the Node, after getting the CNI `ADD` call from `antrea-cni`, the Agent creates
 the Pod's network interface, allocates an IP address, connects the interface to
-the OVS bridge and installs the necessary flows in OVS.
+the OVS bridge and installs the necessary flows in OVS. To learn more about the
+OVS flows check out the [OVS pipeline doc](/docs/ovs-pipeline.md).
 
 Antrea Agent includes two Kubernetes controllers:
 - The Node controller watches the Kubernetes API server for new Nodes, and
@@ -239,3 +240,28 @@ NetworkPolicy implementation.
 
 As described earlier, Antrea Controller leverages the Kubernetes apiserver
 library to build the API and communication channel to Agents.
+
+### IPsec encryption
+
+Antrea supports encrypting GRE tunnel traffic with IPsec ESP. The IPsec
+implementation leverages [OVS IPsec](http://docs.openvswitch.org/en/latest/tutorials/ipsec)
+and leverages [strongSwan](https://www.strongswan.org) as the IKE daemon.
+
+To enable IPsec, an extra container -`antrea-ovs-ipsec` - must be added to the
+Antrea Agent DaemonSet, which runs the `ovs-monitor-ipsec` and strongSwan
+daemons. Antrea now supports only using pre-shared key (PSK) for IKE
+authentication, and the PSK string must be passed to Antrea Agent using an
+environment variable - `ANTREA_IPSEC_PSK`. The PSK string can be specified in
+the [Antrea IPsec deployment yaml](/build/yamls/antrea-ipsec.yml), which creates
+a Kubernetes Secret to save the PSK value and populates it to the
+`ANTREA_IPSEC_PSK` environment variable of the Antrea Agent container.
+
+When IPsec is enabled, Antrea Agent will create a separate GRE tunnel port on
+the OVS bridge for each remote Node, and write the PSK string and the remote Node
+IP address to two OVS interface options of the tunnel interface. Then
+`ovs-monitor-ipsec` can detect the tunnel and create IPsec Security Policies
+with PSK for the remote Node, and strongSwan can create the IPsec Security
+Associations based on the Security Policies. These additional tunnel ports are
+not used to send traffic to a remote Node - the tunnel traffic is still output
+to the default tunnel port (`tun0`) with OVS flow based tunneling. However, the
+traffic from a remote Node will be received from the Node's IPsec tunnel port.

@@ -25,6 +25,10 @@ with the following flags:
 * To enable `CNI` network plugins, `kubelet` should be started with the
 `--network-plugin=cni` flag.
 
+* To enable masquerading of traffic for Service cluster IP via iptables,
+`kube-proxy` should be started with the `--cluster-cidr=<CIDR Range for Pods>`
+flag.
+
 As for OVS, when using the built-in kernel module, kernel version >= 4.4 is
 required. On the other hand, when building it from OVS sources, OVS
 version >= 2.6.0 is required.
@@ -70,12 +74,12 @@ deleting the previous CNI, existing Pods may not be reachable anymore.
 
 For example, when migrating from Flannel to Antrea, you will need to do the
 following:
-
 1. Delete Flannel with `kubectl delete -f <path to your Flannel YAML manifest>`.
-1. Delete Flannel bridge and tunnel interface with `ip link delete flannel.1 &&
+2. Delete Flannel bridge and tunnel interface with `ip link delete flannel.1 &&
 ip link delete flannel cni0` **on each Node**.
-1. [Deploy Antrea](#installation).
-1. Drain and uncordon Nodes one-by-one. For each Node, run `kubectl drain
+3. Ensure [requirements](#ensuring-requirements-are-satisfied) are satisfied.
+4. [Deploy Antrea](#installation).
+5. Drain and uncordon Nodes one-by-one. For each Node, run `kubectl drain
 --ignore-daemonsets <node name> && kubectl uncordon <node name>`. The
 `--ignore-daemonsets` flag will ignore DaemonSet-managed Pods, including the
 Antrea Agent Pods. If you have any other DaemonSet-managed Pods (besides the
@@ -96,3 +100,20 @@ information.
 
 To deploy Antrea in a [Kind](https://github.com/kubernetes-sigs/kind) cluster,
 please refer to this [guide](/docs/kind.md).
+
+### Deploying Antrea in EKS and GKE
+
+Antrea can be deployed in NetworkPolicy only mode to an EKS cluster or a GKE
+cluster, and enforce NetworkPolicies for the cluster. To deploy Antrea in an
+EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
+To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
+
+### Deploying Antrea with IPsec Encyption
+
+Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
+IPsec encyption enabled, please refer to this [guide](/docs/ipsec-tunnel.md).
+
+### Antctl: Installation and Usage
+
+To use antctl, the Antrea command-line tool, please refer to this
+[guide](/docs/antctl.md).
