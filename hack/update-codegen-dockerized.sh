@@ -87,6 +87,8 @@ $GOPATH/bin/go-to-protobuf \
 # Clean up vendor directory.
 rm -rf vendor
 
+set +x
+
 echo "=== Start resetting changes introduced by YEAR ==="
 git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | while read file; do
   if [[ "$(git diff ${file})" == *"-// Copyright "*" Antrea Authors"* ]]; then
@@ -94,4 +96,3 @@ git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | while read file;
     echo "=== ${file} is reset ==="
   fi
 done
-
