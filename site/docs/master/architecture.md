@@ -23,7 +23,7 @@ and `antrea-cni` bits are included in a single Docker image. Antrea also has a
 command-line tool called `antctl`, and an [Octant](https://github.com/vmware-tanzu/octant)
 UI plugin.
 
-<img src="/docs/assets/arch.svg.png" width="600" alt="Antrea Architecture Overview">
+<img src="assets/arch.svg.png" width="600" alt="Antrea Architecture Overview">
 
 ### Antrea Controller
 
@@ -90,7 +90,7 @@ Antrea Agent exposes a gRPC service (`Cni` service) which is invoked by the
 the Node, after getting the CNI `ADD` call from `antrea-cni`, the Agent creates
 the Pod's network interface, allocates an IP address, connects the interface to
 the OVS bridge and installs the necessary flows in OVS. To learn more about the
-OVS flows check out the [OVS pipeline doc](/docs/ovs-pipeline.md).
+OVS flows check out the [OVS pipeline doc](ovs-pipeline.md).
 
 Antrea Agent includes two Kubernetes controllers:
 - The Node controller watches the Kubernetes API server for new Nodes, and
@@ -149,7 +149,7 @@ Agent also creates an internal port - `gw0` by default - to be the gateway of
 the Node's subnet, and a tunnel port `tun0` which is for creating overlay
 tunnels to other Nodes.
 
-<img src="/docs/assets/node.svg.png" width="300" alt="Antrea Node Network">
+<img src="assets/node.svg.png" width="300" alt="Antrea Node Network">
 
 Each Node is assigned a single subnet, and all Pods on the Node get an IP from
 the subnet. Antrea leverages Kubernetes' `NodeIPAMController` for the Node
@@ -167,7 +167,7 @@ IP against each Node's subnet.
 
 ### Traffic walk
 
-<img src="/docs/assets/traffic_walk.svg.png" width="600" alt="Antrea Traffic Walk">
+<img src="assets/traffic_walk.svg.png" width="600" alt="Antrea Traffic Walk">
 
 * ***Intra-node traffic*** Packets between two local Pods will be forwarded by
 the OVS bridge directly.
@@ -187,7 +187,7 @@ so their source IP will be rewritten to the Node's IP before going out.
 
 ### ClusterIP Service
 
-<img src="/docs/assets/service_walk.svg.png" width="600" alt="Antrea Service Traffic Walk">
+<img src="assets/service_walk.svg.png" width="600" alt="Antrea Service Traffic Walk">
 
 At the moment, Antrea leverages `kube-proxy` to serve traffic for ClusterIP and
 NodePort type Services. The packets from a Pod to a Service's ClusterIP will be
