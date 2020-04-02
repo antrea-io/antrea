@@ -92,10 +92,20 @@ A typical CNI configuration looks like this:
   {
     "cniVersion":"0.3.0",
     "name": "antrea",
-    "type": "antrea",
-    "ipam": {
-      "type": "host-local"
-    }
+    "plugins": [
+      {
+        "type": "antrea",
+        "ipam": {
+          "type": "host-local"
+        }
+      },
+      {
+        "type": "portmap",
+        "capabilities": {
+          "portMappings": true
+        }
+      }
+    ]
   }
 ```
 
@@ -106,3 +116,15 @@ which will apply to all Pods and the host gateway interface on every Node. It is
 strongly discouraged to set the `"mtu"` field in the CNI configuration to a
 value that does not match the `defaultMTU` parameter, as it may lead to
 performance degradation or packet drops.
+
+Antrea enables portmap CNI plugin by default to support `hostPort`
+functionality for Pods. In order to disable the portmap plugin, remove the
+following from Antrea CNI config:
+```
+{
+  "type": "portmap",
+  "capabilities": {
+    "portMappings": true
+  }
+}
+```

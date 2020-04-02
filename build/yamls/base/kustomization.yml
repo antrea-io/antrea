@@ -9,7 +9,7 @@ configMapGenerator:
 - files:
   - conf/antrea-controller.conf
   - conf/antrea-agent.conf
-  - conf/antrea-cni.conf
+  - conf/antrea-cni.conflist
   name: antrea-config
 commonLabels:
   app: antrea
