@@ -268,10 +268,13 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
-	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
+	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
 	if err != nil || rc != 0 {
-		fmt.Println(stdout)
 		return fmt.Errorf("error when deploying Antrea; is %s available on the master Node?", yamlFile)
+	}
+	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when waiting for Antrea rollout to complete")
 	}
 	return nil
 }
@@ -295,10 +298,14 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
 		}
 
-		// Make sure that all Daemon Pods are available and that there is no ongoing rolling
-		// update.
-		if daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled &&
-			daemonSet.Status.UpdatedNumberScheduled == daemonSet.Status.DesiredNumberScheduled {
+		// Make sure that all Daemon Pods are available.
+		// We use clusterInfo.numNodes instead of DesiredNumberScheduled because
+		// DesiredNumberScheduled may not be updated right away. If it is still set to 0 the
+		// first time we get the DaemonSet's Status, we would return immediately instead of
+		// waiting.
+		desiredNumber := int32(clusterInfo.numNodes)
+		if daemonSet.Status.NumberAvailable == desiredNumber &&
+			daemonSet.Status.UpdatedNumberScheduled == desiredNumber {
 			// Success
 			return true, nil
 		}
