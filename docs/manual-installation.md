@@ -127,14 +127,22 @@ bin/antrea-agent --config antrea-agent.conf
 ```shell script
 mkdir -p /etc/cni/net.d
 
-cat >/etc/cni/net.d/10-antrea.conf <<EOF
+cat >/etc/cni/net.d/10-antrea.conflist <<EOF
 {
   "cniVersion":"0.3.0",
   "name": "antrea",
-  "type": "antrea",
-  "ipam": {
-    "type": "host-local"
-  }
+  "plugins": [
+    {
+      "type": "antrea",
+      "ipam": {
+        "type": "host-local"
+      }
+    },
+    {
+      "type": "portmap",
+      "capabilities": {"portMappings": true}
+    }
+  ]
 }
 EOF
 ```
