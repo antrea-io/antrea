@@ -1,6 +1,6 @@
 module github.com/vmware-tanzu/antrea
 
-go 1.13
+go 1.14
 
 require (
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20190103132138-cf96a9e61bd1

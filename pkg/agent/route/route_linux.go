@@ -669,7 +669,7 @@ func (c *Client) MigrateRoutesToGw(linkName string) error {
 	}
 	for _, addr := range addrs {
 		if err = netlink.AddrDel(link, &addr); err != nil {
-			klog.Errorf("failed to delete addr %v from %s: %w", addr, link, err)
+			klog.Errorf("Failed to delete addr %v from %s: %v", addr, link, err)
 		}
 		tmpAddr := &netlink.Addr{IPNet: addr.IPNet}
 		if err = netlink.AddrReplace(gwLink, tmpAddr); err != nil {

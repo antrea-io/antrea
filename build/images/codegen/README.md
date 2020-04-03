@@ -1,6 +1,6 @@
 # images/codegen
 
-This Docker image is a very lightweight image based on golang 1.13 which
+This Docker image is a very lightweight image based on golang 1.14 which
 includes codegen tools.
 
 If you need to build a new version of the image and push it to Dockerhub, you

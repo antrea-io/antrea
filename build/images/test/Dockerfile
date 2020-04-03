@@ -1,4 +1,4 @@
-FROM golang:1.13
+FROM golang:1.14
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image for antrea integration tests."

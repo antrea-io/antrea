@@ -16,10 +16,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.14
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.14
 
     - name: Check-out code
       uses: actions/checkout@v2
@@ -32,10 +32,10 @@ jobs:
     name: Golangci-lint
     runs-on: [ubuntu-18.04]
     steps:
-    - name: Set up Go 1.13
+    - name: Set up Go 1.14
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.14
     - name: Check-out code
       uses: actions/checkout@v2
     - name: Run golangci-lint
@@ -46,10 +46,10 @@ jobs:
     name: Golangci-lint for netpol code
     runs-on: [ubuntu-18.04]
     steps:
-    - name: Set up Go 1.13
+    - name: Set up Go 1.14
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.14
     - name: Check-out code
       uses: actions/checkout@v2
     - name: Run golangci-lint
@@ -62,10 +62,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.14
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.14
 
     - name: Check-out code
       uses: actions/checkout@v2
@@ -78,10 +78,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-      - name: Set up Go 1.13
+      - name: Set up Go 1.14
         uses: actions/setup-go@v1
         with:
-          go-version: 1.13
+          go-version: 1.14
 
       - name: Check-out code
         uses: actions/checkout@v2
@@ -95,10 +95,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.14
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.14
 
     - name: Check-out code
       uses: actions/checkout@v2
@@ -112,10 +112,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.14
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.14
 
     - name: Check-out code
       uses: actions/checkout@v2
@@ -129,10 +129,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.14
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.14
 
     - name: Check-out code
       uses: actions/checkout@v2
@@ -145,10 +145,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.14
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.14
 
     - name: Check-out code
       uses: actions/checkout@v2

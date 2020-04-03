@@ -54,7 +54,7 @@ func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, netlink.Link, error) {
 func GetNetLink(dev string) netlink.Link {
 	link, err := netlink.LinkByName(dev)
 	if err != nil {
-		klog.Errorf("Failed to find dev %s: %w", dev, err)
+		klog.Errorf("Failed to find dev %s: %v", dev, err)
 		return nil
 	}
 	return link
