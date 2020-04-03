@@ -115,6 +115,12 @@
         artifact-num-to-keep: -1
         days-to-keep: 7
         num-to-keep: 30
+    - throttle:
+        max-per-node: 1
+        max-total: 0
+        categories: cleanup_and_gc
+        option: category
+        enabled: true
 
 - job-template:
     name: '{name}-{test_name}-for-period'
@@ -148,5 +154,12 @@
     name: '{name}-{test_name}-for-gc'
     builders: '{builders}'
     description: '{description}'
+    properties:
+    - throttle:
+        max-per-node: 1
+        max-total: 0
+        categories: cleanup_and_gc
+        option: category
+        enabled: true
     triggers:
     - timed: '{timed}'
