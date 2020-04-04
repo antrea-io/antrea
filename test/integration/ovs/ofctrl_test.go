@@ -523,8 +523,9 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Action().Normal().Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolTCP).
 			Cookie(getCookieID()).
-			Action().Learn(table.GetID(), priorityNormal-10, 10, 1).
-			MatchLearntTCPDSTPort().
+			Action().Learn(table.GetID(), priorityNormal-10, 10, 0, 1).
+			DeleteLearned().
+			MatchLearnedTCPDstPort().
 			MatchReg(0, 0x0fff, binding.Range{0, 15}).
 			LoadRegToReg(0, 0, binding.Range{0, 15}, binding.Range{0, 15}).
 			LoadReg(0, 0x0ffe, binding.Range{16, 31}).

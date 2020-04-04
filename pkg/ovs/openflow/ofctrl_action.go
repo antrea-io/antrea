@@ -287,11 +287,11 @@ func (a *ofFlowAction) Group(id GroupIDType) FlowBuilder {
 	return a.builder
 }
 
-//  Learn is an action adds or modifies a flow in an OpenFlow table.
-func (a *ofFlowAction) Learn(id TableIDType, priority uint16, idleTimeout uint16, cookie uint64) LearnAction {
+//  Learn is an action which adds or modifies a flow in an OpenFlow table.
+func (a *ofFlowAction) Learn(id TableIDType, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction {
 	la := &ofLearnAction{
 		flowBuilder: a.builder,
-		nxLearn:     ofctrl.NewLearnAction(uint8(id), priority, idleTimeout, 0, 0, 0, cookie),
+		nxLearn:     ofctrl.NewLearnAction(uint8(id), priority, idleTimeout, hardTimeout, 0, 0, cookieID),
 	}
 	la.nxLearn.DeleteLearnedFlowsAfterDeletion()
 	return la
@@ -303,8 +303,13 @@ type ofLearnAction struct {
 	nxLearn     *ofctrl.FlowLearn
 }
 
-// MatchLearntTCPDSTPort makes the learnt flow to match the tp_dst of current TCP packet.
-func (a *ofLearnAction) MatchLearntTCPDSTPort() LearnAction {
+func (a *ofLearnAction) DeleteLearned() LearnAction {
+	a.nxLearn.DeleteLearnedFlowsAfterDeletion()
+	return a
+}
+
+// MatchLearnedTCPDstPort specifies that the tcp_dst field in the learned flow must match the tcp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedTCPDstPort() LearnAction {
 	ethTypeVal := make([]byte, 2)
 	binary.BigEndian.PutUint16(ethTypeVal, 0x800)
 	ipTypeVal := make([]byte, 2)
@@ -315,8 +320,8 @@ func (a *ofLearnAction) MatchLearntTCPDSTPort() LearnAction {
 	return a
 }
 
-// MatchLearntTCPDSTPort makes the learnt flow to match the tp_dst of current UDP packet.
-func (a *ofLearnAction) MatchLearntUDPDSTPort() LearnAction {
+// MatchLearnedUDPDstPort makes the learned flow to match the tp_dst of current UDP packet.
+func (a *ofLearnAction) MatchLearnedUDPDstPort() LearnAction {
 	ethTypeVal := make([]byte, 2)
 	binary.BigEndian.PutUint16(ethTypeVal, 0x800)
 	ipTypeVal := make([]byte, 2)
@@ -327,19 +332,19 @@ func (a *ofLearnAction) MatchLearntUDPDSTPort() LearnAction {
 	return a
 }
 
-// MatchLearntTCPDSTPort makes the learnt flow to match the nw_src of current IP packet.
-func (a *ofLearnAction) MatchLearntSrcIP() LearnAction {
+// MatchLearnedSrcIP makes the learned flow to match the nw_src of current IP packet.
+func (a *ofLearnAction) MatchLearnedSrcIP() LearnAction {
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, nil)
 	return a
 }
 
-// MatchLearntTCPDSTPort makes the learnt flow to match the nw_dst of current IP packet.
-func (a *ofLearnAction) MatchLearntDstIP() LearnAction {
+// MatchLearnedDstIP makes the learned flow to match the nw_dst of current IP packet.
+func (a *ofLearnAction) MatchLearnedDstIP() LearnAction {
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_DST"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_DST"}, nil)
 	return a
 }
 
-// MatchLearntTCPDSTPort makes the learnt flow to match the data in the reg of specific range.
+// MatchReg makes the learned flow to match the data in the reg of specific range.
 func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction {
 	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
 	valBuf := make([]byte, 4)
@@ -348,7 +353,7 @@ func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction 
 	return a
 }
 
-// LoadRegToReg makes the learnt flow to load reg[fromRegID] to reg[toRegID] with specific ranges.
+// LoadRegToReg makes the learned flow to load reg[fromRegID] to reg[toRegID] with specific ranges.
 func (a *ofLearnAction) LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction {
 	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", fromRegID), Start: uint16(fromRng[0])}
 	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", toRegID), Start: uint16(toRng[0])}
@@ -356,7 +361,7 @@ func (a *ofLearnAction) LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Rang
 	return a
 }
 
-// LoadRegToReg makes the learnt flow to load data to reg[regID] with specific range.
+// LoadReg makes the learned flow to load data to reg[regID] with specific range.
 func (a *ofLearnAction) LoadReg(regID int, data uint32, rng Range) LearnAction {
 	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
 	valBuf := make([]byte, 4)
