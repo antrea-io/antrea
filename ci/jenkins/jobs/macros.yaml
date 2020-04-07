@@ -329,9 +329,9 @@
 
           kubectl apply -f build/yamls/antrea.yml
           kubectl rollout restart deployment/coredns -n kube-system
-          kubectl rollout status deployment/coredns -n kube-system
-          kubectl rollout status deployment.apps/antrea-controller -n kube-system
-          kubectl rollout status daemonset/antrea-agent -n kube-system
+          kubectl rollout status --timeout=5m deployment/coredns -n kube-system
+          kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system
+          kubectl rollout status --timeout=5m daemonset/antrea-agent -n kube-system
 
           kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {{print $6}}' | while read master_ip; do
             echo "=== Move kubeconfig to master ==="
