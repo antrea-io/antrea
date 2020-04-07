@@ -318,9 +318,9 @@ func (a *ofLearnAction) MatchEthernetProtocolIP() LearnAction {
 	return a
 }
 
-// MatchLearnedTCPDstPort specifies that the transport layer destination field
+// MatchTransportDst specifies that the transport layer destination field
 // {tcp|udp}_dst in the learned flow must match the same field of the packet
-// currently being processed. It only accepts ProtocolTCP or Protocol UDP,
+// currently being processed. It only accepts ProtocolTCP or ProtocolUDP,
 // otherwise this does nothing.
 func (a *ofLearnAction) MatchTransportDst(protocol Protocol) LearnAction {
 	if protocol != ProtocolTCP && protocol != ProtocolUDP {
