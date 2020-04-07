@@ -186,6 +186,8 @@ type FlowBuilder interface {
 
 type LearnAction interface {
 	DeleteLearned() LearnAction
+	MatchEthernetProtocolIP() LearnAction
+	MatchTransportDst(protocol Protocol) LearnAction
 	MatchLearnedTCPDstPort() LearnAction
 	MatchLearnedUDPDstPort() LearnAction
 	MatchLearnedSrcIP() LearnAction

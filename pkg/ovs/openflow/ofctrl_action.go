@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/ofnet/ofctrl"
@@ -302,33 +303,48 @@ type ofLearnAction struct {
 	nxLearn     *ofctrl.FlowLearn
 }
 
+// DeleteLearned makes learned flows to be deleted when current flow is being deleted.
 func (a *ofLearnAction) DeleteLearned() LearnAction {
 	a.nxLearn.DeleteLearnedFlowsAfterDeletion()
 	return a
 }
 
-// MatchLearnedTCPDstPort specifies that the tcp_dst field in the learned flow must match the tcp_dst of the packet currently being processed.
-func (a *ofLearnAction) MatchLearnedTCPDstPort() LearnAction {
+// MatchEthernetProtocolIP specifies that the NXM_OF_ETH_TYPE field in the
+// learned flow must match IP(0x800).
+func (a *ofLearnAction) MatchEthernetProtocolIP() LearnAction {
 	ethTypeVal := make([]byte, 2)
 	binary.BigEndian.PutUint16(ethTypeVal, 0x800)
-	ipTypeVal := make([]byte, 2)
-	ipTypeVal[1] = byte(ofctrl.IP_PROTO_TCP)
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_ETH_TYPE"}, 2*8, nil, ethTypeVal)
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_PROTO"}, 1*8, nil, ipTypeVal)
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_TCP_DST"}, 2*8, &ofctrl.LearnField{Name: "NXM_OF_TCP_DST"}, nil)
 	return a
 }
 
-// MatchLearnedUDPDstPort specifies that the udp_dst field in the learned flow must match the udp_dst of the packet currently being processed.
-func (a *ofLearnAction) MatchLearnedUDPDstPort() LearnAction {
-	ethTypeVal := make([]byte, 2)
-	binary.BigEndian.PutUint16(ethTypeVal, 0x800)
+// MatchLearnedTCPDstPort specifies that the transport layer destination field
+// {tcp|udp}_dst in the learned flow must match the same field of the packet
+// currently being processed. It only accepts ProtocolTCP or Protocol UDP,
+// otherwise this does nothing.
+func (a *ofLearnAction) MatchTransportDst(protocol Protocol) LearnAction {
+	if protocol != ProtocolTCP && protocol != ProtocolUDP {
+		return a
+	}
+	a.MatchEthernetProtocolIP()
 	ipTypeVal := make([]byte, 2)
-	ipTypeVal[1] = byte(ofctrl.IP_PROTO_UDP)
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_ETH_TYPE"}, 2*8, nil, ethTypeVal)
+	ipTypeVal[1] = byte(ofctrl.IP_PROTO_TCP)
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_PROTO"}, 1*8, nil, ipTypeVal)
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_UDP_DST"}, 2*8, &ofctrl.LearnField{Name: "NXM_OF_UDP_DST"}, nil)
+	fieldName := fmt.Sprintf("NXM_OF_%s_DST", strings.ToUpper(string(protocol)))
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: fieldName}, 2*8, &ofctrl.LearnField{Name: fieldName}, nil)
 	return a
+}
+
+// MatchLearnedTCPDstPort specifies that the tcp_dst field in the learned flow
+// must match the tcp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedTCPDstPort() LearnAction {
+	return a.MatchTransportDst(ProtocolTCP)
+}
+
+// MatchLearnedUDPDstPort specifies that the udp_dst field in the learned flow
+// must match the udp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedUDPDstPort() LearnAction {
+	return a.MatchTransportDst(ProtocolUDP)
 }
 
 // MatchLearnedSrcIP makes the learned flow to match the nw_src of current IP packet.
@@ -352,7 +368,8 @@ func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction 
 	return a
 }
 
-// LoadRegToReg makes the learned flow to load reg[fromRegID] to reg[toRegID] with specific ranges.
+// LoadRegToReg makes the learned flow to load reg[fromRegID] to reg[toRegID]
+// with specific ranges.
 func (a *ofLearnAction) LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction {
 	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", fromRegID), Start: uint16(fromRng[0])}
 	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", toRegID), Start: uint16(toRng[0])}
