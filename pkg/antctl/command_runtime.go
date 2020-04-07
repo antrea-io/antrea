@@ -20,20 +20,19 @@ import (
 )
 
 const (
-	componentController string = "controller"
-	componentAgent      string = "agent"
+	ModeController string = "controller"
+	ModeAgent      string = "agent"
 )
 
 var (
-	// runtimeComponent tells the component the antctl client running against or
-	// the antctl server running in.
-	runtimeComponent string
+	// runtimeMode tells which mode antctl is running against.
+	runtimeMode string
 )
 
 func init() {
 	if strings.HasPrefix(os.Getenv("POD_NAME"), "antrea-agent") {
-		runtimeComponent = componentAgent
+		runtimeMode = ModeAgent
 	} else {
-		runtimeComponent = componentController
+		runtimeMode = ModeController
 	}
 }

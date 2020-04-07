@@ -48,8 +48,8 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
 	}
 	for i := range cl.definitions {
 		def := cl.definitions[i]
-		if (runtimeComponent == componentAgent && def.agentEndpoint == nil) ||
-			(runtimeComponent == componentController && def.controllerEndpoint == nil) {
+		if (runtimeMode == ModeAgent && def.agentEndpoint == nil) ||
+			(runtimeMode == ModeController && def.controllerEndpoint == nil) {
 			continue
 		}
 		def.applySubCommandToRoot(root, client)
@@ -91,9 +91,28 @@ func (cl *commandList) validate() []error {
 	return errs
 }
 
+// GetDebugCommands returns all commands supported by Controller or Agent that
+// are used for debugging purpose.
+func (cl *commandList) GetDebugCommands(mode string) [][]string {
+	var allCommands [][]string
+	for i := range cl.definitions {
+		def := cl.definitions[i]
+		if mode == ModeAgent && def.agentEndpoint != nil ||
+			mode == ModeController && def.controllerEndpoint != nil {
+			var currentCommand []string
+			if group, ok := groupCommands[def.commandGroup]; ok {
+				currentCommand = append(currentCommand, group.Use)
+			}
+			currentCommand = append(currentCommand, def.use)
+			allCommands = append(allCommands, currentCommand)
+		}
+	}
+	return allCommands
+}
+
 // renderDescription replaces placeholders ${component} in Short and Long of a command
 // to the determined component during runtime.
 func renderDescription(command *cobra.Command) {
-	command.Short = strings.ReplaceAll(command.Short, "${component}", runtimeComponent)
-	command.Long = strings.ReplaceAll(command.Long, "${component}", runtimeComponent)
+	command.Short = strings.ReplaceAll(command.Short, "${component}", runtimeMode)
+	command.Long = strings.ReplaceAll(command.Long, "${component}", runtimeMode)
 }
