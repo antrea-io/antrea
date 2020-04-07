@@ -231,7 +231,7 @@
 
           make clean
           docker pull antrea/openvswitch --all-tags
-          docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi || true
+          docker images | grep "${JOB_NAME}" | awk '{print $3}' | xargs -r docker rmi -f || true
           # Clean up dangling images generated in previous builds. Recent ones must be excluded
           # because they might be being used in other builds running simultaneously.
           docker image prune -f --filter "until=1h" || true
