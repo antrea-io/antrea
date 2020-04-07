@@ -346,7 +346,7 @@ func TestFormat(t *testing.T) {
 // TestCommandDefinitionGenerateExample checks example strings are generated as
 // expected.
 func TestCommandDefinitionGenerateExample(t *testing.T) {
-	runtimeComponent = componentAgent
+	runtimeMode = ModeAgent
 	for k, tc := range map[string]struct {
 		use        string
 		cmdChain   string
