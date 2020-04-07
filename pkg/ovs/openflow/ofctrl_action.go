@@ -293,7 +293,6 @@ func (a *ofFlowAction) Learn(id TableIDType, priority uint16, idleTimeout, hardT
 		flowBuilder: a.builder,
 		nxLearn:     ofctrl.NewLearnAction(uint8(id), priority, idleTimeout, hardTimeout, 0, 0, cookieID),
 	}
-	la.nxLearn.DeleteLearnedFlowsAfterDeletion()
 	return la
 }
 
@@ -320,7 +319,7 @@ func (a *ofLearnAction) MatchLearnedTCPDstPort() LearnAction {
 	return a
 }
 
-// MatchLearnedUDPDstPort makes the learned flow to match the tp_dst of current UDP packet.
+// MatchLearnedUDPDstPort specifies that the udp_dst field in the learned flow must match the udp_dst of the packet currently being processed.
 func (a *ofLearnAction) MatchLearnedUDPDstPort() LearnAction {
 	ethTypeVal := make([]byte, 2)
 	binary.BigEndian.PutUint16(ethTypeVal, 0x800)
