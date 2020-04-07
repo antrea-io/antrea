@@ -173,32 +173,32 @@ type commandDefinition struct {
 }
 
 func (cd *commandDefinition) namespaced() bool {
-	if runtimeComponent == componentAgent {
+	if runtimeMode == ModeAgent {
 		return cd.agentEndpoint != nil && cd.agentEndpoint.resourceEndpoint != nil && cd.agentEndpoint.resourceEndpoint.namespaced
-	} else if runtimeComponent == componentController {
+	} else if runtimeMode == ModeController {
 		return cd.controllerEndpoint != nil && cd.controllerEndpoint.resourceEndpoint != nil && cd.controllerEndpoint.resourceEndpoint.namespaced
 	}
 	return false
 }
 
 func (cd *commandDefinition) getAddonTransform() func(reader io.Reader, single bool) (interface{}, error) {
-	if runtimeComponent == componentAgent && cd.agentEndpoint != nil {
+	if runtimeMode == ModeAgent && cd.agentEndpoint != nil {
 		return cd.agentEndpoint.addonTransform
-	} else if runtimeComponent == componentController && cd.controllerEndpoint != nil {
+	} else if runtimeMode == ModeController && cd.controllerEndpoint != nil {
 		return cd.controllerEndpoint.addonTransform
 	}
 	return nil
 }
 
 func (cd *commandDefinition) getEndpoint() endpointResponder {
-	if runtimeComponent == componentAgent {
+	if runtimeMode == ModeAgent {
 		if cd.agentEndpoint != nil {
 			if cd.agentEndpoint.resourceEndpoint != nil {
 				return cd.agentEndpoint.resourceEndpoint
 			}
 			return cd.agentEndpoint.nonResourceEndpoint
 		}
-	} else if runtimeComponent == componentController {
+	} else if runtimeMode == ModeController {
 		if cd.controllerEndpoint != nil {
 			if cd.controllerEndpoint.resourceEndpoint != nil {
 				return cd.controllerEndpoint.resourceEndpoint

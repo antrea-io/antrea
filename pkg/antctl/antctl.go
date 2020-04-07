@@ -37,7 +37,7 @@ var CommandList = &commandList{
 		{
 			use:          "version",
 			short:        "Print version information",
-			long:         "Print version information of the antctl and the ${component}",
+			long:         "Print version information of antctl and ${component}",
 			commandGroup: flat,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
