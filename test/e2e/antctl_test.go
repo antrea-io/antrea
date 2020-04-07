@@ -7,7 +7,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vmware-tanzu/antrea/pkg/antctl"
 )
+
+type cmdAndReturnCode struct {
+	args               []string
+	expectedReturnCode int
+}
 
 // antctlOutput is a helper function for logging antctl outputs.
 func antctlOutput(stdout, stderr string, tb testing.TB) {
@@ -15,17 +22,15 @@ func antctlOutput(stdout, stderr string, tb testing.TB) {
 	tb.Logf("antctl stderr:\n%s", stderr)
 }
 
-// runAntctl runs antctl commands on antrea Pods, the controller, or agents. It
-// always runs the commands with verbose flag enabled.
-func runAntctl(podName string, subCMDs []string, data *TestData, tb testing.TB) (string, string, error) {
+// runAntctl runs antctl commands on antrea Pods, the controller, or agents.
+func runAntctl(podName string, cmds []string, data *TestData, tb testing.TB) (string, string, error) {
 	var containerName string
 	if strings.Contains(podName, "agent") {
 		containerName = "antrea-agent"
 	} else {
 		containerName = "antrea-controller"
 	}
-	var cmds []string
-	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, containerName, append(cmds, subCMDs...))
+	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, containerName, cmds)
 	antctlOutput(stdout, stderr, tb)
 	return stdout, stderr, err
 }
@@ -41,8 +46,16 @@ func TestAntctlAgentLocalAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when getting antrea-agent pod name: %v", err)
 	}
-	if _, _, err := runAntctl(podName, []string{"antctl", "-v", "version"}, data, t); err != nil {
-		t.Fatalf("Error when running `antctl version` from %s: %v", podName, err)
+	for _, c := range antctl.CommandList.GetDebugCommands(antctl.ModeAgent) {
+		args := append([]string{"antctl", "-v"}, c...)
+		cmd := strings.Join(args, " ")
+		t.Run(cmd, func(t *testing.T) {
+			stdout, stderr, err := runAntctl(podName, args, data, t)
+			antctlOutput(stdout, stderr, t)
+			if err != nil {
+				t.Fatalf("Error when running `antctl %s` from %s: %v", c, podName, err)
+			}
+		})
 	}
 }
 
@@ -71,25 +84,28 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 	require.Zero(t, rc)
 	require.Nil(t, err, "Error when make the antctl on master node executable, stdout: %s, stderr: %s", podName, stdout, stderr)
 
-	for k, tc := range map[string]struct {
-		commands           []string
-		expectedReturnCode int
-	}{
-		"CorrectConfig": {
-			commands:           []string{nodeAntctlPath, "-v", "version"},
-			expectedReturnCode: 0,
-		},
-		"MalformedConfig": {
-			commands:           []string{nodeAntctlPath, "-v", "version", "--kubeconfig", "/dev/null"},
+	testCmds := []cmdAndReturnCode{}
+	// Add all controller commands.
+	for _, c := range antctl.CommandList.GetDebugCommands(antctl.ModeController) {
+		cmd := append([]string{nodeAntctlPath, "-v"}, c...)
+		testCmds = append(testCmds, cmdAndReturnCode{args: cmd, expectedReturnCode: 0})
+	}
+	testCmds = append(testCmds,
+		// Malformed config
+		cmdAndReturnCode{
+			args:               []string{nodeAntctlPath, "-v", "version", "--kubeconfig", "/dev/null"},
 			expectedReturnCode: 1,
 		},
-	} {
-		t.Run(k, func(t *testing.T) {
-			rc, stdout, stderr, err = RunCommandOnNode(masterNodeName(), strings.Join(tc.commands, " "))
+	)
+
+	for _, tc := range testCmds {
+		cmd := strings.Join(tc.args, " ")
+		t.Run(cmd, func(t *testing.T) {
+			rc, stdout, stderr, err = RunCommandOnNode(masterNodeName(), cmd)
 			antctlOutput(stdout, stderr, t)
 			assert.Equal(t, tc.expectedReturnCode, rc)
 			if err != nil {
-				t.Fatalf("Error when running `antctl version` from %s: %v", masterNodeName(), err)
+				t.Fatalf("Error when running `%s` from %s: %v", cmd, masterNodeName(), err)
 			}
 		})
 	}

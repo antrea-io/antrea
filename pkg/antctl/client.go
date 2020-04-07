@@ -73,7 +73,7 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 
 func (c *client) request(opt *requestOption) (io.Reader, error) {
 	var e *endpoint
-	if runtimeComponent == componentAgent {
+	if runtimeMode == ModeAgent {
 		e = opt.commandDefinition.agentEndpoint
 	} else {
 		e = opt.commandDefinition.controllerEndpoint
@@ -89,7 +89,7 @@ func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) 
 	if err != nil {
 		return nil, err
 	}
-	if runtimeComponent == componentAgent {
+	if runtimeMode == ModeAgent {
 		kubeconfig.Insecure = true
 		kubeconfig.CAFile = ""
 		kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apiserver.Port))
