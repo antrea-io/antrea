@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package apis
 
-import (
-	componentbaseconfig "k8s.io/component-base/config"
+const (
+	// AntreaControllerAPIPort is the default port for the antrea-controller APIServer.
+	AntreaControllerAPIPort = 10349
+	// AntreaAgentAPIPort is the default port for the antrea-agent APIServer.
+	AntreaAgentAPIPort = 10350
 )
-
-type ControllerConfig struct {
-	// clientConnection specifies the kubeconfig file and client connection settings for the
-	// antrea-controller to communicate with the Kubernetes apiserver.
-	ClientConnection componentbaseconfig.ClientConnectionConfiguration `yaml:"clientConnection"`
-	// APIPort is the port for the antrea-controller APIServer to serve on.
-	// Defaults to 10349.
-	APIPort int `yaml:"apiPort,omitempty"`
-}

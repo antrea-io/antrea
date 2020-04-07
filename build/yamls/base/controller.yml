@@ -7,7 +7,7 @@ spec:
   ports:
     - port: 443
       protocol: TCP
-      targetPort: 443
+      targetPort: api
   selector:
     component: antrea-controller
 ---
@@ -90,13 +90,14 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
           ports:
-            - containerPort: 443
+            - containerPort: 10349
+              name: api
               protocol: TCP
           readinessProbe:
             httpGet:
               host: 127.0.0.1
               path: /healthz
-              port: 443
+              port: api
               scheme: HTTPS
             initialDelaySeconds: 5
             timeoutSeconds: 5
