@@ -17,6 +17,7 @@
 package cniserver
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -336,6 +337,15 @@ func (ic *ifConfigurator) validateContainerPeerInterface(interfaces []*current.I
 
 	return nil, fmt.Errorf("peer veth interface not found for container interface %s",
 		containerVeth.name)
+}
+
+// getInterceptedInterfaces is not supported on Windows.
+func (ic *ifConfigurator) getInterceptedInterfaces(
+	sandbox string,
+	containerNetNS string,
+	containerIFDev string,
+) (*current.Interface, *current.Interface, error) {
+	return nil, nil, errors.New("getInterceptedInterfaces is unsupported on Windows")
 }
 
 // getOVSInterfaceType returns "internal". Windows uses internal OVS interface for container vNIC.
