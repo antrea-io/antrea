@@ -82,6 +82,16 @@ rules:
   - system.antrea.tanzu.vmware.com
   resources:
   - controllerinfos
+  - agentinfos
+  verbs:
+  - get
+- nonResourceURLs:
+  - /agentinfo
+  - /addressgroups
+  - /appliedtogroups
+  - /networkpolicies
+  - /ovsflows
+  - /podinterfaces
   verbs:
   - get
 ---
@@ -120,6 +130,18 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -180,6 +202,22 @@ kind: RoleBinding
 metadata:
   labels:
     app: antrea
+  name: antrea-agent-authentication-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: antrea-agent
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: antrea
   name: antrea-controller-authentication-reader
   namespace: kube-system
 roleRef:
@@ -208,6 +246,9 @@ subjects:
   namespace: kube-system
 - kind: ServiceAccount
   name: antrea-controller
+  namespace: kube-system
+- kind: ServiceAccount
+  name: antrea-agent
   namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
