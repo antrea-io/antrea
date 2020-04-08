@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -520,6 +520,20 @@ func (m *MockAction) Group(arg0 openflow.GroupIDType) openflow.FlowBuilder {
 func (mr *MockActionMockRecorder) Group(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Group", reflect.TypeOf((*MockAction)(nil).Group), arg0)
+}
+
+// Learn mocks base method
+func (m *MockAction) Learn(arg0 openflow.TableIDType, arg1, arg2, arg3 uint16, arg4 uint64) openflow.LearnAction {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Learn", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(openflow.LearnAction)
+	return ret0
+}
+
+// Learn indicates an expected call of Learn
+func (mr *MockActionMockRecorder) Learn(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Learn", reflect.TypeOf((*MockAction)(nil).Learn), arg0, arg1, arg2, arg3, arg4)
 }
 
 // LoadARPOperation mocks base method

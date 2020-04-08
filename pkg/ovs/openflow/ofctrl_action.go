@@ -1,8 +1,10 @@
 package openflow
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/ofnet/ofctrl"
@@ -284,6 +286,109 @@ func (a *ofFlowAction) Group(id GroupIDType) FlowBuilder {
 	}
 	a.builder.ofFlow.lastAction = group
 	return a.builder
+}
+
+//  Learn is an action which adds or modifies a flow in an OpenFlow table.
+func (a *ofFlowAction) Learn(id TableIDType, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction {
+	la := &ofLearnAction{
+		flowBuilder: a.builder,
+		nxLearn:     ofctrl.NewLearnAction(uint8(id), priority, idleTimeout, hardTimeout, 0, 0, cookieID),
+	}
+	return la
+}
+
+// ofLearnAction is used to describe actions in the learn flow.
+type ofLearnAction struct {
+	flowBuilder *ofFlowBuilder
+	nxLearn     *ofctrl.FlowLearn
+}
+
+// DeleteLearned makes learned flows to be deleted when current flow is being deleted.
+func (a *ofLearnAction) DeleteLearned() LearnAction {
+	a.nxLearn.DeleteLearnedFlowsAfterDeletion()
+	return a
+}
+
+// MatchEthernetProtocolIP specifies that the NXM_OF_ETH_TYPE field in the
+// learned flow must match IP(0x800).
+func (a *ofLearnAction) MatchEthernetProtocolIP() LearnAction {
+	ethTypeVal := make([]byte, 2)
+	binary.BigEndian.PutUint16(ethTypeVal, 0x800)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_ETH_TYPE"}, 2*8, nil, ethTypeVal)
+	return a
+}
+
+// MatchTransportDst specifies that the transport layer destination field
+// {tcp|udp}_dst in the learned flow must match the same field of the packet
+// currently being processed. It only accepts ProtocolTCP or ProtocolUDP,
+// otherwise this does nothing.
+func (a *ofLearnAction) MatchTransportDst(protocol Protocol) LearnAction {
+	if protocol != ProtocolTCP && protocol != ProtocolUDP {
+		return a
+	}
+	a.MatchEthernetProtocolIP()
+	ipTypeVal := make([]byte, 2)
+	ipTypeVal[1] = byte(ofctrl.IP_PROTO_TCP)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_PROTO"}, 1*8, nil, ipTypeVal)
+	fieldName := fmt.Sprintf("NXM_OF_%s_DST", strings.ToUpper(string(protocol)))
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: fieldName}, 2*8, &ofctrl.LearnField{Name: fieldName}, nil)
+	return a
+}
+
+// MatchLearnedTCPDstPort specifies that the tcp_dst field in the learned flow
+// must match the tcp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedTCPDstPort() LearnAction {
+	return a.MatchTransportDst(ProtocolTCP)
+}
+
+// MatchLearnedUDPDstPort specifies that the udp_dst field in the learned flow
+// must match the udp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedUDPDstPort() LearnAction {
+	return a.MatchTransportDst(ProtocolUDP)
+}
+
+// MatchLearnedSrcIP makes the learned flow to match the nw_src of current IP packet.
+func (a *ofLearnAction) MatchLearnedSrcIP() LearnAction {
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, nil)
+	return a
+}
+
+// MatchLearnedDstIP makes the learned flow to match the nw_dst of current IP packet.
+func (a *ofLearnAction) MatchLearnedDstIP() LearnAction {
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_DST"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_DST"}, nil)
+	return a
+}
+
+// MatchReg makes the learned flow to match the data in the reg of specific range.
+func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction {
+	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
+	valBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(valBuf, data)
+	a.nxLearn.AddMatch(toField, uint16(rng.length()), nil, valBuf[4-rng.length()/8:])
+	return a
+}
+
+// LoadRegToReg makes the learned flow to load reg[fromRegID] to reg[toRegID]
+// with specific ranges.
+func (a *ofLearnAction) LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction {
+	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", fromRegID), Start: uint16(fromRng[0])}
+	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", toRegID), Start: uint16(toRng[0])}
+	a.nxLearn.AddLoadAction(toField, uint16(toRng.length()), fromField, nil)
+	return a
+}
+
+// LoadReg makes the learned flow to load data to reg[regID] with specific range.
+func (a *ofLearnAction) LoadReg(regID int, data uint32, rng Range) LearnAction {
+	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
+	valBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(valBuf, data)
+	a.nxLearn.AddLoadAction(toField, uint16(rng.length()), nil, valBuf[4-rng.length()/8:])
+	return a
+}
+
+func (a *ofLearnAction) Done() FlowBuilder {
+	a.flowBuilder.Learn(a.nxLearn)
+	return a.flowBuilder
 }
 
 func getFieldRange(name string) (*openflow13.MatchField, Range, error) {
