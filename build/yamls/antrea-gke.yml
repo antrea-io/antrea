@@ -549,6 +549,7 @@ spec:
         name: antrea-agent
         ports:
         - containerPort: 10350
+          hostPort: 10350
           name: api
           protocol: TCP
         readinessProbe:
