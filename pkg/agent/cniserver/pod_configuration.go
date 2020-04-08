@@ -65,6 +65,7 @@ type interfaceConfigurator interface {
 	checkContainerInterface(containerNetns, containerID string, containerIface *current.Interface, containerIPs []*current.IPConfig, containerRoutes []*cnitypes.Route) (*vethPair, error)
 	validateContainerPeerInterface(interfaces []*current.Interface, containerVeth *vethPair) (*vethPair, error)
 	getOVSInterfaceType() int
+	getInterceptedInterfaces(sandbox, containerNS, containerIFDev string) (*current.Interface, *current.Interface, error)
 }
 
 type podConfigurator struct {
@@ -521,28 +522,11 @@ func (pc *podConfigurator) connectInterceptedInterface(
 	if err != nil {
 		return err
 	}
-
-	containerIface := &current.Interface{}
-	intf, err := util.GetNSDevInterface(containerNetNS, containerIFDev)
+	containerIface, hostIface, err := pc.ifConfigurator.getInterceptedInterfaces(sandbox, containerNetNS, containerIFDev)
 	if err != nil {
-		return fmt.Errorf("connectInterceptedInterface failed to get veth info: %w", err)
+		return err
 	}
-	containerIface.Name = containerIFDev
-	containerIface.Sandbox = sandbox
-	containerIface.Mac = intf.HardwareAddr.String()
-
-	// Setup dev in host ns.
-	hostIface := &current.Interface{}
-	intf, br, err := util.GetNSPeerDevBridge(containerNetNS, containerIFDev)
-	if err != nil {
-		return fmt.Errorf("connectInterceptedInterface failed to get veth peer info: %w", err)
-	}
-	if len(br) > 0 {
-		return fmt.Errorf("connectInterceptedInterface: does not expect device %s attached to bridge", intf.Name)
-	}
-	hostIface.Name = intf.Name
-	hostIface.Mac = intf.HardwareAddr.String()
-	if err = pc.routeClient.MigrateRoutesToGw(intf.Name); err != nil {
+	if err = pc.routeClient.MigrateRoutesToGw(hostIface.Name); err != nil {
 		return fmt.Errorf("connectInterceptedInterface failed to migrate: %w", err)
 	}
 	_, err = pc.connectInterfaceToOVS(podName, podNameSpace, containerID, hostIface,
