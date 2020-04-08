@@ -305,6 +305,34 @@ func (ic *ifConfigurator) validateContainerPeerInterface(interfaces []*current.I
 		containerVeth.name)
 }
 
+func (ic *ifConfigurator) getInterceptedInterfaces(
+	sandbox string,
+	containerNetNS string,
+	containerIFDev string,
+) (*current.Interface, *current.Interface, error) {
+	containerIface := &current.Interface{}
+	intf, err := util.GetNSDevInterface(containerNetNS, containerIFDev)
+	if err != nil {
+		return nil, nil, fmt.Errorf("connectInterceptedInterface failed to get veth info: %w", err)
+	}
+	containerIface.Name = containerIFDev
+	containerIface.Sandbox = sandbox
+	containerIface.Mac = intf.HardwareAddr.String()
+
+	// Setup dev in host ns.
+	hostIface := &current.Interface{}
+	intf, br, err := util.GetNSPeerDevBridge(containerNetNS, containerIFDev)
+	if err != nil {
+		return nil, nil, fmt.Errorf("connectInterceptedInterface failed to get veth peer info: %w", err)
+	}
+	if len(br) > 0 {
+		return nil, nil, fmt.Errorf("connectInterceptedInterface: does not expect device %s attached to bridge", intf.Name)
+	}
+	hostIface.Name = intf.Name
+	hostIface.Mac = intf.HardwareAddr.String()
+	return containerIface, hostIface, nil
+}
+
 func validateInterface(intf *current.Interface, inNetns bool) (netlink.Link, error) {
 	if intf.Name == "" {
 		return nil, fmt.Errorf("interface name is missing")
