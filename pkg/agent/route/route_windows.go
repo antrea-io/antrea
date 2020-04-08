@@ -17,6 +17,7 @@
 package route
 
 import (
+	"errors"
 	"net"
 	"sync"
 
@@ -116,6 +117,16 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	c.hostRoutes.Delete(podCIDR.String())
 	klog.V(2).Infof("Deleted route with destination %s from host gateway", podCIDR.String())
 	return nil
+}
+
+// MigrateRoutesToGw is not supported on Windows.
+func (c *Client) MigrateRoutesToGw(linkName string) error {
+	return errors.New("MigrateRoutesToGw is unsupported on Windows")
+}
+
+// UnMigrateRoutesFromGw is not supported on Windows.
+func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error {
+	return errors.New("UnMigrateRoutesFromGw is unsupported on Windows")
 }
 
 func (c *Client) listRoutes() (map[string]*netroute.Route, error) {
