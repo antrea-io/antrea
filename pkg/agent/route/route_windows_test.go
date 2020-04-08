@@ -17,13 +17,13 @@
 package route
 
 import (
-	"k8s.io/klog"
 	"net"
 	"testing"
 
 	"github.com/rakelkar/gonetsh/netroute"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
