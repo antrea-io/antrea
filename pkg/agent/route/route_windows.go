@@ -26,6 +26,13 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/winfirewall"
+)
+
+const (
+	inboundFirewallRuleName  = "Antrea: accept packets from local Pods"
+	outboundFirewallRuleName = "Antrea: accept packets to local Pods"
 )
 
 type Client struct {
@@ -33,6 +40,7 @@ type Client struct {
 	nodeConfig  *config.NodeConfig
 	serviceCIDR *net.IPNet
 	hostRoutes  *sync.Map
+	fwClient    *winfirewall.Client
 }
 
 // NewClient returns a route client.
@@ -42,6 +50,7 @@ func NewClient(hostGateway string, serviceCIDR *net.IPNet, encapMode config.Traf
 		nr:          nr,
 		serviceCIDR: serviceCIDR,
 		hostRoutes:  &sync.Map{},
+		fwClient:    winfirewall.NewClient(),
 	}, nil
 }
 
@@ -49,6 +58,9 @@ func NewClient(hostGateway string, serviceCIDR *net.IPNet, encapMode config.Traf
 // Service LoadBalancing is provided by OpenFlow.
 func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 	c.nodeConfig = nodeConfig
+	if err := c.initFwRules(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -140,10 +152,41 @@ func (c *Client) listRoutes() (map[string]*netroute.Route, error) {
 		if rt.LinkIndex != c.nodeConfig.GatewayConfig.LinkIndex {
 			continue
 		}
-		if rt.DestinationSubnet.IP.IsLoopback() {
+		// Only process IPv4 route entries in the loop.
+		if rt.DestinationSubnet.IP.To4() == nil {
+			continue
+		}
+		// Retrieve the route entries that use global unicast IP address as the destination. "GetNetRoutesAll" also
+		// returns the entries of loopback, broadcast, and multicast, which are added by the system when adding a new IP
+		// on the interface. Since removing those route entries might introduce the host networking issues, ignore them
+		// from the list.
+		if !rt.DestinationSubnet.IP.IsGlobalUnicast() {
+			continue
+		}
+		// Windows adds an active route entry for the local broadcast address automatically when a new IP address
+		// is configured on the interface. This route entry should be ignored in the list.
+		if rt.DestinationSubnet.IP.Equal(util.GetLocalBroadcastIP(rt.DestinationSubnet)) {
+			continue
+		}
+		// Skip Service corresponding routes. These route entries are added by kube-proxy. If these route entries
+		// are removed in Reconcile, the host can't access the Service.
+		if c.serviceCIDR.Contains(rt.DestinationSubnet.IP) {
 			continue
 		}
 		rtMap[rt.DestinationSubnet.String()] = &rt
 	}
 	return rtMap, nil
+}
+
+// initFwRules adds Windows Firewall rules to accept the traffic that is sent to or from local Pods.
+func (c *Client) initFwRules() error {
+	err := c.fwClient.AddRuleAllowIP(inboundFirewallRuleName, winfirewall.FWRuleIn, c.nodeConfig.PodCIDR)
+	if err != nil {
+		return err
+	}
+	err = c.fwClient.AddRuleAllowIP(outboundFirewallRuleName, winfirewall.FWRuleOut, c.nodeConfig.PodCIDR)
+	if err != nil {
+		return err
+	}
+	return nil
 }
