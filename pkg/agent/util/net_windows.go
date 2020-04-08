@@ -1,4 +1,6 @@
-// Copyright 2020 Antrea Authors
+// +build windows
+
+//Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +17,7 @@
 package util
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -41,31 +44,31 @@ func GetNSPath(containerNetNS string) (string, error) {
 // EnableHostInterface sets the specified interface status as UP.
 func EnableHostInterface(ifaceName string) error {
 	cmd := fmt.Sprintf("Enable-NetAdapter -InterfaceAlias %s", ifaceName)
-	return invokePSCommand(cmd)
+	return InvokePSCommand(cmd)
 }
 
 // ConfigureInterfaceAddress adds IPAddress on the specified interface.
 func ConfigureInterfaceAddress(ifaceName string, ipConfig *net.IPNet) error {
 	ipStr := strings.Split(ipConfig.String(), "/")
 	cmd := fmt.Sprintf("New-NetIPAddress -InterfaceAlias %s -IPAddress %s -PrefixLength %s", ifaceName, ipStr[0], ipStr[1])
-	return invokePSCommand(cmd)
+	return InvokePSCommand(cmd)
 }
 
 // EnableIPForwarding enables the IP interface to forward packets that arrive on this interface to other interfaces.
 func EnableIPForwarding(ifaceName string) error {
 	cmd := fmt.Sprintf("Set-NetIPInterface -InterfaceAlias %s -Forwarding Enabled", ifaceName)
-	return invokePSCommand(cmd)
+	return InvokePSCommand(cmd)
 }
 
-func invokePSCommand(cmd string) error {
-	_, err := callPSCommand(cmd)
+func InvokePSCommand(cmd string) error {
+	_, err := CallPSCommand(cmd)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func callPSCommand(cmd string) (string, error) {
+func CallPSCommand(cmd string) (string, error) {
 	// Create a backend shell.
 	back := &backend.Local{}
 
@@ -94,7 +97,7 @@ func RemoveManagementInterface(networkName string) error {
 	cmd := fmt.Sprintf("Get-VMSwitch -Name %s  | Set-VMSwitch -AllowManagementOS $false ", networkName)
 	// Retry the operation here because an error is returned at the first invocation.
 	for i < maxRetry {
-		err = invokePSCommand(cmd)
+		err = InvokePSCommand(cmd)
 		if err == nil {
 			return nil
 		}
@@ -106,7 +109,7 @@ func RemoveManagementInterface(networkName string) error {
 // WindowsHyperVInstalled checks if the Hyper-V feature is enabled on the host.
 func WindowsHyperVInstalled() (bool, error) {
 	cmd := "$(Get-WindowsFeature Hyper-V).InstallState"
-	result, err := callPSCommand(cmd)
+	result, err := CallPSCommand(cmd)
 	if err != nil {
 		return true, err
 	}
@@ -282,4 +285,13 @@ func enableHNSOnOVS(hnsNet *hcsshim.HNSNetwork) error {
 		return err
 	}
 	return err
+}
+
+// GetLocalBroadcastIP returns the last IP address in a subnet. This IP is always working as the broadcast address in
+// the subnet on Windows, and an active route entry that uses it as the destination is added by default when a new IP is
+// configured on the interface.
+func GetLocalBroadcastIP(ipNet *net.IPNet) net.IP {
+	lastAddr := make(net.IP, len(ipNet.IP.To4()))
+	binary.BigEndian.PutUint32(lastAddr, binary.BigEndian.Uint32(ipNet.IP.To4())|^binary.BigEndian.Uint32(net.IP(ipNet.Mask).To4()))
+	return lastAddr
 }
