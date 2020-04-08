@@ -246,7 +246,8 @@ func TestOFctrlGroup(t *testing.T) {
 		}
 	}()
 
-	br := binding.NewOFBridge(brName)
+	bridgeMgmtAddr := binding.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, brName)
+	br := binding.NewOFBridge(brName, bridgeMgmtAddr)
 	err = br.Connect(maxRetry, make(chan struct{}))
 	if err != nil {
 		t.Fatal("Failed to start OFService")
