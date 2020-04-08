@@ -3,7 +3,7 @@ module github.com/vmware-tanzu/antrea
 go 1.13
 
 require (
-	github.com/Microsoft/hcsshim v0.8.6
+	github.com/Microsoft/hcsshim v0.8.9
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20200116135253-9bbdfadcd881
 	github.com/benmoss/go-powershell v0.0.0-20190925205200-09527df358ca
 	github.com/blang/semver v3.5.0+incompatible
@@ -19,12 +19,11 @@ require (
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
 	github.com/go-openapi/spec v0.19.3
-	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
+	github.com/gogo/protobuf v1.3.1
 	github.com/golang/mock v1.4.1
 	github.com/golang/protobuf v1.3.2
 	github.com/google/uuid v1.1.1
 	github.com/googleapis/gnostic v0.3.1 // indirect
-	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/j-keck/arping v1.0.0
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
 	github.com/prometheus/client_golang v1.0.0
