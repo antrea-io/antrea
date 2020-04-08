@@ -25,12 +25,12 @@ import (
 
 	clusterinfo "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/monitor"
+	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
 )
 
 // REST implements rest.Storage for ControllerInfo.
 type REST struct {
-	controllerQuerier monitor.ControllerQuerier
+	controllerQuerier querier.ControllerQuerier
 }
 
 // Name of the AntreaControllerInfo resource.
@@ -43,7 +43,7 @@ var (
 )
 
 // NewREST returns a REST object that will work against API services.
-func NewREST(querier monitor.ControllerQuerier) *REST {
+func NewREST(querier querier.ControllerQuerier) *REST {
 	return &REST{querier}
 }
 
@@ -53,7 +53,8 @@ func (r *REST) New() runtime.Object {
 
 func (r *REST) getControllerInfo() *clusterinfo.AntreaControllerInfo {
 	// Now AntreaControllerInfo has a single instance.
-	info := r.controllerQuerier.GetControllerInfo()
+	info := new(clusterinfo.AntreaControllerInfo)
+	r.controllerQuerier.GetControllerInfo(info, false)
 	info.Name = ControllerInfoResourceName
 	return info
 }

@@ -21,9 +21,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/monitor"
 )
 
 // AntreaAgentInfoResponse is the struct for the response of agentinfo command.
@@ -41,18 +41,18 @@ type AntreaAgentInfoResponse struct {
 
 // HandleFunc returns the function which can handle queries issued by agentinfo commands.
 // The handler function populates Antrea agent information to the response.
-func HandleFunc(aq monitor.AgentQuerier) http.HandlerFunc {
+func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var info *AntreaAgentInfoResponse
-		allInfo := aq.GetAgentInfo()
-		info = &AntreaAgentInfoResponse{
-			Version:                     allInfo.Version,
-			PodRef:                      allInfo.PodRef,
-			NodeRef:                     allInfo.NodeRef,
-			OVSInfo:                     allInfo.OVSInfo,
-			NetworkPolicyControllerInfo: allInfo.NetworkPolicyControllerInfo,
-			LocalPodNum:                 allInfo.LocalPodNum,
-			AgentConditions:             allInfo.AgentConditions,
+		agentInfo := new(v1beta1.AntreaAgentInfo)
+		aq.GetAgentInfo(agentInfo, false)
+		info := &AntreaAgentInfoResponse{
+			Version:                     agentInfo.Version,
+			PodRef:                      agentInfo.PodRef,
+			NodeRef:                     agentInfo.NodeRef,
+			OVSInfo:                     agentInfo.OVSInfo,
+			NetworkPolicyControllerInfo: agentInfo.NetworkPolicyControllerInfo,
+			LocalPodNum:                 agentInfo.LocalPodNum,
+			AgentConditions:             agentInfo.AgentConditions,
 		}
 		err := json.NewEncoder(w).Encode(info)
 		if err != nil {
