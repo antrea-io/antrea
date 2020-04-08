@@ -44,7 +44,6 @@ active replica of `antrea-controller`.
 ```shell script
 kubectl apply -f build/yamls/base/controller-rbac.yml
 ```
-
 2. Create the kubeconfig file that contains the K8s APIServer endpoint and the token of ServiceAccount created in the
 above step. See [Configure Access to Multiple Clusters](
 https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/) for more information.
@@ -56,7 +55,6 @@ kubectl config --kubeconfig=antrea-controller.kubeconfig set-credentials antrea-
 kubectl config --kubeconfig=antrea-controller.kubeconfig set-context antrea-controller@kubernetes --cluster=kubernetes --user=antrea-controller
 kubectl config --kubeconfig=antrea-controller.kubeconfig use-context antrea-controller@kubernetes
 ```
-
 3. Create the `antrea-controller` config file, see [Configuration](configuration.md) for details.
 ```shell script
 cat >antrea-controller.conf <<EOF
@@ -64,7 +62,6 @@ clientConnection:
   kubeconfig: antrea-controller.kubeconfig
 EOF
 ```
-
 4. Start `antrea-controller`.
 ```shell script
 bin/antrea-controller --config antrea-controller.conf
@@ -79,7 +76,6 @@ bin/antrea-controller --config antrea-controller.conf
 ```shell script
 kubectl apply -f build/yamls/base/agent-rbac.yml
 ```
-
 2. Create the kubeconfig file that contains the K8s APIServer endpoint and the token of ServiceAccount created in the
 above step. See [Configure Access to Multiple Clusters](
 https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/) for more information.
@@ -91,7 +87,6 @@ kubectl config --kubeconfig=antrea-agent.kubeconfig set-credentials antrea-agent
 kubectl config --kubeconfig=antrea-agent.kubeconfig set-context antrea-agent@kubernetes --cluster=kubernetes --user=antrea-agent
 kubectl config --kubeconfig=antrea-agent.kubeconfig use-context antrea-agent@kubernetes
 ```
-
 3. Create the kubeconfig file that contains the `antrea-controller` APIServer endpoint and the token of ServiceAccount
 created in the above step.
 ```shell script
@@ -103,7 +98,6 @@ kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig set-credentials antre
 kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig set-context antrea-agent@antrea --cluster=antrea --user=antrea-agent
 kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig use-context antrea-agent@antrea
 ```
-
 4. Create the `antrea-agent` config file, see [Configuration](configuration.md) for details.
 ```shell script
 cat >antrea-agent.conf <<EOF
@@ -114,7 +108,6 @@ antreaClientConnection:
 hostProcPathPrefix: "/"
 EOF
 ```
-
 5. Start `antrea-agent`.
 ```shell script
 bin/antrea-agent --config antrea-agent.conf
@@ -146,7 +139,6 @@ cat >/etc/cni/net.d/10-antrea.conflist <<EOF
 }
 EOF
 ```
-
 2. Install `antrea-cni` to `/opt/cni/bin/antrea`.
 ```shell script
 cp bin/antrea-cni /opt/cni/bin/antrea
