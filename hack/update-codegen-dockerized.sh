@@ -59,7 +59,8 @@ MOCKGEN_TARGETS=(
   "pkg/agent/route Interface"
   "pkg/ovs/openflow Bridge,Table,Flow,Action,FlowBuilder"
   "pkg/ovs/ovsconfig OVSBridgeClient"
-  "pkg/monitor AgentQuerier,ControllerQuerier"
+  "pkg/agent/querier AgentQuerier"
+  "pkg/controller/querier ControllerQuerier"
 )
 
 # Command mockgen does not automatically replace variable YEAR with current year

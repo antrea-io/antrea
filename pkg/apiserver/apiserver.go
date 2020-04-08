@@ -32,7 +32,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	"github.com/vmware-tanzu/antrea/pkg/monitor"
+	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
 )
 
 var (
@@ -55,7 +55,7 @@ type ExtraConfig struct {
 	addressGroupStore   storage.Interface
 	appliedToGroupStore storage.Interface
 	networkPolicyStore  storage.Interface
-	controllerQuerier   monitor.ControllerQuerier
+	controllerQuerier   querier.ControllerQuerier
 }
 
 // Config defines the config for Antrea apiserver.
@@ -77,7 +77,7 @@ type completedConfig struct {
 func NewConfig(
 	genericConfig *genericapiserver.Config,
 	addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface,
-	controllerQuerier monitor.ControllerQuerier) *Config {
+	controllerQuerier querier.ControllerQuerier) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
