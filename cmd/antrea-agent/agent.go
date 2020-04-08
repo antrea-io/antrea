@@ -31,6 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
@@ -151,8 +152,7 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
-	agentMonitor := monitor.NewAgentMonitor(
-		crdClient,
+	agentQuerier := querier.NewAgentQuerier(
 		o.config.OVSBridge,
 		nodeConfig.Name,
 		fmt.Sprintf("%s", nodeConfig.PodCIDR),
@@ -161,9 +161,11 @@ func run(o *Options) error {
 		ovsBridgeClient,
 		networkPolicyController)
 
+	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
+
 	go agentMonitor.Run(stopCh)
 
-	apiServer, err := apiserver.New(agentMonitor, networkPolicyController)
+	apiServer, err := apiserver.New(agentQuerier, networkPolicyController)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}

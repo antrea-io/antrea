@@ -29,7 +29,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
-	"github.com/vmware-tanzu/antrea/pkg/monitor"
+	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 	antreaversion "github.com/vmware-tanzu/antrea/pkg/version"
 )
 
@@ -51,7 +52,7 @@ func (s *agentAPIServer) Run(stopCh <-chan struct{}) error {
 	return s.GenericAPIServer.PrepareRun().Run(stopCh)
 }
 
-func installHandlers(aq monitor.AgentQuerier, npq monitor.AgentNetworkPolicyInfoQuerier, s *genericapiserver.GenericAPIServer) {
+func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/agentinfo", agentinfo.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/podinterfaces", podinterface.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/networkpolicies", networkpolicy.HandleFunc(npq))
@@ -60,7 +61,7 @@ func installHandlers(aq monitor.AgentQuerier, npq monitor.AgentNetworkPolicyInfo
 }
 
 // New creates an APIServer for running in antrea agent.
-func New(aq monitor.AgentQuerier, npq monitor.AgentNetworkPolicyInfoQuerier) (*agentAPIServer, error) {
+func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier) (*agentAPIServer, error) {
 	cfg, err := newConfig()
 	if err != nil {
 		return nil, err

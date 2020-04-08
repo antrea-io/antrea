@@ -19,8 +19,8 @@ import (
 	"net/http"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	"github.com/vmware-tanzu/antrea/pkg/monitor"
 )
 
 // Response describes the response struct of pod-interface command.
@@ -49,7 +49,7 @@ func generateResponse(i *interfacestore.InterfaceConfig) Response {
 }
 
 // HandleFunc returns the function which can handle queries issued by the pod-interface command,
-func HandleFunc(aq monitor.AgentQuerier) http.HandlerFunc {
+func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
 		ns := r.URL.Query().Get("namespace")

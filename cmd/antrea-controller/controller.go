@@ -30,6 +30,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
+	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
@@ -68,13 +69,15 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore)
 
-	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, networkPolicyController)
+	controllerQuerier := querier.NewControllerQuerier(networkPolicyController)
+
+	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
 
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
-		controllerMonitor)
+		controllerQuerier)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
@@ -105,7 +108,7 @@ func createAPIServerConfig(kubeconfig string,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
-	controllerQuerier monitor.ControllerQuerier) (*apiserver.Config, error) {
+	controllerQuerier querier.ControllerQuerier) (*apiserver.Config, error) {
 	// TODO:
 	// 1. Support user-provided certificate.
 	// 2. Support configurable https port.
