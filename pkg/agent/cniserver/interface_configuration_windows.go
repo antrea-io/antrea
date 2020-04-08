@@ -36,11 +36,6 @@ const (
 	notFoundHNSEndpoint = "The endpoint was not found"
 )
 
-type endpoint struct {
-	hnsEP      *hcsshim.HNSEndpoint
-	containers []string
-}
-
 type ifConfigurator struct {
 	hnsNetwork *hcsshim.HNSNetwork
 	epCache    *sync.Map
@@ -53,11 +48,8 @@ func newInterfaceConfigurator(ovsDataPathType string) (*ifConfigurator, error) {
 	}
 	epCache := &sync.Map{}
 	for i := range eps {
-		hnsEP := eps[i]
-		ep := &endpoint{
-			hnsEP: &hnsEP,
-		}
-		epCache.Store(hnsEP.Name, ep)
+		hnsEP := &eps[i]
+		epCache.Store(hnsEP.Name, hnsEP)
 	}
 	return &ifConfigurator{
 		epCache: epCache,
@@ -65,8 +57,8 @@ func newInterfaceConfigurator(ovsDataPathType string) (*ifConfigurator, error) {
 
 }
 
-func (ic *ifConfigurator) addEndpoint(ep *endpoint) {
-	ic.epCache.Store(ep.hnsEP.Name, ep)
+func (ic *ifConfigurator) addEndpoint(ep *hcsshim.HNSEndpoint) {
+	ic.epCache.Store(ep.Name, ep)
 }
 
 // ensureHNSNetwork checks if the target HNSNetwork is created on the node or not. If the HNSNetwork does not exit,
@@ -83,12 +75,12 @@ func (ic *ifConfigurator) ensureHNSNetwork() error {
 	return nil
 }
 
-func (ic *ifConfigurator) getEndpoint(name string) (*endpoint, bool) {
+func (ic *ifConfigurator) getEndpoint(name string) (*hcsshim.HNSEndpoint, bool) {
 	value, ok := ic.epCache.Load(name)
 	if !ok {
 		return nil, false
 	}
-	ep, _ := value.(*endpoint)
+	ep, _ := value.(*hcsshim.HNSEndpoint)
 	return ep, true
 }
 
@@ -122,8 +114,8 @@ func (ic *ifConfigurator) configureContainerLink(
 	}
 
 	hostIface := &current.Interface{
-		Name:    endpoint.hnsEP.Name,
-		Mac:     endpoint.hnsEP.MacAddress,
+		Name:    endpoint.Name,
+		Mac:     endpoint.MacAddress,
 		Sandbox: "",
 	}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
@@ -136,7 +128,7 @@ func (ic *ifConfigurator) configureContainerLink(
 }
 
 // createContainerLink creates HNSEndpoint using the IP configuration in the IPAM result.
-func (ic *ifConfigurator) createContainerLink(podName string, podNameSpace string, containerID string, result *current.Result) (hostLink *endpoint, err error) {
+func (ic *ifConfigurator) createContainerLink(podName string, podNameSpace string, containerID string, result *current.Result) (hostLink *hcsshim.HNSEndpoint, err error) {
 	epName := util.GenerateContainerInterfaceName(podName, podNameSpace)
 	// Search endpoint from local cache.
 	ep, found := ic.getEndpoint(epName)
@@ -164,33 +156,30 @@ func (ic *ifConfigurator) createContainerLink(podName string, podNameSpace strin
 	if err != nil {
 		return nil, err
 	}
-	ep = &endpoint{
-		hnsEP: hnsEP,
-	}
 	// Add the new created Endpoint into local cache.
-	ic.addEndpoint(ep)
-	return ep, nil
+	ic.addEndpoint(hnsEP)
+	return hnsEP, nil
 }
 
 // attachContainerLink takes the result of the IPAM plugin, and adds the appropriate IP
 // addresses and routes to the interface. It then sends a gratuitous ARP to the network.
-func attachContainerLink(ep *endpoint, containerID, sandbox, containerIFDev string) (*current.Interface, error) {
-	var found bool
-	for _, c := range ep.containers {
-		if c == containerID {
-			found = true
-		}
+func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containerIFDev string) (*current.Interface, error) {
+	var attached bool
+	attached, err := ep.IsAttached(containerID)
+	if err != nil {
+		return nil, err
 	}
 
-	if !found {
-		if err := hcsshim.HotAttachEndpoint(containerID, ep.hnsEP.Id); err != nil {
+	if attached {
+		klog.V(2).Infof("HNS Endpoint %s already attached on container %s", ep.Id, containerID)
+	} else {
+		if err := hcsshim.HotAttachEndpoint(containerID, ep.Id); err != nil {
 			return nil, err
 		}
-		ep.containers = append(ep.containers, containerID)
 	}
 	containerIface := &current.Interface{
-		Name:    strings.Join([]string{ep.hnsEP.Name, containerIFDev}, "_"),
-		Mac:     ep.hnsEP.MacAddress,
+		Name:    strings.Join([]string{ep.Name, containerIFDev}, "_"),
+		Mac:     ep.MacAddress,
 		Sandbox: sandbox,
 	}
 	return containerIface, nil
@@ -213,10 +202,10 @@ func (ic *ifConfigurator) removeContainerLink(containerID, epName string) error 
 }
 
 // removeHNSEndpoint removes the HNSEndpoint from HNS and local cache.
-func (ic *ifConfigurator) removeHNSEndpoint(endpoint *endpoint, containerID string) error {
-	epName := endpoint.hnsEP.Name
+func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, containerID string) error {
+	epName := endpoint.Name
 	// Remove HNSEndpoint.
-	_, err := endpoint.hnsEP.Delete()
+	_, err := endpoint.Delete()
 	if err != nil {
 		if !strings.Contains(err.Error(), notFoundHNSEndpoint) {
 			klog.Errorf("Failed to delete container interface %s: %v", containerID, err)
