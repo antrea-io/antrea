@@ -8,6 +8,7 @@ on:
   push:
     branches:
     - master
+    - windows
     - release-*
 jobs:
 
@@ -73,6 +74,9 @@ jobs:
 
     - name: Build Antrea binaries
       run: make bin
+
+    - name: Build Antrea windows binaries
+      run: make windows-bin
 
   antctl:
     name: Build antctl for macOS, Linux and Windows
