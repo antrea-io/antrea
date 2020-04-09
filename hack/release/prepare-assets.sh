@@ -54,13 +54,15 @@ for build in "${ANTCTL_BUILDS[@]}"; do
     GOOS=$os GOARCH=$arch ANTCTL_BINARY_NAME="antctl-$suffix" BINDIR=$1/ make antctl-release
 done
 
-export IMG_NAME=antrea/antrea-ubuntu
 export IMG_TAG=$VERSION
 
+export IMG_NAME=antrea/antrea-ubuntu
 ./hack/generate-manifest.sh --mode release > $1/antrea.yml
 ./hack/generate-manifest.sh --mode release --ipsec > $1/antrea-ipsec.yml
 ./hack/generate-manifest.sh --mode release --encap-mode networkPolicyOnly > $1/antrea-eks.yml
 ./hack/generate-manifest.sh --mode release --cloud GKE --encap-mode noEncap > $1/antrea-gke.yml
+
+export IMG_NAME=antrea/octant-antrea-ubuntu
 ./hack/generate-manifest-octant.sh --mode release > $1/antrea-octant.yml
 
 ls $1 | cat
