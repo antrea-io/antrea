@@ -51,6 +51,12 @@ antrea-octant-plugin:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-octant-plugin
 
+.PHONY: windows-bin
+windows-bin:
+	@mkdir -p $(BINDIR)
+	GOOS=windows $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-cni \
+		github.com/vmware-tanzu/antrea/cmd/antrea-agent
+
 .PHONY: test-unit test-integration
 ifeq ($(UNAME_S),Linux)
 test-unit: .linux-test-unit
@@ -91,6 +97,10 @@ DOCKER_ENV := \
 docker-bin: $(DOCKER_CACHE)
 	$(DOCKER_ENV) make bin
 	@chmod -R 0755 $<
+
+.PHONY: docker-windows-bin
+docker-windows-bin: $(DOCKER_CACHE)
+	$(DOCKER_ENV) make windows-bin
 
 .PHONY: docker-test-unit
 docker-test-unit: $(DOCKER_CACHE)
