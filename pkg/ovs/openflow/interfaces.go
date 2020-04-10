@@ -169,6 +169,7 @@ type Action interface {
 	Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder
 	Group(id GroupIDType) FlowBuilder
 	Learn(id TableIDType, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction
+	GotoTable(table TableIDType) FlowBuilder
 }
 
 type FlowBuilder interface {
