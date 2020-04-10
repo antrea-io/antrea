@@ -117,7 +117,7 @@ func prepareOverlapFlows(table binding.Table, ipStr string, sameCookie bool) ([]
 	expectFlows := []*ExpectFlow{
 		{"priority=200,ip", "drop"},
 		{fmt.Sprintf("priority=200,ip,nw_src=%s", ipStr),
-			fmt.Sprintf("goto_table:%d)", table.GetNext())},
+			fmt.Sprintf("goto_table:%d", table.GetNext())},
 	}
 	return flows, expectFlows
 }
