@@ -139,7 +139,7 @@ func (c *client) addFlows(cache *flowCategoryCache, flowCacheKey string, flows [
 		klog.V(2).Infof("Flows with cache key %s are already installed", flowCacheKey)
 		return nil
 	}
-	err := c.flowOperations.AddAll(flows)
+	err := c.ofEntryOperations.AddAll(flows)
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 	for _, flow := range fCache {
 		delFlows = append(delFlows, flow)
 	}
-	if err := c.flowOperations.DeleteAll(delFlows); err != nil {
+	if err := c.ofEntryOperations.DeleteAll(delFlows); err != nil {
 		return err
 	}
 	cache.Delete(flowCacheKey)
@@ -235,7 +235,7 @@ func (c *client) UninstallPodFlows(containerID string) error {
 
 func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
 	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayMAC, gatewayOFPort, cookie.Service)
-	if err := c.flowOperations.Add(flow); err != nil {
+	if err := c.ofEntryOperations.Add(flow); err != nil {
 		return err
 	}
 	c.clusterServiceCIDRFlows = []binding.Flow{flow}
@@ -261,7 +261,7 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 		flows = append(flows, c.reEntranceBypassCTFlow(gatewayOFPort, gatewayOFPort, cookie.Default))
 	}
 
-	if err := c.flowOperations.AddAll(flows); err != nil {
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
 	c.gatewayFlows = flows
@@ -270,7 +270,7 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 
 func (c *client) InstallDefaultTunnelFlows(tunnelOFPort uint32) error {
 	flow := c.tunnelClassifierFlow(tunnelOFPort, cookie.Default)
-	if err := c.flowOperations.Add(flow); err != nil {
+	if err := c.ofEntryOperations.Add(flow); err != nil {
 		return err
 	}
 	c.defaultTunnelFlows = []binding.Flow{flow}
@@ -278,24 +278,24 @@ func (c *client) InstallDefaultTunnelFlows(tunnelOFPort uint32) error {
 }
 
 func (c *client) initialize() error {
-	if err := c.flowOperations.AddAll(c.defaultFlows()); err != nil {
+	if err := c.ofEntryOperations.AddAll(c.defaultFlows()); err != nil {
 		return fmt.Errorf("failed to install default flows: %v", err)
 	}
-	if err := c.flowOperations.Add(c.arpNormalFlow(cookie.Default)); err != nil {
+	if err := c.ofEntryOperations.Add(c.arpNormalFlow(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install arp normal flow: %v", err)
 	}
-	if err := c.flowOperations.Add(c.l2ForwardOutputFlow(cookie.Default)); err != nil {
+	if err := c.ofEntryOperations.Add(c.l2ForwardOutputFlow(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install L2 forward output flows: %v", err)
 	}
-	if err := c.flowOperations.AddAll(c.connectionTrackFlows(cookie.Default)); err != nil {
+	if err := c.ofEntryOperations.AddAll(c.connectionTrackFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install connection track flows: %v", err)
 	}
-	if err := c.flowOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
+	if err := c.ofEntryOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip established connections: %v", err)
 	}
 
 	if c.encapMode.SupportsNoEncap() {
-		if err := c.flowOperations.Add(c.l2ForwardOutputReentInPortFlow(c.gatewayPort, cookie.Default)); err != nil {
+		if err := c.ofEntryOperations.Add(c.l2ForwardOutputReentInPortFlow(c.gatewayPort, cookie.Default)); err != nil {
 			return fmt.Errorf("failed to install L2 forward same in-port and out-port flow: %v", err)
 		}
 	}
@@ -347,7 +347,7 @@ func (c *client) ReplayFlows() {
 		for _, flow := range flows {
 			flow.Reset()
 		}
-		if err := c.flowOperations.AddAll(flows); err != nil {
+		if err := c.ofEntryOperations.AddAll(flows); err != nil {
 			klog.Errorf("Error when replaying fixed flows: %v", err)
 		}
 
@@ -366,7 +366,7 @@ func (c *client) ReplayFlows() {
 			cachedFlows = append(cachedFlows, flow)
 		}
 
-		if err := c.flowOperations.AddAll(cachedFlows); err != nil {
+		if err := c.ofEntryOperations.AddAll(cachedFlows); err != nil {
 			klog.Errorf("Error when replaying cached flows: %v", err)
 		}
 		return true
@@ -400,7 +400,7 @@ func (c *client) setupPolicyOnlyFlows() error {
 		// Replies any ARP request with the same global virtual MAC.
 		c.arpResponderStaticFlow(cookie.Default),
 	}
-	if err := c.flowOperations.AddAll(flows); err != nil {
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to setup policy-only flows: %w", err)
 	}
 	return nil

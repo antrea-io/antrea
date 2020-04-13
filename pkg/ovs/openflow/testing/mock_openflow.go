@@ -20,6 +20,7 @@
 package testing
 
 import (
+	ofctrl "github.com/contiv/ofnet/ofctrl"
 	gomock "github.com/golang/mock/gomock"
 	openflow "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	net "net"
@@ -61,6 +62,20 @@ func (m *MockBridge) AddFlowsInBundle(arg0, arg1, arg2 []openflow.Flow) error {
 func (mr *MockBridgeMockRecorder) AddFlowsInBundle(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddFlowsInBundle", reflect.TypeOf((*MockBridge)(nil).AddFlowsInBundle), arg0, arg1, arg2)
+}
+
+// AddOFEntriesInBundle mocks base method
+func (m *MockBridge) AddOFEntriesInBundle(arg0, arg1, arg2 []openflow.OFEntry) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOFEntriesInBundle", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddOFEntriesInBundle indicates an expected call of AddOFEntriesInBundle
+func (mr *MockBridgeMockRecorder) AddOFEntriesInBundle(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOFEntriesInBundle", reflect.TypeOf((*MockBridge)(nil).AddOFEntriesInBundle), arg0, arg1, arg2)
 }
 
 // Connect mocks base method
@@ -359,6 +374,21 @@ func (m *MockFlow) Delete() error {
 func (mr *MockFlowMockRecorder) Delete() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockFlow)(nil).Delete))
+}
+
+// GetBundleMessage mocks base method
+func (m *MockFlow) GetBundleMessage(arg0 openflow.OFOperation) (ofctrl.OpenFlowModMessage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBundleMessage", arg0)
+	ret0, _ := ret[0].(ofctrl.OpenFlowModMessage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBundleMessage indicates an expected call of GetBundleMessage
+func (mr *MockFlowMockRecorder) GetBundleMessage(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessage", reflect.TypeOf((*MockFlow)(nil).GetBundleMessage), arg0)
 }
 
 // KeyString mocks base method
