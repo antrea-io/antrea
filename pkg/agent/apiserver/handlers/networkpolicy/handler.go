@@ -27,21 +27,30 @@ import (
 func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
-		groups := npq.GetNetworkPolicies()
+		ns := r.URL.Query().Get("namespace")
+		if len(name) > 0 && len(ns) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		policies := npq.GetNetworkPolicies()
+		var resp []networkingv1beta1.NetworkPolicy
+		for _, p := range policies {
+			if (len(name) == 0 || name == p.Name) && (len(ns) == 0 || ns == p.Namespace) {
+				resp = append(resp, p)
+			}
+		}
+
+		if len(name) > 0 && len(resp) == 0 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
 		var obj interface{}
 		if len(name) > 0 {
-			for _, group := range groups {
-				if group.Name == name {
-					obj = group
-					break
-				}
-			}
-			if obj == nil {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
+			obj = resp[0]
 		} else {
-			obj = networkingv1beta1.NetworkPolicyList{Items: groups}
+			obj = networkingv1beta1.NetworkPolicyList{Items: resp}
 		}
 		if err := json.NewEncoder(w).Encode(obj); err != nil {
 			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)

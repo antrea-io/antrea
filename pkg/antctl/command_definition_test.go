@@ -148,6 +148,7 @@ foo2
 			name: "StructureData-NetworkPolicy-List-HasSummary-RandomFieldOrder",
 			rawResponseData: []networkpolicy.Response{
 				{
+					NameSpace:       "Namespace1",
 					Name:            "GroupName2",
 					AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c", "c4c59cfe-9160-5de5-a85b-01a58d11963e"},
 					Rules: []rule.Response{
@@ -170,11 +171,12 @@ foo2
 					},
 					AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c"},
 					Name:            "GroupName1",
+					NameSpace:       "Namespace2",
 				},
 			},
-			expected: `NAME       APPLIED-TO                                       RULES
-GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2    
-GroupName2 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1    
+			expected: `NAMESPACE  NAME       APPLIED-TO                                       RULES
+Namespace1 GroupName2 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1    
+Namespace2 GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2    
 `,
 		},
 		{
@@ -256,8 +258,8 @@ GroupName <NONE>
 				},
 			},
 			expected: `NAMESPACE NAME                   INTERFACE-NAME IP        MAC               PORT-UUID OF-PORT CONTAINER-ID
-default   nginx-6db489d4b7-vgv7v Interface      127.0.0.1 07-16-76-00-02-86 portuuid0 80      dve7a2d6c22 
 default   nginx-32b489d4b7-vgv7v Interface2     127.0.0.2 07-16-76-00-02-87 portuuid1 35572   uci2ucsd6dx 
+default   nginx-6db489d4b7-vgv7v Interface      127.0.0.1 07-16-76-00-02-86 portuuid0 80      dve7a2d6c22 
 `,
 		},
 	} {
