@@ -387,6 +387,121 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 	return nil
 }
 
+func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEntry, delEntries []OFEntry) error {
+	// If no Openflow entries are requested to be added or modified or deleted on the OVS bridge, return immediately.
+	if len(addEntries) == 0 && len(modEntries) == 0 && len(delEntries) == 0 {
+		klog.V(2).Info("No Openflow entries need to be synced to the OVS bridge, returning")
+		return nil
+	}
+	type entryOperation struct {
+		entry     OFEntry
+		operation OFOperation
+	}
+	var flowSet, groupSet []entryOperation
+	// Classify the entries according to the EntryType, and set a correct operation type.
+	checkMessages := func(entries []OFEntry, operation OFOperation) {
+		for _, entry := range entries {
+			switch entry.Type() {
+			case FlowEntry:
+				flow := entry.(*ofFlow)
+				if flow.Flow.NextElem == nil {
+					flow.Flow.NextElem = flow.lastAction
+				}
+				flowSet = append(flowSet, entryOperation{
+					entry:     flow,
+					operation: operation,
+				})
+			case GroupEntry:
+				group := entry.(*ofGroup)
+				groupSet = append(groupSet, entryOperation{
+					entry:     group,
+					operation: operation,
+				})
+			}
+		}
+	}
+
+	checkMessages(addEntries, AddMessage)
+	checkMessages(modEntries, ModifyMessage)
+	checkMessages(delEntries, DeleteMessage)
+
+	// Create a new transaction. Use ofctrl.Ordered to ensure the messages are realized on OVS in the order of adding
+	// messages. This type could ensure Group entry is realized on OVS in advance of Flow entry.
+	tx := b.ofSwitch.NewTransaction(ofctrl.Ordered)
+	// Open a bundle on the OFSwitch.
+	if err := tx.Begin(); err != nil {
+		return err
+	}
+
+	addMessage := func(entrySet []entryOperation) error {
+		if entrySet == nil {
+			return nil
+		}
+		for _, e := range entrySet {
+			msg, err := e.entry.GetBundleMessage(e.operation)
+			if err != nil {
+				return err
+			}
+			// "AddMessage" operation is async, the function only returns error which occur when constructing and sending
+			// the BundleAdd message. An absence of error does not mean that all OpenFlow entries are added into the
+			// bundle by the switch. The number of entries successfully added to the bundle by the switch will be
+			// returned by function "Complete".
+			if err := tx.AddMessage(msg); err != nil {
+				// Close the bundle and abort it if there is error when adding the FlowMod message.
+				_, err := tx.Complete()
+				if err == nil {
+					tx.Abort()
+				}
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Add Group modification messages in advance of Flow modification messages, so it can ensure the dependent Group
+	// exists when adding a new Flow entry. When OVS is deleting the Group, the corresponding Flow entry is removed
+	// together. It doesn't return an error when OVS is deleting a non-existing Flow entry.
+	for _, entries := range [][]entryOperation{
+		groupSet, flowSet,
+	} {
+		if err := addMessage(entries); err != nil {
+			return nil
+		}
+	}
+
+	// Close the bundle before committing it to the OFSwitch.
+	count, err := tx.Complete()
+	if err != nil {
+		return err
+	} else if count != len(addEntries)+len(modEntries)+len(delEntries) {
+		// This case should not be possible if all the calls to "tx.AddMessage" returned nil. This is just a sanity check.
+		tx.Abort()
+		return errors.New("failed to add all Openflow entries in one transaction, abort it")
+	}
+
+	// Commit the bundle to the OFSwitch. The "Commit" operation is sync, and the Openflow entries should be realized if
+	// there is no error returned.
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Update TableStatus after the transaction is committed successfully.
+	for _, e := range flowSet {
+		ofFlow := e.entry.(*ofFlow)
+		switch e.operation {
+		case AddMessage:
+			ofFlow.table.UpdateStatus(1)
+			ofFlow.UpdateInstallStatus(true)
+		case ModifyMessage:
+			ofFlow.UpdateInstallStatus(true)
+		case DeleteMessage:
+			ofFlow.table.UpdateStatus(-1)
+		}
+	}
+
+	return nil
+}
+
 // MaxRetry is a callback from OFController. It sets the max retry count that OFController attempts to connect to OFSwitch.
 func (b *OFBridge) MaxRetry() int {
 	return b.maxRetrySec

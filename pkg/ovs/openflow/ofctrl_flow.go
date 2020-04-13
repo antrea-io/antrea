@@ -86,6 +86,23 @@ func (f *ofFlow) MatchString() string {
 	return repr
 }
 
+func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMessage, error) {
+	var operation int
+	switch entryOper {
+	case AddMessage:
+		operation = openflow13.FC_ADD
+	case ModifyMessage:
+		operation = openflow13.FC_MODIFY_STRICT
+	case DeleteMessage:
+		operation = openflow13.FC_DELETE_STRICT
+	}
+	message, err := f.Flow.GetBundleMessage(operation)
+	if err != nil {
+		return nil, err
+	}
+	return message, nil
+}
+
 // CopyToBuilder returns a new FlowBuilder that copies the table, protocols, matches and CookieID of the Flow, but does
 // not copy the actions, lastAction and other private status fields of the ofctrl.Flow, e.g., "realized" and "isInstalled".
 func (f *ofFlow) CopyToBuilder() FlowBuilder {

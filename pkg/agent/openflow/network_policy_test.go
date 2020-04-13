@@ -415,9 +415,9 @@ func prepareClient(ctrl *gomock.Controller) *client {
 		bridge:                   bridge,
 	}
 	c.cookieAllocator = cookie.NewAllocator(0)
-	m := oftest.NewMockFlowOperations(ctrl)
+	m := oftest.NewMockOFEntryOperations(ctrl)
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).AnyTimes()
 	m.EXPECT().DeleteAll(gomock.Any()).Return(nil).AnyTimes()
-	c.flowOperations = m
+	c.ofEntryOperations = m
 	return c
 }

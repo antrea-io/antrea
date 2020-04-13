@@ -57,6 +57,20 @@ func (g *ofGroup) Bucket() BucketBuilder {
 	}
 }
 
+func (f *ofGroup) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMessage, error) {
+	var operation int
+	switch entryOper {
+	case AddMessage:
+		operation = openflow13.OFPGC_ADD
+	case ModifyMessage:
+		operation = openflow13.OFPGC_MODIFY
+	case DeleteMessage:
+		operation = openflow13.OFPGC_DELETE
+	}
+	message := f.ofctrl.GetBundleMessage(operation)
+	return message, nil
+}
+
 type bucketBuilder struct {
 	group  *ofGroup
 	bucket *openflow13.Bucket
