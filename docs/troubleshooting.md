@@ -53,7 +53,7 @@ You can specify other kubeconfig files by setting the `--kubeconfig` flag.
 
 For example, you can view internal NetworkPolicy objects with this command:
 ```
-antctl get network-policy
+antctl get networkpolicy
 ```
 
 ### Using kubectl proxy
@@ -99,7 +99,7 @@ agent with this command:
 # Get into the antrea-agent container
 kubectl exec -it <antrea-agent Pod name> -n kube-system -c antrea-agent bash
 # View the agent's NetworkPolicy
-antctl get network-policy
+antctl get networkpolicy
 ```
 
 ### Directly accessing the antrea-agent API
