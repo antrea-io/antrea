@@ -55,14 +55,22 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(version.Response{}),
 		},
 		{
-			use:          "networkpolicy",
-			aliases:      []string{"networkpolicies", "netpol"},
-			short:        "Print network policies",
-			long:         "Print network policies in ${component}",
+			use:     "networkpolicy",
+			aliases: []string{"networkpolicies", "netpol"},
+			short:   "Print network policies",
+			long:    "Print network policies in ${component}. \"Namespace\" is required if \"Name\" is provided.",
+			example: `  Get a NetworkPolicy in a specific Namespace
+  $ antctl get networkpolicy access-nginx -n prod
+  Get the list of NetworkPolicies in a Namespace
+  $ antctl get networkpolicy -n prod
+  Get the list of NetworkPolicies in all Namespaces
+  $ antctl get networkpolicy`,
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
 					groupVersionResource: &networkingv1beta1.NetworkPolicyVersionResource,
+					resourceName:         "",
+					namespaced:           true,
 				},
 				addonTransform: networkpolicy.Transform,
 			},
@@ -74,6 +82,11 @@ var CommandList = &commandList{
 							name:  "name",
 							usage: "Retrieve resource by name",
 							arg:   true,
+						},
+						{
+							name:      "namespace",
+							usage:     "Get networkpolicies from specific Namespace",
+							shorthand: "n",
 						},
 					},
 				},
