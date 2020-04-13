@@ -108,7 +108,7 @@ If you want to directly access the antrea-agent API, you need to log into the
 Node that the antrea-agent runs on or any Pod in hostNetwork mode that runs on
 this Node. Then access the local endpoint directly:
 ```
-curl --insecure https://127.0.0.1:10443/
+curl --insecure https://127.0.0.1:10350/
 ```
 
 ## Debugging OVS
