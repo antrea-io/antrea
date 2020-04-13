@@ -52,6 +52,16 @@ func TestGenerate(t *testing.T) {
 			code:     http.StatusOK,
 			expected: "Unknown error",
 		},
+		{
+			cd: &commandDefinition{
+				use: "foo",
+			},
+			args: map[string]string{
+				"name": "bar",
+			},
+			code:     http.StatusBadRequest,
+			expected: `BadRequest: Please check the args for foo`,
+		},
 	} {
 		generated := generate(tc.cd, tc.args, tc.code)
 		assert.Equal(t, tc.expected, generated.Error())

@@ -36,6 +36,8 @@ func generate(cd *commandDefinition, args map[string]string, code int) error {
 		return fmt.Errorf("NotFound: %s \"%s\" not found", cd.use, args["name"])
 	case http.StatusInternalServerError:
 		return fmt.Errorf("InternalServerError: Encoding response failed for %s", cd.use)
+	case http.StatusBadRequest:
+		return fmt.Errorf("BadRequest: Please check the args for %s", cd.use)
 	default:
 		return fmt.Errorf("Unknown error")
 	}
