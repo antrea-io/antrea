@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"reflect"
 	"sort"
@@ -113,7 +114,7 @@ func (e *resourceEndpoint) flags() []flagInfo {
 		flags = append(flags, flagInfo{
 			name:         "namespace",
 			shorthand:    "n",
-			defaultValue: metav1.NamespaceDefault,
+			defaultValue: metav1.NamespaceAll,
 			usage:        "Filter the resource by namespace",
 		})
 	}
@@ -394,9 +395,15 @@ func (cd *commandDefinition) tableOutputForGetCommands(obj interface{}, writer i
 	for i, element := range list {
 		rows[i+1] = element.GetTableRow(maxTableOutputColumnLength)
 	}
+	// Sort the table rows according to columns in order.
 	body := rows[1:]
 	sort.Slice(body, func(i, j int) bool {
-		return body[i][0] < body[j][0]
+		for k := range body[i] {
+			if body[i][k] != body[j][k] {
+				return body[i][k] < body[j][k]
+			}
+		}
+		return true
 	})
 
 	widths := make([]int, len(args))
@@ -550,7 +557,7 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 	}
 }
 
-func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) map[string]string {
+func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (map[string]string, error) {
 	argMap := make(map[string]string)
 	if len(args) > 0 {
 		argMap["name"] = args[0]
@@ -566,15 +573,21 @@ func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) map
 	}
 	if cd.namespaced() {
 		argMap["namespace"], _ = cmd.Flags().GetString("namespace")
+		if len(argMap["name"]) > 0 && len(argMap["namespace"]) == 0 {
+			return nil, generate(cd, argMap, http.StatusBadRequest)
+		}
 	}
-	return argMap
+	return argMap, nil
 }
 
 // newCommandRunE creates the RunE function for the command. The RunE function
 // checks the args according to argOption and flags.
 func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		argMap := cd.collectFlags(cmd, args)
+		argMap, err := cd.collectFlags(cmd, args)
+		if err != nil {
+			return err
+		}
 		klog.Infof("Args: %v", argMap)
 		var argGet bool
 		for _, flag := range cd.getEndpoint().flags() {
