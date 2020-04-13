@@ -19,16 +19,13 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
 func PrepareOVSBridge(brName string) error {
-	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s", brName)
+	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s -- set Bridge %s protocols='OpenFlow10,OpenFlow13'", brName, brName)
 	err := exec.Command("/bin/sh", "-c", cmdStr).Run()
-	if err != nil {
-		return err
-	}
-	cmdStr = fmt.Sprintf("ovs-vsctl set Bridge %s protocols='OpenFlow10,OpenFlow13'", brName)
-	err = exec.Command("/bin/sh", "-c", cmdStr).Run()
 	if err != nil {
 		return err
 	}
@@ -66,6 +63,32 @@ func CheckFlowExists(t *testing.T, br string, tableID uint8, exist bool, flows [
 		}
 	}
 	return flowList
+}
+
+func CheckGroupExists(t *testing.T, br string, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
+	// dump groups
+	groupList, err := OfctlDumpGroups(br)
+	if err != nil {
+		t.Errorf("Error dumping flows: Err %v", err)
+	}
+	var bucketStrs []string
+	for _, bucket := range buckets {
+		bucketStr := fmt.Sprintf("bucket=%s", bucket)
+		bucketStrs = append(bucketStrs, bucketStr)
+	}
+	groupStr := fmt.Sprintf("group_id=%d,type=%s,%s", groupID, groupType, strings.Join(bucketStrs, ","))
+	found := false
+	for _, groupElems := range groupList {
+		groupEntry := fmt.Sprintf("%s,bucket=", groupElems[0])
+		groupEntry = fmt.Sprintf("%s%s", groupEntry, strings.Join(groupElems[1:], ",bucket="))
+		if strings.Contains(groupEntry, groupStr) {
+			found = true
+			break
+		}
+	}
+	if found != expectExists {
+		t.Errorf("Failed to find group:\n%v\nExisting groups:\n%v", groupStr, groupList)
+	}
 }
 
 func OfctlFlowMatch(flowList []string, tableID uint8, flow *ExpectFlow) bool {

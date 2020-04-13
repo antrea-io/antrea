@@ -17,6 +17,8 @@ package openflow
 import (
 	"net"
 	"time"
+
+	"github.com/contiv/ofnet/ofctrl"
 )
 
 type Protocol string
@@ -27,6 +29,7 @@ const LastTableID TableIDType = 0xff
 
 type MissActionType uint32
 type Range [2]uint32
+type OFOperation int
 
 const (
 	ProtocolIP   Protocol = "ip"
@@ -57,6 +60,12 @@ const (
 	NxmFieldReg     = "NXM_NX_REG"
 )
 
+const (
+	AddMessage OFOperation = iota
+	ModifyMessage
+	DeleteMessage
+)
+
 // Bridge defines operations on an openflow bridge.
 type Bridge interface {
 	CreateTable(id, next TableIDType, missAction MissActionType) Table
@@ -72,6 +81,10 @@ type Bridge interface {
 	// AddFlowsInBundle syncs multiple Openflow entries in a single transaction. This operation could add new flows in
 	// "addFlows", modify flows in "modFlows", and remove flows in "delFlows" in the same bundle.
 	AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows []Flow) error
+	// AddOFEntriesInBundle syncs multiple Openflow entries(including Flow and Group) in a single transaction. This
+	// operation could add new entries in "addEntries", modify entries in "modEntries", and remove entries in
+	// "delEntries" in the same bundle.
+	AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEntry, delEntries []OFEntry) error
 	// Connect initiates connection to the OFSwitch. It will block until the connection is established. connectCh is used to
 	// send notification whenever the switch is connected or reconnected.
 	Connect(maxRetrySec int, connectCh chan struct{}) error
@@ -103,7 +116,7 @@ const (
 	GroupEntry EntryType = "GroupEntry"
 )
 
-type Entry interface {
+type OFEntry interface {
 	Add() error
 	Modify() error
 	Delete() error
@@ -113,10 +126,13 @@ type Entry interface {
 	// Modify / Delete methods can be called on this object. This method
 	// should be called if a reconnection event happened.
 	Reset()
+	// GetBundleMessage returns ofctrl.OpenFlowModMessage which can be used in Bundle messages. operation specifies what
+	// operation is expected to be taken on the OFEntry.
+	GetBundleMessage(operation OFOperation) (ofctrl.OpenFlowModMessage, error)
 }
 
 type Flow interface {
-	Entry
+	OFEntry
 	MatchString() string
 	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions.
 	CopyToBuilder() FlowBuilder
@@ -199,7 +215,7 @@ type LearnAction interface {
 }
 
 type Group interface {
-	Entry
+	OFEntry
 	Bucket() BucketBuilder
 }
 
