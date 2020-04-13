@@ -730,7 +730,7 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule) e
 				actionFlows = append(actionFlows, flow)
 			}
 		}
-		if err := c.flowOperations.AddAll(actionFlows); err != nil {
+		if err := c.ofEntryOperations.AddAll(actionFlows); err != nil {
 			return nil
 		}
 		// Add the action flows after the Openflow entries are installed on the OVS bridge successfully.
@@ -909,7 +909,7 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
 	}
 
 	// Delete action flows from the OVS bridge.
-	if err := c.flowOperations.DeleteAll(conj.actionFlows); err != nil {
+	if err := c.ofEntryOperations.DeleteAll(conj.actionFlows); err != nil {
 		return err
 	}
 
@@ -955,7 +955,7 @@ func (c *client) replayPolicyFlows() {
 	for _, ctx := range c.globalConjMatchFlowCache {
 		addMatchFlows(ctx)
 	}
-	if err := c.flowOperations.AddAll(flows); err != nil {
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		klog.Errorf("Error when replaying flows: %v", err)
 	}
 }

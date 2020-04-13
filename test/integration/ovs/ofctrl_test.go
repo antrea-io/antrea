@@ -479,6 +479,60 @@ func TestReconnectOFSwitch(t *testing.T) {
 	require.Equal(t, 2, connectCount)
 }
 
+// Verify install/uninstall Flow and its dependent Group in the same Bundle.
+func TestBundleWithGroupAndFlow(t *testing.T) {
+	br := "br08"
+	err := PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	defer DeleteOVSBridge(br)
+
+	bridge := binding.NewOFBridge(br)
+	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
+
+	err = bridge.Connect(maxRetry, make(chan struct{}))
+	require.Nil(t, err, "Failed to start OFService")
+	defer bridge.Disconnect()
+	groupID := binding.GroupIDType(4)
+	group := bridge.CreateGroup(groupID).
+		Bucket().Weight(100).
+		LoadReg(1, uint32(0xa0a0002)).
+		LoadReg(2, uint32(0x35)).
+		LoadReg(3, uint32(0xfff1)).
+		ResubmitToTable(table.GetNext()).Done().
+		Bucket().Weight(100).
+		LoadReg(1, uint32(0xa0a0202)).
+		LoadReg(2, uint32(0x35)).
+		LoadReg(3, uint32(0xfff1)).
+		ResubmitToTable(table.GetNext()).Done()
+
+	flow := table.BuildFlow(priorityNormal).
+		Cookie(getCookieID()).
+		MatchProtocol(binding.ProtocolTCP).
+		MatchDstIP(net.ParseIP("10.96.0.10")).
+		MatchTCPDstPort(uint16(53)).
+		MatchReg(3, uint32(0xfff2)).
+		Action().Group(groupID).Done()
+	expectedFlows := []*ExpectFlow{
+		{
+			MatchStr: "priority=200,tcp,reg3=0xfff2,nw_dst=10.96.0.10,tp_dst=53",
+			ActStr:   fmt.Sprintf("group:%d", groupID),
+		},
+	}
+
+	bucket0 := "weight:100,actions=load:0xa0a0002->NXM_NX_REG1[],load:0x35->NXM_NX_REG2[],load:0xfff1->NXM_NX_REG3[],resubmit(,3)"
+	bucket1 := "weight:100,actions=load:0xa0a0202->NXM_NX_REG1[],load:0x35->NXM_NX_REG2[],load:0xfff1->NXM_NX_REG3[],resubmit(,3)"
+	expectedGroupBuckets := []string{bucket0, bucket1}
+	err = bridge.AddOFEntriesInBundle([]binding.OFEntry{flow, group}, nil, nil)
+	require.Nil(t, err)
+	CheckFlowExists(t, br, uint8(table.GetID()), true, expectedFlows)
+	CheckGroupExists(t, br, groupID, "select", expectedGroupBuckets, true)
+
+	err = bridge.AddOFEntriesInBundle(nil, nil, []binding.OFEntry{flow, group})
+	require.Nil(t, err)
+	CheckFlowExists(t, br, uint8(table.GetID()), false, expectedFlows)
+	CheckGroupExists(t, br, groupID, "select", expectedGroupBuckets, false)
+}
+
 func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	var flows []binding.Flow
 	_, AllIPs, _ := net.ParseCIDR("0.0.0.0/0")

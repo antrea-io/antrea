@@ -96,12 +96,14 @@ var (
 	ReentranceMAC, _    = net.ParseMAC("de:ad:be:ef:de:ad")
 )
 
-type FlowOperations interface {
+type OFEntryOperations interface {
 	Add(flow binding.Flow) error
 	Modify(flow binding.Flow) error
 	Delete(flow binding.Flow) error
 	AddAll(flows []binding.Flow) error
 	DeleteAll(flows []binding.Flow) error
+	AddOFEntries(ofEntries []binding.OFEntry) error
+	DeleteOFEntries(ofEntries []binding.OFEntry) error
 }
 
 type flowCache map[string]binding.Flow
@@ -119,9 +121,9 @@ type client struct {
 	// "fixed" flows installed by the agent after initialization and which do not change during
 	// the lifetime of the client.
 	gatewayFlows, clusterServiceCIDRFlows, defaultTunnelFlows []binding.Flow
-	// flowOperations is a wrapper interface for flow Add / Modify / Delete operations. It
+	// ofEntryOperations is a wrapper interface for OpenFlow entry Add / Modify / Delete operations. It
 	// enables convenient mocking in unit tests.
-	flowOperations FlowOperations
+	ofEntryOperations OFEntryOperations
 	// policyCache is a map from PolicyRule ID to policyRuleConjunction. It's guaranteed that one policyRuleConjunction
 	// is processed by at most one goroutine at any given time.
 	policyCache       sync.Map
@@ -154,6 +156,14 @@ func (c *client) AddAll(flows []binding.Flow) error {
 
 func (c *client) DeleteAll(flows []binding.Flow) error {
 	return c.bridge.AddFlowsInBundle(nil, nil, flows)
+}
+
+func (c *client) AddOFEntries(ofEntries []binding.OFEntry) error {
+	return c.bridge.AddOFEntriesInBundle(ofEntries, nil, nil)
+}
+
+func (c *client) DeleteOFEntries(ofEntries []binding.OFEntry) error {
+	return c.bridge.AddOFEntriesInBundle(nil, nil, ofEntries)
 }
 
 // defaultFlows generates the default flows of all tables.
@@ -650,6 +660,6 @@ func NewClient(bridgeName string) Client {
 		policyCache:              sync.Map{},
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 	}
-	c.flowOperations = c
+	c.ofEntryOperations = c
 	return c
 }
