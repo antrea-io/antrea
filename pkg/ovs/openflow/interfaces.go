@@ -235,8 +235,8 @@ type CTAction interface {
 	LoadToMark(value uint32) CTAction
 	LoadToLabelRange(value uint64, rng *Range) CTAction
 	MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction
-	// NAT action is used if the packet is not committed into the conntrack zone, and is required to leverage the
-	// original NAT configurations.
+	// NAT action translates the packet in the way that the connection was committed into the conntrack zone, e.g., if
+	// a connection was committed with SNAT, the later packets would be translated with the earlier SNAT configurations.
 	NAT() CTAction
 	// SNAT actions is used to translate the source IP to a specific address or address in a pool when committing the
 	// packet into the conntrack zone. If a single IP is used as the target address, StartIP and EndIP in the range
