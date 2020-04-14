@@ -286,6 +286,11 @@ data:
     # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
     #
     #trafficEncapMode: encap
+
+    # The port for the antrea-agent APIServer to serve on.
+    # Note that if it's set to another value, the `containerPort` of the `api` port of the
+    # `antrea-agent` container must be set to the same value.
+    #apiPort: 10350
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -303,13 +308,17 @@ data:
             }
         ]
     }
-  antrea-controller.conf: ""
+  antrea-controller.conf: |
+    # The port for the antrea-controller APIServer to serve on.
+    # Note that if it's set to another value, the `containerPort` of the `api` port of the
+    # `antrea-controller` container must be set to the same value.
+    #apiPort: 10349
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-bckh9cmk97
+  name: antrea-config-428d4tg64g
   namespace: kube-system
 ---
 apiVersion: v1
@@ -323,7 +332,7 @@ spec:
   ports:
   - port: 443
     protocol: TCP
-    targetPort: 443
+    targetPort: api
   selector:
     app: antrea
     component: antrea-controller
@@ -377,14 +386,15 @@ spec:
         imagePullPolicy: IfNotPresent
         name: antrea-controller
         ports:
-        - containerPort: 443
+        - containerPort: 10349
+          name: api
           protocol: TCP
         readinessProbe:
           failureThreshold: 5
           httpGet:
             host: 127.0.0.1
             path: /healthz
-            port: 443
+            port: api
             scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 10
@@ -408,7 +418,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-bckh9cmk97
+          name: antrea-config-428d4tg64g
         name: antrea-config
       - hostPath:
           path: /var/log/antrea
@@ -502,12 +512,16 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
         name: antrea-agent
+        ports:
+        - containerPort: 10350
+          name: api
+          protocol: TCP
         readinessProbe:
           failureThreshold: 5
           httpGet:
             host: 127.0.0.1
             path: /healthz
-            port: 10443
+            port: api
             scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 10
@@ -602,7 +616,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-bckh9cmk97
+          name: antrea-config-428d4tg64g
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

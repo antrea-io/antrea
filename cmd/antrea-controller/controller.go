@@ -74,6 +74,7 @@ func run(o *Options) error {
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
 
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
+		o.config.APIPort,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
@@ -105,13 +106,13 @@ func run(o *Options) error {
 }
 
 func createAPIServerConfig(kubeconfig string,
+	bindPort int,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier) (*apiserver.Config, error) {
 	// TODO:
 	// 1. Support user-provided certificate.
-	// 2. Support configurable https port.
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions()
@@ -119,6 +120,7 @@ func createAPIServerConfig(kubeconfig string,
 	// Set the PairName but leave certificate directory blank to generate in-memory by default
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = "antrea-apiserver"
+	secureServing.BindPort = bindPort
 	// kubeconfig file is useful when antrea-controller isn't not running as a pod, like during development.
 	if len(kubeconfig) > 0 {
 		authentication.RemoteKubeConfigFile = kubeconfig

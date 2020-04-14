@@ -37,6 +37,7 @@ func (cl *commandList) applyPersistentFlagsToRoot(root *cobra.Command) {
 	root.PersistentFlags().BoolP("verbose", "v", false, "enable verbose output")
 	root.PersistentFlags().StringP("kubeconfig", "k", clientcmd.RecommendedHomeFile, "absolute path to the kubeconfig file")
 	root.PersistentFlags().DurationP("timeout", "t", 0, "time limit of the execution of the command")
+	root.PersistentFlags().StringP("server", "s", "", "address and port of the API server, taking precedence over the default endpoint and the one set in kubeconfig")
 }
 
 // ApplyToRootCommand applies the commandList to the root cobra command, it applies

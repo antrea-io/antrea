@@ -36,7 +36,6 @@ import (
 
 const (
 	Name = "antrea-agent-api"
-	Port = 10443
 )
 
 var (
@@ -61,8 +60,8 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 }
 
 // New creates an APIServer for running in antrea agent.
-func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier) (*agentAPIServer, error) {
-	cfg, err := newConfig()
+func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, bindPort int) (*agentAPIServer, error) {
+	cfg, err := newConfig(bindPort)
 	if err != nil {
 		return nil, err
 	}
@@ -74,16 +73,13 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	return &agentAPIServer{GenericAPIServer: s}, nil
 }
 
-func newConfig() (*genericapiserver.CompletedConfig, error) {
+func newConfig(bindPort int) (*genericapiserver.CompletedConfig, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	// Set the PairName but leave certificate directory blank to generate in-memory by default.
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = Name
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", Port))
-	if err != nil {
-		return nil, err
-	}
-	secureServing.Listener = ln
+	secureServing.BindAddress = net.ParseIP("127.0.0.1")
+	secureServing.BindPort = bindPort
 	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
