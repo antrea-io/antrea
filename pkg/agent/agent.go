@@ -97,6 +97,7 @@ func (i *Initializer) setupOVSBridge() error {
 		klog.Error("Failed to create OVS bridge: ", err)
 		return err
 	}
+	i.nodeConfig.BridgeName = i.ovsBridgeClient.GetBridgeName()
 
 	// Initialize interface cache
 	if err := i.initInterfaceStore(); err != nil {
@@ -181,6 +182,10 @@ func (i *Initializer) Initialize() error {
 	}
 
 	if err := i.routeClient.Initialize(i.nodeConfig); err != nil {
+		return err
+	}
+
+	if err := i.setupExternalConnectivity(); err != nil {
 		return err
 	}
 
