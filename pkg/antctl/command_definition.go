@@ -598,11 +598,13 @@ func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []st
 		}
 		kubeconfigPath, _ := cmd.Flags().GetString("kubeconfig")
 		timeout, _ := cmd.Flags().GetDuration("timeout")
+		server, _ := cmd.Flags().GetString("server")
 		resp, err := c.request(&requestOption{
 			commandDefinition: cd,
 			kubeconfig:        kubeconfigPath,
 			args:              argMap,
 			timeout:           timeout,
+			server:            server,
 		})
 		if err != nil {
 			return err
