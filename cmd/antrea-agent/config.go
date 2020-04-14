@@ -72,4 +72,7 @@ type AgentConfig struct {
 	// Hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
 	// NetworkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
 	TrafficEncapMode string `yaml:"trafficEncapMode,omitempty"`
+	// APIPort is the port for the antrea-agent APIServer to serve on.
+	// Defaults to 10350.
+	APIPort int `yaml:"apiPort,omitempty"`
 }

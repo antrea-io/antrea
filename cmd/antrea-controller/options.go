@@ -16,11 +16,12 @@ package main
 
 import (
 	"errors"
-
 	"io/ioutil"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+
+	"github.com/vmware-tanzu/antrea/pkg/apis"
 )
 
 type Options struct {
@@ -50,6 +51,7 @@ func (o *Options) complete(args []string) error {
 		}
 		o.config = c
 	}
+	o.setDefaults()
 	return nil
 }
 
@@ -73,4 +75,10 @@ func (o *Options) loadConfigFromFile(file string) (*ControllerConfig, error) {
 		return nil, err
 	}
 	return &c, nil
+}
+
+func (o *Options) setDefaults() {
+	if o.config.APIPort == 0 {
+		o.config.APIPort = apis.AntreaControllerAPIPort
+	}
 }
