@@ -48,12 +48,14 @@ const (
 	priorityHigh   = uint16(210)
 	priorityNormal = uint16(200)
 	priorityLow    = uint16(190)
+	prioritySNAT   = uint16(180)
 	priorityMiss   = uint16(0)
 
 	// Traffic marks
 	markTrafficFromTunnel  = 0
 	markTrafficFromGateway = 1
 	markTrafficFromLocal   = 2
+	markTrafficFromUplink  = 4
 )
 
 var (
@@ -124,8 +126,11 @@ const (
 
 	ctZone = 0xfff0
 
-	portFoundMark = 0x1
+	portFoundMark    = 0x1
+	snatRequiredMark = 0x1
+
 	gatewayCTMark = 0x20
+	snatCTMark    = 0x40
 )
 
 var (
@@ -134,6 +139,9 @@ var (
 	ofPortMarkRange = binding.Range{16, 16}
 	// ofPortRegRange takes a 32-bit range of register portCacheReg to cache the ofPort number of the interface.
 	ofPortRegRange = binding.Range{0, 31}
+	// snatMarkRange takes the 17th bit of register marksReg to indicate if the packet needs to be SNATed with Node's IP
+	// or not. Its value is 0x1 if yes.
+	snatMarkRange = binding.Range{17, 17}
 
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	ReentranceMAC, _    = net.ParseMAC("de:ad:be:ef:de:ad")
@@ -163,7 +171,7 @@ type client struct {
 	nodeFlowCache, podFlowCache *flowCategoryCache // cache for corresponding deletions
 	// "fixed" flows installed by the agent after initialization and which do not change during
 	// the lifetime of the client.
-	gatewayFlows, clusterServiceCIDRFlows, defaultTunnelFlows []binding.Flow
+	gatewayFlows, clusterServiceCIDRFlows, defaultTunnelFlows, hostNetworkingFlows []binding.Flow
 	// ofEntryOperations is a wrapper interface for OpenFlow entry Add / Modify / Delete operations. It
 	// enables convenient mocking in unit tests.
 	ofEntryOperations OFEntryOperations
@@ -288,7 +296,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) (flows []binding
 			Action().GotoTable(connectionTrackStateTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
-		connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 			MatchCTStateInv(true).MatchCTStateTrk(true).
 			Action().Drop().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -680,6 +688,112 @@ func (c *client) localProbeFlow(localGatewayIP net.IP, category cookie.Category)
 		Action().GotoTable(conntrackCommitTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
+}
+
+func (c *client) snatFlows(uplinkOfport uint32, bridgeLocalPort int, nodeIP net.IP, category cookie.Category) []binding.Flow {
+	snatIPRange := &binding.IPRange{nodeIP, nodeIP}
+	vMACInt, _ := strconv.ParseUint(strings.Replace(globalVirtualMAC.String(), ":", "", -1), 16, 64)
+	flows := []binding.Flow{
+		// Resubmit the packet from the uplink interface to conntrackTable.
+		c.pipeline[classifierTable].BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchInPort(uplinkOfport).
+			Action().LoadRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
+			Action().ResubmitToTable(conntrackTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Enforce IP packet into the conntrack zone with SNAT. If the connection is SNATed, the reply packet should use
+		// Pod IP as the destination, and then resubmit to conntrackStateTable.
+		c.pipeline[conntrackTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			Action().CT(false, conntrackStateTable, ctZone).NAT().CTDone().
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Rewrite dMAC with the global vMAC if the packet is a reply to the Pod from the external address
+		c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).
+			MatchProtocol(binding.ProtocolIP).
+			MatchCTStateNew(false).MatchCTStateTrk(true).
+			MatchCTMark(snatCTMark).
+			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
+			Action().LoadRange(binding.NxmFieldDstMAC, vMACInt, binding.Range{0, 47}).
+			Action().ResubmitToTable(dnatTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Resubmit the packet sent from local Pod to the external IP address to dnatTable.
+		c.pipeline[conntrackStateTable].BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchCTStateNew(false).MatchCTStateTrk(true).
+			MatchCTMark(snatCTMark).
+			Action().ResubmitToTable(dnatTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Output the non-SNAT packet to the bridge interface directly if it is received from the uplink interface.
+		c.pipeline[conntrackStateTable].BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchInPort(uplinkOfport).
+			Action().Output(bridgeLocalPort).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Resubmit the packet to L2ForwardingOutput table after the packet is SNATed. The "SNAT" packet has these
+		// characters: 1) the ct_state is "+new+trk", 2) reg1[17] is set as 1; 3) Node IP is used as the target
+		// source IP in NAT action, 4) ct_mark is set with 0x40 in the conn_track context.
+		c.pipeline[conntrackCommitTable].BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchCTStateNew(true).MatchCTStateTrk(true).
+			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
+			Action().CT(true, l2ForwardingOutTable, ctZone).
+			SNAT(snatIPRange, nil).
+			LoadToMark(snatCTMark).CTDone().
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+	}
+	return flows
+}
+
+func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputPort int, category cookie.Category) []binding.Flow {
+	flows := []binding.Flow{
+		// Resubmit the packet to L2ForwardingCalc table if it is communicating to a Service.
+		c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
+			MatchCTMark(gatewayCTMark).
+			Action().ResubmitToTable(l2ForwardingCalcTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Resubmit the packet to L2ForwardingCalc table if it is sent to the Node IP(not to the host gateway). Since
+		// the packet is using the host gateway's MAC as dst MAC, it will be sent out from "gw0". This flow entry is to
+		// avoid SNAT on such packet, otherwise the source and destination IP are the same.
+		c.pipeline[l3ForwardingTable].BuildFlow(priorityLow).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
+			MatchDstIP(nodeIP).
+			Action().ResubmitToTable(l2ForwardingCalcTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Resubmit the packet to L2ForwardingCalc table if it is a packet sent to a local Pod. This flow entry has a
+		// low priority to avoid overlapping with those packets received from tunnel port.
+		c.pipeline[l3ForwardingTable].BuildFlow(priorityLow).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
+			MatchDstIPNet(localSubnet).
+			Action().ResubmitToTable(l2ForwardingCalcTable).
+			Done(),
+		// Add SNAT mark on the packet that is not filtered by other flow entries in L3Forwarding table. This is the
+		// table miss if SNAT feature is enabled.
+		c.pipeline[l3ForwardingTable].BuildFlow(prioritySNAT).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
+			Action().LoadRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
+			Action().ResubmitToTable(ingressRuleTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Output the SNATed packet to the specified port.
+		c.pipeline[l2ForwardingOutTable].BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
+			Action().Output(outputPort).
+			Done(),
+	}
+	return flows
 }
 
 // NewClient is the constructor of the Client interface.

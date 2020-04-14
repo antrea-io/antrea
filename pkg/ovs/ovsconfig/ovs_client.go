@@ -734,3 +734,7 @@ func (br *OVSBridge) DeleteOVSOtherConfig(configs map[string]interface{}) Error 
 	}
 	return nil
 }
+
+func (br *OVSBridge) GetBridgeName() string {
+	return br.name
+}
