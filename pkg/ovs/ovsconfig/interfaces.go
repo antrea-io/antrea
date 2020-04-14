@@ -45,4 +45,5 @@ type OVSBridgeClient interface {
 	AddOVSOtherConfig(configs map[string]interface{}) Error
 	GetOVSOtherConfig() (map[string]string, Error)
 	DeleteOVSOtherConfig(configs map[string]interface{}) Error
+	GetBridgeName() string
 }
