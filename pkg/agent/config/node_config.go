@@ -25,6 +25,9 @@ const (
 	DefaultTunPortName = "tun0"
 	DefaultTunOFPort   = 1
 	HostGatewayOFPort  = 2
+	UplinkOFPort       = 3
+	// 0xfffffffe is a reserved port number in OpenFlow protocol, which is dedicated for the Bridge interface.
+	BridgeOFPort = 0xfffffffe
 )
 
 type GatewayConfig struct {
@@ -47,6 +50,7 @@ type NodeConfig struct {
 	PodCIDR       *net.IPNet
 	NodeIPAddr    *net.IPNet
 	GatewayConfig *GatewayConfig
+	BridgeName    string
 }
 
 func (n *NodeConfig) String() string {
