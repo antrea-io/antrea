@@ -36,6 +36,7 @@ const (
 	Pod
 	Service
 	Policy
+	SNAT
 )
 
 func (c Category) String() string {
@@ -52,6 +53,8 @@ func (c Category) String() string {
 		return "Service"
 	case Policy:
 		return "Policy"
+	case SNAT:
+		return "SNAT"
 	default:
 		return "Invalid"
 	}

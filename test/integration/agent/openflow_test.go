@@ -103,6 +103,7 @@ func TestConnectivityFlows(t *testing.T) {
 		testInstallPodFlows,
 		testUninstallPodFlows,
 		testUninstallNodeFlows,
+		testExternalFlows,
 	} {
 		f(t, config)
 	}
@@ -175,6 +176,17 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	testReplayFlows(t)
+}
+
+func testExternalFlows(t *testing.T, config *testConfig) {
+	nodeIP := net.ParseIP("10.10.10.1")
+	_, localSubnet, _ := net.ParseCIDR("172.16.1.0/24")
+	if err := c.InstallExternalFlows(nodeIP, *localSubnet); err != nil {
+		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
+	}
+	for _, tableFlow := range prepareExternalFlows(nodeIP, localSubnet) {
+		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
+	}
 }
 
 func testReplayFlows(t *testing.T) {
@@ -686,7 +698,7 @@ func prepareDefaultFlows() []expectTableFlows {
 			uint8(31),
 			[]*ofTestUtils.ExpectFlow{
 				{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "goto_table:40"},
-				{"priority=200,ct_state=+inv+trk,ip", "drop"},
+				{"priority=190,ct_state=+inv+trk,ip", "drop"},
 				{"priority=0", "goto_table:40"},
 			},
 		},
@@ -750,4 +762,81 @@ func prepareIPNetAddresses(addresses []string) []types.Address {
 		ipAddresses = append(ipAddresses, ofClient.NewIPNetAddress(*ipNet))
 	}
 	return ipAddresses
+}
+
+func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFlows {
+	return []expectTableFlows{
+		{
+			uint8(0),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					fmt.Sprintf("priority=200,ip,in_port=%d", config1.UplinkOFPort),
+					"load:0x4->NXM_NX_REG0[0..15],resubmit(,30)",
+				},
+			},
+		},
+		{
+			uint8(30),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					"priority=200,ip", "ct(table=31,zone=65520,nat)",
+				},
+			},
+		},
+		{
+			uint8(31),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					"priority=210,ct_state=-new+trk,ct_mark=0x40,ip,reg0=0x4/0xffff",
+					"load:0xaabbccddeeff->NXM_OF_ETH_DST[],resubmit(,40)",
+				},
+				{
+					"priority=200,ct_state=-new+trk,ct_mark=0x40,ip",
+					"resubmit(,40)",
+				},
+				{
+					fmt.Sprintf("priority=200,ip,in_port=%d", config1.UplinkOFPort),
+					"LOCAL",
+				},
+			},
+		},
+		{
+			uint8(70),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					"priority=200,ct_mark=0x20,ip,reg0=0x2/0xffff", "resubmit(,80)",
+				},
+				{
+					fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", localSubnet.String()),
+					"resubmit(,80)",
+				},
+				{
+					fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", nodeIP.String()),
+					"resubmit(,80)",
+				},
+				{
+					"priority=180,ip,reg0=0x2/0xffff",
+					"load:0x1->NXM_NX_REG0[17],resubmit(,90)",
+				},
+			},
+		},
+		{
+			uint8(105),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					"priority=200,ct_state=+new+trk,ip,reg0=0x20000/0x20000",
+					fmt.Sprintf("ct(commit,table=110,zone=65520,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[]))", nodeIP.String()),
+				},
+			},
+		},
+		{
+			uint8(110),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					"priority=200,ip,reg0=0x20000/0x20000",
+					fmt.Sprintf("output:%d", config1.HostGatewayOFPort),
+				},
+			},
+		},
+	}
 }
