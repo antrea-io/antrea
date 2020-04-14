@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
+	"github.com/vmware-tanzu/antrea/pkg/apis"
 )
 
 // requestOption describes options to issue requests.
@@ -42,6 +42,11 @@ type requestOption struct {
 	// duration includes connection setup, all redirects, and reading of the
 	// response body.
 	timeout time.Duration
+	// server is the address and port of the APIServer specified by user explicitly.
+	// If not set, antctl will connect to 127.0.0.1:10350 in agent mode, and will
+	// connect to the server set in kubeconfig in controller mode.
+	// It set, it takes precedence over the above default endpoints.
+	server string
 }
 
 // client issues requests to endpoints.
@@ -92,7 +97,11 @@ func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) 
 	if runtimeMode == ModeAgent {
 		kubeconfig.Insecure = true
 		kubeconfig.CAFile = ""
-		kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apiserver.Port))
+		kubeconfig.CAData = nil
+		kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
+	}
+	if opt.server != "" {
+		kubeconfig.Host = opt.server
 	}
 	restClient, err := rest.UnversionedRESTClientFor(kubeconfig)
 	if err != nil {
@@ -120,6 +129,9 @@ func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Re
 	kubeconfig, err := c.resolveKubeconfig(opt)
 	if err != nil {
 		return nil, err
+	}
+	if opt.server != "" {
+		kubeconfig.Host = opt.server
 	}
 	gv := e.groupVersionResource.GroupVersion()
 	kubeconfig.GroupVersion = &gv

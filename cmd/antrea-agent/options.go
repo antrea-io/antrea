@@ -23,6 +23,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/apis"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
@@ -160,5 +161,9 @@ func (o *Options) setDefaults() {
 		if o.config.EnableIPSecTunnel {
 			o.config.DefaultMTU -= ipsecESPOverhead
 		}
+	}
+
+	if o.config.APIPort == 0 {
+		o.config.APIPort = apis.AntreaAgentAPIPort
 	}
 }

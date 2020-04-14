@@ -75,6 +75,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+          ports:
+            - containerPort: 10350
+              name: api
+              protocol: TCP
           livenessProbe:
             exec:
               command:
@@ -89,7 +93,7 @@ spec:
             httpGet:
               host: 127.0.0.1
               path: /healthz
-              port: 10443
+              port: api
               scheme: HTTPS
             initialDelaySeconds: 5
             timeoutSeconds: 5

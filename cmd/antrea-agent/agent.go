@@ -165,7 +165,7 @@ func run(o *Options) error {
 
 	go agentMonitor.Run(stopCh)
 
-	apiServer, err := apiserver.New(agentQuerier, networkPolicyController)
+	apiServer, err := apiserver.New(agentQuerier, networkPolicyController, o.config.APIPort)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}
