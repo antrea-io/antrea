@@ -192,6 +192,20 @@ func (mr *MockOVSBridgeClientMockRecorder) DeletePorts(arg0 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePorts", reflect.TypeOf((*MockOVSBridgeClient)(nil).DeletePorts), arg0)
 }
 
+// GetBridgeName mocks base method
+func (m *MockOVSBridgeClient) GetBridgeName() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBridgeName")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetBridgeName indicates an expected call of GetBridgeName
+func (mr *MockOVSBridgeClientMockRecorder) GetBridgeName() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBridgeName", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetBridgeName))
+}
+
 // GetExternalIDs mocks base method
 func (m *MockOVSBridgeClient) GetExternalIDs() (map[string]string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
