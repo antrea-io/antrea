@@ -24,6 +24,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ofctl"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
@@ -34,6 +35,8 @@ type AgentQuerier interface {
 	GetNodeName() string
 	GetInterfaceStore() interfacestore.InterfaceStore
 	GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool)
+	GetOpenflowClient() openflow.Client
+	GetOfctlClient() *ofctl.OfctlClient
 }
 
 type agentQuerier struct {
@@ -66,6 +69,16 @@ func (aq agentQuerier) GetNodeName() string {
 // GetInterfaceStore gets current interfacestore.
 func (aq agentQuerier) GetInterfaceStore() interfacestore.InterfaceStore {
 	return aq.interfaceStore
+}
+
+// GetOpenflowClient returns openflow.Client.
+func (aq *agentQuerier) GetOpenflowClient() openflow.Client {
+	return aq.ofClient
+}
+
+// GetOfctlClient returns a new OfctlClient.
+func (aq *agentQuerier) GetOfctlClient() *ofctl.OfctlClient {
+	return ofctl.NewClient(aq.ovsBridge)
 }
 
 // getOVSVersion gets current OVS version.

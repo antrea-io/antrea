@@ -16,6 +16,9 @@ type FlowStates struct {
 
 type ofFlow struct {
 	table *ofTable
+	// The Flow.Table field can be updated by Reset(), which can be called by
+	// ReplayFlows() when replaying the Flow to OVS. For thread safety, any access
+	// to Flow.Table should hold the replayMutex read lock.
 	ofctrl.Flow
 
 	// matchers is string slice, it is used to generate a readable match string of the Flow.
@@ -32,6 +35,10 @@ type ofFlow struct {
 	lastAction ofctrl.FgraphElem
 }
 
+// Reset updates the ofFlow.Flow.Table field with ofFlow.table.Table.
+// In the case of reconnecting to OVS, the ofnet library creates new OFTable
+// objects. Reset() can be called to reset ofFlow.Flow.Table to the right value,
+// before replaying the Flow to OVS.
 func (f *ofFlow) Reset() {
 	f.Flow.Table = f.table.Table
 }
@@ -75,7 +82,7 @@ func (f *ofFlow) KeyString() string {
 }
 
 func (f *ofFlow) MatchString() string {
-	repr := fmt.Sprintf("table=%d,priority=%d", f.table.GetID(), f.Flow.Match.Priority)
+	repr := fmt.Sprintf("table=%d", f.table.GetID())
 	if f.protocol != "" {
 		repr = fmt.Sprintf("%s,%s", repr, f.protocol)
 	}
@@ -103,8 +110,10 @@ func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMess
 	return message, nil
 }
 
-// CopyToBuilder returns a new FlowBuilder that copies the table, protocols, matches and CookieID of the Flow, but does
-// not copy the actions, lastAction and other private status fields of the ofctrl.Flow, e.g., "realized" and "isInstalled".
+// CopyToBuilder returns a new FlowBuilder that copies the table, protocols,
+// matches, and CookieID of the Flow, but does not copy the actions, lastAction,
+// and other private status fields of the ofctrl.Flow, e.g. "realized" and
+// "isInstalled".
 func (f *ofFlow) CopyToBuilder() FlowBuilder {
 	newFlow := ofFlow{
 		table: f.table,
