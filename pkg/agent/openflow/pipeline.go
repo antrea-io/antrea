@@ -267,7 +267,7 @@ func (c *client) podClassifierFlow(podOFPort uint32, category cookie.Category) b
 // 2) Add ct_mark on the packet if it is sent to the switch from the host gateway.
 // 3) Allow traffic if it hits ct_mark and is sent from the host gateway.
 // 4) Drop all invalid traffic.
-// 5) Goto other traffic to the next table by the table-miss flow.
+// 5) Let other traffic go to the next table by the table-miss flow.
 func (c *client) connectionTrackFlows(category cookie.Category) (flows []binding.Flow) {
 	connectionTrackTable := c.pipeline[conntrackTable]
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]

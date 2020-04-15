@@ -596,7 +596,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			LoadRegToReg(0, 0, binding.Range{0, 15}, binding.Range{0, 15}).
 			LoadReg(0, 0x0ffe, binding.Range{16, 31}).
 			Done(). // Finish learn action.
-			Action().GotoTable(table.GetID()).
+			Action().ResubmitToTable(table.GetID()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
