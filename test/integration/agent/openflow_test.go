@@ -28,13 +28,15 @@ import (
 	ofClient "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ofctl"
 	ofTestUtils "github.com/vmware-tanzu/antrea/test/integration/ovs"
 )
 
 var (
-	br        = "br01"
-	c         ofClient.Client
-	roundInfo = types.RoundInfo{0, nil}
+	br          = "br01"
+	c           ofClient.Client
+	roundInfo   = types.RoundInfo{0, nil}
+	ofctlClient = ofctl.NewClient(br)
 )
 
 const (
@@ -178,14 +180,14 @@ func testReplayFlows(t *testing.T) {
 	var err error
 
 	countFlows := func() int {
-		flowList, err := ofTestUtils.OfctlDumpFlows(br)
+		flowList, err := ofTestUtils.OfctlDumpFlows(ofctlClient)
 		require.Nil(t, err, "Error when dumping flows from OVS bridge")
 		return len(flowList)
 	}
 
 	count1 := countFlows()
 	t.Logf("Counted %d flows before deletion & reconciliation", count1)
-	err = ofTestUtils.OfctlDeleteFlows(br)
+	err = ofTestUtils.OfctlDeleteFlows(ofctlClient)
 	require.Nil(t, err, "Error when deleting flows from OVS bridge")
 	count2 := countFlows()
 	assert.Zero(t, count2, "Expected no flows after deletion")
@@ -200,7 +202,7 @@ func testInitialize(t *testing.T, config *testConfig) {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows() {
-		ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
+		ofTestUtils.CheckFlowExists(t, ofctlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
 
@@ -210,7 +212,7 @@ func testInstallTunnelFlows(t *testing.T, config *testConfig) {
 		t.Fatalf("Failed to install Openflow entries for tunnel port: %v", err)
 	}
 	for _, tableFlow := range prepareTunnelFlows(config.tunnelOFPort, config.globalMAC) {
-		ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
+		ofTestUtils.CheckFlowExists(t, ofctlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
 
@@ -220,7 +222,7 @@ func testInstallServiceFlows(t *testing.T, config *testConfig) {
 		t.Fatalf("Failed to install Openflow entries to skip service CIDR from egress table")
 	}
 	for _, tableFlow := range prepareServiceHelperFlows(*config.serviceCIDR, config.localGateway.mac, config.localGateway.ofPort) {
-		ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
+		ofTestUtils.CheckFlowExists(t, ofctlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
 
@@ -231,7 +233,7 @@ func testInstallNodeFlows(t *testing.T, config *testConfig) {
 			t.Fatalf("Failed to install Openflow entries for node connectivity: %v", err)
 		}
 		for _, tableFlow := range prepareNodeFlows(config.tunnelOFPort, node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac) {
-			ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
+			ofTestUtils.CheckFlowExists(t, ofctlClient, tableFlow.tableID, true, tableFlow.flows)
 		}
 	}
 }
@@ -243,7 +245,7 @@ func testUninstallNodeFlows(t *testing.T, config *testConfig) {
 			t.Fatalf("Failed to uninstall Openflow entries for node connectivity: %v", err)
 		}
 		for _, tableFlow := range prepareNodeFlows(config.tunnelOFPort, node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac) {
-			ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, false, tableFlow.flows)
+			ofTestUtils.CheckFlowExists(t, ofctlClient, tableFlow.tableID, false, tableFlow.flows)
 		}
 	}
 }
@@ -255,7 +257,7 @@ func testInstallPodFlows(t *testing.T, config *testConfig) {
 			t.Fatalf("Failed to install Openflow entries for pod: %v", err)
 		}
 		for _, tableFlow := range preparePodFlows(pod.ip, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC) {
-			ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
+			ofTestUtils.CheckFlowExists(t, ofctlClient, tableFlow.tableID, true, tableFlow.flows)
 		}
 	}
 }
@@ -267,7 +269,7 @@ func testUninstallPodFlows(t *testing.T, config *testConfig) {
 			t.Fatalf("Failed to uninstall Openflow entries for pod: %v", err)
 		}
 		for _, tableFlow := range preparePodFlows(pod.ip, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC) {
-			ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, false, tableFlow.flows)
+			ofTestUtils.CheckFlowExists(t, ofctlClient, tableFlow.tableID, false, tableFlow.flows)
 		}
 	}
 }
@@ -318,7 +320,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// Dump flows.
-	flowList, err := ofTestUtils.OfctlDumpTableFlows(br, ingressRuleTable)
+	flowList, err := ofTestUtils.OfctlDumpTableFlows(ofctlClient, ingressRuleTable)
 	require.Nil(t, err, "Failed to dump flows")
 	conjMatch := fmt.Sprintf("priority=%d,ip,reg1=0x%x", priorityNormal, ofport)
 	flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
@@ -340,7 +342,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 
 	// Dump flows
-	flowList, err = ofTestUtils.OfctlDumpTableFlows(br, ingressRuleTable)
+	flowList, err = ofTestUtils.OfctlDumpTableFlows(ofctlClient, ingressRuleTable)
 	require.Nil(t, err, "Failed to dump flows")
 	conjMatch = fmt.Sprintf("priority=%d,ip,nw_dst=192.168.3.4", priorityNormal)
 	flow1 := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3),conjunction(%d,1/2)", ruleID, ruleID2)}
@@ -360,7 +362,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 func checkDefaultDropFlows(t *testing.T, table uint8, priority int, addrType types.AddressType, addresses []types.Address, add bool) {
 	// dump flows
-	flowList, err := ofTestUtils.OfctlDumpTableFlows(br, table)
+	flowList, err := ofTestUtils.OfctlDumpTableFlows(ofctlClient, table)
 	assert.Nil(t, err, fmt.Sprintf("Failed to dump flows: %v", err))
 	for _, addr := range addresses {
 		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(addrType)), addr.GetMatchValue())
@@ -397,7 +399,7 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// dump flows
-	flowList, err := ofTestUtils.OfctlDumpTableFlows(br, ruleTable)
+	flowList, err := ofTestUtils.OfctlDumpTableFlows(ofctlClient, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
 
 	action := fmt.Sprintf("conjunction(%d,1/3)", ruleID)
@@ -423,7 +425,7 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 func checkDeleteAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32, addedAddress []types.Address, addrType types.AddressType) {
 	err := c.DeletePolicyRuleAddress(ruleID, addrType, addedAddress)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
-	flowList, err := ofTestUtils.OfctlDumpTableFlows(br, ruleTable)
+	flowList, err := ofTestUtils.OfctlDumpTableFlows(ofctlClient, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
 
 	action := fmt.Sprintf("conjunction(%d,1/3)", ruleID)
@@ -447,7 +449,7 @@ func checkDeleteAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint
 }
 
 func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allowTable uint8, priority int, ruleID uint32, rule *types.PolicyRule, testFunc func(t assert.TestingT, value bool, msgAndArgs ...interface{}) bool) {
-	flowList, err := ofTestUtils.OfctlDumpTableFlows(br, ruleTable)
+	flowList, err := ofTestUtils.OfctlDumpTableFlows(ofctlClient, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
 
 	conjunctionActionMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip", priority-10, ruleID)
@@ -504,7 +506,7 @@ func testInstallGatewayFlows(t *testing.T, config *testConfig) {
 		t.Fatalf("Failed to install Openflow entries for gateway: %v", err)
 	}
 	for _, tableFlow := range prepareGatewayFlows(config.localGateway.ip, config.localGateway.mac, config.localGateway.ofPort, config.globalMAC) {
-		ofTestUtils.CheckFlowExists(t, config.bridge, tableFlow.tableID, true, tableFlow.flows)
+		ofTestUtils.CheckFlowExists(t, ofctlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
 
