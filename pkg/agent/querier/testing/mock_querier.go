@@ -22,7 +22,9 @@ package testing
 import (
 	gomock "github.com/golang/mock/gomock"
 	interfacestore "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	openflow "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	ofctl "github.com/vmware-tanzu/antrea/pkg/ovs/ofctl"
 	reflect "reflect"
 )
 
@@ -87,4 +89,32 @@ func (m *MockAgentQuerier) GetNodeName() string {
 func (mr *MockAgentQuerierMockRecorder) GetNodeName() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeName", reflect.TypeOf((*MockAgentQuerier)(nil).GetNodeName))
+}
+
+// GetOfctlClient mocks base method
+func (m *MockAgentQuerier) GetOfctlClient() *ofctl.OfctlClient {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOfctlClient")
+	ret0, _ := ret[0].(*ofctl.OfctlClient)
+	return ret0
+}
+
+// GetOfctlClient indicates an expected call of GetOfctlClient
+func (mr *MockAgentQuerierMockRecorder) GetOfctlClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOfctlClient", reflect.TypeOf((*MockAgentQuerier)(nil).GetOfctlClient))
+}
+
+// GetOpenflowClient mocks base method
+func (m *MockAgentQuerier) GetOpenflowClient() openflow.Client {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOpenflowClient")
+	ret0, _ := ret[0].(openflow.Client)
+	return ret0
+}
+
+// GetOpenflowClient indicates an expected call of GetOpenflowClient
+func (mr *MockAgentQuerierMockRecorder) GetOpenflowClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOpenflowClient", reflect.TypeOf((*MockAgentQuerier)(nil).GetOpenflowClient))
 }

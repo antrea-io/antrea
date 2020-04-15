@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ofctl"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -47,8 +48,8 @@ type ExpectFlow struct {
 	ActStr   string
 }
 
-func CheckFlowExists(t *testing.T, br string, tableID uint8, exist bool, flows []*ExpectFlow) []string {
-	flowList, _ := OfctlDumpTableFlows(br, tableID)
+func CheckFlowExists(t *testing.T, ofctlClient *ofctl.OfctlClient, tableID uint8, exist bool, flows []*ExpectFlow) []string {
+	flowList, _ := OfctlDumpTableFlows(ofctlClient, tableID)
 	if exist {
 		for _, flow := range flows {
 			if !OfctlFlowMatch(flowList, tableID, flow) {
@@ -65,9 +66,9 @@ func CheckFlowExists(t *testing.T, br string, tableID uint8, exist bool, flows [
 	return flowList
 }
 
-func CheckGroupExists(t *testing.T, br string, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
+func CheckGroupExists(t *testing.T, ofctlClient *ofctl.OfctlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
 	// dump groups
-	groupList, err := OfctlDumpGroups(br)
+	groupList, err := ofctlClient.DumpGroups()
 	if err != nil {
 		t.Errorf("Error dumping flows: Err %v", err)
 	}
@@ -103,17 +104,9 @@ func OfctlFlowMatch(flowList []string, tableID uint8, flow *ExpectFlow) bool {
 	return false
 }
 
-func OfctlDumpFlows(brName string, args ...string) ([]string, error) {
-	flowDump, err := runOfctlCmd("dump-flows", brName, args...)
-	if err != nil {
-		return nil, err
-	}
-
-	flowOutStr := string(flowDump)
-	flowDb := strings.Split(flowOutStr, "\n")[1:]
-
-	var flowList []string
-	for _, flow := range flowDb {
+func formatFlowDump(rawFlows []string) []string {
+	flowList := []string{}
+	for _, flow := range rawFlows {
 		felem := strings.Fields(flow)
 		if len(felem) > 2 {
 			felem = append(felem[:1], felem[2:]...)
@@ -122,42 +115,26 @@ func OfctlDumpFlows(brName string, args ...string) ([]string, error) {
 			flowList = append(flowList, fstr)
 		}
 	}
-
-	return flowList, nil
+	return flowList
 }
 
-func OfctlDumpGroups(brName string, args ...string) ([][]string, error) {
-	groupsDump, err := runOfctlCmd("dump-groups", brName, args...)
+func OfctlDumpFlows(ofctlClient *ofctl.OfctlClient, args ...string) ([]string, error) {
+	rawFlows, err := ofctlClient.DumpFlows(args...)
 	if err != nil {
 		return nil, err
 	}
-	groupsDumpStr := strings.TrimSpace(string(groupsDump))
-	rawGroupItems := strings.Split(groupsDumpStr, "\n")[1:]
-	var groupList [][]string
-	for _, rawGroupItem := range rawGroupItems {
-		rawGroupItem = strings.TrimSpace(rawGroupItem)
-		elems := strings.Split(rawGroupItem, ",bucket=")
-		groupList = append(groupList, elems)
+	return formatFlowDump(rawFlows), nil
+}
+
+func OfctlDumpTableFlows(ofctlClient *ofctl.OfctlClient, table uint8) ([]string, error) {
+	rawFlows, err := ofctlClient.DumpTableFlows(table)
+	if err != nil {
+		return nil, err
 	}
-	return groupList, nil
+	return formatFlowDump(rawFlows), nil
 }
 
-func OfctlDumpTableFlows(brName string, table uint8) ([]string, error) {
-	return OfctlDumpFlows(brName, fmt.Sprintf("table=%d", table))
-}
-
-func OfctlDeleteFlows(brName string) error {
-	_, err := runOfctlCmd("del-flows", brName)
+func OfctlDeleteFlows(ofctlClient *ofctl.OfctlClient) error {
+	_, err := ofctlClient.RunOfctlCmd("del-flows")
 	return err
-}
-
-func runOfctlCmd(cmd, brName string, args ...string) ([]byte, error) {
-	cmdStr := fmt.Sprintf("ovs-ofctl -O Openflow13 %s %s", cmd, brName)
-	cmdStr = cmdStr + " " + strings.Join(args, " ")
-	out, err := exec.Command("/bin/sh", "-c", cmdStr).Output()
-	if err != nil {
-		return nil, err
-	}
-
-	return out, nil
 }

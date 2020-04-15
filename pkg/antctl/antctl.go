@@ -18,6 +18,7 @@ import (
 	"reflect"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovsflows"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
@@ -210,6 +211,36 @@ var CommandList = &commandList{
 			},
 			commandGroup:        get,
 			transformedResponse: reflect.TypeOf(podinterface.Response{}),
+		},
+		{
+			use:     "ovsflows",
+			aliases: []string{"of"},
+			short:   "Dump OVS flows",
+			long:    "Dump all the OVS flows or the flows installed for the specified entity.",
+			example: `  Dump all OVS flows
+  $ antctl get ovsflows
+  Dump OVS flows of a Pod
+  $ antctl get ovsflows -p pod1 -n ns1`,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/ovsflows",
+					params: []flagInfo{
+						{
+							name:      "pod",
+							usage:     "Pod name. If present, Namespace must be provided.",
+							shorthand: "p",
+						},
+						{
+							name:      "namespace",
+							usage:     "Namespace of the entity",
+							shorthand: "n",
+						},
+					},
+					outputType: multiple,
+				},
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(ovsflows.Response{}),
 		},
 	},
 	codec: scheme.Codecs,
