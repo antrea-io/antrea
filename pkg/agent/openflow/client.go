@@ -68,16 +68,16 @@ type Client interface {
 	UninstallNodeFlows(hostname string) error
 
 	// InstallPodFlows should be invoked when a connection to a Pod on current Node. The
-	// containerID is used to identify the added flows. InstallPodFlows has all-or-nothing
+	// interfaceName is used to identify the added flows. InstallPodFlows has all-or-nothing
 	// semantics(call succeeds if all the flows are installed successfully, otherwise no
 	// flows will be installed). Calls to InstallPodFlows are idempotent. Concurrent calls
 	// to InstallPodFlows and / or UninstallPodFlows are supported as long as they are all
-	// for different containerIDs.
-	InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error
+	// for different interfaceNames.
+	InstallPodFlows(interfaceName string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error
 
 	// UninstallPodFlows removes the connection to the local Pod specified with the
-	// containerID. UninstallPodFlows will do nothing if no connection to the Pod was established.
-	UninstallPodFlows(containerID string) error
+	// interfaceName. UninstallPodFlows will do nothing if no connection to the Pod was established.
+	UninstallPodFlows(interfaceName string) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
@@ -116,6 +116,9 @@ type Client interface {
 	// should be called by the agent after all required flows have been installed / updated with
 	// the new round number.
 	DeleteStaleFlows() error
+
+	// GetPodFlowKeys returns the keys (match strings) of the cached flows for a Pod.
+	GetPodFlowKeys(interfaceName string) []string
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -161,7 +164,7 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 	}
 	fCache := fCacheI.(flowCache)
 	// Delete flows from OVS.
-	delFlows := []binding.Flow{}
+	delFlows := make([]binding.Flow, 0, len(fCache))
 	for _, flow := range fCache {
 		delFlows = append(delFlows, flow)
 	}
@@ -204,7 +207,7 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 	return c.deleteFlows(c.nodeFlowCache, hostname)
 }
 
-func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
+func (c *client) InstallPodFlows(interfaceName string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	flows := []binding.Flow{
@@ -224,13 +227,32 @@ func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podI
 			c.l3ToPodFlow(podInterfaceIP, podInterfaceMAC, cookie.Pod),
 		)
 	}
-	return c.addFlows(c.podFlowCache, containerID, flows)
+	return c.addFlows(c.podFlowCache, interfaceName, flows)
 }
 
-func (c *client) UninstallPodFlows(containerID string) error {
+func (c *client) UninstallPodFlows(interfaceName string) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.deleteFlows(c.podFlowCache, containerID)
+	return c.deleteFlows(c.podFlowCache, interfaceName)
+}
+
+func (c *client) GetPodFlowKeys(interfaceName string) []string {
+	fCacheI, ok := c.podFlowCache.Load(interfaceName)
+	if !ok {
+		return nil
+	}
+
+	fCache := fCacheI.(flowCache)
+	flowKeys := make([]string, 0, len(fCache))
+	// ReplayFlows() could change Flow internal state. Although its current
+	// implementation does not impact Flow match string generation, we still
+	// acquire read lock of replayMutex here for logic cleanliness.
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	for _, flow := range fCache {
+		flowKeys = append(flowKeys, flow.MatchString())
+	}
+	return flowKeys
 }
 
 func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
