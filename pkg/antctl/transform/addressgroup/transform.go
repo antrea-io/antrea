@@ -25,7 +25,7 @@ import (
 
 type Response struct {
 	Name string                  `json:"name" yaml:"name"`
-	Pods []common.GroupMemberPod `json:"pods,omitempty" yaml:"pods,omitempty"`
+	Pods []common.GroupMemberPod `json:"pods,omitempty"`
 }
 
 func listTransform(l interface{}) (interface{}, error) {

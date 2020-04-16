@@ -24,11 +24,11 @@ import (
 )
 
 type GroupMemberPod struct {
-	Pod *networkingv1beta1.PodReference `json:"pod,omitempty" yaml:"pod,omitempty"`
+	Pod *networkingv1beta1.PodReference `json:"pod,omitempty"`
 	// IP maintains the IPAddress associated with the Pod.
-	IP string `json:"ip,omitempty" yaml:"ip,omitempty"`
+	IP string `json:"ip,omitempty"`
 	// Ports maintain the named port mapping of this Pod.
-	Ports []networkingv1beta1.NamedPort `json:"ports,omitempty" yaml:"ports,omitempty"`
+	Ports []networkingv1beta1.NamedPort `json:"ports,omitempty"`
 }
 
 func GroupMemberPodTransform(pod networkingv1beta1.GroupMemberPod) GroupMemberPod {
