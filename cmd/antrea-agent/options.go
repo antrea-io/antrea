@@ -77,7 +77,7 @@ func (o *Options) complete(args []string) error {
 // validate validates all the required options. It must be called after complete.
 func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
-		return fmt.Errorf("an empty argument list is not supported")
+		return fmt.Errorf("no positional arguments are supported")
 	}
 	// Validate service CIDR configuration
 	_, _, err := net.ParseCIDR(o.config.ServiceCIDR)

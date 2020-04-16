@@ -58,7 +58,7 @@ func (o *Options) complete(args []string) error {
 // validate validates all the required options.
 func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
-		return errors.New("No arguments are supported")
+		return errors.New("no positional arguments are supported")
 	}
 	return nil
 }
