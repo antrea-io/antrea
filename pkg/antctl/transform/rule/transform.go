@@ -21,25 +21,25 @@ import (
 )
 
 type service struct {
-	Protocol string `json:"protocol,omitempty" yaml:"protocol,omitempty"`
-	Port     string `json:"port,omitempty" yaml:"port,omitempty"`
+	Protocol string `json:"protocol,omitempty"`
+	Port     string `json:"port,omitempty"`
 }
 
 type ipBlock struct {
 	CIDR   string   `json:"cidr" yaml:"cidr"`
-	Except []string `json:"except,omitempty" yaml:"except,omitempty"`
+	Except []string `json:"except,omitempty"`
 }
 
 type peer struct {
-	AddressGroups []string  `json:"addressGroups,omitempty" yaml:"addressGroups,omitempty"`
+	AddressGroups []string  `json:"addressGroups,omitempty"`
 	IPBlocks      []ipBlock `json:"ipBlocks,omitempty" json:"ipBlocks,omitempty"`
 }
 
 type Response struct {
-	Direction string    `json:"direction,omitempty" yaml:"direction,omitempty"`
-	From      peer      `json:"from,omitempty" yaml:"from,omitempty"`
-	To        peer      `json:"to,omitempty" yaml:"to,omitempty"`
-	Services  []service `json:"services,omitempty" yaml:"services,omitempty"`
+	Direction string    `json:"direction,omitempty"`
+	From      peer      `json:"from,omitempty"`
+	To        peer      `json:"to,omitempty"`
+	Services  []service `json:"services,omitempty"`
 }
 
 func serviceTransform(services ...networkingv1beta1.Service) []service {

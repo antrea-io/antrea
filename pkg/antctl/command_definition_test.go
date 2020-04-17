@@ -42,7 +42,7 @@ import (
 )
 
 type Foobar struct {
-	Foo string
+	Foo string `json:"foo"`
 }
 
 func TestCommandList_tableOutputForGetCommands(t *testing.T) {
@@ -129,7 +129,7 @@ kube-system/antrea-agent-0 node-worker Healthy 192.168.1.0/24,192.168.1.1/24 1  
 		{
 			name:            "StructureData-NonTableOutput-Single",
 			rawResponseData: Foobar{Foo: "foo"},
-			expected: `Foo            
+			expected: `foo            
 foo            
 `,
 		},
@@ -139,7 +139,7 @@ foo
 				{Foo: "foo1"},
 				{Foo: "foo2"},
 			},
-			expected: `Foo            
+			expected: `foo            
 foo1           
 foo2           
 `,
@@ -310,21 +310,21 @@ func TestFormat(t *testing.T) {
 			},
 			rawResponseData: &Foobar{Foo: "foo"},
 			responseStruct:  reflect.TypeOf(struct{ Bar string }{}),
-			expected:        "bar: foo\n",
+			expected:        "Bar: foo\n",
 			formatter:       yamlFormatter,
 		},
 		{
 			name:            "StructureData-NoTransform-List-Table",
 			rawResponseData: []Foobar{{Foo: "foo"}, {Foo: "bar"}},
 			responseStruct:  reflect.TypeOf(Foobar{}),
-			expected:        "Foo            \nfoo            \nbar            \n",
+			expected:        "foo            \nfoo            \nbar            \n",
 			formatter:       tableFormatter,
 		},
 		{
 			name:            "StructureData-NoTransform-List-Table-Struct",
 			rawResponseData: []struct{ Foo Foobar }{{Foo: Foobar{"foo"}}, {Foo: Foobar{"bar"}}},
 			responseStruct:  reflect.TypeOf(struct{ Foo Foobar }{}),
-			expected:        "Foo            \n{\"Foo\":\"foo\"}  \n{\"Foo\":\"bar\"}  \n",
+			expected:        "Foo            \n{\"foo\":\"foo\"}  \n{\"foo\":\"bar\"}  \n",
 			formatter:       tableFormatter,
 		},
 	} {
