@@ -26,7 +26,7 @@ import (
 
 // Response is the response struct of ovsflows command.
 type Response struct {
-	Flow string `json:"flow,omitempty" yaml:"flow,omitempty"`
+	Flow string `json:"flow,omitempty"`
 }
 
 func getAllFlows(aq querier.AgentQuerier) ([]Response, error) {
