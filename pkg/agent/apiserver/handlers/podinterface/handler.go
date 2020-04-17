@@ -25,14 +25,14 @@ import (
 
 // Response describes the response struct of pod-interface command.
 type Response struct {
-	PodName       string `json:"name,omitempty" yaml:"name,omitempty" antctl:"name,Name of the Pod"`
-	PodNamespace  string `json:"podNamespace,omitempty" yaml:"podNamespace,omitempty"`
-	InterfaceName string `json:"interfaceName,omitempty" yaml:"interfaceName,omitempty"`
-	IP            string `json:"ip,omitempty" yaml:"ip,omitempty"`
-	MAC           string `json:"mac,omitempty" yaml:"mac,omitempty"`
-	PortUUID      string `json:"portUUID,omitempty" yaml:"portUUID,omitempty"`
-	OFPort        int32  `json:"ofPort,omitempty" yaml:"ofPort,omitempty"`
-	ContainerID   string `json:"containerID,omitempty" yaml:"containerID,omitempty"`
+	PodName       string `json:"name,omitempty" antctl:"name,Name of the Pod"`
+	PodNamespace  string `json:"podNamespace,omitempty"`
+	InterfaceName string `json:"interfaceName,omitempty"`
+	IP            string `json:"ip,omitempty"`
+	MAC           string `json:"mac,omitempty"`
+	PortUUID      string `json:"portUUID,omitempty"`
+	OFPort        int32  `json:"ofPort,omitempty"`
+	ContainerID   string `json:"containerID,omitempty"`
 }
 
 func generateResponse(i *interfacestore.InterfaceConfig) Response {

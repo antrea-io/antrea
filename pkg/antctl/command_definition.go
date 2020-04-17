@@ -334,8 +334,21 @@ func (cd *commandDefinition) jsonOutput(obj interface{}, writer io.Writer) error
 }
 
 func (cd *commandDefinition) yamlOutput(obj interface{}, writer io.Writer) error {
-	err := yaml.NewEncoder(writer).Encode(obj)
-	if err != nil {
+	var jsonObj interface{}
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(obj); err != nil {
+		return fmt.Errorf("error when outputing in yaml format: %w", err)
+	}
+	// Comment copied from: sigs.k8s.io/yaml
+	// We are using yaml.Unmarshal here (instead of json.Unmarshal) because the
+	// Go JSON library doesn't try to pick the right number type (int, float,
+	// etc.) when unmarshalling to interface{}, it just picks float64
+	// universally. go-yaml does go through the effort of picking the right
+	// number type, so we can preserve number type throughout this process.
+	if err := yaml.Unmarshal(buf.Bytes(), &jsonObj); err != nil {
+		return fmt.Errorf("error when outputing in yaml format: %w", err)
+	}
+	if err := yaml.NewEncoder(writer).Encode(jsonObj); err != nil {
 		return fmt.Errorf("error when outputing in yaml format: %w", err)
 	}
 	return nil
