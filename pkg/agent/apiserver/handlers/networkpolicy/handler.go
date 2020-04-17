@@ -29,7 +29,7 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 		name := r.URL.Query().Get("name")
 		ns := r.URL.Query().Get("namespace")
 		if len(name) > 0 && len(ns) == 0 {
-			w.WriteHeader(http.StatusBadRequest)
+			http.Error(w, "an empty namespace may not be set when a resource name is provided", http.StatusBadRequest)
 			return
 		}
 

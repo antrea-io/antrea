@@ -63,7 +63,7 @@ func TestGenerate(t *testing.T) {
 			expected: `BadRequest: Please check the args for foo`,
 		},
 	} {
-		generated := generate(tc.cd, tc.args, tc.code)
+		generated := generate(tc.cd, tc.args, tc.code, "")
 		assert.Equal(t, tc.expected, generated.Error())
 	}
 }
