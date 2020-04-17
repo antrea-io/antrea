@@ -27,9 +27,9 @@ import (
 )
 
 type Response struct {
-	AgentVersion      string `json:"agentVersion,omitempty" yaml:"agentVersion,omitempty"`
-	ControllerVersion string `json:"controllerVersion,omitempty" yaml:"controllerVersion,omitempty"`
-	AntctlVersion     string `json:"antctlVersion,omitempty" yaml:"antctlVersion,omitempty"`
+	AgentVersion      string `json:"agentVersion,omitempty"`
+	ControllerVersion string `json:"controllerVersion,omitempty"`
+	AntctlVersion     string `json:"antctlVersion,omitempty"`
 }
 
 // AgentVersion is the AddonTransform for the version command. This function
