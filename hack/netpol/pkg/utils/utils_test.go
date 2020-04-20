@@ -11,8 +11,8 @@ func TestNetworkPolicyBuilder(t *testing.T) {
 	builder1 = builder1.SetName("x", "allow-client-a-via-ingress-pod-selector").SetPodSelector(map[string]string{"pod": "a"})
 	builder1.SetTypeIngress()
 	// Test UDP since its not a default.
-	builder1.AddIngress(v1.ProtocolUDP, &p80, nil, nil, map[string]string{"pod": "b"}, nil, nil, nil)
-	builder1.AddEgress(v1.ProtocolUDP, &p80, nil, nil, map[string]string{"pod": "b"}, nil, nil, nil)
+	builder1.AddIngress(v1.ProtocolUDP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, nil, nil, nil)
+	builder1.AddEgress(v1.ProtocolUDP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, nil, nil, nil)
 	policy1 := builder1.Get()
 
 	if policy1.Name != "allow-client-a-via-ingress-pod-selector" {
