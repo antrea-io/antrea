@@ -425,9 +425,8 @@ func (c *conjMatchFlowContextChange) updateContextStatus() {
 // NetworkPolicyController will make sure only one goroutine operates on a policyRuleConjunction.
 // 1) Conjunction action flows use policyRuleConjunction ID as match condition. policyRuleConjunction ID is the single
 // 	  match condition for conjunction action flows to allow packets. If the NetworkPolicy rule has also configured excepts
-// 	  in From or To, extra Openflow entries are installed to drop packets using the addresses in the excepts and
-// 	  policyRuleConjunction ID as the match conditions, and these flows have a higher priority than the one only matching
-// 	  policyRuleConjunction ID.
+// 	  in From or To, Openflow entries are installed only for diff IPBlocks between From/To and Excepts. These are added as
+//	  conjunctive match flows as described below.
 // 2) Conjunctive match flows adds conjunctive actions in Openflow entry, and they are grouped by clauses. The match
 // 	  condition in one clause is one of these three types: from address(for fromClause), or to address(for toClause), or
 // 	  service ports(for serviceClause) configured in the NetworkPolicy rule. Each conjunctive match flow entry is
@@ -682,11 +681,12 @@ func (c *policyRuleConjunction) getAddressClause(addrType types.AddressType) *cl
 // NetworkPolicy rule. Each ingress/egress policy rule installs Openflow entries on two tables, one for ruleTable and
 // the other for dropTable. If a packet does not pass the ruleTable, it will be dropped by the dropTable.
 // NetworkPolicyController will make sure only one goroutine operates on a PolicyRule and addresses in the rule.
-// For a normal NetworkPolicy rule, these Openflow entries are installed: 1) 1 conjunction action flow, and 0 or multiple
-// conjunction except flows, the number of conjunction excepts flows is decided by the addresses in rule.ExceptFrom and
-// rule.ExceptTo is configured; 2) multiple conjunctive match flows, the flow number depends on addresses in rule.From
-// and rule.To, and service ports in rule.Service; and 3) multiple default drop flows, the number is dependent on
-// on the addresses in rule.From for an egress rule, and addresses in rule.To for an ingress rule.
+// For a normal NetworkPolicy rule, these Openflow entries are installed: 1) 1 conjunction action flow; 2) multiple
+// conjunctive match flows, the flow number depends on addresses in rule.From and rule.To, or if
+// rule.FromExcepts/rule.ToExcepts are present, flow number is equal to diff of addresses between rule.From and
+// rule.FromExcepts, and diff addresses between rule.To and rule.ToExcepts, and in addition number includes service ports
+// in rule.Service; and 3) multiple default drop flows, the number is dependent on the addresses in rule.From for
+// an egress rule, and addresses in rule.To for an ingress rule.
 // For ALLOW-ALL rule, the Openflow entries installed on the switch are similar to a normal rule. The differences include,
 // 1) rule.Service is nil; and 2) rule.To has only one address "0.0.0.0/0" for egress rule, and rule.From is "0.0.0.0/0"
 // for ingress rule.
@@ -721,18 +721,6 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 		// Install action flows.
 		var actionFlows = []binding.Flow{
 			c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext()),
-		}
-		if rule.ExceptFrom != nil {
-			for _, addr := range rule.ExceptFrom {
-				flow := c.conjunctionExceptionFlow(ruleID, ruleTable.GetID(), dropTable.GetID(), addr.GetMatchKey(types.SrcAddress), addr.GetValue())
-				actionFlows = append(actionFlows, flow)
-			}
-		}
-		if rule.ExceptTo != nil {
-			for _, addr := range rule.ExceptTo {
-				flow := c.conjunctionExceptionFlow(ruleID, ruleTable.GetID(), dropTable.GetID(), addr.GetMatchKey(types.DstAddress), addr.GetValue())
-				actionFlows = append(actionFlows, flow)
-			}
 		}
 		if err := c.ofEntryOperations.AddAll(actionFlows); err != nil {
 			return nil
@@ -861,7 +849,7 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 }
 
 // calculateChangesForRuleCreation returns the conjMatchFlowContextChanges of the new policyRuleConjunction. It
-// will calculate the expected conjMatchFlowContex status, and the changed Openflow entries.
+// will calculate the expected conjMatchFlowContext status, and the changed Openflow entries.
 func (c *policyRuleConjunction) calculateChangesForRuleCreation(clnt *client, rule *types.PolicyRule) []*conjMatchFlowContextChange {
 	var ctxChanges []*conjMatchFlowContextChange
 	if c.fromClause != nil {
@@ -877,7 +865,7 @@ func (c *policyRuleConjunction) calculateChangesForRuleCreation(clnt *client, ru
 }
 
 // calculateChangesForRuleDeletion returns the conjMatchFlowContextChanges of the deleted policyRuleConjunction. It
-// will calculate the expected conjMatchFlowContex status, and the changed Openflow entries.
+// will calculate the expected conjMatchFlowContext status, and the changed Openflow entries.
 func (c *policyRuleConjunction) calculateChangesForRuleDeletion() []*conjMatchFlowContextChange {
 	var ctxChanges []*conjMatchFlowContextChange
 	if c.fromClause != nil {

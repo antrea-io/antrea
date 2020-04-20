@@ -15,9 +15,8 @@
 package rule
 
 import (
-	"net"
-
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/util/ip"
 )
 
 type service struct {
@@ -53,26 +52,15 @@ func serviceTransform(services ...networkingv1beta1.Service) []service {
 	return ret
 }
 
-func ipNetTransform(ipNet networkingv1beta1.IPNet) *net.IPNet {
-	ip := net.IP(ipNet.IP)
-	var bits int
-	if ip.To4() != nil {
-		bits = net.IPv4len * 8
-	} else {
-		bits = net.IPv6len * 8
-	}
-	return &net.IPNet{IP: ip, Mask: net.CIDRMask(int(ipNet.PrefixLength), bits)}
-}
-
 func ipBlockTransform(block networkingv1beta1.IPBlock) ipBlock {
 	var ib ipBlock
 	except := []string{}
 	for i := range block.Except {
-		except = append(except, ipNetTransform(block.Except[i]).String())
+		except = append(except, ip.IPNetToNetIPNet(&block.Except[i]).String())
 	}
 	ib.Except = except
 	if len(block.CIDR.IP) >= 4 {
-		ib.CIDR = ipNetTransform(block.CIDR).String()
+		ib.CIDR = ip.IPNetToNetIPNet(&block.CIDR).String()
 	}
 	return ib
 }

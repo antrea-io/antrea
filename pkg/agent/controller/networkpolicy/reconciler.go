@@ -30,6 +30,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/util/ip"
 )
 
 var (
@@ -189,19 +190,18 @@ func (r *reconciler) add(rule *CompletedRule) error {
 	if rule.Direction == v1beta1.DirectionIn {
 		// Addresses got from source Pod IPs.
 		from1 := podsToOFAddresses(rule.FromAddresses)
-		// Addresses and ExceptAddresses got from IPBlocks.
-		from2, exceptFrom := ipBlocksToOFAddresses(rule.From.IPBlocks)
+		// Get addresses that in From IPBlock but not in Except IPBlocks.
+		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks)
 
 		podsByServicesMap, servicesMap := groupPodsByServices(rule.Services, rule.Pods)
 		for svcHash, pods := range podsByServicesMap {
 			ofPorts := r.getPodOFPorts(pods)
 			lastRealized.podOFPorts[svcHash] = ofPorts
 			ofRuleByServicesMap[svcHash] = &types.PolicyRule{
-				Direction:  v1beta1.DirectionIn,
-				From:       append(from1, from2...),
-				ExceptFrom: exceptFrom,
-				To:         ofPortsToOFAddresses(ofPorts),
-				Service:    filterUnresolvablePort(servicesMap[svcHash]),
+				Direction: v1beta1.DirectionIn,
+				From:      append(from1, from2...),
+				To:        ofPortsToOFAddresses(ofPorts),
+				Service:   filterUnresolvablePort(servicesMap[svcHash]),
 			}
 		}
 	} else {
@@ -237,9 +237,9 @@ func (r *reconciler) add(rule *CompletedRule) error {
 			ofRuleByServicesMap[svcHash] = ofRule
 		}
 		if len(rule.To.IPBlocks) > 0 {
-			to, exceptTo := ipBlocksToOFAddresses(rule.To.IPBlocks)
+			// Diff Addresses between To and Except of IPBlocks
+			to := ipBlocksToOFAddresses(rule.To.IPBlocks)
 			ofRule.To = append(ofRule.To, to...)
-			ofRule.ExceptTo = append(ofRule.ExceptTo, exceptTo...)
 		}
 	}
 
@@ -272,7 +272,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 	// only happen to Group members.
 	if newRule.Direction == v1beta1.DirectionIn {
 		from1 := podsToOFAddresses(newRule.FromAddresses)
-		from2, exceptFrom := ipBlocksToOFAddresses(newRule.From.IPBlocks)
+		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks)
 		addedFrom := podsToOFAddresses(newRule.FromAddresses.Difference(lastRealized.FromAddresses))
 		deletedFrom := podsToOFAddresses(lastRealized.FromAddresses.Difference(newRule.FromAddresses))
 
@@ -283,11 +283,10 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 			// Install a new Openflow rule if this group doesn't exist, otherwise do incremental update.
 			if !exists {
 				ofRule := &types.PolicyRule{
-					Direction:  v1beta1.DirectionIn,
-					From:       append(from1, from2...),
-					ExceptFrom: exceptFrom,
-					To:         ofPortsToOFAddresses(newOFPorts),
-					Service:    filterUnresolvablePort(servicesMap[svcHash]),
+					Direction: v1beta1.DirectionIn,
+					From:      append(from1, from2...),
+					To:        ofPortsToOFAddresses(newOFPorts),
+					Service:   filterUnresolvablePort(servicesMap[svcHash]),
 				}
 				ofID, err := r.installOFRule(ofRule, newRule.PolicyName, newRule.PolicyNamespace)
 				if err != nil {
@@ -363,8 +362,8 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule, npName, npNamespace
 	if err != nil {
 		return 0, fmt.Errorf("error allocating Openflow ID")
 	}
-	klog.V(2).Infof("Installing ofRule %d (Direction: %v, From: %d, ExceptFrom: %d, To: %d, ExceptTo: %d, Service: %d)",
-		ofID, ofRule.Direction, len(ofRule.From), len(ofRule.ExceptFrom), len(ofRule.To), len(ofRule.ExceptTo), len(ofRule.Service))
+	klog.V(2).Infof("Installing ofRule %d (Direction: %v, From: %d, To: %d, Service: %d)",
+		ofID, ofRule.Direction, len(ofRule.From), len(ofRule.To), len(ofRule.Service))
 	if err := r.ofClient.InstallPolicyRuleFlows(ofID, ofRule, npName, npNamespace); err != nil {
 		r.idAllocator.release(ofID)
 		return 0, fmt.Errorf("error installing ofRule %v: %v", ofID, err)
@@ -504,17 +503,26 @@ func podsToOFAddresses(podSet v1beta1.GroupMemberPodSet) []types.Address {
 	return addresses
 }
 
-func ipBlocksToOFAddresses(ipBlocks []v1beta1.IPBlock) ([]types.Address, []types.Address) {
+func ipBlocksToOFAddresses(ipBlocks []v1beta1.IPBlock) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
-	addresses := make([]types.Address, 0, len(ipBlocks))
-	var exceptAddresses []types.Address
+	addresses := make([]types.Address, 0)
 	for _, b := range ipBlocks {
-		addresses = append(addresses, ipNetToOFAddress(b.CIDR))
-		for _, e := range b.Except {
-			exceptAddresses = append(exceptAddresses, ipNetToOFAddress(e))
+		exceptIPNet := make([]*net.IPNet, 0, len(b.Except))
+		for _, c := range b.Except {
+			exceptIPNet = append(exceptIPNet, ip.IPNetToNetIPNet(&c))
+		}
+		diffCIDRs, err := ip.DiffFromCIDRs(ip.IPNetToNetIPNet(&b.CIDR), exceptIPNet)
+		if err != nil {
+			// Currently only IPv4 addresses are supported
+			klog.Errorf("Error when determining diffCIDRs: %v", err)
+			continue
+		}
+		for _, d := range diffCIDRs {
+			addresses = append(addresses, ipNetToOFAddress(*ip.NetIPNetToIPNet(d)))
 		}
 	}
-	return addresses, exceptAddresses
+
+	return addresses
 }
 
 func ipNetToOFAddress(in v1beta1.IPNet) *openflow.IPNetAddress {
