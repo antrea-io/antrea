@@ -246,31 +246,38 @@ data:
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     #ovsBridge: br-int
+
     # Datapath type to use for the OpenVSwitch bridge created by Antrea. Supported values are:
     # - system
     # - netdev
     # 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
     # OVS in userspace mode. Userspace mode requires the tun device driver to be available.
     #ovsDatapathType: system
+
     # Name of the interface antrea-agent will create and use for host <--> pod communication.
     # Make sure it doesn't conflict with your existing interfaces.
     #hostGateway: gw0
+
     # Encapsulation mode for communication between Pods across Nodes, supported values:
     # - vxlan (default)
     # - geneve
     # - gre
     # - stt
     #tunnelType: vxlan
+
     # Default MTU to use for the host gateway interface and the network interface of each Pod. If
     # omitted, antrea-agent will default this value to 1450 to accommodate for tunnel encapsulate
     # overhead.
     #defaultMTU: 1450
+
     # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
     # for the GRE tunnel type.
     #enableIPSecTunnel: false
+
     # CIDR Range for services in cluster. It's required to support egress network policy, should
     # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
     #serviceCIDR: 10.96.0.0/12
+
     # Determines how traffic is encapsulated. It has the following options
     # encap(default): Inter-node Pod traffic is always encapsulated and Pod to outbound traffic is masqueraded.
     # noEncap: Inter-node Pod traffic is not encapsulated, but Pod to outbound traffic is masqueraded.
@@ -279,10 +286,13 @@ data:
     # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
     #
     #trafficEncapMode: encap
+
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
     #enablePrometheusMetrics: false
+
     # Enable golang metrics exposure via Prometheus.
     #enablePrometheusGoMetrics: false
+
     # Enable process metrics exposure via Prometheus.
     #enablePrometheusProcessMetrics: false
   antrea-cni.conflist: |
