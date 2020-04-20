@@ -163,3 +163,28 @@
         enabled: true
     triggers:
     - timed: '{timed}'
+
+- job-template:
+     name: 'cloud-{name}-{test_name}-for-eks'
+     node: '{node}'
+     builders: '{builders}'
+     description: '{description}'
+     block-downstream: false
+     block-upstream: false
+     project-type: freestyle
+     properties:
+     - build-discarder:
+         artifact-days-to-keep: -1
+         artifact-num-to-keep: -1
+         days-to-keep: 7
+         num-to-keep: 30
+     - github:
+         url: https://github.com/vmware-tanzu/antrea/
+     scm:
+     - git:
+         branches:
+         - master
+         name: origin
+         url: https://github.com/vmware-tanzu/antrea
+     publishers: '{publishers}'
+     wrappers: '{wrappers}'

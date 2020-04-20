@@ -325,3 +325,54 @@
           started_status: null
           wrappers: []
           publishers: []
+      - 'cloud-{name}-{test_name}-for-eks':
+          test_name: conformance-net-policy
+          node: antrea-cloud
+          description: 'This is EKS conformance and network policy test for antrea.'
+          builders:
+          - shell: |-
+              source /home/ubuntu/.bashrc
+              ./ci/test-conformance-eks.sh --setup-only
+          triggers:
+          - timed: H H * * *
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'eks-test.log'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - trigger-parameterized-builds:
+            - project:
+              - cloud-cleanup-eks-testbed
+              property-file: 'ci_properties.txt'
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: AWS_ACCESS_KEY # Jenkins secret that stores aws access key
+                variable: AWS_ACCESS_KEY
+            - text:
+                credential-id: AWS_SECRET_KEY # Jenkins secret that stores aws secret key
+                variable: AWS_SECRET_KEY
+      - 'cloud-{name}-{test_name}-for-eks':
+          test_name: cleanup
+          description: This is for deleting EKS test clusters.
+          builders:
+            - builder-eks-cluster-cleanup
+          concurrent: false
+          disabled: false
+          node: antrea-cloud
+          parameters:
+          - string:
+              default: ''
+              description: The cluster name of the last finished build.
+              name: CLUSTERNAME
+              trim: 'false'
+          publishers:
+          - email:
+              notify-every-unstable-build: true
+              recipients: dingyang@vmware.com zhengshengz@vmware.com
+              send-to-individuals: false
+          triggers: []
+          wrappers: []
