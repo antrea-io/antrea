@@ -1,0 +1,176 @@
+apiVersion: v1
+data:
+  Run-AntreaAgent.ps1: |-
+    $ErrorActionPreference = "Stop"
+    # wins will rename the binary when executing it. So we need to copy the binary everytime before running it.
+    mkdir -force /host/k/antrea/bin
+    cp /k/antrea/bin/* /host/k/antrea/bin/
+    C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr" --envs "KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME"
+kind: ConfigMap
+metadata:
+  annotations: {}
+  labels:
+    app: antrea
+  name: antrea-agent-windows
+  namespace: kube-system
+---
+apiVersion: v1
+data:
+  antrea-agent.conf: |
+    # Name of the OpenVSwitch bridge antrea-agent will create and use.
+    # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
+    #ovsBridge: br-int
+
+    # Name of the interface antrea-agent will create and use for host <--> pod communication.
+    # Make sure it doesn't conflict with your existing interfaces.
+    #hostGateway: gw0
+
+    # Encapsulation mode for communication between Pods across Nodes, supported values:
+    # - vxlan (default)
+    # - stt
+    #tunnelType: vxlan
+
+    # Default MTU to use for the host gateway interface and the network interface of each Pod. If
+    # omitted, antrea-agent will default this value to 1450 to accommodate for tunnel encapsulate
+    # overhead.
+    #defaultMTU: 1450
+
+    # CIDR Range for services in cluster. It's required to support egress network policy, should
+    # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
+    #serviceCIDR: 10.96.0.0/12
+
+  antrea-cni.conflist: |
+    {
+        "cniVersion":"0.3.0",
+        "name": "antrea",
+        "plugins": [
+            {
+                "type": "antrea",
+                "ipam": {
+                    "type": "host-local"
+                },
+                "capabilities": {"dns": true}
+            }
+        ]
+    }
+  antrea-controller.conf: ""
+kind: ConfigMap
+metadata:
+  annotations: {}
+  labels:
+    app: antrea
+  name: antrea-config-bckh9m3ace
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: antrea
+    component: antrea-agent
+  name: antrea-agent-windows
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-agent
+  template:
+    metadata:
+      labels:
+        app: antrea
+        component: antrea-agent
+    spec:
+      containers:
+        - command:
+            - pwsh
+          args:
+            - -file
+            - /var/lib/antrea-windows/Run-AntreaAgent.ps1
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          image: antrea/antrea-windows:latest
+          imagePullPolicy: IfNotPresent
+          name: antrea-agent
+          volumeMounts:
+            - mountPath: /host
+              name: host
+            - mountPath: \\.\pipe\rancher_wins
+              name: wins
+            - mountPath: /etc/antrea
+              name: antrea-config
+            - mountPath: /var/lib/antrea-windows
+              name: antrea-agent-windows
+            - mountPath: /host/k/antrea/
+              name: host-antrea-home
+      hostNetwork: true
+      initContainers:
+        - command:
+            - pwsh
+          args:
+            - -File
+            - /k/antrea/Install-WindowsCNI.ps1
+          image: antrea/antrea-windows:latest
+          imagePullPolicy: IfNotPresent
+          name: install-cni
+          volumeMounts:
+            - mountPath: /etc/antrea
+              name: antrea-config
+              readOnly: true
+            - mountPath: /host/etc/cni/net.d
+              name: host-cni-conf
+            - mountPath: /host/opt/cni/bin
+              name: host-cni-bin
+            - mountPath: /host/k/antrea/
+              name: host-antrea-home
+            - mountPath: /host
+              name: host
+      nodeSelector:
+        kubernetes.io/os: windows
+      priorityClassName: system-node-critical
+      serviceAccountName: antrea-agent
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoSchedule
+          operator: Exists
+      volumes:
+        - configMap:
+            name: antrea-config-bckh9m3ace
+          name: antrea-config
+        - configMap:
+            defaultMode: 420
+            name: antrea-agent-windows
+          name: antrea-agent-windows
+        - hostPath:
+            path: /etc/cni/net.d
+            type: DirectoryOrCreate
+          name: host-cni-conf
+        - hostPath:
+            path: /opt/cni/bin
+            type: DirectoryOrCreate
+          name: host-cni-bin
+        - hostPath:
+            path: /k/antrea
+            type: DirectoryOrCreate
+          name: host-antrea-home
+        - hostPath:
+            path: /
+          name: host
+        - name: wins
+          hostPath:
+            path: \\.\pipe\rancher_wins
+            type: null
+  updateStrategy:
+    type: RollingUpdate
