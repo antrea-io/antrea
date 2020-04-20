@@ -1,17 +1,16 @@
 package metrics
 
 import (
-	"time"
 	"reflect"
 	"testing"
-	"net"
+	"time"
 
+	mock "github.com/golang/mock/gomock"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	mock "github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 )
 
 const (
@@ -28,7 +27,7 @@ func TestNewOVSStatManager(t *testing.T) {
 	assert.NotEqual(t, result.OVSTableDesc, nil, "OVSTableDesc should be initialized")
 }
 
-func TestOVSStatManager_OVSGetStatistics(t *testing.T) {
+func TestOVSStatManagerGetOVSStatistics(t *testing.T) {
 	flowTable := []openflow.TableStatus{
 		{0, 5, time.Now()},
 		{40, 2, time.Now()},
@@ -39,12 +38,12 @@ func TestOVSStatManager_OVSGetStatistics(t *testing.T) {
 	ofClient.EXPECT().GetFlowTableStatus().Return(flowTable)
 	ovsStatManager := NewOVSStatManager(ovsBridge, ofClient)
 	expected := map[string]float64{"0": 5, "40": 2}
-	if !reflect.DeepEqual(expected, ovsStatManager.OVSGetStatistics()) {
-		t.Error("OVSGetStatistics not working correctly")
+	if !reflect.DeepEqual(expected, ovsStatManager.GetOVSStatistics()) {
+		t.Error("GetOVSStatistics did not work correctly")
 	}
 }
 
-func TestOVSStatManager_Collect(t *testing.T) {
+func TestOVSStatManagerCollect(t *testing.T) {
 	flowTable := []openflow.TableStatus{
 		{0, 5, time.Now()},
 	}
@@ -62,10 +61,10 @@ func TestOVSStatManager_Collect(t *testing.T) {
 		prometheus.Labels{"bridge": ovsBridge},
 	)
 	expected := prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, 5, "0")
-	assert.Equal(t, <-out, expected, "Collect should push the correct value")
+	assert.Equal(t, <-out, expected, "Collect did not push the correct value")
 }
 
-func TestOVSStatManager_Describe(t *testing.T) {
+func TestOVSStatManagerDescribe(t *testing.T) {
 	controller := mock.NewController(t)
 	defer controller.Finish()
 	ofClient := openflowtest.NewMockClient(controller)
@@ -78,33 +77,27 @@ func TestOVSStatManager_Describe(t *testing.T) {
 	)
 	out := make(chan *prometheus.Desc)
 	go ovsStatManager.Describe(out)
-	assert.Equal(t, <-out, expected, "Describe should assign the right value")
+	assert.Equal(t, <-out, expected, "Describe did not assign the right value")
 }
 
-func TestStartListener(t *testing.T) {
+func TestInitializePrometheusMetrics(t *testing.T) {
 	controller := mock.NewController(t)
 	defer controller.Finish()
 	ofClient := openflowtest.NewMockClient(controller)
-	go StartListener(
-		"0.0.0.0",
-		9999,
+	go InitializePrometheusMetrics(
 		false,
 		false,
 		ovsBridge,
 		interfacestore.NewInterfaceStore(),
 		ofClient)
 	time.Sleep(time.Second)
-	conn, error := net.Dial("tcp", "0.0.0.0:9999")
-	if error != nil {
-		t.Error("Prometheus server does not start correctly")
-	}
-	defer conn.Close()
+
 	// test prometheus register by duplicating register: if error -> item has already been registered
 	gauge := prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "antrea_agent_local_pod_count",
 			Help: "Testing",
-		}, func() float64 { return 0 });
+		}, func() float64 { return 0 })
 	gaugeHost := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "antrea_agent_host",
@@ -113,22 +106,22 @@ func TestStartListener(t *testing.T) {
 	ovsStats := NewOVSStatManager("br-int", ofClient)
 	registerPodCountError := prometheus.Register(gauge)
 	if registerPodCountError == nil {
-		t.Error("antrea_agent_local_pod_count has not been registered")
+		t.Error("antrea_agent_local_pod_count was not registered")
 	}
 	registerGaugeHostError := prometheus.Register(gaugeHost)
 	if registerGaugeHostError == nil {
-		t.Error("antrea_agent_host has not been registered")
+		t.Error("antrea_agent_host was not registered")
 	}
 	registerOVSStatsError := prometheus.Register(ovsStats)
 	if registerOVSStatsError == nil {
-		t.Error("ovs_stats has not been registered")
+		t.Error("ovs_stats was not registered")
 	}
 	registerGoError := prometheus.Register(prometheus.NewGoCollector())
 	if registerGoError != nil {
-		t.Error("Failed to unregister go metrics")
+		t.Error("Go metrics was not unregistered when enablePrometheusGoMetrics is false")
 	}
 	registerProcessError := prometheus.Register(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	if registerProcessError != nil {
-		t.Error("Failed to unregister process metrics")
+		t.Error("Process metrics was not unregistered when enablePrometheusProcessMetrics is false")
 	}
 }

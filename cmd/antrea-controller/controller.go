@@ -26,8 +26,6 @@ import (
 	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
@@ -107,13 +105,6 @@ func run(o *Options) error {
 		go initializePrometheusMetrics(
 			o.config.EnablePrometheusGoMetrics,
 			o.config.EnablePrometheusProcessMetrics)
-	}
-
-	if o.config.EnablePrometheusMetrics {
-		go createPrometheusMetricsListener(o.config.PrometheusHost,
-			strconv.Itoa(o.config.PrometheusPort),
-			o.config.EnablePrometheusGoMetrics,
-			o.config.EnablePrometheusGoMetrics)
 	}
 
 	<-stopCh

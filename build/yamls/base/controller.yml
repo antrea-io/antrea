@@ -13,10 +13,6 @@ spec:
       port: 443
       protocol: TCP
       targetPort: 443
-    - name: monitoring
-      port: 9093
-      protocol: TCP
-      targetPort: 9093
   selector:
     component: antrea-controller
 ---
@@ -101,9 +97,6 @@ spec:
           ports:
             - name: https
               containerPort: 443
-              protocol: TCP
-            - name: monitoring
-              containerPort: 9093
               protocol: TCP
           readinessProbe:
             httpGet:

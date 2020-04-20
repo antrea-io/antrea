@@ -161,7 +161,4 @@ func (o *Options) setDefaults() {
 			o.config.DefaultMTU -= ipsecESPOverhead
 		}
 	}
-	if o.config.PrometheusPort == 0 {
-		o.config.PrometheusPort = defaultPrometheusPort
-	}
 }
