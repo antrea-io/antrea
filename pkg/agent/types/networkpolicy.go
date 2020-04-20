@@ -41,10 +41,8 @@ type Address interface {
 
 // PolicyRule groups configurations to set up conjunctive match for egress/ingress policy rules.
 type PolicyRule struct {
-	Direction  v1beta1.Direction
-	From       []Address
-	ExceptFrom []Address
-	To         []Address
-	ExceptTo   []Address
-	Service    []v1beta1.Service
+	Direction v1beta1.Direction
+	From      []Address
+	To        []Address
+	Service   []v1beta1.Service
 }
