@@ -100,6 +100,17 @@ func (c *Controller) GetAppliedToGroupNum() int {
 	return c.ruleCache.GetAppliedToGroupNum()
 }
 
+func (c *Controller) GetNetworkPolicies() []v1beta1.NetworkPolicy {
+	return c.ruleCache.GetNetworkPolicies()
+}
+func (c *Controller) GetAddressGroups() []v1beta1.AddressGroup {
+	return c.ruleCache.GetAddressGroups()
+}
+
+func (c *Controller) GetAppliedToGroups() []v1beta1.AppliedToGroup {
+	return c.ruleCache.GetAppliedToGroups()
+}
+
 func (c *Controller) GetControllerConnectionStatus() bool {
 	// When the watchers are connected, controller connection status is true. Otherwise, it is false.
 	return c.addressGroupWatcherConnected && c.appliedToGroupWatcherConnected && c.networkPolicyWatcherConnected
@@ -194,18 +205,19 @@ func (c *Controller) nodeScopedListOptions() metav1.ListOptions {
 
 func (c *Controller) watchAppliedToGroups() {
 	// TODO: Cleanup AppliedToGroups that are removed during reconnection.
-	klog.Info("Start watching AppliedToGroups")
+	klog.Info("Starting watch for AppliedToGroups")
 	options := c.nodeScopedListOptions()
 	w, err := c.antreaClient.NetworkingV1beta1().AppliedToGroups().Watch(options)
 	if err != nil {
-		klog.Errorf("Failed to watch AppliedToGroups: %v", err)
+		klog.Errorf("Failed to start watch for AppliedToGroups: %v", err)
 		return
 	}
 
+	klog.Info("Started watch for AppliedToGroups")
 	c.appliedToGroupWatcherConnected = true
 	eventCount := 0
 	defer func() {
-		klog.Infof("Stop watching AppliedToGroups, total %v items received", eventCount)
+		klog.Infof("Stopped watch for AppliedToGroups, total items received: %d", eventCount)
 		c.appliedToGroupWatcherConnected = false
 		w.Stop()
 	}()
@@ -249,18 +261,19 @@ func (c *Controller) watchAppliedToGroups() {
 
 func (c *Controller) watchAddressGroups() {
 	// TODO: Cleanup AddressGroups that are removed during reconnection.
-	klog.Info("Start watching AddressGroups")
+	klog.Info("Starting watch for AddressGroups")
 	options := c.nodeScopedListOptions()
 	w, err := c.antreaClient.NetworkingV1beta1().AddressGroups().Watch(options)
 	if err != nil {
-		klog.Errorf("Failed to watch AddressGroups: %v", err)
+		klog.Errorf("Failed to start watch for AddressGroups: %v", err)
 		return
 	}
 
+	klog.Info("Started watch for AddressGroups")
 	c.addressGroupWatcherConnected = true
 	eventCount := 0
 	defer func() {
-		klog.Infof("Stop watching AddressGroups, total %v items received", eventCount)
+		klog.Infof("Stopped watch for AddressGroups, total items received: %d", eventCount)
 		c.addressGroupWatcherConnected = false
 		w.Stop()
 	}()
@@ -304,18 +317,19 @@ func (c *Controller) watchAddressGroups() {
 
 func (c *Controller) watchNetworkPolicies() {
 	// TODO: Cleanup NetworkPolicies that are removed during reconnection.
-	klog.Info("Start watching NetworkPolicies")
+	klog.Info("Starting watch for NetworkPolicies")
 	options := c.nodeScopedListOptions()
 	w, err := c.antreaClient.NetworkingV1beta1().NetworkPolicies("").Watch(options)
 	if err != nil {
-		klog.Errorf("Failed to watch NetworkPolicies: %v", err)
+		klog.Errorf("Failed to start watch for NetworkPolicies: %v", err)
 		return
 	}
 
+	klog.Info("Started watch for NetworkPolicies")
 	c.networkPolicyWatcherConnected = true
 	eventCount := 0
 	defer func() {
-		klog.Infof("Stop watching NetworkPolicies, total %v items received", eventCount)
+		klog.Infof("Stopped watch for NetworkPolicies, total items received: %d", eventCount)
 		c.networkPolicyWatcherConnected = false
 		w.Stop()
 	}()
@@ -334,6 +348,7 @@ func (c *Controller) watchNetworkPolicies() {
 					return
 				}
 				klog.V(2).Infof("Added NetworkPolicy (%#v)", event.Object)
+				klog.Infof("NetworkPolicy %s/%s applied to Pods on this Node", policy.Namespace, policy.Name)
 				c.ruleCache.AddNetworkPolicy(policy)
 			case watch.Modified:
 				policy, ok := event.Object.(*v1beta1.NetworkPolicy)
@@ -350,6 +365,7 @@ func (c *Controller) watchNetworkPolicies() {
 					return
 				}
 				klog.V(2).Infof("Removed NetworkPolicy (%#v)", event.Object)
+				klog.Infof("NetworkPolicy %s/%s no longer applied to Pods on this Node", policy.Namespace, policy.Name)
 				c.ruleCache.DeleteNetworkPolicy(policy)
 			}
 			eventCount++

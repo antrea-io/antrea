@@ -14,8 +14,9 @@ spec:
   template:
     metadata:
       annotations:
-        prometheus.io/port: "9092"
+        prometheus.io/port: "10443"
         prometheus.io/scrape: "true"
+        prometheus.io/scheme: "https"
       labels:
         component: antrea-agent
     spec:
@@ -29,10 +30,7 @@ spec:
         - effect: NoSchedule
           operator: Exists
       nodeSelector:
-        # Note: beta.kubernetes.io/os is targeted for removal in K8s v1.18, if running Antrea with 1.18
-        # or higher uncomment the following line and remove beta.kubernetes.io/os.
-        #kubernetes.io/os: linux
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
       serviceAccountName: antrea-agent
       initContainers:
         - name: install-cni
@@ -45,8 +43,8 @@ spec:
                 - SYS_MODULE
           volumeMounts:
           - name: antrea-config
-            mountPath: /etc/antrea/antrea-cni.conf
-            subPath: antrea-cni.conf
+            mountPath: /etc/antrea/antrea-cni.conflist
+            subPath: antrea-cni.conflist
             readOnly: true
           - name: host-cni-conf
             mountPath: /host/etc/cni/net.d
@@ -65,7 +63,8 @@ spec:
         - name: antrea-agent
           image: antrea
           command: ["antrea-agent"]
-          args: ["--config", "/etc/antrea/antrea-agent.conf"]
+          # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).
+          args: ["--config", "/etc/antrea/antrea-agent.conf", "--logtostderr=false", "--log_dir", "/var/log/antrea", "--alsologtostderr"]
           env:
             # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME
@@ -90,12 +89,18 @@ spec:
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 5
-          ports:
-            - containerPort: 9092
-              hostPort: 9092
-              protocol: TCP
+          readinessProbe:
+            httpGet:
+              host: 127.0.0.1
+              path: /healthz
+              port: 10443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
           securityContext:
-            # antrea-agent needs to manipulate /proc/sys/net/ipv4/conf/XXX/send_redirects"
+            # antrea-agent needs to manipulate "/proc/sys/net/ipv4/conf/XXX/send_redirects".
             privileged: true
           volumeMounts:
           - name: antrea-config
@@ -116,6 +121,8 @@ spec:
           # antrea-agent can open the network namespace path when setting up Pod
           # networking. Different container runtimes may use /proc or /var/run/netns when invoking
           # the CNI commands. Docker uses /proc and containerd uses /var/run/netns.
+          - name: host-var-log-antrea
+            mountPath: /var/log/antrea
           - name: host-proc
             mountPath: /host/proc
             readOnly: true

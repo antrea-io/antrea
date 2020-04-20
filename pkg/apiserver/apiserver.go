@@ -24,11 +24,15 @@ import (
 	"k8s.io/client-go/informers"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/install"
+	networkinginstall "github.com/vmware-tanzu/antrea/pkg/apis/networking/install"
+	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
+	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	"github.com/vmware-tanzu/antrea/pkg/monitor"
 )
 
 var (
@@ -40,22 +44,24 @@ var (
 )
 
 func init() {
-	install.Install(Scheme)
+	networkinginstall.Install(Scheme)
+	systeminstall.Install(Scheme)
 	// We need to add the options to empty v1, see sample-apiserver/pkg/apiserver/apiserver.go.
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
 }
 
 // ExtraConfig holds custom apiserver config.
 type ExtraConfig struct {
-	AddressGroupStore   storage.Interface
-	AppliedToGroupStore storage.Interface
-	NetworkPolicyStore  storage.Interface
+	addressGroupStore   storage.Interface
+	appliedToGroupStore storage.Interface
+	networkPolicyStore  storage.Interface
+	controllerQuerier   monitor.ControllerQuerier
 }
 
 // Config defines the config for Antrea apiserver.
 type Config struct {
-	GenericConfig *genericapiserver.Config
-	ExtraConfig   ExtraConfig
+	genericConfig *genericapiserver.Config
+	extraConfig   ExtraConfig
 }
 
 // APIServer contains state for a Kubernetes cluster apiserver.
@@ -64,16 +70,31 @@ type APIServer struct {
 }
 
 type completedConfig struct {
-	GenericConfig genericapiserver.CompletedConfig
-	ExtraConfig   *ExtraConfig
+	genericConfig genericapiserver.CompletedConfig
+	extraConfig   *ExtraConfig
+}
+
+func NewConfig(
+	genericConfig *genericapiserver.Config,
+	addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface,
+	controllerQuerier monitor.ControllerQuerier) *Config {
+	return &Config{
+		genericConfig: genericConfig,
+		extraConfig: ExtraConfig{
+			addressGroupStore:   addressGroupStore,
+			appliedToGroupStore: appliedToGroupStore,
+			networkPolicyStore:  networkPolicyStore,
+			controllerQuerier:   controllerQuerier,
+		},
+	}
 }
 
 func (c *Config) Complete(informers informers.SharedInformerFactory) completedConfig {
-	return completedConfig{c.GenericConfig.Complete(informers), &c.ExtraConfig}
+	return completedConfig{c.genericConfig.Complete(informers), &c.extraConfig}
 }
 
 func (c completedConfig) New() (*APIServer, error) {
-	genericServer, err := c.GenericConfig.New("antrea-apiserver", genericapiserver.NewEmptyDelegate())
+	genericServer, err := c.genericConfig.New("antrea-apiserver", genericapiserver.NewEmptyDelegate())
 	if err != nil {
 		return nil, err
 	}
@@ -82,16 +103,23 @@ func (c completedConfig) New() (*APIServer, error) {
 		GenericAPIServer: genericServer,
 	}
 
-	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(networking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	networkingGroup := genericapiserver.NewDefaultAPIGroupInfo(networking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	networkingStorage := map[string]rest.Storage{}
+	networkingStorage["addressgroups"] = addressgroup.NewREST(c.extraConfig.addressGroupStore)
+	networkingStorage["appliedtogroups"] = appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
+	networkingStorage["networkpolicies"] = networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
+	networkingGroup.VersionedResourcesStorageMap["v1beta1"] = networkingStorage
 
-	v1beta1Storage := map[string]rest.Storage{}
-	v1beta1Storage["addressgroups"] = addressgroup.NewREST(c.ExtraConfig.AddressGroupStore)
-	v1beta1Storage["appliedtogroups"] = appliedtogroup.NewREST(c.ExtraConfig.AppliedToGroupStore)
-	v1beta1Storage["networkpolicies"] = networkpolicy.NewREST(c.ExtraConfig.NetworkPolicyStore)
-	apiGroupInfo.VersionedResourcesStorageMap["v1beta1"] = v1beta1Storage
+	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	systemStorage := map[string]rest.Storage{}
+	systemStorage["controllerinfos"] = controllerinfo.NewREST(c.extraConfig.controllerQuerier)
+	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
 
-	if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
-		return nil, err
+	groups := []*genericapiserver.APIGroupInfo{&networkingGroup, &systemGroup}
+	for _, apiGroupInfo := range groups {
+		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
+			return nil, err
+		}
 	}
 
 	return s, nil

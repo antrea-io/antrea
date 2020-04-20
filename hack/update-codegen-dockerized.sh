@@ -44,8 +44,9 @@ $GOPATH/bin/conversion-gen  \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/openapi-gen  \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1,${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
   --input-dirs "k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/util/intstr" \
+  --input-dirs "k8s.io/api/core/v1" \
   --output-package "${ANTREA_PKG}/pkg/apiserver/openapi" \
   -O zz_generated.openapi \
   --go-header-file hack/boilerplate/license_header.go.txt
@@ -53,12 +54,18 @@ $GOPATH/bin/openapi-gen  \
 # Generate mocks for testing with mockgen.
 MOCKGEN_TARGETS=(
   "pkg/agent/cniserver/ipam IPAMDriver"
+  "pkg/agent/interfacestore InterfaceStore"
   "pkg/agent/openflow Client,FlowOperations"
+  "pkg/agent/route Interface"
   "pkg/ovs/openflow Bridge,Table,Flow,Action,FlowBuilder"
   "pkg/ovs/ovsconfig OVSBridgeClient"
   "pkg/monitor AgentQuerier,ControllerQuerier"
 )
 
+# Command mockgen does not automatically replace variable YEAR with current year
+# like others do, e.g. client-gen.
+current_year=$(date +"%Y")
+sed -i "s/YEAR/${current_year}/g" hack/boilerplate/license_header.raw.txt
 for target in "${MOCKGEN_TARGETS[@]}"; do
   read -r package interfaces <<<"${target}"
   package_name=$(basename "${package}")
@@ -68,6 +75,7 @@ for target in "${MOCKGEN_TARGETS[@]}"; do
     -package=testing \
     "${ANTREA_PKG}/${package}" "${interfaces}"
 done
+git checkout HEAD -- hack/boilerplate/license_header.raw.txt
 
 # Download vendored modules to the vendor directory so it's easier to
 # specify the search path of required protobuf files.
@@ -79,3 +87,12 @@ $GOPATH/bin/go-to-protobuf \
 # Clean up vendor directory.
 rm -rf vendor
 
+set +x
+
+echo "=== Start resetting changes introduced by YEAR ==="
+git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | while read file; do
+  if [[ "$(git diff ${file})" == *"-// Copyright "*" Antrea Authors"* ]]; then
+    git checkout HEAD -- "${file}"
+    echo "=== ${file} is reset ==="
+  fi
+done

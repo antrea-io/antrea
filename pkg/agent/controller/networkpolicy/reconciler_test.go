@@ -309,6 +309,26 @@ func TestReconcilerReconcile(t *testing.T) {
 			false,
 		},
 		{
+			"ingress-rule-deny-all",
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				FromAddresses: nil,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction:  v1beta1.DirectionIn,
+					From:       []types.Address{},
+					ExceptFrom: nil,
+					To:         ofPortsToOFAddresses(sets.NewInt32(1)),
+					ExceptTo:   nil,
+					Service:    nil,
+				},
+			},
+			false,
+		},
+		{
 			"egress-rule",
 			&CompletedRule{
 				rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
@@ -355,6 +375,29 @@ func TestReconcilerReconcile(t *testing.T) {
 						openflow.NewIPNetAddress(*ipNet4),
 					},
 					Service: nil,
+				},
+			},
+			false,
+		},
+		{
+			"egress-rule-deny-all",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta1.DirectionOut,
+				},
+				FromAddresses: nil,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction:  v1beta1.DirectionOut,
+					From:       ipsToOFAddresses(sets.NewString("2.2.2.2")),
+					ExceptFrom: nil,
+					To:         []types.Address{},
+					ExceptTo:   nil,
+					Service:    nil,
 				},
 			},
 			false,
@@ -470,6 +513,24 @@ func TestReconcilerUpdate(t *testing.T) {
 			ipsToOFAddresses(sets.NewString("1.1.1.2")),
 			ipsToOFAddresses(sets.NewString("2.2.2.2")),
 			ipsToOFAddresses(sets.NewString("1.1.1.1")),
+			false,
+		},
+		{
+			"updating-egress-rule-deny-all",
+			&CompletedRule{
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				ToAddresses: nil,
+				Pods:        appliedToGroup1,
+			},
+			&CompletedRule{
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				ToAddresses: nil,
+				Pods:        appliedToGroup2,
+			},
+			ipsToOFAddresses(sets.NewString("3.3.3.3")),
+			[]types.Address{},
+			ipsToOFAddresses(sets.NewString("2.2.2.2")),
+			[]types.Address{},
 			false,
 		},
 	}

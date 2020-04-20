@@ -93,13 +93,13 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 	if controllerCRD == nil {
 		controllerCRD, err = monitor.createControllerCRD(crdName)
 		if err != nil {
-			klog.Errorf("Failed to create controller monitoring CRD %v : %v", controllerCRD, err)
+			klog.Errorf("Failed to create controller monitoring CRD %+v: %v", controllerCRD, err)
 			return
 		}
 	} else {
 		controllerCRD, err = monitor.updateControllerCRD(controllerCRD)
 		if err != nil {
-			klog.Errorf("Failed to update controller monitoring CRD %v : %v", controllerCRD, err)
+			klog.Errorf("Failed to update controller monitoring CRD %+v: %v", controllerCRD, err)
 			return
 		}
 	}
@@ -109,14 +109,14 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 		klog.Error("Unable to sync node for Controller Monitor")
 		return
 	}
+	klog.Info("Caches are synced for Controller Monitor")
 	monitor.deleteStaleAgentCRDs()
 
 	// Update controller monitoring CRD variables every 60 seconds util stopCh is closed.
 	wait.PollUntil(60*time.Second, func() (done bool, err error) {
 		controllerCRD, err = monitor.partialUpdateControllerCRD(controllerCRD)
 		if err != nil {
-			klog.Errorf("Failed to partially update controller monitoring CRD %v : %v", controllerCRD, err)
-			return true, err
+			klog.Errorf("Failed to partially update controller monitoring CRD %+v: %v", controllerCRD, err)
 		}
 		return false, nil
 	}, stopCh)
@@ -133,13 +133,13 @@ func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 	if agentCRD == nil {
 		agentCRD, err = monitor.createAgentCRD()
 		if err != nil {
-			klog.Errorf("Failed to create agent monitoring CRD %v : %v", agentCRD, err)
+			klog.Errorf("Failed to create agent monitoring CRD %+v: %v", agentCRD, err)
 			return
 		}
 	} else {
 		agentCRD, err = monitor.updateAgentCRD(agentCRD)
 		if err != nil {
-			klog.Errorf("Failed to update agent monitoring CRD %v : %v", agentCRD, err)
+			klog.Errorf("Failed to update agent monitoring CRD %+v: %v", agentCRD, err)
 			return
 		}
 	}
@@ -148,8 +148,7 @@ func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 	wait.PollUntil(60*time.Second, func() (done bool, err error) {
 		agentCRD, err = monitor.partialUpdateAgentCRD(agentCRD)
 		if err != nil {
-			klog.Errorf("Failed to partially update agent monitoring CRD %v : %v", agentCRD, err)
-			return true, err
+			klog.Errorf("Failed to partially update agent monitoring CRD %+v: %v", agentCRD, err)
 		}
 		return false, nil
 	}, stopCh)
@@ -166,11 +165,8 @@ func (monitor *controllerMonitor) getControllerCRD(crdName string) *v1beta1.Antr
 	return controllerCRD
 }
 
-func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
-	controllerCRD := &v1beta1.AntreaControllerInfo{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: crdName,
-		},
+func (monitor *controllerMonitor) GetControllerInfo() *v1beta1.AntreaControllerInfo {
+	return &v1beta1.AntreaControllerInfo{
 		Version:                     version.GetFullVersion(),
 		PodRef:                      monitor.GetSelfPod(),
 		NodeRef:                     monitor.GetSelfNode(),
@@ -185,7 +181,12 @@ func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.
 			},
 		},
 	}
-	klog.V(2).Infof("Creating controller monitoring CRD %v", controllerCRD)
+}
+
+func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
+	controllerCRD := monitor.GetControllerInfo()
+	controllerCRD.ObjectMeta.Name = crdName
+	klog.V(2).Infof("Creating controller monitoring CRD %+v", controllerCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Create(controllerCRD)
 }
 
@@ -204,7 +205,7 @@ func (monitor *controllerMonitor) updateControllerCRD(controllerCRD *v1beta1.Ant
 			LastHeartbeatTime: metav1.Now(),
 		},
 	}
-	klog.V(2).Infof("Updating controller monitoring CRD %v", controllerCRD)
+	klog.V(2).Infof("Updating controller monitoring CRD %+v", controllerCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Update(controllerCRD)
 }
 
@@ -219,14 +220,14 @@ func (monitor *controllerMonitor) partialUpdateControllerCRD(controllerCRD *v1be
 			LastHeartbeatTime: metav1.Now(),
 		},
 	}
-	klog.V(2).Infof("Partially updating controller monitoring CRD %v", controllerCRD)
+	klog.V(2).Infof("Partially updating controller monitoring CRD %+v", controllerCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Update(controllerCRD)
 }
 
 func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
 	crds, err := monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().List(metav1.ListOptions{})
 	if err != nil {
-		klog.Errorf("Failed to list agent monitoring CRDs : %v", err)
+		klog.Errorf("Failed to list agent monitoring CRDs: %v", err)
 		return
 	}
 	// Delete stale agent monitoring CRD based on existing nodes.
@@ -248,7 +249,7 @@ func (monitor *controllerMonitor) deleteAgentCRD(name string) {
 	klog.Infof("Deleting agent monitoring CRD %s", name)
 	err := monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Delete(name, &metav1.DeleteOptions{})
 	if err != nil {
-		klog.Errorf("Failed to delete agent monitoring CRD %s : %v", name, err)
+		klog.Errorf("Failed to delete agent monitoring CRD %s: %v", name, err)
 	}
 }
 
@@ -284,7 +285,7 @@ func (monitor *agentMonitor) GetAgentInfo() *v1beta1.AntreaAgentInfo {
 
 func (monitor *agentMonitor) createAgentCRD() (*v1beta1.AntreaAgentInfo, error) {
 	agentCRD := monitor.GetAgentInfo()
-	klog.V(2).Infof("Creating agent monitoring CRD %v", agentCRD)
+	klog.V(2).Infof("Creating agent monitoring CRD %+v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Create(agentCRD)
 }
 
@@ -306,7 +307,7 @@ func (monitor *agentMonitor) updateAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (
 	agentCRD.NetworkPolicyControllerInfo = monitor.GetNetworkPolicyControllerInfo()
 	agentCRD.LocalPodNum = monitor.GetLocalPodNum()
 	agentCRD.AgentConditions = monitor.GetAgentConditions(ovsConnected)
-	klog.V(2).Infof("Updating agent monitoring CRD %v", agentCRD)
+	klog.V(2).Infof("Updating agent monitoring CRD %+v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
 }
 
@@ -324,6 +325,6 @@ func (monitor *agentMonitor) partialUpdateAgentCRD(agentCRD *v1beta1.AntreaAgent
 		agentCRD.OVSInfo.Version = ovsVersion
 	}
 	agentCRD.AgentConditions = monitor.GetAgentConditions(ovsConnected)
-	klog.V(2).Infof("Partially updating agent monitoring CRD %v", agentCRD)
+	klog.V(2).Infof("Partially updating agent monitoring CRD %+v", agentCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
 }

@@ -9,7 +9,60 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 
 ## Unreleased
 
-## 0.4.0 - 2019-02-20
+## 0.5.1 - 2020-04-01
+
+### Changed
+
+- Remove performance bottleneck during NetworkPolicy computation in the Controller: add namespace-based indexers to quickly determine which internal objects need to be updated when a Pod is added / deleted.
+
+### Fixed
+
+- Fix implementation of deny-all egress policy (no egress traffic should be allowed for any Pod to which the policy is applied).
+- Fix antctl segfault when kubeconfig cannot be resolved and print error instead.
+
+## 0.5.0 - 2020-03-25
+
+### Added
+
+- Add "networkPolicyOnly" as a new "encapsulation mode": in this mode Antrea enforces NetworkPolicies with OVS, but is not in charge of forwarding.
+- Support for running Antrea in [EKS] and [GKE] clusters; refer to the documentation.
+- New antctl "get" commands:
+   * in "agent mode": addressgroup, agentinfo, appliedtogroup, networkpolicy, podinterface
+   * in "controller mode": addressgroup, appliedtogroup, controllerinfo, networkpolicy
+- Support for a user-friendly "table" output format for antctl "get" commands.
+- Add health checks to Antrea components by leveraging the apiserver /healthz endpoint (both the Antrea Agent and Controller are running an apiserver).
+- Add documentation for connecting to the Antrea Agent or Controller apiserver, in order to check the resources created by Antrea.
+- Ship antctl binaries as part of each release for different OS / CPU combinations: antctl-linux-x86_64, antctl-linux-arm, antctl-linux-arm64, antctl-windows-x86_64.exe, antctl-darwin-x86_64.
+- Add documentation for antctl installation and usage.
+
+### Changed
+
+- Refactor antctl: most notable change is that the Antrea Agent now runs its own apiserver which the antctl CLI can connect to.
+- Improve NetworkPolicy logging; in particular an Agent now logs (by default) a message when it receives a new NetworkPolicy that needs to be implemented locally.
+- Upgrade OVS to version 2.13.0, which comes with userspace datapath improvements useful when running Antrea in Kind.
+- Use ipset in iptables to match Pod-to-external traffic, which improves performance.
+- Replace "beta.kubernetes.io/os" annotation (no longer supported in K8s 1.18) with "kubernetes.io/os".
+- Enable running antctl from within the Antrea Controller Pod (by binding the antctl ClusterRrole to the antrea-controller ServiceAccount).
+
+### Fixed
+
+- Cancel ongoing OpenFlow bundle if switch disconnects, to prevent deadlock when replaying flows after a restart of the antrea-ovs container.
+- Keep trying to reconnect to OVS switch indefinitely after a disconnection, instead of giving up after 5 seconds.
+- Backport post-2.13 patch to OVS to avoid tunnel port deletion when the antrea-ovs container exits gracefully.
+- Reduce memory usage of Antrea Controller when an Agent establishes a connection.
+- Clean-up the appropriate iptables rules when a Node leaves the cluster.
+
+## 0.4.1 - 2020-02-27
+
+### Fixed
+
+- Fix issues with IPsec support, which was broken in 0.4.0:
+   * reduce MTU when IPsec is enabled to accommodate for IPsec overhead
+   * add required flows to accept traffic received from IPsec tunnels
+- Check and update (if needed) the type of the default tunnel port (tun0) after Agent starts.
+- Fix race condition when the same OF port is reused for a new Pod.
+
+## 0.4.0 - 2020-02-20
 
 ### Added
 
@@ -33,7 +86,7 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 - Install loopback plugin on Nodes if missing, from the Agent's initContainer.
 - Remove unnecessary periodical resync in Antrea K8s controllers to avoid overhead at scale.
 
-## 0.3.0 - 2019-01-23
+## 0.3.0 - 2020-01-23
 
 ### Added
 
@@ -114,3 +167,5 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [Kubernetes Network Policies]: https://kubernetes.io/docs/concepts/services-networking/network-policies/
 [libOpenflow]: https://github.com/contiv/libOpenflow
 [Octant]: https://github.com/vmware-tanzu/octant
+[EKS]: https://aws.amazon.com/eks/
+[GKE]: https://cloud.google.com/kubernetes-engine

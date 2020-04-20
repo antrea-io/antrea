@@ -1,12 +1,13 @@
-SHELL			:= /bin/bash
+SHELL              := /bin/bash
 # go options
-GO              ?= go
-LDFLAGS         :=
-GOFLAGS         :=
-BINDIR          := $(CURDIR)/bin
-GO_FILES        := $(shell find . -type d -name '.cache' -prune -o -type f -name '*.go' -print)
-GOPATH          ?= $$($(GO) env GOPATH)
-DOCKER_CACHE    := $(CURDIR)/.cache
+GO                 ?= go
+LDFLAGS            :=
+GOFLAGS            :=
+BINDIR             ?= $(CURDIR)/bin
+GO_FILES           := $(shell find . -type d -name '.cache' -prune -o -type f -name '*.go' -print)
+GOPATH             ?= $$($(GO) env GOPATH)
+DOCKER_CACHE       := $(CURDIR)/.cache
+ANTCTL_BINARY_NAME ?= antctl
 
 .PHONY: all
 all: build
@@ -19,15 +20,16 @@ UNAME_S := $(shell uname -s)
 USERID  := $(shell id -u)
 GRPID   := $(shell id -g)
 
-.PHONY: bin test-unit test-integration
+.PHONY: bin
+bin:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
 
+.PHONY: test-unit test-integration
 ifeq ($(UNAME_S),Linux)
-bin: .linux-bin
 test-unit: .linux-test-unit
 test-integration: .linux-test-integration
 else
-bin:
-	$(error Cannot use target 'bin' on a non-Linux OS, but you can build Antrea with 'docker-bin')
 test-unit:
 	$(error Cannot use target 'test-unit' on a non-Linux OS, but you can run unit tests with 'docker-test-unit')
 test-integration:
@@ -38,7 +40,7 @@ endif
 build: build-ubuntu
 
 .PHONY: test
-test: test-fmt
+test: golangci
 test: build
 test: docker-test-unit
 test: docker-test-integration
@@ -90,11 +92,6 @@ docker-tidy: $(DOCKER_CACHE)
 	@chmod -R 0755 $<
 	@chmod 0644 go.sum
 
-.PHONY: .linux-bin
-.linux-bin:
-	GOBIN=$(BINDIR) $(GO) install $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
-
-# TODO: strip binary when building releases
 ANTCTL_BINARIES := antctl-darwin antctl-linux antctl-windows
 $(ANTCTL_BINARIES): antctl-%:
 	@GOOS=$* $(GO) build -o $(BINDIR)/$@ $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
@@ -106,6 +103,10 @@ $(ANTCTL_BINARIES): antctl-%:
 
 .PHONY: antctl
 antctl: $(ANTCTL_BINARIES)
+
+.PHONY: antctl-release
+antctl-release:
+	@$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
 
 .PHONY: .linux-test-unit
 .linux-test-unit:
@@ -125,11 +126,6 @@ tidy:
 	@echo "SOME TESTS WILL FAIL IF NOT RUN AS ROOT!"
 	$(GO) test github.com/vmware-tanzu/antrea/test/integration/...
 
-test-fmt:
-	@echo
-	@echo "===> Checking format of Go files <==="
-	@test -z "$$(gofmt -s -l -d $(GO_FILES) | tee /dev/stderr)"
-
 test-tidy:
 	@echo
 	@echo "===> Checking go.mod tidiness <==="
@@ -148,6 +144,10 @@ fmt:
 .PHONY: golangci
 golangci: .golangci-bin
 	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml
+
+.PHONY: golangci-fix
+golangci-fix: .golangci-bin
+	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml --fix
 
 .PHONY: lint
 lint: .golangci-bin
@@ -169,25 +169,32 @@ codegen:
 .PHONY: ubuntu
 ubuntu:
 	@echo "===> Building antrea/antrea-ubuntu Docker image <==="
-	docker build -t antrea/antrea-ubuntu -f build/images/Dockerfile.ubuntu .
-	docker tag antrea/antrea-ubuntu antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION)
+	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu .
+	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 
 # Build bins in a golang container, and build the antrea-ubuntu Docker image.
 .PHONY: build-ubuntu
 build-ubuntu:
 	@echo "===> Building Antrea bins and antrea/antrea-ubuntu Docker image <==="
-	docker build -t antrea/antrea-ubuntu -f build/images/Dockerfile.build.ubuntu .
-	docker tag antrea/antrea-ubuntu antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION)
+	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu .
+	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 
 .PHONY: manifest
 manifest:
 	@echo "===> Generating dev manifest for Antrea <==="
 	$(CURDIR)/hack/generate-manifest.sh --mode dev > build/yamls/antrea.yml
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --ipsec > build/yamls/antrea-ipsec.yml
+	$(CURDIR)/hack/generate-manifest.sh --mode dev --encap-mode networkPolicyOnly > build/yamls/antrea-eks.yml
+	$(CURDIR)/hack/generate-manifest.sh --mode dev --cloud GKE --encap-mode noEncap > build/yamls/antrea-gke.yml
 	$(CURDIR)/hack/generate-manifest-octant.sh --mode dev > build/yamls/antrea-octant.yml
 
 .PHONY: octant-antrea-ubuntu
 octant-antrea-ubuntu:
 	@echo "===> Building antrea/octant-antrea-ubuntu Docker image <==="
-	docker build -t antrea/octant-antrea-ubuntu -f build/images/Dockerfile.octant.ubuntu .
-	docker tag antrea/octant-antrea-ubuntu antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION)
+	docker build -t antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.octant.ubuntu .
+	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/octant-antrea-ubuntu
+
+.PHONY: verify-spelling
+verify-spelling:
+	@echo "===> Verifying spellings <==="
+	$(CURDIR)/hack/verify-spelling.sh

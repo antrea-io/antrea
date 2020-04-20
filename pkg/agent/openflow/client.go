@@ -35,7 +35,7 @@ type Client interface {
 	// be called to ensure that the set of OVS flows is correct. All flows programmed in the
 	// switch which match the current round number will be deleted before any new flow is
 	// installed.
-	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error)
+	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType, gatewayOFPort uint32) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
@@ -43,18 +43,25 @@ type Client interface {
 	// InstallClusterServiceCIDRFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once with
 	// the Cluster Service CIDR as a parameter.
-	InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOFPort uint32) error
+	InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
 
 	// InstallDefaultTunnelFlows sets up the classification flow for the default (flow based) tunnel.
 	InstallDefaultTunnelFlows(tunnelOFPort uint32) error
 
 	// InstallNodeFlows should be invoked when a connection to a remote Node is going to be set
-	// up. The hostname is used to identify the added flows.
+	// up. The hostname is used to identify the added flows. When IPSec tunnel is enabled,
+	// ipsecTunOFPort must be set to the OFPort number of the IPSec tunnel port to the remote Node;
+	// otherwise ipsecTunOFPort must be set to 0.
 	// InstallNodeFlows has all-or-nothing semantics(call succeeds if all the flows are installed
 	// successfully, otherwise no flows will be installed). Calls to InstallNodeFlows are idempotent.
 	// Concurrent calls to InstallNodeFlows and / or UninstallNodeFlows are supported as long as they
 	// are all for different hostnames.
-	InstallNodeFlows(hostname string, localGatewayMAC net.HardwareAddr, peerGatewayIP net.IP, peerPodCIDR net.IPNet, tunnelPeerAddr net.IP, tunOFPort uint32) error
+	InstallNodeFlows(
+		hostname string,
+		localGatewayMAC net.HardwareAddr,
+		peerPodCIDR net.IPNet,
+		peerGatewayIP, tunnelPeerIP net.IP,
+		tunOFPort, ipsecTunOFPort uint32) error
 
 	// UninstallNodeFlows removes the connection to the remote Node specified with the
 	// hostname. UninstallNodeFlows will do nothing if no connection to the host was established.
@@ -167,23 +174,27 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 
 func (c *client) InstallNodeFlows(hostname string,
 	localGatewayMAC net.HardwareAddr,
-	peerGatewayIP net.IP,
 	peerPodCIDR net.IPNet,
-	tunnelPeerAddr net.IP,
-	tunOFPort uint32,
-) error {
+	peerGatewayIP, tunnelPeerIP net.IP,
+	tunOFPort, ipsecTunOFPort uint32) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
 	flows := []binding.Flow{
 		c.arpResponderFlow(peerGatewayIP, cookie.Node),
 	}
-
-	if c.encapMode.NeedsEncapToPeer(tunnelPeerAddr, c.nodeConfig.NodeIPAddr) {
-		flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerAddr, tunOFPort, cookie.Node))
+	if c.encapMode.NeedsEncapToPeer(tunnelPeerIP, c.nodeConfig.NodeIPAddr) {
+		flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerIP, tunOFPort, cookie.Node))
 	} else {
-		flows = append(flows, c.l3FwdFlowToRemoteViaGw(localGatewayMAC, peerPodCIDR, cookie.Node))
+		flows = append(flows, c.l3FwdFlowToRemoteViaGW(localGatewayMAC, peerPodCIDR, cookie.Node))
 	}
+	if ipsecTunOFPort != 0 {
+		// When IPSec tunnel is enabled, packets received from the remote Node are
+		// input from the Node's IPSec tunnel port, not the default tunnel port. So,
+		// add a separate tunnelClassifierFlow for the IPSec tunnel port.
+		flows = append(flows, c.tunnelClassifierFlow(ipsecTunOFPort, cookie.Node))
+	}
+
 	return c.addFlows(c.nodeFlowCache, hostname, flows)
 }
 
@@ -207,6 +218,12 @@ func (c *client) InstallPodFlows(containerID string, podInterfaceIP net.IP, podI
 	if c.encapMode.SupportsEncap() {
 		flows = append(flows, c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod))
 	}
+	if c.encapMode.IsNetworkPolicyOnly() {
+		// In policy-only mode, traffic to local Pod is routed based on destination IP.
+		flows = append(flows,
+			c.l3ToPodFlow(podInterfaceIP, podInterfaceMAC, cookie.Pod),
+		)
+	}
 	return c.addFlows(c.podFlowCache, containerID, flows)
 }
 
@@ -216,8 +233,8 @@ func (c *client) UninstallPodFlows(containerID string) error {
 	return c.deleteFlows(c.podFlowCache, containerID)
 }
 
-func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOFPort uint32) error {
-	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort, cookie.Service)
+func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
+	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayMAC, gatewayOFPort, cookie.Service)
 	if err := c.flowOperations.Add(flow); err != nil {
 		return err
 	}
@@ -234,9 +251,14 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 		c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default),
 		c.localProbeFlow(gatewayAddr, cookie.Default),
 	}
+
 	// In NoEncap , no traffic from tunnel port
 	if c.encapMode.SupportsEncap() {
 		flows = append(flows, c.l3ToGatewayFlow(gatewayAddr, gatewayMAC, cookie.Default))
+	}
+
+	if c.encapMode.SupportsNoEncap() {
+		flows = append(flows, c.reEntranceBypassCTFlow(gatewayOFPort, gatewayOFPort, cookie.Default))
 	}
 
 	if err := c.flowOperations.AddAll(flows); err != nil {
@@ -273,16 +295,23 @@ func (c *client) initialize() error {
 	}
 
 	if c.encapMode.SupportsNoEncap() {
-		if err := c.flowOperations.Add(c.l2ForwardOutputInPortFlow(config.HostGatewayOFPort, cookie.Default)); err != nil {
+		if err := c.flowOperations.Add(c.l2ForwardOutputReentInPortFlow(c.gatewayPort, cookie.Default)); err != nil {
 			return fmt.Errorf("failed to install L2 forward same in-port and out-port flow: %v", err)
+		}
+	}
+	if c.encapMode.IsNetworkPolicyOnly() {
+		if err := c.setupPolicyOnlyFlows(); err != nil {
+			return fmt.Errorf("failed to setup policy only flows: %w", err)
 		}
 	}
 	return nil
 }
 
-func (c *client) Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error) {
-	c.nodeConfig = config
+func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeConfig, encapMode config.TrafficEncapModeType, gatewayOFPort uint32) (<-chan struct{}, error) {
+	c.nodeConfig = nodeConfig
 	c.encapMode = encapMode
+	c.gatewayPort = gatewayOFPort
+
 	// Initiate connections to target OFswitch, and create tables on the switch.
 	connCh := make(chan struct{})
 	if err := c.bridge.Connect(maxRetryForOFSwitch, connCh); err != nil {
@@ -360,4 +389,19 @@ func (c *client) DeleteStaleFlows() error {
 		return nil
 	}
 	return c.deleteFlowsByRoundNum(*c.roundInfo.PrevRoundNum)
+}
+
+func (c *client) setupPolicyOnlyFlows() error {
+	flows := []binding.Flow{
+		// Bypasses remaining l3forwarding flows if the MAC is set via ctRewriteDstMACFlow.
+		c.l3BypassMACRewriteFlow(c.nodeConfig.GatewayConfig.MAC, cookie.Default),
+		// Rewrites MAC to gw port if the packet received is unmatched by local Pod flows.
+		c.l3ToGWFlow(c.nodeConfig.GatewayConfig.MAC, cookie.Default),
+		// Replies any ARP request with the same global virtual MAC.
+		c.arpResponderStaticFlow(cookie.Default),
+	}
+	if err := c.flowOperations.AddAll(flows); err != nil {
+		return fmt.Errorf("failed to setup policy-only flows: %w", err)
+	}
+	return nil
 }

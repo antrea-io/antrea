@@ -18,7 +18,9 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 
 	"k8s.io/api/core/v1"
@@ -46,11 +48,13 @@ type AgentQuerier interface {
 	GetOVSFlowTable() map[string]int32
 	GetLocalPodNum() int32
 	GetAgentInfo() *v1beta1.AntreaAgentInfo
+	GetInterfaceStore() interfacestore.InterfaceStore
 }
 
 type ControllerQuerier interface {
 	Querier
 	GetService() v1.ObjectReference
+	GetControllerInfo() *v1beta1.AntreaControllerInfo
 }
 
 type NetworkPolicyInfoQuerier interface {
@@ -62,6 +66,9 @@ type NetworkPolicyInfoQuerier interface {
 type AgentNetworkPolicyInfoQuerier interface {
 	NetworkPolicyInfoQuerier
 	GetControllerConnectionStatus() bool
+	GetNetworkPolicies() []networkingv1beta1.NetworkPolicy
+	GetAddressGroups() []networkingv1beta1.AddressGroup
+	GetAppliedToGroups() []networkingv1beta1.AppliedToGroup
 }
 
 type ControllerNetworkPolicyInfoQuerier interface {
@@ -112,6 +119,10 @@ func (monitor *agentMonitor) GetNetworkPolicyControllerInfo() v1beta1.NetworkPol
 // GetLocalPodNum gets the number of Pod which the Agent is in charge of.
 func (monitor *agentMonitor) GetLocalPodNum() int32 {
 	return int32(monitor.interfaceStore.GetContainerInterfaceNum())
+}
+
+func (monitor *agentMonitor) GetInterfaceStore() interfacestore.InterfaceStore {
+	return monitor.interfaceStore
 }
 
 func (monitor *agentMonitor) GetAgentConditions(ovsConnected bool) []v1beta1.AgentCondition {

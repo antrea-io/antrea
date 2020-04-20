@@ -19,9 +19,10 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
@@ -30,7 +31,6 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/antctl"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/openapi"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
@@ -74,10 +74,14 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore)
 
+	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, networkPolicyController)
+
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		addressGroupStore,
 		appliedToGroupStore,
-		networkPolicyStore)
+		networkPolicyStore,
+		controllerMonitor,
+		o.config.EnablePrometheusMetrics)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
@@ -86,30 +90,24 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating API server: %v", err)
 	}
 
-	antctlServer, err := antctl.NewLocalServer()
-	if err != nil {
-		return fmt.Errorf("error when creating local antctl server: %w", err)
-	}
-
-	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
+	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
 
 	informerFactory.Start(stopCh)
 
-	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, networkPolicyController)
 	go controllerMonitor.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
 
-	preparedAPIServer := apiServer.GenericAPIServer.PrepareRun()
-	// Set up the antctl handlers on the controller API server for remote access.
-	antctl.CommandList.InstallToAPIServer(preparedAPIServer.GenericAPIServer, controllerMonitor)
-	go preparedAPIServer.Run(stopCh)
+	go apiServer.GenericAPIServer.PrepareRun().Run(stopCh)
 
-	// Set up the antctl server for in-pod access.
-	antctlServer.Start(nil, controllerMonitor, stopCh)
+	if o.config.EnablePrometheusMetrics {
+		go initializePrometheusMetrics(
+			o.config.EnablePrometheusGoMetrics,
+			o.config.EnablePrometheusProcessMetrics)
+	}
 
 	if o.config.EnablePrometheusMetrics {
 		go createPrometheusMetricsListener(o.config.PrometheusHost,
@@ -123,13 +121,16 @@ func run(o *Options) error {
 	return nil
 }
 
-func createPrometheusMetricsListener(prometheusHost string,
-	prometheusPort string,
+// Initialize Prometheus metrics collection.
+func initializePrometheusMetrics(
 	enablePrometheusGoMetrics bool,
 	enablePrometheusProcessMetrics bool) {
 	hostname, err := os.Hostname()
+	if err != nil {
+		klog.Errorf("Failed to retrieve agent node name, %v", err)
+	}
 
-	klog.Infof("Initializing prometheus host %s port %s", prometheusHost, prometheusPort)
+	klog.Info("Initializing prometheus")
 	gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "antrea_controller_host",
 		Help: "Antrea controller hostname (as a label), typically used in grouping/aggregating stats; " +
@@ -149,17 +150,14 @@ func createPrometheusMetricsListener(prometheusHost string,
 		klog.Info("Process metrics are disabled")
 		prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	}
-
-	err = http.ListenAndServe(net.JoinHostPort(prometheusHost, prometheusPort), nil)
-	if err != nil {
-		klog.Errorf("Failed to initialize Prometheus metrics server %v", err)
-	}
 }
 
 func createAPIServerConfig(kubeconfig string,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
-	networkPolicyStore storage.Interface) (*apiserver.Config, error) {
+	networkPolicyStore storage.Interface,
+	controllerQuerier monitor.ControllerQuerier,
+	enablePrometheusMetrics bool) (*apiserver.Config, error) {
 	// TODO:
 	// 1. Support user-provided certificate.
 	// 2. Support configurable https port.
@@ -167,6 +165,9 @@ func createAPIServerConfig(kubeconfig string,
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions()
 
+	if enablePrometheusMetrics {
+		authorization.WithAlwaysAllowPaths("/metrics")
+	}
 	// Set the PairName but leave certificate directory blank to generate in-memory by default
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = "antrea-apiserver"
@@ -191,11 +192,15 @@ func createAPIServerConfig(kubeconfig string,
 		return nil, err
 	}
 
-	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, genericopenapi.NewDefinitionNamer(apiserver.Scheme))
+	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(
+		openapi.GetOpenAPIDefinitions,
+		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
 	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
 
-	return &apiserver.Config{
-		GenericConfig: serverConfig,
-		ExtraConfig:   apiserver.ExtraConfig{addressGroupStore, appliedToGroupStore, networkPolicyStore},
-	}, nil
+	return apiserver.NewConfig(
+		serverConfig,
+		addressGroupStore,
+		appliedToGroupStore,
+		networkPolicyStore,
+		controllerQuerier), nil
 }

@@ -167,7 +167,7 @@ func collectClusterInfo() error {
 			clusterInfo.masterNodeName = node.Name
 		} else {
 			nodeIdx = workerIdx
-			workerIdx += 1
+			workerIdx++
 		}
 
 		clusterInfo.nodes[nodeIdx] = ClusterNode{
@@ -202,49 +202,55 @@ func collectClusterInfo() error {
 	return nil
 }
 
-func (data *TestData) createTestNamespace() error {
+// createNamespace creates the provided namespace.
+func (data *TestData) createNamespace(namespace string) error {
 	ns := v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: testNamespace,
+			Name: namespace,
 		},
 	}
 	if ns, err := data.clientset.CoreV1().Namespaces().Create(&ns); err != nil {
 		// Ignore error if the namespace already exists
 		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("error when creating '%s' Namespace: %v", testNamespace, err)
+			return fmt.Errorf("error when creating '%s' Namespace: %v", namespace, err)
 		}
 		// When namespace already exists, check phase
 		if ns.Status.Phase == v1.NamespaceTerminating {
-			return fmt.Errorf("error when creating '%s' Namespace: namespace exists but is in 'Terminating' phase", testNamespace)
+			return fmt.Errorf("error when creating '%s' Namespace: namespace exists but is in 'Terminating' phase", namespace)
 		}
 	}
 	return nil
 }
 
-// deleteTestNamespace deletes test namespace and waits for deletion to actually complete.
-func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
+// createTestNamespace creates the namespace used for tests.
+func (data *TestData) createTestNamespace() error {
+	return data.createNamespace(testNamespace)
+}
+
+// deleteNamespace deletes the provided namespace and waits for deletion to actually complete.
+func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) error {
 	var gracePeriodSeconds int64 = 0
 	var propagationPolicy metav1.DeletionPropagation = metav1.DeletePropagationForeground
 	deleteOptions := &metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-	if err := data.clientset.CoreV1().Namespaces().Delete(testNamespace, deleteOptions); err != nil {
+	if err := data.clientset.CoreV1().Namespaces().Delete(namespace, deleteOptions); err != nil {
 		if errors.IsNotFound(err) {
 			// namespace does not exist, we return right away
 			return nil
 		}
-		return fmt.Errorf("error when deleting '%s' Namespace: %v", testNamespace, err)
+		return fmt.Errorf("error when deleting '%s' Namespace: %v", namespace, err)
 	}
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if ns, err := data.clientset.CoreV1().Namespaces().Get(testNamespace, metav1.GetOptions{}); err != nil {
+		if ns, err := data.clientset.CoreV1().Namespaces().Get(namespace, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				// Success
 				return true, nil
 			}
-			return false, fmt.Errorf("error when getting Namespace '%s' after delete: %v", testNamespace, err)
+			return false, fmt.Errorf("error when getting Namespace '%s' after delete: %v", namespace, err)
 		} else if ns.Status.Phase != v1.NamespaceTerminating {
-			return false, fmt.Errorf("deleted Namespace '%s' should be in 'Terminating' phase", testNamespace)
+			return false, fmt.Errorf("deleted Namespace '%s' should be in 'Terminating' phase", namespace)
 		}
 
 		// Keep trying
@@ -253,46 +259,53 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 	return err
 }
 
+// deleteTestNamespace deletes test namespace and waits for deletion to actually complete.
+func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
+	return data.deleteNamespace(testNamespace, timeout)
+}
+
 // deployAntreaCommon deploys Antrea using kubectl on the master node.
-func (data *TestData) deployAntreaCommon(ipsec bool) error {
+func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
-
-	var yamlFile string
-	if ipsec {
-		yamlFile = antreaIPSecYML
-	} else {
-		yamlFile = antreaYML
-	}
-
-	rc, stdout, _, err := provider.RunCommandOnNode(masterNodeName(), "kubectl apply -f "+yamlFile)
+	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deploying Antrea; is %s available on the master Node?", yamlFile)
 	}
-	fmt.Println(stdout)
+	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when waiting for Antrea rollout to complete")
+	}
 	return nil
 }
 
 // deployAntrea deploys Antrea with the standard manifest.
 func (data *TestData) deployAntrea() error {
-	return data.deployAntreaCommon(false)
+	return data.deployAntreaCommon(antreaYML, "")
 }
 
 // deployAntreaIPSec deploys Antrea with IPSec tunnel enabled.
 func (data *TestData) deployAntreaIPSec() error {
-	return data.deployAntreaCommon(true)
+	return data.deployAntreaCommon(antreaIPSecYML, "")
 }
 
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
 		daemonSet, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(antreaDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
 		}
 
-		if daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled {
+		// Make sure that all Daemon Pods are available.
+		// We use clusterInfo.numNodes instead of DesiredNumberScheduled because
+		// DesiredNumberScheduled may not be updated right away. If it is still set to 0 the
+		// first time we get the DaemonSet's Status, we would return immediately instead of
+		// waiting.
+		desiredNumber := int32(clusterInfo.numNodes)
+		if daemonSet.Status.NumberAvailable == desiredNumber &&
+			daemonSet.Status.UpdatedNumberScheduled == desiredNumber {
 			// Success
 			return true, nil
 		}
@@ -308,28 +321,9 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 	return nil
 }
 
-// checkCoreDNSPods checks that all the Pods for the CoreDNS deployment are ready. If not, delete
-// all the Pods to force them to restart and waits up to timeout for the Pods to become ready.
-func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
-	if deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get("coredns", metav1.GetOptions{}); err != nil {
-		return fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
-	} else if deployment.Status.UnavailableReplicas == 0 {
-		// deployment ready, nothing to do
-		return nil
-	}
-
-	// restart CoreDNS and wait for all replicas
-	var gracePeriodSeconds int64 = 1
-	deleteOptions := &metav1.DeleteOptions{
-		GracePeriodSeconds: &gracePeriodSeconds,
-	}
-	listOptions := metav1.ListOptions{
-		LabelSelector: "k8s-app=kube-dns",
-	}
-	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
-		return fmt.Errorf("error when deleting all CoreDNS Pods: %v", err)
-	}
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+// waitForCoreDNSPods waits for the K8s apiserver to report that all the CoreDNS Pods are available.
+func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
+	err := wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
 		deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get("coredns", metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
@@ -346,6 +340,35 @@ func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
 		return err
 	}
 	return nil
+}
+
+// restartCoreDNSPods deletes all the CoreDNS Pods to force them to be re-scheduled. It then waits
+// for all the Pods to become available, by calling waitForCoreDNSPods.
+func (data *TestData) restartCoreDNSPods(timeout time.Duration) error {
+	var gracePeriodSeconds int64 = 1
+	deleteOptions := &metav1.DeleteOptions{
+		GracePeriodSeconds: &gracePeriodSeconds,
+	}
+	listOptions := metav1.ListOptions{
+		LabelSelector: "k8s-app=kube-dns",
+	}
+	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
+		return fmt.Errorf("error when deleting all CoreDNS Pods: %v", err)
+	}
+	return data.waitForCoreDNSPods(timeout)
+}
+
+// checkCoreDNSPods checks that all the Pods for the CoreDNS deployment are ready. If not, it
+// deletes all the Pods to force them to restart and waits up to timeout for the Pods to become
+// ready.
+func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
+	if deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get("coredns", metav1.GetOptions{}); err != nil {
+		return fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
+	} else if deployment.Status.UnavailableReplicas == 0 {
+		// deployment ready, nothing to do
+		return nil
+	}
+	return data.restartCoreDNSPods(timeout)
 }
 
 // createClient initializes the K8s clientset in the TestData structure.
@@ -489,12 +512,16 @@ func (data *TestData) createNginxPod(name string) error {
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
-func (data *TestData) createServerPod(name string, portName string, portNum int) error {
+func (data *TestData) createServerPod(name string, portName string, portNum int, setHostPort bool) error {
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.
 	image := "gcr.io/kubernetes-e2e-test-images/agnhost:2.8"
 	cmd := "porter"
 	env := v1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
 	port := v1.ContainerPort{Name: portName, ContainerPort: int32(portNum)}
+	if setHostPort {
+		// If hostPort is to be set, it must match the container port number.
+		port.HostPort = int32(portNum)
+	}
 	return data.createPodOnNode(name, "", image, nil, []string{cmd}, []v1.EnvVar{env}, []v1.ContainerPort{port})
 }
 

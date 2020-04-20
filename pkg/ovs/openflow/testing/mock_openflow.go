@@ -77,6 +77,20 @@ func (mr *MockBridgeMockRecorder) Connect(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockBridge)(nil).Connect), arg0, arg1)
 }
 
+// CreateGroup mocks base method
+func (m *MockBridge) CreateGroup(arg0 openflow.GroupIDType) openflow.Group {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateGroup", arg0)
+	ret0, _ := ret[0].(openflow.Group)
+	return ret0
+}
+
+// CreateGroup indicates an expected call of CreateGroup
+func (mr *MockBridgeMockRecorder) CreateGroup(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGroup", reflect.TypeOf((*MockBridge)(nil).CreateGroup), arg0)
+}
+
 // CreateTable mocks base method
 func (m *MockBridge) CreateTable(arg0, arg1 openflow.TableIDType, arg2 openflow.MissActionType) openflow.Table {
 	m.ctrl.T.Helper()
@@ -103,6 +117,20 @@ func (m *MockBridge) DeleteFlowsByCookie(arg0, arg1 uint64) error {
 func (mr *MockBridgeMockRecorder) DeleteFlowsByCookie(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFlowsByCookie", reflect.TypeOf((*MockBridge)(nil).DeleteFlowsByCookie), arg0, arg1)
+}
+
+// DeleteGroup mocks base method
+func (m *MockBridge) DeleteGroup(arg0 openflow.GroupIDType) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteGroup", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// DeleteGroup indicates an expected call of DeleteGroup
+func (mr *MockBridgeMockRecorder) DeleteGroup(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteGroup", reflect.TypeOf((*MockBridge)(nil).DeleteGroup), arg0)
 }
 
 // DeleteTable mocks base method
@@ -333,6 +361,20 @@ func (mr *MockFlowMockRecorder) Delete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockFlow)(nil).Delete))
 }
 
+// KeyString mocks base method
+func (m *MockFlow) KeyString() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "KeyString")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// KeyString indicates an expected call of KeyString
+func (mr *MockFlowMockRecorder) KeyString() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KeyString", reflect.TypeOf((*MockFlow)(nil).KeyString))
+}
+
 // MatchString mocks base method
 func (m *MockFlow) MatchString() string {
 	m.ctrl.T.Helper()
@@ -371,6 +413,20 @@ func (m *MockFlow) Reset() {
 func (mr *MockFlowMockRecorder) Reset() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockFlow)(nil).Reset))
+}
+
+// Type mocks base method
+func (m *MockFlow) Type() openflow.EntryType {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Type")
+	ret0, _ := ret[0].(openflow.EntryType)
+	return ret0
+}
+
+// Type indicates an expected call of Type
+func (mr *MockFlowMockRecorder) Type() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Type", reflect.TypeOf((*MockFlow)(nil).Type))
 }
 
 // MockAction is a mock of Action interface
@@ -450,6 +506,20 @@ func (m *MockAction) Drop() openflow.FlowBuilder {
 func (mr *MockActionMockRecorder) Drop() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Drop", reflect.TypeOf((*MockAction)(nil).Drop))
+}
+
+// Group mocks base method
+func (m *MockAction) Group(arg0 openflow.GroupIDType) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Group", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// Group indicates an expected call of Group
+func (mr *MockActionMockRecorder) Group(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Group", reflect.TypeOf((*MockAction)(nil).Group), arg0)
 }
 
 // LoadARPOperation mocks base method
@@ -1050,7 +1120,7 @@ func (mr *MockFlowBuilderMockRecorder) MatchInPort(arg0 interface{}) *gomock.Cal
 }
 
 // MatchProtocol mocks base method
-func (m *MockFlowBuilder) MatchProtocol(arg0 string) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchProtocol(arg0 openflow.Protocol) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MatchProtocol", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)

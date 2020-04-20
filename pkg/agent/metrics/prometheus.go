@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"k8s.io/klog"
-	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -34,7 +33,7 @@ type OVSStatManager struct {
 	OVSTableDesc *prometheus.Desc
 }
 
-func (c *OVSStatManager) OVSGetStatistics() (
+func (c *OVSStatManager) GetOVSStatistics() (
 	ovsFlowsByTable map[string]float64,
 ) {
 	ovsFlowsByTable = make(map[string]float64)
@@ -50,7 +49,7 @@ func (c *OVSStatManager) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *OVSStatManager) Collect(ch chan<- prometheus.Metric) {
-	ovsFlowsByTable := c.OVSGetStatistics()
+	ovsFlowsByTable := c.GetOVSStatistics()
 	for tableId, tableFlowCount := range ovsFlowsByTable {
 		ch <- prometheus.MustNewConstMetric(
 			c.OVSTableDesc,
@@ -74,9 +73,7 @@ func NewOVSStatManager(ovsBridge string, ofClient openflow.Client) *OVSStatManag
 	}
 }
 
-func StartListener(
-	prometheusHost string,
-	prometheusPort int,
+func InitializePrometheusMetrics(
 	enablePrometheusGoMetrics bool,
 	enablePrometheusProcessMetrics bool,
 	ovsBridge string,
@@ -93,7 +90,7 @@ func StartListener(
 			Help: "Number of pods on local node.",
 		},
 		func() float64 { return float64(ifaceStore.GetContainerInterfaceNum()) },
-	)); err == nil {
+	)); err != nil {
 		klog.Error("Failed to register local_pod_count with Prometheus")
 	}
 
@@ -118,10 +115,5 @@ func StartListener(
 	if !enablePrometheusProcessMetrics {
 		klog.Info("Process metrics are disabled")
 		prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	}
-
-	err = http.ListenAndServe(net.JoinHostPort(prometheusHost, strconv.Itoa(prometheusPort)), nil)
-	if err != nil {
-		klog.Errorf("Failed to initialize Prometheus metrics server %v", err)
 	}
 }

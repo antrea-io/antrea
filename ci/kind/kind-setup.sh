@@ -46,7 +46,7 @@ where:
   --antrea-cni: specifies install Antrea CNI in kind cluster, default is true.
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
   --images: specifies images loaded to kind cluster, default is $IMAGES
-  --subnets: a subnet creates a seperate docker bridge network with assigned subnet that worker nodes may connect to. Default is empty all worker
+  --subnets: a subnet creates a separate docker bridge network with assigned subnet that worker nodes may connect to. Default is empty all worker
     Node connected to docker0 bridge network
 "
 
@@ -204,6 +204,13 @@ function create {
     exit 1
   fi
 
+  # Having a simple validation check for now.
+  # TODO: Making this comprehensive check confirming with rfc1035/rfc1123
+  if [[ "$CLUSTER_NAME" =~ [^a-z0-9-] ]]; then
+     echoerr "Invalid string. Conform to rfc1035/rfc1123"
+     exit 1
+  fi
+
   set +e
   kind get clusters | grep $CLUSTER_NAME > /dev/null 2>&1
   if [[ $? -eq 0 ]]; then
@@ -237,7 +244,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        kubernetes.io/hostname: kind-control-plane
+        kubernetes.io/hostname: $CLUSTER_NAME-control-plane
 EOF
 )
   kubectl patch deployment coredns -p "$patch" -n kube-system

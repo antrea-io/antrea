@@ -35,7 +35,7 @@ type simpleInternalEvent struct {
 	ResourceVersion uint64
 }
 
-func (e *simpleInternalEvent) ToWatchEvent(selectors *storage.Selectors) *watch.Event {
+func (e *simpleInternalEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	return &watch.Event{
 		Type:   e.Type,
 		Object: e.Object,
@@ -50,7 +50,7 @@ func (e *simpleInternalEvent) GetResourceVersion() uint64 {
 // represents the case that the watcher is not interested in an object.
 type emptyInternalEvent struct{}
 
-func (e *emptyInternalEvent) ToWatchEvent(selectors *storage.Selectors) *watch.Event {
+func (e *emptyInternalEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	return nil
 }
 

@@ -1,0 +1,54 @@
+apiVersion: cluster.x-k8s.io/v1alpha2
+kind: Cluster
+metadata:
+  name: CLUSTERNAME
+  namespace: CLUSTERNAMESPACE
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+      - 100.96.0.0/11
+    serviceDomain: cluster.local
+    services:
+      cidrBlocks:
+      - 100.64.0.0/13
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+    kind: VSphereCluster
+    name: CLUSTERNAME
+    namespace: CLUSTERNAMESPACE
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+kind: VSphereCluster
+metadata:
+  name: CLUSTERNAME
+  namespace: CLUSTERNAMESPACE
+spec:
+  cloudProviderConfiguration:
+    global:
+      insecure: true
+      secretName: cloud-provider-vsphere-credentials
+      secretNamespace: kube-system
+    network:
+      name: NETWORKNAME
+    providerConfig:
+      cloud:
+        controllerImage: gcr.io/cloud-provider-vsphere/cpi/release/manager:v1.1.0
+      storage:
+        attacherImage: quay.io/k8scsi/csi-attacher:v1.1.1
+        controllerImage: gcr.io/cloud-provider-vsphere/csi/release/driver:v1.0.1
+        livenessProbeImage: quay.io/k8scsi/livenessprobe:v1.1.0
+        metadataSyncerImage: gcr.io/cloud-provider-vsphere/csi/release/syncer:v1.0.1
+        nodeDriverImage: gcr.io/cloud-provider-vsphere/csi/release/driver:v1.0.1
+        provisionerImage: quay.io/k8scsi/csi-provisioner:v1.2.1
+        registrarImage: quay.io/k8scsi/csi-node-driver-registrar:v1.1.0
+    virtualCenter:
+      VCENTERNAME:
+        datacenters: DATACENTERNAME
+    workspace:
+      datacenter: DATACENTERNAME
+      datastore: WorkloadDatastore
+      folder: antrea
+      resourcePool: 'RESOURCEPOOLPATH'
+      server: VCENTERNAME
+  server: VCENTERNAME

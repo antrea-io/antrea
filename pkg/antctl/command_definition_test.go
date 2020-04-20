@@ -17,24 +17,265 @@ package antctl
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/rule"
+	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
 
 type Foobar struct {
 	Foo string
 }
 
+func TestCommandList_tableOutputForGetCommands(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		rawResponseData interface{}
+		expected        string
+	}{
+		{
+			name: "StructureData-ControllerInfo-Single",
+			rawResponseData: controllerinfo.Response{
+				Version: "v0.4.0",
+				PodRef: v1.ObjectReference{
+					Kind:      "Pod",
+					Namespace: "kube-system",
+					Name:      "antrea-controller-55b9bcd59f-h9ll4",
+				},
+				NodeRef: v1.ObjectReference{
+					Kind: "Node",
+					Name: "node-master",
+				},
+				ServiceRef: v1.ObjectReference{
+					Kind: "Service",
+					Name: "antrea",
+				},
+				NetworkPolicyControllerInfo: v1beta1.NetworkPolicyControllerInfo{
+					NetworkPolicyNum:  1,
+					AddressGroupNum:   1,
+					AppliedToGroupNum: 2,
+				},
+				ConnectedAgentNum: 2,
+				ControllerConditions: []v1beta1.ControllerCondition{
+					{
+						Type:              "ControllerHealthy",
+						Status:            "True",
+						LastHeartbeatTime: metav1.NewTime(time.Now()),
+					},
+				},
+			},
+			expected: `POD                                            NODE        STATUS  NETWORK-POLICIES ADDRESS-GROUPS APPLIED-TO-GROUPS CONNECTED-AGENTS
+kube-system/antrea-controller-55b9bcd59f-h9ll4 node-master Healthy 1                1              2                 2               
+`,
+		},
+		{
+			name: "StructureData-AgentInfo-Single",
+			rawResponseData: agentinfo.AntreaAgentInfoResponse{
+				Version: "v0.4.0",
+				PodRef: v1.ObjectReference{
+					Kind:      "Pod",
+					Namespace: "kube-system",
+					Name:      "antrea-agent-0",
+				},
+				NodeRef: v1.ObjectReference{
+					Kind: "Node",
+					Name: "node-worker",
+				},
+				NodeSubnet: []string{"192.168.1.0/24", "192.168.1.1/24"},
+				OVSInfo: v1beta1.OVSInfo{
+					Version:    "1.0",
+					BridgeName: "br-int",
+					FlowTable: map[string]int32{
+						"0":  5,
+						"10": 7,
+					},
+				},
+				NetworkPolicyControllerInfo: v1beta1.NetworkPolicyControllerInfo{
+					NetworkPolicyNum:  1,
+					AddressGroupNum:   1,
+					AppliedToGroupNum: 2,
+				},
+				LocalPodNum: 3,
+				AgentConditions: []v1beta1.AgentCondition{
+					{
+						Type:              "AgentHealthy",
+						Status:            "True",
+						LastHeartbeatTime: metav1.NewTime(time.Now()),
+					},
+				},
+			},
+			expected: `POD                        NODE        STATUS  NODE-SUBNET                   NETWORK-POLICIES ADDRESS-GROUPS APPLIED-TO-GROUPS LOCAL-PODS
+kube-system/antrea-agent-0 node-worker Healthy 192.168.1.0/24,192.168.1.1/24 1                1              2                 3         
+`,
+		},
+		{
+			name:            "StructureData-NonTableOutput-Single",
+			rawResponseData: Foobar{Foo: "foo"},
+			expected: `Foo            
+foo            
+`,
+		},
+		{
+			name: "StructureData-NonTableOutput-List",
+			rawResponseData: []Foobar{
+				{Foo: "foo1"},
+				{Foo: "foo2"},
+			},
+			expected: `Foo            
+foo1           
+foo2           
+`,
+		},
+		{
+			name: "StructureData-NetworkPolicy-List-HasSummary-RandomFieldOrder",
+			rawResponseData: []networkpolicy.Response{
+				{
+					Name:            "GroupName2",
+					AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c", "c4c59cfe-9160-5de5-a85b-01a58d11963e"},
+					Rules: []rule.Response{
+						{
+							Direction: "In",
+							Services:  nil,
+						},
+					},
+				},
+				{
+					Rules: []rule.Response{
+						{
+							Direction: "In",
+							Services:  nil,
+						},
+						{
+							Direction: "In",
+							Services:  nil,
+						},
+					},
+					AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c"},
+					Name:            "GroupName1",
+				},
+			},
+			expected: `NAME       APPLIED-TO                                       RULES
+GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2    
+GroupName2 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1    
+`,
+		},
+		{
+			name: "StructureData-AddressGroup-List-HasSummary-HasEmpty",
+			rawResponseData: []addressgroup.Response{
+				{
+					Name: "GroupName1",
+					Pods: []common.GroupMemberPod{
+						{IP: "127.0.0.1"}, {IP: "192.168.0.1"}, {IP: "127.0.0.2"},
+						{IP: "127.0.0.3"}, {IP: "10.0.0.3"}, {IP: "127.0.0.5"}, {IP: "127.0.0.6"},
+					},
+				},
+				{
+					Name: "GroupName2",
+					Pods: []common.GroupMemberPod{},
+				},
+			},
+			expected: `NAME       POD-IPS                                           
+GroupName1 10.0.0.3,127.0.0.1,127.0.0.2,127.0.0.3 + 2 more...
+GroupName2 <NONE>                                            
+`,
+		},
+		{
+			name: "StructureData-AppliedToGroup-Single-NoSummary",
+			rawResponseData: appliedtogroup.Response{
+				Name: "GroupName",
+				Pods: []common.GroupMemberPod{
+					{Pod: &networkingv1beta1.PodReference{
+						Name:      "nginx-6db489d4b7-324rc",
+						Namespace: "PodNamespace",
+					}},
+					{Pod: &networkingv1beta1.PodReference{
+						Name:      "nginx-6db489d4b7-vgv7v",
+						Namespace: "PodNamespace",
+					}},
+				},
+			},
+			expected: `NAME      PODS                                           
+GroupName PodNamespace/nginx-6db489d4b7-324rc + 1 more...
+`,
+		},
+		{
+			name:            "StructureData-NetworkPolicy-List-EmptyRespCase",
+			rawResponseData: []networkpolicy.Response{},
+			expected:        "\n",
+		},
+		{
+			name: "StructureData-AppliedToGroup-Single-EmptyRespCase",
+			rawResponseData: appliedtogroup.Response{
+				Name: "GroupName",
+				Pods: []common.GroupMemberPod{},
+			},
+			expected: `NAME      PODS  
+GroupName <NONE>
+`,
+		},
+		{
+			name: "StructureData-PodInterface-List",
+			rawResponseData: []podinterface.Response{
+				{
+					PodName:       "nginx-6db489d4b7-vgv7v",
+					PodNamespace:  "default",
+					InterfaceName: "Interface",
+					IP:            "127.0.0.1",
+					MAC:           "07-16-76-00-02-86",
+					PortUUID:      "portuuid0",
+					OFPort:        80,
+					ContainerID:   "dve7a2d6c224otm9m0eas8dtwr78",
+				},
+				{
+					PodName:       "nginx-32b489d4b7-vgv7v",
+					PodNamespace:  "default",
+					InterfaceName: "Interface2",
+					IP:            "127.0.0.2",
+					MAC:           "07-16-76-00-02-87",
+					PortUUID:      "portuuid1",
+					OFPort:        35572,
+					ContainerID:   "uci2ucsd6dx87dasuk232312csse",
+				},
+			},
+			expected: `NAMESPACE NAME                   INTERFACE-NAME IP        MAC               PORT-UUID OF-PORT CONTAINER-ID
+default   nginx-6db489d4b7-vgv7v Interface      127.0.0.1 07-16-76-00-02-86 portuuid0 80      dve7a2d6c22 
+default   nginx-32b489d4b7-vgv7v Interface2     127.0.0.2 07-16-76-00-02-87 portuuid1 35572   uci2ucsd6dx 
+`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opt := &commandDefinition{}
+			var outputBuf bytes.Buffer
+			err := opt.tableOutputForGetCommands(tc.rawResponseData, &outputBuf)
+			fmt.Println(outputBuf.String())
+			assert.Nil(t, err)
+			assert.Equal(t, tc.expected, outputBuf.String())
+		})
+	}
+}
+
 // TestFormat ensures the formatter and AddonTransform works as expected.
 func TestFormat(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
-		singleton       bool
 		single          bool
 		transform       func(reader io.Reader, single bool) (interface{}, error)
 		rawResponseData interface{}
@@ -87,9 +328,9 @@ func TestFormat(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opt := &commandDefinition{
-				SingleObject:        tc.singleton,
-				TransformedResponse: tc.responseStruct,
-				AddonTransform:      tc.transform,
+				transformedResponse: tc.responseStruct,
+				controllerEndpoint:  &endpoint{addonTransform: tc.transform},
+				agentEndpoint:       &endpoint{addonTransform: tc.transform},
 			}
 			var responseData []byte
 			responseData, err := json.Marshal(tc.rawResponseData)
@@ -105,40 +346,23 @@ func TestFormat(t *testing.T) {
 // TestCommandDefinitionGenerateExample checks example strings are generated as
 // expected.
 func TestCommandDefinitionGenerateExample(t *testing.T) {
-
-	type fooResponse struct {
-		Bar string
-	}
-
-	type keyFooResponse struct {
-		Bar string `antctl:"key"`
-	}
-
+	runtimeComponent = componentAgent
 	for k, tc := range map[string]struct {
-		use          string
-		cmdChain     string
-		singleObject bool
-		expect       string
-		responseType reflect.Type
+		use        string
+		cmdChain   string
+		outputType OutputType
+		expect     string
 	}{
 		"SingleObject": {
-			use:          "test",
-			cmdChain:     "first second third",
-			singleObject: true,
-			responseType: reflect.TypeOf(fooResponse{}),
-			expect:       "  Get the foo\n  $ first second third test\n",
-		},
-		"NoKeyList": {
-			use:          "test",
-			cmdChain:     "first second third",
-			responseType: reflect.TypeOf(fooResponse{}),
-			expect:       "  Get the list of foo\n  $ first second third test\n",
+			use:        "test",
+			cmdChain:   "first second third",
+			outputType: single,
+			expect:     "  Get the test\n  $ first second third test\n",
 		},
 		"KeyList": {
-			use:          "test",
-			cmdChain:     "first second third",
-			responseType: reflect.TypeOf(keyFooResponse{}),
-			expect:       "  Get a keyfoo\n  $ first second third test [bar]\n  Get the list of keyfoo\n  $ first second third test\n",
+			use:      "test",
+			cmdChain: "first second third",
+			expect:   "  Get a test\n  $ first second third test [name]\n  Get the list of test\n  $ first second third test\n",
 		},
 	} {
 		t.Run(k, func(t *testing.T) {
@@ -152,8 +376,8 @@ func TestCommandDefinitionGenerateExample(t *testing.T) {
 			cmd.Use = tc.use
 
 			co := &commandDefinition{
-				SingleObject:        tc.singleObject,
-				TransformedResponse: tc.responseType,
+				use:           tc.use,
+				agentEndpoint: &endpoint{nonResourceEndpoint: &nonResourceEndpoint{outputType: tc.outputType}},
 			}
 			co.applyExampleToCommand(cmd)
 			assert.Equal(t, tc.expect, cmd.Example)

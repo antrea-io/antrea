@@ -116,6 +116,41 @@ func (a *ofCTAction) move(fromField *openflow13.MatchField, toField *openflow13.
 	a.actions = append(a.actions, action)
 }
 
+func (a *ofCTAction) natAction(isSNAT bool, ipRange *IPRange, portRange *PortRange) CTAction {
+	action := openflow13.NewNXActionCTNAT()
+	if isSNAT {
+		action.SetSNAT()
+	} else {
+		action.SetDNAT()
+	}
+
+	// ipRange should not be nil. The check here is for code safety.
+	if ipRange != nil {
+		action.SetRangeIPv4Min(ipRange.StartIP)
+		action.SetRangeIPv4Max(ipRange.EndIP)
+	}
+	if portRange != nil {
+		action.SetRangeProtoMin(&portRange.StartPort)
+		action.SetRangeProtoMax(&portRange.EndPort)
+	}
+	a.actions = append(a.actions, action)
+	return a
+}
+
+func (a *ofCTAction) SNAT(ipRange *IPRange, portRange *PortRange) CTAction {
+	return a.natAction(true, ipRange, portRange)
+}
+
+func (a *ofCTAction) DNAT(ipRange *IPRange, portRange *PortRange) CTAction {
+	return a.natAction(false, ipRange, portRange)
+}
+
+func (a *ofCTAction) NAT() CTAction {
+	action := openflow13.NewNXActionCTNAT()
+	a.actions = append(a.actions, action)
+	return a
+}
+
 // CTDone sets the conntrack action in the Openflow rule and it returns FlowBuilder.
 func (a *ofCTAction) CTDone() FlowBuilder {
 	a.builder.Flow.ConnTrack(a.commit, a.force, &a.ctTable, &a.ctZone, a.actions...)
@@ -211,17 +246,14 @@ func (a *ofFlowAction) MoveRange(fromField, toField string, fromRange, toRange R
 
 // Resubmit is an action to resubmit packet to the specified table with the port as new in_port. If port is empty string,
 // the in_port field is not changed.
-func (a *ofFlowAction) Resubmit(ofPort uint16, table TableIDType) FlowBuilder {
-	ofTableID := uint8(table)
-	resubmit := ofctrl.NewResubmit(&ofPort, &ofTableID)
-	a.builder.ofFlow.lastAction = resubmit
+func (a *ofFlowAction) Resubmit(ofPort uint16, tableID TableIDType) FlowBuilder {
+	a.builder.ofFlow.Resubmit(ofPort, uint8(tableID))
 	return a.builder
 }
 
 func (a *ofFlowAction) ResubmitToTable(table TableIDType) FlowBuilder {
 	ofTableID := uint8(table)
-	resubmit := ofctrl.NewResubmit(nil, &ofTableID)
-	a.builder.ofFlow.lastAction = resubmit
+	a.builder.ofFlow.Resubmit(openflow13.OFPP_IN_PORT, ofTableID)
 	return a.builder
 }
 
@@ -241,6 +273,16 @@ func (a *ofFlowAction) Normal() FlowBuilder {
 // Conjunction is an action to add new conjunction configuration to conjunctive match flow.
 func (a *ofFlowAction) Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder {
 	a.builder.ofFlow.AddConjunction(conjID, clauseID, nClause)
+	return a.builder
+}
+
+// Group is an action to forward packets to groups to do load-balance.
+func (a *ofFlowAction) Group(id GroupIDType) FlowBuilder {
+	group := &ofctrl.Group{
+		Switch: a.builder.Flow.Table.Switch,
+		ID:     uint32(id),
+	}
+	a.builder.ofFlow.lastAction = group
 	return a.builder
 }
 

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
-	"github.com/vishvananda/netlink"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -35,7 +34,6 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
@@ -60,8 +58,7 @@ type Controller struct {
 	kubeClient       clientset.Interface
 	ovsBridgeClient  ovsconfig.OVSBridgeClient
 	ofClient         openflow.Client
-	routeClient      *route.Client
-	iptablesClient   *iptables.Client
+	routeClient      route.Interface
 	interfaceStore   interfacestore.InterfaceStore
 	networkConfig    *config.NetworkConfig
 	nodeConfig       *config.NodeConfig
@@ -70,11 +67,8 @@ type Controller struct {
 	nodeListerSynced cache.InformerSynced
 	queue            workqueue.RateLimitingInterface
 	// installedNodes records routes and flows installation states of Nodes.
-	// The key is the host name of the Node, the value is the route to the Node.
-	// If the flows of the Node are installed, the installedNodes must contains a key which is the host name.
-	// If the route of the Node are installed, the flows of the Node must be installed first and the value of host name
-	// key must not be nil.
-	// TODO: handle agent restart cases.
+	// The key is the host name of the Node, the value is the podCIDR of the Node.
+	// A node will be in the map after its flows and routes are installed successfully.
 	installedNodes *sync.Map
 }
 
@@ -85,8 +79,7 @@ func NewNodeRouteController(
 	informerFactory informers.SharedInformerFactory,
 	client openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
-	routeClient *route.Client,
-	iptablesClient *iptables.Client,
+	routeClient route.Interface,
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
 	nodeConfig *config.NodeConfig) *Controller {
@@ -96,7 +89,6 @@ func NewNodeRouteController(
 		ovsBridgeClient:  ovsBridgeClient,
 		ofClient:         client,
 		routeClient:      routeClient,
-		iptablesClient:   iptablesClient,
 		interfaceStore:   interfaceStore,
 		networkConfig:    networkConfig,
 		nodeConfig:       nodeConfig,
@@ -154,33 +146,22 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 		return fmt.Errorf("error when listing Nodes: %v", err)
 	}
 
-	routes, err := c.routeClient.ListPeerCIDRRoute()
-	if err != nil {
-		return fmt.Errorf("error when listing existing gateway routes: %v", err)
-	}
-
+	// We iterate over all current Nodes, including the Node on which this agent is
+	// running, so the route to local Pods will be desired as well.
+	var desiredPodCIDRs []string
 	for _, node := range nodes {
-		_, podCIDR, err := net.ParseCIDR(node.Spec.PodCIDR)
-		if err != nil {
-			return fmt.Errorf("error when parsing Pod CIDR for Node %s: %v", node.Name, err)
+		// PodCIDR is allocated by K8s NodeIpamController asynchronously so it's possible we see a Node
+		// with no PodCIDR set when it just joins the cluster.
+		if node.Spec.PodCIDR == "" {
+			continue
 		}
-		podCIDRStr := podCIDR.String()
-		// remove from map of routes: at the end of the loop the remaining routes will be
-		// the stale ones (the ones we want to delete).
-		// we iterate over all current Nodes, including the Node on which this agent is
-		// running, so the route to local Pods will be removed from the map as well.
-		delete(routes, podCIDRStr)
+		desiredPodCIDRs = append(desiredPodCIDRs, node.Spec.PodCIDR)
 	}
 
-	// remove all remaining routes in the map: these routes do not match any Node in the
-	// cluster.
-	klog.V(4).Infof("Need to delete %d routes", len(routes))
-	for _, r := range routes {
-		if err := c.routeClient.DeletePeerCIDRRoute(r); err != nil {
-			klog.Errorf("error when deleting route '%v': %v", r, err)
-		}
+	// routeClient will remove orphaned routes whose destinations are not in desiredPodCIDRs.
+	if err := c.routeClient.Reconcile(desiredPodCIDRs); err != nil {
+		return err
 	}
-
 	return nil
 }
 
@@ -252,36 +233,6 @@ func (c *Controller) removeStaleTunnelPorts() error {
 	return nil
 }
 
-func (c *Controller) reconcileIPTables() error {
-	nodes, err := c.nodeLister.List(labels.Everything())
-	if err != nil {
-		return fmt.Errorf("error when listing Nodes: %v", err)
-	}
-
-	// collect CIDRs from each known Node, and restore its iptables rule.
-	for _, node := range nodes {
-		_, podCIDR, err := net.ParseCIDR(node.Spec.PodCIDR)
-		if err != nil {
-			klog.Errorf("Failed to parse Pod CIDR for Node %s: %v", node.Name, err)
-			continue
-		}
-		peerNodeIP, err := GetNodeAddr(node)
-		if err != nil {
-			klog.Errorf("Failed to get IP for Node %s: %v", node.Name, err)
-			continue
-		}
-		err = c.iptablesClient.AddPeerCIDR(podCIDR, peerNodeIP)
-		if err != nil {
-			klog.Errorf("Failed to update iptables for node %s: %v", node.Name, err)
-			continue
-		}
-	}
-	if err := c.iptablesClient.Reconcile(); err != nil {
-		return fmt.Errorf("iptables reconcile: %v", err)
-	}
-	return nil
-}
-
 func (c *Controller) reconcile() error {
 	klog.Infof("Reconciliation for %s", controllerName)
 	// reconciliation consists of removing stale routes and stale / invalid tunnel ports:
@@ -293,13 +244,21 @@ func (c *Controller) reconcile() error {
 	if err := c.removeStaleTunnelPorts(); err != nil {
 		return fmt.Errorf("error when removing stale tunnel ports: %v", err)
 	}
-	return c.reconcileIPTables()
+	return nil
 }
 
 // Run will create defaultWorkers workers (go routines) which will process the Node events from the
 // workqueue.
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
+
+	// If agent is running policy-only mode, it delegates routing to
+	// underlying network. Therefore it needs not know the routes to
+	// peer Pod CIDRs.
+	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		<-stopCh
+		return
+	}
 
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
@@ -394,20 +353,20 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 func (c *Controller) deleteNodeRoute(nodeName string) error {
 	klog.Infof("Deleting routes and flows to Node %s", nodeName)
 
-	entry, flowsAreInstalled := c.installedNodes.Load(nodeName)
-	if routes, ok := entry.([]*netlink.Route); ok {
-		if err := c.routeClient.DeletePeerCIDRRoute(routes); err != nil {
-			return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
-		}
+	podCIDR, installed := c.installedNodes.Load(nodeName)
+	if !installed {
+		// Route is not added for this Node.
+		return nil
 	}
-	c.installedNodes.Store(nodeName, nil)
 
-	if flowsAreInstalled {
-		if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
-			return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
-		}
-		c.installedNodes.Delete(nodeName)
+	if err := c.routeClient.DeleteRoutes(podCIDR.(*net.IPNet)); err != nil {
+		return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 	}
+
+	if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
+		return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
+	}
+	c.installedNodes.Delete(nodeName)
 
 	if c.networkConfig.EnableIPSecTunnel {
 		interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
@@ -426,8 +385,7 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 }
 
 func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
-	entry, flowsAreInstalled := c.installedNodes.Load(nodeName)
-	if entry != nil {
+	if _, installed := c.installedNodes.Load(nodeName); installed {
 		// Route is already added for this Node.
 		return nil
 	}
@@ -452,73 +410,81 @@ func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
 	}
 	peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
+	ipsecTunOFPort := int32(0)
 	if c.networkConfig.EnableIPSecTunnel {
 		// Create a separate tunnel port for the Node, as OVS IPSec monitor needs to
 		// read PSK and remote IP from the Node's tunnel interface to create IPSec
 		// security policies.
-		if err = c.createIPSecTunnelPort(nodeName, peerNodeIP); err != nil {
+		if ipsecTunOFPort, err = c.createIPSecTunnelPort(nodeName, peerNodeIP); err != nil {
 			return err
 		}
 	}
 
-	if !flowsAreInstalled { // then install flows
-		err = c.ofClient.InstallNodeFlows(
-			nodeName,
-			c.nodeConfig.GatewayConfig.MAC,
-			peerGatewayIP,
-			*peerPodCIDR,
-			peerNodeIP,
-			config.DefaultTunOFPort)
-		if err != nil {
-			return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
-		}
-		c.installedNodes.Store(nodeName, nil)
+	err = c.ofClient.InstallNodeFlows(
+		nodeName,
+		c.nodeConfig.GatewayConfig.MAC,
+		*peerPodCIDR,
+		peerGatewayIP,
+		peerNodeIP,
+		config.DefaultTunOFPort,
+		uint32(ipsecTunOFPort))
+	if err != nil {
+		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 	}
 
-	routes, err := c.routeClient.AddPeerCIDRRoute(peerPodCIDR, c.nodeConfig.GatewayConfig.LinkIndex, peerNodeIP, peerGatewayIP)
-	if err == nil {
-		c.installedNodes.Store(nodeName, routes)
-		err = c.iptablesClient.AddPeerCIDR(peerPodCIDR, peerNodeIP)
+	if err := c.routeClient.AddRoutes(peerPodCIDR, peerNodeIP, peerGatewayIP); err != nil {
+		return err
 	}
+	c.installedNodes.Store(nodeName, peerPodCIDR)
 	return err
 }
 
 // createIPSecTunnelPort creates an IPSec tunnel port for the remote Node if the
-// tunnel does not exist.
-func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) error {
+// tunnel does not exist, and returns the ofport number.
+func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int32, error) {
 	interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
 	if ok {
 		// TODO: check if Node IP, PSK, or tunnel type changes. This can
 		// happen if removeStaleTunnelPorts fails to remove a "stale"
 		// tunnel port for which the configuration has changed.
-		return nil
+		if interfaceConfig.OFPort != 0 {
+			return interfaceConfig.OFPort, nil
+		}
+	} else {
+		portName := util.GenerateNodeTunnelInterfaceName(nodeName)
+		ovsExternalIDs := map[string]interface{}{ovsExternalIDNodeName: nodeName}
+		portUUID, err := c.ovsBridgeClient.CreateTunnelPortExt(
+			portName,
+			c.networkConfig.TunnelType,
+			0, // ofPortRequest - let OVS allocate OFPort number.
+			nodeIP.String(),
+			c.networkConfig.IPSecPSK,
+			ovsExternalIDs)
+		if err != nil {
+			return 0, fmt.Errorf("failed to create IPSec tunnel port for Node %s", nodeName)
+		}
+		klog.Infof("Created IPSec tunnel port %s for Node %s", portName, nodeName)
+
+		ovsPortConfig := &interfacestore.OVSPortConfig{PortUUID: portUUID}
+		interfaceConfig = interfacestore.NewIPSecTunnelInterface(
+			portName,
+			c.networkConfig.TunnelType,
+			nodeName,
+			nodeIP,
+			c.networkConfig.IPSecPSK)
+		interfaceConfig.OVSPortConfig = ovsPortConfig
+		c.interfaceStore.AddInterface(interfaceConfig)
 	}
 
-	portName := util.GenerateNodeTunnelInterfaceName(nodeName)
-	ovsExternalIDs := map[string]interface{}{ovsExternalIDNodeName: nodeName}
-	portUUID, err := c.ovsBridgeClient.CreateTunnelPortExt(
-		portName,
-		c.networkConfig.TunnelType,
-		0, // ofPortRequest - let OVS allocate OFPort number.
-		nodeIP.String(),
-		c.networkConfig.IPSecPSK,
-		ovsExternalIDs)
+	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
+	ofPort, err := c.ovsBridgeClient.GetOFPort(interfaceConfig.InterfaceName)
 	if err != nil {
-		klog.Errorf("Failed to create OVS IPSec tunnel port for Node %s: %v", nodeName, err)
-		return fmt.Errorf("failed to create IPSec tunnel port for Node %s", nodeName)
+		// Could be a temporary OVSDB connection failure or timeout.
+		// Let NodeRouteController retry at errors.
+		return 0, fmt.Errorf("failed to get of_port of IPSec tunnel port for Node %s", nodeName)
 	}
-	klog.Infof("Created IPSec tunnel port %s for Node %s", portName, nodeName)
-
-	ovsPortConfig := &interfacestore.OVSPortConfig{PortUUID: portUUID}
-	interfaceConfig = interfacestore.NewIPSecTunnelInterface(
-		portName,
-		c.networkConfig.TunnelType,
-		nodeName,
-		nodeIP,
-		c.networkConfig.IPSecPSK)
-	interfaceConfig.OVSPortConfig = ovsPortConfig
-	c.interfaceStore.AddInterface(interfaceConfig)
-	return nil
+	interfaceConfig.OFPort = ofPort
+	return ofPort, nil
 }
 
 // ParseTunnelInterfaceConfig initializes and returns an InterfaceConfig struct

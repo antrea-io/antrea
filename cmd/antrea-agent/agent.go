@@ -23,17 +23,16 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent"
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	_ "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	"github.com/vmware-tanzu/antrea/pkg/antctl"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
@@ -81,8 +80,7 @@ func run(o *Options) error {
 		TrafficEncapMode:  encapMode,
 		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
 
-	routeClient := route.NewClient(encapMode)
-	iptablesClient := iptables.NewClient(o.config.HostGateway, serviceCIDRNet, encapMode)
+	routeClient, err := route.NewClient(o.config.HostGateway, serviceCIDRNet, encapMode)
 
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -93,7 +91,6 @@ func run(o *Options) error {
 		ovsBridgeClient,
 		ofClient,
 		routeClient,
-		iptablesClient,
 		ifaceStore,
 		o.config.HostGateway,
 		o.config.DefaultMTU,
@@ -105,18 +102,12 @@ func run(o *Options) error {
 	}
 	nodeConfig := agentInitializer.GetNodeConfig()
 
-	antctlServer, err := antctl.NewLocalServer()
-	if err != nil {
-		return fmt.Errorf("error when creating local antctl server: %w", err)
-	}
-
 	nodeRouteController := noderoute.NewNodeRouteController(
 		k8sClient,
 		informerFactory,
 		ofClient,
 		ovsBridgeClient,
 		routeClient,
-		iptablesClient,
 		ifaceStore,
 		networkConfig,
 		nodeConfig)
@@ -126,7 +117,10 @@ func run(o *Options) error {
 	// updated Pods.
 	podUpdates := make(chan v1beta1.PodReference, 100)
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(antreaClient, ofClient, ifaceStore, nodeConfig.Name, podUpdates)
-
+	isChaining := false
+	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		isChaining = true
+	}
 	cniServer := cniserver.New(
 		o.config.CNISocket,
 		o.config.HostProcPathPrefix,
@@ -137,7 +131,9 @@ func run(o *Options) error {
 		ofClient,
 		ifaceStore,
 		k8sClient,
-		podUpdates)
+		podUpdates,
+		isChaining,
+		routeClient)
 	err = cniServer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing CNI server: %v", err)
@@ -157,8 +153,7 @@ func run(o *Options) error {
 	go networkPolicyController.Run(stopCh)
 
 	if o.config.EnablePrometheusMetrics {
-		go metrics.StartListener(o.config.PrometheusHost,
-			o.config.PrometheusPort,
+		go metrics.InitializePrometheusMetrics(
 			o.config.EnablePrometheusGoMetrics,
 			o.config.EnablePrometheusProcessMetrics,
 			o.config.OVSBridge, ifaceStore, ofClient)
@@ -168,7 +163,7 @@ func run(o *Options) error {
 		crdClient,
 		o.config.OVSBridge,
 		nodeConfig.Name,
-		nodeConfig.PodCIDR.String(),
+		fmt.Sprintf("%s", nodeConfig.PodCIDR),
 		ifaceStore,
 		ofClient,
 		ovsBridgeClient,
@@ -176,7 +171,11 @@ func run(o *Options) error {
 
 	go agentMonitor.Run(stopCh)
 
-	antctlServer.Start(agentMonitor, nil, stopCh)
+	apiServer, err := apiserver.New(agentMonitor, networkPolicyController)
+	if err != nil {
+		return fmt.Errorf("error when creating agent API server: %v", err)
+	}
+	go apiServer.Run(stopCh)
 
 	<-stopCh
 	klog.Info("Stopping Antrea agent")

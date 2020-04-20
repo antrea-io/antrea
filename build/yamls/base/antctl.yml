@@ -10,14 +10,24 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: antctl
 rules:
-  - nonResourceURLs:
-      - /apis/system.antrea.tanzu.vmware.com
-      - /apis/system.antrea.tanzu.vmware.com/*
+  - apiGroups:
+      - networking.antrea.tanzu.vmware.com
+    resources:
+      - networkpolicies
+      - appliedtogroups
+      - addressgroups
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - system.antrea.tanzu.vmware.com
+    resources:
+      - controllerinfos
     verbs:
       - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   labels:
     app: antrea
@@ -30,4 +40,10 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: antctl
+    namespace: kube-system
+  - kind: ServiceAccount
+    # This is to allow antctl to be executed inside the Antrea Controller Pod
+    # and authenticate with Controller API server using the Controller's
+    # ServiceAccount token.
+    name: antrea-controller
     namespace: kube-system

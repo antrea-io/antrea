@@ -69,9 +69,19 @@ metadata:
     app: antrea
   name: antctl
 rules:
-- nonResourceURLs:
-  - /apis/system.antrea.tanzu.vmware.com
-  - /apis/system.antrea.tanzu.vmware.com/*
+- apiGroups:
+  - networking.antrea.tanzu.vmware.com
+  resources:
+  - networkpolicies
+  - appliedtogroups
+  - addressgroups
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - system.antrea.tanzu.vmware.com
+  resources:
+  - controllerinfos
   verbs:
   - get
 ---
@@ -170,6 +180,22 @@ kind: RoleBinding
 metadata:
   labels:
     app: antrea
+  name: antrea-controller-authentication-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: antrea-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: antrea
   name: antctl
   namespace: kube-system
 roleRef:
@@ -180,19 +206,6 @@ subjects:
 - kind: ServiceAccount
   name: antctl
   namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  labels:
-    app: antrea
-  name: antrea-controller-authentication-reader
-  namespace: kube-system
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: extension-apiserver-authentication-reader
-subjects:
 - kind: ServiceAccount
   name: antrea-controller
   namespace: kube-system
@@ -253,7 +266,7 @@ data:
     #tunnelType: vxlan
 
     # Default MTU to use for the host gateway interface and the network interface of each Pod. If
-    # omitted, antrea-agent will default this value to 1450 to accomodate for tunnel encapsulate
+    # omitted, antrea-agent will default this value to 1450 to accommodate for tunnel encapsulate
     # overhead.
     #defaultMTU: 1450
 
@@ -270,59 +283,59 @@ data:
     # noEncap: Inter-node Pod traffic is not encapsulated, but Pod to outbound traffic is masqueraded.
     #          Underlying network must be capable of supporting Pod traffic across IP subnet.
     # hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
+    # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
+    #
     #trafficEncapMode: encap
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
     #enablePrometheusMetrics: false
 
-    # Enable golang metrics exposure via Prometheus
+    # Enable golang metrics exposure via Prometheus.
     #enablePrometheusGoMetrics: false
 
     # Enable process metrics exposure via Prometheus.
     #enablePrometheusProcessMetrics: false
 
-    # Prometheus metrics hostname.
-    #prometheusHost:
-
-    # Prometheus listener port.
-    #prometheusPort: 9092
-  antrea-cni.conf: |
+  antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
         "name": "antrea",
-        "type": "antrea",
-        "ipam": {
-            "type": "host-local"
-        }
+        "plugins": [
+            {
+                "type": "antrea",
+                "ipam": {
+                    "type": "host-local"
+                }
+            },
+            {
+                "type": "portmap",
+                "capabilities": {"portMappings": true}
+            }
+        ]
     }
   antrea-controller.conf: |
-    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     #enablePrometheusMetrics: false
 
-    # Enable golang metrics exposure via Prometheus
+    # Enable golang metrics exposure via Prometheus.
     #enablePrometheusGoMetrics: false
 
     # Enable process metrics exposure via Prometheus.
     #enablePrometheusProcessMetrics: false
-
-    # Prometheus metrics hostname.
-    #prometheusHost:
-
-    # Prometheus listener port.
-    #prometheusPort: 9093
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-dbb9d5fhf9
+  name: antrea-config-dkh5bmmbk2
   namespace: kube-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
   annotations:
-    prometheus.io/port: "9093"
+    prometheus.io/port: "443"
+    prometheus.io/scheme: https
     prometheus.io/scrape: "true"
   labels:
     app: antrea
@@ -368,6 +381,10 @@ spec:
       - args:
         - --config
         - /etc/antrea/antrea-controller.conf
+        - --logtostderr=false
+        - --log_dir
+        - /var/log/antrea
+        - --alsologtostderr
         command:
         - antrea-controller
         env:
@@ -393,14 +410,26 @@ spec:
         - containerPort: 9093
           name: monitoring
           protocol: TCP
+        readinessProbe:
+          failureThreshold: 5
+          httpGet:
+            host: 127.0.0.1
+            path: /healthz
+            port: 443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
         volumeMounts:
         - mountPath: /etc/antrea/antrea-controller.conf
           name: antrea-config
           readOnly: true
           subPath: antrea-controller.conf
+        - mountPath: /var/log/antrea
+          name: host-var-log-antrea
       hostNetwork: true
       nodeSelector:
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
       priorityClassName: system-cluster-critical
       serviceAccountName: antrea-controller
       tolerations:
@@ -410,8 +439,28 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-dbb9d5fhf9
+          name: antrea-config-dkh5bmmbk2
         name: antrea-config
+      - hostPath:
+          path: /var/log/antrea
+          type: DirectoryOrCreate
+        name: host-var-log-antrea
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    app: antrea
+  name: v1beta1.networking.antrea.tanzu.vmware.com
+spec:
+  group: networking.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: antrea
+    namespace: kube-system
+  version: v1beta1
+  versionPriority: 100
 ---
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
@@ -445,7 +494,8 @@ spec:
   template:
     metadata:
       annotations:
-        prometheus.io/port: "9092"
+        prometheus.io/port: "10443"
+        prometheus.io/scheme: https
         prometheus.io/scrape: "true"
       labels:
         app: antrea
@@ -455,6 +505,10 @@ spec:
       - args:
         - --config
         - /etc/antrea/antrea-agent.conf
+        - --logtostderr=false
+        - --log_dir
+        - /var/log/antrea
+        - --alsologtostderr
         command:
         - antrea-agent
         env:
@@ -483,10 +537,16 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
         name: antrea-agent
-        ports:
-        - containerPort: 9092
-          hostPort: 9092
-          protocol: TCP
+        readinessProbe:
+          failureThreshold: 5
+          httpGet:
+            host: 127.0.0.1
+            path: /healthz
+            port: 10443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
         securityContext:
           privileged: true
         volumeMounts:
@@ -502,6 +562,8 @@ spec:
         - mountPath: /var/lib/cni
           name: host-var-run-antrea
           subPath: cni
+        - mountPath: /var/log/antrea
+          name: host-var-log-antrea
         - mountPath: /host/proc
           name: host-proc
           readOnly: true
@@ -550,10 +612,10 @@ spec:
             add:
             - SYS_MODULE
         volumeMounts:
-        - mountPath: /etc/antrea/antrea-cni.conf
+        - mountPath: /etc/antrea/antrea-cni.conflist
           name: antrea-config
           readOnly: true
-          subPath: antrea-cni.conf
+          subPath: antrea-cni.conflist
         - mountPath: /host/etc/cni/net.d
           name: host-cni-conf
         - mountPath: /host/opt/cni/bin
@@ -565,7 +627,7 @@ spec:
           name: host-depmod
           readOnly: true
       nodeSelector:
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
       priorityClassName: system-node-critical
       serviceAccountName: antrea-agent
       tolerations:
@@ -575,7 +637,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-dbb9d5fhf9
+          name: antrea-config-dkh5bmmbk2
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

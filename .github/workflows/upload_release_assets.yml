@@ -1,0 +1,108 @@
+name: Upload assets to release
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  build:
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build assets
+      env:
+        TAG: ${{ github.ref }}
+      run: |
+        mkdir assets
+        VERSION="${TAG:10}" ./hack/release/prepare-assets.sh ./assets
+    - name: Upload antctl-darwin-x86_64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antctl-darwin-x86_64
+        asset_name: antctl-darwin-x86_64
+        asset_content_type: application/octet-stream
+    - name: Upload antctl-linux-arm
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antctl-linux-arm
+        asset_name: antctl-linux-arm
+        asset_content_type: application/octet-stream
+    - name: Upload antctl-linux-arm64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antctl-linux-arm64
+        asset_name: antctl-linux-arm64
+        asset_content_type: application/octet-stream
+    - name: Upload antctl-linux-x86_64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antctl-linux-x86_64
+        asset_name: antctl-linux-x86_64
+        asset_content_type: application/octet-stream
+    - name: Upload antctl-windows-x86_64.exe
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antctl-windows-x86_64.exe
+        asset_name: antctl-windows-x86_64.exe
+        asset_content_type: application/octet-stream
+    - name: Upload antrea.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea.yml
+        asset_name: antrea.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-ipsec.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-ipsec.yml
+        asset_name: antrea-ipsec.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-eks.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-eks.yml
+        asset_name: antrea-eks.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-gke.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-gke.yml
+        asset_name: antrea-gke.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant.yml
+        asset_name: antrea-octant.yml
+        asset_content_type: application/octet-stream

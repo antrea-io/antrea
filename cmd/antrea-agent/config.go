@@ -70,6 +70,7 @@ type AgentConfig struct {
 	// NoEncap: Inter-node Pod traffic is not encapsulated, but Pod to outbound traffic is masqueraded.
 	//          Underlying network must be capable of supporting Pod traffic across IP subnet.
 	// Hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
+	// NetworkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
 	TrafficEncapMode string `yaml:"trafficEncapMode,omitempty"`
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to false.
@@ -80,10 +81,4 @@ type AgentConfig struct {
 	// Enable process metrics exposure via Prometheus
 	// Defaults to false.
 	EnablePrometheusProcessMetrics bool `yaml:"enablePrometheusProcessMetrics,omitempty"`
-	// Prometheus metrics hostname.
-	// Defaults to empty string
-	PrometheusHost string `yaml:"prometheusHost,omitempty"`
-	// Prometheus listener port.
-	// Default is 9092
-	PrometheusPort int `yaml:"prometheusPort,omitempty"`
 }

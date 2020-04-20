@@ -31,10 +31,4 @@ type ControllerConfig struct {
 	// Enable process metrics exposure via Prometheus
 	// Defaults to false.
 	EnablePrometheusProcessMetrics bool `yaml:"enablePrometheusProcessMetrics,omitempty"`
-	// Prometheus metrics hostname.
-	// Defaults to empty string
-	PrometheusHost string `yaml:"prometheusHost,omitempty"`
-	// Prometheus listener port.
-	// Default is 9093
-	PrometheusPort int `yaml:"prometheusPort,omitempty"`
 }

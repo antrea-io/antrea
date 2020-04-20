@@ -8,23 +8,18 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v0.1.0`).
     1. a commit to update the [CHANGELOG](/CHANGELOG.md).
     2. a commit to update [VERSION](/VERSION) as needed.
 
- * Generate the manifest files for the release:
-    1. `IMG_NAME=antrea/antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest.sh --mode release > antrea.yml`
-    2. `IMG_NAME=antrea/antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest.sh --mode release --ipsec > antrea-ipsec.yml`
-    3. `IMG_NAME=antrea/octant-antrea-ubuntu IMG_TAG=<TAG> ./hack/generate-manifest-octant.sh --mode release > antrea-octant.yml`
-
  * Make the release on Github with the release branch as the target: copy the
    relevant section of the [CHANGELOG](/CHANGELOG.md) for the release
-   description and upload the manifests generated in the previous step (with the
-   same file names, otherwise the manifest link advertised in
-   [getting-started.md](getting-started.md) will not work!). Check the
-   `pre-release` box if applicable.
+   description and check the `pre-release` box if applicable. There is no need
+   to upload any assets as this will be done automatically by a Github workflow,
+   after you create the release.
 
- * Check that:
-    1. after a while (time for the Github workflows to complete) the docker
-     image has been pushed to [dockerhub](https://hub.docker.com/u/antrea) with
-     the correct tag.
-    2. the following link works: `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml`
+ * After a while (time for the Github workflows to complete), check that:
+    1. the docker image has been pushed to
+       [dockerhub](https://hub.docker.com/u/antrea) with the correct tag.
+    2. the assets have been uploaded to the release (`antctl` binaries and yaml
+       manifests). In particular, the following link should work:
+       `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml`.
 
  * Open a PR against the master branch with the following commits:
     1. the commit updating the [CHANGELOG](/CHANGELOG.md), cherry-picked from
