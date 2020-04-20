@@ -149,7 +149,6 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 
 	ruleID := uint32(100)
 	fromList := []string{"192.168.1.3", "192.168.1.25", "192.168.2.4"}
-	exceptFromList := []string{"192.168.2.3"}
 	toList := []string{"192.168.3.4", "192.168.3.5"}
 
 	port2 := intstr.FromInt(8080)
@@ -157,11 +156,10 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
-		Direction:  v1beta1.DirectionIn,
-		From:       prepareIPAddresses(fromList),
-		ExceptFrom: prepareIPAddresses(exceptFromList),
-		To:         toIPList,
-		Service:    []v1beta1.Service{npPort1},
+		Direction: v1beta1.DirectionIn,
+		From:      prepareIPAddresses(fromList),
+		To:        toIPList,
+		Service:   []v1beta1.Service{npPort1},
 	}
 
 	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
@@ -291,7 +289,6 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 	ruleID := uint32(100)
 	fromList := []string{"192.168.1.3", "192.168.1.25", "192.168.2.4"}
-	exceptFromList := []string{"192.168.2.3"}
 	toList := []string{"192.168.3.4", "192.168.3.5"}
 
 	port2 := intstr.FromInt(8080)
@@ -299,11 +296,10 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
-		Direction:  v1beta1.DirectionIn,
-		From:       prepareIPAddresses(fromList),
-		ExceptFrom: prepareIPAddresses(exceptFromList),
-		To:         toIPList,
-		Service:    []v1beta1.Service{npPort1},
+		Direction: v1beta1.DirectionIn,
+		From:      prepareIPAddresses(fromList),
+		To:        toIPList,
+		Service:   []v1beta1.Service{npPort1},
 	}
 
 	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
@@ -455,23 +451,6 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 	conjunctionActionMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip", priority-10, ruleID)
 	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("resubmit(,%d)", allowTable)}
 	testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to update conjunction action flow")
-
-	if rule.ExceptFrom != nil {
-		for _, addr := range rule.ExceptFrom {
-			exceptsMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip,%s=%s", priority, ruleID, getCmdMatchKey(addr.GetMatchKey(types.SrcAddress)), addr.GetMatchValue())
-			flow := &ofTestUtils.ExpectFlow{MatchStr: exceptsMatch, ActStr: fmt.Sprintf("resubmit(,%d)", dropTable)}
-			testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunction excepts flow")
-		}
-	}
-
-	if rule.ExceptTo != nil {
-		for _, addr := range rule.ExceptTo {
-			exceptsMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip,%s=%s", priority, ruleID, getCmdMatchKey(addr.GetMatchKey(types.DstAddress)), addr.GetMatchValue())
-			flow := &ofTestUtils.ExpectFlow{MatchStr: exceptsMatch, ActStr: fmt.Sprintf("resubmit(,%d)", dropTable)}
-			testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow),
-				"Failed to install conjunction excepts flow")
-		}
-	}
 
 	for _, addr := range rule.From {
 		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(types.SrcAddress)), addr.GetMatchValue())

@@ -640,6 +640,7 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue 
 }
 
 // conjunctionExceptionFlow generates the flow to resubmit to a specific table if both policyRuleConjunction ID and except address are matched.
+// Keeping this for reference to generic exception flow.
 func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, matchKey int, matchValue interface{}) binding.Flow {
 	fb := c.pipeline[tableID].BuildFlow(priorityNormal).MatchConjID(conjunctionID)
 	return c.addFlowMatch(fb, matchKey, matchValue).
