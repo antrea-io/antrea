@@ -177,7 +177,6 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		Direction: v1beta1.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.60"}),
 		To:        parseAddresses([]string{"192.168.2.0/24"}),
-		ExceptTo:  parseAddresses([]string{"192.168.2.100", "192.168.2.150"}),
 		Service:   []v1beta1.Service{npPort1, npPort2},
 	}
 	conj3 := &policyRuleConjunction{id: ruleID3}
@@ -198,8 +197,8 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 	err = c.InstallPolicyRuleFlows(ruleID3, rule3, "np1", "ns1")
 	require.Nil(t, err, "Failed to invoke InstallPolicyRuleFlows")
-	checkConjunctionConfig(t, ruleID3, 3, 2, 1, 2)
-	assert.Equal(t, 16, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	checkConjunctionConfig(t, ruleID3, 1, 2, 1, 2)
+	assert.Equal(t, 14, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
 
 	ctxChanges4 := conj.calculateChangesForRuleDeletion()
 	matchFlows4, dropFlows4 := getChangedFlows(ctxChanges4)
@@ -216,7 +215,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	assert.Equal(t, 2, getChangedFlowOPCount(matchFlows5, deletion))
 	assert.Equal(t, 1, getChangedFlowOPCount(matchFlows5, modification))
 	err = c.applyConjunctiveMatchFlows(ctxChanges5)
-	assert.Equal(t, 13, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	assert.Equal(t, 11, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
 	require.Nil(t, err)
 }
 

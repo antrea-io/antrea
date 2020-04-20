@@ -363,8 +363,9 @@ to 2 in the above example (1 was allocated for the ingress rule of our Network
 Policy example).
 
 If the Network Policy specification includes exceptions (`except` field), then
-the table will include additional rules, but we will not cover them in this
-document.
+the table will include multiple flows with conjunctive match, corresponding to
+each cidr that is present in `from` or `to` fields, but not in `except` field.
+Network Policy implementation details are not covered in this document.
 
 If the `conjunction` action is matched, packets are "allowed" and resubmitted
 directly to [L3ForwardingTable]. Other packets go to [EgressDefaultTable]. If a

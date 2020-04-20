@@ -61,6 +61,11 @@ var (
 	servicesHash2 = hashServices(services2)
 )
 
+func newCIDR(cidrStr string) *net.IPNet {
+	_, tmpIpNet, _ := net.ParseCIDR(cidrStr)
+	return tmpIpNet
+}
+
 func TestReconcilerForget(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -129,10 +134,23 @@ func TestReconcilerReconcile(t *testing.T) {
 		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod3", PodNamespace: "ns1"},
 		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 3},
 	})
-	_, ipNet1, _ := net.ParseCIDR("10.10.0.0/16")
-	_, ipNet2, _ := net.ParseCIDR("10.20.0.0/16")
-	_, ipNet3, _ := net.ParseCIDR("10.20.1.0/24")
-	_, ipNet4, _ := net.ParseCIDR("10.20.2.0/28")
+	ipNet1 := newCIDR("10.10.0.0/16")
+	ipNet2 := newCIDR("10.20.0.0/16")
+	ipNet3 := newCIDR("10.20.1.0/24")
+	ipNet4 := newCIDR("10.20.2.0/28")
+	diffNet1 := newCIDR("10.20.128.0/17")
+	diffNet2 := newCIDR("10.20.64.0/18")
+	diffNet3 := newCIDR("10.20.32.0/19")
+	diffNet4 := newCIDR("10.20.16.0/20")
+	diffNet5 := newCIDR("10.20.8.0/21")
+	diffNet6 := newCIDR("10.20.4.0/22")
+	diffNet7 := newCIDR("10.20.0.0/24")
+	diffNet8 := newCIDR("10.20.3.0/24")
+	diffNet9 := newCIDR("10.20.2.128/25")
+	diffNet10 := newCIDR("10.20.2.64/26")
+	diffNet11 := newCIDR("10.20.2.32/27")
+	diffNet12 := newCIDR("10.20.2.16/28")
+
 	ipBlock1 := v1beta1.IPBlock{
 		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet1.IP), PrefixLength: 16},
 	}
@@ -160,12 +178,10 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction:  v1beta1.DirectionIn,
-					From:       ipsToOFAddresses(sets.NewString("1.1.1.1")),
-					ExceptFrom: nil,
-					To:         ofPortsToOFAddresses(sets.NewInt32(1)),
-					ExceptTo:   nil,
-					Service:    []v1beta1.Service{serviceTCP80, serviceTCP},
+					Direction: v1beta1.DirectionIn,
+					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
 				},
 			},
 			false,
@@ -180,12 +196,10 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction:  v1beta1.DirectionIn,
-					From:       ipsToOFAddresses(sets.NewString("1.1.1.1")),
-					ExceptFrom: nil,
-					To:         []types.Address{},
-					ExceptTo:   nil,
-					Service:    nil,
+					Direction: v1beta1.DirectionIn,
+					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					To:        []types.Address{},
+					Service:   nil,
 				},
 			},
 			false,
@@ -209,15 +223,21 @@ func TestReconcilerReconcile(t *testing.T) {
 					From: []types.Address{
 						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
 						openflow.NewIPNetAddress(*ipNet1),
-						openflow.NewIPNetAddress(*ipNet2),
+						openflow.NewIPNetAddress(*diffNet1),
+						openflow.NewIPNetAddress(*diffNet2),
+						openflow.NewIPNetAddress(*diffNet3),
+						openflow.NewIPNetAddress(*diffNet4),
+						openflow.NewIPNetAddress(*diffNet5),
+						openflow.NewIPNetAddress(*diffNet6),
+						openflow.NewIPNetAddress(*diffNet7),
+						openflow.NewIPNetAddress(*diffNet8),
+						openflow.NewIPNetAddress(*diffNet9),
+						openflow.NewIPNetAddress(*diffNet10),
+						openflow.NewIPNetAddress(*diffNet11),
+						openflow.NewIPNetAddress(*diffNet12),
 					},
-					ExceptFrom: []types.Address{
-						openflow.NewIPNetAddress(*ipNet3),
-						openflow.NewIPNetAddress(*ipNet4),
-					},
-					To:       ofPortsToOFAddresses(sets.NewInt32(1)),
-					ExceptTo: nil,
-					Service:  []v1beta1.Service{serviceTCP80, serviceTCP},
+					To:      ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service: []v1beta1.Service{serviceTCP80, serviceTCP},
 				},
 			},
 			false,
@@ -318,12 +338,10 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction:  v1beta1.DirectionIn,
-					From:       []types.Address{},
-					ExceptFrom: nil,
-					To:         ofPortsToOFAddresses(sets.NewInt32(1)),
-					ExceptTo:   nil,
-					Service:    nil,
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   nil,
 				},
 			},
 			false,
@@ -338,12 +356,10 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction:  v1beta1.DirectionOut,
-					From:       ipsToOFAddresses(sets.NewString("2.2.2.2")),
-					ExceptFrom: nil,
-					To:         ipsToOFAddresses(sets.NewString("1.1.1.1")),
-					ExceptTo:   nil,
-					Service:    nil,
+					Direction: v1beta1.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
+					To:        ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					Service:   nil,
 				},
 			},
 			false,
@@ -362,17 +378,23 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction:  v1beta1.DirectionOut,
-					From:       ipsToOFAddresses(sets.NewString("2.2.2.2")),
-					ExceptFrom: nil,
+					Direction: v1beta1.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
 					To: []types.Address{
 						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
 						openflow.NewIPNetAddress(*ipNet1),
-						openflow.NewIPNetAddress(*ipNet2),
-					},
-					ExceptTo: []types.Address{
-						openflow.NewIPNetAddress(*ipNet3),
-						openflow.NewIPNetAddress(*ipNet4),
+						openflow.NewIPNetAddress(*diffNet1),
+						openflow.NewIPNetAddress(*diffNet2),
+						openflow.NewIPNetAddress(*diffNet3),
+						openflow.NewIPNetAddress(*diffNet4),
+						openflow.NewIPNetAddress(*diffNet5),
+						openflow.NewIPNetAddress(*diffNet6),
+						openflow.NewIPNetAddress(*diffNet7),
+						openflow.NewIPNetAddress(*diffNet8),
+						openflow.NewIPNetAddress(*diffNet9),
+						openflow.NewIPNetAddress(*diffNet10),
+						openflow.NewIPNetAddress(*diffNet11),
+						openflow.NewIPNetAddress(*diffNet12),
 					},
 					Service: nil,
 				},
@@ -392,12 +414,10 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			[]*types.PolicyRule{
 				{
-					Direction:  v1beta1.DirectionOut,
-					From:       ipsToOFAddresses(sets.NewString("2.2.2.2")),
-					ExceptFrom: nil,
-					To:         []types.Address{},
-					ExceptTo:   nil,
-					Service:    nil,
+					Direction: v1beta1.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
+					To:        []types.Address{},
+					Service:   nil,
 				},
 			},
 			false,

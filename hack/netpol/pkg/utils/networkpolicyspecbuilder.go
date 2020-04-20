@@ -40,7 +40,7 @@ func (n *NetworkPolicySpecBuilder) SetName(namespace string, name string) *Netwo
 }
 
 // TODO: Add tests to match expressions
-func (n *NetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol, port *int, portName *string, cidr *string, podSelector map[string]string, nsSelector map[string]string, podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement) *NetworkPolicySpecBuilder {
+func (n *NetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol, port *int, portName *string, cidr *string, exceptCIDRs []string, podSelector map[string]string, nsSelector map[string]string, podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement) *NetworkPolicySpecBuilder {
 
 	var ps *metav1.LabelSelector
 	var ns *metav1.LabelSelector
@@ -78,12 +78,20 @@ func (n *NetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol, port *int, por
 		}
 	}
 
+	var ipBlock *networkingv1.IPBlock
+	if cidr != nil {
+		ipBlock = &networkingv1.IPBlock{
+			CIDR:   *cidr,
+			Except: exceptCIDRs,
+		}
+	}
+
 	var policyPeer []networkingv1.NetworkPolicyPeer
-	if ps != nil || ns != nil {
+	if ps != nil || ns != nil || ipBlock != nil {
 		policyPeer = []networkingv1.NetworkPolicyPeer{{
 			PodSelector:       ps,
 			NamespaceSelector: ns,
-			IPBlock:           nil, // todo add in IPBlock support
+			IPBlock:           ipBlock,
 		}}
 	}
 
@@ -131,11 +139,11 @@ func (n *NetworkPolicySpecBuilder) WithEgressDNS() *NetworkPolicySpecBuilder {
 	return n
 }
 
-func (n *NetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol, port *int, portName *string, cidr *string, podSelector map[string]string, nsSelector map[string]string, podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement) *NetworkPolicySpecBuilder {
+func (n *NetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol, port *int, portName *string, cidr *string, exceptCIDRs []string, podSelector map[string]string, nsSelector map[string]string, podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement) *NetworkPolicySpecBuilder {
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	i := &NetworkPolicySpecBuilder{}
-	i.AddIngress(protoc, port, portName, cidr, podSelector, nsSelector, podSelectorMatchExp, nsSelectorMatchExp)
+	i.AddIngress(protoc, port, portName, cidr, exceptCIDRs, podSelector, nsSelector, podSelectorMatchExp, nsSelectorMatchExp)
 	theRule := i.Get().Spec.Ingress[0]
 
 	n.Spec.Egress = append(n.Spec.Egress, networkingv1.NetworkPolicyEgressRule{
