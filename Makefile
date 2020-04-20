@@ -215,6 +215,12 @@ build-ubuntu:
 	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu .
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 
+.PHONY: build-windows
+build-windows:
+	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="
+	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
+	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) antrea/antrea-windows
+
 .PHONY: manifest
 manifest:
 	@echo "===> Generating dev manifest for Antrea <==="
