@@ -51,16 +51,17 @@ const (
 )
 
 const (
-	NxmFieldSrcMAC  = "NXM_OF_ETH_SRC"
-	NxmFieldDstMAC  = "NXM_OF_ETH_DST"
-	NxmFieldARPSha  = "NXM_NX_ARP_SHA"
-	NxmFieldARPTha  = "NXM_NX_ARP_THA"
-	NxmFieldARPSpa  = "NXM_OF_ARP_SPA"
-	NxmFieldARPTpa  = "NXM_OF_ARP_TPA"
-	NxmFieldCtLabel = "NXM_NX_CT_LABEL"
-	NxmFieldCtMark  = "NXM_NX_CT_MARK"
-	NxmFieldARPOp   = "NXM_OF_ARP_OP"
-	NxmFieldReg     = "NXM_NX_REG"
+	NxmFieldSrcMAC      = "NXM_OF_ETH_SRC"
+	NxmFieldDstMAC      = "NXM_OF_ETH_DST"
+	NxmFieldARPSha      = "NXM_NX_ARP_SHA"
+	NxmFieldARPTha      = "NXM_NX_ARP_THA"
+	NxmFieldARPSpa      = "NXM_OF_ARP_SPA"
+	NxmFieldARPTpa      = "NXM_OF_ARP_TPA"
+	NxmFieldCtLabel     = "NXM_NX_CT_LABEL"
+	NxmFieldCtMark      = "NXM_NX_CT_MARK"
+	NxmFieldARPOp       = "NXM_OF_ARP_OP"
+	NxmFieldReg         = "NXM_NX_REG"
+	NxmFieldTunMetadata = "NXM_NX_TUN_METADATA"
 )
 
 const (
@@ -78,7 +79,7 @@ type Bridge interface {
 	DumpTableStatus() []TableStatus
 	// DumpFlows queries the Openflow entries from OFSwitch. The filter of the query is Openflow cookieID; the result is
 	// a map from flow cookieID to FlowStates.
-	DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates
+	DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates, error)
 	// DeleteFlowsByCookie removes Openflow entries from OFSwitch. The removed Openflow entries use the specific CookieID.
 	DeleteFlowsByCookie(cookieID, cookieMask uint64) error
 	// AddFlowsInBundle syncs multiple Openflow entries in a single transaction. This operation could add new flows in
@@ -95,6 +96,18 @@ type Bridge interface {
 	Disconnect() error
 	// IsConnected returns the OFSwitch's connection status. The result is true if the OFSwitch is connected.
 	IsConnected() bool
+	// SubscribePacketIn registers a consumer to listen to PacketIn messages matching the provided reason. When the
+	// Bridge receives a PacketIn message with the specified reason, it sends the message to the consumer using the
+	// provided channel.
+	SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error
+	// AddTLVMap adds a TLV mapping with OVS field tun_metadataX. The value loaded in tun_metadataX is transported by
+	// Geneve header with the specified <optClass, optType, optLength>. The value of OptLength must be a multiple of 4.
+	// The value loaded into field tun_metadataX must fit within optLength bytes.
+	AddTLVMap(optClass uint16, optType uint8, optLength uint8, tunMetadataIndex uint16) error
+	// SendPacketOut sends a packetOut message to the OVS Bridge.
+	SendPacketOut(packetOut *ofctrl.PacketOut) error
+	// BuildPacketOut returns a new PacketOutBuilder.
+	BuildPacketOut() PacketOutBuilder
 }
 
 // TableStatus represents the status of a specific flow table. The status is useful for debugging.
@@ -137,8 +150,9 @@ type OFEntry interface {
 type Flow interface {
 	OFEntry
 	MatchString() string
-	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions.
-	CopyToBuilder() FlowBuilder
+	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions. It
+	// resets the priority of the new FlowBuilder if the provided value is not 0.
+	CopyToBuilder(priority uint16) FlowBuilder
 }
 
 type Action interface {
@@ -170,6 +184,7 @@ type Action interface {
 	Group(id GroupIDType) FlowBuilder
 	Learn(id TableIDType, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction
 	GotoTable(table TableIDType) FlowBuilder
+	SendToController(reason uint8) FlowBuilder
 }
 
 type FlowBuilder interface {
@@ -199,7 +214,10 @@ type FlowBuilder interface {
 	MatchTCPDstPort(port uint16) FlowBuilder
 	MatchUDPDstPort(port uint16) FlowBuilder
 	MatchSCTPDstPort(port uint16) FlowBuilder
+	MatchTunMetadata(index int, data uint32) FlowBuilder
 	Cookie(cookieID uint64) FlowBuilder
+	SetHardTimeout(timout uint16) FlowBuilder
+	SetIdleTimeout(timeout uint16) FlowBuilder
 	Action() Action
 	Done() Flow
 }
@@ -247,6 +265,29 @@ type CTAction interface {
 	// should be the same. portRange could be nil.
 	DNAT(ipRange *IPRange, portRange *PortRange) CTAction
 	CTDone() FlowBuilder
+}
+
+type PacketOutBuilder interface {
+	SetSrcMAC(mac net.HardwareAddr) PacketOutBuilder
+	SetDstMAC(mac net.HardwareAddr) PacketOutBuilder
+	SetSrcIP(ip net.IP) PacketOutBuilder
+	SetDstIP(ip net.IP) PacketOutBuilder
+	SetIPProtocol(protocol Protocol) PacketOutBuilder
+	SetTTL(ttl uint8) PacketOutBuilder
+	SetIPFlags(flags uint16) PacketOutBuilder
+	SetTCPSrcPort(port uint16) PacketOutBuilder
+	SetTCPDstPort(port uint16) PacketOutBuilder
+	SetTCPFlags(flags uint8) PacketOutBuilder
+	SetUDPSrcPort(port uint16) PacketOutBuilder
+	SetUDPDstPort(port uint16) PacketOutBuilder
+	SetICMPType(icmpType uint8) PacketOutBuilder
+	SetICMPCode(icmpCode uint8) PacketOutBuilder
+	SetICMPID(id uint16) PacketOutBuilder
+	SetICMPSequence(seq uint16) PacketOutBuilder
+	SetInport(inPort uint32) PacketOutBuilder
+	SetOutport(outport uint32) PacketOutBuilder
+	AddLoadAction(name string, data uint64, rng Range) PacketOutBuilder
+	Done() *ofctrl.PacketOut
 }
 
 type ctBase struct {

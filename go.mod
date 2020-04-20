@@ -10,7 +10,7 @@ require (
 	github.com/cenkalti/rpc2 v0.0.0-20180727162946-9642ea02d0aa // indirect
 	github.com/containernetworking/cni v0.7.1
 	github.com/containernetworking/plugins v0.8.2-0.20190724153215-ded2f1757770
-	github.com/contiv/libOpenflow v0.0.0-20200319171453-882ba6d92cbc
+	github.com/contiv/libOpenflow v0.0.0-20200424005919-3a6722c98962
 	github.com/contiv/ofnet v0.0.0-00010101000000-000000000000
 	github.com/coreos/go-iptables v0.4.1
 	github.com/davecgh/go-spew v1.1.1
@@ -51,7 +51,7 @@ require (
 )
 
 replace (
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200326015539-5862ec3fa686
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200508122021-ed82d5d15cea
 	// fake.NewSimpleClientset is quite slow when it's initialized with massive objects due to
 	// https://github.com/kubernetes/kubernetes/issues/89574. It takes more than tens of minutes to
 	// init a fake client with 200k objects, which makes it hard to run the NetworkPolicy scale test.

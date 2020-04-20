@@ -113,8 +113,8 @@ func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMess
 // CopyToBuilder returns a new FlowBuilder that copies the table, protocols,
 // matches, and CookieID of the Flow, but does not copy the actions, lastAction,
 // and other private status fields of the ofctrl.Flow, e.g. "realized" and
-// "isInstalled".
-func (f *ofFlow) CopyToBuilder() FlowBuilder {
+// "isInstalled". Reset the priority in the new FlowBuilder if it is provided.
+func (f *ofFlow) CopyToBuilder(priority uint16) FlowBuilder {
 	newFlow := ofFlow{
 		table: f.table,
 		Flow: ofctrl.Flow{
@@ -125,6 +125,9 @@ func (f *ofFlow) CopyToBuilder() FlowBuilder {
 		},
 		matchers: f.matchers,
 		protocol: f.protocol,
+	}
+	if priority > 0 {
+		newFlow.Flow.Match.Priority = priority
 	}
 	return &ofFlowBuilder{newFlow}
 }
