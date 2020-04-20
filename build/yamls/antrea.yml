@@ -318,7 +318,7 @@ data:
 
     # Enable golang metrics exposure via Prometheus.
     #enablePrometheusGoMetrics: false
-    
+
     # Enable process metrics exposure via Prometheus.
     #enablePrometheusProcessMetrics: false
 kind: ConfigMap
