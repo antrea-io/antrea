@@ -28,6 +28,11 @@ jobs:
     needs: build-antrea-image
     runs-on: [ubuntu-18.04]
     steps:
+    - name: Free disk space
+      # https://github.com/actions/virtual-environments/issues/709
+      run: |
+        sudo apt-get clean
+        df -h
     - uses: actions/checkout@v2
     - uses: actions/setup-go@v1
       with:
@@ -54,6 +59,11 @@ jobs:
     needs: build-antrea-image
     runs-on: [ubuntu-18.04]
     steps:
+    - name: Free disk space
+      # https://github.com/actions/virtual-environments/issues/709
+      run: |
+        sudo apt-get clean
+        df -h
     - uses: actions/checkout@v2
     - uses: actions/setup-go@v1
       with:
@@ -80,6 +90,11 @@ jobs:
     needs: build-antrea-image
     runs-on: [ubuntu-18.04]
     steps:
+    - name: Free disk space
+      # https://github.com/actions/virtual-environments/issues/709
+      run: |
+        sudo apt-get clean
+        df -h
     - uses: actions/checkout@v2
     - uses: actions/setup-go@v1
       with:
@@ -106,6 +121,11 @@ jobs:
     needs: build-antrea-image
     runs-on: [ubuntu-18.04]
     steps:
+    - name: Free disk space
+      # https://github.com/actions/virtual-environments/issues/709
+      run: |
+        sudo apt-get clean
+        df -h
     - uses: actions/checkout@v2
     - uses: actions/setup-go@v1
       with:
