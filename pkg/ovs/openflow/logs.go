@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,25 +17,21 @@ package openflow
 import (
 	"bytes"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
-type logFormat struct {
-	TimestampFormat string
-}
+type klogFormatter struct {}
 
 // Format fomats logrus log in compliance with k8s log
-func (f *logFormat) Format(entry *logrus.Entry) ([]byte, error) {
-
+func (f *klogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	b := &bytes.Buffer{}
-
 	filePath := entry.Caller.File
 	filePathArray := strings.Split(filePath, "/")
 	fileName := filePathArray[len(filePathArray)-1]
-
 	pidString := strconv.Itoa(os.Getpid())
 
 	// logrus has seven logging levels: Trace, Debug, Info, Warning, Error, Fatal and Panic.
@@ -51,18 +47,15 @@ func (f *logFormat) Format(entry *logrus.Entry) ([]byte, error) {
 	b.WriteString(":")
 	fmt.Fprint(b, entry.Caller.Line)
 	b.WriteString("] ")
-
 	if entry.Message != "" {
 		b.WriteString(entry.Message)
 	}
-
 	b.WriteByte('\n')
+
 	return b.Bytes(), nil
 }
 
 func init() {
 	logrus.SetReportCaller(true)
-	formatter := logFormat{}
-	formatter.TimestampFormat = "2006-01-02 15:04:05"
-	logrus.SetFormatter(&formatter)
+	logrus.SetFormatter(&klogFormatter{})
 }
