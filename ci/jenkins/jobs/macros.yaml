@@ -342,7 +342,7 @@
             echo  "=== Run sonobuoy with conformance image version ${{conformance_image_version}} ==="
 
             sonobuoy delete --wait --kubeconfig jenkins/out/kubeconfig
-            sonobuoy run --wait --e2e-focus '{focus_regex}' --e2e-skip '{skip_regex}' --e2e-parallel y --kube-conformance-image-version ${{conformance_image_version}} --kubeconfig jenkins/out/kubeconfig
+            sonobuoy run --wait --timeout 1800 --e2e-focus '{focus_regex}' --e2e-skip '{skip_regex}' --e2e-parallel y --kube-conformance-image-version ${{conformance_image_version}} --kubeconfig jenkins/out/kubeconfig
             sonobuoy retrieve --kubeconfig jenkins/out/kubeconfig
             echo '=== Print all results ==='
             sonobuoy results *sonobuoy*.tar.gz
