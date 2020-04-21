@@ -18,19 +18,33 @@ import (
 	"fmt"
 	"net/http"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/rest"
 )
 
 func generateMessage(opt *requestOption, result rest.Result) error {
 	var code int
 	_ = result.StatusCode(&code)
-	if errMsg := generate(opt.commandDefinition, opt.args, code); errMsg != nil {
+	if errMsg := generate(opt.commandDefinition, opt.args, code, result.Error().Error()); errMsg != nil {
 		return errMsg
 	}
 	return result.Error()
 }
 
-func generate(cd *commandDefinition, args map[string]string, code int) error {
+func generateMessageForStatusErr(cd *commandDefinition, args map[string]string, statusErr *errors.StatusError) error {
+	if statusErr.ErrStatus.Details.Causes == nil || len(statusErr.ErrStatus.Details.Causes[0].Message) == 0 {
+		return generate(cd, args, int(statusErr.ErrStatus.Code), statusErr.Error())
+	}
+	return fmt.Errorf("%s: %s", statusErr.ErrStatus.Reason, statusErr.ErrStatus.Details.Causes[0].Message)
+}
+
+func generate(cd *commandDefinition, args map[string]string, code int, err string) error {
+	if len(err) > 0 {
+		if len(http.StatusText(code)) == 0 {
+			return fmt.Errorf("%s", err)
+		}
+		return fmt.Errorf("%s: %s", http.StatusText(code), err)
+	}
 	switch code {
 	case http.StatusNotFound:
 		return fmt.Errorf("NotFound: %s \"%s\" not found", cd.use, args["name"])
