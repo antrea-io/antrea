@@ -24,7 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type klogFormatter struct {}
+type klogFormatter struct{}
 
 // Format fomats logrus log in compliance with k8s log
 func (f *klogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
