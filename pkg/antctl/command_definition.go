@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"reflect"
 	"sort"
@@ -586,9 +585,6 @@ func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (ma
 	}
 	if cd.namespaced() {
 		argMap["namespace"], _ = cmd.Flags().GetString("namespace")
-		if len(argMap["name"]) > 0 && len(argMap["namespace"]) == 0 {
-			return nil, generate(cd, argMap, http.StatusBadRequest)
-		}
 	}
 	return argMap, nil
 }
