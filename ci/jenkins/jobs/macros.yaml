@@ -11,6 +11,7 @@
     builders:
       - shell: |-
           #!/bin/bash
+          set -ex
           cluster="${JOB_NAME}-${BUILD_NUMBER}"
           newNS="${cluster}"
           echo "=== This cluster is: ${cluster} ==="
@@ -99,6 +100,7 @@
     builders:
       - shell: |-
           #!/bin/bash
+          set -ex
           cluster="${CLUSTERNAME}"
 
           echo '=== Clean up cluster ==='
@@ -136,6 +138,7 @@
     builders:
       - shell: |-
           #!/bin/bash
+          set -ex
           echo "=== Auto cleanup starts ==="
           export KUBECONFIG="/var/lib/jenkins/kubeconfig-mgmt"
 
@@ -259,6 +262,7 @@
     builders:
       - shell: |-
           #!/bin/bash
+          set -ex
           echo ====== Running Antrea E2E Tests ======
 
           export GO111MODULE=on
@@ -317,6 +321,7 @@
     builders:
       - shell: |-
           #!/bin/bash
+          set -ex
           echo ====== Running Antrea Conformance Tests ======
 
           export GO111MODULE=on
