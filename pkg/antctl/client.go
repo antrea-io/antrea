@@ -23,6 +23,7 @@ import (
 	"os"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
@@ -114,15 +115,15 @@ func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) 
 	}
 	u.RawQuery = q.Encode()
 	getter := restClient.Get().RequestURI(u.RequestURI()).Timeout(opt.timeout)
-	result := getter.Do()
-	if result.Error() != nil {
-		return nil, generateMessage(opt, result)
-	}
-	raw, err := result.Raw()
+	result, err := getter.DoRaw()
 	if err != nil {
-		return nil, err
+		statusErr, ok := err.(*errors.StatusError)
+		if !ok {
+			return nil, err
+		}
+		return nil, generateMessageForStatusErr(opt.commandDefinition, opt.args, statusErr)
 	}
-	return bytes.NewReader(raw), nil
+	return bytes.NewReader(result), nil
 }
 
 func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Reader, error) {
