@@ -41,6 +41,10 @@ In case a node does not have a supported OVS module installed,
 you can install it following the instructions at:
 [Installing Open vSwitch](https://docs.openvswitch.org/en/latest/intro/install).
 
+Antrea will work out-of-the-box on most popular Operating Systems. Known issues
+encountered when running Antrea on specific OSes are documented
+[here](os-issues.md).
+
 ## Installation
 
 To deploy a released version of Antrea, pick a deployment manifest from the
@@ -104,9 +108,10 @@ please refer to this [guide](/docs/kind.md).
 ### Deploying Antrea in EKS and GKE
 
 Antrea can be deployed in NetworkPolicy only mode to an EKS cluster or a GKE
-cluster, and enforce NetworkPolicies for the cluster. To deploy Antrea in an
-EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
-To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
+cluster, and enforce NetworkPolicies for the cluster.
+
+* To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
+* To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
 
 ### Deploying Antrea with IPsec Encyption
 
