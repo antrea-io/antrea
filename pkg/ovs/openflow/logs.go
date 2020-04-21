@@ -26,7 +26,7 @@ import (
 
 type klogFormatter struct{}
 
-// Format fomats logrus log in compliance with k8s log
+// Format formats logrus log in compliance with k8s log.
 func (f *klogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	b := &bytes.Buffer{}
 	filePath := entry.Caller.File
