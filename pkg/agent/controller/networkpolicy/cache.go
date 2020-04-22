@@ -23,7 +23,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
@@ -111,9 +110,9 @@ type ruleCache struct {
 	// It is a mapping from group name to a set of Pods.
 	addressSetByGroup map[string]v1beta1.GroupMemberPodSet
 
-	policySetLock sync.RWMutex
-	// policySet is a set to store NetworkPolicy UID strings.
-	policySet sets.String
+	policyMapLock sync.RWMutex
+	// policyMap is a map using NetworkPolicy UID as the key.
+	policyMap map[string]*types.NamespacedName
 
 	// rules is a storage that supports listing rules using multiple indexing functions.
 	// rules is thread-safe.
@@ -127,30 +126,54 @@ type ruleCache struct {
 
 func (c *ruleCache) GetNetworkPolicies() []v1beta1.NetworkPolicy {
 	var ret []v1beta1.NetworkPolicy
-	c.policySetLock.RLock()
-	defer c.policySetLock.RUnlock()
-	for uid := range c.policySet {
-		np := v1beta1.NetworkPolicy{
-			ObjectMeta: metav1.ObjectMeta{UID: types.UID(uid)},
-		}
-		rules, _ := c.rules.ByIndex(policyIndex, uid)
-		for i, ruleObj := range rules {
-			rule := ruleObj.(*rule)
-			if i == 0 {
-				np.Name = rule.PolicyName
-				np.Namespace = rule.PolicyNamespace
-			}
-			np.Rules = append(np.Rules, v1beta1.NetworkPolicyRule{
-				Direction: rule.Direction,
-				From:      rule.From,
-				To:        rule.To,
-				Services:  rule.Services,
-			})
-			np.AppliedToGroups = rule.AppliedToGroups
-		}
-		ret = append(ret, np)
+	c.policyMapLock.RLock()
+	defer c.policyMapLock.RUnlock()
+	for uid := range c.policyMap {
+		ret = append(ret, *c.buildNetworkPolicy(uid))
 	}
 	return ret
+}
+
+// getNetworkPolicy looks up and returns the cached NetworkPolicy.
+// nil is returned if the specified NetworkPolicy is not found.
+func (c *ruleCache) getNetworkPolicy(npName, npNamespace string) *v1beta1.NetworkPolicy {
+	var npUID string
+	c.policyMapLock.Lock()
+	defer c.policyMapLock.Unlock()
+	for uid, np := range c.policyMap {
+		if np.Name == npName && np.Namespace == npNamespace {
+			npUID = uid
+			break
+		}
+	}
+
+	if npUID == "" {
+		// NetworkPolicy not found.
+		return nil
+	}
+	return c.buildNetworkPolicy(npUID)
+}
+
+func (c *ruleCache) buildNetworkPolicy(uid string) *v1beta1.NetworkPolicy {
+	np := v1beta1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{UID: types.UID(uid)},
+	}
+	rules, _ := c.rules.ByIndex(policyIndex, uid)
+	for i, ruleObj := range rules {
+		rule := ruleObj.(*rule)
+		if i == 0 {
+			np.Name = rule.PolicyName
+			np.Namespace = rule.PolicyNamespace
+		}
+		np.Rules = append(np.Rules, v1beta1.NetworkPolicyRule{
+			Direction: rule.Direction,
+			From:      rule.From,
+			To:        rule.To,
+			Services:  rule.Services,
+		})
+		np.AppliedToGroups = rule.AppliedToGroups
+	}
+	return &np
 }
 
 func (c *ruleCache) GetAddressGroups() []v1beta1.AddressGroup {
@@ -226,7 +249,7 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta1.PodRef
 	cache := &ruleCache{
 		podSetByGroup:     make(map[string]v1beta1.GroupMemberPodSet),
 		addressSetByGroup: make(map[string]v1beta1.GroupMemberPodSet),
-		policySet:         sets.NewString(),
+		policyMap:         make(map[string]*types.NamespacedName),
 		rules:             rules,
 		dirtyRuleHandler:  dirtyRuleHandler,
 		podUpdates:        podUpdate,
@@ -394,10 +417,10 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
 
 // GetNetworkPolicyNum gets the number of NetworkPolicy.
 func (c *ruleCache) GetNetworkPolicyNum() int {
-	c.policySetLock.RLock()
-	defer c.policySetLock.RUnlock()
+	c.policyMapLock.RLock()
+	defer c.policyMapLock.RUnlock()
 
-	return c.policySet.Len()
+	return len(c.policyMap)
 }
 
 // AddNetworkPolicy adds a new *v1beta1.NetworkPolicy to the cache.
@@ -405,10 +428,10 @@ func (c *ruleCache) GetNetworkPolicyNum() int {
 // watcher reconnects to the Apiserver, we use the same processing as
 // UpdateNetworkPolicy to ensure orphan rules are removed.
 func (c *ruleCache) AddNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
-	c.policySetLock.Lock()
-	defer c.policySetLock.Unlock()
+	c.policyMapLock.Lock()
+	defer c.policyMapLock.Unlock()
 
-	c.policySet.Insert(string(policy.UID))
+	c.policyMap[string(policy.UID)] = &types.NamespacedName{policy.Namespace, policy.Name}
 	return c.UpdateNetworkPolicy(policy)
 }
 
@@ -445,10 +468,10 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 // DeleteNetworkPolicy deletes a cached *v1beta1.NetworkPolicy.
 // All its rules will be regarded as dirty.
 func (c *ruleCache) DeleteNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
-	c.policySetLock.Lock()
-	defer c.policySetLock.Unlock()
+	c.policyMapLock.Lock()
+	defer c.policyMapLock.Unlock()
 
-	c.policySet.Delete(string(policy.UID))
+	delete(c.policyMap, string(policy.UID))
 	existingRules, _ := c.rules.ByIndex(policyIndex, string(policy.UID))
 	for _, r := range existingRules {
 		ruleID := r.(*rule).ID

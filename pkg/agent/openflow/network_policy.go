@@ -443,6 +443,9 @@ type policyRuleConjunction struct {
 	toClause      *clause
 	serviceClause *clause
 	actionFlows   []binding.Flow
+	// NetworkPolicy name and Namespace information for debugging usage.
+	npName      string
+	npNamespace string
 }
 
 // clause groups conjunctive match flows. Matches in a clause represent source addresses(for fromClause), or destination
@@ -694,7 +697,7 @@ func (c *policyRuleConjunction) getAddressClause(addrType types.AddressType) *cl
 // If there is an error in any clause's addAddrFlows or addServiceFlows, the conjunction action flow will never be hit.
 // If the default drop flow is already installed before this error, all packets will be dropped by the default drop flow,
 // Otherwise all packets will be allowed.
-func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule) error {
+func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, npName, npNamespace string) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
@@ -706,8 +709,9 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule) e
 	}
 
 	conj = &policyRuleConjunction{
-		id: ruleID,
-	}
+		id:          ruleID,
+		npName:      npName,
+		npNamespace: npNamespace}
 	nClause, ruleTable, dropTable := conj.calculateClauses(rule, c)
 
 	// Conjunction action flows are installed only if the number of clauses in the conjunction is > 1. It should be a rule
@@ -888,6 +892,36 @@ func (c *policyRuleConjunction) calculateChangesForRuleDeletion() []*conjMatchFl
 	return ctxChanges
 }
 
+// getAllFlowKeys returns the matching strings of actions flows of
+// policyRuleConjunction, as well as matching flows of all its clauses.
+func (c *policyRuleConjunction) getAllFlowKeys() []string {
+	flowKeys := []string{}
+	dropFlowKeys := []string{}
+	for _, flow := range c.actionFlows {
+		flowKeys = append(flowKeys, flow.MatchString())
+	}
+
+	addClauseFlowKeys := func(clause *clause) {
+		if clause == nil {
+			return
+		}
+		for _, ctx := range clause.matches {
+			if ctx.flow != nil {
+				flowKeys = append(flowKeys, ctx.flow.MatchString())
+			}
+			if ctx.dropFlow != nil {
+				dropFlowKeys = append(dropFlowKeys, ctx.dropFlow.MatchString())
+			}
+		}
+	}
+	addClauseFlowKeys(c.fromClause)
+	addClauseFlowKeys(c.toClause)
+	addClauseFlowKeys(c.serviceClause)
+
+	// Add flows in the order of action flows, conjunctive match flows, drop flows.
+	return append(flowKeys, dropFlowKeys...)
+}
+
 func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction {
 	conj, found := c.policyCache.Load(ruleID)
 	if !found {
@@ -1011,4 +1045,26 @@ func (c *client) DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressTy
 	changes := clause.deleteAddrFlows(addrType, addresses)
 	// Update the Openflow entries on the OVS bridge, and update local cache.
 	return c.applyConjunctiveMatchFlows(changes)
+}
+
+func (c *client) GetNetworkPolicyFlowKeys(npName, npNamespace string) []string {
+	flowKeys := []string{}
+	// Hold replayMutex write lock to protect flows from being modified by
+	// NetworkPolicy updates and replayPolicyFlows. This is more for logic
+	// cleanliness, as: for now flow updates do not impact the matching string
+	// generation; NetworkPolicy updates do not change policyRuleConjunction.actionFlows;
+	// and last for protection of clause flows, conjMatchFlowLock is good enough.
+	c.replayMutex.Lock()
+	defer c.replayMutex.Unlock()
+
+	c.policyCache.Range(func(key, value interface{}) bool {
+		conj := value.(*policyRuleConjunction)
+		if conj.npName == npName && conj.npNamespace == npNamespace {
+			// There can be duplicated flows added due to conjunctive matches
+			// shared by multiple policy rules (clauses).
+			flowKeys = append(flowKeys, conj.getAllFlowKeys()...)
+		}
+		return true
+	})
+	return flowKeys
 }

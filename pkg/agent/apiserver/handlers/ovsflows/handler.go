@@ -42,6 +42,22 @@ func getAllFlows(aq querier.AgentQuerier) ([]Response, error) {
 	return resps, nil
 }
 
+func dumpFlows(aq querier.AgentQuerier, flowKeys []string) ([]Response, error) {
+	resps := []Response{}
+	for _, f := range flowKeys {
+		flowStr, err := aq.GetOfctlClient().DumpMatchedFlow(f)
+		if err != nil {
+			klog.Errorf("Failed to dump flows %s: %v", f, err)
+			return nil, err
+		}
+		if flowStr != "" {
+			resps = append(resps, Response{flowStr})
+		}
+	}
+	return resps, nil
+
+}
+
 func getPodFlows(aq querier.AgentQuerier, podName, namespace string) ([]Response, error) {
 	intf, ok := aq.GetInterfaceStore().GetContainerInterface(podName, namespace)
 	if !ok {
@@ -49,18 +65,18 @@ func getPodFlows(aq querier.AgentQuerier, podName, namespace string) ([]Response
 	}
 
 	flowKeys := aq.GetOpenflowClient().GetPodFlowKeys(intf.InterfaceName)
-	resps := []Response{}
-	for _, f := range flowKeys {
-		flowStrs, err := aq.GetOfctlClient().DumpFlows(f)
-		if err != nil {
-			klog.Errorf("Failed to dump flows: %v", err)
-			return nil, err
-		}
-		for _, s := range flowStrs {
-			resps = append(resps, Response{s})
-		}
+	return dumpFlows(aq, flowKeys)
+
+}
+
+func getNetworkPolicyFlows(aq querier.AgentQuerier, npName, namespace string) ([]Response, error) {
+	if aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicy(npName, namespace) == nil {
+		// NetworkPolicy not found.
+		return nil, nil
 	}
-	return resps, nil
+
+	flowKeys := aq.GetOpenflowClient().GetNetworkPolicyFlowKeys(npName, namespace)
+	return dumpFlows(aq, flowKeys)
 }
 
 // HandleFunc returns the function which can handle API requests to "/ovsflows".
@@ -68,14 +84,22 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		var resps []Response
-		podName := r.URL.Query().Get("pod")
+		pod := r.URL.Query().Get("pod")
+		networkPolicy := r.URL.Query().Get("networkpolicy")
 		namespace := r.URL.Query().Get("namespace")
 
-		if podName == "" && namespace == "" {
+		if (pod != "" || networkPolicy != "") && namespace == "" {
+			http.Error(w, "namespace must be provided", http.StatusBadRequest)
+			return
+		}
+
+		if pod == "" && networkPolicy == "" && namespace == "" {
 			resps, err = getAllFlows(aq)
-		} else if podName != "" && namespace != "" {
+		} else if pod != "" {
 			// Pod Namespace must be provided to dump flows of a Pod.
-			resps, err = getPodFlows(aq, podName, namespace)
+			resps, err = getPodFlows(aq, pod, namespace)
+		} else if networkPolicy != "" {
+			resps, err = getNetworkPolicyFlows(aq, networkPolicy, namespace)
 		} else {
 			// Not supported.
 			w.WriteHeader(http.StatusBadRequest)

@@ -86,7 +86,7 @@ type Client interface {
 	// NetworkPolicy rule. Each ingress/egress policy rule installs Openflow entries on two tables, one for
 	// ruleTable and the other for dropTable. If a packet does not pass the ruleTable, it will be dropped by the
 	// dropTable.
-	InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule) error
+	InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, npName, npNamespace string) error
 
 	// UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
 	// UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
@@ -117,8 +117,15 @@ type Client interface {
 	// the new round number.
 	DeleteStaleFlows() error
 
-	// GetPodFlowKeys returns the keys (match strings) of the cached flows for a Pod.
+	// GetPodFlowKeys returns the keys (match strings) of the cached flows for a
+	// Pod.
 	GetPodFlowKeys(interfaceName string) []string
+
+	// GetNetworkPolicyFlowKeys returns the keys (match strings) of the cached
+	// flows for a NetworkPolicy. Flows are grouped by policy rules, and duplicated
+	// entries can be added due to conjunctive match flows shared by multiple
+	// rules.
+	GetNetworkPolicyFlowKeys(npName, npNamespace string) []string
 }
 
 // GetFlowTableStatus returns an array of flow table status.
