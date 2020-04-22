@@ -30,6 +30,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 )
 
+const testNamespace = "ns1"
+
 func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 	ch := make(chan v1beta1.PodReference, 100)
@@ -104,7 +106,7 @@ func newNetworkPolicy(uid string, from, to, appliedTo []string, services []v1bet
 		Services:  services,
 	}
 	return &v1beta1.NetworkPolicy{
-		ObjectMeta:      v1.ObjectMeta{UID: types.UID(uid)},
+		ObjectMeta:      v1.ObjectMeta{UID: types.UID(uid), Name: uid, Namespace: testNamespace},
 		Rules:           []v1beta1.NetworkPolicyRule{networkPolicyRule1},
 		AppliedToGroups: appliedTo,
 	}
@@ -124,7 +126,7 @@ func getNetworkPolicyWithMultipleRules(uid string, from, to, appliedTo []string,
 		Services:  services,
 	}
 	return &v1beta1.NetworkPolicy{
-		ObjectMeta:      v1.ObjectMeta{UID: types.UID(uid)},
+		ObjectMeta:      v1.ObjectMeta{UID: types.UID(uid), Name: uid, Namespace: testNamespace},
 		Rules:           []v1beta1.NetworkPolicyRule{networkPolicyRule1, networkPolicyRule2},
 		AppliedToGroups: appliedTo,
 	}
@@ -153,12 +155,14 @@ func TestAddSingleGroupRule(t *testing.T) {
 	go controller.Run(stopCh)
 
 	// policy1 comes first, no rule will be synced due to missing addressGroup1 and appliedToGroup1.
-	networkPolicyWatcher.Add(newNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services))
+	policy1 := newNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services)
+	networkPolicyWatcher.Add(policy1)
 	select {
 	case ruleID := <-reconciler.updated:
 		t.Fatalf("Expected no update, got %v", ruleID)
 	case <-time.After(time.Millisecond * 100):
 	}
+	assert.Equal(t, policy1, controller.GetNetworkPolicy(policy1.Name, policy1.Namespace))
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 0, controller.GetAddressGroupNum())
 	assert.Equal(t, 0, controller.GetAppliedToGroupNum())
@@ -229,12 +233,14 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	// appliedToGroup1 comes, no rule will be synced.
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")}))
 	// policy1 comes first, no rule will be synced due to missing addressGroup2 and appliedToGroup2.
-	networkPolicyWatcher.Add(newNetworkPolicy("policy1", []string{"addressGroup1", "addressGroup2"}, []string{}, []string{"appliedToGroup1", "appliedToGroup2"}, services))
+	policy1 := newNetworkPolicy("policy1", []string{"addressGroup1", "addressGroup2"}, []string{}, []string{"appliedToGroup1", "appliedToGroup2"}, services)
+	networkPolicyWatcher.Add(policy1)
 	select {
 	case ruleID := <-reconciler.updated:
 		t.Fatalf("Expected no update, got %v", ruleID)
 	case <-time.After(time.Millisecond * 100):
 	}
+	assert.Equal(t, policy1, controller.GetNetworkPolicy(policy1.Name, policy1.Namespace))
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
@@ -351,7 +357,8 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	go controller.Run(stopCh)
 
 	// Test NetworkPolicyInfoQuerier functions when the NetworkPolicy has multiple rules.
-	networkPolicyWatcher.Add(getNetworkPolicyWithMultipleRules("policy1", []string{"addressGroup1"}, []string{"addressGroup2"}, []string{"appliedToGroup1"}, services))
+	policy1 := getNetworkPolicyWithMultipleRules("policy1", []string{"addressGroup1"}, []string{"addressGroup2"}, []string{"appliedToGroup1"}, services)
+	networkPolicyWatcher.Add(policy1)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta1.GroupMemberPod{*newAddressGroupMember("3.3.3.3"), *newAddressGroupMember("4.4.4.4")}))
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")}))
@@ -392,6 +399,7 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 			t.Fatal("Expected two rule updates, got timeout")
 		}
 	}
+	assert.Equal(t, policy1, controller.GetNetworkPolicy(policy1.Name, policy1.Namespace))
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 2, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())

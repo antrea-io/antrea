@@ -160,9 +160,12 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	assert.Equal(t, 3, getChangedFlowOPCount(matchFlows2, insertion))
 	err = c.applyConjunctiveMatchFlows(ctxChanges2)
 	require.Nil(t, err)
-	err = c.InstallPolicyRuleFlows(ruleID2, rule2)
+
+	assert.Equal(t, 0, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	err = c.InstallPolicyRuleFlows(ruleID2, rule2, "np1", "ns1")
 	require.Nil(t, err)
 	checkConjunctionConfig(t, ruleID2, 1, 2, 1, 0)
+	assert.Equal(t, 6, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
 
 	ruleID3 := uint32(103)
 	port1 := intstr.FromInt(8080)
@@ -192,9 +195,11 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	assert.Equal(t, 1, getChangedFlowOPCount(matchFlows3, modification))
 	err = c.applyConjunctiveMatchFlows(ctxChanges3)
 	require.Nil(t, err)
-	err = c.InstallPolicyRuleFlows(ruleID3, rule3)
+
+	err = c.InstallPolicyRuleFlows(ruleID3, rule3, "np1", "ns1")
 	require.Nil(t, err, "Failed to invoke InstallPolicyRuleFlows")
 	checkConjunctionConfig(t, ruleID3, 3, 2, 1, 2)
+	assert.Equal(t, 16, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
 
 	ctxChanges4 := conj.calculateChangesForRuleDeletion()
 	matchFlows4, dropFlows4 := getChangedFlows(ctxChanges4)
@@ -211,6 +216,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	assert.Equal(t, 2, getChangedFlowOPCount(matchFlows5, deletion))
 	assert.Equal(t, 1, getChangedFlowOPCount(matchFlows5, modification))
 	err = c.applyConjunctiveMatchFlows(ctxChanges5)
+	assert.Equal(t, 13, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
 	require.Nil(t, err)
 }
 
@@ -347,6 +353,7 @@ func newMockDropFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	dropFlowBuilder.EXPECT().Action().Return(action).AnyTimes()
 	dropFlow = mocks.NewMockFlow(ctrl)
 	dropFlowBuilder.EXPECT().Done().Return(dropFlow).AnyTimes()
+	dropFlow.EXPECT().MatchString().Return("").AnyTimes()
 	return dropFlowBuilder
 }
 
@@ -370,6 +377,7 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlow = mocks.NewMockFlow(ctrl)
 	ruleFlowBuilder.EXPECT().Done().Return(ruleFlow).AnyTimes()
 	ruleFlow.EXPECT().CopyToBuilder().Return(ruleFlowBuilder).AnyTimes()
+	ruleFlow.EXPECT().MatchString().Return("").AnyTimes()
 	return ruleFlowBuilder
 }
 
