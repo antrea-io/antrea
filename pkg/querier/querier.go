@@ -41,6 +41,7 @@ type AgentNetworkPolicyInfoQuerier interface {
 	GetNetworkPolicies() []networkingv1beta1.NetworkPolicy
 	GetAddressGroups() []networkingv1beta1.AddressGroup
 	GetAppliedToGroups() []networkingv1beta1.AppliedToGroup
+	GetNetworkPolicy(npName, npNamespace string) *networkingv1beta1.NetworkPolicy
 }
 
 type ControllerNetworkPolicyInfoQuerier interface {

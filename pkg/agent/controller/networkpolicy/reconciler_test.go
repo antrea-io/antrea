@@ -409,7 +409,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			for _, ofRule := range tt.expectedOFRules {
-				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any(), gomock.Eq(ofRule))
+				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any(), gomock.Eq(ofRule), "", "")
 			}
 			r := newReconciler(mockOFClient, ifaceStore)
 			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
@@ -539,7 +539,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
-			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any(), gomock.Any())
+			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any(), gomock.Any(), "", "")
 			if len(tt.expectedAddedFrom) > 0 {
 				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedAddedFrom))
 			}

@@ -30,6 +30,7 @@ func (b *ofFlowBuilder) Done() Flow {
 
 // MatchReg adds match condition for matching data in the target register.
 func (b *ofFlowBuilder) MatchReg(regID int, data uint32) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("reg%d=0x%x", regID, data))
 	reg := &ofctrl.NXRegister{
 		ID:   regID,
 		Data: data,
@@ -292,7 +293,7 @@ func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 func (b *ofFlowBuilder) MatchTCPDstPort(port uint16) FlowBuilder {
 	b.MatchProtocol(ProtocolTCP)
 	b.Match.TcpDstPort = port
-	b.matchers = append(b.matchers, fmt.Sprintf("tcp_dst=%d", port))
+	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
 	return b
 }
 
@@ -300,7 +301,7 @@ func (b *ofFlowBuilder) MatchTCPDstPort(port uint16) FlowBuilder {
 func (b *ofFlowBuilder) MatchUDPDstPort(port uint16) FlowBuilder {
 	b.MatchProtocol(ProtocolUDP)
 	b.Match.UdpDstPort = port
-	b.matchers = append(b.matchers, fmt.Sprintf("udp_dst=%d", port))
+	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
 	return b
 }
 
@@ -308,7 +309,7 @@ func (b *ofFlowBuilder) MatchUDPDstPort(port uint16) FlowBuilder {
 func (b *ofFlowBuilder) MatchSCTPDstPort(port uint16) FlowBuilder {
 	b.MatchProtocol(ProtocolSCTP)
 	b.Match.SctpDstPort = port
-	b.matchers = append(b.matchers, fmt.Sprintf("sctp_dst=%d", port))
+	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
 	return b
 }
 
