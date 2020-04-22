@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"time"
 
 	"github.com/coreos/go-iptables/iptables"
 	"k8s.io/klog"
@@ -93,8 +94,17 @@ func (c *Client) Restore(data []byte, flush bool) error {
 	}
 	cmd := exec.Command("iptables-restore", args...)
 	cmd.Stdin = bytes.NewBuffer(data)
+	// We acquire xtables lock explicitly for iptables-restore to prevent it from conflicting
+	// with iptables/iptables-restore which might being called by kube-proxy.
+	// iptables supports "--wait" option and go-iptables has enabled it.
+	// iptables-restore doesn't support the option until 1.6.2, but it's not widely deployed yet.
+	unlockFunc, err := lock(xtablesLockFilePath, 10*time.Second)
+	if err != nil {
+		return err
+	}
+	defer unlockFunc()
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error executing iptables-restore: %v", cmd)
+		return fmt.Errorf("error executing iptables-restore: %v", err)
 	}
 	return nil
 }
