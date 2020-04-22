@@ -56,14 +56,6 @@ const (
 	markTrafficFromLocal   = 2
 )
 
-var (
-	// ofPortMarkRange takes the 16th bit of register marksReg to indicate if the ofPort number of an interface
-	// is found or not. Its value is 0x1 if yes.
-	ofPortMarkRange = binding.Range{16, 16}
-	// ofPortRegRange takes a 32-bit range of register portCacheReg to cache the ofPort number of the interface.
-	ofPortRegRange = binding.Range{0, 31}
-)
-
 type regType uint
 
 func (rt regType) number() string {
@@ -92,6 +84,12 @@ const (
 )
 
 var (
+	// ofPortMarkRange takes the 16th bit of register marksReg to indicate if the ofPort number of an interface
+	// is found or not. Its value is 0x1 if yes.
+	ofPortMarkRange = binding.Range{16, 16}
+	// ofPortRegRange takes a 32-bit range of register portCacheReg to cache the ofPort number of the interface.
+	ofPortRegRange = binding.Range{0, 31}
+
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	ReentranceMAC, _    = net.ParseMAC("de:ad:be:ef:de:ad")
 )
@@ -269,7 +267,7 @@ func (c *client) reEntranceBypassCTFlow(gwPort, reentPort uint32, category cooki
 	conntrackCommitTable := c.pipeline[conntrackCommitTable]
 	return conntrackCommitTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		MatchInPort(gwPort).MatchRegRange(int(portCacheReg), reentPort, ofPortRegRange).
+		MatchInPort(gwPort).MatchReg(int(portCacheReg), reentPort).
 		Action().ResubmitToTable(conntrackCommitTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
@@ -314,7 +312,7 @@ func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
 func (c *client) l2ForwardOutputReentInPortFlow(gwPort uint32, category cookie.Category) binding.Flow {
 	return c.pipeline[l2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		MatchInPort(gwPort).MatchRegRange(int(portCacheReg), gwPort, ofPortRegRange).
+		MatchInPort(gwPort).MatchReg(int(portCacheReg), gwPort).
 		Action().SetSrcMAC(ReentranceMAC).
 		Action().OutputInPort().
 		Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -583,7 +581,7 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue 
 		fb = fb.MatchProtocol(binding.ProtocolIP).MatchSrcIPNet(matchValue.(net.IPNet))
 	case MatchDstOFPort:
 		// ofport number in NXM_NX_REG1 is used in ingress rule to match packets sent to local Pod.
-		fb = fb.MatchProtocol(binding.ProtocolIP).MatchRegRange(int(portCacheReg), uint32(matchValue.(int32)), ofPortRegRange)
+		fb = fb.MatchProtocol(binding.ProtocolIP).MatchReg(int(portCacheReg), uint32(matchValue.(int32)))
 	case MatchSrcOFPort:
 		fb = fb.MatchProtocol(binding.ProtocolIP).MatchInPort(uint32(matchValue.(int32)))
 	case MatchTCPDstPort:

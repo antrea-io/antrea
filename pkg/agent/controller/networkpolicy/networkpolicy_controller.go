@@ -103,6 +103,13 @@ func (c *Controller) GetAppliedToGroupNum() int {
 func (c *Controller) GetNetworkPolicies() []v1beta1.NetworkPolicy {
 	return c.ruleCache.GetNetworkPolicies()
 }
+
+// GetNetworkPolicy looks up and returns the cached NetworkPolicy.
+// nil is returned if the specified NetworkPolicy is not found.
+func (c *Controller) GetNetworkPolicy(npName, npNamespace string) *v1beta1.NetworkPolicy {
+	return c.ruleCache.getNetworkPolicy(npName, npNamespace)
+}
+
 func (c *Controller) GetAddressGroups() []v1beta1.AddressGroup {
 	return c.ruleCache.GetAddressGroups()
 }

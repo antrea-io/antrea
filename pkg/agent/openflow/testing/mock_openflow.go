@@ -121,6 +121,20 @@ func (mr *MockClientMockRecorder) GetFlowTableStatus() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFlowTableStatus", reflect.TypeOf((*MockClient)(nil).GetFlowTableStatus))
 }
 
+// GetNetworkPolicyFlowKeys mocks base method
+func (m *MockClient) GetNetworkPolicyFlowKeys(arg0, arg1 string) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetworkPolicyFlowKeys", arg0, arg1)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GetNetworkPolicyFlowKeys indicates an expected call of GetNetworkPolicyFlowKeys
+func (mr *MockClientMockRecorder) GetNetworkPolicyFlowKeys(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyFlowKeys", reflect.TypeOf((*MockClient)(nil).GetNetworkPolicyFlowKeys), arg0, arg1)
+}
+
 // GetPodFlowKeys mocks base method
 func (m *MockClient) GetPodFlowKeys(arg0 string) []string {
 	m.ctrl.T.Helper()
@@ -221,17 +235,17 @@ func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3, arg4 i
 }
 
 // InstallPolicyRuleFlows mocks base method
-func (m *MockClient) InstallPolicyRuleFlows(arg0 uint32, arg1 *types.PolicyRule) error {
+func (m *MockClient) InstallPolicyRuleFlows(arg0 uint32, arg1 *types.PolicyRule, arg2, arg3 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallPolicyRuleFlows", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallPolicyRuleFlows", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallPolicyRuleFlows indicates an expected call of InstallPolicyRuleFlows
-func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyRuleFlows), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyRuleFlows), arg0, arg1, arg2, arg3)
 }
 
 // IsConnected mocks base method

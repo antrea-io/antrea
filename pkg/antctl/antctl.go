@@ -220,20 +220,26 @@ var CommandList = &commandList{
 			example: `  Dump all OVS flows
   $ antctl get ovsflows
   Dump OVS flows of a Pod
-  $ antctl get ovsflows -p pod1 -n ns1`,
+  $ antctl get ovsflows -p pod1 -n ns1
+  Dump OVS flows of a NetworkPolicy
+  $ antctl get ovsflows --networkpolicy np1 -n ns1`,
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/ovsflows",
 					params: []flagInfo{
+						{
+							name:      "namespace",
+							usage:     "Namespace of the entity",
+							shorthand: "n",
+						},
 						{
 							name:      "pod",
 							usage:     "Pod name. If present, Namespace must be provided.",
 							shorthand: "p",
 						},
 						{
-							name:      "namespace",
-							usage:     "Namespace of the entity",
-							shorthand: "n",
+							name:  "networkpolicy",
+							usage: "NetworkPolicy name. If present, Namespace must be provided.",
 						},
 					},
 					outputType: multiple,
