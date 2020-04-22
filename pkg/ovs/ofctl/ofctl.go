@@ -29,6 +29,7 @@ func NewClient(bridge string) *OfctlClient {
 	return &OfctlClient{bridge}
 }
 
+// DumpFlows returns flows of the bridge.
 func (c *OfctlClient) DumpFlows(args ...string) ([]string, error) {
 	flowDump, err := c.RunOfctlCmd("dump-flows", args...)
 	if err != nil {
@@ -43,8 +44,38 @@ func (c *OfctlClient) DumpFlows(args ...string) ([]string, error) {
 	for scanner.Scan() {
 		flowList = append(flowList, scanner.Text())
 	}
-
 	return flowList, nil
+
+}
+
+// DumpFlows returns the flow exactly matches the matchStr.
+func (c *OfctlClient) DumpMatchedFlow(matchStr string) (string, error) {
+	flowDump, err := c.RunOfctlCmd("dump-flows", matchStr)
+	if err != nil {
+		return "", err
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(string(flowDump)))
+	scanner.Split(bufio.ScanLines)
+	// Skip the first line.
+	scanner.Scan()
+	for scanner.Scan() {
+		flowStr := scanner.Text()
+		// ovs-ofctl dump-flows can return multiple flows that match matchStr, here we
+		// check and return only the one that exactly matches matchStr (no extra match
+		// conditions).
+		if flowExactMatch(matchStr, flowStr) {
+			return flowStr, nil
+		}
+	}
+
+	// No exactly matched flow found.
+	return "", nil
+}
+
+// DumpTableFlows returns all flows in the table.
+func (c *OfctlClient) DumpTableFlows(table uint8) ([]string, error) {
+	return c.DumpFlows(fmt.Sprintf("table=%d", table))
 }
 
 func (c *OfctlClient) DumpGroups(args ...string) ([][]string, error) {
@@ -72,10 +103,6 @@ func (c *OfctlClient) DumpGroups(args ...string) ([][]string, error) {
 	return groupList, nil
 }
 
-func (c *OfctlClient) DumpTableFlows(table uint8) ([]string, error) {
-	return c.DumpFlows(fmt.Sprintf("table=%d", table))
-}
-
 func (c *OfctlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
 	cmdStr := fmt.Sprintf("ovs-ofctl -O Openflow13 %s %s", cmd, c.bridge)
 	cmdStr = cmdStr + " " + strings.Join(args, " ")
@@ -84,4 +111,18 @@ func (c *OfctlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func flowExactMatch(matchStr, flowStr string) bool {
+	// Get the match string which starts with "priority=".
+	flowStr = flowStr[strings.Index(flowStr, " priority")+1 : strings.LastIndexByte(flowStr, ' ')]
+	matches := strings.Split(flowStr, ",")
+	for i, m := range matches {
+		// Skip the first match which is "priority=".
+		if i > 0 && !strings.Contains(matchStr, m) {
+			// The match condition is not included in matchStr.
+			return false
+		}
+	}
+	return true
 }

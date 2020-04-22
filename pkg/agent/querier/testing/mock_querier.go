@@ -25,6 +25,7 @@ import (
 	openflow "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	ofctl "github.com/vmware-tanzu/antrea/pkg/ovs/ofctl"
+	querier "github.com/vmware-tanzu/antrea/pkg/querier"
 	reflect "reflect"
 )
 
@@ -75,6 +76,20 @@ func (m *MockAgentQuerier) GetInterfaceStore() interfacestore.InterfaceStore {
 func (mr *MockAgentQuerierMockRecorder) GetInterfaceStore() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceStore", reflect.TypeOf((*MockAgentQuerier)(nil).GetInterfaceStore))
+}
+
+// GetNetworkPolicyInfoQuerier mocks base method
+func (m *MockAgentQuerier) GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetworkPolicyInfoQuerier")
+	ret0, _ := ret[0].(querier.AgentNetworkPolicyInfoQuerier)
+	return ret0
+}
+
+// GetNetworkPolicyInfoQuerier indicates an expected call of GetNetworkPolicyInfoQuerier
+func (mr *MockAgentQuerierMockRecorder) GetNetworkPolicyInfoQuerier() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyInfoQuerier", reflect.TypeOf((*MockAgentQuerier)(nil).GetNetworkPolicyInfoQuerier))
 }
 
 // GetNodeName mocks base method

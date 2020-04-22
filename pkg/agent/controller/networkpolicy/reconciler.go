@@ -244,7 +244,9 @@ func (r *reconciler) add(rule *CompletedRule) error {
 	}
 
 	for svcHash, ofRule := range ofRuleByServicesMap {
-		ofID, err := r.installOFRule(ofRule)
+		npName := lastRealized.CompletedRule.PolicyName
+		npNamespace := lastRealized.CompletedRule.PolicyNamespace
+		ofID, err := r.installOFRule(ofRule, npName, npNamespace)
 		if err != nil {
 			return err
 		}
@@ -287,7 +289,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 					To:         ofPortsToOFAddresses(newOFPorts),
 					Service:    filterUnresolvablePort(servicesMap[svcHash]),
 				}
-				ofID, err := r.installOFRule(ofRule)
+				ofID, err := r.installOFRule(ofRule, newRule.PolicyName, newRule.PolicyNamespace)
 				if err != nil {
 					return err
 				}
@@ -327,7 +329,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 					To:        podsToOFAddresses(pods),
 					Service:   filterUnresolvablePort(servicesMap[svcHash]),
 				}
-				ofID, err := r.installOFRule(ofRule)
+				ofID, err := r.installOFRule(ofRule, newRule.PolicyName, newRule.PolicyNamespace)
 				if err != nil {
 					return err
 				}
@@ -355,7 +357,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 	return nil
 }
 
-func (r *reconciler) installOFRule(ofRule *types.PolicyRule) (uint32, error) {
+func (r *reconciler) installOFRule(ofRule *types.PolicyRule, npName, npNamespace string) (uint32, error) {
 	// Each pod group gets an Openflow ID.
 	ofID, err := r.idAllocator.allocate()
 	if err != nil {
@@ -363,7 +365,7 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule) (uint32, error) {
 	}
 	klog.V(2).Infof("Installing ofRule %d (Direction: %v, From: %d, ExceptFrom: %d, To: %d, ExceptTo: %d, Service: %d)",
 		ofID, ofRule.Direction, len(ofRule.From), len(ofRule.ExceptFrom), len(ofRule.To), len(ofRule.ExceptTo), len(ofRule.Service))
-	if err := r.ofClient.InstallPolicyRuleFlows(ofID, ofRule); err != nil {
+	if err := r.ofClient.InstallPolicyRuleFlows(ofID, ofRule, npName, npNamespace); err != nil {
 		r.idAllocator.release(ofID)
 		return 0, fmt.Errorf("error installing ofRule %v: %v", ofID, err)
 	}

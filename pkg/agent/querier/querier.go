@@ -33,10 +33,11 @@ var _ AgentQuerier = new(agentQuerier)
 
 type AgentQuerier interface {
 	GetNodeName() string
-	GetInterfaceStore() interfacestore.InterfaceStore
 	GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool)
+	GetInterfaceStore() interfacestore.InterfaceStore
 	GetOpenflowClient() openflow.Client
 	GetOfctlClient() *ofctl.OfctlClient
+	GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier
 }
 
 type agentQuerier struct {
@@ -79,6 +80,11 @@ func (aq *agentQuerier) GetOpenflowClient() openflow.Client {
 // GetOfctlClient returns a new OfctlClient.
 func (aq *agentQuerier) GetOfctlClient() *ofctl.OfctlClient {
 	return ofctl.NewClient(aq.ovsBridge)
+}
+
+// GetNetworkPolicyInfoQuerier returns AgentNetworkPolicyInfoQuerier.
+func (aq agentQuerier) GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier {
+	return aq.networkPolicyInfoQuerier
 }
 
 // getOVSVersion gets current OVS version.
