@@ -22,6 +22,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Microsoft/hcsshim"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -204,14 +205,27 @@ func (ic *ifConfigurator) removeContainerLink(containerID, epName string) error 
 // removeHNSEndpoint removes the HNSEndpoint from HNS and local cache.
 func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, containerID string) error {
 	epName := endpoint.Name
+	deleteCh := make(chan error)
 	// Remove HNSEndpoint.
-	_, err := endpoint.Delete()
-	if err != nil {
-		if !strings.Contains(err.Error(), notFoundHNSEndpoint) {
-			klog.Errorf("Failed to delete container interface %s: %v", containerID, err)
-			return err
+	go func() {
+		_, err := endpoint.Delete()
+		deleteCh <- err
+	}()
+
+	// Deleting HNS Endpoint is blocking in some corner cases. It might be a bug in Windows HNS service. To avoid
+	// hanging in cniserver, add timeout control in HNSEndpoint deletion.
+	select {
+	case err := <-deleteCh:
+		if err != nil {
+			if !strings.Contains(err.Error(), notFoundHNSEndpoint) {
+				klog.Errorf("Failed to delete container interface %s: %v", containerID, err)
+				return err
+			}
 		}
+	case <-time.After(1 * time.Second):
+		return fmt.Errorf("timeout when deleting HNSEndpoint %s", epName)
 	}
+
 	// Delete HNSEndpoint from local cache.
 	ic.delEndpoint(epName)
 	return nil
