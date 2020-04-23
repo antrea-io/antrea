@@ -58,14 +58,16 @@ var CommandList = &commandList{
 		{
 			use:     "networkpolicy",
 			aliases: []string{"networkpolicies", "netpol"},
-			short:   "Print network policies",
-			long:    "Print network policies in ${component}. \"Namespace\" is required if \"Name\" is provided.",
-			example: `  Get a NetworkPolicy in a specific Namespace
-  $ antctl get networkpolicy access-nginx -n prod
+			short:   "Print NetworkPolicies",
+			long:    "Print NetworkPolicies in ${component}. \"namespace\" is required if \"name\" is provided.",
+			example: `  Get a specific NetworkPolicy
+  $ antctl get networkpolicy np1 -n ns1
   Get the list of NetworkPolicies in a Namespace
-  $ antctl get networkpolicy -n prod
+  $ antctl get networkpolicy -n ns1
   Get the list of NetworkPolicies in all Namespaces
-  $ antctl get networkpolicy`,
+  $ antctl get networkpolicy
+  Get the list of NetworkPolicies applied to a Pod (supported by agent only)
+  $ antctl get networkpolicy -p pod1 -n ns1`,
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
@@ -81,13 +83,18 @@ var CommandList = &commandList{
 					params: []flagInfo{
 						{
 							name:  "name",
-							usage: "Retrieve resource by name",
+							usage: "Get NetworkPolicy by name. If present, Namespace must be provided.",
 							arg:   true,
 						},
 						{
 							name:      "namespace",
-							usage:     "Get networkpolicies from specific Namespace",
+							usage:     "Get Networkpolicies from specific Namespace",
 							shorthand: "n",
+						},
+						{
+							name:      "pod",
+							usage:     "Get NetworkPolicies applied to the Pod. If present, Namespace must be provided.",
+							shorthand: "p",
 						},
 					},
 				},
