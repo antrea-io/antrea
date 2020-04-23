@@ -124,12 +124,14 @@ type ruleCache struct {
 	podUpdates <-chan v1beta1.PodReference
 }
 
-func (c *ruleCache) GetNetworkPolicies() []v1beta1.NetworkPolicy {
-	var ret []v1beta1.NetworkPolicy
+func (c *ruleCache) getNetworkPolicies(namespace string) []v1beta1.NetworkPolicy {
+	ret := []v1beta1.NetworkPolicy{}
 	c.policyMapLock.RLock()
 	defer c.policyMapLock.RUnlock()
-	for uid := range c.policyMap {
-		ret = append(ret, *c.buildNetworkPolicy(uid))
+	for uid, np := range c.policyMap {
+		if namespace == "" || np.Namespace == namespace {
+			ret = append(ret, *c.buildNetworkPolicyFromRules(uid))
+		}
 	}
 	return ret
 }
@@ -151,29 +153,68 @@ func (c *ruleCache) getNetworkPolicy(npName, npNamespace string) *v1beta1.Networ
 		// NetworkPolicy not found.
 		return nil
 	}
-	return c.buildNetworkPolicy(npUID)
+	return c.buildNetworkPolicyFromRules(npUID)
 }
 
-func (c *ruleCache) buildNetworkPolicy(uid string) *v1beta1.NetworkPolicy {
-	np := v1beta1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{UID: types.UID(uid)},
-	}
+func (c *ruleCache) buildNetworkPolicyFromRules(uid string) *v1beta1.NetworkPolicy {
+	var np *v1beta1.NetworkPolicy
 	rules, _ := c.rules.ByIndex(policyIndex, uid)
-	for i, ruleObj := range rules {
-		rule := ruleObj.(*rule)
-		if i == 0 {
-			np.Name = rule.PolicyName
-			np.Namespace = rule.PolicyNamespace
-		}
-		np.Rules = append(np.Rules, v1beta1.NetworkPolicyRule{
-			Direction: rule.Direction,
-			From:      rule.From,
-			To:        rule.To,
-			Services:  rule.Services,
-		})
-		np.AppliedToGroups = rule.AppliedToGroups
+	for _, ruleObj := range rules {
+		np = addRuleToNetworkPolicy(np, ruleObj.(*rule))
 	}
-	return &np
+	return np
+}
+
+// addRuleToNetworkPolicy adds a cached rule to the passed NetworkPolicy struct
+// and returns it. If np is nil, a new NetworkPolicy struct will be created.
+func addRuleToNetworkPolicy(np *v1beta1.NetworkPolicy, rule *rule) *v1beta1.NetworkPolicy {
+	if np == nil {
+		np = &v1beta1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{UID: rule.PolicyUID,
+				Name:      rule.PolicyName,
+				Namespace: rule.PolicyNamespace},
+			AppliedToGroups: rule.AppliedToGroups,
+		}
+	}
+	np.Rules = append(np.Rules, v1beta1.NetworkPolicyRule{
+		Direction: rule.Direction,
+		From:      rule.From,
+		To:        rule.To,
+		Services:  rule.Services})
+	return np
+
+}
+
+func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string) []v1beta1.NetworkPolicy {
+	var groups []string
+	memberPod := &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{pod, namespace}}
+	c.podSetLock.RLock()
+	for group, podSet := range c.podSetByGroup {
+		if podSet.Has(memberPod) {
+			groups = append(groups, group)
+		}
+	}
+	c.podSetLock.RUnlock()
+
+	npMap := make(map[string]*v1beta1.NetworkPolicy)
+	for _, group := range groups {
+		rules, _ := c.rules.ByIndex(appliedToGroupIndex, group)
+		for _, ruleObj := range rules {
+			rule := ruleObj.(*rule)
+			np, ok := npMap[string(rule.PolicyUID)]
+			np = addRuleToNetworkPolicy(np, rule)
+			if !ok {
+				// First rule for this NetworkPolicy
+				npMap[string(rule.PolicyUID)] = np
+			}
+		}
+	}
+
+	ret := make([]v1beta1.NetworkPolicy, 0, len(npMap))
+	for _, np := range npMap {
+		ret = append(ret, *np)
+	}
+	return ret
 }
 
 func (c *ruleCache) GetAddressGroups() []v1beta1.AddressGroup {
