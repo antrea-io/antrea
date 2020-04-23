@@ -18,39 +18,47 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query network policy rules in current agent.
-func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
+func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
 		ns := r.URL.Query().Get("namespace")
-		if len(name) > 0 && len(ns) == 0 {
-			http.Error(w, "an empty namespace may not be set when a resource name is provided", http.StatusBadRequest)
-			return
-		}
+		pod := r.URL.Query().Get("pod")
 
-		policies := npq.GetNetworkPolicies()
-		var resp []networkingv1beta1.NetworkPolicy
-		for _, p := range policies {
-			if (len(name) == 0 || name == p.Name) && (len(ns) == 0 || ns == p.Namespace) {
-				resp = append(resp, p)
-			}
-		}
-
-		if len(name) > 0 && len(resp) == 0 {
-			w.WriteHeader(http.StatusNotFound)
+		if (name != "" || pod != "") && ns == "" {
+			http.Error(w, "namespace must be provided", http.StatusBadRequest)
 			return
 		}
 
 		var obj interface{}
-		if len(name) > 0 {
-			obj = resp[0]
+		npq := aq.GetNetworkPolicyInfoQuerier()
+
+		if name != "" {
+			// Query the specified NetworkPolicy.
+			np := npq.GetNetworkPolicy(name, ns)
+			if np != nil {
+				obj = *np
+			}
+		} else if pod != "" {
+			// Query NetworkPolicies applied to the Pod
+			_, ok := aq.GetInterfaceStore().GetContainerInterface(pod, ns)
+			if ok {
+				nps := npq.GetAppliedNetworkPolicies(pod, ns)
+				obj = networkingv1beta1.NetworkPolicyList{Items: nps}
+			}
 		} else {
-			obj = networkingv1beta1.NetworkPolicyList{Items: resp}
+			nps := npq.GetNetworkPolicies(ns)
+			obj = networkingv1beta1.NetworkPolicyList{Items: nps}
+		}
+
+		if obj == nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
 		}
 		if err := json.NewEncoder(w).Encode(obj); err != nil {
 			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)

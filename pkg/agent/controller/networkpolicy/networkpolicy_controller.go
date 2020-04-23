@@ -100,8 +100,17 @@ func (c *Controller) GetAppliedToGroupNum() int {
 	return c.ruleCache.GetAppliedToGroupNum()
 }
 
-func (c *Controller) GetNetworkPolicies() []v1beta1.NetworkPolicy {
-	return c.ruleCache.GetNetworkPolicies()
+// GetNetworkPolicies returns the requested NetworkPolicies.
+// If namespace is provided, only NetworkPolicies in the Namespace are returned.
+// If namespace is not provided, NetworkPolicies in all the Namespace are
+// returned.
+func (c *Controller) GetNetworkPolicies(namespace string) []v1beta1.NetworkPolicy {
+	return c.ruleCache.getNetworkPolicies(namespace)
+}
+
+// GetAppliedToNetworkPolicies returns the NetworkPolicies applied to the Pod.
+func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string) []v1beta1.NetworkPolicy {
+	return c.ruleCache.getAppliedNetworkPolicies(pod, namespace)
 }
 
 // GetNetworkPolicy looks up and returns the cached NetworkPolicy.
