@@ -244,12 +244,6 @@ subjects:
 - kind: ServiceAccount
   name: antctl
   namespace: kube-system
-- kind: ServiceAccount
-  name: antrea-controller
-  namespace: kube-system
-- kind: ServiceAccount
-  name: antrea-agent
-  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
