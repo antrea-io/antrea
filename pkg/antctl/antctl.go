@@ -15,11 +15,13 @@
 package antctl
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovsflows"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
@@ -226,10 +228,14 @@ var CommandList = &commandList{
 			long:    "Dump all the OVS flows or the flows installed for the specified entity.",
 			example: `  Dump all OVS flows
   $ antctl get ovsflows
-  Dump OVS flows of a Pod
+  Dump OVS flows of a local Pod
   $ antctl get ovsflows -p pod1 -n ns1
   Dump OVS flows of a NetworkPolicy
-  $ antctl get ovsflows --networkpolicy np1 -n ns1`,
+  $ antctl get ovsflows --networkpolicy np1 -n ns1
+  Dump OVS flows of a flow Table
+  $ antctl get ovsflows -t IngressRule
+
+  Antrea OVS Flow Tables:` + generateFlowTableHelpMsg(),
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/ovsflows",
@@ -241,12 +247,17 @@ var CommandList = &commandList{
 						},
 						{
 							name:      "pod",
-							usage:     "Pod name. If present, Namespace must be provided.",
+							usage:     "Name of a local Pod. If present, Namespace must be provided.",
 							shorthand: "p",
 						},
 						{
 							name:  "networkpolicy",
 							usage: "NetworkPolicy name. If present, Namespace must be provided.",
+						},
+						{
+							name:      "table",
+							usage:     "Antrea OVS flow table name or number",
+							shorthand: "T",
 						},
 					},
 					outputType: multiple,
@@ -257,4 +268,12 @@ var CommandList = &commandList{
 		},
 	},
 	codec: scheme.Codecs,
+}
+
+func generateFlowTableHelpMsg() string {
+	msg := ""
+	for _, t := range openflow.FlowTables {
+		msg += fmt.Sprintf("\n  %d\t%s", uint32(t.Number), t.Name)
+	}
+	return msg
 }
