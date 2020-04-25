@@ -24,12 +24,17 @@ import (
 
 type SecurityV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ClusterNetworkPoliciesGetter
 	NetworkPoliciesGetter
 }
 
 // SecurityV1alpha1Client is used to interact with features provided by the security.antrea.tanzu.vmware.com group.
 type SecurityV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *SecurityV1alpha1Client) ClusterNetworkPolicies() ClusterNetworkPolicyInterface {
+	return newClusterNetworkPolicies(c)
 }
 
 func (c *SecurityV1alpha1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {

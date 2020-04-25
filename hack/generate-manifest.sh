@@ -27,7 +27,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
         --cloud               Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
-        --np                  Generate a manifest with Namespaced Antrea NetworkPolicy CRDs enabled
+        --np                  Generate a manifest with Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs enabled
         --keep                Debug flag which will preserve the generated kustomization.yml
         --help, -h            Print this message and exit
 
@@ -138,9 +138,10 @@ BASE=../../base
 
 # do all ConfigMap edits
 mkdir configMap && cd configMap
-# user is not expected to make changes directly to antrea-agent.conf but instead to the generated
-# YAML manifest, so our regexs need not be too robust.
+# user is not expected to make changes directly to antrea-agent.conf and antrea-controller.conf,
+# but instead to the generated YAML manifest, so our regexs need not be too robust.
 cp $KUSTOMIZATION_DIR/base/conf/antrea-agent.conf antrea-agent.conf
+cp $KUSTOMIZATION_DIR/base/conf/antrea-controller.conf antrea-controller.conf
 if $KIND; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ovsDatapathType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/ovsDatapathType: netdev/" antrea-agent.conf
 fi
@@ -151,13 +152,17 @@ if $IPSEC; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
 fi
 
+if $NP; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableSecurityCRDs[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableSecurityCRDs: true/" antrea-controller.conf
+fi
+
 if [[ $ENCAP_MODE != "" ]]; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: $ENCAP_MODE/" antrea-agent.conf
 fi
 
 # unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,
 # which is why we use a template kustomization file.
-sed -e "s/<CONF_FILE>/antrea-agent.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
+sed -e "s/<AGENT_CONF_FILE>/antrea-agent.conf/; s/<CONTROLLER_CONF_FILE>/antrea-controller.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
 $KUSTOMIZE edit add base $BASE
 BASE=../configMap
 cd ..
@@ -186,7 +191,7 @@ if $NP; then
     cp ../../base/core-crds.yml .
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
-    # add RBAC to antrea-controller for NP CRD access.
+    # add RBAC to antrea-controller for ANP and CNP CRD access.
     $KUSTOMIZE edit add patch npRbac.yml
     # create NetworkPolicy related CRDs.
     $KUSTOMIZE edit add resource security-crds.yml

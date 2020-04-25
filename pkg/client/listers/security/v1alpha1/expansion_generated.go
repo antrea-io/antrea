@@ -16,6 +16,10 @@
 
 package v1alpha1
 
+// ClusterNetworkPolicyListerExpansion allows custom methods to be added to
+// ClusterNetworkPolicyLister.
+type ClusterNetworkPolicyListerExpansion interface{}
+
 // NetworkPolicyListerExpansion allows custom methods to be added to
 // NetworkPolicyLister.
 type NetworkPolicyListerExpansion interface{}
