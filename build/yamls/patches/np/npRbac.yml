@@ -20,3 +20,11 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
+      - clusternetworkpolicies
+    verbs:
+      - get
+      - watch
+      - list

@@ -22,6 +22,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ClusterNetworkPolicies returns a ClusterNetworkPolicyInformer.
+	ClusterNetworkPolicies() ClusterNetworkPolicyInformer
 	// NetworkPolicies returns a NetworkPolicyInformer.
 	NetworkPolicies() NetworkPolicyInformer
 }
@@ -35,6 +37,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// ClusterNetworkPolicies returns a ClusterNetworkPolicyInformer.
+func (v *version) ClusterNetworkPolicies() ClusterNetworkPolicyInformer {
+	return &clusterNetworkPolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // NetworkPolicies returns a NetworkPolicyInformer.

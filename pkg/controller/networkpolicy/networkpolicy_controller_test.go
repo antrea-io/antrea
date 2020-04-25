@@ -37,6 +37,8 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
@@ -50,31 +52,46 @@ type networkPolicyController struct {
 	podStore                   cache.Store
 	namespaceStore             cache.Store
 	networkPolicyStore         cache.Store
+	cnpStore                   cache.Store
 	appliedToGroupStore        storage.Interface
 	addressGroupStore          storage.Interface
 	internalNetworkPolicyStore storage.Interface
 	informerFactory            informers.SharedInformerFactory
+	crdInformerFactory         crdinformers.SharedInformerFactory
 }
 
 func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyController) {
 	client := newClientset(objects...)
+	crdClient := fakeversioned.NewSimpleClientset(objects...)
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
-	npController := NewNetworkPolicyController(client, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), informerFactory.Networking().V1().NetworkPolicies(), addressGroupStore, appliedToGroupStore, internalNetworkPolicyStore)
+	npController := NewNetworkPolicyController(client,
+		crdClient,
+		informerFactory.Core().V1().Pods(),
+		informerFactory.Core().V1().Namespaces(),
+		informerFactory.Networking().V1().NetworkPolicies(),
+		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
+		addressGroupStore,
+		appliedToGroupStore,
+		internalNetworkPolicyStore)
 	npController.podListerSynced = alwaysReady
 	npController.namespaceListerSynced = alwaysReady
 	npController.networkPolicyListerSynced = alwaysReady
+	npController.cnpListerSynced = alwaysReady
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
+		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
 		informerFactory,
+		crdInformerFactory,
 	}
 }
 
