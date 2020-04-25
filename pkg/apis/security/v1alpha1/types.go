@@ -142,3 +142,46 @@ type NetworkPolicyList struct {
 
 	Items []NetworkPolicy `json:"items"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ClusterNetworkPolicy struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of ClusterNetworkPolicy.
+	Spec ClusterNetworkPolicySpec `json:"spec"`
+}
+
+// ClusterNetworkPolicySpec defines the desired state for ClusterNetworkPolicy.
+type ClusterNetworkPolicySpec struct {
+	// Priority specfies the order of the ClusterNetworkPolicy relative to
+	// other ClusterNetworkPolicies.
+	Priority float64 `json:"priority"`
+	// Select workloads on which the rules will be applied to.
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
+	// Set of ingress rules evaluated based on the order in which they are set.
+	// Currently Ingress rule supports setting the `From` field but not the `To`
+	// field within a Rule.
+	// +optional
+	Ingress []Rule `json:"ingress"`
+	// Set of egress rules evaluated based on the order in which they are set.
+	// Currently Egress rule supports setting the `To` field but not the `From`
+	// field within a Rule.
+	// +optional
+	Egress []Rule `json:"egress"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ClusterNetworkPolicyList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []ClusterNetworkPolicy `json:"items"`
+}

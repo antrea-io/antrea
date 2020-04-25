@@ -26,6 +26,10 @@ type FakeSecurityV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeSecurityV1alpha1) ClusterNetworkPolicies() v1alpha1.ClusterNetworkPolicyInterface {
+	return &FakeClusterNetworkPolicies{c}
+}
+
 func (c *FakeSecurityV1alpha1) NetworkPolicies(namespace string) v1alpha1.NetworkPolicyInterface {
 	return &FakeNetworkPolicies{c, namespace}
 }

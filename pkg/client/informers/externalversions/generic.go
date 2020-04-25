@@ -56,6 +56,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().ExternalEntities().Informer()}, nil
 
 		// Group=security.antrea.tanzu.vmware.com, Version=v1alpha1
+	case securityv1alpha1.SchemeGroupVersion.WithResource("clusternetworkpolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Security().V1alpha1().ClusterNetworkPolicies().Informer()}, nil
 	case securityv1alpha1.SchemeGroupVersion.WithResource("networkpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Security().V1alpha1().NetworkPolicies().Informer()}, nil
 
