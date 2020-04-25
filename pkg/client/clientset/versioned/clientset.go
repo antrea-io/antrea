@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
+	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
@@ -29,6 +30,7 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface
+	CrdV1beta1() crdv1beta1.CrdV1beta1Interface
 	NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface
 }
 
@@ -37,12 +39,18 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	clusterinformationV1beta1 *clusterinformationv1beta1.ClusterinformationV1beta1Client
+	crdV1beta1                *crdv1beta1.CrdV1beta1Client
 	networkingV1beta1         *networkingv1beta1.NetworkingV1beta1Client
 }
 
 // ClusterinformationV1beta1 retrieves the ClusterinformationV1beta1Client
 func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface {
 	return c.clusterinformationV1beta1
+}
+
+// CrdV1beta1 retrieves the CrdV1beta1Client
+func (c *Clientset) CrdV1beta1() crdv1beta1.CrdV1beta1Interface {
+	return c.crdV1beta1
 }
 
 // NetworkingV1beta1 retrieves the NetworkingV1beta1Client
@@ -75,6 +83,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.crdV1beta1, err = crdv1beta1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	cs.networkingV1beta1, err = networkingv1beta1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -92,6 +104,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.NewForConfigOrDie(c)
+	cs.crdV1beta1 = crdv1beta1.NewForConfigOrDie(c)
 	cs.networkingV1beta1 = networkingv1beta1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
@@ -102,6 +115,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.New(c)
+	cs.crdV1beta1 = crdv1beta1.New(c)
 	cs.networkingV1beta1 = networkingv1beta1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)

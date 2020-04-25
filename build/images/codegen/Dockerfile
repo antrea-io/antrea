@@ -22,6 +22,8 @@ ARG K8S_VERSION=1.17.6
 ARG KUBEOPENAPI_VERSION=v0.0.0-20200410145947-bcb3869e6f29
 
 RUN go get k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
+    go get k8s.io/code-generator/cmd/lister-gen@kubernetes-$K8S_VERSION && \
+    go get k8s.io/code-generator/cmd/informer-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/conversion-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/lister-gen@kubernetes-$K8S_VERSION && \

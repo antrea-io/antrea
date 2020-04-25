@@ -46,6 +46,9 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlisters "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -90,51 +93,52 @@ var (
 // NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
 // affected by a Network Policy.
 type NetworkPolicyController struct {
-	kubeClient  clientset.Interface
-	podInformer coreinformers.PodInformer
+	// kubeClient is a standard Kubernetes clientset.
+	kubeClient clientset.Interface
+	// crdClient is the clientset for CRD API group.
+	crdClient versioned.Interface
 
+	podInformer coreinformers.PodInformer
 	// podLister is able to list/get Pods and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
 	podLister corelisters.PodLister
-
 	// podListerSynced is a function which returns true if the Pod shared informer has been synced at least once.
 	podListerSynced cache.InformerSynced
 
 	namespaceInformer coreinformers.NamespaceInformer
-
 	// namespaceLister is able to list/get Namespaces and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
 	namespaceLister corelisters.NamespaceLister
-
 	// namespaceListerSynced is a function which returns true if the Namespace shared informer has been synced at least once.
 	namespaceListerSynced cache.InformerSynced
 
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer
-
 	// networkPolicyLister is able to list/get Network Policies and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
 	networkPolicyLister networkinglisters.NetworkPolicyLister
-
 	// networkPolicyListerSynced is a function which returns true if the Network Policy shared informer has been synced at least once.
 	networkPolicyListerSynced cache.InformerSynced
 
+	cnpInformer crdinformers.ClusterNetworkPolicyInformer
+	// cnpLister is able to list/get ClusterNetworkPolicies and is populated by the shared informer passed to
+	// NewClusterNetworkPolicyController.
+	cnpLister crdlisters.ClusterNetworkPolicyLister
+	// cnpListerSynced is a function which returns true if the ClusterNetworkPolicies shared informer has been synced at least once.
+	cnpListerSynced cache.InformerSynced
+
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
-
 	// appliedToGroupStore is the storage where the populated AppliedTo Groups are stored.
 	appliedToGroupStore storage.Interface
-
 	// internalNetworkPolicyStore is the storage where the populated internal Network Policy are stored.
 	internalNetworkPolicyStore storage.Interface
 
 	// appliedToGroupQueue maintains the networkpolicy.AppliedToGroup objects that
 	// need to be synced.
 	appliedToGroupQueue workqueue.RateLimitingInterface
-
 	// addressGroupQueue maintains the networkpolicy.AddressGroup objects that
 	// need to be synced.
 	addressGroupQueue workqueue.RateLimitingInterface
-
 	// internalNetworkPolicyQueue maintains the networkpolicy.NetworkPolicy objects that
 	// need to be synced.
 	internalNetworkPolicyQueue workqueue.RateLimitingInterface
@@ -155,14 +159,17 @@ type heartbeat struct {
 
 // NewNetworkPolicyController returns a new *NetworkPolicyController.
 func NewNetworkPolicyController(kubeClient clientset.Interface,
+	crdClient versioned.Interface,
 	podInformer coreinformers.PodInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
+	cnpInformer crdinformers.ClusterNetworkPolicyInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface) *NetworkPolicyController {
 	n := &NetworkPolicyController{
 		kubeClient:                 kubeClient,
+		crdClient:                  crdClient,
 		podInformer:                podInformer,
 		podLister:                  podInformer.Lister(),
 		podListerSynced:            podInformer.Informer().HasSynced,
@@ -172,6 +179,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		networkPolicyInformer:      networkPolicyInformer,
 		networkPolicyLister:        networkPolicyInformer.Lister(),
 		networkPolicyListerSynced:  networkPolicyInformer.Informer().HasSynced,
+		cnpInformer:                cnpInformer,
+		cnpLister:                  cnpInformer.Lister(),
+		cnpListerSynced:            cnpInformer.Informer().HasSynced,
 		addressGroupStore:          addressGroupStore,
 		appliedToGroupStore:        appliedToGroupStore,
 		internalNetworkPolicyStore: internalNetworkPolicyStore,
@@ -203,6 +213,15 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			AddFunc:    n.addNetworkPolicy,
 			UpdateFunc: n.updateNetworkPolicy,
 			DeleteFunc: n.deleteNetworkPolicy,
+		},
+		resyncPeriod,
+	)
+	// Add handlers for ClusterNetworkPolicy events.
+	cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc:    n.addCNP,
+			UpdateFunc: n.updateCNP,
+			DeleteFunc: n.deleteCNP,
 		},
 		resyncPeriod,
 	)

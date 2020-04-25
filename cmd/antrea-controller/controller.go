@@ -31,6 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/openapi"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -55,10 +56,12 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
+	cnpInformer := crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies()
 
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()
@@ -66,9 +69,11 @@ func run(o *Options) error {
 	networkPolicyStore := store.NewNetworkPolicyStore()
 
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
+		crdClient,
 		podInformer,
 		namespaceInformer,
 		networkPolicyInformer,
+		cnpInformer,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore)
@@ -98,6 +103,7 @@ func run(o *Options) error {
 	stopCh := signals.RegisterSignalHandlers()
 
 	informerFactory.Start(stopCh)
+	crdInformerFactory.Start(stopCh)
 
 	go controllerMonitor.Run(stopCh)
 

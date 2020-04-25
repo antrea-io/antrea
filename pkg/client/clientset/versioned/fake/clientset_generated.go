@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
 	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1/fake"
+	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1"
+	fakecrdv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1/fake"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
 	fakenetworkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -79,6 +81,11 @@ var _ clientset.Interface = &Clientset{}
 // ClusterinformationV1beta1 retrieves the ClusterinformationV1beta1Client
 func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface {
 	return &fakeclusterinformationv1beta1.FakeClusterinformationV1beta1{Fake: &c.Fake}
+}
+
+// CrdV1beta1 retrieves the CrdV1beta1Client
+func (c *Clientset) CrdV1beta1() crdv1beta1.CrdV1beta1Interface {
+	return &fakecrdv1beta1.FakeCrdV1beta1{Fake: &c.Fake}
 }
 
 // NetworkingV1beta1 retrieves the NetworkingV1beta1Client

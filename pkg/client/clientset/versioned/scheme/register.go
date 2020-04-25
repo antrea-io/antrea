@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package scheme
 
 import (
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -31,6 +32,7 @@ var Codecs = serializer.NewCodecFactory(Scheme)
 var ParameterCodec = runtime.NewParameterCodec(Scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
 	clusterinformationv1beta1.AddToScheme,
+	crdv1beta1.AddToScheme,
 	networkingv1beta1.AddToScheme,
 }
 
