@@ -19,32 +19,34 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ofctl"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 var _ AgentQuerier = new(agentQuerier)
 
 type AgentQuerier interface {
-	GetNodeName() string
-	GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool)
+	GetNodeConfig() *config.NodeConfig
 	GetInterfaceStore() interfacestore.InterfaceStore
+	GetK8sClient() clientset.Interface
+	GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool)
 	GetOpenflowClient() openflow.Client
-	GetOfctlClient() ofctl.OfctlClient
+	GetOVSCtlClient() ovsctl.OVSCtlClient
 	GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier
 }
 
 type agentQuerier struct {
-	ovsBridge                string
-	nodeName                 string
-	nodeSubnet               string
+	nodeConfig               *config.NodeConfig
 	interfaceStore           interfacestore.InterfaceStore
+	k8sClient                clientset.Interface
 	ofClient                 openflow.Client
 	ovsBridgeClient          ovsconfig.OVSBridgeClient
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier
@@ -52,26 +54,37 @@ type agentQuerier struct {
 }
 
 func NewAgentQuerier(
-	ovsBridge string,
-	nodeName string,
-	nodeSubnet string,
+	nodeConfig *config.NodeConfig,
 	interfaceStore interfacestore.InterfaceStore,
+	k8sClient clientset.Interface,
 	ofClient openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier,
 	apiPort int,
 ) *agentQuerier {
-	return &agentQuerier{ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient, networkPolicyInfoQuerier: networkPolicyInfoQuerier, apiPort: apiPort}
+	return &agentQuerier{
+		nodeConfig:               nodeConfig,
+		interfaceStore:           interfaceStore,
+		k8sClient:                k8sClient,
+		ofClient:                 ofClient,
+		ovsBridgeClient:          ovsBridgeClient,
+		networkPolicyInfoQuerier: networkPolicyInfoQuerier,
+		apiPort:                  apiPort}
 }
 
-// GetNodeName gets current node name.
-func (aq agentQuerier) GetNodeName() string {
-	return aq.nodeName
+// GetNodeConfig returns NodeConfig.
+func (aq agentQuerier) GetNodeConfig() *config.NodeConfig {
+	return aq.nodeConfig
 }
 
-// GetInterfaceStore gets current interfacestore.
+// GetInterfaceStore returns InterfaceStore.
 func (aq agentQuerier) GetInterfaceStore() interfacestore.InterfaceStore {
 	return aq.interfaceStore
+}
+
+// GetK8sClient returns Kubernetes client.
+func (aq agentQuerier) GetK8sClient() clientset.Interface {
+	return aq.k8sClient
 }
 
 // GetOpenflowClient returns openflow.Client.
@@ -79,9 +92,9 @@ func (aq *agentQuerier) GetOpenflowClient() openflow.Client {
 	return aq.ofClient
 }
 
-// GetOfctlClient returns a new OfctlClient.
-func (aq *agentQuerier) GetOfctlClient() ofctl.OfctlClient {
-	return ofctl.NewClient(aq.ovsBridge)
+// GetOVSCtlClient returns a new OVSCtlClient.
+func (aq *agentQuerier) GetOVSCtlClient() ovsctl.OVSCtlClient {
+	return ovsctl.NewClient(aq.nodeConfig.OVSBridge)
 }
 
 // GetNetworkPolicyInfoQuerier returns AgentNetworkPolicyInfoQuerier.
@@ -162,7 +175,7 @@ func (aq agentQuerier) getNetworkPolicyControllerInfo() v1beta1.NetworkPolicyCon
 func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool) {
 	// LocalPodNum, FlowTable, NetworkPolicyControllerInfo, OVSVersion and AgentConditions can be changed, so reset these fields.
 	// Only these fields are updated when partial is true.
-	agentInfo.Name = aq.nodeName
+	agentInfo.Name = aq.nodeConfig.Name
 	agentInfo.LocalPodNum = int32(aq.interfaceStore.GetContainerInterfaceNum())
 	agentInfo.OVSInfo.FlowTable = aq.getOVSFlowTable()
 	agentInfo.NetworkPolicyControllerInfo = aq.getNetworkPolicyControllerInfo()
@@ -179,9 +192,9 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 	if !partial {
 		agentInfo.Version = querier.GetVersion()
 		agentInfo.PodRef = querier.GetSelfPod()
-		agentInfo.NodeRef = querier.GetSelfNode(true, aq.nodeName)
-		agentInfo.NodeSubnet = []string{aq.nodeSubnet}
-		agentInfo.OVSInfo.BridgeName = aq.ovsBridge
+		agentInfo.NodeRef = querier.GetSelfNode(true, aq.nodeConfig.Name)
+		agentInfo.NodeSubnet = []string{aq.nodeConfig.PodCIDR.String()}
+		agentInfo.OVSInfo.BridgeName = aq.nodeConfig.OVSBridge
 		agentInfo.APIPort = aq.apiPort
 	}
 }

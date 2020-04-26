@@ -93,6 +93,7 @@ func run(o *Options) error {
 		ofClient,
 		routeClient,
 		ifaceStore,
+		o.config.OVSBridge,
 		o.config.HostGateway,
 		o.config.DefaultMTU,
 		serviceCIDRNet,
@@ -160,10 +161,9 @@ func run(o *Options) error {
 	go networkPolicyController.Run(stopCh)
 
 	agentQuerier := querier.NewAgentQuerier(
-		o.config.OVSBridge,
-		nodeConfig.Name,
-		fmt.Sprintf("%s", nodeConfig.PodCIDR),
+		nodeConfig,
 		ifaceStore,
+		k8sClient,
 		ofClient,
 		ovsBridgeClient,
 		networkPolicyController,
