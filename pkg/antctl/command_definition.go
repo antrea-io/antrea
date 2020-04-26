@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 )
 
@@ -153,6 +154,15 @@ type flagInfo struct {
 	usage        string
 }
 
+// rawCommand defines a full function cobra.Command which lets developers
+// write complex client-side tasks. Only the global flags of the antctl framework will
+// be passed to the cobra.Command.
+type rawCommand struct {
+	cobraCommand      *cobra.Command
+	supportAgent      bool
+	supportController bool
+}
+
 // commandDefinition defines options to create a cobra.Command for an antctl client.
 type commandDefinition struct {
 	// Cobra related
@@ -173,32 +183,32 @@ type commandDefinition struct {
 }
 
 func (cd *commandDefinition) namespaced() bool {
-	if runtimeMode == ModeAgent {
+	if runtime.Mode == runtime.ModeAgent {
 		return cd.agentEndpoint != nil && cd.agentEndpoint.resourceEndpoint != nil && cd.agentEndpoint.resourceEndpoint.namespaced
-	} else if runtimeMode == ModeController {
+	} else if runtime.Mode == runtime.ModeController {
 		return cd.controllerEndpoint != nil && cd.controllerEndpoint.resourceEndpoint != nil && cd.controllerEndpoint.resourceEndpoint.namespaced
 	}
 	return false
 }
 
 func (cd *commandDefinition) getAddonTransform() func(reader io.Reader, single bool) (interface{}, error) {
-	if runtimeMode == ModeAgent && cd.agentEndpoint != nil {
+	if runtime.Mode == runtime.ModeAgent && cd.agentEndpoint != nil {
 		return cd.agentEndpoint.addonTransform
-	} else if runtimeMode == ModeController && cd.controllerEndpoint != nil {
+	} else if runtime.Mode == runtime.ModeController && cd.controllerEndpoint != nil {
 		return cd.controllerEndpoint.addonTransform
 	}
 	return nil
 }
 
 func (cd *commandDefinition) getEndpoint() endpointResponder {
-	if runtimeMode == ModeAgent {
+	if runtime.Mode == runtime.ModeAgent {
 		if cd.agentEndpoint != nil {
 			if cd.agentEndpoint.resourceEndpoint != nil {
 				return cd.agentEndpoint.resourceEndpoint
 			}
 			return cd.agentEndpoint.nonResourceEndpoint
 		}
-	} else if runtimeMode == ModeController {
+	} else if runtime.Mode == runtime.ModeController {
 		if cd.controllerEndpoint != nil {
 			if cd.controllerEndpoint.resourceEndpoint != nil {
 				return cd.controllerEndpoint.resourceEndpoint

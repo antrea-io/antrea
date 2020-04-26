@@ -53,7 +53,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.NetworkPolicyRule":                   schema_pkg_apis_networking_v1beta1_NetworkPolicyRule(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.PodReference":                        schema_pkg_apis_networking_v1beta1_PodReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.Service":                             schema_pkg_apis_networking_v1beta1_Service(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1.Bundle":                                  schema_pkg_apis_system_v1beta1_Bundle(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1.SupportBundle":                           schema_pkg_apis_system_v1beta1_SupportBundle(ref),
 		"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource":                                            schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
 		"k8s.io/api/core/v1.Affinity":                                    schema_k8sio_api_core_v1_Affinity(ref),
 		"k8s.io/api/core/v1.AttachedVolume":                              schema_k8sio_api_core_v1_AttachedVolume(ref),
@@ -1451,7 +1451,7 @@ func schema_pkg_apis_networking_v1beta1_Service(ref common.ReferenceCallback) co
 	}
 }
 
-func schema_pkg_apis_system_v1beta1_Bundle(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_system_v1beta1_SupportBundle(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{

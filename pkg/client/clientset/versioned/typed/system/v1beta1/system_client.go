@@ -24,7 +24,7 @@ import (
 
 type SystemV1beta1Interface interface {
 	RESTClient() rest.Interface
-	BundlesGetter
+	SupportBundlesGetter
 }
 
 // SystemV1beta1Client is used to interact with features provided by the system.antrea.tanzu.vmware.com group.
@@ -32,8 +32,8 @@ type SystemV1beta1Client struct {
 	restClient rest.Interface
 }
 
-func (c *SystemV1beta1Client) Bundles() BundleInterface {
-	return newBundles(c)
+func (c *SystemV1beta1Client) SupportBundles() SupportBundleInterface {
+	return newSupportBundles(c)
 }
 
 // NewForConfig creates a new SystemV1beta1Client for the given config.

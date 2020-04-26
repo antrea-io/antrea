@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bundle
+package supportbundle
 
 import (
 	"archive/tar"
@@ -37,71 +37,65 @@ import (
 	"k8s.io/klog"
 	"k8s.io/utils/exec"
 
-	agentutil "github.com/vmware-tanzu/antrea/pkg/agent/util"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
-	"github.com/vmware-tanzu/antrea/pkg/util"
+	"github.com/vmware-tanzu/antrea/pkg/support"
 )
 
 const bundleExpireDuration = time.Hour
 
 var (
-	defaultFS          = afero.NewOsFs()
-	defaultExecutor    = exec.New()
-	ofctlClientFactory = func(bridge string) ovsctl.OVSCtlClient {
-		return ovsctl.NewClient(bridge)
-	}
+	defaultFS       = afero.NewOsFs()
+	defaultExecutor = exec.New()
 )
 
-func NewStorage(mode string) Storage {
-	bundle := &bundleREST{
-		mode: mode,
-		cache: &bundle{
-			Bundle: systemv1beta1.Bundle{
-				ObjectMeta: metav1.ObjectMeta{Name: mode},
-				Status:     systemv1beta1.BundleStatusNone,
-			},
+// NewStorage creates a support bundle storage. The mode should be either agent
+// or controller. If the mode is agent, the client argument should not be nil.
+func NewStorage(mode string, client ovsctl.OVSCtlClient) Storage {
+	bundle := &supportBundleREST{
+		mode:         mode,
+		ovsCtlClient: client,
+		cache: &systemv1beta1.SupportBundle{
+			ObjectMeta: metav1.ObjectMeta{Name: mode},
+			Status:     systemv1beta1.SupportBundleStatusNone,
 		},
 	}
 	return Storage{
-		Mode:     mode,
-		Bundle:   bundle,
-		Download: &downloadREST{bundle: bundle},
+		Mode:          mode,
+		SupportBundle: bundle,
+		Download:      &downloadREST{supportBundle: bundle},
 	}
 }
 
-// Storage contains REST resources for Bundle, includes status query and download.
+// Storage contains REST resources for support bundle, including status query and download.
 type Storage struct {
-	Bundle   *bundleREST
-	Download *downloadREST
-	Mode     string
+	SupportBundle *supportBundleREST
+	Download      *downloadREST
+	Mode          string
 }
 
 var (
-	_ rest.Scoper          = &bundleREST{}
-	_ rest.Getter          = &bundleREST{}
-	_ rest.Creater         = &bundleREST{}
-	_ rest.GracefulDeleter = &bundleREST{}
+	_ rest.Scoper          = &supportBundleREST{}
+	_ rest.Getter          = &supportBundleREST{}
+	_ rest.Creater         = &supportBundleREST{}
+	_ rest.GracefulDeleter = &supportBundleREST{}
 )
 
-type bundle struct {
-	systemv1beta1.Bundle
-	filepath string
-}
-
-// bundleREST implements REST interfaces for bundle status querying.
-type bundleREST struct {
+// supportBundleREST implements REST interfaces for bundle status querying.
+type supportBundleREST struct {
+	bridge       string
 	mode         string
 	statusLocker sync.RWMutex
 	cancelFunc   context.CancelFunc
-	cache        *bundle
+	cache        *systemv1beta1.SupportBundle
+	ovsCtlClient ovsctl.OVSCtlClient
 }
 
-// Create triggers a bundle generation progress. It only allows to create resource
-// which has the same name with the mode. It returns metav1.Status if there is any
-// error, otherwise it returns the Bundle.
-func (r *bundleREST) Create(ctx context.Context, obj runtime.Object, _ rest.ValidateObjectFunc, _ *metav1.CreateOptions) (runtime.Object, error) {
-	requestBundle := obj.(*systemv1beta1.Bundle)
+// Create triggers a bundle generation. It only allows resource creation when
+// the name matches the mode. It returns metav1.Status if there is any error,
+// otherwise it returns the SupportBundle.
+func (r *supportBundleREST) Create(ctx context.Context, obj runtime.Object, _ rest.ValidateObjectFunc, _ *metav1.CreateOptions) (runtime.Object, error) {
+	requestBundle := obj.(*systemv1beta1.SupportBundle)
 	if requestBundle.Name != r.mode {
 		return nil, errors.NewForbidden(systemv1beta1.ControllerInfoVersionResource.GroupResource(), requestBundle.Name, fmt.Errorf("only resource name \"%s\" is allowed", r.mode))
 	}
@@ -112,17 +106,15 @@ func (r *bundleREST) Create(ctx context.Context, obj runtime.Object, _ rest.Vali
 		r.cancelFunc()
 	}
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	r.cache = &bundle{
-		Bundle: systemv1beta1.Bundle{
-			ObjectMeta: metav1.ObjectMeta{Name: r.mode},
-			Status:     systemv1beta1.BundleStatusCollecting,
-		},
+	r.cache = &systemv1beta1.SupportBundle{
+		ObjectMeta: metav1.ObjectMeta{Name: r.mode},
+		Status:     systemv1beta1.SupportBundleStatusCollecting,
 	}
 	r.cancelFunc = cancelFunc
 
 	go func() {
 		var err error
-		var b *bundle
+		var b *systemv1beta1.SupportBundle
 		if r.mode == "agent" {
 			b, err = r.collectAgent(ctx)
 		} else if r.mode == "controller" {
@@ -132,8 +124,8 @@ func (r *bundleREST) Create(ctx context.Context, obj runtime.Object, _ rest.Vali
 			r.statusLocker.Lock()
 			defer r.statusLocker.Unlock()
 			if err != nil {
-				klog.Errorf("Error when collecting bundle: %v", err)
-				r.cache.Status = systemv1beta1.BundleStatusNone
+				klog.Errorf("Error when collecting supportBundle: %v", err)
+				r.cache.Status = systemv1beta1.SupportBundleStatusNone
 				return
 			}
 			select {
@@ -142,54 +134,50 @@ func (r *bundleREST) Create(ctx context.Context, obj runtime.Object, _ rest.Vali
 				r.cache = b
 			}
 		}()
-
-		r.clean(ctx, b.filepath, bundleExpireDuration)
+		r.clean(ctx, b.Filepath, bundleExpireDuration)
 	}()
 
 	return r.cache, nil
 }
 
-func (r *bundleREST) New() runtime.Object {
-	return &systemv1beta1.Bundle{}
+func (r *supportBundleREST) New() runtime.Object {
+	return &systemv1beta1.SupportBundle{}
 }
 
-// Get returns current status of the bundle. It only allows to query the resource
-// which has the same name of the mode.
-func (r *bundleREST) Get(_ context.Context, name string, _ *metav1.GetOptions) (runtime.Object, error) {
+// Get returns current status of the bundle. It only allows querying the resource
+// whose name is equal to the mode.
+func (r *supportBundleREST) Get(_ context.Context, name string, _ *metav1.GetOptions) (runtime.Object, error) {
 	r.statusLocker.RLock()
 	defer r.statusLocker.RUnlock()
 	if r.cache.Name != name {
-		return nil, errors.NewNotFound(systemv1beta1.Resource("bundle"), name)
+		return nil, errors.NewNotFound(systemv1beta1.Resource("supportBundle"), name)
 	}
 	return r.cache, nil
 }
 
 // Delete can remove the current finished bundle or cancel a running bundle
-// collecting. It only allows to query the resource which has the same name of
-// the mode.
-func (r *bundleREST) Delete(_ context.Context, name string, _ rest.ValidateObjectFunc, _ *metav1.DeleteOptions) (runtime.Object, bool, error) {
+// collecting. It only allows querying the resource whose name is equal to the mode.
+func (r *supportBundleREST) Delete(_ context.Context, name string, _ rest.ValidateObjectFunc, _ *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	if name != r.mode {
-		return nil, false, errors.NewNotFound(systemv1beta1.Resource("bundle"), name)
+		return nil, false, errors.NewNotFound(systemv1beta1.Resource("supportBundle"), name)
 	}
 	r.statusLocker.Lock()
 	defer r.statusLocker.Unlock()
 	if r.cancelFunc != nil {
 		r.cancelFunc()
 	}
-	r.cache = &bundle{
-		Bundle: systemv1beta1.Bundle{
-			ObjectMeta: metav1.ObjectMeta{Name: r.mode},
-			Status:     systemv1beta1.BundleStatusNone,
-		},
+	r.cache = &systemv1beta1.SupportBundle{
+		ObjectMeta: metav1.ObjectMeta{Name: r.mode},
+		Status:     systemv1beta1.SupportBundleStatusNone,
 	}
 	return nil, true, nil
 }
 
-func (r *bundleREST) NamespaceScoped() bool {
+func (r *supportBundleREST) NamespaceScoped() bool {
 	return false
 }
 
-func (r *bundleREST) collect(ctx context.Context, dumpers ...func(string) error) (*bundle, error) {
+func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string) error) (*systemv1beta1.SupportBundle, error) {
 	basedir, err := afero.TempDir(defaultFS, "", "bundle_tmp_")
 	if err != nil {
 		return nil, fmt.Errorf("error when creating tempdir: %w", err)
@@ -207,7 +195,7 @@ func (r *bundleREST) collect(ctx context.Context, dumpers ...func(string) error)
 	defer outputFile.Close()
 	hashSum, err := packDir(basedir, outputFile)
 	if err != nil {
-		return nil, fmt.Errorf("error when packaing bundle: %w", err)
+		return nil, fmt.Errorf("error when packaing supportBundle: %w", err)
 	}
 
 	select {
@@ -223,51 +211,42 @@ func (r *bundleREST) collect(ctx context.Context, dumpers ...func(string) error)
 	}
 	creationTime := metav1.Now()
 	deletionTime := metav1.NewTime(creationTime.Add(bundleExpireDuration))
-	return &bundle{
-		Bundle: systemv1beta1.Bundle{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:              r.mode,
-				CreationTimestamp: creationTime,
-				DeletionTimestamp: &deletionTime,
-			},
-			Status: systemv1beta1.BundleStatusCollected,
-			Sum:    fmt.Sprintf("%x", hashSum),
-			Size:   uint32(fileSize),
+	return &systemv1beta1.SupportBundle{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              r.mode,
+			CreationTimestamp: creationTime,
+			DeletionTimestamp: &deletionTime,
 		},
-		filepath: outputFile.Name(),
+		Status:   systemv1beta1.SupportBundleStatusCollected,
+		Sum:      fmt.Sprintf("%x", hashSum),
+		Size:     uint32(fileSize),
+		Filepath: outputFile.Name(),
 	}, nil
 }
 
-func (r *bundleREST) collectAgent(ctx context.Context) (*bundle, error) {
-	agentDumper := agentutil.NewDumper(defaultFS, defaultExecutor, ofctlClientFactory)
-	generalDumper := util.NewDumper(defaultFS, defaultExecutor)
+func (r *supportBundleREST) collectAgent(ctx context.Context) (*systemv1beta1.SupportBundle, error) {
+	dumper := support.NewAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient)
 	return r.collect(
 		ctx,
-		generalDumper.DumpAgentLog,
-		generalDumper.DumpOVSLog,
-		agentDumper.DumpIPToolInfo,
-		agentDumper.DumpIPTables,
-		agentDumper.DumpFlows,
-		generalDumper.DumpAddressGroups,
-		generalDumper.DumpNetworkPolicies,
-		generalDumper.DumpAppliedToGroups,
-		generalDumper.DumpAgentInfo,
+		dumper.DumpLog,
+		dumper.DumpHostNetworkInfo,
+		dumper.DumpFlows,
+		dumper.DumpNetworkPolicyResources,
+		dumper.DumpAgentInfo,
 	)
 }
 
-func (r *bundleREST) collectController(ctx context.Context) (*bundle, error) {
-	generalDumper := util.NewDumper(defaultFS, defaultExecutor)
+func (r *supportBundleREST) collectController(ctx context.Context) (*systemv1beta1.SupportBundle, error) {
+	dumper := support.NewControllerDumper(defaultFS, defaultExecutor)
 	return r.collect(
 		ctx,
-		generalDumper.DumpControllerLog,
-		generalDumper.DumpAddressGroups,
-		generalDumper.DumpNetworkPolicies,
-		generalDumper.DumpAppliedToGroups,
-		generalDumper.DumpControllerInfo,
+		dumper.DumpLog,
+		dumper.DumpNetworkPolicyResources,
+		dumper.DumpControllerInfo,
 	)
 }
 
-func (r *bundleREST) clean(ctx context.Context, bundlePath string, duration time.Duration) {
+func (r *supportBundleREST) clean(ctx context.Context, bundlePath string, duration time.Duration) {
 	select {
 	case <-ctx.Done():
 	case <-time.After(duration):
@@ -277,12 +256,10 @@ func (r *bundleREST) clean(ctx context.Context, bundlePath string, duration time
 			select { // check the context again in case of cancellation when acquiring the lock.
 			case <-ctx.Done():
 			default:
-				if r.cache.Status == systemv1beta1.BundleStatusCollected {
-					r.cache = &bundle{
-						Bundle: systemv1beta1.Bundle{
-							ObjectMeta: metav1.ObjectMeta{Name: r.mode},
-							Status:     systemv1beta1.BundleStatusNone,
-						},
+				if r.cache.Status == systemv1beta1.SupportBundleStatusCollected {
+					r.cache = &systemv1beta1.SupportBundle{
+						ObjectMeta: metav1.ObjectMeta{Name: r.mode},
+						Status:     systemv1beta1.SupportBundleStatusNone,
 					}
 				}
 			}
@@ -335,15 +312,15 @@ var (
 
 // downloadREST implements the REST for downloading the bundle.
 type downloadREST struct {
-	bundle *bundleREST
+	supportBundle *supportBundleREST
 }
 
 func (d *downloadREST) New() runtime.Object {
-	return &systemv1beta1.Bundle{}
+	return &systemv1beta1.SupportBundle{}
 }
 
 func (d *downloadREST) Get(_ context.Context, _ string, _ *metav1.GetOptions) (runtime.Object, error) {
-	return &bundleStream{d.bundle.cache}, nil
+	return &bundleStream{d.supportBundle.cache}, nil
 }
 
 func (d *downloadREST) ProducesMIMETypes(_ string) []string {
@@ -360,7 +337,7 @@ var (
 )
 
 type bundleStream struct {
-	cache *bundle
+	cache *systemv1beta1.SupportBundle
 }
 
 func (b *bundleStream) GetObjectKind() schema.ObjectKind {
@@ -373,7 +350,7 @@ func (b *bundleStream) DeepCopyObject() runtime.Object {
 
 func (b *bundleStream) InputStream(_ context.Context, _, _ string) (stream io.ReadCloser, flush bool, mimeType string, err error) {
 	// f will be closed by invoker, no need to close in this function.
-	f, err := defaultFS.Open(b.cache.filepath)
+	f, err := defaultFS.Open(b.cache.Filepath)
 	if err != nil {
 		return nil, false, "", err
 	}

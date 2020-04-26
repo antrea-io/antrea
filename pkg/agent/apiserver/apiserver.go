@@ -39,8 +39,9 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
-	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/bundle"
+	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/supportbundle"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 	antreaversion "github.com/vmware-tanzu/antrea/pkg/version"
 )
@@ -76,12 +77,12 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/ovstracing", ovstracing.HandleFunc(aq))
 }
 
-func installAPIGroup(s *genericapiserver.GenericAPIServer) error {
-	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, scheme, metav1.ParameterCodec, codecs)
+func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier) error {
+	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(systemv1beta1.GroupName, scheme, metav1.ParameterCodec, codecs)
 	systemStorage := map[string]rest.Storage{}
-	bundleStorage := bundle.NewStorage("agent")
-	systemStorage["bundles"] = bundleStorage.Bundle
-	systemStorage["bundles/download"] = bundleStorage.Download
+	supportBundleStorage := supportbundle.NewStorage("agent", ovsctl.NewClient(aq.GetNodeConfig().OVSBridge))
+	systemStorage["supportbundles"] = supportBundleStorage.SupportBundle
+	systemStorage["supportbundles/download"] = supportBundleStorage.Download
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
 	return s.InstallAPIGroup(&systemGroup)
 }
@@ -97,7 +98,7 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	if err != nil {
 		return nil, err
 	}
-	if err := installAPIGroup(s); err != nil {
+	if err := installAPIGroup(s, aq); err != nil {
 		return nil, err
 	}
 	installHandlers(aq, npq, s)

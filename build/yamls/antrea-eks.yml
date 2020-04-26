@@ -88,14 +88,14 @@ rules:
 - apiGroups:
   - system.antrea.tanzu.vmware.com
   resources:
-  - bundles
+  - supportbundles
   verbs:
   - get
   - post
 - apiGroups:
   - system.antrea.tanzu.vmware.com
   resources:
-  - bundles/download
+  - supportbundles/download
   verbs:
   - get
 - nonResourceURLs:

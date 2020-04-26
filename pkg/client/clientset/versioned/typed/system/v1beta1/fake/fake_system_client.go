@@ -26,8 +26,8 @@ type FakeSystemV1beta1 struct {
 	*testing.Fake
 }
 
-func (c *FakeSystemV1beta1) Bundles() v1beta1.BundleInterface {
-	return &FakeBundles{c}
+func (c *FakeSystemV1beta1) SupportBundles() v1beta1.SupportBundleInterface {
+	return &FakeSupportBundles{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

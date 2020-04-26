@@ -32,8 +32,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/bundle"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
 )
@@ -132,9 +132,9 @@ func (c completedConfig) New() (*APIServer, error) {
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	systemStorage := map[string]rest.Storage{}
 	systemStorage["controllerinfos"] = controllerinfo.NewREST(c.extraConfig.controllerQuerier)
-	bundleStorage := bundle.NewStorage("controller")
-	systemStorage["bundles"] = bundleStorage.Bundle
-	systemStorage["bundles/download"] = bundleStorage.Download
+	bundleStorage := supportbundle.NewStorage("controller", nil)
+	systemStorage["supportbundles"] = bundleStorage.SupportBundle
+	systemStorage["supportbundles/download"] = bundleStorage.Download
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
 
 	groups := []*genericapiserver.APIGroupInfo{&networkingGroup, &systemGroup}

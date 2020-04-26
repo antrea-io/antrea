@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
@@ -43,8 +44,8 @@ func getAccessToken(podName string, containerName string, tokenPath string, data
 	return stdout, nil
 }
 
-// testBundle tests all bundle related APIs.
-func testBundle(name string, t *testing.T) {
+// testSupportBundle tests all support bundle related APIs.
+func testSupportBundle(name string, t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -53,21 +54,24 @@ func testBundle(name string, t *testing.T) {
 
 	var podName, podPort, tokenPath string
 	if name == "controller" {
-		podName, err = data.getAntreaController()
+		var pod *v1.Pod
+		pod, err = data.getAntreaController()
+		require.NoError(t, err)
+		podName = pod.Name
 		podPort = fmt.Sprint(apis.AntreaControllerAPIPort)
 		tokenPath = controllerapiserver.TokenPath
 	} else {
 		podName, err = data.getAntreaPodOnNode(masterNodeName())
+		require.NoError(t, err)
 		podPort = fmt.Sprint(apis.AntreaAgentAPIPort)
 		tokenPath = agentapiserver.TokenPath
 	}
-	require.NoError(t, err)
-	// acquired token.
+	// Acquire token.
 	token, err := getAccessToken(podName, fmt.Sprintf("antrea-%s", name), tokenPath, data)
 	require.NoError(t, err)
 	podIP, err := data.podWaitForIP(defaultTimeout, podName, metav1.NamespaceSystem)
 	require.NoError(t, err)
-	// setup clients.
+	// Setup clients.
 	localConfig := rest.CopyConfig(data.kubeConfig)
 	localConfig.Host = net.JoinHostPort(podIP, podPort)
 	localConfig.BearerToken = token
@@ -76,19 +80,19 @@ func testBundle(name string, t *testing.T) {
 	localConfig.CAData = nil
 	clients, err := clientset.NewForConfig(localConfig)
 	require.NoError(t, err)
-	// Clearing any exists bundle.
-	err = clients.SystemV1beta1().Bundles().Delete(name, &metav1.DeleteOptions{})
+	// Clearing any existing support bundle.
+	err = clients.SystemV1beta1().SupportBundles().Delete(name, &metav1.DeleteOptions{})
 	require.NoError(t, nil)
 	time.Sleep(100 * time.Millisecond)
 	// Checking the initial status.
-	bundle, err := clients.SystemV1beta1().Bundles().Get(name, metav1.GetOptions{})
+	bundle, err := clients.SystemV1beta1().SupportBundles().Get(name, metav1.GetOptions{})
 	require.NoError(t, err)
-	require.Equal(t, systemv1beta1.BundleStatusNone, bundle.Status)
-	// Creating a new bundle.
-	bundle, err = clients.SystemV1beta1().Bundles().Create(&systemv1beta1.Bundle{ObjectMeta: metav1.ObjectMeta{Name: name}})
+	require.Equal(t, systemv1beta1.SupportBundleStatusNone, bundle.Status)
+	// Creating a new support bundle.
+	bundle, err = clients.SystemV1beta1().SupportBundles().Create(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: name}})
 	require.NoError(t, err)
-	require.Equal(t, systemv1beta1.BundleStatusCollecting, bundle.Status)
-	// Waiting the generation to be completed.
+	require.Equal(t, systemv1beta1.SupportBundleStatusCollecting, bundle.Status)
+	// Waiting for the generation to be completed.
 	ddl := time.After(defaultTimeout)
 	err = wait.PollImmediateUntil(200*time.Millisecond, func() (done bool, err error) {
 		select {
@@ -96,19 +100,19 @@ func testBundle(name string, t *testing.T) {
 			return false, fmt.Errorf("collecting timeout")
 		default:
 		}
-		bundle, err = clients.SystemV1beta1().Bundles().Get(name, metav1.GetOptions{})
+		bundle, err = clients.SystemV1beta1().SupportBundles().Get(name, metav1.GetOptions{})
 		require.NoError(t, err)
-		return bundle.Status == systemv1beta1.BundleStatusCollected, nil
+		return bundle.Status == systemv1beta1.SupportBundleStatusCollected, nil
 	}, nil)
 	require.NoError(t, err)
 	// Checking the complete status.
-	bundle, err = clients.SystemV1beta1().Bundles().Get(name, metav1.GetOptions{})
+	bundle, err = clients.SystemV1beta1().SupportBundles().Get(name, metav1.GetOptions{})
 	require.NoError(t, err)
-	require.Equal(t, systemv1beta1.BundleStatusCollected, bundle.Status)
-	// Downloading the bundle and verify sha256sum.
+	require.Equal(t, systemv1beta1.SupportBundleStatusCollected, bundle.Status)
+	// Downloading the bundle and verifying sha256sum.
 	readStream, err := clients.SystemV1beta1().RESTClient().
 		Get().
-		Resource("bundles").
+		Resource("supportbundles").
 		Name(name).
 		SubResource("download").
 		Stream()
@@ -119,19 +123,19 @@ func testBundle(name string, t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bundle.Sum, fmt.Sprintf("%x", hasher.Sum(nil)))
 	// Deleting the bundle.
-	err = clients.SystemV1beta1().Bundles().Delete(name, &metav1.DeleteOptions{})
+	err = clients.SystemV1beta1().SupportBundles().Delete(name, &metav1.DeleteOptions{})
 	require.NoError(t, nil)
 	time.Sleep(100 * time.Millisecond)
-	// Checking if the bundle deleted.
-	bundle, err = clients.SystemV1beta1().Bundles().Get(name, metav1.GetOptions{})
+	// Checking that the bundle was deleted.
+	bundle, err = clients.SystemV1beta1().SupportBundles().Get(name, metav1.GetOptions{})
 	require.NoError(t, err)
-	require.Equal(t, systemv1beta1.BundleStatusNone, bundle.Status)
+	require.Equal(t, systemv1beta1.SupportBundleStatusNone, bundle.Status)
 }
 
-func TestBundleController(t *testing.T) {
-	testBundle("controller", t)
+func TestSupportBundleController(t *testing.T) {
+	testSupportBundle("controller", t)
 }
 
-func TestBundleAgent(t *testing.T) {
-	testBundle("agent", t)
+func TestSupportBundleAgent(t *testing.T) {
+	testSupportBundle("agent", t)
 }

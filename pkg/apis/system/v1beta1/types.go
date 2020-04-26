@@ -16,21 +16,24 @@ package v1beta1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+type BundleStatus string
+
 const (
-	BundleStatusNone       = "None"
-	BundleStatusCollecting = "Collecting"
-	BundleStatusCollected  = "Collected"
+	SupportBundleStatusNone       BundleStatus = "None"
+	SupportBundleStatusCollecting BundleStatus = "Collecting"
+	SupportBundleStatusCollected  BundleStatus = "Collected"
 )
 
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=get,create,delete
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type Bundle struct {
+type SupportBundle struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Status   string `json:"status,omitempty"`
-	Sum      string `json:"sum,omitempty"`
-	Size     uint32 `json:"size,omitempty"`
+	Status   BundleStatus `json:"status,omitempty"`
+	Sum      string       `json:"sum,omitempty"`
+	Size     uint32       `json:"size,omitempty"`
+	Filepath string       `json:"-"`
 }

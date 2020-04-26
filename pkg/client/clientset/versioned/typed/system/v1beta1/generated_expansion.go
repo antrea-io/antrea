@@ -16,4 +16,4 @@
 
 package v1beta1
 
-type BundleExpansion interface{}
+type SupportBundleExpansion interface{}
