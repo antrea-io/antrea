@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	agentapiserver "github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
 	"github.com/vmware-tanzu/antrea/pkg/apis"
 	controllerapiserver "github.com/vmware-tanzu/antrea/pkg/apiserver"
 )
@@ -76,14 +77,14 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 		return nil, err
 	}
 	kubeconfig.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: c.codec}
-	if inPod {
+	if runtime.InPod {
 		kubeconfig.Insecure = true
 		kubeconfig.CAFile = ""
 		kubeconfig.CAData = nil
-		if runtimeMode == ModeAgent {
+		if runtime.Mode == runtime.ModeAgent {
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
 			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
-		} else if runtimeMode == ModeController {
+		} else if runtime.Mode == runtime.ModeController {
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaControllerAPIPort))
 			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
 		}
@@ -93,7 +94,7 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 
 func (c *client) request(opt *requestOption) (io.Reader, error) {
 	var e *endpoint
-	if runtimeMode == ModeAgent {
+	if runtime.Mode == runtime.ModeAgent {
 		e = opt.commandDefinition.agentEndpoint
 	} else {
 		e = opt.commandDefinition.controllerEndpoint

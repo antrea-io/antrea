@@ -48,6 +48,7 @@ type agentQuerier struct {
 	ofClient                 openflow.Client
 	ovsBridgeClient          ovsconfig.OVSBridgeClient
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier
+	apiPort                  int
 }
 
 func NewAgentQuerier(
@@ -58,8 +59,9 @@ func NewAgentQuerier(
 	ofClient openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier,
+	apiPort int,
 ) *agentQuerier {
-	return &agentQuerier{ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient, networkPolicyInfoQuerier: networkPolicyInfoQuerier}
+	return &agentQuerier{ovsBridge: ovsBridge, nodeName: nodeName, nodeSubnet: nodeSubnet, interfaceStore: interfaceStore, ofClient: ofClient, ovsBridgeClient: ovsBridgeClient, networkPolicyInfoQuerier: networkPolicyInfoQuerier, apiPort: apiPort}
 }
 
 // GetNodeName gets current node name.
@@ -180,5 +182,6 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 		agentInfo.NodeRef = querier.GetSelfNode(true, aq.nodeName)
 		agentInfo.NodeSubnet = []string{aq.nodeSubnet}
 		agentInfo.OVSInfo.BridgeName = aq.ovsBridge
+		agentInfo.APIPort = aq.apiPort
 	}
 }

@@ -23,6 +23,7 @@ IMAGE_NAME="antrea/codegen:latest"
 
 function docker_run() {
   docker run --rm \
+    -e GOPROXY="$(go env GOPROXY)" \
 		-w /go/src/github.com/vmware-tanzu/antrea \
 		-v ${ANTREA_ROOT}:/go/src/github.com/vmware-tanzu/antrea \
 		"${IMAGE_NAME}" "$@"

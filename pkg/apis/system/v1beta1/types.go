@@ -12,11 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +k8s:openapi-gen=true
-// +k8s:deepcopy-gen=package
-// +k8s:defaulter-gen=TypeMeta
-// +groupName=system.antrea.tanzu.vmware.com
-
-// Package v1beta1 contains the v1beta1 version of the Antrea "system" API
-// group definitions.
 package v1beta1
+
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+const (
+	BundleNone       = "none"
+	BundleCollecting = "collecting"
+	BundleCollected  = "collected"
+)
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:onlyVerbs=get,create,delete
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type Bundle struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Status   string `json:"status,omitempty"`
+	Sum      string `json:"sum,omitempty"`
+	FilePath string `json:"filePath,omitempty"`
+}

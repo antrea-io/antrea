@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package antctl
+package runtime
 
 import (
 	"os"
@@ -25,17 +25,17 @@ const (
 )
 
 var (
-	// runtimeMode tells which mode antctl is running against.
-	runtimeMode string
-	inPod       bool
+	// Mode tells which mode antctl is running against.
+	Mode  string
+	InPod bool
 )
 
 func init() {
 	podName, found := os.LookupEnv("POD_NAME")
-	inPod = found && (strings.HasPrefix(podName, "antrea-agent") || strings.HasPrefix(podName, "antrea-controller"))
+	InPod = found && (strings.HasPrefix(podName, "antrea-agent") || strings.HasPrefix(podName, "antrea-controller"))
 	if strings.HasPrefix(podName, "antrea-agent") {
-		runtimeMode = ModeAgent
+		Mode = ModeAgent
 	} else {
-		runtimeMode = ModeController
+		Mode = ModeController
 	}
 }
