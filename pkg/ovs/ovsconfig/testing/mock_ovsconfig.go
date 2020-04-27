@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,20 @@ func NewMockOVSBridgeClient(ctrl *gomock.Controller) *MockOVSBridgeClient {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockOVSBridgeClient) EXPECT() *MockOVSBridgeClientMockRecorder {
 	return m.recorder
+}
+
+// AddOVSOtherConfig mocks base method
+func (m *MockOVSBridgeClient) AddOVSOtherConfig(arg0 map[string]interface{}) ovsconfig.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOVSOtherConfig", arg0)
+	ret0, _ := ret[0].(ovsconfig.Error)
+	return ret0
+}
+
+// AddOVSOtherConfig indicates an expected call of AddOVSOtherConfig
+func (mr *MockOVSBridgeClientMockRecorder) AddOVSOtherConfig(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).AddOVSOtherConfig), arg0)
 }
 
 // Create mocks base method
@@ -136,6 +150,20 @@ func (mr *MockOVSBridgeClientMockRecorder) Delete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockOVSBridgeClient)(nil).Delete))
 }
 
+// DeleteOVSOtherConfig mocks base method
+func (m *MockOVSBridgeClient) DeleteOVSOtherConfig(arg0 map[string]interface{}) ovsconfig.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOVSOtherConfig", arg0)
+	ret0, _ := ret[0].(ovsconfig.Error)
+	return ret0
+}
+
+// DeleteOVSOtherConfig indicates an expected call of DeleteOVSOtherConfig
+func (mr *MockOVSBridgeClientMockRecorder) DeleteOVSOtherConfig(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).DeleteOVSOtherConfig), arg0)
+}
+
 // DeletePort mocks base method
 func (m *MockOVSBridgeClient) DeletePort(arg0 string) ovsconfig.Error {
 	m.ctrl.T.Helper()
@@ -192,6 +220,21 @@ func (m *MockOVSBridgeClient) GetOFPort(arg0 string) (int32, ovsconfig.Error) {
 func (mr *MockOVSBridgeClientMockRecorder) GetOFPort(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOFPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetOFPort), arg0)
+}
+
+// GetOVSOtherConfig mocks base method
+func (m *MockOVSBridgeClient) GetOVSOtherConfig() (map[string]string, ovsconfig.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOVSOtherConfig")
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(ovsconfig.Error)
+	return ret0, ret1
+}
+
+// GetOVSOtherConfig indicates an expected call of GetOVSOtherConfig
+func (mr *MockOVSBridgeClientMockRecorder) GetOVSOtherConfig() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetOVSOtherConfig))
 }
 
 // GetOVSVersion mocks base method
