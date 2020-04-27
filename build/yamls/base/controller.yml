@@ -72,6 +72,9 @@ spec:
       containers:
         - name: antrea-controller
           image: antrea
+          resources:
+            requests:
+              cpu: "200m"
           command: ["antrea-controller"]
           # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).
           args: ["--config", "/etc/antrea/antrea-controller.conf", "--logtostderr=false", "--log_dir", "/var/log/antrea", "--alsologtostderr"]
