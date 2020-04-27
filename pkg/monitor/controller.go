@@ -30,23 +30,26 @@ import (
 	controllerquerier "github.com/vmware-tanzu/antrea/pkg/controller/querier"
 )
 
+const crdName = "antrea-controller"
+
 type controllerMonitor struct {
 	client       clientset.Interface
 	nodeInformer coreinformers.NodeInformer
 	// nodeListerSynced is a function which returns true if the node shared informer has been synced at least once.
 	nodeListerSynced cache.InformerSynced
 	querier          controllerquerier.ControllerQuerier
+	// controllerCRD is the desired state of controller monitoring CRD which controllerMonitor expects.
+	controllerCRD *v1beta1.AntreaControllerInfo
 }
 
 // NewControllerMonitor creates a new controller monitor.
 func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers.NodeInformer, querier controllerquerier.ControllerQuerier) *controllerMonitor {
-	m := &controllerMonitor{client: client, nodeInformer: nodeInformer, nodeListerSynced: nodeInformer.Informer().HasSynced, querier: querier}
+	m := &controllerMonitor{client: client, nodeInformer: nodeInformer, nodeListerSynced: nodeInformer.Informer().HasSynced, querier: querier, controllerCRD: nil}
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    nil,
 		UpdateFunc: nil,
 		DeleteFunc: m.deleteStaleAgentCRD,
 	})
-
 	return m
 }
 
@@ -54,24 +57,6 @@ func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers
 // Then updates AntreaControllerInfo CRD every 60 seconds if there is any change.
 func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting Antrea Controller Monitor")
-	crdName := "antrea-controller"
-
-	// Initialize controller monitoring CRD.
-	controllerCRD := monitor.getControllerCRD(crdName)
-	var err error = nil
-	if controllerCRD == nil {
-		controllerCRD, err = monitor.createControllerCRD(crdName)
-		if err != nil {
-			klog.Errorf("Failed to create controller monitoring CRD %+v: %v", controllerCRD, err)
-			return
-		}
-	} else {
-		controllerCRD, err = monitor.updateControllerCRD(controllerCRD)
-		if err != nil {
-			klog.Errorf("Failed to update controller monitoring CRD %+v: %v", controllerCRD, err)
-			return
-		}
-	}
 
 	klog.Info("Waiting for node synced for Controller Monitor")
 	if !cache.WaitForCacheSync(stopCh, monitor.nodeListerSynced) {
@@ -81,47 +66,63 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 	klog.Info("Caches are synced for Controller Monitor")
 	monitor.deleteStaleAgentCRDs()
 
-	// Update controller monitoring CRD variables every 60 seconds util stopCh is closed.
-	wait.PollUntil(60*time.Second, func() (done bool, err error) {
-		controllerCRD, err = monitor.partialUpdateControllerCRD(controllerCRD)
-		if err != nil {
-			klog.Errorf("Failed to partially update controller monitoring CRD %+v: %v", controllerCRD, err)
+	// Sync controller monitoring CRD every minute util stopCh is closed.
+	wait.Until(monitor.syncControllerCRD, time.Minute, stopCh)
+}
+
+func (monitor *controllerMonitor) syncControllerCRD() {
+	var err error = nil
+	if monitor.controllerCRD != nil {
+		if monitor.controllerCRD, err = monitor.updateControllerCRD(true); err == nil {
+			return
 		}
-		return false, nil
-	}, stopCh)
+		klog.Errorf("Failed to partially update controller monitoring CRD: %v", err)
+		monitor.controllerCRD = nil
+	}
+
+	monitor.controllerCRD, err = monitor.getControllerCRD(crdName)
+
+	if errors.IsNotFound(err) {
+		monitor.controllerCRD, err = monitor.createControllerCRD(crdName)
+		if err != nil {
+			klog.Errorf("Failed to create controller monitoring CRD: %v", err)
+			monitor.controllerCRD = nil
+		}
+		return
+	}
+
+	if err != nil {
+		klog.Errorf("Failed to get controller monitoring CRD: %v", err)
+		monitor.controllerCRD = nil
+		return
+	}
+
+	monitor.controllerCRD, err = monitor.updateControllerCRD(false)
+	if err != nil {
+		klog.Errorf("Failed to entirely update controller monitoring CRD: %v", err)
+		monitor.controllerCRD = nil
+	}
 }
 
 // getControllerCRD is used to check the existence of controller monitoring CRD.
 // So when the pod restarts, it will update this monitoring CRD instead of creating a new one.
-func (monitor *controllerMonitor) getControllerCRD(crdName string) *v1beta1.AntreaControllerInfo {
-	controllerCRD, err := monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Get(crdName, metav1.GetOptions{})
-	if err != nil {
-		klog.V(2).Infof("Controller monitoring CRD named %s doesn't exist, will create one", crdName)
-		return nil
-	}
-	return controllerCRD
+func (monitor *controllerMonitor) getControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
+	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Get(crdName, metav1.GetOptions{})
 }
 
 func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
 	controllerCRD := new(v1beta1.AntreaControllerInfo)
+	controllerCRD.Name = crdName
 	monitor.querier.GetControllerInfo(controllerCRD, false)
-	controllerCRD.ObjectMeta.Name = crdName
 	klog.V(2).Infof("Creating controller monitoring CRD %+v", controllerCRD)
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Create(controllerCRD)
 }
 
-// updateControllerCRD updates all the fields of existing monitoring CRD.
-func (monitor *controllerMonitor) updateControllerCRD(controllerCRD *v1beta1.AntreaControllerInfo) (*v1beta1.AntreaControllerInfo, error) {
-	monitor.querier.GetControllerInfo(controllerCRD, false)
-	klog.V(2).Infof("Updating controller monitoring CRD %+v", controllerCRD)
-	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Update(controllerCRD)
-}
-
-// partialUpdateControllerCRD only updates the variables.
-func (monitor *controllerMonitor) partialUpdateControllerCRD(controllerCRD *v1beta1.AntreaControllerInfo) (*v1beta1.AntreaControllerInfo, error) {
-	monitor.querier.GetControllerInfo(controllerCRD, true)
-	klog.V(2).Infof("Partially updating controller monitoring CRD %+v", controllerCRD)
-	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Update(controllerCRD)
+// updateControllerCRD updates the monitoring CRD.
+func (monitor *controllerMonitor) updateControllerCRD(partial bool) (*v1beta1.AntreaControllerInfo, error) {
+	monitor.querier.GetControllerInfo(monitor.controllerCRD, partial)
+	klog.V(2).Infof("Updating controller monitoring CRD %+v, partial: %t", monitor.controllerCRD, partial)
+	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Update(monitor.controllerCRD)
 }
 
 func (monitor *controllerMonitor) deleteStaleAgentCRDs() {

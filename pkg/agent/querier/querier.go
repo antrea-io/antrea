@@ -154,6 +154,7 @@ func (aq agentQuerier) getNetworkPolicyControllerInfo() v1beta1.NetworkPolicyCon
 func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool) {
 	// LocalPodNum, FlowTable, NetworkPolicyControllerInfo, OVSVersion and AgentConditions can be changed, so reset these fields.
 	// Only these fields are updated when partial is true.
+	agentInfo.Name = aq.nodeName
 	agentInfo.LocalPodNum = int32(aq.interfaceStore.GetContainerInterfaceNum())
 	agentInfo.OVSInfo.FlowTable = aq.getOVSFlowTable()
 	agentInfo.NetworkPolicyControllerInfo = aq.getNetworkPolicyControllerInfo()
