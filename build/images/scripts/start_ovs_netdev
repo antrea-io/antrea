@@ -48,6 +48,10 @@ function del_br_phy {
 
 function start_ovs {
     log_info $CONTAINER_NAME "Starting OVS"
+    # Unlike the start_ovs script, we don't set flow-restore-wait when starting OVS
+    # with the netdev datapath. This is because the Node's network relies on the
+    # forwarding of OVS so we cannot get Node, Pod, NetworkPolicy data from
+    # Kubernetes API to install proper flows before removing flow-restore-wait.
     /usr/share/openvswitch/scripts/ovs-ctl --system-id=random start --db-file=$OVS_DB_FILE
 }
 

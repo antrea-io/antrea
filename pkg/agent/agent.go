@@ -24,6 +24,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/vishvananda/netlink"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
@@ -290,9 +291,40 @@ func (i *Initializer) initOpenFlowPipeline() error {
 			klog.Info("Replaying OF flows to OVS bridge")
 			i.ofClient.ReplayFlows()
 			klog.Info("Flow replay completed")
+
+			// ofClient and ovsBridgeClient have their own mechanisms to restore connections with OVS, and it could
+			// happen that ovsBridgeClient's connection is not ready when ofClient completes flow replay. We retry it
+			// with a timeout that is longer time than ovsBridgeClient's maximum connecting retry interval (8 seconds)
+			// to ensure the flag can be removed successfully.
+			err := wait.PollImmediate(200*time.Millisecond, 10*time.Second, func() (done bool, err error) {
+				if err := i.FlowRestoreComplete(); err != nil {
+					return false, nil
+				}
+				return true, nil
+			})
+			// This shouldn't happen unless OVS is disconnected again after replaying flows. If it happens, we will try
+			// to clean up the config again so an error log should be fine.
+			if err != nil {
+				klog.Errorf("Failed to clean up flow-restore-wait config: %v", err)
+			}
 		}
 	}()
 
+	return nil
+}
+
+func (i *Initializer) FlowRestoreComplete() error {
+	// ovs-vswitchd is started with flow-restore-wait set to true for the following reasons:
+	// 1. It prevents packets from being mishandled by ovs-vswitchd in its default fashion,
+	//    which could affect existing connections' conntrack state and cause issues like #625.
+	// 2. It prevents ovs-vswitchd from flushing or expiring previously set datapath flows,
+	//    so existing connections can achieve 0 downtime during OVS restart.
+	// As a result, we remove the config here after restoring necessary flows.
+	klog.Info("Cleaning up flow-restore-wait config")
+	if err := i.ovsBridgeClient.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true"}); err != nil {
+		return fmt.Errorf("error when cleaning up flow-restore-wait config: %v", err)
+	}
+	klog.Info("Cleaned up flow-restore-wait config")
 	return nil
 }
 
