@@ -673,3 +673,66 @@ func (br *OVSBridge) GetOVSVersion() (string, Error) {
 
 	return res[0].Rows[0].(map[string]interface{})["ovs_version"].(string), nil
 }
+
+// AddOVSOtherConfig adds the given configs to the "other_config" column of
+// the single record of the "Open_vSwitch" table.
+// For each config, it will only be added if its key doesn't already exist.
+// No error is returned if configs already exist.
+func (br *OVSBridge) AddOVSOtherConfig(configs map[string]interface{}) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+
+	mutateSet := helpers.MakeOVSDBMap(configs)
+	tx.Mutate(dbtransaction.Mutate{
+		Table:     "Open_vSwitch",
+		Mutations: [][]interface{}{{"other_config", "insert", mutateSet}},
+	})
+
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}
+
+func (br *OVSBridge) GetOVSOtherConfig() (map[string]string, Error) {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+
+	tx.Select(dbtransaction.Select{
+		Table:   "Open_vSwitch",
+		Columns: []string{"other_config"},
+	})
+
+	res, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return nil, NewTransactionError(err, temporary)
+	}
+	if len(res[0].Rows) == 0 {
+		klog.Warning("Could not find other_config")
+		return nil, nil
+	}
+	otherConfigs := res[0].Rows[0].(map[string]interface{})["other_config"].([]interface{})
+	return buildMapFromOVSDBMap(otherConfigs), nil
+}
+
+// DeleteOVSOtherConfig deletes the given configs from the "other_config" column of
+// the single record of the "Open_vSwitch" table.
+// For each config, it will only be deleted if its key exists and its value matches the stored one.
+// No error is returned if configs don't exist or don't match.
+func (br *OVSBridge) DeleteOVSOtherConfig(configs map[string]interface{}) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+
+	mutateSet := helpers.MakeOVSDBMap(configs)
+	tx.Mutate(dbtransaction.Mutate{
+		Table:     "Open_vSwitch",
+		Mutations: [][]interface{}{{"other_config", "delete", mutateSet}},
+	})
+
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}
