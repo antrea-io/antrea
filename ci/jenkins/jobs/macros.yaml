@@ -259,6 +259,7 @@
           VERSION="$JOB_NAME-$BUILD_NUMBER" make
 
           sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" build/yamls/antrea.yml
+          sed -i 's|#enablePrometheusMetrics: false|enablePrometheusMetrics: true|g' build/yamls/antrea.yml
       - shell: |-
           echo ====== Delivering Antrea to all the Nodes ======
           export KUBECONFIG="${WORKSPACE}/jenkins/out/kubeconfig"
@@ -308,9 +309,12 @@
           sed -i "s/CONTROLPLANENODE/${cluster}-controlplane-0/g" test/e2e/infra/vagrant/ssh-config
           echo "    IdentityFile ${WORKSPACE}/jenkins/key/antrea-ci-key" >> test/e2e/infra/vagrant/ssh-config
 
+          # Run and configure Prometheus
+          kubectl apply -f build/yamls/antrea-prometheus.yml
+
           set +e
           mkdir -p `pwd`/antrea-test-logs
-          go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=20m
+          go test -prometheus -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=20m
 
           test_rc=$?
           set -e

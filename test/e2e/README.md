@@ -112,6 +112,15 @@ By default the description and logs for Antrea Pods are only written to disk if 
 test fails. You can choose to dump this information unconditionally with
 `--logs-export-on-success`.
 
+### Testing the Prometheus Integration
+The Prometheus integration tests can be run as part of the e2e tests when 
+enabled explicitly.
+* To load Antrea into the cluster with Prometheus enabled, use: 
+`./infra/vagrant/push_antrea.sh --prometheus`
+* To run the Prometheus tests within the e2e suite, use:
+`go test -v -prometheus github.com/vmware-tanzu/antrea/test/e2e`
+
+
 ## Running the e2e tests on a Kind cluster
 
 Refer to this [document](/docs/kind.md) for instructions on how to create a
