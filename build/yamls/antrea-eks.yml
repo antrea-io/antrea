@@ -440,6 +440,9 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 5
+        resources:
+          requests:
+            cpu: 200m
         volumeMounts:
         - mountPath: /etc/antrea/antrea-controller.conf
           name: antrea-config
@@ -567,6 +570,9 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 5
+        resources:
+          requests:
+            cpu: 200m
         securityContext:
           privileged: true
         volumeMounts:
@@ -606,6 +612,9 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 5
         name: antrea-ovs
+        resources:
+          requests:
+            cpu: 200m
         securityContext:
           capabilities:
             add:
@@ -627,6 +636,9 @@ spec:
         image: antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: install-cni
+        resources:
+          requests:
+            cpu: 100m
         securityContext:
           capabilities:
             add:
