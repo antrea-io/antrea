@@ -85,6 +85,9 @@ func (i *Initializer) prepareOVSBridge() error {
 		// host can not communicate with external network. To make sure the agent can connect to API server in
 		// next retry, this step deletes OVS bridge and HNS network created previously which will restore the
 		// host network.
+		if err == nil {
+			return
+		}
 		if err := i.ovsBridgeClient.Delete(); err != nil {
 			klog.Errorf("Failed to delete OVS bridge: %v", err)
 		}
@@ -110,12 +113,12 @@ func (i *Initializer) prepareOVSBridge() error {
 
 	// Create local port.
 	brName := i.ovsBridgeClient.GetBridgeName()
-	if _, err := i.ovsBridgeClient.GetOFPort(brName); err == nil {
+	if _, err = i.ovsBridgeClient.GetOFPort(brName); err == nil {
 		klog.Infof("OVS bridge local port %s already exists, skip the configuration", brName)
 	} else {
 		// OVS does not receive "ofport_request" param when creating local port, so here use config.AutoAssignedOFPort=0
 		// to ignore this param.
-		if _, err := i.ovsBridgeClient.CreateInternalPort(brName, config.AutoAssignedOFPort, nil); err != nil {
+		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, config.AutoAssignedOFPort, nil); err != nil {
 			return err
 		}
 	}
