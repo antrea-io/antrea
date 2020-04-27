@@ -31,6 +31,9 @@ spec:
       initContainers:
         - name: install-cni
           image: antrea
+          resources:
+            requests:
+              cpu: "100m"
           command: ["install_cni"]
           securityContext:
             capabilities:
@@ -58,6 +61,9 @@ spec:
       containers:
         - name: antrea-agent
           image: antrea
+          resources:
+            requests:
+              cpu: "200m"
           command: ["antrea-agent"]
           # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).
           args: ["--config", "/etc/antrea/antrea-agent.conf", "--logtostderr=false", "--log_dir", "/var/log/antrea", "--alsologtostderr"]
@@ -136,6 +142,9 @@ spec:
             mountPath: /run/xtables.lock
         - name: antrea-ovs
           image: antrea
+          resources:
+            requests:
+              cpu: "200m"
           command: ["start_ovs"]
           securityContext:
             # capabilities required by OVS daemons
