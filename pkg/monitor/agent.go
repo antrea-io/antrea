@@ -17,6 +17,7 @@ package monitor
 import (
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
@@ -29,55 +30,64 @@ import (
 type agentMonitor struct {
 	client  clientset.Interface
 	querier agentquerier.AgentQuerier
+	// agentCRD is the desired state of agent monitoring CRD which agentMonitor expects.
+	agentCRD *v1beta1.AntreaAgentInfo
 }
 
 // NewAgentMonitor creates a new agent monitor.
 func NewAgentMonitor(client clientset.Interface, querier agentquerier.AgentQuerier) *agentMonitor {
-	return &agentMonitor{client: client, querier: querier}
+	return &agentMonitor{client: client, querier: querier, agentCRD: nil}
 }
 
 // Run creates AntreaAgentInfo CRD first after controller is running.
 // Then updates AntreaAgentInfo CRD every 60 seconds.
 func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting Antrea Agent Monitor")
-	agentCRD := monitor.getAgentCRD()
-	var err error = nil
 
-	// Initialize agent monitoring CRD.
-	if agentCRD == nil {
-		agentCRD, err = monitor.createAgentCRD()
-		if err != nil {
-			klog.Errorf("Failed to create agent monitoring CRD %+v: %v", agentCRD, err)
+	// Sync agent monitoring CRD every minute util stopCh is closed.
+	wait.Until(monitor.syncAgentCRD, time.Minute, stopCh)
+}
+
+func (monitor *agentMonitor) syncAgentCRD() {
+	var err error = nil
+	if monitor.agentCRD != nil {
+		if monitor.agentCRD, err = monitor.updateAgentCRD(true); err == nil {
 			return
 		}
-	} else {
-		agentCRD, err = monitor.updateAgentCRD(agentCRD)
-		if err != nil {
-			klog.Errorf("Failed to update agent monitoring CRD %+v: %v", agentCRD, err)
-			return
-		}
+		klog.Errorf("Failed to partially update agent monitoring CRD: %v", err)
+		monitor.agentCRD = nil
 	}
 
-	// Update agent monitoring CRD variables every 60 seconds util stopCh is closed.
-	wait.PollUntil(60*time.Second, func() (done bool, err error) {
-		agentCRD, err = monitor.partialUpdateAgentCRD(agentCRD)
+	monitor.agentCRD, err = monitor.getAgentCRD()
+
+	if errors.IsNotFound(err) {
+		monitor.agentCRD, err = monitor.createAgentCRD()
 		if err != nil {
-			klog.Errorf("Failed to partially update agent monitoring CRD %+v: %v", agentCRD, err)
+			klog.Errorf("Failed to create agent monitoring CRD: %v", err)
+			monitor.agentCRD = nil
 		}
-		return false, nil
-	}, stopCh)
+		return
+	}
+
+	if err != nil {
+		klog.Errorf("Failed to get agent monitoring CRD: %v", err)
+		monitor.agentCRD = nil
+		return
+	}
+
+	monitor.agentCRD, err = monitor.updateAgentCRD(false)
+	if err != nil {
+		klog.Errorf("Failed to entirely update agent monitoring CRD: %v", err)
+		monitor.agentCRD = nil
+	}
 }
 
 // getAgentCRD is used to check the existence of agent monitoring CRD.
 // So when the pod restarts, it will update this monitoring CRD instead of creating a new one.
-func (monitor *agentMonitor) getAgentCRD() *v1beta1.AntreaAgentInfo {
+func (monitor *agentMonitor) getAgentCRD() (*v1beta1.AntreaAgentInfo, error) {
 	crdName := monitor.querier.GetNodeName()
-	agentCRD, err := monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Get(crdName, metav1.GetOptions{})
-	if err != nil {
-		klog.V(2).Infof("Agent monitoring CRD named %s doesn't exist, will create one", crdName)
-		return nil
-	}
-	return agentCRD
+	klog.V(2).Infof("Getting agent monitoring CRD %+v", crdName)
+	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Get(crdName, metav1.GetOptions{})
 }
 
 // createAgentCRD creates a new agent CRD.
@@ -88,16 +98,9 @@ func (monitor *agentMonitor) createAgentCRD() (*v1beta1.AntreaAgentInfo, error) 
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Create(agentCRD)
 }
 
-// updateAgentCRD updates all the fields of existing monitoring CRD.
-func (monitor *agentMonitor) updateAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (*v1beta1.AntreaAgentInfo, error) {
-	monitor.querier.GetAgentInfo(agentCRD, false)
-	klog.V(2).Infof("Updating agent monitoring CRD %+v", agentCRD)
-	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
-}
-
-// partialUpdateAgentCRD only updates some variables.
-func (monitor *agentMonitor) partialUpdateAgentCRD(agentCRD *v1beta1.AntreaAgentInfo) (*v1beta1.AntreaAgentInfo, error) {
-	monitor.querier.GetAgentInfo(agentCRD, true)
-	klog.V(2).Infof("Partially updating agent monitoring CRD %+v", agentCRD)
-	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(agentCRD)
+// updateAgentCRD updates the monitoring CRD.
+func (monitor *agentMonitor) updateAgentCRD(partial bool) (*v1beta1.AntreaAgentInfo, error) {
+	monitor.querier.GetAgentInfo(monitor.agentCRD, partial)
+	klog.V(2).Infof("Updating agent monitoring CRD %+v, partial: %t", monitor.agentCRD, partial)
+	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(monitor.agentCRD)
 }
