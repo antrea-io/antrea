@@ -2,6 +2,7 @@
 
 source logging
 source daemon_status
+source /usr/share/openvswitch/scripts/ovs-lib
 
 CONTAINER_NAME="antrea-ovs"
 OVS_DB_FILE="/var/run/openvswitch/conf.db"
@@ -9,8 +10,25 @@ OVS_DB_FILE="/var/run/openvswitch/conf.db"
 set -euo pipefail
 
 function start_ovs {
-    log_info $CONTAINER_NAME "Starting OVS"
-    /usr/share/openvswitch/scripts/ovs-ctl --system-id=random start --db-file=$OVS_DB_FILE
+    if daemon_is_running ovsdb-server; then
+        log_info $CONTAINER_NAME "ovsdb-server is already running"
+    else
+        log_info $CONTAINER_NAME "Starting ovsdb-server"
+        /usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd --system-id=random start --db-file=$OVS_DB_FILE
+        log_info $CONTAINER_NAME "Started ovsdb-server"
+    fi
+
+    if daemon_is_running ovs-vswitchd; then
+        log_info $CONTAINER_NAME "ovs-vswitchd is already running"
+    else
+        log_info $CONTAINER_NAME "Starting ovs-vswitchd"
+        # Start ovs-vswitchd with flow-restore-wait set to true so that packets won't be
+        # mishandled in its default fashion, the config will be removed after antrea-agent
+        # restoring flows.
+        ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait="true"
+        /usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server --system-id=random start --db-file=$OVS_DB_FILE
+        log_info $CONTAINER_NAME "Started ovs-vswitchd"
+    fi
 }
 
 function stop_ovs {

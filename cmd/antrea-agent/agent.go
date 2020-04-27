@@ -140,6 +140,12 @@ func run(o *Options) error {
 		return fmt.Errorf("error initializing CNI server: %v", err)
 	}
 
+	// TODO: we should call this after installing flows for initial node routes
+	//  and initial NetworkPolicies so that no packets will be mishandled.
+	if err := agentInitializer.FlowRestoreComplete(); err != nil {
+		return err
+	}
+
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
