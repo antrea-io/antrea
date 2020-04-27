@@ -150,6 +150,36 @@ func TestOVSBridgeExternalIDs(t *testing.T) {
 	}
 }
 
+func TestOVSOtherConfig(t *testing.T) {
+	data := &testData{}
+	data.setup(t)
+	defer data.teardown(t)
+
+	otherConfigs := map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar1"}
+	err := data.br.AddOVSOtherConfig(otherConfigs)
+	require.Nil(t, err, "Error when adding OVS other_config")
+
+	gotOtherConfigs, err := data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1"}, gotOtherConfigs, "other_config mismatched")
+
+	// Expect only the new config "foo2: bar2" will be added.
+	err = data.br.AddOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "false", "foo2": "bar2"})
+	require.Nil(t, err, "Error when adding OVS other_config")
+
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
+
+	// Expect only the matched config "flow-restore-wait: true" will be deleted.
+	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar2"})
+	require.Nil(t, err, "Error when deleting OVS other_config")
+
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
+}
+
 func deleteAllPorts(t *testing.T, br *ovsconfig.OVSBridge) {
 	portList, err := br.GetPortUUIDList()
 	require.Nil(t, err, "Error when retrieving port list")

@@ -42,4 +42,7 @@ type OVSBridgeClient interface {
 	GetPortList() ([]OVSPortData, Error)
 	SetInterfaceMTU(name string, MTU int) error
 	GetOVSVersion() (string, Error)
+	AddOVSOtherConfig(configs map[string]interface{}) Error
+	GetOVSOtherConfig() (map[string]string, Error)
+	DeleteOVSOtherConfig(configs map[string]interface{}) Error
 }
