@@ -16,7 +16,10 @@ package apiserver
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"path"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -35,13 +38,12 @@ import (
 	antreaversion "github.com/vmware-tanzu/antrea/pkg/version"
 )
 
-const (
-	Name = "antrea-agent-api"
-)
+const Name = "antrea-agent-api"
 
 var (
-	scheme = runtime.NewScheme()
-	codecs = serializer.NewCodecFactory(scheme)
+	scheme    = runtime.NewScheme()
+	codecs    = serializer.NewCodecFactory(scheme)
+	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
 
 type agentAPIServer struct {
@@ -97,6 +99,12 @@ func newConfig(bindPort int) (*genericapiserver.CompletedConfig, error) {
 	}
 	if err := authorization.ApplyTo(&serverConfig.Authorization); err != nil {
 		return nil, err
+	}
+	if err := os.MkdirAll(path.Dir(TokenPath), os.ModeDir); err != nil {
+		return nil, fmt.Errorf("error when creating dirs of token file: %v", err)
+	}
+	if err := ioutil.WriteFile(TokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
+		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
 	}
 	v := antreaversion.GetVersion()
 	serverConfig.Version = &k8sversion.Info{
