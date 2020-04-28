@@ -29,7 +29,9 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	agentapiserver "github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/apis"
+	controllerapiserver "github.com/vmware-tanzu/antrea/pkg/apiserver"
 )
 
 // requestOption describes options to issue requests.
@@ -65,7 +67,7 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 	if _, err = os.Stat(opt.kubeconfig); opt.kubeconfig == clientcmd.RecommendedHomeFile && os.IsNotExist(err) {
 		kubeconfig, err = rest.InClusterConfig()
 		if err != nil {
-			err = fmt.Errorf("Unable to resolve in-cluster configuration: %v. Please specify the kubeconfig file", err)
+			err = fmt.Errorf("unable to resolve in-cluster configuration: %v. Please specify the kubeconfig file", err)
 		}
 	} else {
 		kubeconfig, err = clientcmd.BuildConfigFromFlags("", opt.kubeconfig)
@@ -74,6 +76,18 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 		return nil, err
 	}
 	kubeconfig.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: c.codec}
+	if inPod {
+		kubeconfig.Insecure = true
+		kubeconfig.CAFile = ""
+		kubeconfig.CAData = nil
+		if runtimeMode == ModeAgent {
+			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
+			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
+		} else if runtimeMode == ModeController {
+			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaControllerAPIPort))
+			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
+		}
+	}
 	return kubeconfig, nil
 }
 
@@ -94,12 +108,6 @@ func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) 
 	kubeconfig, err := c.resolveKubeconfig(opt)
 	if err != nil {
 		return nil, err
-	}
-	if runtimeMode == ModeAgent {
-		kubeconfig.Insecure = true
-		kubeconfig.CAFile = ""
-		kubeconfig.CAData = nil
-		kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
 	}
 	if opt.server != "" {
 		kubeconfig.Host = opt.server

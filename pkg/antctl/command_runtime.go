@@ -27,10 +27,13 @@ const (
 var (
 	// runtimeMode tells which mode antctl is running against.
 	runtimeMode string
+	inPod       bool
 )
 
 func init() {
-	if strings.HasPrefix(os.Getenv("POD_NAME"), "antrea-agent") {
+	podName, found := os.LookupEnv("POD_NAME")
+	inPod = found && (strings.HasPrefix(podName, "antrea-agent") || strings.HasPrefix(podName, "antrea-controller"))
+	if strings.HasPrefix(podName, "antrea-agent") {
 		runtimeMode = ModeAgent
 	} else {
 		runtimeMode = ModeController

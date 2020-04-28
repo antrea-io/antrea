@@ -51,15 +51,3 @@ subjects:
   - kind: ServiceAccount
     name: antctl
     namespace: kube-system
-  - kind: ServiceAccount
-    # This is to allow antctl to be executed inside the Antrea Controller Pod
-    # and authenticate with Controller API server using the Controller's
-    # ServiceAccount token.
-    name: antrea-controller
-    namespace: kube-system
-  - kind: ServiceAccount
-    # This is to allow antctl to be executed inside the Antrea Agent Pod
-    # and authenticate with agent API server using the agent's
-    # ServiceAccount token.
-    name: antrea-agent
-    namespace: kube-system
