@@ -41,7 +41,7 @@ var (
 	// Codecs provides methods for retrieving codecs and serializers for specific
 	// versions and content types.
 	Codecs    = serializer.NewCodecFactory(Scheme)
-	TokenPath = "/var/run/antrea/apiserver/controller-loopback-client-token"
+	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
 
 func init() {

@@ -43,7 +43,7 @@ const Name = "antrea-agent-api"
 var (
 	scheme    = runtime.NewScheme()
 	codecs    = serializer.NewCodecFactory(scheme)
-	TokenPath = "/var/run/antrea/apiserver/agent-loopback-client-token"
+	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
 
 type agentAPIServer struct {
@@ -101,7 +101,7 @@ func newConfig(bindPort int) (*genericapiserver.CompletedConfig, error) {
 		return nil, err
 	}
 	if err := os.MkdirAll(path.Dir(TokenPath), os.ModeDir); err != nil {
-		return nil, fmt.Errorf("error when creating dirs of token file")
+		return nil, fmt.Errorf("error when creating dirs of token file: %v", err)
 	}
 	if err := ioutil.WriteFile(TokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
 		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
