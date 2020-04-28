@@ -16,7 +16,10 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"path"
 	"time"
 
 	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
@@ -142,6 +145,12 @@ func createAPIServerConfig(kubeconfig string,
 		return nil, err
 	}
 
+	if err := os.MkdirAll(path.Dir(apiserver.TokenPath), os.ModeDir); err != nil {
+		return nil, fmt.Errorf("error when creating dirs of token file: %v", err)
+	}
+	if err := ioutil.WriteFile(apiserver.TokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
+		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
+	}
 	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(
 		openapi.GetOpenAPIDefinitions,
 		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
