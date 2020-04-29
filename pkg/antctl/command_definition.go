@@ -407,16 +407,19 @@ func (cd *commandDefinition) tableOutputForGetCommands(obj interface{}, writer i
 	for i, element := range list {
 		rows[i+1] = element.GetTableRow(maxTableOutputColumnLength)
 	}
-	// Sort the table rows according to columns in order.
-	body := rows[1:]
-	sort.Slice(body, func(i, j int) bool {
-		for k := range body[i] {
-			if body[i][k] != body[j][k] {
-				return body[i][k] < body[j][k]
+
+	if list[0].SortRows() {
+		// Sort the table rows according to columns in order.
+		body := rows[1:]
+		sort.Slice(body, func(i, j int) bool {
+			for k := range body[i] {
+				if body[i][k] != body[j][k] {
+					return body[i][k] < body[j][k]
+				}
 			}
-		}
-		return true
-	})
+			return true
+		})
+	}
 
 	widths := make([]int, len(args))
 	// Get the width of every column.
