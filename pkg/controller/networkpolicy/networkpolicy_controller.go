@@ -46,6 +46,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
@@ -838,6 +839,7 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 func (n *NetworkPolicyController) enqueueAppliedToGroup(key string) {
 	klog.V(4).Infof("Adding new key %s to AppliedToGroup queue", key)
 	n.appliedToGroupQueue.Add(key)
+	metrics.LengthAppliedToGroupQueue.Set(float64(n.appliedToGroupQueue.Len()))
 }
 
 // deleteDereferencedAddressGroups deletes the AddressGroup keys which are no
@@ -892,11 +894,13 @@ func (n *NetworkPolicyController) deleteDereferencedAppliedToGroup(key string) {
 func (n *NetworkPolicyController) enqueueAddressGroup(key string) {
 	klog.V(4).Infof("Adding new key %s to AddressGroup queue", key)
 	n.addressGroupQueue.Add(key)
+	metrics.LengthAddressGroupQueue.Set(float64(n.addressGroupQueue.Len()))
 }
 
 func (n *NetworkPolicyController) enqueueInternalNetworkPolicy(key string) {
 	klog.V(4).Infof("Adding new key %s to internal NetworkPolicy queue", key)
 	n.internalNetworkPolicyQueue.Add(key)
+	metrics.LengthInternalNetworkPolicyQueue.Set(float64(n.internalNetworkPolicyQueue.Len()))
 }
 
 // Run begins watching and syncing of a NetworkPolicyController.
@@ -925,16 +929,22 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 
 func (n *NetworkPolicyController) appliedToGroupWorker() {
 	for n.processNextAppliedToGroupWorkItem() {
+		metrics.OpsAppliedToGroupProcessed.Inc()
+		metrics.LengthAppliedToGroupQueue.Set(float64(n.appliedToGroupQueue.Len()))
 	}
 }
 
 func (n *NetworkPolicyController) addressGroupWorker() {
 	for n.processNextAddressGroupWorkItem() {
+		metrics.OpsAddressGroupProcessed.Inc()
+		metrics.LengthAddressGroupQueue.Set(float64(n.addressGroupQueue.Len()))
 	}
 }
 
 func (n *NetworkPolicyController) internalNetworkPolicyWorker() {
 	for n.processNextInternalNetworkPolicyWorkItem() {
+		metrics.OpsInternalNetworkPolicyProcessed.Inc()
+		metrics.LengthInternalNetworkPolicyQueue.Set(float64(n.internalNetworkPolicyQueue.Len()))
 	}
 }
 
@@ -1033,7 +1043,9 @@ func (n *NetworkPolicyController) processNextAppliedToGroupWorkItem() bool {
 func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	startTime := time.Now()
 	defer func() {
-		klog.V(2).Infof("Finished syncing AddressGroup %s. (%v)", key, time.Since(startTime))
+		d := time.Since(startTime)
+		metrics.DurationAddressGroupSyncing.Observe(float64(d.Milliseconds()))
+		klog.V(2).Infof("Finished syncing AddressGroup %s. (%v)", key, d)
 	}()
 	// Get all internal NetworkPolicy objects that refers this AddressGroup.
 	nps, err := n.internalNetworkPolicyStore.GetByIndex(store.AddressGroupIndex, key)
@@ -1079,7 +1091,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	podSet := networking.GroupMemberPodSet{}
 	for _, pod := range pods {
 		if pod.Status.PodIP == "" {
-			// No need to insert Pod IPAdddress when it is unset.
+			// No need to insert Pod IPAddress when it is unset.
 			continue
 		}
 		podSet.Insert(podToMemberPod(pod, true, false))
@@ -1136,7 +1148,9 @@ func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *networking.Grou
 func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	startTime := time.Now()
 	defer func() {
-		klog.V(2).Infof("Finished syncing AppliedToGroup %s. (%v)", key, time.Since(startTime))
+		d := time.Since(startTime)
+		metrics.DurationAppliedToGroupSyncing.Observe(float64(d.Milliseconds()))
+		klog.V(2).Infof("Finished syncing AppliedToGroup %s. (%v)", key, d)
 	}()
 	podSetByNode := make(map[string]networking.GroupMemberPodSet)
 	var pods []*v1.Pod
@@ -1201,7 +1215,9 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 	startTime := time.Now()
 	defer func() {
-		klog.V(2).Infof("Finished syncing internal NetworkPolicy %s. (%v)", key, time.Since(startTime))
+		d := time.Since(startTime)
+		metrics.DurationInternalNetworkPolicySyncing.Observe(float64(d.Milliseconds()))
+		klog.V(2).Infof("Finished syncing internal NetworkPolicy %s. (%v)", key, d)
 	}()
 	klog.V(2).Infof("Syncing internal NetworkPolicy %s", key)
 	nodeNames := sets.String{}
