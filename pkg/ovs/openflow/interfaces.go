@@ -25,11 +25,14 @@ type Protocol string
 type TableIDType uint8
 type GroupIDType uint32
 
-const LastTableID TableIDType = 0xff
-
 type MissActionType uint32
 type Range [2]uint32
 type OFOperation int
+
+const (
+	LastTableID TableIDType = 0xff
+	TableIDAll              = LastTableID
+)
 
 const (
 	ProtocolIP   Protocol = "ip"

@@ -125,7 +125,7 @@ func prepareOverlapFlows(table binding.Table, ipStr string, sameCookie bool) ([]
 	return flows, expectFlows
 }
 
-func testDeleteSingleFlow(t *testing.T, ofctlClient *ofctl.OfctlClient, table binding.Table, flows []binding.Flow, expectFlows []*ExpectFlow) {
+func testDeleteSingleFlow(t *testing.T, ofctlClient ofctl.OfctlClient, table binding.Table, flows []binding.Flow, expectFlows []*ExpectFlow) {
 	for id, flow := range flows {
 		if err := flow.Add(); err != nil {
 			t.Fatalf("Failed to install flow%d: %v", id, err)
