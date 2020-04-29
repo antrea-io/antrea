@@ -30,6 +30,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
@@ -161,11 +162,19 @@ func run(o *Options) error {
 		ovsBridgeClient,
 		networkPolicyController)
 
+	if o.config.EnablePrometheusMetrics {
+		metrics.InitializePrometheusMetrics(o.config.OVSBridge, ifaceStore, ofClient)
+	}
+
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
 
 	go agentMonitor.Run(stopCh)
 
-	apiServer, err := apiserver.New(agentQuerier, networkPolicyController, o.config.APIPort)
+	apiServer, err := apiserver.New(
+		agentQuerier,
+		networkPolicyController,
+		o.config.APIPort,
+		o.config.EnablePrometheusMetrics)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}

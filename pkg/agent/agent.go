@@ -37,12 +37,11 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 const (
 	maxRetryForHostLink = 5
-	// nodeNameEnvKey is environment variable.
-	nodeNameEnvKey = "NODE_NAME"
 	// ipsecPSKEnvKey is environment variable.
 	ipsecPSKEnvKey          = "ANTREA_IPSEC_PSK"
 	roundNumKey             = "roundNum" // round number key in externalIDs.
@@ -436,7 +435,7 @@ func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 // initNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
 // host gateway interface.
 func (i *Initializer) initNodeLocalConfig() error {
-	nodeName, err := getNodeName()
+	nodeName, err := env.GetNodeName()
 	if err != nil {
 		return err
 	}
@@ -474,24 +473,6 @@ func (i *Initializer) initNodeLocalConfig() error {
 
 	i.nodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: localSubnet, NodeIPAddr: localAddr}
 	return nil
-}
-
-// getNodeName returns the node's name used in Kubernetes, based on the priority:
-// - Environment variable NODE_NAME, which should be set by Downward API
-// - OS's hostname
-func getNodeName() (string, error) {
-	nodeName := os.Getenv(nodeNameEnvKey)
-	if nodeName != "" {
-		return nodeName, nil
-	}
-	klog.Infof("Environment variable %s not found, using hostname instead", nodeNameEnvKey)
-	var err error
-	nodeName, err = os.Hostname()
-	if err != nil {
-		klog.Errorf("Failed to get local hostname: %v", err)
-		return "", err
-	}
-	return nodeName, nil
 }
 
 // readIPSecPSK reads the IPSec PSK value from environment variable
