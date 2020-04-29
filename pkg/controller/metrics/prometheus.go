@@ -21,6 +21,45 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
+var (
+	OpsAppliedToGroupProcessed = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "antrea_controller_applied_to_group_processed",
+		Help: "The total number of applied-to-group processed",
+	})
+	OpsAddressGroupProcessed = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "antrea_controller_address_group_processed",
+		Help: "The total number of address-group processed ",
+	})
+	OpsInternalNetworkPolicyProcessed = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "antrea_controller_network_policy_processed",
+		Help: "The total number of internal-networkpolicy processed",
+	})
+	DurationAppliedToGroupSyncing = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "antrea_controller_applied_to_group_sync_duration_milliseconds",
+		Help: "The duration of syncing applied-to-group",
+	})
+	DurationAddressGroupSyncing = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "antrea_controller_address_group_sync_duration_milliseconds",
+		Help: "The duration of syncing address-group",
+	})
+	DurationInternalNetworkPolicySyncing = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "antrea_controller_network_policy_sync_duration_milliseconds",
+		Help: "The duration of syncing internal-networkpolicy",
+	})
+	LengthAppliedToGroupQueue = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "antrea_controller_length_applied_to_group_queue",
+		Help: "The length of AppliedToGroupQueue",
+	})
+	LengthAddressGroupQueue = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "antrea_controller_length_address_group_queue",
+		Help: "The length of AddressGroupQueue",
+	})
+	LengthInternalNetworkPolicyQueue = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "antrea_controller_length_network_policy_queue",
+		Help: "The length of InternalNetworkPolicyQueue",
+	})
+)
+
 // Initialize Prometheus metrics collection.
 func InitializePrometheusMetrics() {
 	nodeName, err := env.GetNodeName()
@@ -36,6 +75,33 @@ func InitializePrometheusMetrics() {
 	})
 	gaugeHost.Set(1)
 	if err = prometheus.Register(gaugeHost); err != nil {
-		klog.Error("Failed to register antrea_controller_runtime_info with Prometheus")
+		klog.Errorf("Failed to register antrea_controller_runtime_info with Prometheus: %s", err.Error())
+	}
+	if err := prometheus.Register(OpsAppliedToGroupProcessed); err != nil {
+		klog.Errorf("Failed to register antrea_controller_applied_to_group_processed with Prometheus: %s", err.Error())
+	}
+	if err := prometheus.Register(OpsAddressGroupProcessed); err != nil {
+		klog.Errorf("Failed to register antrea_controller_address_group_processed with Prometheus: %s", err.Error())
+	}
+	if err := prometheus.Register(OpsInternalNetworkPolicyProcessed); err != nil {
+		klog.Errorf("Failed to register antrea_controller_network_policy_processed with Prometheus: %s", err.Error())
+	}
+	if err := prometheus.Register(DurationAppliedToGroupSyncing); err != nil {
+		klog.Errorf("Failed to register antrea_controller_applied_to_group_sync_duration_milliseconds with Prometheus: %s", err.Error())
+	}
+	if err := prometheus.Register(DurationAddressGroupSyncing); err != nil {
+		klog.Errorf("Failed to register antrea_controller_address_group_sync_duration_milliseconds with Prometheus: %s", err.Error())
+	}
+	if err := prometheus.Register(DurationInternalNetworkPolicySyncing); err != nil {
+		klog.Errorf("Failed to register antrea_controller_network_policy_sync_duration_milliseconds with Prometheus: %s", err.Error())
+	}
+	if err := prometheus.Register(LengthAppliedToGroupQueue); err != nil {
+		klog.Errorf("Failed to register antrea_controller_length_applied_to_group_queue with Prometheus: %s", err.Error())
+	}
+	if err := prometheus.Register(LengthAddressGroupQueue); err != nil {
+		klog.Errorf("Failed to register antrea_controller_length_address_group_queue with Prometheus: %s", err.Error())
+	}
+	if err := prometheus.Register(LengthInternalNetworkPolicyQueue); err != nil {
+		klog.Errorf("Failed to register antrea_controller_length_network_policy_queue with Prometheus: %s", err.Error())
 	}
 }
