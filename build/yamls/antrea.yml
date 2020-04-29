@@ -326,6 +326,9 @@ data:
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-agent` container must be set to the same value.
     #apiPort: 10350
+
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
+    #enablePrometheusMetrics: false
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -348,12 +351,15 @@ data:
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
     #apiPort: 10349
+
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
+    #enablePrometheusMetrics: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-428d4tg64g
+  name: antrea-config-m8cb9g82tf
   namespace: kube-system
 ---
 apiVersion: v1
@@ -453,7 +459,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-428d4tg64g
+          name: antrea-config-m8cb9g82tf
         name: antrea-config
       - hostPath:
           path: /var/log/antrea
@@ -651,7 +657,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-428d4tg64g
+          name: antrea-config-m8cb9g82tf
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
