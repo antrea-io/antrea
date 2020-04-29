@@ -64,8 +64,9 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 }
 
 // New creates an APIServer for running in antrea agent.
-func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, bindPort int) (*agentAPIServer, error) {
-	cfg, err := newConfig(bindPort)
+func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, bindPort int,
+	enableMetrics bool) (*agentAPIServer, error) {
+	cfg, err := newConfig(bindPort, enableMetrics)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +78,7 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	return &agentAPIServer{GenericAPIServer: s}, nil
 }
 
-func newConfig(bindPort int) (*genericapiserver.CompletedConfig, error) {
+func newConfig(bindPort int, enableMetrics bool) (*genericapiserver.CompletedConfig, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions()
@@ -114,6 +115,7 @@ func newConfig(bindPort int) (*genericapiserver.CompletedConfig, error) {
 		GitTreeState: antreaversion.GitTreeState,
 		GitCommit:    antreaversion.GetGitSHA(),
 	}
+	serverConfig.EnableMetrics = enableMetrics
 
 	completedServerCfg := serverConfig.Complete(nil)
 	return &completedServerCfg, nil

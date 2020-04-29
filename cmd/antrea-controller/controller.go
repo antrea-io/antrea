@@ -31,6 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/openapi"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
@@ -81,7 +82,8 @@ func run(o *Options) error {
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
-		controllerQuerier)
+		controllerQuerier,
+		o.config.EnablePrometheusMetrics)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
@@ -103,6 +105,10 @@ func run(o *Options) error {
 
 	go apiServer.GenericAPIServer.PrepareRun().Run(stopCh)
 
+	if o.config.EnablePrometheusMetrics {
+		metrics.InitializePrometheusMetrics()
+	}
+
 	<-stopCh
 	klog.Info("Stopping Antrea controller")
 	return nil
@@ -113,7 +119,8 @@ func createAPIServerConfig(kubeconfig string,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
-	controllerQuerier querier.ControllerQuerier) (*apiserver.Config, error) {
+	controllerQuerier querier.ControllerQuerier,
+	enableMetrics bool) (*apiserver.Config, error) {
 	// TODO:
 	// 1. Support user-provided certificate.
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
@@ -155,6 +162,7 @@ func createAPIServerConfig(kubeconfig string,
 		openapi.GetOpenAPIDefinitions,
 		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
 	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
+	serverConfig.EnableMetrics = enableMetrics
 
 	return apiserver.NewConfig(
 		serverConfig,
