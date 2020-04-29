@@ -21,46 +21,40 @@ import (
 	"strings"
 )
 
-type OfctlClient struct {
+type ofctlClient struct {
 	bridge string
 }
 
-func NewClient(bridge string) *OfctlClient {
-	return &OfctlClient{bridge}
+func NewClient(bridge string) *ofctlClient {
+	return &ofctlClient{bridge}
 }
 
-// DumpFlows returns flows of the bridge.
-func (c *OfctlClient) DumpFlows(args ...string) ([]string, error) {
-	flowDump, err := c.RunOfctlCmd("dump-flows", args...)
+func (c *ofctlClient) DumpFlows(args ...string) ([]string, error) {
+	// Print table and port names.
+	flowDump, err := c.RunOfctlCmd("dump-flows", append(args, "--names")...)
 	if err != nil {
 		return nil, err
 	}
 
 	scanner := bufio.NewScanner(strings.NewReader(string(flowDump)))
 	scanner.Split(bufio.ScanLines)
-	// Skip the first line.
-	scanner.Scan()
 	flowList := []string{}
 	for scanner.Scan() {
-		flowList = append(flowList, scanner.Text())
+		flowList = append(flowList, trimFlowStr(scanner.Text()))
 	}
 	return flowList, nil
 
 }
 
-// DumpFlows returns the flow exactly matches the matchStr.
-func (c *OfctlClient) DumpMatchedFlow(matchStr string) (string, error) {
-	flowDump, err := c.RunOfctlCmd("dump-flows", matchStr)
+func (c *ofctlClient) DumpMatchedFlow(matchStr string) (string, error) {
+	flowDump, err := c.RunOfctlCmd("dump-flows", matchStr, "--names")
 	if err != nil {
 		return "", err
 	}
-
 	scanner := bufio.NewScanner(strings.NewReader(string(flowDump)))
 	scanner.Split(bufio.ScanLines)
-	// Skip the first line.
-	scanner.Scan()
 	for scanner.Scan() {
-		flowStr := scanner.Text()
+		flowStr := trimFlowStr(scanner.Text())
 		// ovs-ofctl dump-flows can return multiple flows that match matchStr, here we
 		// check and return only the one that exactly matches matchStr (no extra match
 		// conditions).
@@ -73,12 +67,11 @@ func (c *OfctlClient) DumpMatchedFlow(matchStr string) (string, error) {
 	return "", nil
 }
 
-// DumpTableFlows returns all flows in the table.
-func (c *OfctlClient) DumpTableFlows(table uint8) ([]string, error) {
+func (c *ofctlClient) DumpTableFlows(table uint8) ([]string, error) {
 	return c.DumpFlows(fmt.Sprintf("table=%d", table))
 }
 
-func (c *OfctlClient) DumpGroups(args ...string) ([][]string, error) {
+func (c *ofctlClient) DumpGroups(args ...string) ([][]string, error) {
 	groupsDump, err := c.RunOfctlCmd("dump-groups", args...)
 	if err != nil {
 		return nil, err
@@ -103,7 +96,7 @@ func (c *OfctlClient) DumpGroups(args ...string) ([][]string, error) {
 	return groupList, nil
 }
 
-func (c *OfctlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
+func (c *ofctlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
 	cmdStr := fmt.Sprintf("ovs-ofctl -O Openflow13 %s %s", cmd, c.bridge)
 	cmdStr = cmdStr + " " + strings.Join(args, " ")
 	out, err := exec.Command("/bin/sh", "-c", cmdStr).Output()
@@ -113,13 +106,25 @@ func (c *OfctlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
+// trimFlowStr removes undesirable fields from the flow string.
+func trimFlowStr(flowStr string) string {
+	return flowStr[strings.Index(flowStr, " table")+1:]
+}
+
 func flowExactMatch(matchStr, flowStr string) bool {
 	// Get the match string which starts with "priority=".
 	flowStr = flowStr[strings.Index(flowStr, " priority")+1 : strings.LastIndexByte(flowStr, ' ')]
 	matches := strings.Split(flowStr, ",")
 	for i, m := range matches {
-		// Skip the first match which is "priority=".
-		if i > 0 && !strings.Contains(matchStr, m) {
+		// Skip "priority=".
+		if i == 0 {
+			continue
+		}
+		if strings.HasPrefix(m, "in_port=") {
+			// in_port can be formatted as port name.
+			m = "in_port="
+		}
+		if !strings.Contains(matchStr, m) {
 			// The match condition is not included in matchStr.
 			return false
 		}

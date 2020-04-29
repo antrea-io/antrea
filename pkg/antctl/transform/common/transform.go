@@ -42,6 +42,7 @@ func GroupMemberPodTransform(pod networkingv1beta1.GroupMemberPod) GroupMemberPo
 type TableOutput interface {
 	GetTableHeader() []string
 	GetTableRow(maxColumnLength int) []string
+	SortRows() bool
 }
 
 func Int32ToString(val int32) string {

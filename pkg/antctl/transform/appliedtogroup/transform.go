@@ -73,3 +73,7 @@ func (r Response) GetPodNames(maxColumnLength int) string {
 func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{r.Name, r.GetPodNames(maxColumnLength)}
 }
+
+func (r Response) SortRows() bool {
+	return true
+}

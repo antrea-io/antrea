@@ -56,6 +56,51 @@ const (
 	markTrafficFromLocal   = 2
 )
 
+var (
+	FlowTables = []struct {
+		Number binding.TableIDType
+		Name   string
+	}{
+		{classifierTable, "Classification"},
+		{spoofGuardTable, "SpoofGuard"},
+		{arpResponderTable, "ARPResponder"},
+		{conntrackTable, "ConntrackZone"},
+		{conntrackStateTable, "ContrackState"},
+		{dnatTable, "DNAT"},
+		{egressRuleTable, "EgressRule"},
+		{egressDefaultTable, "EgressDefaultRule"},
+		{l3ForwardingTable, "L3Forwarding"},
+		{l2ForwardingCalcTable, "L2Forwarding"},
+		{ingressRuleTable, "IngressRule"},
+		{ingressDefaultTable, "IngressDefaultRule"},
+		{conntrackCommitTable, "ConntrackCommit"},
+		{l2ForwardingOutTable, "Output"},
+	}
+)
+
+// GetFlowTableName returns the flow table name given the table number. An empty
+// string is returned if the table cannot be found.
+func GetFlowTableName(tableNumber binding.TableIDType) string {
+	for _, t := range FlowTables {
+		if t.Number == tableNumber {
+			return t.Name
+		}
+	}
+	return ""
+}
+
+// GetFlowTableNumber does a case insensitive lookup of the table name, and
+// returns the flow table number if the table is found. Otherwise TableIDAll is
+// returned if the table cannot be found.
+func GetFlowTableNumber(tableName string) binding.TableIDType {
+	for _, t := range FlowTables {
+		if strings.EqualFold(t.Name, tableName) {
+			return t.Number
+		}
+	}
+	return binding.TableIDAll
+}
+
 type regType uint
 
 func (rt regType) number() string {

@@ -94,3 +94,7 @@ func (r AntreaAgentInfoResponse) GetTableRow(maxColumnLength int) []string {
 		common.Int32ToString(r.NetworkPolicyControllerInfo.AppliedToGroupNum),
 		common.Int32ToString(r.LocalPodNum)}
 }
+
+func (r AntreaAgentInfoResponse) SortRows() bool {
+	return true
+}

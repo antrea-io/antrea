@@ -74,3 +74,7 @@ func (r Response) GetTableHeader() []string {
 func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{r.NameSpace, r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength), strconv.Itoa(len(r.Rules))}
 }
+
+func (r Response) SortRows() bool {
+	return true
+}
