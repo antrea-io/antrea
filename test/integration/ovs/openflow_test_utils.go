@@ -48,7 +48,7 @@ type ExpectFlow struct {
 	ActStr   string
 }
 
-func CheckFlowExists(t *testing.T, ofctlClient *ofctl.OfctlClient, tableID uint8, exist bool, flows []*ExpectFlow) []string {
+func CheckFlowExists(t *testing.T, ofctlClient ofctl.OfctlClient, tableID uint8, exist bool, flows []*ExpectFlow) []string {
 	flowList, _ := OfctlDumpTableFlows(ofctlClient, tableID)
 	if exist {
 		for _, flow := range flows {
@@ -66,7 +66,7 @@ func CheckFlowExists(t *testing.T, ofctlClient *ofctl.OfctlClient, tableID uint8
 	return flowList
 }
 
-func CheckGroupExists(t *testing.T, ofctlClient *ofctl.OfctlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
+func CheckGroupExists(t *testing.T, ofctlClient ofctl.OfctlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
 	// dump groups
 	groupList, err := ofctlClient.DumpGroups()
 	if err != nil {
@@ -109,8 +109,7 @@ func formatFlowDump(rawFlows []string) []string {
 	for _, flow := range rawFlows {
 		felem := strings.Fields(flow)
 		if len(felem) > 2 {
-			felem = append(felem[:1], felem[2:]...)
-			felem = append(felem[:2], felem[4:]...)
+			felem = append(felem[:1], felem[3:]...)
 			fstr := strings.Join(felem, " ")
 			flowList = append(flowList, fstr)
 		}
@@ -118,7 +117,7 @@ func formatFlowDump(rawFlows []string) []string {
 	return flowList
 }
 
-func OfctlDumpFlows(ofctlClient *ofctl.OfctlClient, args ...string) ([]string, error) {
+func OfctlDumpFlows(ofctlClient ofctl.OfctlClient, args ...string) ([]string, error) {
 	rawFlows, err := ofctlClient.DumpFlows(args...)
 	if err != nil {
 		return nil, err
@@ -126,7 +125,7 @@ func OfctlDumpFlows(ofctlClient *ofctl.OfctlClient, args ...string) ([]string, e
 	return formatFlowDump(rawFlows), nil
 }
 
-func OfctlDumpTableFlows(ofctlClient *ofctl.OfctlClient, table uint8) ([]string, error) {
+func OfctlDumpTableFlows(ofctlClient ofctl.OfctlClient, table uint8) ([]string, error) {
 	rawFlows, err := ofctlClient.DumpTableFlows(table)
 	if err != nil {
 		return nil, err
@@ -134,7 +133,7 @@ func OfctlDumpTableFlows(ofctlClient *ofctl.OfctlClient, table uint8) ([]string,
 	return formatFlowDump(rawFlows), nil
 }
 
-func OfctlDeleteFlows(ofctlClient *ofctl.OfctlClient) error {
+func OfctlDeleteFlows(ofctlClient ofctl.OfctlClient) error {
 	_, err := ofctlClient.RunOfctlCmd("del-flows")
 	return err
 }

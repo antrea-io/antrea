@@ -36,7 +36,7 @@ type AgentQuerier interface {
 	GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool)
 	GetInterfaceStore() interfacestore.InterfaceStore
 	GetOpenflowClient() openflow.Client
-	GetOfctlClient() *ofctl.OfctlClient
+	GetOfctlClient() ofctl.OfctlClient
 	GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier
 }
 
@@ -78,7 +78,7 @@ func (aq *agentQuerier) GetOpenflowClient() openflow.Client {
 }
 
 // GetOfctlClient returns a new OfctlClient.
-func (aq *agentQuerier) GetOfctlClient() *ofctl.OfctlClient {
+func (aq *agentQuerier) GetOfctlClient() ofctl.OfctlClient {
 	return ofctl.NewClient(aq.ovsBridge)
 }
 

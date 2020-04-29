@@ -17,11 +17,14 @@ package ovsflows
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
+	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
 // Response is the response struct of ovsflows command.
@@ -29,20 +32,7 @@ type Response struct {
 	Flow string `json:"flow,omitempty"`
 }
 
-func getAllFlows(aq querier.AgentQuerier) ([]Response, error) {
-	resps := []Response{}
-	flowStrs, err := aq.GetOfctlClient().DumpFlows()
-	if err != nil {
-		klog.Errorf("Failed to dump flows: %v", err)
-		return nil, err
-	}
-	for _, s := range flowStrs {
-		resps = append(resps, Response{s})
-	}
-	return resps, nil
-}
-
-func dumpFlows(aq querier.AgentQuerier, flowKeys []string) ([]Response, error) {
+func dumpMatchedFlows(aq querier.AgentQuerier, flowKeys []string) ([]Response, error) {
 	resps := []Response{}
 	for _, f := range flowKeys {
 		flowStr, err := aq.GetOfctlClient().DumpMatchedFlow(f)
@@ -55,7 +45,44 @@ func dumpFlows(aq querier.AgentQuerier, flowKeys []string) ([]Response, error) {
 		}
 	}
 	return resps, nil
+}
 
+func dumpFlows(aq querier.AgentQuerier, table binding.TableIDType) ([]Response, error) {
+	resps := []Response{}
+	var flowStrs []string
+	var err error
+	if table != binding.TableIDAll {
+		flowStrs, err = aq.GetOfctlClient().DumpTableFlows(uint8(table))
+	} else {
+		flowStrs, err = aq.GetOfctlClient().DumpFlows()
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range flowStrs {
+		resps = append(resps, Response{s})
+	}
+	return resps, nil
+}
+
+// nil is returned if the flow table can not be found (the passed table name or
+// number is invalid).
+func getTableFlows(aq querier.AgentQuerier, table string) ([]Response, error) {
+	var tableNumber binding.TableIDType
+	// Table nubmer is a 8-bit unsigned integer.
+	n, err := strconv.ParseUint(table, 10, 8)
+	if err == nil {
+		tableNumber = binding.TableIDType(n)
+		if openflow.GetFlowTableName(tableNumber) == "" {
+			return nil, nil
+		}
+	} else {
+		tableNumber = openflow.GetFlowTableNumber(table)
+		if tableNumber == binding.TableIDAll {
+			return nil, nil
+		}
+	}
+	return dumpFlows(aq, tableNumber)
 }
 
 func getPodFlows(aq querier.AgentQuerier, podName, namespace string) ([]Response, error) {
@@ -65,7 +92,7 @@ func getPodFlows(aq querier.AgentQuerier, podName, namespace string) ([]Response
 	}
 
 	flowKeys := aq.GetOpenflowClient().GetPodFlowKeys(intf.InterfaceName)
-	return dumpFlows(aq, flowKeys)
+	return dumpMatchedFlows(aq, flowKeys)
 
 }
 
@@ -76,7 +103,7 @@ func getNetworkPolicyFlows(aq querier.AgentQuerier, npName, namespace string) ([
 	}
 
 	flowKeys := aq.GetOpenflowClient().GetNetworkPolicyFlowKeys(npName, namespace)
-	return dumpFlows(aq, flowKeys)
+	return dumpMatchedFlows(aq, flowKeys)
 }
 
 // HandleFunc returns the function which can handle API requests to "/ovsflows".
@@ -87,27 +114,34 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 		pod := r.URL.Query().Get("pod")
 		networkPolicy := r.URL.Query().Get("networkpolicy")
 		namespace := r.URL.Query().Get("namespace")
+		table := r.URL.Query().Get("table")
 
 		if (pod != "" || networkPolicy != "") && namespace == "" {
 			http.Error(w, "namespace must be provided", http.StatusBadRequest)
 			return
 		}
 
-		if pod == "" && networkPolicy == "" && namespace == "" {
-			resps, err = getAllFlows(aq)
+		if pod == "" && networkPolicy == "" && namespace == "" && table == "" {
+			resps, err = dumpFlows(aq, binding.TableIDAll)
 		} else if pod != "" {
 			// Pod Namespace must be provided to dump flows of a Pod.
 			resps, err = getPodFlows(aq, pod, namespace)
 		} else if networkPolicy != "" {
 			resps, err = getNetworkPolicyFlows(aq, networkPolicy, namespace)
+		} else if table != "" {
+			resps, err = getTableFlows(aq, table)
+			if err == nil && resps == nil {
+				http.Error(w, "invalid table name or number", http.StatusBadRequest)
+				return
+			}
 		} else {
-			// Not supported.
-			w.WriteHeader(http.StatusBadRequest)
+			http.Error(w, "unsupported parameter combination", http.StatusBadRequest)
 			return
 		}
 
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			klog.Errorf("Failed to dump flows: %v", err)
+			http.Error(w, "OVS flow dumping failed", http.StatusInternalServerError)
 			return
 		}
 		if resps == nil {
@@ -130,4 +164,8 @@ func (r Response) GetTableHeader() []string {
 
 func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{r.Flow}
+}
+
+func (r Response) SortRows() bool {
+	return false
 }

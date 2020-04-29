@@ -90,3 +90,7 @@ func (r Response) GetContainerIDStr() string {
 func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{r.PodNamespace, r.PodName, r.InterfaceName, r.IP, r.MAC, r.PortUUID, common.Int32ToString(r.OFPort), r.GetContainerIDStr()}
 }
+
+func (r Response) SortRows() bool {
+	return true
+}

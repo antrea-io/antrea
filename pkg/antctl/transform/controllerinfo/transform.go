@@ -92,3 +92,7 @@ func (r Response) GetTableRow(maxColumnLength int) []string {
 		common.Int32ToString(r.NetworkPolicyControllerInfo.AppliedToGroupNum),
 		common.Int32ToString(r.ConnectedAgentNum)}
 }
+
+func (r Response) SortRows() bool {
+	return true
+}

@@ -107,10 +107,10 @@ func (mr *MockAgentQuerierMockRecorder) GetNodeName() *gomock.Call {
 }
 
 // GetOfctlClient mocks base method
-func (m *MockAgentQuerier) GetOfctlClient() *ofctl.OfctlClient {
+func (m *MockAgentQuerier) GetOfctlClient() ofctl.OfctlClient {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetOfctlClient")
-	ret0, _ := ret[0].(*ofctl.OfctlClient)
+	ret0, _ := ret[0].(ofctl.OfctlClient)
 	return ret0
 }
 
