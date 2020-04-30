@@ -22,9 +22,10 @@ parameter to true in the Controller and the Agent configurations.
  
 ## Prometheus Configuration
   
-### Kubernetes API Endpoint Access
-Prometheus requires access to Kubernetes API endpoint for service discovery
-capability.
+### Prometheus RBAC
+Prometheus requires access to Kubernetes API resources for the service discovery
+capability. Reading metrics also requires access to the "/metrics" API
+endpoints.
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRole

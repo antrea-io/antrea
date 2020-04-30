@@ -7,6 +7,7 @@ metadata:
     name: monitoring
 ---
 # Authorize Prometheus to view Kubernetes cluster components for service discovery purposes
+# Authorize Prometheus to retrieve metrics
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRole
 metadata:
@@ -27,17 +28,6 @@ rules:
   verbs: ["get", "list", "watch"]
 - nonResourceURLs: ["/metrics"]
   verbs: ["get"]
----
-# Authorize Prometheus to retrieve metrics from Antrea components
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1beta1
-metadata:
-  name: prometheus-antrea
-rules:
-- nonResourceURLs:
-  - /metrics
-  verbs:
-  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
