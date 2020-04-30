@@ -27,7 +27,6 @@ SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
-RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/"
 TEST_FAILURE=false
 
@@ -173,12 +172,15 @@ function deliver_antrea_to_eks() {
     node_mtu=$(ssh -o StrictHostKeyChecking=no -l "ec2-user" $worker_node_ip_1 \
       'export PATH=$PATH:/usr/sbin; ip a | grep -E eth0.*mtu | cut -d " " -f5')
 
-    sed -i.bak -e "s|#defaultMTU: 1450|defaultMTU: ${node_mtu}|g" ../build/yamls/antrea-eks.yml
-    sed -i.bak -e "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: ${k8s_svc_cidr}|g" ../build/yamls/antrea-eks.yml
+    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
+        GIT_CHECKOUT_DIR=..
+    fi
+    sed -i "s|#defaultMTU: 1450|defaultMTU: ${node_mtu}|g"  ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
+    sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: ${k8s_svc_cidr}|g"  ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
     echo "defaultMTU set as ${node_mtu}"
     echo "seviceCIDR set as ${k8s_svc_cidr}"
 
-    kubectl apply -f ../build/yamls/antrea-eks.yml
+    kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
     set -e
 
     kubectl rollout status --timeout=2m deployment.apps/antrea-controller -n kube-system
@@ -190,7 +192,13 @@ function deliver_antrea_to_eks() {
 function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
 
-    ./run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy > eks-test.log
+    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
+        GIT_CHECKOUT_DIR=..
+    fi
+    # Skip NodePort related cases for EKS since by default eksctl does not create security groups for nodeport service
+    # access through node external IP. See https://github.com/vmware-tanzu/antrea/issues/690
+    skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
+     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-conformance-skip ${skip_regex} > eks-test.log
 
     if grep -Fxq "Failed tests:" eks-test.log
     then
@@ -201,7 +209,7 @@ function run_conformance() {
     fi
 
     echo "=== Cleanup Antrea Installation ==="
-    for antrea_yml in ../build/yamls/*.yml
+    for antrea_yml in ${GIT_CHECKOUT_DIR}/build/yamls/*.yml
     do
         kubectl delete -f ${antrea_yml} --ignore-not-found=true || true
     done
