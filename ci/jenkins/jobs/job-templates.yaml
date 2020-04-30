@@ -167,7 +167,9 @@
 - job-template:
      name: 'cloud-{name}-{test_name}-for-eks'
      node: '{node}'
+     triggers: '{triggers}'
      builders: '{builders}'
+     parameters: '{parameters}'
      description: '{description}'
      block-downstream: false
      block-upstream: false

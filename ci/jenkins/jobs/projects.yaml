@@ -329,12 +329,14 @@
           test_name: conformance-net-policy
           node: antrea-cloud
           description: 'This is EKS conformance and network policy test for antrea.'
+          parameters: []
           builders:
           - shell: |-
+              #!/bin/bash
               source /home/ubuntu/.bashrc
-              ./ci/test-conformance-eks.sh --setup-only
+              sudo ./ci/test-conformance-eks.sh --setup-only
           triggers:
-          - timed: H H * * *
+          - timed: H H */2 * *
           publishers:
           - archive:
               allow-empty: true
