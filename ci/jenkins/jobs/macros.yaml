@@ -140,7 +140,7 @@
           #!/bin/bash
           set -ex
           source /home/ubuntu/.bashrc
-          ./ci/test-conformance-eks.sh --cluster "${CLUSTERNAME}" --cleanup-only
+          ./ci/test-conformance-eks.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
 
 - builder:
     name: builder-workload-cluster-gc
