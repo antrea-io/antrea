@@ -9,6 +9,38 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 
 ## Unreleased
 
+## 0.6.0 - 2020-04-30
+
+### Added
+
+- Expose Prometheus metrics for Agent and Controller using the "/metrics" apiserver endpoint; "enablePrometheusMetrics" must be set to true in configuration.
+- Add documentation for deploying Prometheus and scraping Antrea metrics, along with sample YAML manifest.
+- Install portmap CNI by default in order to support Pods with "hostPort" set.
+- Support configurable ports for Agent and Controller apiservers.
+- Set default CPU resource requests for Antrea components in YAML manifest.
+- Add "/ovsflows" API endpoint to Agent to query OVS flows and "antctl get ovsflows" command; flows can be filtered by Pod / NetworkPolicy / OVS Table.
+- Improvements to "/networkpolicies" API endpoint and "antctl get networkpolicies" command:
+   * namespace and name parameters to filter policies
+   * ability to get NetworkPolicies applied to a Pod (Agent API only)
+- Add object type aliases to antctl (plural form and short alias).
+- Document known issues when deploying Antrea on Photon OS or CoreOS.
+
+### Changed
+
+- Add authentication to Agent apiserver to enable external access (from outside of Agent Pod), and generate bearer token for local access instead of delegating authentication to K8s apiserver.
+- Send Agent and Controller logs to /var/log/antrea/ on the host as well as stderr.
+- Make "table" output format the default for antctl get commands.
+- Use custom formatter for logs originating from ofnet / libOpenflow (which use the logrus module) to mimic K8s log format.
+- Use Go cross compilation support for "make bin": Antrea Linux binaries can now be built on other OS's.
+- Ensure that OVS bridge datapath type is correct when Agent starts.
+
+### Fixed
+
+- Acquire xtables.lock before executing iptables-restore in Agent to avoid initialization error when kube-proxy uses iptables concurrently.
+- Start ovs-vswitchd with flow-restore-wait config (only for OVS system datapath type) to avoid conntrack issues after antrea-ovs restarts; this could also reduce downtime during upgrades.
+- Fix monitoring CRDs update: recover gracefully from transient errors.
+- Handle DeletedFinalStateUnknown in NetworkPolicy Controller to avoid crashes when a watch deletion event is missed, e.g. because of a transient connectivity issue to the K8s apiserver.
+
 ## 0.5.1 - 2020-04-01
 
 ### Changed
