@@ -22,18 +22,6 @@
           builders:
             - builder-workload-cluster-gc
           timed: 'H * * * *'
-      - '{name}-{test_name}-for-testbed':
-          test_name: cleanup
-          node: null
-          description: 'This is for deleting workload clusters.'
-          builders:
-            - builder-workload-cluster-cleanup
-          parameters:
-            - string:
-                default: ''
-                description: 'The cluster name of the last finished build.'
-                name: CLUSTERNAME
-                trim: 'true'
       - '{name}-{test_name}-for-pull-request':
           test_name: list-tests
           node: null
@@ -64,7 +52,7 @@
           publishers: []
       - '{name}-{test_name}-job-validator':
           test_name: jenkins-job-validator
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is for validating jenkins jobs code.'
           builders:
             - builder-job-validator
@@ -111,12 +99,13 @@
           publishers: []
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
           builders:
             - builder-workload-cluster-setup
             - builder-prepare-antrea
             - builder-e2e
+            - builder-workload-cluster-cleanup
           trigger_phrase: .*/test-(e2e|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -131,7 +120,11 @@
           error_status: Failed. Add comment /test-e2e to re-trigger.
           triggered_status: null
           started_status: null
-          wrappers: []
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 50
+              type: absolute
           publishers:
           - archive:
               allow-empty: true
@@ -140,10 +133,6 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-          - trigger-parameterized-builds:
-            - project:
-              - antrea-cleanup-for-testbed
-              property-file: 'ci_properties.txt'
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e-skip
           node: null
@@ -189,7 +178,7 @@
           publishers: []
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
           builders:
             - builder-workload-cluster-setup
@@ -197,6 +186,7 @@
             - builder-conformance:
                 focus_regex: '\[Conformance\]'
                 skip_regex: '\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]'
+            - builder-workload-cluster-cleanup
           trigger_phrase: .*/test-(conformance|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -211,7 +201,11 @@
           error_status: Failed. Add comment /test-conformance to re-trigger.
           triggered_status: null
           started_status: null
-          wrappers: []
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 50
+              type: absolute
           publishers:
           - archive:
               allow-empty: true
@@ -220,10 +214,6 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-          - trigger-parameterized-builds:
-            - project:
-              - antrea-cleanup-for-testbed
-              property-file: 'ci_properties.txt'
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance-skip
           node: null
@@ -269,7 +259,7 @@
           publishers: []
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
           builders:
             - builder-workload-cluster-setup
@@ -277,6 +267,7 @@
             - builder-conformance:
                 focus_regex: '\[Feature:NetworkPolicy\]'
                 skip_regex: 'SKIP_NO_TESTCASE'
+            - builder-workload-cluster-cleanup
           trigger_phrase: .*/test-(networkpolicy|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -291,7 +282,11 @@
           error_status: Failed. Add comment /test-networkpolicy to re-trigger.
           triggered_status: null
           started_status: null
-          wrappers: []
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 50
+              type: absolute
           publishers:
           - archive:
               allow-empty: true
@@ -300,10 +295,6 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-          - trigger-parameterized-builds:
-            - project:
-              - antrea-cleanup-for-testbed
-              property-file: 'ci_properties.txt'
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy-skip
           node: null
