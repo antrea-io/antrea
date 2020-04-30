@@ -28,11 +28,12 @@ RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 RUN_CLEANUP_ONLY=false
-KUBECONFIG_PATH=/jenkins/out/
+KUBECONFIG_PATH="$HOME/jenkins/out/"
 TEST_FAILURE=false
 
-_usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--aws-access-key <AccessKey>] \
-                  [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] [--setup-only] [--cleanup-only]"
+_usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
+                  [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] \
+                  [--setup-only] [--cleanup-only]"
 
 function print_usage {
     echoerr "$_usage"
@@ -69,6 +70,10 @@ case $key in
     ;;
     --kubeconfig)
     KUBECONFIG_PATH="$2"
+    shift 2
+    ;;
+    --k8s-version)
+    K8S_VERSION="$2"
     shift 2
     ;;
     --setup-only)
@@ -218,7 +223,7 @@ function cleanup_cluster() {
        echo "=== Failed to delete EKS cluster ${CLUSTER}! ==="
        exit 1
     fi
-    rm ${KUBECONFIG_PATH}/kubeconfig
+    rm -f ${KUBECONFIG_PATH}/kubeconfig
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 }
 
