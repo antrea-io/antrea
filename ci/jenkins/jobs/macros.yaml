@@ -70,7 +70,7 @@
 
           if !(test -f jenkins/SECRET_EXIST); then
             echo "=== Fail to get secret ==="
-            
+
             echo "=== Remove too many logs ==="
             export LOG_DIR=/var/lib/jenkins/antrea_logs
             find ${LOG_DIR}/* -type d -mmin +10080 | xargs rm -rf
@@ -89,7 +89,7 @@
               capv_pod_name=$(echo ${capv_pod} | cut -d'/' -f 2)
               kubectl logs ${capv_pod_name} -n capv-system --tail=100 > ${CLUSTER_LOG_DIR}/capv/${capv_pod_name}
             done
-            
+
             exit 1
           else
             echo "=== Setup cluster succeeded ==="
@@ -132,6 +132,15 @@
 
           rm -rf "${WORKSPACE}/jenkins"
           echo "=== Cleanup cluster ${cluster} succeeded ==="
+
+- builder:
+    name: builder-eks-cluster-cleanup
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          source /home/ubuntu/.bashrc
+          ./ci/test-conformance-eks.sh --cluster "${CLUSTERNAME}" --cleanup-only
 
 - builder:
     name: builder-workload-cluster-gc
