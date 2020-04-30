@@ -24,8 +24,10 @@ RUN_CONFORMANCE=false
 RUN_NETWORK_POLICY=false
 RUN_E2E_FOCUS=""
 KUBECONFIG_OPTION=""
+E2E_CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
 
-_usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]
+_usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-conformance-skip <SkipRegex>]
+                  [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]
 Run the K8s e2e community tests (Conformance & Network Policy) which are relevant to Project Antrea,
 using the sonobuoy tool.
         --e2e-conformance                                         Run Conformance tests.
@@ -82,6 +84,10 @@ case $key in
     RUN_E2E_FOCUS="$2"
     shift 2
     ;;
+    --e2e-conformance-skip)
+    E2E_CONFORMANCE_SKIP="$2"
+    shift 2
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -119,7 +125,7 @@ function run_sonobuoy() {
 }
 
 function run_conformance() {
-    run_sonobuoy "\[Conformance\]" "\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
+    run_sonobuoy "\[Conformance\]" ${E2E_CONFORMANCE_SKIP}
 }
 
 function run_network_policy() {
