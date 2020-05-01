@@ -293,6 +293,12 @@ func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 func (b *ofFlowBuilder) MatchTCPDstPort(port uint16) FlowBuilder {
 	b.MatchProtocol(ProtocolTCP)
 	b.Match.TcpDstPort = port
+	// According to ovs-ofctl(8) man page, "tp_dst" is deprecated and "tcp_dst",
+	// "udp_dst", "sctp_dst" should be used for the destination port of TCP, UDP,
+	// SCTP respectively. However, OVS command line tools like ovs-ofctl and
+	// ovs-appctl still print flows with "tp_dst", so we also  use "tp_dst" in flow
+	// matching string, as flow matching string can be used to look up matched
+	// flows from these tools' outputs.
 	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
 	return b
 }
