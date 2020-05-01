@@ -76,13 +76,16 @@ func InitializePrometheusMetrics(
 	ofClient openflow.Client) {
 
 	klog.Info("Initializing prometheus metrics")
-	prometheus.NewGaugeFunc(
+	podCount := prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "antrea_agent_local_pod_count",
 			Help: "Number of pods on local node which are managed by the Antrea Agent.",
 		},
 		func() float64 { return float64(ifaceStore.GetContainerInterfaceNum()) },
 	)
+	if err := prometheus.Register(podCount); err != nil {
+		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
+	}
 
 	nodeName, err := env.GetNodeName()
 	if err != nil {
