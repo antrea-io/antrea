@@ -76,9 +76,8 @@ Antrea components, which publish runtime information as
 
 ## Roadmap
 
-Antrea is a very young project. There is a very exciting list of features and
-integrations that we would like to add. A most likely incomplete list can
-be found on our [Roadmap](ROADMAP.md) page. Feel free to throw your ideas in!
+We are adding features very quickly to Antrea. Check out the list of features we are considering 
+on our [Roadmap](ROADMAP.md) page. Feel free to throw your ideas in!
 
 ## License
 
