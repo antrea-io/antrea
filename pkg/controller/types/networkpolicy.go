@@ -37,18 +37,19 @@ func (meta *SpanMeta) Has(nodeName string) bool {
 	return meta.NodeNames.Has(nodeName)
 }
 
-// GroupSelector describes how to select pods.
+// GroupSelector describes how to select Pods.
 type GroupSelector struct {
 	// The normalized name is calculated from Namespace, PodSelector, and NamespaceSelector.
 	// If multiple policies have same selectors, they should share this group by comparing NormalizedName.
 	// It's also used to generate Name and UUID of group.
 	NormalizedName string
-	// If Namespace is set, NamespaceSelector can not be set. It means only pods in this namespace will be matched.
+	// If Namespace is set, NamespaceSelector can not be set. It means only Pods in this Namespace will be matched.
 	Namespace string
-	// This is a label selector which selects pods. If Namespace is also set, it selects the pods in the namespace.
-	// If NamespaceSelector is also set, it selects the pods in the namespaces selected by NamespaceSelector.
+	// This is a label selector which selects Pods. If Namespace is also set, it selects the Pods in the Namespace.
+	// If NamespaceSelector is also set, it selects the Pods in the Namespaces selected by NamespaceSelector.
+	// If Namespace and NamespaceSelector both are unset, it selects the Pods in all the Namespaces.
 	PodSelector labels.Selector
-	// This is a label selector which selects namespaces. It this field is set, Namespace can not be set.
+	// This is a label selector which selects Namespaces. It this field is set, Namespace can not be set.
 	NamespaceSelector labels.Selector
 }
 
@@ -90,7 +91,11 @@ type NetworkPolicy struct {
 	// Name of the original K8s Network Policy.
 	Name string
 	// Namespace of the original K8s Network Policy.
+	// An empty value indicates that the Network Policy is Cluster scoped.
 	Namespace string
+	// Priority represents the relative priority of this Network Policy as compared to
+	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+	Priority *float64
 	// Rules is a list of rules to be applied to the selected Pods.
 	Rules []networking.NetworkPolicyRule
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
