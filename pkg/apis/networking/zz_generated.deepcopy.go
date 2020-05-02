@@ -19,6 +19,7 @@
 package networking
 
 import (
+	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -511,6 +512,11 @@ func (in *NetworkPolicy) DeepCopyInto(out *NetworkPolicy) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.Priority != nil {
+		in, out := &in.Priority, &out.Priority
+		*out = new(float64)
+		**out = **in
+	}
 	return
 }
 
@@ -604,6 +610,11 @@ func (in *NetworkPolicyRule) DeepCopyInto(out *NetworkPolicyRule) {
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.Action != nil {
+		in, out := &in.Action, &out.Action
+		*out = new(v1alpha1.RuleAction)
+		**out = **in
 	}
 	return
 }

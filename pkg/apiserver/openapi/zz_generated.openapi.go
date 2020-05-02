@@ -1430,6 +1430,13 @@ func schema_pkg_apis_networking_v1beta1_NetworkPolicy(ref common.ReferenceCallba
 							},
 						},
 					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority represents the relative priority of this Network Policy as compared to other Network Policies. Priority will be unset (nil) for K8s Network Policy.",
+							Type:        []string{"number"},
+							Format:      "double",
+						},
+					},
 				},
 			},
 		},
@@ -1564,6 +1571,20 @@ func schema_pkg_apis_networking_v1beta1_NetworkPolicyRule(ref common.ReferenceCa
 									},
 								},
 							},
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority defines the priority of the Rule as compared to other rules in the NetworkPolicy.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"action": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Action specifies the action to be applied on the rule. i.e. Allow/Drop. An empty action “nil” defaults to Allow action, which would be the case for rules created for K8s Network Policy.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},
