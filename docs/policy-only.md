@@ -162,7 +162,7 @@ conntrack, and can record them accordingly. With re-entrance traffic, the reply 
 original server Pod IPs does not reach OVS bridge, and any dropped traffic by host network
 conntrack is unknown to the OVS bridge.
 
-## Additional Works
+## Future Work
 1. Smoother transition in/out of Antrea in policy mode, Kubernetes deployment shall be easily
 scaled up and down after/before Antrea insertion to allow Pods be added to Antrea after
 installation, and reconnect to old CNI topology after Antrea is uninstalled.
