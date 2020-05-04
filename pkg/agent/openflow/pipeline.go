@@ -573,7 +573,7 @@ func (c *client) arpNormalFlow(category cookie.Category) binding.Flow {
 		Done()
 }
 
-// conjunctionActionFlow generates the flow to resubmit to a specific table if policyRuleConjunction ID is matched. Priority of
+// conjunctionActionFlow generates the flow to jump to a specific table if policyRuleConjunction ID is matched. Priority of
 // conjunctionActionFlow is priorityLow.
 func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType) binding.Flow {
 	return c.pipeline[tableID].BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
@@ -668,7 +668,7 @@ func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey int, matc
 		Done()
 }
 
-// localProbeFlow generates the flow to resubmit packets to conntrackCommitTable. The packets are sent from Node to probe the liveness/readiness of local Pods.
+// localProbeFlow generates the flow to forward packets to conntrackCommitTable. The packets are sent from Node to probe the liveness/readiness of local Pods.
 func (c *client) localProbeFlow(localGatewayIP net.IP, category cookie.Category) binding.Flow {
 	return c.pipeline[ingressRuleTable].BuildFlow(priorityHigh).
 		MatchProtocol(binding.ProtocolIP).
