@@ -421,21 +421,29 @@ func (cd *commandDefinition) tableOutputForGetCommands(obj interface{}, writer i
 		})
 	}
 
-	widths := make([]int, len(args))
-	// Get the width of every column.
-	for j := 0; j < len(args); j++ {
-		width := len(rows[0][j])
-		for i := 1; i < len(list)+1; i++ {
-			if len(rows[i][j]) == 0 {
-				rows[i][j] = "<NONE>"
+	numColumns := len(args)
+	widths := make([]int, numColumns)
+	if numColumns == 1 {
+		// Do not limit the column length for a single column table.
+		// This is for the case a single column table can have long rows which cannot
+		// fit into a single line (one example is the ovsflows outputs).
+		widths[0] = 0
+	} else {
+		// Get the width of every column.
+		for j := 0; j < numColumns; j++ {
+			width := len(rows[0][j])
+			for i := 1; i < len(list)+1; i++ {
+				if len(rows[i][j]) == 0 {
+					rows[i][j] = "<NONE>"
+				}
+				if width < len(rows[i][j]) {
+					width = len(rows[i][j])
+				}
 			}
-			if width < len(rows[i][j]) {
-				width = len(rows[i][j])
+			widths[j] = width
+			if j != 0 {
+				widths[j]++
 			}
-		}
-		widths[j] = width
-		if j != 0 {
-			widths[j]++
 		}
 	}
 
@@ -448,7 +456,9 @@ func (cd *commandDefinition) tableOutputForGetCommands(obj interface{}, writer i
 				val = " " + val
 			}
 			val += rows[i][j]
-			val += strings.Repeat(" ", widths[j]-len(val))
+			if widths[j] > 0 {
+				val += strings.Repeat(" ", widths[j]-len(val))
+			}
 			buffer.WriteString(val)
 		}
 		buffer.WriteString("\n")
