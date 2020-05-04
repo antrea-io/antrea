@@ -105,11 +105,25 @@ antctl get networkpolicy
 ### Directly accessing the antrea-agent API
 
 If you want to directly access the antrea-agent API, you need to log into the
-Node that the antrea-agent runs on or any Pod in hostNetwork mode that runs on
-this Node. Then access the local endpoint directly:
+Node that the antrea-agent runs on or exec into the antrea-agent container. Then
+access the local endpoint directly using the Bearer Token stored in the file
+system:
 ```
-curl --insecure https://127.0.0.1:10350/
+TOKEN=$(cat /var/run/antrea/apiserver/loopback-client-token)
+curl --insecure --header "Authorization: Bearer $TOKEN" https://127.0.0.1:10350/
 ```
+
+Note that you can also access the antrea-agent API from outside the Node by
+using the authentication token of the `antctl` service account:
+```
+# Get the token value of antctl account.
+TOKEN=$(kubectl get secrets -n kube-system -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='antctl')].data.token}"|base64 --decode)
+# Access antrea API with TOKEN
+curl --insecure --header "Authorization: Bearer $TOKEN" https://<Node IP address>:10350/podinterfaces
+```
+However, in this case you will be limited to the endpoints that `antctl` is
+allowed to access, as defined
+[here](https://github.com/vmware-tanzu/antrea/blob/master/build/yamls/base/antctl.yml).
 
 ## Debugging OVS
 
