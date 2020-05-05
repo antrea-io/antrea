@@ -439,11 +439,17 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 
 func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 	tunnelIface, portExists := i.ifaceStore.GetInterface(tunnelPortName)
+	localIP := i.getTunnelPortLocalIP()
+	localIPStr := ""
+	if localIP != nil {
+		localIPStr = localIP.String()
+	}
 
 	// Check the default tunnel port.
 	if portExists {
 		if i.networkConfig.TrafficEncapMode.SupportsEncap() &&
-			tunnelIface.TunnelInterfaceConfig.Type == i.networkConfig.TunnelType {
+			tunnelIface.TunnelInterfaceConfig.Type == i.networkConfig.TunnelType &&
+			tunnelIface.TunnelInterfaceConfig.LocalIP.Equal(localIP) {
 			klog.V(2).Infof("Tunnel port %s already exists on OVS bridge", tunnelPortName)
 			return nil
 		}
@@ -462,12 +468,12 @@ func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 
 	// Create default tunnel port.
 	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
-		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPort(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort)
+		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, localIPStr, "", "", nil)
 		if err != nil {
 			klog.Errorf("Failed to create tunnel port %s type %s on OVS bridge: %v", tunnelPortName, i.networkConfig.TunnelType, err)
 			return err
 		}
-		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType)
+		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType, localIP)
 		tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{tunnelPortUUID, config.DefaultTunOFPort}
 		i.ifaceStore.AddInterface(tunnelIface)
 	}
