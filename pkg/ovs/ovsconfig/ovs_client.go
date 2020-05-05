@@ -364,7 +364,7 @@ func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, extern
 // the bridge.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 func (br *OVSBridge) CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32) (string, Error) {
-	return br.createTunnelPort(name, tunnelType, ofPortRequest, "", "", nil)
+	return br.createTunnelPort(name, tunnelType, ofPortRequest, "", "", "", nil)
 }
 
 // CreateTunnelPortExt creates a tunnel port with the specified name and type
@@ -381,19 +381,21 @@ func (br *OVSBridge) CreateTunnelPortExt(
 	name string,
 	tunnelType TunnelType,
 	ofPortRequest int32,
+	localIP string,
 	remoteIP string,
 	psk string,
 	externalIDs map[string]interface{}) (string, Error) {
 	if psk != "" && remoteIP == "" {
 		return "", newInvalidArgumentsError("IPSec tunnel can not be flow based. remoteIP must be set")
 	}
-	return br.createTunnelPort(name, tunnelType, ofPortRequest, remoteIP, psk, externalIDs)
+	return br.createTunnelPort(name, tunnelType, ofPortRequest, localIP, remoteIP, psk, externalIDs)
 }
 
 func (br *OVSBridge) createTunnelPort(
 	name string,
 	tunnelType TunnelType,
 	ofPortRequest int32,
+	localIP string,
 	remoteIP string,
 	psk string,
 	externalIDs map[string]interface{}) (string, Error) {
@@ -413,6 +415,9 @@ func (br *OVSBridge) createTunnelPort(
 		options["key"] = "flow"
 		options["remote_ip"] = "flow"
 	}
+	if localIP != "" {
+		options["local_ip"] = localIP
+	}
 
 	if psk != "" {
 		options["psk"] = psk
@@ -423,23 +428,26 @@ func (br *OVSBridge) createTunnelPort(
 
 // ParseTunnelInterfaceOptions reads remote IP and IPSec PSK from the tunnel
 // interface options and returns them.
-func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, string) {
+func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string) {
 	if portData.Options == nil {
-		return nil, ""
+		return nil, nil, ""
 	}
 
 	var ok bool
-	var remoteIPStr, psk string
-	var remoteIP net.IP
+	var remoteIPStr, localIPStr, psk string
+	var remoteIP, localIP net.IP
 
 	if remoteIPStr, ok = portData.Options["remote_ip"]; ok {
 		if remoteIPStr != "flow" {
 			remoteIP = net.ParseIP(remoteIPStr)
 		}
 	}
+	if localIPStr, ok = portData.Options["local_ip"]; ok {
+		localIP = net.ParseIP(localIPStr)
+	}
 
 	psk = portData.Options["psk"]
-	return remoteIP, psk
+	return remoteIP, localIP, psk
 }
 
 // CreateUplinkPort creates uplink port.
