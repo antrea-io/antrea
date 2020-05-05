@@ -16,6 +16,10 @@
 
 package agent
 
+import (
+	"net"
+)
+
 // setupExternalConnectivity returns immediately on Linux. The corresponding functions are provided in routeClient.
 func (i *Initializer) setupExternalConnectivity() error {
 	return nil
@@ -33,5 +37,11 @@ func (i *Initializer) prepareOVSBridge() error {
 
 // initHostNetworkFlows returns immediately on Linux.
 func (i *Initializer) initHostNetworkFlows() error {
+	return nil
+}
+
+// getTunnelLocalIP returns local_ip of tunnel port.
+// On linux platform, local_ip option is not needed.
+func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return nil
 }
