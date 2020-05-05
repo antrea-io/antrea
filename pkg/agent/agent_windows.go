@@ -17,6 +17,7 @@
 package agent
 
 import (
+	"net"
 	"strings"
 
 	"github.com/Microsoft/hcsshim"
@@ -172,4 +173,9 @@ func (i *Initializer) initHostNetworkFlows() error {
 		return err
 	}
 	return nil
+}
+
+// getTunnelLocalIP returns local_ip of tunnel port
+func (i *Initializer) getTunnelPortLocalIP() net.IP {
+	return i.nodeConfig.NodeIPAddr.IP
 }
