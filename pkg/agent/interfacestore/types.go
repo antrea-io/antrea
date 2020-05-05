@@ -48,6 +48,8 @@ type TunnelInterfaceConfig struct {
 	Type ovsconfig.TunnelType
 	// Name of the remote Node.
 	NodeName string
+	// IP address of the local Node.
+	LocalIP net.IP
 	// IP address of the remote Node.
 	RemoteIP net.IP
 	PSK      string
@@ -109,8 +111,8 @@ func NewGatewayInterface(gatewayName string) *InterfaceConfig {
 
 // NewTunnelInterface creates InterfaceConfig for the default tunnel port
 // interface.
-func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType) *InterfaceConfig {
-	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType}
+func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, localIP net.IP) *InterfaceConfig {
+	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, LocalIP: localIP}
 	return &InterfaceConfig{InterfaceName: tunnelName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
 }
 
