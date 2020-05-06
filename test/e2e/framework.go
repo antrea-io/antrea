@@ -566,9 +566,9 @@ type PodCondition func(*v1.Pod) (bool, error)
 
 // podWaitFor polls the K8s apiserver until the specified Pod is found (in the test Namespace) and
 // the condition predicate is met (or until the provided timeout expires).
-func (data *TestData) podWaitFor(timeout time.Duration, name string, condition PodCondition) (*v1.Pod, error) {
+func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*v1.Pod, error) {
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if pod, err := data.clientset.CoreV1().Pods(testNamespace).Get(name, metav1.GetOptions{}); err != nil {
+		if pod, err := data.clientset.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
 			}
@@ -580,13 +580,13 @@ func (data *TestData) podWaitFor(timeout time.Duration, name string, condition P
 	if err != nil {
 		return nil, err
 	}
-	return data.clientset.CoreV1().Pods(testNamespace).Get(name, metav1.GetOptions{})
+	return data.clientset.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
 }
 
 // podWaitForRunning polls the k8s apiserver until the specified Pod is in the "running" state (or
 // until the provided timeout expires).
-func (data *TestData) podWaitForRunning(timeout time.Duration, name string) error {
-	_, err := data.podWaitFor(timeout, name, func(pod *v1.Pod) (bool, error) {
+func (data *TestData) podWaitForRunning(timeout time.Duration, name, namespace string) error {
+	_, err := data.podWaitFor(timeout, name, namespace, func(pod *v1.Pod) (bool, error) {
 		return pod.Status.Phase == v1.PodRunning, nil
 	})
 	return err
@@ -594,8 +594,8 @@ func (data *TestData) podWaitForRunning(timeout time.Duration, name string) erro
 
 // podWaitForIP polls the K8s apiserver until the specified Pod is in the "running" state (or until
 // the provided timeout expires). The function then returns the IP address assigned to the Pod.
-func (data *TestData) podWaitForIP(timeout time.Duration, name string) (string, error) {
-	pod, err := data.podWaitFor(timeout, name, func(pod *v1.Pod) (bool, error) {
+func (data *TestData) podWaitForIP(timeout time.Duration, name, namespace string) (string, error) {
+	pod, err := data.podWaitFor(timeout, name, namespace, func(pod *v1.Pod) (bool, error) {
 		return pod.Status.Phase == v1.PodRunning, nil
 	})
 	if err != nil {

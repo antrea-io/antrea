@@ -31,7 +31,7 @@ func waitForPodIPs(t *testing.T, data *TestData, podNames []string) map[string]s
 	t.Logf("Waiting for Pods to be ready and retrieving IPs")
 	podIPs := make(map[string]string)
 	for _, podName := range podNames {
-		if podIP, err := data.podWaitForIP(defaultTimeout, podName); err != nil {
+		if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
 			t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
 		} else {
 			podIPs[podName] = podIP
@@ -101,7 +101,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	}
 	defer deletePodWrapper(t, data, hpPodName)
 	// Retrieve the IP Address of the Node on which the Pod is scheduled.
-	hpPod, err := data.podWaitFor(defaultTimeout, hpPodName, func(pod *v1.Pod) (bool, error) {
+	hpPod, err := data.podWaitFor(defaultTimeout, hpPodName, testNamespace, func(pod *v1.Pod) (bool, error) {
 		return pod.Status.Phase == v1.PodRunning, nil
 	})
 	if err != nil {
@@ -114,7 +114,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, clientName)
-	if _, err := data.podWaitForIP(defaultTimeout, clientName); err != nil {
+	if _, err := data.podWaitForIP(defaultTimeout, clientName, testNamespace); err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
 	}
 

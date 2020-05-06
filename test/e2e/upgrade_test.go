@@ -54,7 +54,7 @@ func TestUpgrade(t *testing.T) {
 	if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
-	if err := data.podWaitForRunning(defaultTimeout, podName); err != nil {
+	if err := data.podWaitForRunning(defaultTimeout, podName, testNamespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
 	}
 

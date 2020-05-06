@@ -35,7 +35,7 @@ func TestDifferentNamedPorts(t *testing.T) {
 		t.Fatalf("Error when creating server pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, server0Name)
-	server0IP, err := data.podWaitForIP(defaultTimeout, server0Name)
+	server0IP, err := data.podWaitForIP(defaultTimeout, server0Name, testNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", server0Name, err)
 	}
@@ -46,7 +46,7 @@ func TestDifferentNamedPorts(t *testing.T) {
 		t.Fatalf("Error when creating server pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, server1Name)
-	server1IP, err := data.podWaitForIP(defaultTimeout, server1Name)
+	server1IP, err := data.podWaitForIP(defaultTimeout, server1Name, testNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", server1Name, err)
 	}
@@ -56,7 +56,7 @@ func TestDifferentNamedPorts(t *testing.T) {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, client0Name)
-	if _, err := data.podWaitForIP(defaultTimeout, client0Name); err != nil {
+	if _, err := data.podWaitForIP(defaultTimeout, client0Name, testNamespace); err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", client0Name, err)
 	}
 
@@ -65,7 +65,7 @@ func TestDifferentNamedPorts(t *testing.T) {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, client1Name)
-	if _, err := data.podWaitForIP(defaultTimeout, client1Name); err != nil {
+	if _, err := data.podWaitForIP(defaultTimeout, client1Name, testNamespace); err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", client1Name, err)
 	}
 
@@ -135,7 +135,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 		t.Fatalf("Error when creating server pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, serverName)
-	serverIP, err := data.podWaitForIP(defaultTimeout, serverName)
+	serverIP, err := data.podWaitForIP(defaultTimeout, serverName, testNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", serverName, err)
 	}
@@ -145,7 +145,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, clientName)
-	if _, err := data.podWaitForIP(defaultTimeout, clientName); err != nil {
+	if _, err := data.podWaitForIP(defaultTimeout, clientName, testNamespace); err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
 	}
 
