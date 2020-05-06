@@ -301,5 +301,5 @@ forwarding. Refer to the [NetworkPolicyOnly mode design doc](docs/policy-only.md
 for more information.
 
 [Antrea for AKS Engine](https://github.com/Azure/aks-engine/blob/master/docs/topics/features.md#feat-antrea)
-and [Antrea EKS support](docs/eks-installation.md) work in `NetworkPolicyOnly`
+and [Antrea EKS support](/docs/eks-installation.md) work in `NetworkPolicyOnly`
 mode.
