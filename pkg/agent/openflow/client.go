@@ -318,7 +318,7 @@ func (c *client) InstallDefaultTunnelFlows(tunnelOFPort uint32) error {
 func (c *client) InstallBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32) error {
 	flows := c.hostBridgeUplinkFlows(uplinkPort, bridgeLocalPort, cookie.Default)
 	c.hostNetworkingFlows = flows
-	if err := c.flowOperations.AddAll(flows); err != nil {
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
 	c.hostNetworkingFlows = flows
