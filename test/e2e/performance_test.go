@@ -183,7 +183,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 		b.Fatalf("Error when creating nginx test pod: %v", err)
 	}
 	b.Logf("Waiting IP assignment of the nginx test Pod")
-	nginxPodIP, err = data.podWaitForIP(defaultTimeout, benchNginxPodName)
+	nginxPodIP, err = data.podWaitForIP(defaultTimeout, benchNginxPodName, testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of nginx test Pod: %v", err)
 	}
@@ -195,7 +195,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 		b.Fatalf("Error when creating perftool test Pod: %v", err)
 	}
 	b.Logf("Waiting IP assignment of the perftool test Pod")
-	perfPodIP, err = data.podWaitForIP(defaultTimeout, perftoolPodName)
+	perfPodIP, err = data.podWaitForIP(defaultTimeout, perftoolPodName, testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of perftool test Pod: %v", err)
 	}

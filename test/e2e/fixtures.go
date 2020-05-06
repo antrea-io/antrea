@@ -237,7 +237,7 @@ func createTestBusyboxPods(tb testing.TB, data *TestData, num int, nodeName stri
 			return "", "", err
 		}
 
-		if podIP, err := data.podWaitForIP(defaultTimeout, podName); err != nil {
+		if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
 			tb.Errorf("Error when waiting for IP for Pod '%s': %v", podName, err)
 			return podName, "", err
 		} else {
