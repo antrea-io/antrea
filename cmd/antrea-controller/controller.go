@@ -73,7 +73,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore)
 
-	controllerQuerier := querier.NewControllerQuerier(networkPolicyController)
+	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
 
@@ -131,13 +131,14 @@ func createAPIServerConfig(kubeconfig string,
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = "antrea-apiserver"
 	secureServing.BindPort = bindPort
+	secureServing.BindAddress = net.ParseIP("0.0.0.0")
 	// kubeconfig file is useful when antrea-controller isn't not running as a pod, like during development.
 	if len(kubeconfig) > 0 {
 		authentication.RemoteKubeConfigFile = kubeconfig
 		authorization.RemoteKubeConfigFile = kubeconfig
 	}
 
-	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+	if err := secureServing.MaybeDefaultWithSelfSignedCerts("127.0.0.1", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 

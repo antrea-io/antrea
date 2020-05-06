@@ -166,7 +166,8 @@ func run(o *Options) error {
 		ifaceStore,
 		ofClient,
 		ovsBridgeClient,
-		networkPolicyController)
+		networkPolicyController,
+		o.config.APIPort)
 
 	if o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics(o.config.OVSBridge, ifaceStore, ofClient)
