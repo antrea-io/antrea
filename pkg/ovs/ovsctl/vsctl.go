@@ -12,11 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +k8s:openapi-gen=true
-// +k8s:deepcopy-gen=package
-// +k8s:defaulter-gen=TypeMeta
-// +groupName=system.antrea.tanzu.vmware.com
+package ovsctl
 
-// Package v1beta1 contains the v1beta1 version of the Antrea "system" API
-// group definitions.
-package v1beta1
+import (
+	"bufio"
+	"fmt"
+	"strings"
+
+	"k8s.io/utils/exec"
+)
+
+func ListBridges(executor exec.Interface) ([]string, error) {
+	brListOutput, err := executor.Command("ovs-vsctl", "list-br").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("error when dumping ovs bridge info: %w", err)
+	}
+	scanner := bufio.NewScanner(strings.NewReader(string(brListOutput)))
+	scanner.Split(bufio.ScanLines)
+	brs := []string{}
+	for scanner.Scan() {
+		brs = append(brs, strings.TrimSpace(scanner.Text()))
+	}
+	return brs, nil
+}

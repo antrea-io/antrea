@@ -31,6 +31,7 @@ require (
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
+	github.com/spf13/afero v1.2.2
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
 	github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 // indirect
@@ -52,6 +53,8 @@ require (
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.17.6
 	k8s.io/kube-openapi v0.0.0-20200410145947-bcb3869e6f29
+	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
+
 )
 
 replace (
