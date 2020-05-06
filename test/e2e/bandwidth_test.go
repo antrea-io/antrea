@@ -34,7 +34,7 @@ func BenchmarkBandwidthIntraNode(b *testing.B) {
 		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(podDefB); err != nil {
 			b.Fatalf("Error when creating the second perftest Pod: %v", err)
 		}
-		podBIP, err := data.podWaitForIP(defaultTimeout, podDefB.Name)
+		podBIP, err := data.podWaitForIP(defaultTimeout, podDefB.Name, testNamespace)
 		if err != nil {
 			b.Fatalf("Error when getting perftest Pod IP: %v", err)
 		}
