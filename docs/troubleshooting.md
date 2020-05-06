@@ -1,17 +1,18 @@
-**Table of Contents**
-
-- [Troubleshooting](#troubleshooting)
-  - [Looking at the Antrea logs](#looking-at-the-antrea-logs)
-  - [Accessing the antrea-controller API](#accessing-the-antrea-controller-api)
-    - [Using antctl](#using-antctl)
-    - [Using kubectl proxy](#using-kubectl-proxy)
-    - [Directly accessing the antrea-controller API](#directly-accessing-the-antrea-controller-api)
-  - [Accessing the antrea-agent API](#accessing-the-antrea-agent-api)
-    - [Using antctl](#using-antctl-1)
-    - [Directly accessing the antrea-agent API](#directly-accessing-the-antrea-agent-api)
-  - [Debugging OVS](#debugging-ovs)
-
 # Troubleshooting
+
+## Table of Contents
+
+- [Looking at the Antrea logs](#looking-at-the-antrea-logs)
+- [Accessing the antrea-controller API](#accessing-the-antrea-controller-api)
+  - [Using antctl](#using-antctl)
+  - [Using kubectl proxy](#using-kubectl-proxy)
+  - [Directly accessing the antrea-controller API](#directly-accessing-the-antrea-controller-api)
+- [Accessing the antrea-agent API](#accessing-the-antrea-agent-api)
+  - [Using antctl](#using-antctl-1)
+  - [Directly accessing the antrea-agent API](#directly-accessing-the-antrea-agent-api)
+- [Troubleshooting OVS](#troubleshooting-ovs)
+- [Troubleshooting with antctl](#troubleshooting-with-antctl)
+
 
 ## Looking at the Antrea logs
 
@@ -125,7 +126,7 @@ However, in this case you will be limited to the endpoints that `antctl` is
 allowed to access, as defined
 [here](https://github.com/vmware-tanzu/antrea/blob/master/build/yamls/base/antctl.yml).
 
-## Debugging OVS
+## Troubleshooting OVS
 
 OVS agents (`ovsdb-server` and `ovs-vswitchd`) run inside the `antrea-ovs`
 container of the `antrea-agent` Pod. You can use `kubectl exec` to execute OVS
@@ -145,3 +146,12 @@ by specifying the socket file path explicitly, for example:
 ovs-vsctl --db unix:/var/run/antrea/openvswitch/db.sock show
 ovs-ofctl show unix:/var/run/antrea/openvswitch/br-int.mgmt
 ```
+
+## Troubleshooting with antctl
+
+`antctl` provides some useful commands to troubleshoot Antrea Controller and
+Agent, which can print the runtime information of `antrea-controller` and
+`antrea-agent`, dump NetworkPolicy objects, dump Pod network interface
+information on a Node, dump Antrea OVS flows, and perform OVS packet tracing.
+Refer to the [`antctl` guide](/docs/antctl.md#usage) to learn how to use these
+commands.
