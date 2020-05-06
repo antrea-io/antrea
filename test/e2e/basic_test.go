@@ -59,7 +59,7 @@ func TestPodAssignIP(t *testing.T) {
 	defer deletePodWrapper(t, data, podName)
 
 	t.Logf("Checking Pod networking")
-	if podIP, err := data.podWaitForIP(defaultTimeout, podName); err != nil {
+	if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
 		t.Errorf("Error when waiting for Pod IP: %v", err)
 	} else {
 		t.Logf("Pod IP is '%s'", podIP)
@@ -141,7 +141,7 @@ func TestDeletePod(t *testing.T) {
 	if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
-	if err := data.podWaitForRunning(defaultTimeout, podName); err != nil {
+	if err := data.podWaitForRunning(defaultTimeout, podName, testNamespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
 	}
 
@@ -199,7 +199,7 @@ func TestIPAMRestart(t *testing.T) {
 			return "", err
 		}
 		pods = append(pods, podName)
-		if podIP, err := data.podWaitForIP(defaultTimeout, podName); err != nil {
+		if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
 			return "", err
 		} else {
 			return podIP, nil
