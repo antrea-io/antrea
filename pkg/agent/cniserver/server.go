@@ -52,40 +52,40 @@ import (
 // respectively by CmdAdd and CmdDel). The idea is to simply the locking requirements for the rest
 // of the code by ensuring that all the requests for a given container are serialized.
 type containerAccessArbitrator struct {
-	mutex            sync.Mutex
-	cond             *sync.Cond
-	busyContainerIDs map[string]bool // used as a set of container IDs
+	mutex             sync.Mutex
+	cond              *sync.Cond
+	busyContainerKeys map[string]bool // used as a set of container keys
 }
 
 func newContainerAccessArbitrator() *containerAccessArbitrator {
 	arbitrator := &containerAccessArbitrator{
-		busyContainerIDs: make(map[string]bool),
+		busyContainerKeys: make(map[string]bool),
 	}
 	arbitrator.cond = sync.NewCond(&arbitrator.mutex)
 	return arbitrator
 }
 
-// lockContainer prevents other goroutines from accessing containerID. If containerID is already
+// lockContainer prevents other goroutines from accessing containerKey. If containerKey is already
 // locked by another goroutine, this function will block until the container is available. Every
-// call to lockContainer must be followed by a call to unlockContainer on the same containerID.
-func (arbitrator *containerAccessArbitrator) lockContainer(containerID string) {
+// call to lockContainer must be followed by a call to unlockContainer on the same containerKey.
+func (arbitrator *containerAccessArbitrator) lockContainer(containerKey string) {
 	arbitrator.cond.L.Lock()
 	defer arbitrator.cond.L.Unlock()
 	for {
-		_, ok := arbitrator.busyContainerIDs[containerID]
+		_, ok := arbitrator.busyContainerKeys[containerKey]
 		if !ok {
 			break
 		}
 		arbitrator.cond.Wait()
 	}
-	arbitrator.busyContainerIDs[containerID] = true
+	arbitrator.busyContainerKeys[containerKey] = true
 }
 
-// unlockContainer releases access to containerID.
-func (arbitrator *containerAccessArbitrator) unlockContainer(containerID string) {
+// unlockContainer releases access to containerKey.
+func (arbitrator *containerAccessArbitrator) unlockContainer(containerKey string) {
 	arbitrator.cond.L.Lock()
 	defer arbitrator.cond.L.Unlock()
-	delete(arbitrator.busyContainerIDs, containerID)
+	delete(arbitrator.busyContainerKeys, containerKey)
 	arbitrator.cond.Broadcast()
 }
 
@@ -381,8 +381,8 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		}
 	}()
 
-	s.containerAccess.lockContainer(cniConfig.ContainerId)
-	defer s.containerAccess.unlockContainer(cniConfig.ContainerId)
+	s.containerAccess.lockContainer(cniConfig.getContainerKey())
+	defer s.containerAccess.unlockContainer(cniConfig.getContainerKey())
 
 	if s.isChaining {
 		resp, err := s.interceptAdd(cniConfig)
@@ -441,8 +441,8 @@ func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (
 		return response, nil
 	}
 
-	s.containerAccess.lockContainer(cniConfig.ContainerId)
-	defer s.containerAccess.unlockContainer(cniConfig.ContainerId)
+	s.containerAccess.lockContainer(cniConfig.getContainerKey())
+	defer s.containerAccess.unlockContainer(cniConfig.getContainerKey())
 
 	if s.isChaining {
 		return s.interceptDel(cniConfig)
@@ -473,8 +473,8 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 		return response, nil
 	}
 
-	s.containerAccess.lockContainer(cniConfig.ContainerId)
-	defer s.containerAccess.unlockContainer(cniConfig.ContainerId)
+	s.containerAccess.lockContainer(cniConfig.getContainerKey())
+	defer s.containerAccess.unlockContainer(cniConfig.getContainerKey())
 
 	if s.isChaining {
 		return s.interceptCheck(cniConfig)
@@ -495,6 +495,11 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	}
 	klog.Info("Succeed to check network configuration")
 	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
+}
+
+// getContainerKey returns the key of a Pod, which is a string with format "$K8S_POD_NAMESPACE/$K8S_POD_NAME".
+func (c *CNIConfig) getContainerKey() string {
+	return fmt.Sprintf("%s/%s", string(c.K8S_POD_NAMESPACE), string(c.K8S_POD_NAME))
 }
 
 func New(
