@@ -19,11 +19,25 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 )
+
+type bookmarkEvent struct {
+	resourceVersion uint64
+	object          runtime.Object
+}
+
+func (b *bookmarkEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
+	return &watch.Event{Type: watch.Bookmark, Object: b.object}
+}
+
+func (b *bookmarkEvent) GetResourceVersion() uint64 {
+	return b.resourceVersion
+}
 
 // storeWatcher implements watch.Interface
 type storeWatcher struct {
@@ -38,15 +52,18 @@ type storeWatcher struct {
 	forget func()
 	// stopOnce guarantees Stop function will perform exactly once.
 	stopOnce sync.Once
+	// newFunc is a function that creates new empty object of this type.
+	newFunc func() runtime.Object
 }
 
-func newStoreWatcher(chanSize int, selectors *storage.Selectors, forget func()) *storeWatcher {
+func newStoreWatcher(chanSize int, selectors *storage.Selectors, forget func(), newFunc func() runtime.Object) *storeWatcher {
 	return &storeWatcher{
 		input:     make(chan storage.InternalEvent, chanSize),
 		result:    make(chan watch.Event, chanSize),
 		done:      make(chan struct{}),
 		selectors: selectors,
 		forget:    forget,
+		newFunc:   newFunc,
 	}
 }
 
@@ -89,6 +106,14 @@ func (w *storeWatcher) process(ctx context.Context, initEvents []storage.Interna
 	for _, event := range initEvents {
 		w.sendWatchEvent(event, true)
 	}
+	// Send a dummy bookmark event to indicate the end of initEvents. This is
+	// an unusual way to use the bookmark event, as it is meant to be used to
+	// refresh the last resource version of a client. In Antrea we do not use
+	// resource version when restarting a watch, but we need a way to
+	// communicate to clients what the initial set of objects is, so that
+	// stale objects whose delete events were missed by the client (because
+	// the watch was down) can be deleted.
+	w.sendWatchEvent(&bookmarkEvent{resourceVersion, w.newFunc()}, true)
 	defer close(w.result)
 	for {
 		select {

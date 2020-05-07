@@ -45,7 +45,6 @@ func runAntctl(podName string, cmds []string, data *TestData, tb testing.TB) (st
 		containerName = "antrea-controller"
 	}
 	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, containerName, cmds)
-	antctlOutput(stdout, stderr, tb)
 	return stdout, stderr, err
 }
 

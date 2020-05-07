@@ -15,10 +15,13 @@
 package networkpolicy
 
 import (
+	"fmt"
+	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/util/workqueue"
@@ -50,9 +53,6 @@ const (
 //              b. Notify dirty rules
 //
 type Controller struct {
-	// nodeName is the name of this node, which is used to filter resources
-	// when watching resources.
-	nodeName string
 	// antreaClient provides interfaces to watch Antrea AddressGroups,
 	// AppliedToGroups, and NetworkPolicies.
 	antreaClient versioned.Interface
@@ -63,12 +63,10 @@ type Controller struct {
 	// reconciler provides interfaces to reconcile the desired state of
 	// NetworkPolicy rules with the actual state of Openflow entries.
 	reconciler Reconciler
-	// networkPolicyWatcherConnected maintains the connection status between NetworkPolicyWatcher and Controller.
-	networkPolicyWatcherConnected bool
-	// appliedToGroupWatcherConnected maintains the connection status between appliedToGroupWatcher and Controller.
-	appliedToGroupWatcherConnected bool
-	// addressGroupWatcherConnected maintains the connection status between addressGroupWatcherConnected and Controller.
-	addressGroupWatcherConnected bool
+
+	networkPolicyWatcher  *watcher
+	appliedToGroupWatcher *watcher
+	addressGroupWatcher   *watcher
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -79,12 +77,147 @@ func NewNetworkPolicyController(antreaClient versioned.Interface,
 	podUpdates <-chan v1beta1.PodReference) *Controller {
 	c := &Controller{
 		antreaClient: antreaClient,
-		nodeName:     nodeName,
 		queue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
 		reconciler:   newReconciler(ofClient, ifaceStore),
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
-	c.networkPolicyWatcherConnected = true
+
+	// Use nodeName to filter resources when watching resources.
+	options := metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector("nodeName", nodeName).String(),
+	}
+
+	c.networkPolicyWatcher = &watcher{
+		objectType: "NetworkPolicy",
+		watchFunc: func() (watch.Interface, error) {
+			return c.antreaClient.NetworkingV1beta1().NetworkPolicies("").Watch(options)
+		},
+		AddFunc: func(obj runtime.Object) error {
+			policy, ok := obj.(*v1beta1.NetworkPolicy)
+			if !ok {
+				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
+			}
+			c.ruleCache.AddNetworkPolicy(policy)
+			klog.Infof("NetworkPolicy %s/%s applied to Pods on this Node", policy.Namespace, policy.Name)
+			return nil
+		},
+		UpdateFunc: func(obj runtime.Object) error {
+			policy, ok := obj.(*v1beta1.NetworkPolicy)
+			if !ok {
+				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
+			}
+			c.ruleCache.UpdateNetworkPolicy(policy)
+			return nil
+		},
+		DeleteFunc: func(obj runtime.Object) error {
+			policy, ok := obj.(*v1beta1.NetworkPolicy)
+			if !ok {
+				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
+			}
+			c.ruleCache.DeleteNetworkPolicy(policy)
+			klog.Infof("NetworkPolicy %s/%s no longer applied to Pods on this Node", policy.Namespace, policy.Name)
+			return nil
+		},
+		ReplaceFunc: func(objs []runtime.Object) error {
+			policies := make([]*v1beta1.NetworkPolicy, len(objs))
+			var ok bool
+			for i := range objs {
+				policies[i], ok = objs[i].(*v1beta1.NetworkPolicy)
+				if !ok {
+					return fmt.Errorf("Cannot convert to *v1beta1.NetworkPolicy: %v", objs[i])
+				}
+				klog.Infof("NetworkPolicy %s/%s applied to Pods on this Node", policies[i].Namespace, policies[i].Name)
+			}
+			c.ruleCache.ReplaceNetworkPolicies(policies)
+			return nil
+		},
+	}
+
+	c.appliedToGroupWatcher = &watcher{
+		objectType: "AppliedToGroup",
+		watchFunc: func() (watch.Interface, error) {
+			return c.antreaClient.NetworkingV1beta1().AppliedToGroups().Watch(options)
+		},
+		AddFunc: func(obj runtime.Object) error {
+			group, ok := obj.(*v1beta1.AppliedToGroup)
+			if !ok {
+				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
+			}
+			c.ruleCache.AddAppliedToGroup(group)
+			return nil
+		},
+		UpdateFunc: func(obj runtime.Object) error {
+			group, ok := obj.(*v1beta1.AppliedToGroupPatch)
+			if !ok {
+				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
+			}
+			c.ruleCache.PatchAppliedToGroup(group)
+			return nil
+		},
+		DeleteFunc: func(obj runtime.Object) error {
+			group, ok := obj.(*v1beta1.AppliedToGroup)
+			if !ok {
+				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
+			}
+			c.ruleCache.DeleteAppliedToGroup(group)
+			return nil
+		},
+		ReplaceFunc: func(objs []runtime.Object) error {
+			groups := make([]*v1beta1.AppliedToGroup, len(objs))
+			var ok bool
+			for i := range objs {
+				groups[i], ok = objs[i].(*v1beta1.AppliedToGroup)
+				if !ok {
+					return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", objs[i])
+				}
+			}
+			c.ruleCache.ReplaceAppliedToGroups(groups)
+			return nil
+		},
+	}
+
+	c.addressGroupWatcher = &watcher{
+		objectType: "AddressGroup",
+		watchFunc: func() (watch.Interface, error) {
+			return c.antreaClient.NetworkingV1beta1().AddressGroups().Watch(options)
+		},
+		AddFunc: func(obj runtime.Object) error {
+			group, ok := obj.(*v1beta1.AddressGroup)
+			if !ok {
+				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
+			}
+			c.ruleCache.AddAddressGroup(group)
+			return nil
+		},
+		UpdateFunc: func(obj runtime.Object) error {
+			group, ok := obj.(*v1beta1.AddressGroupPatch)
+			if !ok {
+				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
+			}
+			c.ruleCache.PatchAddressGroup(group)
+			return nil
+		},
+		DeleteFunc: func(obj runtime.Object) error {
+			group, ok := obj.(*v1beta1.AddressGroup)
+			if !ok {
+				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
+			}
+			c.ruleCache.DeleteAddressGroup(group)
+			return nil
+		},
+		ReplaceFunc: func(objs []runtime.Object) error {
+			groups := make([]*v1beta1.AddressGroup, len(objs))
+			var ok bool
+			for i := range objs {
+				groups[i], ok = objs[i].(*v1beta1.AddressGroup)
+				if !ok {
+					return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", objs[i])
+				}
+			}
+			c.ruleCache.ReplaceAddressGroups(groups)
+			return nil
+		},
+	}
 	return c
 }
 
@@ -129,7 +262,7 @@ func (c *Controller) GetAppliedToGroups() []v1beta1.AppliedToGroup {
 
 func (c *Controller) GetControllerConnectionStatus() bool {
 	// When the watchers are connected, controller connection status is true. Otherwise, it is false.
-	return c.addressGroupWatcherConnected && c.appliedToGroupWatcherConnected && c.networkPolicyWatcherConnected
+	return c.addressGroupWatcher.isConnected() && c.appliedToGroupWatcher.isConnected() && c.networkPolicyWatcher.isConnected()
 }
 
 // Run begins watching and processing Antrea AddressGroups, AppliedToGroups
@@ -139,9 +272,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) error {
 	// Use NonSlidingUntil so that normal reconnection (disconnected after
 	// running a while) can reconnect immediately while abnormal reconnection
 	// won't be too aggressive.
-	go wait.NonSlidingUntil(c.watchAppliedToGroups, 5*time.Second, stopCh)
-	go wait.NonSlidingUntil(c.watchAddressGroups, 5*time.Second, stopCh)
-	go wait.NonSlidingUntil(c.watchNetworkPolicies, 5*time.Second, stopCh)
+	go wait.NonSlidingUntil(c.appliedToGroupWatcher.watch, 5*time.Second, stopCh)
+	go wait.NonSlidingUntil(c.addressGroupWatcher.watch, 5*time.Second, stopCh)
+	go wait.NonSlidingUntil(c.networkPolicyWatcher.watch, 5*time.Second, stopCh)
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
@@ -213,176 +346,113 @@ func (c *Controller) handleErr(err error, key interface{}) {
 	c.queue.AddRateLimited(key)
 }
 
-func (c *Controller) nodeScopedListOptions() metav1.ListOptions {
-	options := metav1.ListOptions{}
-	options.FieldSelector = fields.OneTermEqualSelector("nodeName", c.nodeName).String()
-	return options
+// watcher is responsible for watching a given resource with the provided watchFunc
+// and calling the eventHandlers when receiving events.
+type watcher struct {
+	// objectType is the type of objects being watched, used for logging.
+	objectType string
+	// watchFunc is the function that starts the watch.
+	watchFunc func() (watch.Interface, error)
+	// AddFunc is the function that handles added event.
+	AddFunc func(obj runtime.Object) error
+	// UpdateFunc is the function that handles modified event.
+	UpdateFunc func(obj runtime.Object) error
+	// DeleteFunc is the function that handles deleted event.
+	DeleteFunc func(obj runtime.Object) error
+	// ReplaceFunc is the function that handles init events.
+	ReplaceFunc func(objs []runtime.Object) error
+	// connected represents whether the watch has connected to apiserver successfully.
+	connected bool
+	// lock protects connected.
+	lock sync.RWMutex
 }
 
-func (c *Controller) watchAppliedToGroups() {
-	// TODO: Cleanup AppliedToGroups that are removed during reconnection.
-	klog.Info("Starting watch for AppliedToGroups")
-	options := c.nodeScopedListOptions()
-	w, err := c.antreaClient.NetworkingV1beta1().AppliedToGroups().Watch(options)
+func (w *watcher) isConnected() bool {
+	w.lock.RLock()
+	defer w.lock.RUnlock()
+	return w.connected
+}
+
+func (w *watcher) setConnected(connected bool) {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	w.connected = connected
+}
+
+func (w *watcher) watch() {
+	klog.Infof("Starting watch for %s", w.objectType)
+	watcher, err := w.watchFunc()
 	if err != nil {
-		klog.Errorf("Failed to start watch for AppliedToGroups: %v", err)
+		klog.Errorf("Failed to start watch for %s: %v", w.objectType, err)
 		return
 	}
 
-	klog.Info("Started watch for AppliedToGroups")
-	c.appliedToGroupWatcherConnected = true
+	klog.Infof("Started watch for %s", w.objectType)
+	w.setConnected(true)
 	eventCount := 0
 	defer func() {
-		klog.Infof("Stopped watch for AppliedToGroups, total items received: %d", eventCount)
-		c.appliedToGroupWatcherConnected = false
-		w.Stop()
+		klog.Infof("Stopped watch for %s, total items received: %d", w.objectType, eventCount)
+		w.setConnected(false)
+		watcher.Stop()
 	}()
 
+	// First receive init events from the result channel and buffer them until
+	// a Bookmark event is received, indicating that all init events have been
+	// received.
+	var initObjects []runtime.Object
+loop:
 	for {
 		select {
-		case event, ok := <-w.ResultChan():
+		case event, ok := <-watcher.ResultChan():
 			if !ok {
+				klog.Warningf("Result channel for %s was closed", w.objectType)
 				return
 			}
 			switch event.Type {
 			case watch.Added:
-				group, ok := event.Object.(*v1beta1.AppliedToGroup)
-				if !ok {
-					klog.Errorf("Cannot convert to *v1beta1.AppliedToGroup: %v", event.Object)
-					return
-				}
-				klog.V(2).Infof("Added AppliedToGroup (%#v)", event.Object)
-				c.ruleCache.AddAppliedToGroup(group)
-			case watch.Modified:
-				patch, ok := event.Object.(*v1beta1.AppliedToGroupPatch)
-				if !ok {
-					klog.Errorf("Cannot convert to *v1beta1.AppliedToGroupPatch: %v", event.Object)
-					return
-				}
-				klog.V(2).Infof("Patched AppliedToGroup (%#v)", event.Object)
-				c.ruleCache.PatchAppliedToGroup(patch)
-			case watch.Deleted:
-				group, ok := event.Object.(*v1beta1.AppliedToGroup)
-				if !ok {
-					klog.Errorf("Cannot convert to *v1beta1.AppliedToGroup: %v", event.Object)
-					return
-				}
-				klog.V(2).Infof("Removed AppliedToGroup (%#v)", event.Object)
-				c.ruleCache.DeleteAppliedToGroup(group)
+				klog.V(2).Infof("Added %s (%#v)", w.objectType, event.Object)
+				initObjects = append(initObjects, event.Object)
+			case watch.Bookmark:
+				break loop
 			}
-			eventCount++
 		}
 	}
-}
+	klog.Infof("Received %d init events for %s", len(initObjects), w.objectType)
 
-func (c *Controller) watchAddressGroups() {
-	// TODO: Cleanup AddressGroups that are removed during reconnection.
-	klog.Info("Starting watch for AddressGroups")
-	options := c.nodeScopedListOptions()
-	w, err := c.antreaClient.NetworkingV1beta1().AddressGroups().Watch(options)
-	if err != nil {
-		klog.Errorf("Failed to start watch for AddressGroups: %v", err)
+	eventCount += len(initObjects)
+	if err := w.ReplaceFunc(initObjects); err != nil {
+		klog.Errorf("Failed to handle init events: %v", err)
 		return
 	}
 
-	klog.Info("Started watch for AddressGroups")
-	c.addressGroupWatcherConnected = true
-	eventCount := 0
-	defer func() {
-		klog.Infof("Stopped watch for AddressGroups, total items received: %d", eventCount)
-		c.addressGroupWatcherConnected = false
-		w.Stop()
-	}()
-
 	for {
 		select {
-		case event, ok := <-w.ResultChan():
+		case event, ok := <-watcher.ResultChan():
 			if !ok {
 				return
 			}
 			switch event.Type {
 			case watch.Added:
-				group, ok := event.Object.(*v1beta1.AddressGroup)
-				if !ok {
-					klog.Errorf("Cannot convert to *v1beta1.AddressGroup: %v", event.Object)
+				if err := w.AddFunc(event.Object); err != nil {
+					klog.Errorf("Failed to handle added event: %v", err)
 					return
 				}
-				klog.V(2).Infof("Added AddressGroup (%#v)", event.Object)
-				c.ruleCache.AddAddressGroup(group)
+				klog.V(2).Infof("Added %s (%#v)", w.objectType, event.Object)
 			case watch.Modified:
-				patch, ok := event.Object.(*v1beta1.AddressGroupPatch)
-				if !ok {
-					klog.Errorf("Cannot convert to *v1beta1.AddressGroupPatch: %v", event.Object)
+				if err := w.UpdateFunc(event.Object); err != nil {
+					klog.Errorf("Failed to handle modified event: %v", err)
 					return
 				}
-				klog.V(2).Infof("Patched AddressGroup (%#v)", event.Object)
-				c.ruleCache.PatchAddressGroup(patch)
+				klog.V(2).Infof("Updated %s (%#v)", w.objectType, event.Object)
 			case watch.Deleted:
-				group, ok := event.Object.(*v1beta1.AddressGroup)
-				if !ok {
-					klog.Errorf("Cannot convert to *v1beta1.AddressGroup: %v", event.Object)
+				if err := w.DeleteFunc(event.Object); err != nil {
+					klog.Errorf("Failed to handle deleted event: %v", err)
 					return
 				}
-				klog.V(2).Infof("Removed AddressGroup (%#v)", event.Object)
-				c.ruleCache.DeleteAddressGroup(group)
-			}
-			eventCount++
-		}
-	}
-}
-
-func (c *Controller) watchNetworkPolicies() {
-	// TODO: Cleanup NetworkPolicies that are removed during reconnection.
-	klog.Info("Starting watch for NetworkPolicies")
-	options := c.nodeScopedListOptions()
-	w, err := c.antreaClient.NetworkingV1beta1().NetworkPolicies("").Watch(options)
-	if err != nil {
-		klog.Errorf("Failed to start watch for NetworkPolicies: %v", err)
-		return
-	}
-
-	klog.Info("Started watch for NetworkPolicies")
-	c.networkPolicyWatcherConnected = true
-	eventCount := 0
-	defer func() {
-		klog.Infof("Stopped watch for NetworkPolicies, total items received: %d", eventCount)
-		c.networkPolicyWatcherConnected = false
-		w.Stop()
-	}()
-
-	for {
-		select {
-		case event, ok := <-w.ResultChan():
-			if !ok {
+				klog.V(2).Infof("Removed %s (%#v)", w.objectType, event.Object)
+			default:
+				klog.Errorf("Unknown event: %v", event)
 				return
-			}
-			switch event.Type {
-			case watch.Added:
-				policy, ok := event.Object.(*v1beta1.NetworkPolicy)
-				if !ok {
-					klog.Errorf("Cannot convert to *v1beta1.NetworkPolicy: %v", event.Object)
-					return
-				}
-				klog.V(2).Infof("Added NetworkPolicy (%#v)", event.Object)
-				klog.Infof("NetworkPolicy %s/%s applied to Pods on this Node", policy.Namespace, policy.Name)
-				c.ruleCache.AddNetworkPolicy(policy)
-			case watch.Modified:
-				policy, ok := event.Object.(*v1beta1.NetworkPolicy)
-				if !ok {
-					klog.Errorf("Cannot convert to *v1beta1.NetworkPolicy: %v", event.Object)
-					return
-				}
-				klog.V(2).Infof("Updated NetworkPolicy (%#v)", event.Object)
-				c.ruleCache.UpdateNetworkPolicy(policy)
-			case watch.Deleted:
-				policy, ok := event.Object.(*v1beta1.NetworkPolicy)
-				if !ok {
-					klog.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", event.Object)
-					return
-				}
-				klog.V(2).Infof("Removed NetworkPolicy (%#v)", event.Object)
-				klog.Infof("NetworkPolicy %s/%s no longer applied to Pods on this Node", policy.Namespace, policy.Name)
-				c.ruleCache.DeleteNetworkPolicy(policy)
 			}
 			eventCount++
 		}

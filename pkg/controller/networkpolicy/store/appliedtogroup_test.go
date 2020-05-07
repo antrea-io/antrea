@@ -63,6 +63,7 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 				})
 			},
 			expected: []watch.Event{
+				{watch.Bookmark, nil},
 				{watch.Added, &networking.AppliedToGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 					Pods:       []networking.GroupMemberPod{*pod1, *pod2},
@@ -110,6 +111,7 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 				})
 			},
 			expected: []watch.Event{
+				{watch.Bookmark, nil},
 				{watch.Added, &networking.AppliedToGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 					Pods:       []networking.GroupMemberPod{*pod3},
