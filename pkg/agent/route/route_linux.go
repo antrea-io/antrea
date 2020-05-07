@@ -33,6 +33,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 const (
@@ -172,6 +173,29 @@ func (c *Client) initIPSet() error {
 	return nil
 }
 
+// writeEKSMangleRule writes an additional iptables mangle rule to the
+// iptablesData buffer, which is required to ensure that the reverse path for
+// NodePort Service traffic is correct on EKS.
+// See https://github.com/vmware-tanzu/antrea/issues/678.
+func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
+	// TODO: the following should be taking into account:
+	//   1) AWS_VPC_CNI_NODE_PORT_SUPPORT may be set to false (by default is
+	//   true), in which case we do not need to install the rule.
+	//   2) this option is not documented but the mark value can be
+	//   configured with AWS_VPC_K8S_CNI_CONNMARK.
+	// We could look for the rule added by AWS VPC CNI to the mangle
+	// table. If it does not exist, we do not need to install this rule. If
+	// it does exist we can scan for the mark value and use that in our
+	// rule.
+	klog.V(2).Infof("Add iptable mangle rule for EKS to ensure correct reverse path for NodePort Service traffic")
+	writeLine(iptablesData, []string{
+		"-A", antreaMangleChain,
+		"-m", "comment", "--comment", `"Antrea: AWS, primary ENI"`,
+		"-i", c.hostGateway, "-j", "CONNMARK",
+		"--restore-mark", "--nfmask", "0x80", "--ctmask", "0x80",
+	}...)
+}
+
 // initIPTables ensure that the iptables infrastructure we use is set up.
 // It's idempotent and can safely be called on every startup.
 func (c *Client) initIPTables() error {
@@ -214,6 +238,11 @@ func (c *Client) initIPTables() error {
 			"-i", c.hostGateway, "!", "-d", c.serviceCIDR.String(),
 			"-j", iptables.MarkTarget, "--set-xmark", "0/0xffffffff",
 		}...)
+		// When Antrea is used to enforce NetworkPolicies in EKS, an additional iptables
+		// mangle rule is required. See https://github.com/vmware-tanzu/antrea/issues/678.
+		if env.IsCloudEKS() {
+			c.writeEKSMangleRule(iptablesData)
+		}
 	}
 	writeLine(iptablesData, "COMMIT")
 

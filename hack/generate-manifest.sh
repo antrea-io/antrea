@@ -184,16 +184,24 @@ if [[ $ENCAP_MODE == "networkPolicyOnly" ]] ; then
     cd ..
 fi
 
-if [[ $CLOUD != "" ]]; then
-    if [[ $CLOUD == "GKE" ]]; then
-        mkdir gke && cd gke
-        cp ../../patches/gke/*.yml .
-        touch kustomization.yml
-        $KUSTOMIZE edit add base $BASE
-        $KUSTOMIZE edit add patch cniPath.yml
-        BASE=../gke
-        cd ..
-    fi
+if [[ $CLOUD == "GKE" ]]; then
+    mkdir gke && cd gke
+    cp ../../patches/gke/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    $KUSTOMIZE edit add patch cniPath.yml
+    BASE=../gke
+    cd ..
+fi
+
+if [[ $CLOUD == "EKS" ]]; then
+    mkdir eks && cd eks
+    cp ../../patches/eks/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    $KUSTOMIZE edit add patch eksEnv.yml
+    BASE=../eks
+    cd ..
 fi
 
 if $KIND; then

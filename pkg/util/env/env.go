@@ -16,6 +16,7 @@ package env
 
 import (
 	"os"
+	"strconv"
 
 	"k8s.io/klog"
 )
@@ -24,6 +25,8 @@ import (
 const (
 	nodeNameEnvKey = "NODE_NAME"
 	podNameEnvKey  = "POD_NAME"
+
+	antreaCloudEKSEnvKey = "ANTREA_CLOUD_EKS"
 )
 
 // GetNodeName returns the node's name used in Kubernetes, based on the priority:
@@ -51,4 +54,21 @@ func GetPodName() string {
 		klog.Warningf("Environment variable %s not found", podNameEnvKey)
 	}
 	return podName
+}
+
+func getBoolEnvVar(name string, defaultValue bool) bool {
+	if strValue := os.Getenv(name); strValue != "" {
+		parsedValue, err := strconv.ParseBool(strValue)
+		if err != nil {
+			klog.Errorf("Failed to parse env variable '%s' (using default '%t'): %v", name, defaultValue, err)
+			return defaultValue
+		}
+		return parsedValue
+	}
+	return defaultValue
+}
+
+// Returns true if Antrea is used to enforce NetworkPolicies in an EKS cluster.
+func IsCloudEKS() bool {
+	return getBoolEnvVar(antreaCloudEKSEnvKey, false)
 }
