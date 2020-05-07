@@ -399,7 +399,8 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 			t.Fatal("Expected two rule updates, got timeout")
 		}
 	}
-	assert.Equal(t, policy1, controller.GetNetworkPolicy(policy1.Name, policy1.Namespace))
+	assert.ElementsMatch(t, policy1.Rules, controller.GetNetworkPolicy(policy1.Name, policy1.Namespace).Rules)
+	assert.ElementsMatch(t, policy1.AppliedToGroups, controller.GetNetworkPolicy(policy1.Name, policy1.Namespace).AppliedToGroups)
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 2, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
