@@ -233,7 +233,7 @@ var CommandList = &commandList{
   Dump OVS flows of a NetworkPolicy
   $ antctl get ovsflows --networkpolicy np1 -n ns1
   Dump OVS flows of a flow Table
-  $ antctl get ovsflows -t IngressRule
+  $ antctl get ovsflows -T IngressRule
 
   Antrea OVS Flow Tables:` + generateFlowTableHelpMsg(),
 			agentEndpoint: &endpoint{
