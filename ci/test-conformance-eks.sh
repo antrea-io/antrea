@@ -97,11 +97,15 @@ case $key in
 esac
 done
 
-function setup_eks() {
-
-    if [[ -z ${CLUSTER+x} ]]; then
-        CLUSTER="${JOB_NAME}-${BUILD_NUMBER}"
+if [[ -z ${CLUSTER+x} ]]; then
+    if [[ -z ${JOB_NAME+x} ]]; then
+        echoerr "Use --cluster-name to set the name of the EKS cluster"
+        exit 1
     fi
+    CLUSTER="${JOB_NAME}-${BUILD_NUMBER}"
+fi
+
+function setup_eks() {
 
     echo "=== This cluster to be created is named: ${CLUSTER} ==="
     echo "CLUSTERNAME=${CLUSTER}" > ci_properties.txt
@@ -169,8 +173,8 @@ function deliver_antrea_to_eks() {
     node_mtu=$(ssh -o StrictHostKeyChecking=no -l "ec2-user" $worker_node_ip_1 \
       'export PATH=$PATH:/usr/sbin; ip a | grep -E eth0.*mtu | cut -d " " -f5')
 
-    sed -i "s|#defaultMTU: 1450|defaultMTU: ${node_mtu}|g" ../build/yamls/antrea-eks.yml
-    sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: ${k8s_svc_cidr}|g" ../build/yamls/antrea-eks.yml
+    sed -i.bak -e "s|#defaultMTU: 1450|defaultMTU: ${node_mtu}|g" ../build/yamls/antrea-eks.yml
+    sed -i.bak -e "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: ${k8s_svc_cidr}|g" ../build/yamls/antrea-eks.yml
     echo "defaultMTU set as ${node_mtu}"
     echo "seviceCIDR set as ${k8s_svc_cidr}"
 
@@ -226,6 +230,10 @@ function cleanup_cluster() {
     rm -f ${KUBECONFIG_PATH}/kubeconfig
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 }
+
+# ensures that the script can be run from anywhere
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+pushd "$THIS_DIR" > /dev/null
 
 if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then
     setup_eks

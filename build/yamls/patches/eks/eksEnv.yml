@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent
+spec:
+  template:
+    spec:
+      containers:
+        - name: antrea-agent
+          env:
+            # Antrea Agent needs to be aware that it is being used in EKS, as
+            # additional iptables rules may have to be installed.
+            - name: ANTREA_CLOUD_EKS
+              value: "true"
