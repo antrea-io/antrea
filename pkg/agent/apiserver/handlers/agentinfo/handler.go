@@ -53,6 +53,7 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			NetworkPolicyControllerInfo: agentInfo.NetworkPolicyControllerInfo,
 			LocalPodNum:                 agentInfo.LocalPodNum,
 			AgentConditions:             agentInfo.AgentConditions,
+			NodeSubnet:                  agentInfo.NodeSubnet,
 		}
 		err := json.NewEncoder(w).Encode(info)
 		if err != nil {
