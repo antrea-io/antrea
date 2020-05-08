@@ -130,6 +130,21 @@ func (mr *MockInterfaceStoreMockRecorder) GetInterface(arg0 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterface", reflect.TypeOf((*MockInterfaceStore)(nil).GetInterface), arg0)
 }
 
+// GetInterfaceByIP mocks base method
+func (m *MockInterfaceStore) GetInterfaceByIP(arg0 string) (*interfacestore.InterfaceConfig, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfaceByIP", arg0)
+	ret0, _ := ret[0].(*interfacestore.InterfaceConfig)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetInterfaceByIP indicates an expected call of GetInterfaceByIP
+func (mr *MockInterfaceStoreMockRecorder) GetInterfaceByIP(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceByIP", reflect.TypeOf((*MockInterfaceStore)(nil).GetInterfaceByIP), arg0)
+}
+
 // GetInterfaceByName mocks base method
 func (m *MockInterfaceStore) GetInterfaceByName(arg0 string) (*interfacestore.InterfaceConfig, bool) {
 	m.ctrl.T.Helper()
