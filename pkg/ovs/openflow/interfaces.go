@@ -185,6 +185,7 @@ type Action interface {
 	Learn(id TableIDType, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction
 	GotoTable(table TableIDType) FlowBuilder
 	SendToController(reason uint8) FlowBuilder
+	Note(notes string) FlowBuilder
 }
 
 type FlowBuilder interface {
@@ -215,6 +216,20 @@ type FlowBuilder interface {
 	MatchUDPDstPort(port uint16) FlowBuilder
 	MatchSCTPDstPort(port uint16) FlowBuilder
 	MatchTunMetadata(index int, data uint32) FlowBuilder
+	// MatchCTSrcIP matches the source IPv4 address of the connection tracker original direction tuple.
+	MatchCTSrcIP(ip net.IP) FlowBuilder
+	// MatchCTSrcIPNet matches the source IPv4 address of the connection tracker original direction tuple with IP masking.
+	MatchCTSrcIPNet(ipnet net.IPNet) FlowBuilder
+	// MatchCTDstIP matches the destination IPv4 address of the connection tracker original direction tuple.
+	MatchCTDstIP(ip net.IP) FlowBuilder
+	// MatchCTDstIP matches the destination IPv4 address of the connection tracker original direction tuple with IP masking.
+	MatchCTDstIPNet(ipNet net.IPNet) FlowBuilder
+	// MatchCTSrcPort matches the transport source port of the connection tracker original direction tuple.
+	MatchCTSrcPort(port uint16) FlowBuilder
+	// MatchCTDstPort matches the transport destination port of the connection tracker original direction tuple.
+	MatchCTDstPort(port uint16) FlowBuilder
+	// MatchCTProtocol matches the IP protocol type of the connection tracker original direction tuple.
+	MatchCTProtocol(proto Protocol) FlowBuilder
 	Cookie(cookieID uint64) FlowBuilder
 	SetHardTimeout(timout uint16) FlowBuilder
 	SetIdleTimeout(timeout uint16) FlowBuilder

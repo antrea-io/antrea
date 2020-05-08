@@ -214,7 +214,8 @@ func TestOFctrlFlow(t *testing.T) {
 
 		// Test: DumpFlows
 		dumpCookieID, dumpCookieMask := getCookieIDMask()
-		flowStates, _ := bridge.DumpFlows(dumpCookieID, dumpCookieMask)
+		flowStates, err := bridge.DumpFlows(dumpCookieID, dumpCookieMask)
+		require.Nil(t, err, "no error returns in DumpFlows")
 		if len(flowStates) != len(flowList) {
 			t.Errorf("Flow count in dump result is incorrect")
 		}
@@ -710,6 +711,116 @@ func TestMoveTunMetadata(t *testing.T) {
 	}
 	ovsCtlClient := ovsctl.NewClient(br)
 	CheckFlowExists(t, ovsCtlClient, uint8(table.GetID()), true, expectedFlows)
+}
+
+func TestFlowWithCTMatchers(t *testing.T) {
+	br := "br09"
+	err := PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	defer DeleteOVSBridge(br)
+
+	bridge := newOFBridge(br)
+	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
+
+	err = bridge.Connect(maxRetry, make(chan struct{}))
+	require.Nil(t, err, "Failed to start OFService")
+	defer bridge.Disconnect()
+
+	ofctlClient := ovsctl.NewClient(br)
+	ctIpSrc, ctIpSrcNet, _ := net.ParseCIDR("1.1.1.1/24")
+	ctIpDst, ctIpDstNet, _ := net.ParseCIDR("2.2.2.2/24")
+	ctPortSrc := uint16(10001)
+	ctPortDst := uint16(20002)
+	priority := uint16(200)
+	flow1 := table.BuildFlow(priority).
+		MatchProtocol(binding.ProtocolIP).
+		MatchCTStateNew(true).
+		MatchCTSrcIP(ctIpSrc).
+		MatchCTDstIP(ctIpDst).
+		MatchCTSrcPort(ctPortSrc).
+		MatchCTDstPort(ctPortDst).
+		MatchCTProtocol(binding.ProtocolTCP).
+		Action().ResubmitToTable(table.GetNext()).
+		Done()
+	flow2 := table.BuildFlow(priority).
+		MatchProtocol(binding.ProtocolIP).
+		MatchCTStateEst(true).
+		MatchCTSrcIPNet(*ctIpSrcNet).
+		MatchCTDstIPNet(*ctIpDstNet).
+		MatchCTProtocol(binding.ProtocolTCP).
+		Action().ResubmitToTable(table.GetNext()).
+		Done()
+	expectFlows := []*ExpectFlow{
+		{fmt.Sprintf("priority=%d,ct_state=+new,ct_nw_src=%s,ct_nw_dst=%s,ct_nw_proto=6,ct_tp_src=%d,ct_tp_dst=%d,ip",
+			priority, ctIpSrc.String(), ctIpDst.String(), ctPortSrc, ctPortDst),
+			fmt.Sprintf("resubmit(,%d)", table.GetNext()),
+		},
+		{
+			fmt.Sprintf("priority=%d,ct_state=+est,ct_nw_src=%s,ct_nw_dst=%s,ct_nw_proto=6,ip",
+				priority, ctIpSrcNet.String(), ctIpDstNet.String()),
+			fmt.Sprintf("resubmit(,%d)", table.GetNext()),
+		},
+	}
+	for _, f := range []binding.Flow{flow1, flow2} {
+		err = f.Add()
+		assert.Nil(t, err, "no error returned when adding flow")
+	}
+	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), true, expectFlows)
+	for _, f := range []binding.Flow{flow1, flow2} {
+		err = f.Delete()
+		assert.Nil(t, err, "no error returned when deleting flow")
+	}
+	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), false, expectFlows)
+}
+
+func TestNoteAction(t *testing.T) {
+	br := "br10"
+	err := PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	defer DeleteOVSBridge(br)
+
+	bridge := newOFBridge(br)
+	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
+
+	err = bridge.Connect(maxRetry, make(chan struct{}))
+	require.Nil(t, err, "Failed to start OFService")
+	defer bridge.Disconnect()
+
+	ofctlClient := ovsctl.NewClient(br)
+	priority := uint16(1001)
+	srcIP := net.ParseIP("1.1.1.2")
+	testNotes := "test for noteActions."
+	flow1 := table.BuildFlow(priority).
+		MatchProtocol(binding.ProtocolIP).
+		MatchSrcIP(srcIP).
+		Action().Note(testNotes).
+		Action().GotoTable(table.GetNext()).
+		Done()
+
+	convertNoteToHex := func(note string) string {
+		byteSlice := make([]byte, (len(note)/8)*8+6)
+		copy(byteSlice, note)
+		var bytesStrs []string
+		for i := range byteSlice {
+			if byteSlice[i] < 16 {
+				bytesStrs = append(bytesStrs, fmt.Sprintf("0%x", byteSlice[i]))
+			} else {
+				bytesStrs = append(bytesStrs, fmt.Sprintf("%x", byteSlice[i]))
+			}
+		}
+		return strings.Join(bytesStrs, ".")
+	}
+	notesStr := convertNoteToHex(testNotes)
+	expectFlows := []*ExpectFlow{
+		{fmt.Sprintf("priority=%d,ip,nw_src=%s", priority, srcIP.String()),
+			fmt.Sprintf("note:%s,goto_table:%d", notesStr, table.GetNext())},
+	}
+
+	err = flow1.Add()
+	assert.Nil(t, err, "no error returned when adding flow")
+	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), true, expectFlows)
+	err = flow1.Delete()
+	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), false, expectFlows)
 }
 
 func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {

@@ -16,21 +16,21 @@ type ofFlowAction struct {
 
 // Drop is an action to drop packets.
 func (a *ofFlowAction) Drop() FlowBuilder {
-	dropAction := a.builder.Flow.Table.Switch.DropAction()
-	a.builder.ofFlow.lastAction = dropAction
+	a.builder.Drop()
 	return a.builder
 }
 
 // Output is an action to output packets to the specified ofport.
 func (a *ofFlowAction) Output(port int) FlowBuilder {
 	outputAction := ofctrl.NewOutputPort(uint32(port))
-	a.builder.ofFlow.lastAction = outputAction
+	a.builder.ApplyAction(outputAction)
 	return a.builder
 }
 
 // OutputFieldRange is an action to output packets to the port located in the specified NXM field with rng.
 func (a *ofFlowAction) OutputFieldRange(name string, rng Range) FlowBuilder {
-	a.builder.OutputReg(name, int(rng[0]), int(rng[1]))
+	outputAction, _ := ofctrl.NewNXOutput(name, int(rng[0]), int(rng[1]))
+	a.builder.ApplyAction(outputAction)
 	return a.builder
 }
 
@@ -43,7 +43,7 @@ func (a *ofFlowAction) OutputRegRange(regID int, rng Range) FlowBuilder {
 // OutputInPort is an action to output packets to the ofport from where the packet enters the OFSwitch.
 func (a *ofFlowAction) OutputInPort() FlowBuilder {
 	outputAction := ofctrl.NewOutputInPort()
-	a.builder.ofFlow.lastAction = outputAction
+	a.builder.ApplyAction(outputAction)
 	return a.builder
 }
 
@@ -154,80 +154,96 @@ func (a *ofCTAction) NAT() CTAction {
 
 // CTDone sets the conntrack action in the Openflow rule and it returns FlowBuilder.
 func (a *ofCTAction) CTDone() FlowBuilder {
-	a.builder.Flow.ConnTrack(a.commit, a.force, &a.ctTable, &a.ctZone, a.actions...)
+	conntrackAct := ofctrl.NewNXConnTrackAction(a.commit, a.force, &a.ctTable, &a.ctZone, a.actions...)
+	a.builder.ApplyAction(conntrackAct)
 	return a.builder
 }
 
 // SetDstMAC is an action to modify packet destination MAC address to the specified address.
 func (a *ofFlowAction) SetDstMAC(addr net.HardwareAddr) FlowBuilder {
-	a.builder.SetMacDa(addr)
+	setDstMACAct := &ofctrl.SetDstMACAction{MAC: addr}
+	a.builder.ApplyAction(setDstMACAct)
 	return a.builder
 }
 
 // SetSrcMAC is an action to modify packet source MAC address to the specified address.
 func (a *ofFlowAction) SetSrcMAC(addr net.HardwareAddr) FlowBuilder {
-	a.builder.SetMacSa(addr)
+	setSrcMACAct := &ofctrl.SetSrcMACAction{MAC: addr}
+	a.builder.ApplyAction(setSrcMACAct)
 	return a.builder
 }
 
 // SetARPSha is an action to modify ARP packet source hardware address to the specified address.
 func (a *ofFlowAction) SetARPSha(addr net.HardwareAddr) FlowBuilder {
-	a.builder.SetARPSha(addr)
+	setARPShaAct := &ofctrl.SetARPShaAction{MAC: addr}
+	a.builder.ApplyAction(setARPShaAct)
 	return a.builder
 }
 
 // SetARPTha is an action to modify ARP packet target hardware address to the specified address.
 func (a *ofFlowAction) SetARPTha(addr net.HardwareAddr) FlowBuilder {
-	a.builder.SetARPTha(addr)
+	setARPThaAct := &ofctrl.SetARPThaAction{MAC: addr}
+	a.builder.ApplyAction(setARPThaAct)
 	return a.builder
 }
 
 // SetARPSpa is an action to modify ARP packet source protocol address to the specified address.
 func (a *ofFlowAction) SetARPSpa(addr net.IP) FlowBuilder {
-	a.builder.SetARPSpa(addr)
+	setARPSpaAct := &ofctrl.SetARPSpaAction{IP: addr}
+	a.builder.ApplyAction(setARPSpaAct)
 	return a.builder
 }
 
 // SetARPTpa is an action to modify ARP packet target protocol address to the specified address.
 func (a *ofFlowAction) SetARPTpa(addr net.IP) FlowBuilder {
-	a.builder.SetARPTpa(addr)
+	setARPTpaAct := &ofctrl.SetARPTpaAction{IP: addr}
+	a.builder.ApplyAction(setARPTpaAct)
 	return a.builder
 }
 
 // SetSrcIP is an action to modify packet source IP address to the specified address.
 func (a *ofFlowAction) SetSrcIP(addr net.IP) FlowBuilder {
-	a.builder.SetIPField(addr, "Src")
+	setSrcIPAct := &ofctrl.SetSrcIPAction{IP: addr}
+	a.builder.ApplyAction(setSrcIPAct)
 	return a.builder
 }
 
 // SetDstIP is an action to modify packet destination IP address to the specified address.
 func (a *ofFlowAction) SetDstIP(addr net.IP) FlowBuilder {
-	a.builder.SetIPField(addr, "Dst")
+	setDstIPAct := &ofctrl.SetDstIPAction{IP: addr}
+	a.builder.ApplyAction(setDstIPAct)
 	return a.builder
 }
 
 // SetTunnelDst is an action to modify packet tunnel destination address to the specified address.
 func (a *ofFlowAction) SetTunnelDst(addr net.IP) FlowBuilder {
-	a.builder.SetIPField(addr, "TunDst")
+	setTunDstAct := &ofctrl.SetTunnelDstAction{IP: addr}
+	a.builder.ApplyAction(setTunDstAct)
 	return a.builder
 }
 
 // LoadARPOperation is an action to Load data to NXM_OF_ARP_OP field.
 func (a *ofFlowAction) LoadARPOperation(value uint16) FlowBuilder {
-	a.builder.ofFlow.LoadReg(NxmFieldARPOp, uint64(value), openflow13.NewNXRange(0, 15))
+	loadAct, _ := ofctrl.NewNXLoadAction(NxmFieldARPOp, uint64(value), openflow13.NewNXRange(0, 15))
+	a.builder.ApplyAction(loadAct)
 	return a.builder
 }
 
 // LoadRange is an action to Load data to the target field at specified range.
 func (a *ofFlowAction) LoadRange(name string, value uint64, rng Range) FlowBuilder {
-	a.builder.ofFlow.LoadReg(name, value, rng.ToNXRange())
+	loadAct, _ := ofctrl.NewNXLoadAction(name, value, rng.ToNXRange())
+	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
+		loadAct.ResetFieldLength(a.builder.ofFlow.Table.Switch)
+	}
+	a.builder.ApplyAction(loadAct)
 	return a.builder
 }
 
 // LoadRegRange is an action to Load data to the target register at specified range.
 func (a *ofFlowAction) LoadRegRange(regID int, value uint32, rng Range) FlowBuilder {
 	name := fmt.Sprintf("%s%d", NxmFieldReg, regID)
-	a.builder.ofFlow.LoadReg(name, uint64(value), rng.ToNXRange())
+	loadAct, _ := ofctrl.NewNXLoadAction(name, uint64(value), rng.ToNXRange())
+	a.builder.ApplyAction(loadAct)
 	return a.builder
 }
 
@@ -241,39 +257,45 @@ func (a *ofFlowAction) Move(fromField, toField string) FlowBuilder {
 
 // MoveRange is an action to move data from "fromField" at "fromRange" to "toField" at "toRange".
 func (a *ofFlowAction) MoveRange(fromField, toField string, fromRange, toRange Range) FlowBuilder {
-	a.builder.ofFlow.MoveRegs(fromField, toField, fromRange.ToNXRange(), toRange.ToNXRange())
+	moveAct, _ := ofctrl.NewNXMoveAction(fromField, toField, fromRange.ToNXRange(), toRange.ToNXRange())
+	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
+		moveAct.ResetFieldsLength(a.builder.ofFlow.Table.Switch)
+	}
+	a.builder.ApplyAction(moveAct)
 	return a.builder
 }
 
 // Resubmit is an action to resubmit packet to the specified table with the port as new in_port. If port is empty string,
 // the in_port field is not changed.
 func (a *ofFlowAction) Resubmit(ofPort uint16, tableID TableIDType) FlowBuilder {
-	a.builder.ofFlow.Resubmit(ofPort, uint8(tableID))
+	table := uint8(tableID)
+	resubmitAct := ofctrl.NewResubmit(&ofPort, &table)
+	a.builder.ApplyAction(resubmitAct)
 	return a.builder
 }
 
 func (a *ofFlowAction) ResubmitToTable(table TableIDType) FlowBuilder {
-	ofTableID := uint8(table)
-	a.builder.ofFlow.Resubmit(openflow13.OFPP_IN_PORT, ofTableID)
-	return a.builder
+	return a.Resubmit(openflow13.OFPP_IN_PORT, table)
 }
 
 // DecTTL is an action to decrease TTL. It is used in routing functions implemented by Openflow.
 func (a *ofFlowAction) DecTTL() FlowBuilder {
-	a.builder.ofFlow.DecTTL()
+	decTTLAct := new(ofctrl.DecTTLAction)
+	a.builder.ApplyAction(decTTLAct)
 	return a.builder
 }
 
 // Normal is an action to leverage OVS fwd table to forwarding packets.
 func (a *ofFlowAction) Normal() FlowBuilder {
 	normalAction := ofctrl.NewOutputNormal()
-	a.builder.ofFlow.lastAction = normalAction
+	a.builder.ApplyAction(normalAction)
 	return a.builder
 }
 
 // Conjunction is an action to add new conjunction configuration to conjunctive match flow.
 func (a *ofFlowAction) Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder {
-	a.builder.ofFlow.AddConjunction(conjID, clauseID, nClause)
+	conjunctionAct, _ := ofctrl.NewNXConjunctionAction(conjID, clauseID, nClause)
+	a.builder.ApplyAction(conjunctionAct)
 	return a.builder
 }
 
@@ -283,12 +305,24 @@ func (a *ofFlowAction) Group(id GroupIDType) FlowBuilder {
 		Switch: a.builder.Flow.Table.Switch,
 		ID:     uint32(id),
 	}
-	a.builder.ofFlow.lastAction = group
+	a.builder.ApplyAction(group)
+	return a.builder
+}
+
+// Note annotates the OpenFlow entry. The notes are presented as hex digits in the OpenFlow entry, and it will be
+// padded on the right to make the total number of bytes 6 more than a multiple of 8.
+func (a *ofFlowAction) Note(notes string) FlowBuilder {
+	noteAct := &ofctrl.NXNoteAction{Notes: []byte(notes)}
+	a.builder.ApplyAction(noteAct)
 	return a.builder
 }
 
 func (a *ofFlowAction) SendToController(reason uint8) FlowBuilder {
-	a.builder.ofFlow.Controller(reason)
+	controllerAct := &ofctrl.NXController{
+		ControllerID: a.builder.ofFlow.Table.Switch.GetControllerID(),
+		Reason:       reason,
+	}
+	a.builder.ApplyAction(controllerAct)
 	return a.builder
 }
 
@@ -391,7 +425,7 @@ func (a *ofLearnAction) LoadReg(regID int, data uint32, rng Range) LearnAction {
 }
 
 func (a *ofLearnAction) Done() FlowBuilder {
-	a.flowBuilder.Learn(a.nxLearn)
+	a.flowBuilder.ApplyAction(a.nxLearn)
 	return a.flowBuilder
 }
 
@@ -405,9 +439,6 @@ func getFieldRange(name string) (*openflow13.MatchField, Range, error) {
 
 // GotoTable is an action to jump to the specified table.
 func (a *ofFlowAction) GotoTable(table TableIDType) FlowBuilder {
-	// Use Table until new ofnet APIs are ready
-	// a.builder.ofFlow.Goto(uint8(table))
-	gotoTable := &ofctrl.Table{TableId: uint8(table)}
-	a.builder.ofFlow.lastAction = gotoTable
+	a.builder.ofFlow.Goto(uint8(table))
 	return a.builder
 }
