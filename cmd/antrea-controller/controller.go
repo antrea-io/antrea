@@ -138,7 +138,7 @@ func createAPIServerConfig(kubeconfig string,
 		authorization.RemoteKubeConfigFile = kubeconfig
 	}
 
-	if err := secureServing.MaybeDefaultWithSelfSignedCerts("127.0.0.1", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 
