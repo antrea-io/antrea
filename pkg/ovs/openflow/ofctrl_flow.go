@@ -31,8 +31,6 @@ type ofFlow struct {
 	// ctStates is a temporary variable to maintain openflow13.CTStates. When FlowBuilder.Done is called, it is used to
 	// set the CtStates field in ofctrl.Flow.Match.
 	ctStates *openflow13.CTStates
-	// lastAction is used to set ofctrl.Flow nextElem field. It is the last action of the Flow.
-	lastAction ofctrl.FgraphElem
 }
 
 // Reset updates the ofFlow.Flow.Table field with ofFlow.table.Table.
@@ -44,8 +42,7 @@ func (f *ofFlow) Reset() {
 }
 
 func (f *ofFlow) Add() error {
-	f.Flow.UpdateInstallStatus(false)
-	err := f.Flow.Next(f.lastAction)
+	err := f.Flow.Send(openflow13.FC_ADD)
 	if err != nil {
 		return err
 	}
@@ -54,8 +51,7 @@ func (f *ofFlow) Add() error {
 }
 
 func (f *ofFlow) Modify() error {
-	f.Flow.UpdateInstallStatus(true)
-	err := f.Flow.Next(f.lastAction)
+	err := f.Flow.Send(openflow13.FC_MODIFY_STRICT)
 	if err != nil {
 		return err
 	}
@@ -65,7 +61,7 @@ func (f *ofFlow) Modify() error {
 
 func (f *ofFlow) Delete() error {
 	f.Flow.UpdateInstallStatus(true)
-	err := f.Flow.Delete()
+	err := f.Flow.Send(openflow13.FC_DELETE_STRICT)
 	if err != nil {
 		return err
 	}
@@ -111,7 +107,7 @@ func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMess
 }
 
 // CopyToBuilder returns a new FlowBuilder that copies the table, protocols,
-// matches, and CookieID of the Flow, but does not copy the actions, lastAction,
+// matches, and CookieID of the Flow, but does not copy the actions,
 // and other private status fields of the ofctrl.Flow, e.g. "realized" and
 // "isInstalled". Reset the priority in the new FlowBuilder if it is provided.
 func (f *ofFlow) CopyToBuilder(priority uint16) FlowBuilder {

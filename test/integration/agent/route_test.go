@@ -180,7 +180,7 @@ func TestInitialize(t *testing.T) {
 `,
 			"nat": `:ANTREA-POSTROUTING - [0:0]
 -A POSTROUTING -m comment --comment "Antrea: jump to Antrea postrouting rules" -j ANTREA-POSTROUTING
--A ANTREA-POSTROUTING -s 10.10.10.0/24 -m set ! --match-set ANTREA-POD-IP dst -m comment --comment "Antrea: masquerade pod to external packets" -j MASQUERADE
+-A ANTREA-POSTROUTING -s 10.10.10.0/24 -m comment --comment "Antrea: masquerade pod to external packets" -m set ! --match-set ANTREA-POD-IP dst -j MASQUERADE
 `,
 		}
 		if tc.mode.SupportsNoEncap() {
@@ -191,7 +191,7 @@ func TestInitialize(t *testing.T) {
 `
 			expectedIPTables["raw"] = `:ANTREA-RAW - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea raw rules" -j ANTREA-RAW
--A ANTREA-RAW -i gw0 -m mac --mac-source DE:AD:BE:EF:DE:AD -m comment --comment "Antrea: reentry pod traffic skip conntrack" -j CT --notrack
+-A ANTREA-RAW -i gw0 -m comment --comment "Antrea: reentry pod traffic skip conntrack" -m mac --mac-source DE:AD:BE:EF:DE:AD -j CT --notrack
 `
 		}
 
