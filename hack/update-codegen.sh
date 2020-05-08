@@ -22,6 +22,7 @@ ANTREA_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 IMAGE_NAME="antrea/codegen:latest"
 
 function docker_run() {
+  docker pull ${IMAGE_NAME}
   docker run --rm \
 		-w /go/src/github.com/vmware-tanzu/antrea \
 		-v ${ANTREA_ROOT}:/go/src/github.com/vmware-tanzu/antrea \
