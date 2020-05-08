@@ -721,6 +721,20 @@ func (mr *MockActionMockRecorder) Normal() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Normal", reflect.TypeOf((*MockAction)(nil).Normal))
 }
 
+// Note mocks base method
+func (m *MockAction) Note(arg0 string) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Note", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// Note indicates an expected call of Note
+func (mr *MockActionMockRecorder) Note(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Note", reflect.TypeOf((*MockAction)(nil).Note), arg0)
+}
+
 // Output mocks base method
 func (m *MockAction) Output(arg0 int) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -1080,6 +1094,48 @@ func (mr *MockFlowBuilderMockRecorder) MatchARPTpa(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchARPTpa", reflect.TypeOf((*MockFlowBuilder)(nil).MatchARPTpa), arg0)
 }
 
+// MatchCTDstIP mocks base method
+func (m *MockFlowBuilder) MatchCTDstIP(arg0 net.IP) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTDstIP", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTDstIP indicates an expected call of MatchCTDstIP
+func (mr *MockFlowBuilderMockRecorder) MatchCTDstIP(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTDstIP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTDstIP), arg0)
+}
+
+// MatchCTDstIPNet mocks base method
+func (m *MockFlowBuilder) MatchCTDstIPNet(arg0 net.IPNet) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTDstIPNet", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTDstIPNet indicates an expected call of MatchCTDstIPNet
+func (mr *MockFlowBuilderMockRecorder) MatchCTDstIPNet(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTDstIPNet", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTDstIPNet), arg0)
+}
+
+// MatchCTDstPort mocks base method
+func (m *MockFlowBuilder) MatchCTDstPort(arg0 uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTDstPort", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTDstPort indicates an expected call of MatchCTDstPort
+func (mr *MockFlowBuilderMockRecorder) MatchCTDstPort(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTDstPort), arg0)
+}
+
 // MatchCTMark mocks base method
 func (m *MockFlowBuilder) MatchCTMark(arg0 uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -1092,6 +1148,62 @@ func (m *MockFlowBuilder) MatchCTMark(arg0 uint32) openflow.FlowBuilder {
 func (mr *MockFlowBuilderMockRecorder) MatchCTMark(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTMark), arg0)
+}
+
+// MatchCTProtocol mocks base method
+func (m *MockFlowBuilder) MatchCTProtocol(arg0 openflow.Protocol) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTProtocol", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTProtocol indicates an expected call of MatchCTProtocol
+func (mr *MockFlowBuilderMockRecorder) MatchCTProtocol(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTProtocol", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTProtocol), arg0)
+}
+
+// MatchCTSrcIP mocks base method
+func (m *MockFlowBuilder) MatchCTSrcIP(arg0 net.IP) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTSrcIP", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTSrcIP indicates an expected call of MatchCTSrcIP
+func (mr *MockFlowBuilderMockRecorder) MatchCTSrcIP(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcIP", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcIP), arg0)
+}
+
+// MatchCTSrcIPNet mocks base method
+func (m *MockFlowBuilder) MatchCTSrcIPNet(arg0 net.IPNet) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTSrcIPNet", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTSrcIPNet indicates an expected call of MatchCTSrcIPNet
+func (mr *MockFlowBuilderMockRecorder) MatchCTSrcIPNet(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcIPNet", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcIPNet), arg0)
+}
+
+// MatchCTSrcPort mocks base method
+func (m *MockFlowBuilder) MatchCTSrcPort(arg0 uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTSrcPort", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTSrcPort indicates an expected call of MatchCTSrcPort
+func (mr *MockFlowBuilderMockRecorder) MatchCTSrcPort(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcPort), arg0)
 }
 
 // MatchCTStateEst mocks base method
