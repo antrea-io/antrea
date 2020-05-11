@@ -449,7 +449,7 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 	require.Nil(t, err, "Failed to dump flows")
 
 	conjunctionActionMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip", priority-10, ruleID)
-	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("resubmit(,%d)", allowTable)}
+	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("goto_table:%d", allowTable)}
 	testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to update conjunction action flow")
 
 	for _, addr := range rule.From {
@@ -530,17 +530,17 @@ func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gw
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{
-				{fmt.Sprintf("priority=190,in_port=%d", podOFPort), "load:0x2->NXM_NX_REG0[0..15],resubmit(,10)"},
+				{fmt.Sprintf("priority=190,in_port=%d", podOFPort), "load:0x2->NXM_NX_REG0[0..15],goto_table:10"},
 			},
 		},
 		{
 			uint8(10),
 			[]*ofTestUtils.ExpectFlow{
 				{fmt.Sprintf("priority=200,ip,in_port=%d,dl_src=%s,nw_src=%s", podOFPort, podMAC.String(), podIP.String()),
-					"resubmit(,30)"},
+					"goto_table:30"},
 				{
 					fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", podOFPort, podIP.String(), podMAC.String()),
-					"resubmit(,20)"},
+					"goto_table:20"},
 			},
 		},
 		{
@@ -548,7 +548,7 @@ func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gw
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,ip,dl_dst=%s,nw_dst=%s", vMAC.String(), podIP.String()),
-					fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,dec_ttl,resubmit(,80)", gwMAC.String(), podMAC.String())},
+					fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,dec_ttl,goto_table:80", gwMAC.String(), podMAC.String())},
 			},
 		},
 		{
@@ -556,7 +556,7 @@ func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gw
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,dl_dst=%s", podMAC.String()),
-					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)", podOFPort)},
+					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90", podOFPort)},
 			},
 		},
 	}
@@ -568,21 +568,21 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{
 				{fmt.Sprintf("priority=200,in_port=%d", gwOFPort),
-					"load:0x1->NXM_NX_REG0[0..15],resubmit(,10)"},
+					"load:0x1->NXM_NX_REG0[0..15],goto_table:10"},
 			},
 		},
 		{
 			uint8(31),
 			[]*ofTestUtils.ExpectFlow{
 				{"priority=200,ct_state=-new+trk,ct_mark=0x20,ip",
-					fmt.Sprintf("load:0x%s->NXM_OF_ETH_DST[],resubmit(,40)", strings.Replace(gwMAC.String(), ":", "", -1))},
+					fmt.Sprintf("load:0x%s->NXM_OF_ETH_DST[],goto_table:40", strings.Replace(gwMAC.String(), ":", "", -1))},
 			},
 		},
 		{
 			uint8(10),
 			[]*ofTestUtils.ExpectFlow{
-				{fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", gwOFPort, gwIP, gwMAC), "resubmit(,20)"},
-				{fmt.Sprintf("priority=200,ip,in_port=%d", gwOFPort), "resubmit(,30)"},
+				{fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", gwOFPort, gwIP, gwMAC), "goto_table:20"},
+				{fmt.Sprintf("priority=200,ip,in_port=%d", gwOFPort), "goto_table:30"},
 			},
 		},
 		{
@@ -590,7 +590,7 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,ip,dl_dst=%s,nw_dst=%s", vMAC.String(), gwIP.String()),
-					fmt.Sprintf("set_field:%s->eth_dst,resubmit(,80)", gwMAC.String())},
+					fmt.Sprintf("set_field:%s->eth_dst,goto_table:80", gwMAC.String())},
 			},
 		},
 		{
@@ -598,7 +598,7 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,dl_dst=%s", gwMAC.String()),
-					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)", gwOFPort)},
+					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90", gwOFPort)},
 			},
 		},
 		{
@@ -606,7 +606,7 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=210,ip,nw_src=%s", gwIP.String()),
-					"resubmit(,105)"},
+					"goto_table:105"},
 			},
 		},
 	}
@@ -617,7 +617,7 @@ func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableF
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{
-				{fmt.Sprintf("priority=200,in_port=%d", tunnelPort), "load:0->NXM_NX_REG0[0..15],resubmit(,30)"},
+				{fmt.Sprintf("priority=200,in_port=%d", tunnelPort), "load:0->NXM_NX_REG0[0..15],goto_table:30"},
 			},
 		},
 	}
@@ -637,7 +637,7 @@ func prepareNodeFlows(tunnelPort uint32, peerSubnet net.IPNet, peerGwIP, peerNod
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,ip,nw_dst=%s", peerSubnet.String()),
-					fmt.Sprintf("dec_ttl,set_field:%s->eth_src,set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],set_field:%s->tun_dst,resubmit(,105)", localGwMAC.String(), vMAC.String(), tunnelPort, peerNodeIP.String())},
+					fmt.Sprintf("dec_ttl,set_field:%s->eth_src,set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],set_field:%s->tun_dst,goto_table:105", localGwMAC.String(), vMAC.String(), tunnelPort, peerNodeIP.String())},
 			},
 		},
 	}
@@ -649,7 +649,7 @@ func prepareServiceHelperFlows(serviceCIDR net.IPNet, gwMAC net.HardwareAddr, gw
 			uint8(40),
 			[]*ofTestUtils.ExpectFlow{
 				{fmt.Sprintf("priority=200,ip,nw_dst=%s", serviceCIDR.String()),
-					fmt.Sprintf("set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,105)", gwMAC, gwOFPort),
+					fmt.Sprintf("set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105", gwMAC, gwOFPort),
 				},
 			},
 		},
@@ -682,45 +682,45 @@ func prepareDefaultFlows() []expectTableFlows {
 		{
 			uint8(31),
 			[]*ofTestUtils.ExpectFlow{
-				{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "resubmit(,40)"},
+				{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "goto_table:40"},
 				{"priority=200,ct_state=+inv+trk,ip", "drop"},
-				{"priority=0", "resubmit(,40)"},
+				{"priority=0", "goto_table:40"},
 			},
 		},
 		{
 			uint8(40),
-			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,50)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:50"}},
 		},
 		{
 			uint8(50),
-			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,60)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:60"}},
 		},
 		{
 			uint8(60),
-			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,70)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:70"}},
 		},
 		{
 			uint8(70),
-			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,80)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:80"}},
 		},
 		{
 			uint8(80),
-			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,90)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:90"}},
 		},
 		{
 			uint8(90),
-			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,100)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:100"}},
 		},
 		{
 			uint8(100),
-			[]*ofTestUtils.ExpectFlow{{"priority=0", "resubmit(,105)"}},
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:105"}},
 		},
 		{
 			uint8(105),
 			[]*ofTestUtils.ExpectFlow{
 				{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=110,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
 				{"priority=190,ct_state=+new+trk,ip", "ct(commit,table=110,zone=65520)"},
-				{"priority=0", "resubmit(,110)"}},
+				{"priority=0", "goto_table:110"}},
 		},
 		{
 			uint8(110),

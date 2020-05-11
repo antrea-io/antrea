@@ -398,3 +398,12 @@ func getFieldRange(name string) (*openflow13.MatchField, Range, error) {
 	}
 	return field, Range{0, uint32(field.Length)*8 - 1}, nil
 }
+
+// GotoTable is an action to jump to the specified table.
+func (a *ofFlowAction) GotoTable(table TableIDType) FlowBuilder {
+	// Use Table until new ofnet APIs are ready
+	// a.builder.ofFlow.Goto(uint8(table))
+	gotoTable := &ofctrl.Table{TableId: uint8(table)}
+	a.builder.ofFlow.lastAction = gotoTable
+	return a.builder
+}
