@@ -215,7 +215,7 @@ func (c *client) defaultFlows() (flows []binding.Flow) {
 		flowBuilder := table.BuildFlow(priorityMiss)
 		switch table.GetMissAction() {
 		case binding.TableMissActionNext:
-			flowBuilder = flowBuilder.Action().ResubmitToTable(table.GetNext())
+			flowBuilder = flowBuilder.Action().GotoTable(table.GetNext())
 		case binding.TableMissActionNormal:
 			flowBuilder = flowBuilder.Action().Normal()
 		case binding.TableMissActionDrop:
@@ -235,7 +235,7 @@ func (c *client) tunnelClassifierFlow(tunnelOFPort uint32, category cookie.Categ
 	return c.pipeline[classifierTable].BuildFlow(priorityNormal).
 		MatchInPort(tunnelOFPort).
 		Action().LoadRegRange(int(marksReg), markTrafficFromTunnel, binding.Range{0, 15}).
-		Action().ResubmitToTable(conntrackTable).
+		Action().GotoTable(conntrackTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -246,7 +246,7 @@ func (c *client) gatewayClassifierFlow(gatewayOFPort uint32, category cookie.Cat
 	return classifierTable.BuildFlow(priorityNormal).
 		MatchInPort(gatewayOFPort).
 		Action().LoadRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-		Action().ResubmitToTable(classifierTable.GetNext()).
+		Action().GotoTable(classifierTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -257,7 +257,7 @@ func (c *client) podClassifierFlow(podOFPort uint32, category cookie.Category) b
 	return classifierTable.BuildFlow(priorityLow).
 		MatchInPort(podOFPort).
 		Action().LoadRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
-		Action().ResubmitToTable(classifierTable.GetNext()).
+		Action().GotoTable(classifierTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -267,7 +267,7 @@ func (c *client) podClassifierFlow(podOFPort uint32, category cookie.Category) b
 // 2) Add ct_mark on the packet if it is sent to the switch from the host gateway.
 // 3) Allow traffic if it hits ct_mark and is sent from the host gateway.
 // 4) Drop all invalid traffic.
-// 5) Resubmit other traffic to the next table by the table-miss flow.
+// 5) Let other traffic go to the next table by the table-miss flow.
 func (c *client) connectionTrackFlows(category cookie.Category) (flows []binding.Flow) {
 	connectionTrackTable := c.pipeline[conntrackTable]
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
@@ -281,7 +281,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) (flows []binding
 			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 			MatchCTMark(gatewayCTMark).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
-			Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
+			Action().GotoTable(connectionTrackStateTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
@@ -313,7 +313,7 @@ func (c *client) reEntranceBypassCTFlow(gwPort, reentPort uint32, category cooki
 	return conntrackCommitTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		MatchInPort(gwPort).MatchReg(int(portCacheReg), reentPort).
-		Action().ResubmitToTable(conntrackCommitTable.GetNext()).
+		Action().GotoTable(conntrackCommitTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -326,7 +326,7 @@ func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr, category cooki
 		MatchCTMark(gatewayCTMark).
 		MatchCTStateNew(false).MatchCTStateTrk(true).
 		Action().LoadRange(binding.NxmFieldDstMAC, macData, binding.Range{0, 47}).
-		Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
+		Action().GotoTable(connectionTrackStateTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -338,7 +338,7 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, categ
 		MatchDstMAC(dstMAC).
 		Action().LoadRegRange(int(portCacheReg), ofPort, ofPortRegRange).
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().ResubmitToTable(l2FwdCalcTable.GetNext()).
+		Action().GotoTable(l2FwdCalcTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -371,7 +371,7 @@ func (c *client) l3BypassMACRewriteFlow(gatewayMAC net.HardwareAddr, category co
 	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchCTMark(gatewayCTMark).
 		MatchDstMAC(gatewayMAC).
-		Action().ResubmitToTable(l3FwdTable.GetNext()).
+		Action().GotoTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -386,7 +386,7 @@ func (c *client) l3FlowsToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP n
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(podInterfaceMAC).
 		Action().DecTTL().
-		Action().ResubmitToTable(l3FwdTable.GetNext()).
+		Action().GotoTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -399,7 +399,7 @@ func (c *client) l3ToPodFlow(podInterfaceIP net.IP, podInterfaceMAC net.Hardware
 		MatchDstIP(podInterfaceIP).
 		Action().SetDstMAC(podInterfaceMAC).
 		Action().DecTTL().
-		Action().ResubmitToTable(l3FwdTable.GetNext()).
+		Action().GotoTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -411,7 +411,7 @@ func (c *client) l3ToGWFlow(gwMAC net.HardwareAddr, category cookie.Category) bi
 	return l3FwdTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 		Action().SetDstMAC(gwMAC).
 		Action().DecTTL().
-		Action().ResubmitToTable(l3FwdTable.GetNext()).
+		Action().GotoTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -423,7 +423,7 @@ func (c *client) l3ToGatewayFlow(localGatewayIP net.IP, localGatewayMAC net.Hard
 		MatchDstMAC(globalVirtualMAC).
 		MatchDstIP(localGatewayIP).
 		Action().SetDstMAC(localGatewayMAC).
-		Action().ResubmitToTable(l3FwdTable.GetNext()).
+		Action().GotoTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -449,7 +449,7 @@ func (c *client) l3FwdFlowToRemote(
 		Action().SetTunnelDst(tunnelPeer).
 		// Bypass l2ForwardingCalcTable and tables for ingress rules (which won't
 		// apply to packets to remote Nodes).
-		Action().ResubmitToTable(conntrackCommitTable).
+		Action().GotoTable(conntrackCommitTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -464,7 +464,7 @@ func (c *client) l3FwdFlowToRemoteViaGW(
 		MatchDstIPNet(peerSubnet).
 		Action().DecTTL().
 		Action().SetDstMAC(localGatewayMAC).
-		Action().ResubmitToTable(l3FwdTable.GetNext()).
+		Action().GotoTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -515,7 +515,7 @@ func (c *client) podIPSpoofGuardFlow(ifIP net.IP, ifMAC net.HardwareAddr, ifOFPo
 		MatchInPort(ifOFPort).
 		MatchSrcMAC(ifMAC).
 		MatchSrcIP(ifIP).
-		Action().ResubmitToTable(ipSpoofGuardTable.GetNext()).
+		Action().GotoTable(ipSpoofGuardTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -526,7 +526,7 @@ func (c *client) gatewayARPSpoofGuardFlow(gatewayOFPort uint32, gatewayIP net.IP
 		MatchInPort(gatewayOFPort).
 		MatchARPSha(gatewayMAC).
 		MatchARPSpa(gatewayIP).
-		Action().ResubmitToTable(arpResponderTable).
+		Action().GotoTable(arpResponderTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -537,7 +537,7 @@ func (c *client) arpSpoofGuardFlow(ifIP net.IP, ifMAC net.HardwareAddr, ifOFPort
 		MatchInPort(ifOFPort).
 		MatchARPSha(ifMAC).
 		MatchARPSpa(ifIP).
-		Action().ResubmitToTable(arpResponderTable).
+		Action().GotoTable(arpResponderTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -548,7 +548,7 @@ func (c *client) gatewayIPSpoofGuardFlow(gatewayOFPort uint32, category cookie.C
 	ipSpoofGuardTable := ipPipeline[spoofGuardTable]
 	return ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchInPort(gatewayOFPort).
-		Action().ResubmitToTable(ipSpoofGuardTable.GetNext()).
+		Action().GotoTable(ipSpoofGuardTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -560,7 +560,7 @@ func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayMAC net.Hard
 		Action().SetDstMAC(gatewayMAC).
 		Action().LoadRegRange(int(portCacheReg), gatewayOFPort, ofPortRegRange).
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().ResubmitToTable(conntrackCommitTable).
+		Action().GotoTable(conntrackCommitTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -573,12 +573,12 @@ func (c *client) arpNormalFlow(category cookie.Category) binding.Flow {
 		Done()
 }
 
-// conjunctionActionFlow generates the flow to resubmit to a specific table if policyRuleConjunction ID is matched. Priority of
+// conjunctionActionFlow generates the flow to jump to a specific table if policyRuleConjunction ID is matched. Priority of
 // conjunctionActionFlow is priorityLow.
 func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType) binding.Flow {
 	return c.pipeline[tableID].BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 		MatchConjID(conjunctionID).
-		Action().ResubmitToTable(nextTable).
+		Action().GotoTable(nextTable).
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 		Done()
 }
@@ -599,7 +599,7 @@ func (c *client) establishedConnectionFlows(category cookie.Category) (flows []b
 	egressDropTable := c.pipeline[egressDefaultTable]
 	egressEstFlow := c.pipeline[egressRuleTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchCTStateNew(false).MatchCTStateEst(true).
-		Action().ResubmitToTable(egressDropTable.GetNext()).
+		Action().GotoTable(egressDropTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
@@ -608,7 +608,7 @@ func (c *client) establishedConnectionFlows(category cookie.Category) (flows []b
 	ingressDropTable := c.pipeline[ingressDefaultTable]
 	ingressEstFlow := c.pipeline[ingressRuleTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchCTStateNew(false).MatchCTStateEst(true).
-		Action().ResubmitToTable(ingressDropTable.GetNext()).
+		Action().GotoTable(ingressDropTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 	return []binding.Flow{egressEstFlow, ingressEstFlow}
@@ -639,12 +639,12 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue 
 	return fb
 }
 
-// conjunctionExceptionFlow generates the flow to resubmit to a specific table if both policyRuleConjunction ID and except address are matched.
+// conjunctionExceptionFlow generates the flow to jump to a specific table if both policyRuleConjunction ID and except address are matched.
 // Keeping this for reference to generic exception flow.
 func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, matchKey int, matchValue interface{}) binding.Flow {
 	fb := c.pipeline[tableID].BuildFlow(priorityNormal).MatchConjID(conjunctionID)
 	return c.addFlowMatch(fb, matchKey, matchValue).
-		Action().ResubmitToTable(nextTable).
+		Action().GotoTable(nextTable).
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 		Done()
 }
@@ -668,12 +668,12 @@ func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey int, matc
 		Done()
 }
 
-// localProbeFlow generates the flow to resubmit packets to conntrackCommitTable. The packets are sent from Node to probe the liveness/readiness of local Pods.
+// localProbeFlow generates the flow to forward packets to conntrackCommitTable. The packets are sent from Node to probe the liveness/readiness of local Pods.
 func (c *client) localProbeFlow(localGatewayIP net.IP, category cookie.Category) binding.Flow {
 	return c.pipeline[ingressRuleTable].BuildFlow(priorityHigh).
 		MatchProtocol(binding.ProtocolIP).
 		MatchSrcIP(localGatewayIP).
-		Action().ResubmitToTable(conntrackCommitTable).
+		Action().GotoTable(conntrackCommitTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
