@@ -37,7 +37,7 @@ func lock(lockFilePath string, timeout time.Duration) (func() error, error) {
 	}
 
 	// Check whether the lock is available every 200ms.
-	if err := wait.PollImmediate(200*time.Millisecond, timeout, func() (bool, error) {
+	if err := wait.PollImmediate(waitIntervalMicroSeconds*time.Microsecond, timeout, func() (bool, error) {
 		if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
 			return false, nil
 		}

@@ -18,8 +18,10 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"time"
 
+	"github.com/blang/semver"
 	"github.com/coreos/go-iptables/iptables"
 	"k8s.io/klog"
 )
@@ -38,10 +40,19 @@ const (
 	PreRoutingChain  = "PREROUTING"
 	ForwardChain     = "FORWARD"
 	PostRoutingChain = "POSTROUTING"
+
+	waitSeconds              = 10
+	waitIntervalMicroSeconds = 200000
 )
+
+// https://netfilter.org/projects/iptables/files/changes-iptables-1.6.2.txt:
+// iptables-restore: support acquiring the lock.
+var restoreWaitSupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
 
 type Client struct {
 	ipt *iptables.IPTables
+	// restoreWaitSupported indicates whether iptables-restore supports --wait flag.
+	restoreWaitSupported bool
 }
 
 func New() (*Client, error) {
@@ -49,7 +60,13 @@ func New() (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
 	}
-	return &Client{ipt: ipt}, nil
+	return &Client{ipt: ipt, restoreWaitSupported: isRestoreWaitSupported(ipt)}, nil
+}
+
+func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
+	major, minor, patch := ipt.GetIptablesVersion()
+	version := semver.Version{Major: uint64(major), Minor: uint64(minor), Patch: uint64(patch)}
+	return version.GE(restoreWaitSupportedMinVersion)
 }
 
 // ensureChain checks if target chain already exists, creates it if not.
@@ -94,15 +111,23 @@ func (c *Client) Restore(data []byte, flush bool) error {
 	}
 	cmd := exec.Command("iptables-restore", args...)
 	cmd.Stdin = bytes.NewBuffer(data)
-	// We acquire xtables lock explicitly for iptables-restore to prevent it from conflicting
+	// We acquire xtables lock for iptables-restore to prevent it from conflicting
 	// with iptables/iptables-restore which might being called by kube-proxy.
 	// iptables supports "--wait" option and go-iptables has enabled it.
-	// iptables-restore doesn't support the option until 1.6.2, but it's not widely deployed yet.
-	unlockFunc, err := lock(xtablesLockFilePath, 10*time.Second)
-	if err != nil {
-		return err
+	// iptables-restore doesn't support the option until 1.6.2. We use "-w" if the
+	// detected version is greater than or equal to 1.6.2, otherwise we acquire the
+	// file lock explicitly.
+	// Note that we cannot just acquire the file lock explicitly for all cases because
+	// iptables-restore will try acquiring the lock with or without "-w" provided since 1.6.2.
+	if c.restoreWaitSupported {
+		cmd.Args = append(cmd.Args, "-w", strconv.Itoa(waitSeconds), "-W", strconv.Itoa(waitIntervalMicroSeconds))
+	} else {
+		unlockFunc, err := lock(xtablesLockFilePath, waitSeconds*time.Second)
+		if err != nil {
+			return err
+		}
+		defer unlockFunc()
 	}
-	defer unlockFunc()
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error executing iptables-restore: %v", err)
 	}
