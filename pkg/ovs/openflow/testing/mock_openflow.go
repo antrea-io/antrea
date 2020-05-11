@@ -538,6 +538,20 @@ func (mr *MockActionMockRecorder) Drop() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Drop", reflect.TypeOf((*MockAction)(nil).Drop))
 }
 
+// GotoTable mocks base method
+func (m *MockAction) GotoTable(arg0 openflow.TableIDType) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GotoTable", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// GotoTable indicates an expected call of GotoTable
+func (mr *MockActionMockRecorder) GotoTable(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GotoTable", reflect.TypeOf((*MockAction)(nil).GotoTable), arg0)
+}
+
 // Group mocks base method
 func (m *MockAction) Group(arg0 openflow.GroupIDType) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
