@@ -114,13 +114,13 @@ func prepareOverlapFlows(table binding.Table, ipStr string, sameCookie bool) ([]
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(cookie2).
 			MatchSrcIP(srcIP).
-			Action().ResubmitToTable(table.GetNext()).
+			Action().GotoTable(table.GetNext()).
 			Done(),
 	}
 	expectFlows := []*ExpectFlow{
 		{"priority=200,ip", "drop"},
 		{fmt.Sprintf("priority=200,ip,nw_src=%s", ipStr),
-			fmt.Sprintf("resubmit(,%d)", table.GetNext())},
+			fmt.Sprintf("goto_table:%d", table.GetNext())},
 	}
 	return flows, expectFlows
 }
@@ -424,7 +424,7 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 				flows := []binding.Flow{table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 					Cookie(getCookieID()).
 					MatchInPort(uint32(count + 1)).
-					Action().ResubmitToTable(table.GetNext()).
+					Action().GotoTable(table.GetNext()).
 					Done()}
 				err = bridge.AddFlowsInBundle(flows, nil, nil)
 				if err != nil {
@@ -555,21 +555,21 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Cookie(getCookieID()).
 			MatchInPort(podOFport).
 			Action().LoadRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
-			Action().ResubmitToTable(table.GetNext()).
+			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
 			Cookie(getCookieID()).
 			MatchInPort(podOFport).
 			MatchARPSha(podMAC).
 			MatchARPSpa(podIP).
-			Action().ResubmitToTable(table.GetNext()).
+			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchInPort(podOFport).
 			MatchSrcMAC(podMAC).
 			MatchSrcIP(podIP).
-			Action().ResubmitToTable(table.GetNext()).
+			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
 			Cookie(getCookieID()).
@@ -607,7 +607,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 			MatchCTMark(gatewayCTMark).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
-			Action().ResubmitToTable(table.GetNext()).
+			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
@@ -624,7 +624,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			MatchCTMark(gatewayCTMark).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
 			Action().LoadRange(binding.NxmFieldDstMAC, gwMACData, binding.Range{0, 47}).
-			Action().ResubmitToTable(table.GetNext()).
+			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
@@ -643,7 +643,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Action().SetSrcMAC(gwMAC).
 			Action().SetDstMAC(podMAC).
 			Action().DecTTL().
-			Action().ResubmitToTable(table.GetNext()).
+			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
@@ -652,20 +652,20 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Action().SetSrcMAC(gwMAC).
 			Action().SetDstMAC(vMAC).
 			Action().SetTunnelDst(tunnelPeer).
-			Action().ResubmitToTable(table.GetNext()).
+			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchDstIP(gwIP).
 			Action().SetDstMAC(gwMAC).
-			Action().ResubmitToTable(table.GetNext()).
+			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).
 			Cookie(getCookieID()).
 			MatchDstMAC(podMAC).
 			Action().LoadRegRange(portCacheReg, podOFport, ofportRegRange).
 			Action().LoadRegRange(int(marksReg), portFoundMark, ofportMarkRange).
-			Action().ResubmitToTable(table.GetNext()).
+			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).
 			Cookie(getCookieID()).
@@ -688,30 +688,30 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchRegRange(int(portCacheReg), podOFport, ofportRegRange).
 			Action().Conjunction(uint32(1001), uint8(2), uint8(3)).Done(),
 		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchConjID(1001).
-			Action().ResubmitToTable(table.GetNext()).Done(),
+			Action().GotoTable(table.GetNext()).Done(),
 		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchConjID(1001).MatchSrcIP(gwIP).
-			Action().ResubmitToTable(table.GetNext()).Done(),
+			Action().GotoTable(table.GetNext()).Done(),
 	)
 
-	resubmitAction := fmt.Sprintf("resubmit(,%d)", table.GetNext())
+	gotoTableAction := fmt.Sprintf("goto_table:%d", table.GetNext())
 	var flowStrs []*ExpectFlow
 	flowStrs = append(flowStrs,
-		&ExpectFlow{"priority=190,in_port=3", fmt.Sprintf("load:0x2->NXM_NX_REG0[0..15],%s", resubmitAction)},
-		&ExpectFlow{"priority=200,arp,in_port=3,arp_spa=192.168.1.3,arp_sha=aa:aa:aa:aa:aa:13", resubmitAction},
-		&ExpectFlow{"priority=200,ip,in_port=3,dl_src=aa:aa:aa:aa:aa:13,nw_src=192.168.1.3", resubmitAction},
+		&ExpectFlow{"priority=190,in_port=3", fmt.Sprintf("load:0x2->NXM_NX_REG0[0..15],%s", gotoTableAction)},
+		&ExpectFlow{"priority=200,arp,in_port=3,arp_spa=192.168.1.3,arp_sha=aa:aa:aa:aa:aa:13", gotoTableAction},
+		&ExpectFlow{"priority=200,ip,in_port=3,dl_src=aa:aa:aa:aa:aa:13,nw_src=192.168.1.3", gotoTableAction},
 		&ExpectFlow{"priority=200,arp,arp_tpa=192.168.2.1,arp_op=1", "move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,load:0x2->NXM_OF_ARP_OP[],move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:192.168.2.1->arp_spa,IN_PORT"},
 		&ExpectFlow{"priority=190,arp", "NORMAL"},
 		&ExpectFlow{"priority=200,tcp", fmt.Sprintf("learn(table=%d,idle_timeout=10,priority=190,delete_learned,cookie=0x1,eth_type=0x800,nw_proto=6,NXM_OF_TCP_DST[],NXM_NX_REG0[0..15]=0xfff,load:NXM_NX_REG0[0..15]->NXM_NX_REG0[0..15],load:0xffe->NXM_NX_REG0[16..31]),resubmit(,%d)", table.GetID(), table.GetID())},
 		&ExpectFlow{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=65520)", table.GetNext())},
-		&ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", resubmitAction},
+		&ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", gotoTableAction},
 		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", fmt.Sprintf("ct(commit,table=%d,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])", table.GetNext())},
-		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x20,ip", fmt.Sprintf("load:0xaaaaaaaaaa11->NXM_OF_ETH_DST[],%s", resubmitAction)},
+		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x20,ip", fmt.Sprintf("load:0xaaaaaaaaaa11->NXM_OF_ETH_DST[],%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ct_state=+new+inv,ip", "drop"},
 		&ExpectFlow{"priority=190,ct_state=+new+trk,ip", fmt.Sprintf("ct(commit,table=%d,zone=65520)", table.GetNext())},
-		&ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,%s", resubmitAction)},
-		&ExpectFlow{"priority=200,ip,nw_dst=192.168.2.0/24", fmt.Sprintf("dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:10.1.1.2->tun_dst,%s", resubmitAction)},
-		&ExpectFlow{"priority=200,ip,nw_dst=192.168.1.1", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_dst,%s", resubmitAction)},
-		&ExpectFlow{"priority=200,dl_dst=aa:aa:aa:aa:aa:13", fmt.Sprintf("load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],%s", resubmitAction)},
+		&ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,%s", gotoTableAction)},
+		&ExpectFlow{"priority=200,ip,nw_dst=192.168.2.0/24", fmt.Sprintf("dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:10.1.1.2->tun_dst,%s", gotoTableAction)},
+		&ExpectFlow{"priority=200,ip,nw_dst=192.168.1.1", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_dst,%s", gotoTableAction)},
+		&ExpectFlow{"priority=200,dl_dst=aa:aa:aa:aa:aa:13", fmt.Sprintf("load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,reg0=0x10000/0x10000", "output:NXM_NX_REG1[]"},
 		&ExpectFlow{"priority=200,ip,nw_dst=172.16.0.0/16", "output:1"},
 		&ExpectFlow{"priority=220,tcp,tp_dst=8080", "conjunction(1001,3/3)"},
@@ -719,8 +719,8 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		&ExpectFlow{"priority=220,ip,nw_dst=192.168.3.0/24", "conjunction(1001,2/3)"},
 		&ExpectFlow{"priority=220,ip", "conjunction(1001,1/3)"},
 		&ExpectFlow{"priority=220,ip,reg1=0x3", "conjunction(1001,2/3)"},
-		&ExpectFlow{"priority=220,conj_id=1001,ip", resubmitAction},
-		&ExpectFlow{"priority=220,conj_id=1001,ip,nw_src=192.168.1.1", resubmitAction},
+		&ExpectFlow{"priority=220,conj_id=1001,ip", gotoTableAction},
+		&ExpectFlow{"priority=220,conj_id=1001,ip,nw_src=192.168.1.1", gotoTableAction},
 	)
 
 	return flows, flowStrs
