@@ -707,7 +707,7 @@ func (c *client) localProbeFlow(localGatewayIP net.IP, category cookie.Category)
 		Done()
 }
 
-func (c *client) snatFlows(uplinkOfport uint32, bridgeLocalPort int, nodeIP net.IP, category cookie.Category) []binding.Flow {
+func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort int, nodeIP net.IP, localSubnet net.IPNet, category cookie.Category) []binding.Flow {
 	snatIPRange := &binding.IPRange{nodeIP, nodeIP}
 	vMACInt, _ := strconv.ParseUint(strings.Replace(globalVirtualMAC.String(), ":", "", -1), 16, 64)
 	flows := []binding.Flow{
@@ -718,6 +718,15 @@ func (c *client) snatFlows(uplinkOfport uint32, bridgeLocalPort int, nodeIP net.
 			Action().LoadRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
 			Action().ResubmitToTable(conntrackTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Resubmit the packet to conntrackTable if it enters the OVS pipeline from the bridge interface and is sent to
+		// local Pods.
+		c.pipeline[classifierTable].BuildFlow(priorityHigh).
+			MatchProtocol(binding.ProtocolIP).
+			MatchInPort(uint32(bridgeLocalPort)).
+			MatchDstIPNet(localSubnet).
+			Action().SetDstMAC(globalVirtualMAC).
+			Action().ResubmitToTable(conntrackTable).
 			Done(),
 		// Enforce IP packet into the conntrack zone with SNAT. If the connection is SNATed, the reply packet should use
 		// Pod IP as the destination, and then resubmit to conntrackStateTable.
