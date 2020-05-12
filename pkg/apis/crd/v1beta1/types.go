@@ -15,8 +15,6 @@
 package v1beta1
 
 import (
-	"strings"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -134,12 +132,6 @@ type NetworkPolicyPort struct {
 
 // RuleAction describes the action to be applied on traffic matching a rule.
 type RuleAction string
-
-// ToUpper returns a RuleAction type in uppercase.
-func (a *RuleAction) ToUpper() RuleAction {
-	aStr := string(*a)
-	return RuleAction(strings.ToUpper(aStr))
-}
 
 const (
 	// RuleActionAllow describes that rule matching traffic must be allowed.
