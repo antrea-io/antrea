@@ -60,6 +60,9 @@ checked-in [deployment yaml](/build/yamls/antrea.yml):
 kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea.yml
 ```
 
+If you want to add Windows Nodes to your cluster, please refer to the
+installation instructions in [windows.md](/docs/windows.md).
+
 ### Deploying Antrea on a Cluster with Existing CNI
 
 The instructions above only apply when deploying Antrea in a new cluster. If you

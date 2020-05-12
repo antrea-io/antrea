@@ -12,6 +12,10 @@ in a high-performance and efficient manner. Thanks to the "programmable"
 characteristic of Open vSwitch, Antrea is able to implement an extensive set
 of networking and security features and services on top of Open vSwitch.
 
+Some information in this document and in particular when it comes to the Antrea
+Agent is specific to running Antrea on Linux Nodes. For information about how
+Antrea is run on Windows Nodes, please refer to [windows.md](/docs/windows.md).
+
 ## Components
 
 In a Kubernetes cluster, Antrea creates a Deployment that runs Antrea
