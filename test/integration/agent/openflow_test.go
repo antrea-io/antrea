@@ -773,6 +773,10 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 					fmt.Sprintf("priority=200,ip,in_port=%d", config1.UplinkOFPort),
 					"load:0x4->NXM_NX_REG0[0..15],resubmit(,30)",
 				},
+				{
+					fmt.Sprintf("priority=210,ip,in_port=LOCAL,nw_dst=%s", localSubnet.String()),
+					"set_field:aa:bb:cc:dd:ee:ff->eth_dst,resubmit(,30)",
+				},
 			},
 		},
 		{
