@@ -387,7 +387,7 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 }
 
 func (c *client) InstallExternalFlows(nodeIP net.IP, localSubnet net.IPNet) error {
-	flows := c.snatFlows(config.UplinkOFPort, config.BridgeOFPort, nodeIP, cookie.SNAT)
+	flows := c.bridgeAndUplinkFlows(config.UplinkOFPort, config.BridgeOFPort, nodeIP, localSubnet, cookie.SNAT)
 	flows = append(flows, c.l3ToExternalFlows(nodeIP, localSubnet, config.HostGatewayOFPort, cookie.SNAT)...)
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to install flows for external communication: %v", err)
