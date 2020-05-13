@@ -63,6 +63,20 @@ run from the `infra/vagrant` directory. The master node is named
 single worker node, the name is `k8s-node-worker-1`. `kubectl` is installed on
 all the nodes.
 
+The
+[kubeconfig](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/)
+file for the cluster can also be found locally on your machine at
+`./infra/vagrant/playbook/kube/config`. If you install
+[`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/) locally and
+set the `KUBECONFIG` environment variable to the absolute path of this
+kubeconfig file, you can run commands against your test cluster created with
+Vagrant. For example:
+```bash
+cd <directory containing this README file>
+export KUBECONFIG=`pwd`/infra/vagrant/playbook/kube/config
+kubectl cluster-info
+```
+
 ## Running the tests
 
 Make sure that your cluster was provisioned and that the Antrea build artifacts
