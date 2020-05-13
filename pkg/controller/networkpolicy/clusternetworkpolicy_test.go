@@ -267,7 +267,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 									NamespaceSelector: &selectorC,
 								},
 							},
-							Action: allowAction,
+							Action: &allowAction,
 						},
 					},
 					Egress: []secv1alpha1.Rule{
@@ -283,7 +283,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 									NamespaceSelector: &selectorC,
 								},
 							},
-							Action: allowAction,
+							Action: &allowAction,
 						},
 					},
 				},
@@ -349,7 +349,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 									PodSelector: &selectorB,
 								},
 							},
-							Action: allowAction,
+							Action: &allowAction,
 						},
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
@@ -362,7 +362,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 									NamespaceSelector: &selectorC,
 								},
 							},
-							Action: allowAction,
+							Action: &allowAction,
 						},
 					},
 				},
@@ -468,7 +468,7 @@ func TestAddCNP(t *testing.T) {
 									NamespaceSelector: &selectorC,
 								},
 							},
-							Action: allowAction,
+							Action: &allowAction,
 						},
 					},
 					Egress: []secv1alpha1.Rule{
@@ -484,7 +484,7 @@ func TestAddCNP(t *testing.T) {
 									NamespaceSelector: &selectorC,
 								},
 							},
-							Action: allowAction,
+							Action: &allowAction,
 						},
 					},
 				},
@@ -550,7 +550,7 @@ func TestAddCNP(t *testing.T) {
 									PodSelector: &selectorB,
 								},
 							},
-							Action: allowAction,
+							Action: &allowAction,
 						},
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
@@ -563,7 +563,7 @@ func TestAddCNP(t *testing.T) {
 									NamespaceSelector: &selectorC,
 								},
 							},
-							Action: allowAction,
+							Action: &allowAction,
 						},
 					},
 				},
@@ -669,7 +669,7 @@ func getCNP() *secv1alpha1.ClusterNetworkPolicy {
 					NamespaceSelector: &selectorB,
 				},
 			},
-			Action: allowAction,
+			Action: &allowAction,
 		},
 	}
 	egressRules := []secv1alpha1.Rule{
@@ -679,7 +679,7 @@ func getCNP() *secv1alpha1.ClusterNetworkPolicy {
 					PodSelector: &selectorC,
 				},
 			},
-			Action: allowAction,
+			Action: &allowAction,
 		},
 	}
 	npObj := &secv1alpha1.ClusterNetworkPolicy{

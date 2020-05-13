@@ -5,13 +5,13 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
@@ -122,6 +122,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	rule1 := &types.PolicyRule{
 		Direction: v1beta1.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.30", "192.168.1.50"}),
+		Priority:  nil,
 	}
 
 	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
@@ -151,6 +152,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	require.NotNil(t, conj2.toClause)
 	require.Nil(t, conj2.serviceClause)
 	ruleFlowBuilder.EXPECT().MatchConjID(ruleID2).MaxTimes(1)
+	ruleFlowBuilder.EXPECT().MatchPriority(priorityLow).MaxTimes(1)
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID2, 2, 2}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID2, 1, 2}})
 	ctxChanges2 := conj2.calculateChangesForRuleCreation(c, rule2)
@@ -182,6 +184,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	conj3 := &policyRuleConjunction{id: ruleID3}
 	conj3.calculateClauses(rule3, c)
 	ruleFlowBuilder.EXPECT().MatchConjID(ruleID3).MaxTimes(3)
+	ruleFlowBuilder.EXPECT().MatchPriority(priorityLow).MaxTimes(3)
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID2, 1, 2}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID3, 2, 3}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID3, 1, 3}})
@@ -370,12 +373,14 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlowBuilder.EXPECT().MatchUDPDstPort(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchSCTPDstPort(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchConjID(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	ruleFlowBuilder.EXPECT().MatchPriority(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleAction = mocks.NewMockAction(ctrl)
 	ruleAction.EXPECT().GotoTable(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().Action().Return(ruleAction).AnyTimes()
 	ruleFlow = mocks.NewMockFlow(ctrl)
 	ruleFlowBuilder.EXPECT().Done().Return(ruleFlow).AnyTimes()
 	ruleFlow.EXPECT().CopyToBuilder(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	ruleFlow.EXPECT().FlowPriority().Return("").AnyTimes()
 	ruleFlow.EXPECT().MatchString().Return("").AnyTimes()
 	return ruleFlowBuilder
 }
@@ -406,6 +411,10 @@ func createMockTable(ctrl *gomock.Controller, tableID binding.TableIDType, nextT
 }
 
 func prepareClient(ctrl *gomock.Controller) *client {
+	policyCache := cache.NewIndexer(
+		policyConjKeyFunc,
+		cache.Indexers{priorityIndex: priorityIndexFunc},
+	)
 	bridge := mocks.NewMockBridge(ctrl)
 	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	outTable = createMockTable(ctrl, egressRuleTable, egressDefaultTable, binding.TableMissActionNext)
@@ -417,7 +426,7 @@ func prepareClient(ctrl *gomock.Controller) *client {
 			egressDefaultTable: outDropTable,
 			l3ForwardingTable:  outAllowTable,
 		},
-		policyCache:              sync.Map{},
+		policyCache:              policyCache,
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 		bridge:                   bridge,
 	}

@@ -361,6 +361,20 @@ func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
 }
 
+// ReassignActionPriority mocks base method
+func (m *MockClient) ReassignActionPriority(arg0 map[uint16]uint16) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReassignActionPriority", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReassignActionPriority indicates an expected call of ReassignActionPriority
+func (mr *MockClientMockRecorder) ReassignActionPriority(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignActionPriority", reflect.TypeOf((*MockClient)(nil).ReassignActionPriority), arg0)
+}
+
 // ReplayFlows mocks base method
 func (m *MockClient) ReplayFlows() {
 	m.ctrl.T.Helper()
@@ -416,11 +430,12 @@ func (mr *MockClientMockRecorder) UninstallPodFlows(arg0 interface{}) *gomock.Ca
 }
 
 // UninstallPolicyRuleFlows mocks base method
-func (m *MockClient) UninstallPolicyRuleFlows(arg0 uint32) error {
+func (m *MockClient) UninstallPolicyRuleFlows(arg0 uint32) (*[]string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UninstallPolicyRuleFlows", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(*[]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // UninstallPolicyRuleFlows indicates an expected call of UninstallPolicyRuleFlows

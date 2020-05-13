@@ -2,6 +2,7 @@ package openflow
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/contiv/libOpenflow/openflow13"
@@ -89,6 +90,10 @@ func (f *ofFlow) MatchString() string {
 	return repr
 }
 
+func (f *ofFlow) FlowPriority() string {
+	return strconv.Itoa(int(f.Match.Priority))
+}
+
 func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMessage, error) {
 	var operation int
 	switch entryOper {
@@ -124,6 +129,18 @@ func (f *ofFlow) CopyToBuilder(priority uint16) FlowBuilder {
 	}
 	if priority > 0 {
 		newFlow.Flow.Match.Priority = priority
+	}
+	return &ofFlowBuilder{newFlow}
+}
+
+func (f *ofFlow) DuplicateToBuilder() FlowBuilder {
+	newFlowMatchers := make([]string, len(f.matchers))
+	copy(newFlowMatchers, f.matchers)
+	newFlow := ofFlow{
+		table:    f.table,
+		Flow:     f.Flow,
+		matchers: newFlowMatchers,
+		protocol: f.protocol,
 	}
 	return &ofFlowBuilder{newFlow}
 }

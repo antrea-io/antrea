@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 const (
@@ -56,6 +58,12 @@ type rule struct {
 	To v1beta1.NetworkPolicyPeer
 	// Protocols and Ports of this rule.
 	Services []v1beta1.Service
+	// Action of this rule. nil for k8s network policy.
+	Action *secv1alpha1.RuleAction
+	// Priority of this rule within the network policy.
+	Priority int32
+	// Priority of the network policy to which this rule belong. nil for k8s network policy.
+	PolicyPriority *float64
 	// Targets of this rule.
 	AppliedToGroups []string
 	// The parent Policy ID. Used to identify rules belong to a specified
@@ -161,6 +169,12 @@ func (c *ruleCache) getNetworkPolicy(npName, npNamespace string) *v1beta1.Networ
 func (c *ruleCache) buildNetworkPolicyFromRules(uid string) *v1beta1.NetworkPolicy {
 	var np *v1beta1.NetworkPolicy
 	rules, _ := c.rules.ByIndex(policyIndex, uid)
+	// Sort the rules by priority
+	sort.Slice(rules, func(i, j int) bool {
+		r1 := rules[i].(*rule)
+		r2 := rules[j].(*rule)
+		return r1.Priority < r2.Priority
+	})
 	for _, ruleObj := range rules {
 		np = addRuleToNetworkPolicy(np, ruleObj.(*rule))
 	}
@@ -182,7 +196,9 @@ func addRuleToNetworkPolicy(np *v1beta1.NetworkPolicy, rule *rule) *v1beta1.Netw
 		Direction: rule.Direction,
 		From:      rule.From,
 		To:        rule.To,
-		Services:  rule.Services})
+		Services:  rule.Services,
+		Action:    rule.Action,
+		Priority:  rule.Priority})
 	return np
 
 }
@@ -511,12 +527,15 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
 		From:            r.From,
 		To:              r.To,
 		Services:        r.Services,
+		Action:          r.Action,
+		Priority:        r.Priority,
 		AppliedToGroups: policy.AppliedToGroups,
 		PolicyUID:       policy.UID,
 	}
 	rule.ID = hashRule(rule)
 	rule.PolicyNamespace = policy.Namespace
 	rule.PolicyName = policy.Name
+	rule.PolicyPriority = policy.Priority
 	return rule
 }
 

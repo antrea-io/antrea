@@ -17,11 +17,13 @@ package openflow
 import (
 	"fmt"
 	"net"
+	"strconv"
 
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -723,13 +725,17 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 	// but the default drop flow is installed.
 	if nClause > 1 {
 		// Install action flows.
-		var actionFlows = []binding.Flow{
-			c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext()),
+		var actionFlows []binding.Flow
+		if rule.Action != nil && *rule.Action == secv1alpha1.RuleActionDrop {
+			actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleID, ruleTable.GetID(), rule.Priority))
+		} else {
+			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority))
 		}
 		if err := c.ofEntryOperations.AddAll(actionFlows); err != nil {
 			return nil
 		}
 		// Add the action flows after the Openflow entries are installed on the OVS bridge successfully.
+		klog.V(4).Infof("Successfully added action flows!")
 		conj.actionFlows = actionFlows
 	}
 	c.conjMatchFlowLock.Lock()
@@ -742,8 +748,8 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
 		return err
 	}
-	// Add the policyRuleConjunction into policyCache.
-	c.policyCache.Store(ruleID, conj)
+	// Add the policyRuleConjunction into policyCache
+	c.policyCache.Add(conj)
 	return nil
 }
 
@@ -786,6 +792,15 @@ func (c *client) sendConjunctiveMatchFlows(changes []*conjMatchFlowContextChange
 	return c.bridge.AddFlowsInBundle(addFlows, modifyFlows, deleteFlows)
 }
 
+// ActionFlowPriorities returns the OF priorities of the actionFlows in the policyRuleConjunction
+func (c *policyRuleConjunction) ActionFlowPriorities() []string {
+	priorities := make([]string, 0, len(c.actionFlows))
+	for _, flow := range c.actionFlows {
+		priorities = append(priorities, flow.FlowPriority())
+	}
+	return priorities
+}
+
 func (c *policyRuleConjunction) newClause(clauseID uint8, nClause uint8, ruleTable, dropTable binding.Table) *clause {
 	return &clause{
 		ruleTable: ruleTable,
@@ -806,11 +821,19 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 	var isEgressRule = false
 	switch rule.Direction {
 	case v1beta1.DirectionOut:
-		ruleTable = clnt.pipeline[egressRuleTable]
+		if rule.IsAntreaNetworkPolicyRule() {
+			ruleTable = clnt.pipeline[cnpEgressRuleTable]
+		} else {
+			ruleTable = clnt.pipeline[egressRuleTable]
+		}
 		dropTable = clnt.pipeline[egressDefaultTable]
 		isEgressRule = true
 	default:
-		ruleTable = clnt.pipeline[ingressRuleTable]
+		if rule.IsAntreaNetworkPolicyRule() {
+			ruleTable = clnt.pipeline[cnpIngressRuleTable]
+		} else {
+			ruleTable = clnt.pipeline[ingressRuleTable]
+		}
 		dropTable = clnt.pipeline[ingressDefaultTable]
 	}
 
@@ -831,18 +854,19 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 
 	var defaultTable binding.Table
 	if rule.From != nil {
-		if isEgressRule {
-			defaultTable = dropTable
-		} else {
+		// deny rule does not need to be created for ClusterNetworkPolicies
+		if !isEgressRule || rule.IsAntreaNetworkPolicyRule() {
 			defaultTable = nil
+		} else {
+			defaultTable = dropTable
 		}
 		c.fromClause = c.newClause(fromID, nClause, ruleTable, defaultTable)
 	}
 	if rule.To != nil {
-		if !isEgressRule {
-			defaultTable = dropTable
-		} else {
+		if isEgressRule || rule.IsAntreaNetworkPolicyRule() {
 			defaultTable = nil
+		} else {
+			defaultTable = dropTable
 		}
 		c.toClause = c.newClause(toID, nClause, ruleTable, defaultTable)
 	}
@@ -915,7 +939,7 @@ func (c *policyRuleConjunction) getAllFlowKeys() []string {
 }
 
 func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction {
-	conj, found := c.policyCache.Load(ruleID)
+	conj, found, _ := c.policyCache.GetByKey(string(ruleID))
 	if !found {
 		return nil
 	}
@@ -924,19 +948,22 @@ func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction 
 
 // UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
 // UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
-func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
+func (c *client) UninstallPolicyRuleFlows(ruleID uint32) (*[]string, error) {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
 	conj := c.getPolicyRuleConjunction(ruleID)
 	if conj == nil {
 		klog.V(2).Infof("policyRuleConjunction with ID %d not found", ruleID)
-		return nil
+		return nil, nil
 	}
 
+	ofPrioritiesToUninstall := conj.ActionFlowPriorities()
+	klog.V(2).Infof("Old priority %v found", ofPrioritiesToUninstall)
+	var staleOFPriorities []string
 	// Delete action flows from the OVS bridge.
 	if err := c.ofEntryOperations.DeleteAll(conj.actionFlows); err != nil {
-		return err
+		return nil, err
 	}
 
 	c.conjMatchFlowLock.Lock()
@@ -945,12 +972,18 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
 	ctxChanges := conj.calculateChangesForRuleDeletion()
 	// Send the changed OpenFlow entries to the OVS bridge and update the conjMatchFlowContext.
 	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
-		return err
+		return nil, err
 	}
 
-	// Remove policyRuleConjunction from client's policyCache.
-	c.policyCache.Delete(ruleID)
-	return nil
+	c.policyCache.Delete(conj)
+	for _, p := range ofPrioritiesToUninstall {
+		conjsStalePriority, _ := c.policyCache.ByIndex(priorityIndex, p)
+		if len(conjsStalePriority) == 0 {
+			klog.V(2).Infof("ofPriority %v is now stale", p)
+			staleOFPriorities = append(staleOFPriorities, p)
+		}
+	}
+	return &staleOFPriorities, nil
 }
 
 func (c *client) replayPolicyFlows() {
@@ -962,10 +995,9 @@ func (c *client) replayPolicyFlows() {
 		}
 	}
 
-	c.policyCache.Range(func(key, value interface{}) bool {
-		addActionFlows(value.(*policyRuleConjunction))
-		return true
-	})
+	for _, conj := range c.policyCache.List() {
+		addActionFlows(conj.(*policyRuleConjunction))
+	}
 
 	addMatchFlows := func(ctx *conjMatchFlowContext) {
 		if ctx.dropFlow != nil {
@@ -1049,14 +1081,85 @@ func (c *client) GetNetworkPolicyFlowKeys(npName, npNamespace string) []string {
 	c.replayMutex.Lock()
 	defer c.replayMutex.Unlock()
 
-	c.policyCache.Range(func(key, value interface{}) bool {
-		conj := value.(*policyRuleConjunction)
+	for _, conjObj := range c.policyCache.List() {
+		conj := conjObj.(*policyRuleConjunction)
 		if conj.npName == npName && conj.npNamespace == npNamespace {
 			// There can be duplicated flows added due to conjunctive matches
 			// shared by multiple policy rules (clauses).
 			flowKeys = append(flowKeys, conj.getAllFlowKeys()...)
 		}
-		return true
-	})
+	}
 	return flowKeys
+}
+
+// actionFlowUpdate stores updates to the actionFlows in a policyRuleConjunction.
+type actionFlowUpdate struct {
+	actionFlowIndex int
+	newFlow         binding.Flow
+}
+
+// updateConjunctionActionFlows constructs a new policyRuleConjunction with actionFlows updated to be
+// stored in the policyCache.
+func updateConjunctionActionFlows(conj *policyRuleConjunction, actionUpdates []actionFlowUpdate) *policyRuleConjunction {
+	newActionFlows := make([]binding.Flow, len(conj.actionFlows))
+	copy(newActionFlows, conj.actionFlows)
+	newConj := &policyRuleConjunction{
+		id:            conj.id,
+		fromClause:    conj.fromClause,
+		toClause:      conj.toClause,
+		serviceClause: conj.serviceClause,
+		actionFlows:   newActionFlows,
+		npName:        conj.npName,
+		npNamespace:   conj.npNamespace,
+	}
+	for _, actionUpdate := range actionUpdates {
+		newConj.actionFlows[actionUpdate.actionFlowIndex] = actionUpdate.newFlow
+	}
+	return newConj
+}
+
+// ReassignActionPriority re-installs flows installed with the original OFPriority to
+// the new OFPriority, for each item in the updates map.
+func (c *client) ReassignActionPriority(updates map[uint16]uint16) error {
+	var addFlows, modifyFlows, deleteFlows []binding.Flow
+	actionFlowUpdates := map[uint32][]actionFlowUpdate{}
+
+	for original, newPriority := range updates {
+		originalPriority := strconv.Itoa(int(original))
+		conjs, _ := c.policyCache.ByIndex(priorityIndex, originalPriority)
+		klog.V(4).Infof("%d policyRuleConjunctions had actionFlow installed at priority %v previously",
+			len(conjs), originalPriority)
+		for _, conjObj := range conjs {
+			conj := conjObj.(*policyRuleConjunction)
+			for idx, actionFlow := range conj.actionFlows {
+				priorityStr := actionFlow.FlowPriority()
+				if priorityStr == originalPriority {
+					// The OF flow was created at the priority which need to be re-installed
+					// at the NewPriority now
+					updatedFlow := actionFlow.
+						DuplicateToBuilder().
+						MatchPriority(newPriority).
+						Done()
+					addFlows = append(addFlows, updatedFlow)
+					deleteFlows = append(deleteFlows, actionFlow)
+					// Store the actionFlow update to the policyRuleConjunction and update all
+					// policyRuleConjunctions if flow installation is successful.
+					actionFlowUpdates[conj.id] = append(actionFlowUpdates[conj.id],
+						actionFlowUpdate{idx, updatedFlow})
+				}
+			}
+		}
+	}
+	// add new flows with updated priorities and delete flows with original priority.
+	err := c.bridge.AddFlowsInBundle(addFlows, modifyFlows, deleteFlows)
+	if err != nil {
+		return err
+	}
+	for conjID, actionUpdates := range actionFlowUpdates {
+		originalConj, _, _ := c.policyCache.GetByKey(string(conjID))
+		conj := originalConj.(*policyRuleConjunction)
+		updatedConj := updateConjunctionActionFlows(conj, actionUpdates)
+		c.policyCache.Update(updatedConj)
+	}
+	return nil
 }

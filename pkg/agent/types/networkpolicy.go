@@ -16,6 +16,7 @@ package types
 
 import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 type AddressCategory uint8
@@ -45,4 +46,10 @@ type PolicyRule struct {
 	From      []Address
 	To        []Address
 	Service   []v1beta1.Service
+	Action    *secv1alpha1.RuleAction
+	Priority  *uint16
+}
+
+func (r *PolicyRule) IsAntreaNetworkPolicyRule() bool {
+	return r.Priority != nil
 }

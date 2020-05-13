@@ -369,6 +369,14 @@ func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v
 		}
 		// Namespace labels match namespaceSelector.
 		return true
+	} else if sel.PodSelector != nil {
+		// Selector only has a PodSelector and no sel.Namespace. Pods must be matched
+		// from all Namespaces.
+		if !sel.PodSelector.Matches(labels.Set(pod.Labels)) {
+			// pod labels do not match PodSelector.
+			return false
+		}
+		return true
 	}
 	return false
 }
@@ -412,9 +420,11 @@ func (n *NetworkPolicyController) filterAddressGroupsForPod(pod *v1.Pod) sets.St
 // match the Pod's labels.
 func (n *NetworkPolicyController) filterAppliedToGroupsForPod(pod *v1.Pod) sets.String {
 	matchingKeySet := sets.String{}
-	// Only AppliedToGroups that are in this namespace can possibly select this Pod as there are
-	// no cluster scoped AppliedToGroups right now.
+	// Get appliedToGroups from the namespace level
 	appliedToGroups, _ := n.appliedToGroupStore.GetByIndex(cache.NamespaceIndex, pod.Namespace)
+	// Get appliedToGroups from the cluster level
+	clusterATGroups, _ := n.appliedToGroupStore.GetByIndex(cache.NamespaceIndex, "")
+	appliedToGroups = append(appliedToGroups, clusterATGroups...)
 	podNS, _ := n.namespaceLister.Get(pod.Namespace)
 	for _, group := range appliedToGroups {
 		appGroup := group.(*antreatypes.AppliedToGroup)
@@ -1194,10 +1204,29 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		return nil
 	}
 	appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
-	// AppliedToGroup will not have NamespaceSelector.
-	podSelector := appliedToGroup.Selector.PodSelector
-	// Retrieve all Pods matching the podSelector.
-	pods, err = n.podLister.Pods(appliedToGroup.Selector.Namespace).List(podSelector)
+	groupSelector := appliedToGroup.Selector
+	if groupSelector.Namespace != "" {
+		// AppliedTo Group was created for k8s networkpolicy and must select pods in its own namespace.
+		pods, _ = n.podLister.Pods(groupSelector.Namespace).List(groupSelector.PodSelector)
+	} else if groupSelector.NamespaceSelector != nil && groupSelector.PodSelector != nil {
+		// Pods must be selected from Namespaces matching nsSelector.
+		namespaces, _ := n.namespaceLister.List(groupSelector.NamespaceSelector)
+		for _, ns := range namespaces {
+			nsPods, _ := n.podLister.Pods(ns.Name).List(groupSelector.PodSelector)
+			pods = append(pods, nsPods...)
+		}
+	} else if groupSelector.NamespaceSelector != nil {
+		// All the Pods from Namespaces matching the nsSelector must be selected.
+		namespaces, _ := n.namespaceLister.List(groupSelector.NamespaceSelector)
+		for _, ns := range namespaces {
+			nsPods, _ := n.podLister.Pods(ns.Name).List(labels.Everything())
+			pods = append(pods, nsPods...)
+		}
+	} else if groupSelector.PodSelector != nil && groupSelector.Namespace == "" {
+		// Lack of Namespace and NamespaceSelector indicates Pods must be selected
+		// from all Namespaces.
+		pods, _ = n.podLister.Pods("").List(groupSelector.PodSelector)
+	}
 	scheduledPodNum := 0
 	for _, pod := range pods {
 		if pod.Spec.NodeName == "" {

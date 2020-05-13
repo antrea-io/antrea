@@ -433,6 +433,34 @@ func (mr *MockFlowMockRecorder) Delete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockFlow)(nil).Delete))
 }
 
+// DuplicateToBuilder mocks base method
+func (m *MockFlow) DuplicateToBuilder() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DuplicateToBuilder")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// DuplicateToBuilder indicates an expected call of DuplicateToBuilder
+func (mr *MockFlowMockRecorder) DuplicateToBuilder() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DuplicateToBuilder", reflect.TypeOf((*MockFlow)(nil).DuplicateToBuilder))
+}
+
+// FlowPriority mocks base method
+func (m *MockFlow) FlowPriority() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FlowPriority")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// FlowPriority indicates an expected call of FlowPriority
+func (mr *MockFlowMockRecorder) FlowPriority() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FlowPriority", reflect.TypeOf((*MockFlow)(nil).FlowPriority))
+}
+
 // GetBundleMessage mocks base method
 func (m *MockFlow) GetBundleMessage(arg0 openflow.OFOperation) (ofctrl.OpenFlowModMessage, error) {
 	m.ctrl.T.Helper()
@@ -1358,6 +1386,20 @@ func (m *MockFlowBuilder) MatchInPort(arg0 uint32) openflow.FlowBuilder {
 func (mr *MockFlowBuilderMockRecorder) MatchInPort(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchInPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchInPort), arg0)
+}
+
+// MatchPriority mocks base method
+func (m *MockFlowBuilder) MatchPriority(arg0 uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchPriority", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchPriority indicates an expected call of MatchPriority
+func (mr *MockFlowBuilderMockRecorder) MatchPriority(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchPriority", reflect.TypeOf((*MockFlowBuilder)(nil).MatchPriority), arg0)
 }
 
 // MatchProtocol mocks base method

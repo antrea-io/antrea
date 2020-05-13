@@ -282,6 +282,11 @@ func (b *ofFlowBuilder) MatchConjID(value uint32) FlowBuilder {
 	return b
 }
 
+func (b *ofFlowBuilder) MatchPriority(priority uint16) FlowBuilder {
+	b.Match.Priority = priority
+	return b
+}
+
 // MatchProtocol adds match condition for matching protocol type.
 func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 	switch protocol {

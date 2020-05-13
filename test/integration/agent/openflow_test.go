@@ -366,11 +366,11 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		t.Errorf("Failed to install conjunctive match flow")
 	}
 	require.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow3), "Failed to install service flow")
-	err = c.UninstallPolicyRuleFlows(ruleID2)
+	_, err = c.UninstallPolicyRuleFlows(ruleID2)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList2, true)
 
-	err = c.UninstallPolicyRuleFlows(ruleID)
+	_, err = c.UninstallPolicyRuleFlows(ruleID)
 	require.Nil(t, err, "Failed to DeletePolicyRuleService")
 	checkConjunctionFlows(t, ingressRuleTable, ingressDefaultTable, contrackCommitTable, priorityNormal, ruleID, rule, assert.False)
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList, false)
@@ -576,7 +576,7 @@ func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gw
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,dl_dst=%s", podMAC.String()),
-					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90", podOFPort)},
+					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:85", podOFPort)},
 			},
 		},
 	}
@@ -618,7 +618,7 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,dl_dst=%s", gwMAC.String()),
-					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90", gwOFPort)},
+					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:85", gwOFPort)},
 			},
 		},
 		{
@@ -708,6 +708,14 @@ func prepareDefaultFlows() []expectTableFlows {
 			},
 		},
 		{
+			uint8(40),
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:45"}},
+		},
+		{
+			uint8(45),
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:50"}},
+		},
+		{
 			uint8(50),
 			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:60"}},
 		},
@@ -721,6 +729,10 @@ func prepareDefaultFlows() []expectTableFlows {
 		},
 		{
 			uint8(80),
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:85"}},
+		},
+		{
+			uint8(85),
 			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:90"}},
 		},
 		{

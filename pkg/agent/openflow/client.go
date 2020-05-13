@@ -124,7 +124,7 @@ type Client interface {
 
 	// UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
 	// UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
-	UninstallPolicyRuleFlows(ruleID uint32) error
+	UninstallPolicyRuleFlows(ruleID uint32) (*[]string, error)
 
 	// AddPolicyRuleAddress adds one or multiple addresses to the specified NetworkPolicy rule. If addrType is true, the
 	// addresses are added to PolicyRule.From, else to PolicyRule.To.
@@ -168,6 +168,10 @@ type Client interface {
 	// entries can be added due to conjunctive match flows shared by multiple
 	// rules.
 	GetNetworkPolicyFlowKeys(npName, npNamespace string) []string
+
+	// ReassignActionPriority takes a list of PriorityUpdates and update the actionFlows that
+	// match the old priority to new priority desired, for each PriorityUpdate.
+	ReassignActionPriority(updates map[uint16]uint16) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
