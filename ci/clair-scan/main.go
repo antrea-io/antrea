@@ -69,7 +69,7 @@ func main() {
 	stats := parseAndAnalyze(*fileReport)
 	statsCmp := parseAndAnalyze(*fileReportCmp)
 
-	err := notifyIfNeeded(stats, *maxScore, statsCmp)
+	err := notifyIfNeeded(stats, *maxScore, statsCmp, *fileReport, *fileReportCmp)
 	if err != nil {
 		klog.Fatalf("Failed to send email: %v", err)
 	}

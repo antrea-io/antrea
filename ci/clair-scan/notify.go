@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ses"
+	"gopkg.in/gomail.v2"
 	"k8s.io/klog"
 )
 
@@ -29,15 +31,16 @@ const (
 	// This address must be verified with Amazon SES.
 	Sender = "antreabot@gmail.com"
 
-	// Account is still in the sandbox, this address must be verified.
-	// TODO: replace with Antrea mailing list
-	Recipient = "antonin.bas@gmail.com"
-
 	// The character encoding for the email.
 	CharSet = "UTF-8"
 
 	AWSRegion = "us-west-2"
 )
+
+var Recipients = []string{
+	"projectantrea-dev@googlegroups.com",
+	"projectantrea-maintainers@googlegroups.com",
+}
 
 func isNeeded(stats *reportStats, maxScore int, newStats *reportStats) bool {
 	if stats.score > maxScore {
@@ -52,13 +55,19 @@ func isNeeded(stats *reportStats, maxScore int, newStats *reportStats) bool {
 	return false
 }
 
-func notifyIfNeeded(stats *reportStats, maxScore int, newStats *reportStats) error {
+func notifyIfNeeded(
+	stats *reportStats,
+	maxScore int,
+	newStats *reportStats,
+	reportPath string,
+	newReportPath string,
+) error {
 	if !isNeeded(stats, maxScore, newStats) {
 		klog.Infof("No need to send an email notification")
 		return nil
 	}
 
-	klog.Infof("Sending email to address: %s", Recipient)
+	klog.Infof("Sending email to addresses: %v", Recipients)
 
 	subject := fmt.Sprintf("Antrea Docker Image Security Update - %s", time.Now().Format("Mon-Jan-2"))
 
@@ -90,33 +99,27 @@ func notifyIfNeeded(stats *reportStats, maxScore int, newStats *reportStats) err
 	// Create an SES session.
 	svc := ses.New(sess)
 
-	// TODO: add JSON reports as attachments. This is a more complicated API however.
-
 	// Assemble the email.
-	input := &ses.SendEmailInput{
-		Destination: &ses.Destination{
-			CcAddresses: []*string{},
-			ToAddresses: []*string{
-				aws.String(Recipient),
-			},
-		},
-		Message: &ses.Message{
-			Body: &ses.Body{
-				Text: &ses.Content{
-					Charset: aws.String(CharSet),
-					Data:    aws.String(textBody),
-				},
-			},
-			Subject: &ses.Content{
-				Charset: aws.String(CharSet),
-				Data:    aws.String(subject),
-			},
-		},
-		Source: aws.String(Sender),
+	msg := gomail.NewMessage(gomail.SetCharset(CharSet))
+	msg.SetHeader("From", Sender)
+	msg.SetHeader("To", Recipients...)
+	msg.SetHeader("Subject", subject)
+	msg.SetBody("text/plain", textBody)
+	// Attach JSON reports to email.
+	msg.Attach(reportPath)
+	if newReportPath != "" {
+		msg.Attach(newReportPath)
 	}
 
+	var emailRaw bytes.Buffer
+	msg.WriteTo(&emailRaw)
+
+	message := ses.RawMessage{Data: emailRaw.Bytes()}
+	// Other fields are not required.
+	input := &ses.SendRawEmailInput{RawMessage: &message}
+
 	// Attempt to send the email.
-	result, err := svc.SendEmail(input)
+	result, err := svc.SendRawEmail(input)
 
 	// Convert error
 	if err != nil {
@@ -127,7 +130,7 @@ func notifyIfNeeded(stats *reportStats, maxScore int, newStats *reportStats) err
 		}
 	}
 
-	klog.Infof("Email sent to address: %s", Recipient)
+	klog.Infof("Email sent to addresses: %v", Recipients)
 	klog.Infof("Result: %v", result)
 
 	return nil
