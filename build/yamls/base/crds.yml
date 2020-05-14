@@ -116,6 +116,7 @@ spec:
                          properties:
                            cidr:
                              type: string
+                             format: cidr
            egress:
              type: array
              items:
@@ -148,3 +149,4 @@ spec:
                          properties:
                            cidr:
                              type: string
+                             format: cidr
