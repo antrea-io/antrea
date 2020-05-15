@@ -34,10 +34,11 @@ type ControllerQuerier interface {
 
 type controllerQuerier struct {
 	networkPolicyInfoQuerier querier.ControllerNetworkPolicyInfoQuerier
+	apiPort                  int
 }
 
-func NewControllerQuerier(networkPolicyInfoQuerier querier.ControllerNetworkPolicyInfoQuerier) *controllerQuerier {
-	return &controllerQuerier{networkPolicyInfoQuerier: networkPolicyInfoQuerier}
+func NewControllerQuerier(networkPolicyInfoQuerier querier.ControllerNetworkPolicyInfoQuerier, apiPort int) *controllerQuerier {
+	return &controllerQuerier{networkPolicyInfoQuerier: networkPolicyInfoQuerier, apiPort: apiPort}
 }
 
 // GetNodeSubnet gets current network policy info querier.
@@ -81,5 +82,6 @@ func (cq controllerQuerier) GetControllerInfo(controllInfo *v1beta1.AntreaContro
 		controllInfo.PodRef = querier.GetSelfPod()
 		controllInfo.NodeRef = querier.GetSelfNode(false, "")
 		controllInfo.ServiceRef = cq.getService()
+		controllInfo.APIPort = cq.apiPort
 	}
 }
