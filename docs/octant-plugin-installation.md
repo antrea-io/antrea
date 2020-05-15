@@ -94,7 +94,7 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
 3. Build antrea-octant-plugin.
 
     ```
-    make bin
+    make antrea-octant-plugin
     ```
 
 4. Move antrea-octant-plugin to OCTANT_PLUGIN_PATH.
