@@ -34,6 +34,7 @@ type AntreaAgentInfo struct {
 	NetworkPolicyControllerInfo NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Agent NetworkPolicy information
 	LocalPodNum                 int32                       `json:"localPodNum,omitempty"`                 // The number of Pods which the agent is in charge of
 	AgentConditions             []AgentCondition            `json:"agentConditions,omitempty"`             // Agent condition contains types like AgentHealthy
+	APIPort                     int                         `json:"apiPort,omitempty"`                     // The port of antrea agent API Server
 }
 
 type OVSInfo struct {
@@ -81,6 +82,7 @@ type AntreaControllerInfo struct {
 	NetworkPolicyControllerInfo NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Controller NetworkPolicy information
 	ConnectedAgentNum           int32                       `json:"connectedAgentNum,omitempty"`           // Number of agents which are connected to this controller
 	ControllerConditions        []ControllerCondition       `json:"controllerConditions,omitempty"`        // Controller condition contains types like ControllerHealthy
+	APIPort                     int                         `json:"apiPort,omitempty"`                     // The port of antrea controller API Server
 }
 
 type NetworkPolicyControllerInfo struct {
