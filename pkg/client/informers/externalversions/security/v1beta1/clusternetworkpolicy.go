@@ -19,10 +19,10 @@ package v1beta1
 import (
 	time "time"
 
-	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
+	securityv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1beta1"
 	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/client/listers/security/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -58,16 +58,16 @@ func NewFilteredClusterNetworkPolicyInformer(client versioned.Interface, resyncP
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1beta1().ClusterNetworkPolicies().List(options)
+				return client.SecurityV1beta1().ClusterNetworkPolicies().List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1beta1().ClusterNetworkPolicies().Watch(options)
+				return client.SecurityV1beta1().ClusterNetworkPolicies().Watch(options)
 			},
 		},
-		&crdv1beta1.ClusterNetworkPolicy{},
+		&securityv1beta1.ClusterNetworkPolicy{},
 		resyncPeriod,
 		indexers,
 	)
@@ -78,7 +78,7 @@ func (f *clusterNetworkPolicyInformer) defaultInformer(client versioned.Interfac
 }
 
 func (f *clusterNetworkPolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&crdv1beta1.ClusterNetworkPolicy{}, f.defaultInformer)
+	return f.factory.InformerFor(&securityv1beta1.ClusterNetworkPolicy{}, f.defaultInformer)
 }
 
 func (f *clusterNetworkPolicyInformer) Lister() v1beta1.ClusterNetworkPolicyLister {

@@ -17,7 +17,7 @@
 package fake
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -28,12 +28,12 @@ import (
 
 // FakeClusterNetworkPolicies implements ClusterNetworkPolicyInterface
 type FakeClusterNetworkPolicies struct {
-	Fake *FakeCrdV1beta1
+	Fake *FakeSecurityV1beta1
 }
 
-var clusternetworkpoliciesResource = schema.GroupVersionResource{Group: "crd.antrea.tanzu.vmware.com", Version: "v1beta1", Resource: "clusternetworkpolicies"}
+var clusternetworkpoliciesResource = schema.GroupVersionResource{Group: "security.antrea.tanzu.vmware.com", Version: "v1beta1", Resource: "clusternetworkpolicies"}
 
-var clusternetworkpoliciesKind = schema.GroupVersionKind{Group: "crd.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "ClusterNetworkPolicy"}
+var clusternetworkpoliciesKind = schema.GroupVersionKind{Group: "security.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "ClusterNetworkPolicy"}
 
 // Get takes name of the clusterNetworkPolicy, and returns the corresponding clusterNetworkPolicy object, and an error if there is any.
 func (c *FakeClusterNetworkPolicies) Get(name string, options v1.GetOptions) (result *v1beta1.ClusterNetworkPolicy, err error) {

@@ -19,7 +19,7 @@ package v1beta1
 import (
 	"time"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1beta1"
 	scheme "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -52,7 +52,7 @@ type clusterNetworkPolicies struct {
 }
 
 // newClusterNetworkPolicies returns a ClusterNetworkPolicies
-func newClusterNetworkPolicies(c *CrdV1beta1Client) *clusterNetworkPolicies {
+func newClusterNetworkPolicies(c *SecurityV1beta1Client) *clusterNetworkPolicies {
 	return &clusterNetworkPolicies{
 		client: c.RESTClient(),
 	}

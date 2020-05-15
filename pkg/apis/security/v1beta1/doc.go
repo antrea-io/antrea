@@ -14,6 +14,6 @@
 
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package
-// +groupName=crd.antrea.tanzu.vmware.com
+// +groupName=security.antrea.tanzu.vmware.com
 
-package v1beta1 // import "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
+package v1beta1 // import "github.com/vmware-tanzu/antrea/pkg/apis/security/v1beta1"

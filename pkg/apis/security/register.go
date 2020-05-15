@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package crd
+package security
 
 // GroupName is the group name used in this package
 const (
-	GroupName = "crd.antrea.tanzu.vmware.com"
+	GroupName = "security.antrea.tanzu.vmware.com"
 )

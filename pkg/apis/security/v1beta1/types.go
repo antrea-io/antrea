@@ -42,17 +42,21 @@ type ClusterNetworkPolicySpec struct {
 	// Select workloads on which the rules will be applied to.
 	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
 	// Set of ingress rules evaluated based on the order in which they are set.
+	// Currently Ingress rule supports setting the `From` field but not the `To`
+	// field within a Rule.
 	// +optional
-	Ingress []IngressRule `json:"ingress"`
+	Ingress []Rule `json:"ingress"`
 	// Set of egress rules evaluated based on the order in which they are set.
+	// Currently Egress rule supports setting the `To` field but not the `From`
+	// field within a Rule.
 	// +optional
-	Egress []EgressRule `json:"egress"`
+	Egress []Rule `json:"egress"`
 }
 
-// IngressRule describes the traffic allowed to the workloads selected by
+// Rule describes the traffic allowed to/from the workloads selected by
 // Spec.AppliedTo. Based on the action specified in the rule, traffic is either
 // allowed or denied which exactly match the specified ports and protocol.
-type IngressRule struct {
+type Rule struct {
 	// Action specifies the action to be applied on the rule. Defaults to
 	// ALLOW action.
 	// +optional
@@ -62,24 +66,9 @@ type IngressRule struct {
 	// +optional
 	Ports []NetworkPolicyPort `json:"ports"`
 	// Rule is matched if traffic originates from workloads selected by
-	// this field. If this field is empty or missing, this rule matches all
-	// sources.
+	// this field. If this field is empty, this rule matches all sources.
 	// +optional
 	From []NetworkPolicyPeer `json:"from"`
-}
-
-// EgressRule describes the traffic allowed from the workloads selected by
-// Spec.AppliedTo. Based on the action specified in the rule, traffic is either
-// allowed or denied which exactly match the specified ports and protocol.
-type EgressRule struct {
-	// Action specifies the action to be applied on the rule. Defaults to
-	// ALLOW action.
-	// +optional
-	Action *RuleAction `json:"action"`
-	// Set of port and protocol allowed/denied by the rule. If this field is unset
-	// or empty, this rule matches all ports.
-	// +optional
-	Ports []NetworkPolicyPort `json:"ports"`
 	// Rule is matched if traffic is intended for workloads selected by
 	// this field. If this field is empty or missing, this rule matches all
 	// destinations.

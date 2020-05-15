@@ -47,8 +47,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlisters "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1beta1"
+	secinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security/v1beta1"
+	seclisters "github.com/vmware-tanzu/antrea/pkg/client/listers/security/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -119,10 +119,10 @@ type NetworkPolicyController struct {
 	// networkPolicyListerSynced is a function which returns true if the Network Policy shared informer has been synced at least once.
 	networkPolicyListerSynced cache.InformerSynced
 
-	cnpInformer crdinformers.ClusterNetworkPolicyInformer
+	cnpInformer secinformers.ClusterNetworkPolicyInformer
 	// cnpLister is able to list/get ClusterNetworkPolicies and is populated by the shared informer passed to
 	// NewClusterNetworkPolicyController.
-	cnpLister crdlisters.ClusterNetworkPolicyLister
+	cnpLister seclisters.ClusterNetworkPolicyLister
 	// cnpListerSynced is a function which returns true if the ClusterNetworkPolicies shared informer has been synced at least once.
 	cnpListerSynced cache.InformerSynced
 
@@ -163,7 +163,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	podInformer coreinformers.PodInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
-	cnpInformer crdinformers.ClusterNetworkPolicyInformer,
+	cnpInformer secinformers.ClusterNetworkPolicyInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface) *NetworkPolicyController {

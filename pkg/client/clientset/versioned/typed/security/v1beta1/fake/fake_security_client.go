@@ -17,22 +17,22 @@
 package fake
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1beta1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
 
-type FakeCrdV1beta1 struct {
+type FakeSecurityV1beta1 struct {
 	*testing.Fake
 }
 
-func (c *FakeCrdV1beta1) ClusterNetworkPolicies() v1beta1.ClusterNetworkPolicyInterface {
+func (c *FakeSecurityV1beta1) ClusterNetworkPolicies() v1beta1.ClusterNetworkPolicyInterface {
 	return &FakeClusterNetworkPolicies{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeCrdV1beta1) RESTClient() rest.Interface {
+func (c *FakeSecurityV1beta1) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }

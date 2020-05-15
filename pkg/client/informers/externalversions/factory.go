@@ -22,8 +22,8 @@ import (
 	time "time"
 
 	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	crd "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd"
 	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/internalinterfaces"
+	security "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -170,9 +170,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Crd() crd.Interface
+	Security() security.Interface
 }
 
-func (f *sharedInformerFactory) Crd() crd.Interface {
-	return crd.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Security() security.Interface {
+	return security.New(f, f.namespace, f.tweakListOptions)
 }

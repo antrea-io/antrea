@@ -29,14 +29,6 @@ rules:
       - watch
       - list
   - apiGroups:
-      - crd.antrea.tanzu.vmware.com
-    resources:
-      - clusternetworkpolicies
-    verbs:
-      - get
-      - watch
-      - list
-  - apiGroups:
       - clusterinformation.antrea.tanzu.vmware.com
     resources:
       - antreacontrollerinfos

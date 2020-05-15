@@ -61,7 +61,7 @@ func run(o *Options) error {
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	cnpInformer := crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies()
+	cnpInformer := crdInformerFactory.Security().V1beta1().ClusterNetworkPolicies()
 
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()

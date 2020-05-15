@@ -13,6 +13,6 @@
 // limitations under the License.
 
 // +k8s:deepcopy-gen=package
-// +groupName=crd.antrea.tanzu.vmware.com
+// +groupName=security.antrea.tanzu.vmware.com
 
-package crd
+package security
