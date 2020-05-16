@@ -27,6 +27,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
         --cloud               Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
+        --np                  Generate a manifest with Namespaced Antrea NetworkPolicy CRDs enabled
         --keep                Debug flag which will preserve the generated kustomization.yml
         --help, -h            Print this message and exit
 
@@ -48,6 +49,7 @@ function print_help {
 MODE="dev"
 KIND=false
 IPSEC=false
+NP=false
 KEEP=false
 ENCAP_MODE=""
 CLOUD=""
@@ -75,6 +77,10 @@ case $key in
     ;;
     --ipsec)
     IPSEC=true
+    shift
+    ;;
+    --np)
+    NP=true
     shift
     ;;
     --keep)
@@ -170,6 +176,19 @@ if $IPSEC; then
     # add an environment variable to the antrea-agent container for passing the PSK to Agent.
     $KUSTOMIZE edit add patch pskEnv.yml
     BASE=../ipsec
+    cd ..
+fi
+
+if $NP; then
+    mkdir np && cd np
+    cp ../../patches/np/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    # create NetworkPolicy related CRDs.
+    $KUSTOMIZE edit add resource npCrds.yml
+    # add RBAC to antrea-controller for NP CRD access.
+    $KUSTOMIZE edit add patch npRbac.yml
+    BASE=../np
     cd ..
 fi
 
