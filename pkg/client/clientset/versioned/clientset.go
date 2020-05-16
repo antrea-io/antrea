@@ -20,8 +20,13 @@ import (
 	"fmt"
 
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
+	endpointv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/endpoint/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
+<<<<<<< HEAD
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
+=======
+	securityv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1beta1"
+>>>>>>> Add API types for Namespaced Antrea NetworkPolicy
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -30,8 +35,13 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface
+	EndpointV1beta1() endpointv1beta1.EndpointV1beta1Interface
 	NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface
+<<<<<<< HEAD
 	SystemV1beta1() systemv1beta1.SystemV1beta1Interface
+=======
+	SecurityV1beta1() securityv1beta1.SecurityV1beta1Interface
+>>>>>>> Add API types for Namespaced Antrea NetworkPolicy
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -39,8 +49,13 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	clusterinformationV1beta1 *clusterinformationv1beta1.ClusterinformationV1beta1Client
+	endpointV1beta1           *endpointv1beta1.EndpointV1beta1Client
 	networkingV1beta1         *networkingv1beta1.NetworkingV1beta1Client
+<<<<<<< HEAD
 	systemV1beta1             *systemv1beta1.SystemV1beta1Client
+=======
+	securityV1beta1           *securityv1beta1.SecurityV1beta1Client
+>>>>>>> Add API types for Namespaced Antrea NetworkPolicy
 }
 
 // ClusterinformationV1beta1 retrieves the ClusterinformationV1beta1Client
@@ -48,14 +63,25 @@ func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.Cluste
 	return c.clusterinformationV1beta1
 }
 
+// EndpointV1beta1 retrieves the EndpointV1beta1Client
+func (c *Clientset) EndpointV1beta1() endpointv1beta1.EndpointV1beta1Interface {
+	return c.endpointV1beta1
+}
+
 // NetworkingV1beta1 retrieves the NetworkingV1beta1Client
 func (c *Clientset) NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface {
 	return c.networkingV1beta1
 }
 
+<<<<<<< HEAD
 // SystemV1beta1 retrieves the SystemV1beta1Client
 func (c *Clientset) SystemV1beta1() systemv1beta1.SystemV1beta1Interface {
 	return c.systemV1beta1
+=======
+// SecurityV1beta1 retrieves the SecurityV1beta1Client
+func (c *Clientset) SecurityV1beta1() securityv1beta1.SecurityV1beta1Interface {
+	return c.securityV1beta1
+>>>>>>> Add API types for Namespaced Antrea NetworkPolicy
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -83,11 +109,19 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.endpointV1beta1, err = endpointv1beta1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	cs.networkingV1beta1, err = networkingv1beta1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
+<<<<<<< HEAD
 	cs.systemV1beta1, err = systemv1beta1.NewForConfig(&configShallowCopy)
+=======
+	cs.securityV1beta1, err = securityv1beta1.NewForConfig(&configShallowCopy)
+>>>>>>> Add API types for Namespaced Antrea NetworkPolicy
 	if err != nil {
 		return nil, err
 	}
@@ -104,8 +138,13 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.NewForConfigOrDie(c)
+	cs.endpointV1beta1 = endpointv1beta1.NewForConfigOrDie(c)
 	cs.networkingV1beta1 = networkingv1beta1.NewForConfigOrDie(c)
+<<<<<<< HEAD
 	cs.systemV1beta1 = systemv1beta1.NewForConfigOrDie(c)
+=======
+	cs.securityV1beta1 = securityv1beta1.NewForConfigOrDie(c)
+>>>>>>> Add API types for Namespaced Antrea NetworkPolicy
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -115,8 +154,13 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.New(c)
+	cs.endpointV1beta1 = endpointv1beta1.New(c)
 	cs.networkingV1beta1 = networkingv1beta1.New(c)
+<<<<<<< HEAD
 	cs.systemV1beta1 = systemv1beta1.New(c)
+=======
+	cs.securityV1beta1 = securityv1beta1.New(c)
+>>>>>>> Add API types for Namespaced Antrea NetworkPolicy
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
