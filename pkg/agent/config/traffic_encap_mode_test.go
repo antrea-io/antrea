@@ -23,8 +23,8 @@ func TestGetTrafficEncapModeFromStr(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualBool, actualMode := GetTrafficEncapModeFromStr(tt.mode)
-			assert.Equal(t, actualBool, tt.expBool, "GetTrafficEncapModeFromStr did not return correct boolean")
-			assert.Equal(t, actualMode, tt.expMode, "GetTrafficEncapModeFromStr did not return correct traffic type")
+			assert.Equal(t, tt.expBool, actualBool, "GetTrafficEncapModeFromStr did not return correct boolean")
+			assert.Equal(t, tt.expMode, actualMode, "GetTrafficEncapModeFromStr did not return correct traffic type")
 		})
 	}
 }
@@ -32,7 +32,7 @@ func TestGetTrafficEncapModeFromStr(t *testing.T) {
 func TestGetTrafficEncapModes(t *testing.T) {
 	modes := GetTrafficEncapModes()
 	expModes := []TrafficEncapModeType{0, 1, 2, 3}
-	assert.Equal(t, modes, expModes, "GetTrafficEncapModes received unexpected encap modes")
+	assert.Equal(t, expModes, modes, "GetTrafficEncapModes received unexpected encap modes")
 }
 
 func TestTrafficEncapModeTypeString(t *testing.T) {
@@ -50,7 +50,7 @@ func TestTrafficEncapModeTypeString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualMode := tt.modeType.String()
-			assert.Equal(t, actualMode, tt.expMode, "String did not return correct traffic type in string format")
+			assert.Equal(t, tt.expMode, actualMode, "String did not return correct traffic type in string format")
 		})
 	}
 }
