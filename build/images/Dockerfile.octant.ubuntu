@@ -4,7 +4,7 @@ COPY . /antrea
 
 WORKDIR /antrea
 
-RUN make bin
+RUN make antrea-octant-plugin
 
 
 FROM ubuntu:18.04
