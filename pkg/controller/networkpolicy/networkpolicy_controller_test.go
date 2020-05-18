@@ -369,9 +369,9 @@ func TestAddNetworkPolicy(t *testing.T) {
 	for _, tt := range tests {
 		npc.addNetworkPolicy(tt.inputPolicy)
 	}
-	assert.Equal(t, npc.GetNetworkPolicyNum(), 6, "expected networkPolicy number is 6")
-	assert.Equal(t, npc.GetAddressGroupNum(), 4, "expected addressGroup number is 4")
-	assert.Equal(t, npc.GetAppliedToGroupNum(), 2, "appliedToGroup number is 2")
+	assert.Equal(t, 6, npc.GetNetworkPolicyNum(), "expected networkPolicy number is 6")
+	assert.Equal(t, 4, npc.GetAddressGroupNum(), "expected addressGroup number is 4")
+	assert.Equal(t, 2, npc.GetAppliedToGroupNum(), "appliedToGroup number is 2")
 }
 
 func TestDeleteNetworkPolicy(t *testing.T) {
