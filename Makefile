@@ -25,6 +25,32 @@ bin:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
 
+.PHONY: antrea-agent
+antrea-agent:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-agent
+
+.PHONY: antrea-controller
+antrea-controller:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-controller
+
+
+.PHONY: antrea-cni
+antrea-cni:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-cni
+
+.PHONY: antctl-ubuntu
+antctl-ubuntu:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
+
+.PHONY: antrea-octant-plugin
+antrea-octant-plugin:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-octant-plugin
+
 .PHONY: test-unit test-integration
 ifeq ($(UNAME_S),Linux)
 test-unit: .linux-test-unit
