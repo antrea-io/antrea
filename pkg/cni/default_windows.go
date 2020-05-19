@@ -14,5 +14,5 @@
 
 package cni
 
-// AntreaCNISocketAddr is the UNIX socket used by the CNI Protobuf / gRPC service.
-const AntreaCNISocketAddr = "c:/antrea/cni.sock"
+// On windows platform, AntreaCNISocketAddr is a named pipe used by the CNI Protobuf / gRPC service.
+const AntreaCNISocketAddr = `\\.\pipe\cnisock`

@@ -23,6 +23,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/Microsoft/go-winio"
 	"github.com/Microsoft/hcsshim"
 	ps "github.com/benmoss/go-powershell"
 	"github.com/benmoss/go-powershell/backend"
@@ -35,6 +36,7 @@ const (
 	HNSNetworkType      = "Transparent"
 	LocalHNSNetwork     = "antrea-hnsnetwork"
 	OVSExtensionID      = "583CC151-73EC-4A6A-8B47-578297AD7623"
+	namedPipePrefix     = `\\.\pipe\`
 )
 
 func GetNSPath(containerNetNS string) (string, error) {
@@ -370,4 +372,24 @@ func SetAdapterDNSServers(adapterName, dnsServers string) error {
 		return err
 	}
 	return nil
+}
+
+// ListenLocalSocket creates a listener on a Unix domain socket or a Windows named pipe.
+// - If the specified address starts with "\\.\pipe\",  create a listener on the a Windows named pipe path.
+// - Else create a listener on a local Unix domain socket.
+func ListenLocalSocket(address string) (net.Listener, error) {
+	if strings.HasPrefix(address, namedPipePrefix) {
+		return winio.ListenPipe(address, nil)
+	}
+	return listenUnix(address)
+}
+
+// DialLocalSocket connects to a Unix domain socket or a Windows named pipe.
+// - If the specified address starts with "\\.\pipe\",  connect to a Windows named pipe path.
+// - Else connect to a Unix domain socket.
+func DialLocalSocket(address string) (net.Conn, error) {
+	if strings.HasPrefix(address, namedPipePrefix) {
+		return winio.DialPipe(address, nil)
+	}
+	return dialUnix(address)
 }
