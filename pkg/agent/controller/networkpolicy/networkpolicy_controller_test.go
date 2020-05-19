@@ -157,6 +157,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 	// policy1 comes first, no rule will be synced due to missing addressGroup1 and appliedToGroup1.
 	policy1 := newNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services)
 	networkPolicyWatcher.Add(policy1)
+	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	select {
 	case ruleID := <-reconciler.updated:
 		t.Fatalf("Expected no update, got %v", ruleID)
@@ -169,6 +170,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 
 	// addressGroup1 comes, no rule will be synced due to missing appliedToGroup1 data.
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
+	addressGroupWatcher.Action(watch.Bookmark, nil)
 	select {
 	case ruleID := <-reconciler.updated:
 		t.Fatalf("Expected no update, got %v", ruleID)
@@ -180,6 +182,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 
 	// appliedToGroup1 comes, policy1 will be synced.
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")}))
+	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	select {
 	case ruleID := <-reconciler.updated:
 		actualRule, _ := reconciler.getLastRealized(ruleID)
@@ -230,11 +233,14 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 
 	// addressGroup1 comes, no rule will be synced.
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
+	addressGroupWatcher.Action(watch.Bookmark, nil)
 	// appliedToGroup1 comes, no rule will be synced.
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")}))
+	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	// policy1 comes first, no rule will be synced due to missing addressGroup2 and appliedToGroup2.
 	policy1 := newNetworkPolicy("policy1", []string{"addressGroup1", "addressGroup2"}, []string{}, []string{"appliedToGroup1", "appliedToGroup2"}, services)
 	networkPolicyWatcher.Add(policy1)
+	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	select {
 	case ruleID := <-reconciler.updated:
 		t.Fatalf("Expected no update, got %v", ruleID)
@@ -301,8 +307,11 @@ func TestDeleteRule(t *testing.T) {
 	go controller.Run(stopCh)
 
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
+	addressGroupWatcher.Action(watch.Bookmark, nil)
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")}))
+	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	networkPolicyWatcher.Add(newNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services))
+	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	select {
 	case ruleID := <-reconciler.updated:
 		_, exists := reconciler.getLastRealized(ruleID)
@@ -359,9 +368,12 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	// Test NetworkPolicyInfoQuerier functions when the NetworkPolicy has multiple rules.
 	policy1 := getNetworkPolicyWithMultipleRules("policy1", []string{"addressGroup1"}, []string{"addressGroup2"}, []string{"appliedToGroup1"}, services)
 	networkPolicyWatcher.Add(policy1)
+	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta1.GroupMemberPod{*newAddressGroupMember("3.3.3.3"), *newAddressGroupMember("4.4.4.4")}))
+	addressGroupWatcher.Action(watch.Bookmark, nil)
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")}))
+	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	for i := 0; i < 2; i++ {
 		select {
 		case ruleID := <-reconciler.updated:
