@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 )
 
@@ -85,7 +86,7 @@ func rpcClient(f func(client cnipb.CniClient) error) error {
 		AntreaCNISocketAddr,
 		grpc.WithInsecure(),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (conn net.Conn, e error) {
-			return net.Dial("unix", addr)
+			return util.DialLocalSocket(addr)
 		}),
 	)
 	if err != nil {
