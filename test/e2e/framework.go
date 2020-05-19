@@ -46,6 +46,7 @@ const (
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
 	antreaNamespace      string = "kube-system"
 	antreaDaemonSet      string = "antrea-agent"
+	antreaDeployment     string = "antrea-controller"
 	antreaGWName         string = "gw0"
 	testNamespace        string = "antrea-test"
 	busyboxContainerName string = "busybox"
@@ -408,7 +409,7 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-	if err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Delete("antrea-agent", deleteOptions); err != nil {
+	if err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Delete(antreaDaemonSet, deleteOptions); err != nil {
 		if errors.IsNotFound(err) {
 			// no Antrea DaemonSet running, we return right away
 			return nil

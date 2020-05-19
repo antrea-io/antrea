@@ -59,6 +59,7 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				})
 			},
 			expected: []watch.Event{
+				{watch.Bookmark, nil},
 				{watch.Added, &networking.AddressGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 					Pods:       []networking.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
@@ -100,6 +101,7 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				})
 			},
 			expected: []watch.Event{
+				{watch.Bookmark, nil},
 				{watch.Added, &networking.AddressGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 					Pods:       []networking.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},

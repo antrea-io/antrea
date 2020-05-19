@@ -22,10 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-// Patched is an EventType in addition to EventTypes defined in k8s.io/apimachinery/pkg/watch/watch.go.
-// It indicates watch.Event contains an incremental update, not the object itself.
-const Patched watch.EventType = "PATCHED"
-
 // Selectors represent a watcher's conditions to select objects.
 type Selectors struct {
 	// Key is the identifier of the object the watcher monitors. It can be empty.
