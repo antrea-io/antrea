@@ -20,8 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -547,13 +545,7 @@ func (s *CNIServer) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting CNI server")
 	defer klog.Info("Shutting down CNI server")
 
-	// remove before bind to avoid "address already in use" errors
-	_ = os.Remove(s.cniSocket)
-
-	if err := os.MkdirAll(filepath.Dir(s.cniSocket), 0755); err != nil {
-		klog.Fatalf("Failed to create directory %s: %v", filepath.Dir(s.cniSocket), err)
-	}
-	listener, err := net.Listen("unix", s.cniSocket)
+	listener, err := util.ListenLocalSocket(s.cniSocket)
 	if err != nil {
 		klog.Fatalf("Failed to bind on %s: %v", s.cniSocket, err)
 	}
