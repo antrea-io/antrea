@@ -69,6 +69,7 @@ type InterfaceStore interface {
 	AddInterface(interfaceConfig *InterfaceConfig)
 	DeleteInterface(interfaceConfig *InterfaceConfig)
 	GetInterface(interfaceKey string) (*InterfaceConfig, bool)
+	GetInterfaceByName(interfaceName string) (*InterfaceConfig, bool)
 	GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool)
 	GetNodeTunnelInterface(nodeName string) (*InterfaceConfig, bool)
 	GetContainerInterfaceNum() int
