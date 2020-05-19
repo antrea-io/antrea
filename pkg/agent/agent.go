@@ -57,6 +57,7 @@ type Initializer struct {
 	ofClient        openflow.Client
 	routeClient     route.Interface
 	ifaceStore      interfacestore.InterfaceStore
+	ovsBridge       string
 	hostGateway     string     // name of gateway port on the OVS bridge
 	mtu             int        // Pod network interface MTU
 	serviceCIDR     *net.IPNet // K8s Service ClusterIP CIDR
@@ -70,6 +71,7 @@ func NewInitializer(
 	ofClient openflow.Client,
 	routeClient route.Interface,
 	ifaceStore interfacestore.InterfaceStore,
+	ovsBridge string,
 	hostGateway string,
 	mtu int,
 	serviceCIDR *net.IPNet,
@@ -80,6 +82,7 @@ func NewInitializer(
 		ifaceStore:      ifaceStore,
 		ofClient:        ofClient,
 		routeClient:     routeClient,
+		ovsBridge:       ovsBridge,
 		hostGateway:     hostGateway,
 		mtu:             mtu,
 		serviceCIDR:     serviceCIDR,
@@ -503,7 +506,11 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return err
 	}
 
-	i.nodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: localSubnet, NodeIPAddr: localAddr}
+	i.nodeConfig = &config.NodeConfig{
+		Name:       nodeName,
+		OVSBridge:  i.ovsBridge,
+		PodCIDR:    localSubnet,
+		NodeIPAddr: localAddr}
 	return nil
 }
 

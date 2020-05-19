@@ -181,6 +181,10 @@ type client struct {
 	gatewayPort uint32 // OVSOFPort number
 }
 
+func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
+	return globalVirtualMAC
+}
+
 func (c *client) Add(flow binding.Flow) error {
 	return c.bridge.AddFlowsInBundle([]binding.Flow{flow}, nil, nil)
 }

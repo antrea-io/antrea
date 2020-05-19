@@ -149,6 +149,20 @@ func (mr *MockClientMockRecorder) GetPodFlowKeys(arg0 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPodFlowKeys", reflect.TypeOf((*MockClient)(nil).GetPodFlowKeys), arg0)
 }
 
+// GetTunnelVirtualMAC mocks base method
+func (m *MockClient) GetTunnelVirtualMAC() net.HardwareAddr {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTunnelVirtualMAC")
+	ret0, _ := ret[0].(net.HardwareAddr)
+	return ret0
+}
+
+// GetTunnelVirtualMAC indicates an expected call of GetTunnelVirtualMAC
+func (mr *MockClientMockRecorder) GetTunnelVirtualMAC() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTunnelVirtualMAC", reflect.TypeOf((*MockClient)(nil).GetTunnelVirtualMAC))
+}
+
 // Initialize mocks base method
 func (m *MockClient) Initialize(arg0 types.RoundInfo, arg1 *config.NodeConfig, arg2 config.TrafficEncapModeType, arg3 uint32) (<-chan struct{}, error) {
 	m.ctrl.T.Helper()
