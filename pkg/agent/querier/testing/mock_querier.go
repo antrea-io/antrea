@@ -21,11 +21,13 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	interfacestore "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	openflow "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	ofctl "github.com/vmware-tanzu/antrea/pkg/ovs/ofctl"
+	ovsctl "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	querier "github.com/vmware-tanzu/antrea/pkg/querier"
+	kubernetes "k8s.io/client-go/kubernetes"
 	reflect "reflect"
 )
 
@@ -78,6 +80,20 @@ func (mr *MockAgentQuerierMockRecorder) GetInterfaceStore() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceStore", reflect.TypeOf((*MockAgentQuerier)(nil).GetInterfaceStore))
 }
 
+// GetK8sClient mocks base method
+func (m *MockAgentQuerier) GetK8sClient() kubernetes.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetK8sClient")
+	ret0, _ := ret[0].(kubernetes.Interface)
+	return ret0
+}
+
+// GetK8sClient indicates an expected call of GetK8sClient
+func (mr *MockAgentQuerierMockRecorder) GetK8sClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetK8sClient", reflect.TypeOf((*MockAgentQuerier)(nil).GetK8sClient))
+}
+
 // GetNetworkPolicyInfoQuerier mocks base method
 func (m *MockAgentQuerier) GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier {
 	m.ctrl.T.Helper()
@@ -92,32 +108,32 @@ func (mr *MockAgentQuerierMockRecorder) GetNetworkPolicyInfoQuerier() *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyInfoQuerier", reflect.TypeOf((*MockAgentQuerier)(nil).GetNetworkPolicyInfoQuerier))
 }
 
-// GetNodeName mocks base method
-func (m *MockAgentQuerier) GetNodeName() string {
+// GetNodeConfig mocks base method
+func (m *MockAgentQuerier) GetNodeConfig() *config.NodeConfig {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNodeName")
-	ret0, _ := ret[0].(string)
+	ret := m.ctrl.Call(m, "GetNodeConfig")
+	ret0, _ := ret[0].(*config.NodeConfig)
 	return ret0
 }
 
-// GetNodeName indicates an expected call of GetNodeName
-func (mr *MockAgentQuerierMockRecorder) GetNodeName() *gomock.Call {
+// GetNodeConfig indicates an expected call of GetNodeConfig
+func (mr *MockAgentQuerierMockRecorder) GetNodeConfig() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeName", reflect.TypeOf((*MockAgentQuerier)(nil).GetNodeName))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeConfig", reflect.TypeOf((*MockAgentQuerier)(nil).GetNodeConfig))
 }
 
-// GetOfctlClient mocks base method
-func (m *MockAgentQuerier) GetOfctlClient() ofctl.OfctlClient {
+// GetOVSCtlClient mocks base method
+func (m *MockAgentQuerier) GetOVSCtlClient() ovsctl.OVSCtlClient {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOfctlClient")
-	ret0, _ := ret[0].(ofctl.OfctlClient)
+	ret := m.ctrl.Call(m, "GetOVSCtlClient")
+	ret0, _ := ret[0].(ovsctl.OVSCtlClient)
 	return ret0
 }
 
-// GetOfctlClient indicates an expected call of GetOfctlClient
-func (mr *MockAgentQuerierMockRecorder) GetOfctlClient() *gomock.Call {
+// GetOVSCtlClient indicates an expected call of GetOVSCtlClient
+func (mr *MockAgentQuerierMockRecorder) GetOVSCtlClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOfctlClient", reflect.TypeOf((*MockAgentQuerier)(nil).GetOfctlClient))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOVSCtlClient", reflect.TypeOf((*MockAgentQuerier)(nil).GetOVSCtlClient))
 }
 
 // GetOpenflowClient mocks base method

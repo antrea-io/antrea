@@ -35,7 +35,7 @@ type Response struct {
 func dumpMatchedFlows(aq querier.AgentQuerier, flowKeys []string) ([]Response, error) {
 	resps := []Response{}
 	for _, f := range flowKeys {
-		flowStr, err := aq.GetOfctlClient().DumpMatchedFlow(f)
+		flowStr, err := aq.GetOVSCtlClient().DumpMatchedFlow(f)
 		if err != nil {
 			klog.Errorf("Failed to dump flows %s: %v", f, err)
 			return nil, err
@@ -52,9 +52,9 @@ func dumpFlows(aq querier.AgentQuerier, table binding.TableIDType) ([]Response, 
 	var flowStrs []string
 	var err error
 	if table != binding.TableIDAll {
-		flowStrs, err = aq.GetOfctlClient().DumpTableFlows(uint8(table))
+		flowStrs, err = aq.GetOVSCtlClient().DumpTableFlows(uint8(table))
 	} else {
-		flowStrs, err = aq.GetOfctlClient().DumpFlows()
+		flowStrs, err = aq.GetOVSCtlClient().DumpFlows()
 	}
 	if err != nil {
 		return nil, err

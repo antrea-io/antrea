@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ofctl
+package ovsctl
 
 import (
 	"bufio"
@@ -21,15 +21,7 @@ import (
 	"strings"
 )
 
-type ofctlClient struct {
-	bridge string
-}
-
-func NewClient(bridge string) *ofctlClient {
-	return &ofctlClient{bridge}
-}
-
-func (c *ofctlClient) DumpFlows(args ...string) ([]string, error) {
+func (c *ovsCtlClient) DumpFlows(args ...string) ([]string, error) {
 	// Print table and port names.
 	flowDump, err := c.RunOfctlCmd("dump-flows", append(args, "--names")...)
 	if err != nil {
@@ -46,7 +38,7 @@ func (c *ofctlClient) DumpFlows(args ...string) ([]string, error) {
 
 }
 
-func (c *ofctlClient) DumpMatchedFlow(matchStr string) (string, error) {
+func (c *ovsCtlClient) DumpMatchedFlow(matchStr string) (string, error) {
 	flowDump, err := c.RunOfctlCmd("dump-flows", matchStr, "--names")
 	if err != nil {
 		return "", err
@@ -67,11 +59,11 @@ func (c *ofctlClient) DumpMatchedFlow(matchStr string) (string, error) {
 	return "", nil
 }
 
-func (c *ofctlClient) DumpTableFlows(table uint8) ([]string, error) {
+func (c *ovsCtlClient) DumpTableFlows(table uint8) ([]string, error) {
 	return c.DumpFlows(fmt.Sprintf("table=%d", table))
 }
 
-func (c *ofctlClient) DumpGroups(args ...string) ([][]string, error) {
+func (c *ovsCtlClient) DumpGroups(args ...string) ([][]string, error) {
 	groupsDump, err := c.RunOfctlCmd("dump-groups", args...)
 	if err != nil {
 		return nil, err
@@ -96,7 +88,7 @@ func (c *ofctlClient) DumpGroups(args ...string) ([][]string, error) {
 	return groupList, nil
 }
 
-func (c *ofctlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
+func (c *ovsCtlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
 	cmdStr := fmt.Sprintf("ovs-ofctl -O Openflow13 %s %s", cmd, c.bridge)
 	cmdStr = cmdStr + " " + strings.Join(args, " ")
 	out, err := exec.Command("/bin/sh", "-c", cmdStr).Output()

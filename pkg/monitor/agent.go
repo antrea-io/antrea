@@ -85,7 +85,7 @@ func (monitor *agentMonitor) syncAgentCRD() {
 // getAgentCRD is used to check the existence of agent monitoring CRD.
 // So when the pod restarts, it will update this monitoring CRD instead of creating a new one.
 func (monitor *agentMonitor) getAgentCRD() (*v1beta1.AntreaAgentInfo, error) {
-	crdName := monitor.querier.GetNodeName()
+	crdName := monitor.querier.GetNodeConfig().Name
 	klog.V(2).Infof("Getting agent monitoring CRD %+v", crdName)
 	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Get(crdName, metav1.GetOptions{})
 }

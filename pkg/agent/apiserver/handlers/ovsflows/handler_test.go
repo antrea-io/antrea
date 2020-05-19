@@ -29,7 +29,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	aqtest "github.com/vmware-tanzu/antrea/pkg/agent/querier/testing"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
-	ofctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ofctl/testing"
+	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
 	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
 )
 
@@ -100,19 +100,16 @@ func TestPodFlows(t *testing.T) {
 
 		if tc.expectedStatus != http.StatusNotFound {
 			ofc := oftest.NewMockClient(ctrl)
-			ofctl := ofctltest.NewMockOfctlClient(ctrl)
+			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
 			i.EXPECT().GetContainerInterface(tc.name, tc.namespace).Return(testInterface, true).Times(1)
 			ofc.EXPECT().GetPodFlowKeys(testInterface.InterfaceName).Return(testFlowKeys).Times(1)
 			q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
-			q.EXPECT().GetOfctlClient().Return(ofctl).Times(len(testFlowKeys))
+			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
 			for i := range testFlowKeys {
-				ofctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpResults[i], nil).Times(1)
+				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpResults[i], nil).Times(1)
 			}
 		} else {
 			i.EXPECT().GetContainerInterface(tc.name, tc.namespace).Return(nil, false).Times(1)
-			i.EXPECT().GetContainerInterface(tc.name, "").Return(nil, false).AnyTimes()
-			ofc := oftest.NewMockClient(ctrl)
-			ofc.EXPECT().GetPodFlowKeys(testInterface.InterfaceName).Return(testFlowKeys).AnyTimes()
 		}
 
 		runHTTPTest(t, &tc, q)
@@ -148,13 +145,13 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 		if tc.expectedStatus != http.StatusNotFound {
 			ofc := oftest.NewMockClient(ctrl)
-			ofctl := ofctltest.NewMockOfctlClient(ctrl)
+			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
 			npq.EXPECT().GetNetworkPolicy(tc.name, tc.namespace).Return(testNetworkPolicy).Times(1)
 			ofc.EXPECT().GetNetworkPolicyFlowKeys(tc.name, tc.namespace).Return(testFlowKeys).Times(1)
 			q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
-			q.EXPECT().GetOfctlClient().Return(ofctl).Times(len(testFlowKeys))
+			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
 			for i := range testFlowKeys {
-				ofctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpResults[i], nil).Times(1)
+				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpResults[i], nil).Times(1)
 			}
 		} else {
 			npq.EXPECT().GetNetworkPolicy(tc.name, tc.namespace).Return(nil).Times(1)
@@ -182,10 +179,10 @@ func TestTableFlows(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
-		ofctl := ofctltest.NewMockOfctlClient(ctrl)
+		ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
 		q := aqtest.NewMockAgentQuerier(ctrl)
-		q.EXPECT().GetOfctlClient().Return(ofctl).Times(1)
-		ofctl.EXPECT().DumpTableFlows(gomock.Any()).Return(testDumpResults, nil).Times(1)
+		q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(1)
+		ovsctl.EXPECT().DumpTableFlows(gomock.Any()).Return(testDumpResults, nil).Times(1)
 
 		runHTTPTest(t, &tc, q)
 	}
