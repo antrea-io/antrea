@@ -90,6 +90,19 @@ func (c *interfaceCache) GetInterface(interfaceKey string) (*InterfaceConfig, bo
 	return iface, found
 }
 
+// GetInterfaceByName retrieves interface from local cache given the interface
+// name.
+func (c *interfaceCache) GetInterfaceByName(interfaceName string) (*InterfaceConfig, bool) {
+	c.RLock()
+	defer c.RUnlock()
+	for _, v := range c.cache {
+		if v.InterfaceName == interfaceName {
+			return v, true
+		}
+	}
+	return nil, false
+}
+
 func (c *interfaceCache) GetContainerInterfaceNum() int {
 	num := 0
 	c.RLock()

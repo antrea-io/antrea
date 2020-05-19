@@ -20,8 +20,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ofctl"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
 func PrepareOVSBridge(brName string) error {
@@ -48,8 +48,8 @@ type ExpectFlow struct {
 	ActStr   string
 }
 
-func CheckFlowExists(t *testing.T, ofctlClient ofctl.OfctlClient, tableID uint8, exist bool, flows []*ExpectFlow) []string {
-	flowList, _ := OfctlDumpTableFlows(ofctlClient, tableID)
+func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableID uint8, exist bool, flows []*ExpectFlow) []string {
+	flowList, _ := OfctlDumpTableFlows(ovsCtlClient, tableID)
 	if exist {
 		for _, flow := range flows {
 			if !OfctlFlowMatch(flowList, tableID, flow) {
@@ -66,9 +66,9 @@ func CheckFlowExists(t *testing.T, ofctlClient ofctl.OfctlClient, tableID uint8,
 	return flowList
 }
 
-func CheckGroupExists(t *testing.T, ofctlClient ofctl.OfctlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
+func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
 	// dump groups
-	groupList, err := ofctlClient.DumpGroups()
+	groupList, err := ovsCtlClient.DumpGroups()
 	if err != nil {
 		t.Errorf("Error dumping flows: Err %v", err)
 	}
@@ -117,23 +117,23 @@ func formatFlowDump(rawFlows []string) []string {
 	return flowList
 }
 
-func OfctlDumpFlows(ofctlClient ofctl.OfctlClient, args ...string) ([]string, error) {
-	rawFlows, err := ofctlClient.DumpFlows(args...)
+func OfctlDumpFlows(ovsCtlClient ovsctl.OVSCtlClient, args ...string) ([]string, error) {
+	rawFlows, err := ovsCtlClient.DumpFlows(args...)
 	if err != nil {
 		return nil, err
 	}
 	return formatFlowDump(rawFlows), nil
 }
 
-func OfctlDumpTableFlows(ofctlClient ofctl.OfctlClient, table uint8) ([]string, error) {
-	rawFlows, err := ofctlClient.DumpTableFlows(table)
+func OfctlDumpTableFlows(ovsCtlClient ovsctl.OVSCtlClient, table uint8) ([]string, error) {
+	rawFlows, err := ovsCtlClient.DumpTableFlows(table)
 	if err != nil {
 		return nil, err
 	}
 	return formatFlowDump(rawFlows), nil
 }
 
-func OfctlDeleteFlows(ofctlClient ofctl.OfctlClient) error {
-	_, err := ofctlClient.RunOfctlCmd("del-flows")
+func OfctlDeleteFlows(ovsCtlClient ovsctl.OVSCtlClient) error {
+	_, err := ovsCtlClient.RunOfctlCmd("del-flows")
 	return err
 }

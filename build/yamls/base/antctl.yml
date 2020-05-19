@@ -32,6 +32,7 @@ rules:
       - /appliedtogroups
       - /networkpolicies
       - /ovsflows
+      - /ovstracing
       - /podinterfaces
     verbs:
       - get

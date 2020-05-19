@@ -91,6 +91,7 @@ rules:
   - /appliedtogroups
   - /networkpolicies
   - /ovsflows
+  - /ovstracing
   - /podinterfaces
   verbs:
   - get
@@ -106,10 +107,17 @@ rules:
   - ""
   resources:
   - nodes
-  - pods
   verbs:
   - get
   - watch
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - services
+  verbs:
+  - get
   - list
 - apiGroups:
   - clusterinformation.antrea.tanzu.vmware.com

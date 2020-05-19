@@ -657,9 +657,9 @@ func (cd *commandDefinition) applyFlagsToCommand(cmd *cobra.Command) {
 		cmd.Args = cobra.NoArgs
 	}
 	if cd.commandGroup == get {
-		cmd.Flags().StringP("output", "o", "table", "output format: json|yaml|table")
+		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
 	} else {
-		cmd.Flags().StringP("output", "o", "json", "output format: json|yaml|table")
+		cmd.Flags().StringP("output", "o", "yaml", "output format: json|table|yaml")
 	}
 }
 

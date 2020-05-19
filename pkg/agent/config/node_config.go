@@ -43,14 +43,15 @@ func (g *GatewayConfig) String() string {
 // Local Node configurations retrieved from K8s API or host networking state.
 type NodeConfig struct {
 	Name          string
+	OVSBridge     string
 	PodCIDR       *net.IPNet
 	NodeIPAddr    *net.IPNet
 	GatewayConfig *GatewayConfig
 }
 
 func (n *NodeConfig) String() string {
-	return fmt.Sprintf("NodeName: %s, PodCIDR: %s, NodeIP: %s, Gateway: %s",
-		n.Name, n.PodCIDR, n.NodeIPAddr, n.GatewayConfig)
+	return fmt.Sprintf("NodeName: %s, OVSBridge: %s, PodCIDR: %s, NodeIP: %s, Gateway: %s",
+		n.Name, n.OVSBridge, n.PodCIDR, n.NodeIPAddr, n.GatewayConfig)
 }
 
 // User provided network configuration parameters.
