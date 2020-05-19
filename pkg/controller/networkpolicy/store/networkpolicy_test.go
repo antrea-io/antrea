@@ -84,6 +84,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV2)
 			},
 			expected: []watch.Event{
+				{watch.Bookmark, &networking.NetworkPolicy{}},
 				{watch.Added, &networking.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV1.Rules,
@@ -110,6 +111,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV1)
 			},
 			expected: []watch.Event{
+				{watch.Bookmark, &networking.NetworkPolicy{}},
 				{watch.Added, &networking.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV2.Rules,

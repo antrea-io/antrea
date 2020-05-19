@@ -22,6 +22,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
@@ -60,6 +61,8 @@ type store struct {
 	selectFunc antreastorage.SelectFunc
 	// genEventFunc is used to generate InternalEvent from update of an object.
 	genEventFunc antreastorage.GenEventFunc
+	// newFunc is a function that creates new empty object of this type.
+	newFunc func() runtime.Object
 
 	// resourceVersion up to which the store has generated.
 	resourceVersion uint64
@@ -79,7 +82,7 @@ type store struct {
 // KeyFunc decides how to get the key from an object.
 // Indexers decides how to build indices for an object.
 // GenEventFunc decides how to generate InternalEvent for an update of an object.
-func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc, selectorFunc antreastorage.SelectFunc) *store {
+func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc, selectorFunc antreastorage.SelectFunc, newFunc func() runtime.Object) *store {
 	stopCh := make(chan struct{})
 	storage := cache.NewIndexer(keyFunc, indexers)
 	timer := time.NewTimer(time.Duration(0))
@@ -96,6 +99,7 @@ func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antre
 		genEventFunc: genEventFunc,
 		selectFunc:   selectorFunc,
 		timer:        timer,
+		newFunc:      newFunc,
 	}
 
 	go s.dispatchEvents()
@@ -254,7 +258,7 @@ func (s *store) Watch(ctx context.Context, key string, labelSelector labels.Sele
 		s.watcherMutex.Lock()
 		defer s.watcherMutex.Unlock()
 
-		w := newStoreWatcher(watcherChanSize, selectors, forgetWatcher(s, s.watcherIdx))
+		w := newStoreWatcher(watcherChanSize, selectors, forgetWatcher(s, s.watcherIdx), s.newFunc)
 		s.watchers[s.watcherIdx] = w
 		s.watcherIdx++
 		return w
