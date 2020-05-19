@@ -19,6 +19,8 @@ package util
 import (
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -175,4 +177,20 @@ func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
 		return err
 	}
 	return nil
+}
+
+// ListenLocalSocket creates a listener on a Unix domain socket.
+func ListenLocalSocket(address string) (net.Listener, error) {
+	// remove before bind to avoid "address already in use" errors
+	_ = os.Remove(address)
+
+	if err := os.MkdirAll(filepath.Dir(address), 0755); err != nil {
+		klog.Fatalf("Failed to create directory %s: %v", filepath.Dir(address), err)
+	}
+	return listenUnix(address)
+}
+
+// DialLocalSocket connects to a Unix domain socket.
+func DialLocalSocket(address string) (net.Conn, error) {
+	return dialUnix(address)
 }
