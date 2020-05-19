@@ -85,6 +85,7 @@ func TestEvents(t *testing.T) {
 				},
 			},
 			expected: []watch.Event{
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
 				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
@@ -113,6 +114,7 @@ func TestEvents(t *testing.T) {
 			},
 			expected: []watch.Event{
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
 				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
 			},
@@ -137,13 +139,14 @@ func TestEvents(t *testing.T) {
 			},
 			expected: []watch.Event{
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
 			},
 		},
 	}
 
 	for i, testCase := range testCases {
-		w := newStoreWatcher(10, &storage.Selectors{}, func() {})
+		w := newStoreWatcher(10, &storage.Selectors{}, func() {}, func() runtime.Object { return new(v1.Pod) })
 		go w.process(context.Background(), testCase.initEvents, 0)
 
 		for _, event := range testCase.addedEvents {
@@ -166,7 +169,7 @@ func TestEvents(t *testing.T) {
 }
 
 func TestAddTimeout(t *testing.T) {
-	w := newStoreWatcher(1, &storage.Selectors{}, func() {})
+	w := newStoreWatcher(1, &storage.Selectors{}, func() {}, func() runtime.Object { return new(v1.Pod) })
 	events := []storage.InternalEvent{
 		&simpleInternalEvent{
 			Type:            watch.Added,
