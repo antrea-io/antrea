@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 )
 
 const (
@@ -77,4 +78,12 @@ func newLinkNotFoundError(name string) LinkNotFound {
 	return LinkNotFound{
 		fmt.Errorf("link %s not found", name),
 	}
+}
+
+func listenUnix(address string) (net.Listener, error) {
+	return net.Listen("unix", address)
+}
+
+func dialUnix(address string) (net.Conn, error) {
+	return net.Dial("unix", address)
 }
