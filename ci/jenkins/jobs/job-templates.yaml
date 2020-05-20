@@ -165,7 +165,7 @@
     - timed: '{timed}'
 
 - job-template:
-     name: 'cloud-{name}-{test_name}-for-eks'
+     name: 'cloud-{name}-{test_name}'
      node: '{node}'
      triggers: '{triggers}'
      builders: '{builders}'
