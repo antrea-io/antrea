@@ -32,7 +32,19 @@ TEST_FAILURE=false
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] \
-                  [--setup-only] [--cleanup-only]"
+                  [--setup-only] [--cleanup-only]
+
+Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy).
+
+        --cluster-name           The cluster name to be used for the generated EKS cluster. Must be specified if not run in Jenkins environment.
+        --kubeconfig             Path to save kubeconfig of generated EKS cluster.
+        --k8s-version            GKE K8s cluster version. Defaults to 1.15.
+        --aws-access-key         AWS Acess Key for logging in to awscli.
+        --aws-secret-key         AWS Secret Key for logging in to awscli.
+        --aws-region             The AWS region where the cluster will be initiated. Defaults to us-east-2.
+        --ssh-key                The path of key to be used for ssh access to worker nodes.
+        --setup-only             Only perform setting up the cluster and run test.
+        --cleanup-only           Only perform cleaning up the cluster."
 
 function print_usage {
     echoerr "$_usage"
