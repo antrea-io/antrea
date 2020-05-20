@@ -325,8 +325,8 @@
           started_status: null
           wrappers: []
           publishers: []
-      - 'cloud-{name}-{test_name}-for-eks':
-          test_name: conformance-net-policy
+      - 'cloud-{name}-{test_name}':
+          test_name: eks-conformance-net-policy
           node: antrea-cloud
           description: 'This is EKS conformance and network policy test for antrea.'
           parameters: []
@@ -347,7 +347,7 @@
               only-if-success: false
           - trigger-parameterized-builds:
             - project:
-              - cloud-cleanup-eks-testbed
+              - cloud-{name}-eks-cleanup
               property-file: 'ci_properties.txt'
           wrappers:
           - credentials-binding:
@@ -357,11 +357,59 @@
             - text:
                 credential-id: AWS_SECRET_KEY # Jenkins secret that stores aws secret key
                 variable: AWS_SECRET_KEY
-      - 'cloud-{name}-{test_name}-for-eks':
-          test_name: cleanup
+      - 'cloud-{name}-{test_name}':
+          test_name: eks-cleanup
           description: This is for deleting EKS test clusters.
           builders:
             - builder-eks-cluster-cleanup
+          concurrent: false
+          disabled: false
+          node: antrea-cloud
+          parameters:
+          - string:
+              default: ''
+              description: The cluster name of the last finished build.
+              name: CLUSTERNAME
+              trim: 'false'
+          publishers:
+          - email:
+              notify-every-unstable-build: true
+              recipients: dingyang@vmware.com zhengshengz@vmware.com
+              send-to-individuals: false
+          triggers: []
+          wrappers: []
+      - 'cloud-{name}-{test_name}':
+          test_name: gke-conformance-net-policy
+          node: antrea-cloud
+          description: 'This is GKE conformance and network policy test for antrea.'
+          parameters: []
+          builders:
+          - shell: |-
+              #!/bin/bash
+              source /home/ubuntu/.bashrc
+              # gcloud auth login requires verification code from url
+              gcloud auth activate-service-account --key-file=/home/ubuntu/gke/Antrea-c2ba1dfc7b0d.json
+              sudo ./ci/test-conformance-gke.sh --svc-account antrea-gcp@antrea.iam.gserviceaccount.com --setup-only
+          triggers:
+          - timed: H H */2 * *
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'gke-test.log'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - trigger-parameterized-builds:
+            - project:
+              - cloud-{name}-gke-cleanup
+              property-file: 'ci_properties.txt'
+          wrappers: []
+      - 'cloud-{name}-{test_name}':
+          test_name: gke-cleanup
+          description: This is for deleting GKE test clusters.
+          builders:
+            - builder-gke-cluster-cleanup
           concurrent: false
           disabled: false
           node: antrea-cloud
