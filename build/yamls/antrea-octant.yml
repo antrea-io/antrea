@@ -69,3 +69,5 @@ spec:
         secret:
           defaultMode: 256
           secretName: octant-kubeconfig
+      nodeSelector:
+        node-role: octant

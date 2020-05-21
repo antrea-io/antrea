@@ -46,11 +46,6 @@ antctl-ubuntu:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
 
-.PHONY: antrea-octant-plugin
-antrea-octant-plugin:
-	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-octant-plugin
-
 .PHONY: test-unit test-integration
 ifeq ($(UNAME_S),Linux)
 test-unit: .linux-test-unit
