@@ -54,15 +54,13 @@ type ClusterNetworkPolicySpec struct {
 }
 
 // Rule describes the traffic allowed to/from the workloads selected by
-// Spec.AppliedTo. Based on the action specified in the rule, traffic is either
-// allowed or denied which exactly match the specified ports and protocol.
+// Spec.AppliedTo. Based on the action specified in the rule, traffic which exactly
+// matches the specified ports and protocol is either allowed or denied.
 type Rule struct {
-	// Action specifies the action to be applied on the rule. Defaults to
-	// ALLOW action.
-	// +optional
+	// Action specifies the action to be applied on the rule.
 	Action *RuleAction `json:"action"`
 	// Set of port and protocol allowed/denied by the rule. If this field is unset
-	// or empty, this rule matches all ports.
+	// or empty, this rule matches all ports and protocols.
 	// +optional
 	Ports []NetworkPolicyPort `json:"ports"`
 	// Rule is matched if traffic originates from workloads selected by
@@ -76,10 +74,10 @@ type Rule struct {
 	To []NetworkPolicyPeer `json:"to"`
 }
 
-// NetworkPolicyPeer describes the grouping selector of workloads.
+// NetworkPolicyPeer describes the peer to allow/deny traffic to/from.
 type NetworkPolicyPeer struct {
-	// IPBlock describes the IPAddresses/IPBlocks that is matched in to/from.
-	// IPBlock cannot be set as part of the AppliedTo field
+	// IPBlock specifies an IP CIDR that is matched in to/from.
+	// IPBlock cannot be set as part of the AppliedTo field.
 	// Cannot be set with any other selector.
 	// +optional
 	IPBlock *IPBlock `json:"ipBlock,omitempty"`
@@ -123,9 +121,9 @@ type NetworkPolicyPort struct {
 type RuleAction string
 
 const (
-	// RuleActionAllow describes that rule matching traffic must be allowed.
+	// RuleActionAllow describes that the traffic matching the rule must be allowed.
 	RuleActionAllow RuleAction = "ALLOW"
-	// RuleActionDrop describes that rule matching traffic must be dropped.
+	// RuleActionDrop describes that the traffic matching the rule must be dropped.
 	RuleActionDrop RuleAction = "DROP"
 )
 

@@ -52,6 +52,8 @@ spec:
              type: array
              items:
                type: object
+               required:
+                 - action
                properties:
                  # Ensure that Action field allows only ALLOW and DROP values
                  action:
@@ -85,6 +87,8 @@ spec:
              type: array
              items:
                type: object
+               required:
+                 - action
                properties:
                  # Ensure that Action field allows only ALLOW and DROP values
                  action:
