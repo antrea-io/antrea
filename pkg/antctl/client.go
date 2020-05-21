@@ -75,7 +75,7 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	kubeconfig.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: c.codec}
+	kubeconfig.NegotiatedSerializer = c.codec
 	if inPod {
 		kubeconfig.Insecure = true
 		kubeconfig.CAFile = ""

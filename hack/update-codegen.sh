@@ -19,7 +19,7 @@ set -o nounset
 set -o pipefail
 
 ANTREA_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-IMAGE_NAME="antrea/codegen:latest"
+IMAGE_NAME="antrea/codegen:kubernetes-1.17.6"
 
 function docker_run() {
   docker pull ${IMAGE_NAME}
