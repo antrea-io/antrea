@@ -183,7 +183,7 @@ if $NP; then
     mkdir np && cd np
     cp ../../patches/np/*.yml .
     cp ../../base/security-crds.yml .
-    cp ../../base/endpoint-crds.yml .
+    cp ../../base/core-crds.yml .
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
     # add RBAC to antrea-controller for NP CRD access.
@@ -191,7 +191,7 @@ if $NP; then
     # create NetworkPolicy related CRDs.
     $KUSTOMIZE edit add resource security-crds.yml
     # create ExternalEntity related CRDs.
-    $KUSTOMIZE edit add resource endpoint-crds.yml
+    $KUSTOMIZE edit add resource core-crds.yml
     BASE=../np
     cd ..
 fi

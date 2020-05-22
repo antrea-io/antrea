@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package endpoint
+// +k8s:deepcopy-gen=package
+// +groupName=core.antrea.tanzu.vmware.com
 
-// GroupName is the group name used in this package
-const (
-	GroupName = "endpoint.antrea.tanzu.vmware.com"
-)
+package core

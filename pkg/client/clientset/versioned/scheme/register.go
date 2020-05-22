@@ -18,7 +18,7 @@ package scheme
 
 import (
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	endpointv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/endpoint/v1beta1"
+	corev1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	securityv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +33,7 @@ var Codecs = serializer.NewCodecFactory(Scheme)
 var ParameterCodec = runtime.NewParameterCodec(Scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
 	clusterinformationv1beta1.AddToScheme,
-	endpointv1beta1.AddToScheme,
+	corev1beta1.AddToScheme,
 	networkingv1beta1.AddToScheme,
 	securityv1beta1.AddToScheme,
 }

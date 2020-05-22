@@ -19,7 +19,7 @@ package externalversions
 import (
 	"fmt"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/endpoint/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1beta1"
 	securityv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1beta1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
@@ -51,9 +51,9 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=endpoint.antrea.tanzu.vmware.com, Version=v1beta1
+	// Group=core.antrea.tanzu.vmware.com, Version=v1beta1
 	case v1beta1.SchemeGroupVersion.WithResource("externalentities"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Endpoint().V1beta1().ExternalEntities().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1beta1().ExternalEntities().Informer()}, nil
 
 		// Group=security.antrea.tanzu.vmware.com, Version=v1beta1
 	case securityv1beta1.SchemeGroupVersion.WithResource("networkpolicies"):

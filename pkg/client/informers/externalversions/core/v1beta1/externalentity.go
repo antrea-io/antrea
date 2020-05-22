@@ -19,10 +19,10 @@ package v1beta1
 import (
 	time "time"
 
-	endpointv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/endpoint/v1beta1"
+	corev1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1beta1"
 	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/client/listers/endpoint/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/client/listers/core/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -59,16 +59,16 @@ func NewFilteredExternalEntityInformer(client versioned.Interface, namespace str
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.EndpointV1beta1().ExternalEntities(namespace).List(options)
+				return client.CoreV1beta1().ExternalEntities(namespace).List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.EndpointV1beta1().ExternalEntities(namespace).Watch(options)
+				return client.CoreV1beta1().ExternalEntities(namespace).Watch(options)
 			},
 		},
-		&endpointv1beta1.ExternalEntity{},
+		&corev1beta1.ExternalEntity{},
 		resyncPeriod,
 		indexers,
 	)
@@ -79,7 +79,7 @@ func (f *externalEntityInformer) defaultInformer(client versioned.Interface, res
 }
 
 func (f *externalEntityInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&endpointv1beta1.ExternalEntity{}, f.defaultInformer)
+	return f.factory.InformerFor(&corev1beta1.ExternalEntity{}, f.defaultInformer)
 }
 
 func (f *externalEntityInformer) Lister() v1beta1.ExternalEntityLister {
