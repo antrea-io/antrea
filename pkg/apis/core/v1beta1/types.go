@@ -38,7 +38,7 @@ type ExternalEntitySpec struct {
 	Endpoints []ExternalEndpoint `json:"endpoints"`
 	// ExternalNode is the opaque identifier of the agent/controller responsible
 	// for additional computation of this external entity.
-	ExternalNode string `json:"scope"`
+	ExternalNode string `json:"externalNode"`
 }
 
 // ExternalEndpoint refers to an endpoint associated with the ExternalEntity.
