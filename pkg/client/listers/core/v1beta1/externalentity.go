@@ -17,7 +17,7 @@
 package v1beta1
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/endpoint/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"

@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +k8s:openapi-gen=true
-// +k8s:deepcopy-gen=package
-// +groupName=endpoint.antrea.tanzu.vmware.com
+package core
 
-package v1beta1 // import "github.com/vmware-tanzu/antrea/pkg/apis/endpoint/v1beta1"
+// GroupName is the group name used in this package
+const (
+	GroupName = "core.antrea.tanzu.vmware.com"
+)

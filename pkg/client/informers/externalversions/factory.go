@@ -22,7 +22,7 @@ import (
 	time "time"
 
 	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	endpoint "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/endpoint"
+	core "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/core"
 	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/internalinterfaces"
 	security "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -171,12 +171,12 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Endpoint() endpoint.Interface
+	Core() core.Interface
 	Security() security.Interface
 }
 
-func (f *sharedInformerFactory) Endpoint() endpoint.Interface {
-	return endpoint.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Core() core.Interface {
+	return core.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) Security() security.Interface {

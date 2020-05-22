@@ -17,22 +17,22 @@
 package fake
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/endpoint/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1beta1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
 
-type FakeEndpointV1beta1 struct {
+type FakeCoreV1beta1 struct {
 	*testing.Fake
 }
 
-func (c *FakeEndpointV1beta1) ExternalEntities(namespace string) v1beta1.ExternalEntityInterface {
+func (c *FakeCoreV1beta1) ExternalEntities(namespace string) v1beta1.ExternalEntityInterface {
 	return &FakeExternalEntities{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeEndpointV1beta1) RESTClient() rest.Interface {
+func (c *FakeCoreV1beta1) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }

@@ -19,7 +19,7 @@ package v1beta1
 import (
 	"time"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/endpoint/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1beta1"
 	scheme "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -53,7 +53,7 @@ type externalEntities struct {
 }
 
 // newExternalEntities returns a ExternalEntities
-func newExternalEntities(c *EndpointV1beta1Client, namespace string) *externalEntities {
+func newExternalEntities(c *CoreV1beta1Client, namespace string) *externalEntities {
 	return &externalEntities{
 		client: c.RESTClient(),
 		ns:     namespace,
