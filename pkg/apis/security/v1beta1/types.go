@@ -37,7 +37,7 @@ type NetworkPolicy struct {
 type NetworkPolicySpec struct {
 	// Priority specfies the order of the NetworkPolicy relative to other
 	// NetworkPolicies.
-	Priority int32 `json:"priority"`
+	Priority float64 `json:"priority"`
 	// Select workloads on which the rules will be applied to.
 	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
 	// Set of ingress rules evaluated based on the order in which they are set.
