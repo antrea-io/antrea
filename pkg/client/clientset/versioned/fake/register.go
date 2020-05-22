@@ -18,7 +18,7 @@ package fake
 
 import (
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	endpointv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/endpoint/v1beta1"
+	corev1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1beta1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 <<<<<<< HEAD
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
@@ -37,7 +37,7 @@ var codecs = serializer.NewCodecFactory(scheme)
 var parameterCodec = runtime.NewParameterCodec(scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
 	clusterinformationv1beta1.AddToScheme,
-	endpointv1beta1.AddToScheme,
+	corev1beta1.AddToScheme,
 	networkingv1beta1.AddToScheme,
 <<<<<<< HEAD
 	systemv1beta1.AddToScheme,

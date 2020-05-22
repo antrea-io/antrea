@@ -13,7 +13,7 @@ rules:
       - watch
       - list
   - apiGroups:
-      - endpoint.antrea.tanzu.vmware.com
+      - core.antrea.tanzu.vmware.com
     resources:
       - externalentities
     verbs:

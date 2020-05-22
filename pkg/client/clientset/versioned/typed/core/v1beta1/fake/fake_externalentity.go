@@ -17,7 +17,7 @@
 package fake
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/endpoint/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -28,13 +28,13 @@ import (
 
 // FakeExternalEntities implements ExternalEntityInterface
 type FakeExternalEntities struct {
-	Fake *FakeEndpointV1beta1
+	Fake *FakeCoreV1beta1
 	ns   string
 }
 
-var externalentitiesResource = schema.GroupVersionResource{Group: "endpoint.antrea.tanzu.vmware.com", Version: "v1beta1", Resource: "externalentities"}
+var externalentitiesResource = schema.GroupVersionResource{Group: "core.antrea.tanzu.vmware.com", Version: "v1beta1", Resource: "externalentities"}
 
-var externalentitiesKind = schema.GroupVersionKind{Group: "endpoint.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "ExternalEntity"}
+var externalentitiesKind = schema.GroupVersionKind{Group: "core.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "ExternalEntity"}
 
 // Get takes name of the externalEntity, and returns the corresponding externalEntity object, and an error if there is any.
 func (c *FakeExternalEntities) Get(name string, options v1.GetOptions) (result *v1beta1.ExternalEntity, err error) {
