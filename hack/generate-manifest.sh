@@ -27,7 +27,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
         --cloud               Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
-        --cnp                 Generate a manifest with ClusterNetworkPolicy CRDs enabled
+        --np                  Generate a manifest with NetworkPolicy related CRDs enabled
         --keep                Debug flag which will preserve the generated kustomization.yml
         --help, -h            Print this message and exit
 
@@ -49,7 +49,7 @@ function print_help {
 MODE="dev"
 KIND=false
 IPSEC=false
-CNP=false
+NP=false
 KEEP=false
 ENCAP_MODE=""
 CLOUD=""
@@ -79,8 +79,8 @@ case $key in
     IPSEC=true
     shift
     ;;
-    --cnp)
-    CNP=true
+    --np)
+    NP=true
     shift
     ;;
     --keep)
@@ -179,16 +179,17 @@ if $IPSEC; then
     cd ..
 fi
 
-if $CNP; then
-    mkdir cnp && cd cnp
-    cp ../../patches/cnp/*.yml .
+if $NP; then
+    mkdir np && cd np
+    cp ../../patches/np/*.yml .
+    cp ../../base/security-crds.yml .
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
-    # create ClusterNetworkPolicy related CRDs.
-    $KUSTOMIZE edit add resource cnpCrds.yml
     # add RBAC to antrea-controller for CNP CRD access.
     $KUSTOMIZE edit add patch cnpRbac.yml
-    BASE=../cnp
+    # create security group CRDs.
+    $KUSTOMIZE edit add resource security-crds.yml
+    BASE=../np
     cd ..
 fi
 

@@ -38,7 +38,7 @@ type ClusterNetworkPolicy struct {
 type ClusterNetworkPolicySpec struct {
 	// Priority specfies the order of the ClusterNetworkPolicy relative to
 	// other ClusterNetworkPolicies.
-	Priority int32 `json:"priority"`
+	Priority float64 `json:"priority"`
 	// Select workloads on which the rules will be applied to.
 	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
 	// Set of ingress rules evaluated based on the order in which they are set.
