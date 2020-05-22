@@ -27,10 +27,10 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 )
 
 const (
@@ -53,9 +53,14 @@ const (
 //              b. Notify dirty rules
 //
 type Controller struct {
-	// antreaClient provides interfaces to watch Antrea AddressGroups,
-	// AppliedToGroups, and NetworkPolicies.
-	antreaClient versioned.Interface
+	// antreaClientProvider provides interfaces to get antreaClient, which can be
+	// used to watch Antrea AddressGroups, AppliedToGroups, and NetworkPolicies.
+	// We need to get antreaClient dynamically because the apiserver cert can be
+	// rotated and we need a new client with the updated CA cert.
+	// Verifying server certificate only takes place for new requests and existing
+	// watches won't be interrupted by rotating cert. The new client will be used
+	// after the existing watches expire.
+	antreaClientProvider agent.AntreaClientProvider
 	// queue maintains the NetworkPolicy ruleIDs that need to be synced.
 	queue workqueue.RateLimitingInterface
 	// ruleCache maintains the desired state of NetworkPolicy rules.
@@ -70,15 +75,15 @@ type Controller struct {
 }
 
 // NewNetworkPolicyController returns a new *Controller.
-func NewNetworkPolicyController(antreaClient versioned.Interface,
+func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
 	podUpdates <-chan v1beta1.PodReference) *Controller {
 	c := &Controller{
-		antreaClient: antreaClient,
-		queue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
-		reconciler:   newReconciler(ofClient, ifaceStore),
+		antreaClientProvider: antreaClientGetter,
+		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
+		reconciler:           newReconciler(ofClient, ifaceStore),
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
 
@@ -90,7 +95,11 @@ func NewNetworkPolicyController(antreaClient versioned.Interface,
 	c.networkPolicyWatcher = &watcher{
 		objectType: "NetworkPolicy",
 		watchFunc: func() (watch.Interface, error) {
-			return c.antreaClient.NetworkingV1beta1().NetworkPolicies("").Watch(options)
+			antreaClient, err := c.antreaClientProvider.GetAntreaClient()
+			if err != nil {
+				return nil, err
+			}
+			return antreaClient.NetworkingV1beta1().NetworkPolicies("").Watch(options)
 		},
 		AddFunc: func(obj runtime.Object) error {
 			policy, ok := obj.(*v1beta1.NetworkPolicy)
@@ -136,7 +145,11 @@ func NewNetworkPolicyController(antreaClient versioned.Interface,
 	c.appliedToGroupWatcher = &watcher{
 		objectType: "AppliedToGroup",
 		watchFunc: func() (watch.Interface, error) {
-			return c.antreaClient.NetworkingV1beta1().AppliedToGroups().Watch(options)
+			antreaClient, err := c.antreaClientProvider.GetAntreaClient()
+			if err != nil {
+				return nil, err
+			}
+			return antreaClient.NetworkingV1beta1().AppliedToGroups().Watch(options)
 		},
 		AddFunc: func(obj runtime.Object) error {
 			group, ok := obj.(*v1beta1.AppliedToGroup)
@@ -179,7 +192,11 @@ func NewNetworkPolicyController(antreaClient versioned.Interface,
 	c.addressGroupWatcher = &watcher{
 		objectType: "AddressGroup",
 		watchFunc: func() (watch.Interface, error) {
-			return c.antreaClient.NetworkingV1beta1().AddressGroups().Watch(options)
+			antreaClient, err := c.antreaClientProvider.GetAntreaClient()
+			if err != nil {
+				return nil, err
+			}
+			return antreaClient.NetworkingV1beta1().AddressGroups().Watch(options)
 		},
 		AddFunc: func(obj runtime.Object) error {
 			group, ok := obj.(*v1beta1.AddressGroup)
@@ -383,7 +400,7 @@ func (w *watcher) watch() {
 	klog.Infof("Starting watch for %s", w.objectType)
 	watcher, err := w.watchFunc()
 	if err != nil {
-		klog.Errorf("Failed to start watch for %s: %v", w.objectType, err)
+		klog.Warningf("Failed to start watch for %s: %v", w.objectType, err)
 		return
 	}
 
