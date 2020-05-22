@@ -22,7 +22,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 )
 
@@ -35,7 +34,7 @@ type commandList struct {
 
 func (cl *commandList) applyPersistentFlagsToRoot(root *cobra.Command) {
 	root.PersistentFlags().BoolP("verbose", "v", false, "enable verbose output")
-	root.PersistentFlags().StringP("kubeconfig", "k", clientcmd.RecommendedHomeFile, "absolute path to the kubeconfig file")
+	root.PersistentFlags().StringP("kubeconfig", "k", "", "absolute path to the kubeconfig file")
 	root.PersistentFlags().DurationP("timeout", "t", 0, "time limit of the execution of the command")
 	root.PersistentFlags().StringP("server", "s", "", "address and port of the API server, taking precedence over the default endpoint and the one set in kubeconfig")
 }

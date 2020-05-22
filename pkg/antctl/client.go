@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -64,6 +65,13 @@ type client struct {
 func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 	var err error
 	var kubeconfig *rest.Config
+	if len(opt.kubeconfig) == 0 {
+		var hasIt bool
+		opt.kubeconfig, hasIt = os.LookupEnv("KUBECONFIG")
+		if !hasIt || len(strings.TrimSpace(opt.kubeconfig)) == 0 {
+			opt.kubeconfig = clientcmd.RecommendedHomeFile
+		}
+	}
 	if _, err = os.Stat(opt.kubeconfig); opt.kubeconfig == clientcmd.RecommendedHomeFile && os.IsNotExist(err) {
 		kubeconfig, err = rest.InClusterConfig()
 		if err != nil {
