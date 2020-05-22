@@ -57,6 +57,22 @@ rules:
       - subjectaccessreviews
     verbs:
       - create
+  # This is the content of built-in role kube-system/extension-apiserver-authentication-reader.
+  # But it doesn't have list/watch permission before K8s v1.17.0 so the extension apiserver (antrea-agent) will
+  # have permission issue after bumping up apiserver library to a version that supports dynamic authentication.
+  # See https://github.com/kubernetes/kubernetes/pull/85375
+  # To support K8s clusters older than v1.17.0, we grant the required permissions directly instead of relying on
+  # the extension-apiserver-authentication role.
+  - apiGroups:
+      - ""
+    resourceNames:
+      - extension-apiserver-authentication
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -66,20 +82,6 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: antrea-agent
-subjects:
-  - kind: ServiceAccount
-    name: antrea-agent
-    namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: antrea-agent-authentication-reader
-  namespace: kube-system
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: extension-apiserver-authentication-reader
 subjects:
   - kind: ServiceAccount
     name: antrea-agent

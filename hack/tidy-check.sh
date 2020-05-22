@@ -28,7 +28,6 @@ TMP_MOD_FILE="$TMP_DIR/go.mod"
 TMP_SUM_FILE="$TMP_DIR/go.sum"
 TARGET_GO_VERSION="1.13"
 TARGET_GO_VERSION_PATTERN="go$TARGET_GO_VERSION.*"
-TARGET_OCTANT="github.com/vmware/octant v0.8.0"
 
 # if Go environment variable is set, use it as it is, otherwise default to "go"
 : "${GO:=go}"
@@ -92,15 +91,8 @@ function failed {
 function check {
   MOD_DIFF=$(diff "$MOD_FILE" "$TMP_MOD_FILE")
   SUM_DIFF=$(diff "$SUM_FILE" "$TMP_SUM_FILE")
-  OCTANT_VERSION_CHECK=$(grep -c "$TARGET_OCTANT" "$MOD_FILE")
   if [ -n "$MOD_DIFF" ] || [ -n "$SUM_DIFF" ]; then
     echoerr "dependencies are not tidy"
-    general_help
-    clean
-    exit 1
-  # TODO: Remove Octant version check after finding another compatible Octant release.
-  elif [ $OCTANT_VERSION_CHECK -eq 0 ]; then
-    echoerr "cannot find expected Octant version v0.8.0"
     general_help
     clean
     exit 1
