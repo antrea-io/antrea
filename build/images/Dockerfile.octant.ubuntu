@@ -14,13 +14,13 @@ LABEL description="A docker image to deploy octant and antrea-octant-plugin."
 
 USER root
 
-# Get and install octant v0.8.0
+# Get and install octant v0.10.2
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget ca-certificates && \
-    wget -q https://github.com/vmware-tanzu/octant/releases/download/v0.8.0/octant_0.8.0_Linux-64bit.deb && \
-    dpkg -i octant_0.8.0_Linux-64bit.deb && \
+    wget -q https://github.com/vmware-tanzu/octant/releases/download/v0.10.2/octant_0.10.2_Linux-64bit.deb && \
+    dpkg -i octant_0.10.2_Linux-64bit.deb && \
     apt-get remove -y wget ca-certificates && \
-    rm -rf octant_0.8.0_Linux-64bit.deb /var/cache/apt/* /var/lib/apt/lists/*
+    rm -rf octant_0.10.2_Linux-64bit.deb /var/cache/apt/* /var/lib/apt/lists/*
 
 # Install octant plugin for Antrea UI display
 RUN mkdir -p /root/.config/octant/plugins
