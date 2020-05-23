@@ -18,13 +18,10 @@ package scheme
 
 import (
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	corev1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1beta1"
+	corev1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
-<<<<<<< HEAD
+	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
-=======
-	securityv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1beta1"
->>>>>>> Add API types for Namespaced Antrea NetworkPolicy
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -37,13 +34,10 @@ var Codecs = serializer.NewCodecFactory(Scheme)
 var ParameterCodec = runtime.NewParameterCodec(Scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
 	clusterinformationv1beta1.AddToScheme,
-	corev1beta1.AddToScheme,
+	corev1alpha1.AddToScheme,
 	networkingv1beta1.AddToScheme,
-<<<<<<< HEAD
+	securityv1alpha1.AddToScheme,
 	systemv1beta1.AddToScheme,
-=======
-	securityv1beta1.AddToScheme,
->>>>>>> Add API types for Namespaced Antrea NetworkPolicy
 }
 
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition
