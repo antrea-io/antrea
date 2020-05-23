@@ -22,8 +22,8 @@ import (
 	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1/fake"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
 	fakenetworkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1/fake"
-	securityv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1beta1"
-	fakesecurityv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1beta1/fake"
+	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
+	fakesecurityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -88,7 +88,7 @@ func (c *Clientset) NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Inter
 	return &fakenetworkingv1beta1.FakeNetworkingV1beta1{Fake: &c.Fake}
 }
 
-// SecurityV1beta1 retrieves the SecurityV1beta1Client
-func (c *Clientset) SecurityV1beta1() securityv1beta1.SecurityV1beta1Interface {
-	return &fakesecurityv1beta1.FakeSecurityV1beta1{Fake: &c.Fake}
+// SecurityV1alpha1 retrieves the SecurityV1alpha1Client
+func (c *Clientset) SecurityV1alpha1() securityv1alpha1.SecurityV1alpha1Interface {
+	return &fakesecurityv1alpha1.FakeSecurityV1alpha1{Fake: &c.Fake}
 }

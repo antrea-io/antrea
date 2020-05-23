@@ -61,7 +61,7 @@ func run(o *Options) error {
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	cnpInformer := crdInformerFactory.Security().V1beta1().ClusterNetworkPolicies()
+	cnpInformer := crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
 
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()
@@ -103,7 +103,10 @@ func run(o *Options) error {
 	stopCh := signals.RegisterSignalHandlers()
 
 	informerFactory.Start(stopCh)
-	crdInformerFactory.Start(stopCh)
+	// Only start watching Security CRDs when config option is set to true.
+	if o.config.EnableSecurityCrds {
+		crdInformerFactory.Start(stopCh)
+	}
 
 	go controllerMonitor.Run(stopCh)
 

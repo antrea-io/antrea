@@ -316,7 +316,7 @@ data:
     # hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
     # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
     #
-    trafficEncapMode: networkPolicyOnly
+    #trafficEncapMode: encap
 
     # The port for the antrea-agent APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
@@ -350,12 +350,16 @@ data:
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     #enablePrometheusMetrics: false
+
+    # Enable Antrea NetworkPolicy CRDs. Setting it to true enables the controller
+    # watch for ClusterNetworkPolicy CRDs.
+    #enableSecurityCrds: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-522bfh947f
+  name: antrea-config-49m5h6hc88
   namespace: kube-system
 ---
 apiVersion: v1
@@ -458,7 +462,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-522bfh947f
+          name: antrea-config-49m5h6hc88
         name: antrea-config
       - hostPath:
           path: /var/log/antrea
@@ -667,7 +671,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-522bfh947f
+          name: antrea-config-49m5h6hc88
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

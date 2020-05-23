@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1beta1
+package v1alpha1
 
 import (
 	v1 "k8s.io/api/core/v1"
@@ -58,7 +58,7 @@ type ClusterNetworkPolicySpec struct {
 // matches the specified ports and protocol is either allowed or denied.
 type Rule struct {
 	// Action specifies the action to be applied on the rule.
-	Action *RuleAction `json:"action"`
+	Action RuleAction `json:"action"`
 	// Set of port and protocol allowed/denied by the rule. If this field is unset
 	// or empty, this rule matches all ports and protocols.
 	// +optional

@@ -18,34 +18,34 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
-	secv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1beta1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 // addCNP receives ClusterNetworkPolicy ADD events and creates resources
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) addCNP(obj interface{}) {
-	cnp := obj.(*secv1beta1.ClusterNetworkPolicy)
+	cnp := obj.(*secv1alpha1.ClusterNetworkPolicy)
 	klog.Infof("Processing ClusterNetworkPolicy %s ADD event", cnp.Name)
 }
 
 // updateCNP receives ClusterNetworkPolicy UPDATE events and updates resources
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) updateCNP(oldObj, curObj interface{}) {
-	curCNP := curObj.(*secv1beta1.ClusterNetworkPolicy)
+	curCNP := curObj.(*secv1alpha1.ClusterNetworkPolicy)
 	klog.Infof("Processing ClusterNetworkPolicy %s UPDATE event", curCNP.Name)
 }
 
 // deleteCNP receives ClusterNetworkPolicy DELETED events and deletes resources
 // which can be consumed by agents to delete corresponding rules on the Nodes.
 func (n *NetworkPolicyController) deleteCNP(old interface{}) {
-	cnp, ok := old.(*secv1beta1.ClusterNetworkPolicy)
+	cnp, ok := old.(*secv1alpha1.ClusterNetworkPolicy)
 	if !ok {
 		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting ClusterNetworkPolicy, invalid type: %v", old)
 			return
 		}
-		cnp, ok = tombstone.Obj.(*secv1beta1.ClusterNetworkPolicy)
+		cnp, ok = tombstone.Obj.(*secv1alpha1.ClusterNetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting ClusterNetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
