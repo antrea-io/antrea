@@ -604,6 +604,10 @@ data:
     # to define security policies which apply to the entire cluster.
     # ClusterNetworkPolicy: false
 
+    # Enable AntreaNetworkPolicy feature to complement K8s NetworkPolicy for security policies that
+    # supports priorities, actions and externalEntities.
+    # AntreaNetworkPolicy: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -625,7 +629,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-96mc77fdk8
+  name: antrea-config-dd9tdd7t7g
   namespace: kube-system
 ---
 apiVersion: v1
@@ -731,7 +735,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-96mc77fdk8
+          name: antrea-config-dd9tdd7t7g
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -946,7 +950,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-96mc77fdk8
+          name: antrea-config-dd9tdd7t7g
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -132,6 +132,13 @@ type NetworkPolicyController struct {
 	// cnpListerSynced is a function which returns true if the ClusterNetworkPolicies shared informer has been synced at least once.
 	cnpListerSynced cache.InformerSynced
 
+	anpInformer secinformers.NetworkPolicyInformer
+	// anpLister is able to list/get Antrea NetworkPolicies and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	anpLister seclisters.NetworkPolicyLister
+	// anpListerSynced is a function which returns true if the Antrea NetworkPolicies shared informer has been synced at least once.
+	anpListerSynced cache.InformerSynced
+
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
 	// appliedToGroupStore is the storage where the populated AppliedTo Groups are stored.
@@ -170,6 +177,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	namespaceInformer coreinformers.NamespaceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	cnpInformer secinformers.ClusterNetworkPolicyInformer,
+	anpInformer secinformers.NetworkPolicyInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface) *NetworkPolicyController {
@@ -229,6 +237,20 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 				AddFunc:    n.addCNP,
 				UpdateFunc: n.updateCNP,
 				DeleteFunc: n.deleteCNP,
+			},
+			resyncPeriod,
+		)
+	}
+	// Register Informer and add handlers for AntreaNetworkPolicy events only if the feature is enabled.
+	if features.DefaultFeatureGate.Enabled(features.AntreaNetworkPolicy) {
+		n.anpInformer = anpInformer
+		n.anpLister = anpInformer.Lister()
+		n.anpListerSynced = anpInformer.Informer().HasSynced
+		anpInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addANP,
+				UpdateFunc: n.updateANP,
+				DeleteFunc: n.deleteANP,
 			},
 			resyncPeriod,
 		)
@@ -955,7 +977,7 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	defer klog.Info("Shutting down NetworkPolicy controller")
 
 	klog.Info("Waiting for caches to sync for NetworkPolicy controller")
-	if !cache.WaitForCacheSync(stopCh, n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced) {
+	if !cache.WaitForCacheSync(stopCh, n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced, n.anpListerSynced) {
 		klog.Error("Unable to sync caches for NetworkPolicy controller")
 		return
 	}

@@ -33,6 +33,10 @@ const (
 	// Allows to apply cluster-wide NetworkPolicies.
 	ClusterNetworkPolicy featuregate.Feature = "ClusterNetworkPolicy"
 
+	// alpha: v0.9
+	// Allows to apply namespaced NetworkPolicies.
+	AntreaNetworkPolicy featuregate.Feature = "AntreaNetworkPolicy"
+
 	// alpha: v0.8
 	// Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
 	// It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
@@ -57,6 +61,7 @@ var (
 	// available throughout Antrea binaries.
 	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		ClusterNetworkPolicy: {Default: false, PreRelease: featuregate.Alpha},
+		AntreaNetworkPolicy:  {Default: false, PreRelease: featuregate.Alpha},
 		AntreaProxy:          {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:            {Default: false, PreRelease: featuregate.Alpha},
 	}
