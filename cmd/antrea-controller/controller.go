@@ -104,7 +104,7 @@ func run(o *Options) error {
 
 	informerFactory.Start(stopCh)
 	// Only start watching Security CRDs when config option is set to true.
-	if o.config.EnableSecurityCrds {
+	if o.config.EnableSecurityCRDs {
 		crdInformerFactory.Start(stopCh)
 	}
 

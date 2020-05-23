@@ -353,13 +353,13 @@ data:
 
     # Enable Antrea NetworkPolicy CRDs. Setting it to true enables the controller
     # watch for ClusterNetworkPolicy CRDs.
-    #enableSecurityCrds: false
+    #enableSecurityCRDs: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-49m5h6hc88
+  name: antrea-config-h2t9f9k2f4
   namespace: kube-system
 ---
 apiVersion: v1
@@ -462,7 +462,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-49m5h6hc88
+          name: antrea-config-h2t9f9k2f4
         name: antrea-config
       - hostPath:
           path: /var/log/antrea
@@ -669,7 +669,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-49m5h6hc88
+          name: antrea-config-h2t9f9k2f4
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

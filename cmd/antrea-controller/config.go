@@ -31,5 +31,5 @@ type ControllerConfig struct {
 	// Enable controller to watch for ClusterNetworkPolicy CRDs. Temporary config option
 	// to be removed once CRDs are considered stable.
 	// Defaults to false.
-	EnableSecurityCrds bool `yaml:"enableSecurityCrds,omitempty"`
+	EnableSecurityCRDs bool `yaml:"enableSecurityCRDs,omitempty"`
 }

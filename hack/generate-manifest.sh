@@ -155,7 +155,7 @@ if $IPSEC; then
 fi
 
 if $NP; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableSecurityCrds[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableSecurityCrds: true/" antrea-controller.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableSecurityCRDs[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableSecurityCRDs: true/" antrea-controller.conf
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then
