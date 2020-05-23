@@ -45,6 +45,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -61,6 +62,8 @@ const (
 	maxRetryDelay = 300 * time.Second
 	// Default number of workers processing a NetworkPolicy change.
 	defaultWorkers = 4
+	// Default rule priority for K8s NetworkPolicy rules.
+	defaultRulePriority = -1
 )
 
 var (
@@ -85,12 +88,16 @@ var (
 	denyAllIngressRule = networking.NetworkPolicyRule{Direction: networking.DirectionIn}
 	// denyAllEgressRule is a NetworkPolicyRule which denies all egress traffic.
 	denyAllEgressRule = networking.NetworkPolicyRule{Direction: networking.DirectionOut}
+	// defaultAction is a RuleAction which sets the default Action for the NetworkPolicy rule.
+	defaultAction = secv1alpha1.RuleActionAllow
 )
 
 // NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
 // affected by a Network Policy.
 type NetworkPolicyController struct {
-	kubeClient  clientset.Interface
+	kubeClient clientset.Interface
+	// crdClient is the clientset for CRD API group.
+	crdClient   versioned.Interface
 	podInformer coreinformers.PodInformer
 
 	// podLister is able to list/get Pods and is populated by the shared informer passed to
@@ -117,6 +124,13 @@ type NetworkPolicyController struct {
 
 	// networkPolicyListerSynced is a function which returns true if the Network Policy shared informer has been synced at least once.
 	networkPolicyListerSynced cache.InformerSynced
+
+	anpInformer secinformers.NetworkPolicyInformer
+	// anpLister is able to list/get Antrea NetworkPolicies and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	anpLister seclisters.NetworkPolicyLister
+	// anpListerSynced is a function which returns true if the Antrea NetworkPolicies shared informer has been synced at least once.
+	anpListerSynced cache.InformerSynced
 
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
@@ -155,14 +169,17 @@ type heartbeat struct {
 
 // NewNetworkPolicyController returns a new *NetworkPolicyController.
 func NewNetworkPolicyController(kubeClient clientset.Interface,
+	crdClient versioned.Interface,
 	podInformer coreinformers.PodInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
+	anpInformer secinformers.NetworkPolicyInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface) *NetworkPolicyController {
 	n := &NetworkPolicyController{
 		kubeClient:                 kubeClient,
+		crdClient:                  crdClient,
 		podInformer:                podInformer,
 		podLister:                  podInformer.Lister(),
 		podListerSynced:            podInformer.Informer().HasSynced,
@@ -172,6 +189,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		networkPolicyInformer:      networkPolicyInformer,
 		networkPolicyLister:        networkPolicyInformer.Lister(),
 		networkPolicyListerSynced:  networkPolicyInformer.Informer().HasSynced,
+		anpInformer:                anpInformer,
+		anpLister:                  anpInformer.Lister(),
+		anpListerSynced:            anpInformer.Informer().HasSynced,
 		addressGroupStore:          addressGroupStore,
 		appliedToGroupStore:        appliedToGroupStore,
 		internalNetworkPolicyStore: internalNetworkPolicyStore,
@@ -203,6 +223,15 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			AddFunc:    n.addNetworkPolicy,
 			UpdateFunc: n.updateNetworkPolicy,
 			DeleteFunc: n.deleteNetworkPolicy,
+		},
+		resyncPeriod,
+	)
+	// Add handlers for Antrea NetworkPolicy events.
+	anpInformer.Informer().AddEventHandlerWithResyncPeriod(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc:    n.addANP,
+			UpdateFunc: n.updateANP,
+			DeleteFunc: n.deleteANP,
 		},
 		resyncPeriod,
 	)
@@ -285,8 +314,8 @@ func generateNormalizedName(namespace string, podSelector, nsSelector labels.Sel
 }
 
 // createAppliedToGroup creates an AppliedToGroup object in store if it is not created already.
-func (n *NetworkPolicyController) createAppliedToGroup(np *networkingv1.NetworkPolicy) string {
-	groupSelector := toGroupSelector(np.ObjectMeta.Namespace, &np.Spec.PodSelector, nil)
+func (n *NetworkPolicyController) createAppliedToGroup(npNsName string, pSel, nSel *metav1.LabelSelector) string {
+	groupSelector := toGroupSelector(npNsName, pSel, nSel)
 	appliedToGroupUID := getNormalizedUID(groupSelector.NormalizedName)
 	// Get or create a AppliedToGroup for the generated UID.
 	_, found, _ := n.appliedToGroupStore.Get(appliedToGroupUID)
@@ -477,7 +506,7 @@ func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networking.IPBlock, error)
 // wherein, it will be either stored as a new Object in case of ADD event or
 // modified and store the updated instance, in case of an UPDATE event.
 func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkPolicy) *antreatypes.NetworkPolicy {
-	appliedToGroupKey := n.createAppliedToGroup(np)
+	appliedToGroupKey := n.createAppliedToGroup(np.Namespace, &np.Spec.PodSelector, nil)
 	appliedToGroupNames := []string{appliedToGroupKey}
 	rules := make([]networking.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
 	var ingressRuleExists, egressRuleExists bool
@@ -488,6 +517,8 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 			Direction: networking.DirectionIn,
 			From:      *n.toAntreaPeer(ingressRule.From, np, networking.DirectionIn),
 			Services:  toAntreaServices(ingressRule.Ports),
+			Priority:  defaultRulePriority,
+			Action:    &defaultAction,
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
@@ -497,6 +528,8 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 			Direction: networking.DirectionOut,
 			To:        *n.toAntreaPeer(egressRule.To, np, networking.DirectionOut),
 			Services:  toAntreaServices(egressRule.Ports),
+			Priority:  defaultRulePriority,
+			Action:    &defaultAction,
 		})
 	}
 
@@ -913,7 +946,7 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	defer klog.Info("Shutting down NetworkPolicy controller")
 
 	klog.Info("Waiting for caches to sync for NetworkPolicy controller")
-	if !cache.WaitForCacheSync(stopCh, n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced) {
+	if !cache.WaitForCacheSync(stopCh, n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced, n.anpListerSynced) {
 		klog.Error("Unable to sync caches for NetworkPolicy controller")
 		return
 	}
@@ -1251,6 +1284,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 		Namespace:       internalNP.Namespace,
 		Rules:           internalNP.Rules,
 		AppliedToGroups: internalNP.AppliedToGroups,
+		Priority:        internalNP.Priority,
 		SpanMeta:        antreatypes.SpanMeta{NodeNames: nodeNames},
 	}
 	klog.V(4).Infof("Updating internal NetworkPolicy %s with %d Nodes", key, nodeNames.Len())

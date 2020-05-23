@@ -28,4 +28,8 @@ type ControllerConfig struct {
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to false.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// Enable controller to watch for Antrea NetworkPolicy CRDs. Temporary config option
+	// to be removed once CRDs are considered stable.
+	// Defaults to false.
+	EnableSecurityCRDs bool `yaml:"enableSecurityCRDs,omitempty"`
 }

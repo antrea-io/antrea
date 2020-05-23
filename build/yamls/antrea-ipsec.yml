@@ -294,7 +294,7 @@ data:
     # - geneve
     # - gre
     # - stt
-    tunnelType: gre
+    #tunnelType: vxlan
 
     # Default MTU to use for the host gateway interface and the network interface of each Pod. If
     # omitted, antrea-agent will default this value to 1450 to accommodate for tunnel encapsulate
@@ -303,7 +303,7 @@ data:
 
     # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
     # for the GRE tunnel type.
-    enableIPSecTunnel: true
+    #enableIPSecTunnel: false
 
     # CIDR Range for services in cluster. It's required to support egress network policy, should
     # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
@@ -350,12 +350,16 @@ data:
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     #enablePrometheusMetrics: false
+
+    # Enable Antrea NetworkPolicy CRDs. Setting it to true enables the controller
+    # watch for Antrea NetworkPolicy CRDs.
+    #enableSecurityCRDs: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-hdhc998mb8
+  name: antrea-config-k2m4645m4g
   namespace: kube-system
 ---
 apiVersion: v1
@@ -467,7 +471,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-hdhc998mb8
+          name: antrea-config-k2m4645m4g
         name: antrea-config
       - hostPath:
           path: /var/log/antrea
@@ -709,7 +713,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-hdhc998mb8
+          name: antrea-config-k2m4645m4g
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

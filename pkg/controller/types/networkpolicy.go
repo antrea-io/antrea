@@ -91,6 +91,9 @@ type NetworkPolicy struct {
 	Name string
 	// Namespace of the original K8s Network Policy.
 	Namespace string
+	// Priority represents the relative priority of this Network Policy as compared to
+	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+	Priority *float64
 	// Rules is a list of rules to be applied to the selected Pods.
 	Rules []networking.NetworkPolicyRule
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
