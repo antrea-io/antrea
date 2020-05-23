@@ -29,26 +29,26 @@ protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
 $GOPATH/bin/client-gen \
   --clientset-name versioned \
   --input-base "${ANTREA_PKG}/pkg/apis/" \
-  --input "clusterinformation/v1beta1,networking/v1beta1,security/v1beta1,core/v1beta1" \
+  --input "clusterinformation/v1beta1,networking/v1beta1,security/v1alpha1,core/v1alpha1" \
   --output-package "${ANTREA_PKG}/pkg/client/clientset" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 # Generate listers with K8s codegen tools.
 $GOPATH/bin/lister-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1beta1,${ANTREA_PKG}/pkg/apis/core/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha1" \
   --output-package "${ANTREA_PKG}/pkg/client/listers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 # Generate informers with K8s codegen tools.
 $GOPATH/bin/informer-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1beta1,${ANTREA_PKG}/pkg/apis/core/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha1" \
   --versioned-clientset-package "${ANTREA_PKG}/pkg/client/clientset/versioned" \
   --listers-package "${ANTREA_PKG}/pkg/client/listers" \
   --output-package "${ANTREA_PKG}/pkg/client/informers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/deepcopy-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1,${ANTREA_PKG}/pkg/apis/networking,${ANTREA_PKG}/pkg/apis/networking/v1beta1,${ANTREA_PKG}/pkg/apis/security/v1beta1,${ANTREA_PKG}/pkg/apis/core/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1,${ANTREA_PKG}/pkg/apis/networking,${ANTREA_PKG}/pkg/apis/networking/v1beta1,${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha1" \
   -O zz_generated.deepcopy \
   --go-header-file hack/boilerplate/license_header.go.txt
 
