@@ -683,6 +683,10 @@ data:
     # to define security policies which apply to the entire cluster.
     #  ClusterNetworkPolicy: false
 
+    # Enable AntreaNetworkPolicy feature to complement K8s NetworkPolicy for security policies that
+    # supports priorities, actions and externalEntities.
+    #  AntreaNetworkPolicy: false
+
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
     #  FlowExporter: false
 
@@ -779,6 +783,10 @@ data:
     # to define security policies which apply to the entire cluster.
     #  ClusterNetworkPolicy: false
 
+    # Enable AntreaNetworkPolicy feature to complement K8s NetworkPolicy for security policies that
+    # supports priorities, actions and externalEntities.
+    #  AntreaNetworkPolicy: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -800,7 +808,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-92kk9hc82g
+  name: antrea-config-6bt9gdt7t5
   namespace: kube-system
 ---
 apiVersion: v1
@@ -915,7 +923,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-92kk9hc82g
+          name: antrea-config-6bt9gdt7t5
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1165,7 +1173,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-92kk9hc82g
+          name: antrea-config-6bt9gdt7t5
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

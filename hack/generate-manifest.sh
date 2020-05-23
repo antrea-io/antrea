@@ -28,7 +28,8 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --proxy                       Generate a manifest with Antrea proxy enabled
-        --np                          Generate a manifest with Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs enabled
+        --np                          Generate a manifest with ClusterNetworkPolicy related CRDs enabled
+        --anp                         Generate a manifest with Namespaced Antrea NetworkPolicy CRDs enabled
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --help, -h                    Print this message and exit
@@ -53,6 +54,7 @@ KIND=false
 IPSEC=false
 PROXY=false
 NP=false
+ANP=false
 KEEP=false
 ENCAP_MODE=""
 CLOUD=""
@@ -89,6 +91,10 @@ case $key in
     ;;
     --np)
     NP=true
+    shift
+    ;;
+    --anp)
+    ANP=true
     shift
     ;;
     --keep)
@@ -182,6 +188,10 @@ fi
 if $NP; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  ClusterNetworkPolicy: true/" antrea-controller.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  ClusterNetworkPolicy: true/" antrea-agent.conf
+fi
+
+if $ANP; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaNetworkPolicy: true/" antrea-controller.conf
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then
