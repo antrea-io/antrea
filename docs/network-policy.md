@@ -24,8 +24,8 @@ spec:
         matchLabels:
           env: prod
     ingress:
-    - from:
-      action: Allow
+    - action: Allow
+      from:
       - podSelector:
           matchLabels:
             role: db
@@ -40,8 +40,8 @@ spec:
         port: 8080
         name: httpPort
     egress:
-    - to:
-      action: Drop
+    - action: Drop
+      to:
       - ipBlock:
         cidr: 10.0.10.0/24
       ports:
