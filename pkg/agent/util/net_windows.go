@@ -37,6 +37,7 @@ const (
 	LocalHNSNetwork     = "antrea-hnsnetwork"
 	OVSExtensionID      = "583CC151-73EC-4A6A-8B47-578297AD7623"
 	namedPipePrefix     = `\\.\pipe\`
+	infraContainerNetNS = "none"
 )
 
 func GetNSPath(containerNetNS string) (string, error) {
@@ -392,4 +393,10 @@ func DialLocalSocket(address string) (net.Conn, error) {
 		return winio.DialPipe(address, nil)
 	}
 	return dialUnix(address)
+}
+
+// IsInfraContainer return if a container is infra container according to the network namespace path.
+// On Windows platform, the network namespace of infra container is "none".
+func IsInfraContainer(netNS string) bool {
+	return netNS == infraContainerNetNS
 }

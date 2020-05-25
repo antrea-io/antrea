@@ -20,6 +20,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 )
 
@@ -70,6 +71,12 @@ func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) (
 	if ok {
 		result := obj.(*current.Result)
 		return result, nil
+	}
+
+	// Only allocate IP when handling CNI request from infra container.
+	// On windows platform, CNI plugin is called for all containers in a Pod.
+	if !util.IsInfraContainer(cniArgs.Netns) {
+		return nil, fmt.Errorf("allocated IP address not found")
 	}
 
 	args := argsFromEnv(cniArgs)

@@ -20,3 +20,13 @@ import "github.com/containernetworking/cni/pkg/types/current"
 func updateResultDNSConfig(result *current.Result, cniConfig *CNIConfig) {
 	result.DNS = cniConfig.DNS
 }
+
+// When running in a container, the host's /proc directory is mounted under s.hostProcPathPrefix, so
+// we need to prepend s.hostProcPathPrefix to the network namespace path provided by the cni. When
+// running as a simple process, s.hostProcPathPrefix will be empty.
+func (s *CNIServer) hostNetNsPath(netNS string) string {
+	if netNS == "" {
+		return ""
+	}
+	return s.hostProcPathPrefix + netNS
+}

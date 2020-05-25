@@ -198,6 +198,11 @@ func (pc *podConfigurator) configureInterfaces(
 	hostIface := result.Interfaces[0]
 	containerIface := result.Interfaces[1]
 
+	if !util.IsInfraContainer(containerNetNS) {
+		klog.Infof("Not infra container: %s, skip add OVS port.", containerNetNS)
+		return nil
+	}
+
 	// Delete veth pair if any failure occurs in later manipulation.
 	success := false
 	defer func() {

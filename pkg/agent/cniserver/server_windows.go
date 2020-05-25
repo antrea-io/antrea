@@ -36,3 +36,8 @@ func updateResultDNSConfig(result *current.Result, cniConfig *CNIConfig) {
 	}
 	klog.Infof("Got runtime DNS configuration: %v", result.DNS)
 }
+
+// On windows platform netNS is not used, return it directly.
+func (s *CNIServer) hostNetNsPath(netNS string) string {
+	return netNS
+}
