@@ -321,16 +321,6 @@ func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*c
 	return prevResult, nil
 }
 
-// When running in a container, the host's /proc directory is mounted under s.hostProcPathPrefix, so
-// we need to prepend s.hostProcPathPrefix to the network namespace path provided by the cni. When
-// running as a simple process, s.hostProcPathPrefix will be empty.
-func (s *CNIServer) hostNetNsPath(netNS string) string {
-	if netNS == "" {
-		return ""
-	}
-	return s.hostProcPathPrefix + netNS
-}
-
 func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8sArgs, prevResult *current.Result) (*cnipb.CniCmdResponse, error) {
 	containerID := cfgArgs.ContainerId
 	netNS := s.hostNetNsPath(cfgArgs.Netns)
@@ -367,14 +357,19 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	cniVersion := cniConfig.CNIVersion
 	result := &current.Result{CNIVersion: cniVersion}
 	netNS := s.hostNetNsPath(cniConfig.Netns)
+	isInfraContainer := isInfraContainer(netNS)
 
 	success := false
 	defer func() {
 		// Rollback to delete configurations once ADD is failure.
 		if !success {
-			klog.Warningf("CmdAdd has failed, and try to rollback")
-			if _, err := s.CmdDel(ctx, request); err != nil {
-				klog.Warningf("Failed to rollback after CNI add failure: %v", err)
+			if isInfraContainer {
+				klog.Warningf("CmdAdd has failed, and try to rollback")
+				if _, err := s.CmdDel(ctx, request); err != nil {
+					klog.Warningf("Failed to rollback after CNI add failure: %v", err)
+				}
+			} else {
+				klog.Warningf("CmdAdd has failed")
 			}
 		}
 	}()
@@ -391,11 +386,21 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	}
 
 	podKey := util.GenerateContainerInterfaceName(string(cniConfig.K8S_POD_NAME), string(cniConfig.K8S_POD_NAMESPACE))
-	// Request IP Address from IPAM driver
-	ipamResult, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, podKey)
-	if err != nil {
-		klog.Errorf("Failed to add IP addresses from IPAM driver: %v", err)
-		return s.ipamFailureResponse(err), nil
+	var ipamResult *current.Result
+	var err error
+	// Only allocate IP when handling CNI request from infra container.
+	// On windows platform, CNI plugin is called for all containers in a Pod.
+	if !isInfraContainer {
+		if ipamResult, _ = ipam.GetIPFromCache(podKey); ipamResult == nil {
+			return nil, fmt.Errorf("allocated IP address not found")
+		}
+	} else {
+		// Request IP Address from IPAM driver.
+		ipamResult, err = ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, podKey)
+		if err != nil {
+			klog.Errorf("Failed to add IP addresses from IPAM driver: %v", err)
+			return s.ipamFailureResponse(err), nil
+		}
 	}
 	klog.Infof("Added ip addresses from IPAM driver, %v", ipamResult)
 	result.IPs = ipamResult.IPs
@@ -414,6 +419,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		cniConfig.Ifname,
 		cniConfig.MTU,
 		result,
+		isInfraContainer,
 	); err != nil {
 		klog.Errorf("Failed to configure interfaces for container %s: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
