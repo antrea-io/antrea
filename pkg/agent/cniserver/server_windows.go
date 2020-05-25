@@ -21,6 +21,8 @@ import (
 	"k8s.io/klog"
 )
 
+const infraContainerNetNS = "none"
+
 // updateResultDNSConfig update the DNS config from CNIConfig.
 // For windows platform, if runtime dns values are there use that else use cni conf supplied dns.
 // See PR: https://github.com/kubernetes/kubernetes/pull/63905
@@ -35,4 +37,15 @@ func updateResultDNSConfig(result *current.Result, cniConfig *CNIConfig) {
 		result.DNS.Search = cniConfig.RuntimeConfig.DNS.Search
 	}
 	klog.Infof("Got runtime DNS configuration: %v", result.DNS)
+}
+
+// On windows platform netNS is not used, return it directly.
+func (s *CNIServer) hostNetNsPath(netNS string) string {
+	return netNS
+}
+
+// isInfraContainer return if a container is infra container according to the network namespace path.
+// On Windows platform, the network namespace of infra container is "none".
+func isInfraContainer(netNS string) bool {
+	return netNS == infraContainerNetNS
 }
