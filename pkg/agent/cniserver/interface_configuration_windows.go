@@ -99,10 +99,19 @@ func (ic *ifConfigurator) configureContainerLink(
 	mtu int,
 	result *current.Result,
 ) error {
-	// Create HNS Endpoint.
-	endpoint, err := ic.createContainerLink(podName, podNameSpace, containerID, result)
-	if err != nil {
-		return err
+	epName := util.GenerateContainerInterfaceName(podName, podNameSpace)
+	// Search endpoint from local cache.
+	endpoint, found := ic.getEndpoint(epName)
+	if !found {
+		if !isInfraContainer(containerNetNS) {
+			return fmt.Errorf("failed to find HNSEndpoint: %s", epName)
+		}
+		// Only create HNS Endpoint for infra container.
+		ep, err := ic.createContainerLink(podName, podNameSpace, containerID, result)
+		if err != nil {
+			return err
+		}
+		endpoint = ep
 	}
 	// Attach HNSEndpoint to the container. Note that HNSEndpoint must be attached to the container before adding OVS port,
 	// otherwise an error will be returned when creating OVS port.
@@ -131,11 +140,6 @@ func (ic *ifConfigurator) configureContainerLink(
 // createContainerLink creates HNSEndpoint using the IP configuration in the IPAM result.
 func (ic *ifConfigurator) createContainerLink(podName string, podNameSpace string, containerID string, result *current.Result) (hostLink *hcsshim.HNSEndpoint, err error) {
 	epName := util.GenerateContainerInterfaceName(podName, podNameSpace)
-	// Search endpoint from local cache.
-	ep, found := ic.getEndpoint(epName)
-	if found {
-		return ep, nil
-	}
 
 	// Create a new Endpoint if not found.
 	if err := ic.ensureHNSNetwork(); err != nil {
@@ -175,7 +179,9 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 		klog.V(2).Infof("HNS Endpoint %s already attached on container %s", ep.Id, containerID)
 	} else {
 		if err := hcsshim.HotAttachEndpoint(containerID, ep.Id); err != nil {
-			return nil, err
+			if isInfraContainer(sandbox) || hcsshim.ErrComputeSystemDoesNotExist != err {
+				return nil, err
+			}
 		}
 	}
 	containerIface := &current.Interface{
