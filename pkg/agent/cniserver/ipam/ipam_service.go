@@ -66,10 +66,9 @@ func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) (
 	// The cache here is to ensure only one IP address is allocated to one Pod.
 	// TODO: A risk of IP re-allocation exists if agent restarts before kubelet queries Pod status and after the
 	//       container networking configurations is added.
-	obj, ok := ipamResults.Load(resultKey)
+	obj, ok := GetIPFromCache(resultKey)
 	if ok {
-		result := obj.(*current.Result)
-		return result, nil
+		return obj, nil
 	}
 
 	args := argsFromEnv(cniArgs)
@@ -83,7 +82,7 @@ func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) (
 }
 
 func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) error {
-	_, ok := ipamResults.Load(resultKey)
+	_, ok := GetIPFromCache(resultKey)
 	if !ok {
 		return nil
 	}
@@ -101,6 +100,15 @@ func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, ipamType string) error {
 	args := argsFromEnv(cniArgs)
 	driver := ipamDrivers[ipamType]
 	return driver.Check(args, cniArgs.NetworkConfiguration)
+}
+
+func GetIPFromCache(resultKey string) (*current.Result, bool) {
+	obj, ok := ipamResults.Load(resultKey)
+	if ok {
+		result := obj.(*current.Result)
+		return result, ok
+	}
+	return nil, ok
 }
 
 func IsIPAMTypeValid(ipamType string) bool {

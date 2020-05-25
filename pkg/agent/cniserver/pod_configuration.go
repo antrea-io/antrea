@@ -190,6 +190,7 @@ func (pc *podConfigurator) configureInterfaces(
 	containerIFDev string,
 	mtu int,
 	result *current.Result,
+	createOVSPort bool,
 ) error {
 	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, result)
 	if err != nil {
@@ -197,6 +198,10 @@ func (pc *podConfigurator) configureInterfaces(
 	}
 	hostIface := result.Interfaces[0]
 	containerIface := result.Interfaces[1]
+
+	if !createOVSPort {
+		return nil
+	}
 
 	// Delete veth pair if any failure occurs in later manipulation.
 	success := false
@@ -207,9 +212,10 @@ func (pc *podConfigurator) configureInterfaces(
 	}()
 
 	// Check if the OVS configurations for the container exists or not. If yes, return immediately. This check is
-	// used on Windows, for Kubelet on Windows will call CNI Add for both the infrastructure container and the workload
-	// container. But there should be only one OVS port created for the same Pod. And if the OVS port is added more than
+	// used on Windows, as kubelet on Windows will call CNI Add for infrastructure container for multiple times
+	// to query IP of Pod. But there should be only one OVS port created for the same Pod. And if the OVS port is added more than
 	// once, OVS will return an error.
+	// See https://github.com/kubernetes/kubernetes/issues/57253#issuecomment-358897721.
 	_, found := pc.ifaceStore.GetContainerInterface(podName, podNameSpace)
 	if found {
 		klog.V(2).Infof("Found an existed OVS port with podName %s podNamespace %s, returning", podName, podNameSpace)
