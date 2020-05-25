@@ -20,6 +20,7 @@ import (
 
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/metricsstore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -738,6 +739,16 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
 		return err
 	}
+
+	// Count up antrea_agent_local_ingress_networkpolicy_count or antrea_agent_local_engress_networkpolicy_count
+	if rule.Direction == v1beta1.DirectionIn {
+		klog.Error("Ingress Rule create")
+		metricsstore.IngressNetworkPolicyCount.Inc()	
+	} else if rule.Direction == v1beta1.DirectionOut {
+		klog.Error("Egress Rule create")
+		metricsstore.EgressNetworkPolicyCount.Inc()
+	}
+
 	// Add the policyRuleConjunction into policyCache.
 	c.policyCache.Store(ruleID, conj)
 	return nil
@@ -943,6 +954,25 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
 	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
 		return err
 	}
+	
+
+	isFound := false
+	for _, ctxChange := range ctxChanges {
+		klog.Errorf("RuleID: %s, TableID", ruleID, ctxChange.clause.ruleTable.GetID())
+		switch ctxChange.clause.ruleTable.GetID() {
+		case ingressRuleTable:
+			klog.Errorf("IngressRule Deleted")	
+			metricsstore.IngressNetworkPolicyCount.Dec()
+			isFound = true
+		case egressRuleTable:
+			klog.Errorf("EgressRule Deleted")	
+			metricsstore.EgressNetworkPolicyCount.Dec()
+			isFound = true
+		}
+		if isFound {
+			break
+		}
+	}	
 
 	// Remove policyRuleConjunction from client's policyCache.
 	c.policyCache.Delete(ruleID)

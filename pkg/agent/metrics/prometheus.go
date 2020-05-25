@@ -52,6 +52,14 @@ func InitializePrometheusMetrics() {
 		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
 	}
 
+	//if err := prometheus.Register(metricsstore.IngressNetworkPolicyCount); err != nil {
+	//	klog.Error("Failed to register antrea_agent_local_ingress_networkpolicy_count with Prometheus")
+	//}
+
+	//if err := prometheus.Register(metricsstore.EgressNetworkPolicyCount); err != nil {
+	//	klog.Error("Failed to register antrea_agent_local_egress_networkpolicy_count with Prometheus")
+	//}
+
 	nodeName, err := env.GetNodeName()
 	if err != nil {
 		klog.Errorf("Failed to retrieve agent K8S node name: %v", err)
