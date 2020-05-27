@@ -51,14 +51,14 @@ const informerDefaultResync = 12 * time.Hour
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
 	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
-	k8sClient, crdClient, err := k8s.CreateClients(o.config.ClientConnection)
+	k8sClient, _, crdClient, err := k8s.CreateClients(o.config.ClientConnection)
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
 
 	// Create Antrea Clientset for the given config.
-	antreaClient, err := agent.CreateAntreaClient(o.config.AntreaClientConnection)
+	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
 	if err != nil {
 		return fmt.Errorf("error creating Antrea client: %v", err)
 	}
@@ -118,7 +118,7 @@ func run(o *Options) error {
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated Pods.
 	podUpdates := make(chan v1beta1.PodReference, 100)
-	networkPolicyController := networkpolicy.NewNetworkPolicyController(antreaClient, ofClient, ifaceStore, nodeConfig.Name, podUpdates)
+	networkPolicyController := networkpolicy.NewNetworkPolicyController(antreaClientProvider, ofClient, ifaceStore, nodeConfig.Name, podUpdates)
 	isChaining := false
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
@@ -147,6 +147,9 @@ func run(o *Options) error {
 		return err
 	}
 
+	if err := antreaClientProvider.RunOnce(); err != nil {
+		return err
+	}
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
@@ -155,6 +158,8 @@ func run(o *Options) error {
 	go cniServer.Run(stopCh)
 
 	informerFactory.Start(stopCh)
+
+	go antreaClientProvider.Run(stopCh)
 
 	go nodeRouteController.Run(stopCh)
 

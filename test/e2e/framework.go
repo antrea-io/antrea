@@ -35,6 +35,7 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
+	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/test/e2e/providers"
@@ -87,8 +88,9 @@ var provider providers.ProviderInterface
 
 // TestData stores the state required for each test case.
 type TestData struct {
-	kubeConfig *restclient.Config
-	clientset  kubernetes.Interface
+	kubeConfig       *restclient.Config
+	clientset        kubernetes.Interface
+	aggregatorClient aggregatorclientset.Interface
 }
 
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
@@ -391,8 +393,13 @@ func (data *TestData) createClient() error {
 	if err != nil {
 		return fmt.Errorf("error when creating kubernetes client: %v", err)
 	}
+	aggregatorClient, err := aggregatorclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return fmt.Errorf("error when creating kubernetes aggregatorClient: %v", err)
+	}
 	data.kubeConfig = kubeConfig
 	data.clientset = clientset
+	data.aggregatorClient = aggregatorClient
 	return nil
 }
 
@@ -696,18 +703,52 @@ func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err e
 }
 
 // getAntreaController retrieves the name of the Antrea Controller (antrea-controller-*) running in the k8s cluster.
-func (data *TestData) getAntreaController() (podName string, err error) {
+func (data *TestData) getAntreaController() (*v1.Pod, error) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea,component=antrea-controller",
 	}
 	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(listOptions)
 	if err != nil {
-		return "", fmt.Errorf("failed to list Antrea Controller: %v", err)
+		return nil, fmt.Errorf("failed to list Antrea Controller: %v", err)
 	}
 	if len(pods.Items) != 1 {
-		return "", fmt.Errorf("expected *exactly* one Pod")
+		return nil, fmt.Errorf("expected *exactly* one Pod")
 	}
-	return pods.Items[0].Name, nil
+	return &pods.Items[0], nil
+}
+
+// restartAntreaControllerPod deletes the antrea-controller Pod to force it to be re-scheduled. It then waits
+// for the new Pod to become available, and returns it.
+func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*v1.Pod, error) {
+	var gracePeriodSeconds int64 = 1
+	deleteOptions := &metav1.DeleteOptions{
+		GracePeriodSeconds: &gracePeriodSeconds,
+	}
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=antrea,component=antrea-controller",
+	}
+	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
+		return nil, fmt.Errorf("error when deleting antrea-controller Pod: %v", err)
+	}
+
+	var newPod *v1.Pod
+	// wait for new antrea-controller Pod
+	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+		pods, err := data.clientset.CoreV1().Pods("kube-system").List(listOptions)
+		if err != nil {
+			return false, fmt.Errorf("failed to list antrea-controller Pods: %v", err)
+		}
+		for _, pod := range pods.Items {
+			if pod.Status.Phase == v1.PodRunning && pod.DeletionTimestamp == nil {
+				newPod = &pod
+				return true, nil
+			}
+		}
+		return false, nil
+	}); err != nil {
+		return nil, err
+	}
+	return newPod, nil
 }
 
 // validatePodIP checks that the provided IP address is in the Pod Network CIDR for the cluster.

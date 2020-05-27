@@ -27,15 +27,24 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 )
 
 const testNamespace = "ns1"
 
+type antreaClientGetter struct {
+	clientset versioned.Interface
+}
+
+func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
+	return g.clientset, nil
+}
+
 func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 	ch := make(chan v1beta1.PodReference, 100)
-	controller := NewNetworkPolicyController(clientset, nil, nil, "node1", ch)
+	controller := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch)
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
 	return controller, clientset, reconciler

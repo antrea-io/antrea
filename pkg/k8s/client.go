@@ -20,12 +20,13 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog"
+	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 )
 
 // CreateClients creates kube clients from the given config.
-func CreateClients(config componentbaseconfig.ClientConnectionConfiguration) (clientset.Interface, crdclientset.Interface, error) {
+func CreateClients(config componentbaseconfig.ClientConnectionConfiguration) (clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, error) {
 	var kubeConfig *rest.Config
 	var err error
 
@@ -38,7 +39,7 @@ func CreateClients(config componentbaseconfig.ClientConnectionConfiguration) (cl
 			&clientcmd.ConfigOverrides{}).ClientConfig()
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	kubeConfig.AcceptContentTypes = config.AcceptContentTypes
@@ -48,12 +49,17 @@ func CreateClients(config componentbaseconfig.ClientConnectionConfiguration) (cl
 
 	client, err := clientset.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+
+	aggregatorClient, err := aggregatorclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	// Create client for crd operations
 	crdClient, err := crdclientset.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return client, crdClient, nil
+	return client, aggregatorClient, crdClient, nil
 }
