@@ -67,7 +67,7 @@ Download `kube-proxy.yaml` from kubernetes official repository and set
 kube-proxy version.
 ```
 # Example:
-curl.exe -LO https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/kube-proxy.yml | sed 's/VERSION/v1.18.0/g' > kube-proxy.yaml
+curl -L https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/kube-proxy.yml | sed 's/VERSION/v1.18.0/g'  > kube-proxy.yml
 ```
 Replace the content of `run-script.ps1` in configmap named `kube-proxy-windows`
 as following:
@@ -112,9 +112,9 @@ spec:
     spec:
       hostNetwork: true
 ```
-Then apply the `kube-proxy.yaml`.
+Then apply the `kube-proxy.yml`.
 ```
-kubectl apply -f kube-proxy.yaml
+kubectl apply -f kube-proxy.yml
 ```
 
 #### Join Windows worker Nodes
@@ -160,16 +160,6 @@ container.
 curl.exe -LO https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/PrepareNode.ps1
 .\PrepareNode.ps1 -KubernetesVersion v1.18.0
 ```
-Then, set the Node IP used by kubelet.
-Open file `/var/lib/kubelet/kubeadm-flags.env`:
-```
-KUBELET_KUBEADM_ARGS="--cgroup-driver= --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.1"
-```
-Append "--node-ip=$NODE_IP" arg at the end of params. Replace `$NODE_IP` with
-the address for kubelet. It should look like:
-```
-KUBELET_KUBEADM_ARGS="--cgroup-driver= --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.1 --node-ip=$NODE_IP"```
-```
 
 4. Prepare network adapter for kubernetes service
 
@@ -195,6 +185,21 @@ generate a new token and join command.
 ```
 # Example:
 kubeadm join 192.168.101.5:6443 --token tdp0jt.rshv3uobkuoobb4v  --discovery-token-ca-cert-hash sha256:84a163e57bf470f18565e44eaa2a657bed4da9748b441e9643ac856a274a30b9
+```
+
+Then, set the Node IP used by kubelet.
+Open file `/var/lib/kubelet/kubeadm-flags.env`:
+```
+KUBELET_KUBEADM_ARGS="--cgroup-driver= --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.1"
+```
+Append `--node-ip=$NODE_IP` at the end of params. Replace `$NODE_IP` with
+the address for kubelet. It should look like:
+```
+KUBELET_KUBEADM_ARGS="--cgroup-driver= --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.1 --node-ip=$NODE_IP"
+```
+Restart kubelet service for changes to take effect.
+```
+restart-service kubelet
 ```
 
 #### Verify your installation
