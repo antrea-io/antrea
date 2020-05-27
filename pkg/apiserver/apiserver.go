@@ -15,6 +15,7 @@
 package apiserver
 
 import (
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -22,6 +23,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	networkinginstall "github.com/vmware-tanzu/antrea/pkg/apis/networking/install"
@@ -57,6 +59,7 @@ type ExtraConfig struct {
 	appliedToGroupStore storage.Interface
 	networkPolicyStore  storage.Interface
 	controllerQuerier   querier.ControllerQuerier
+	caCertController    *certificate.CACertController
 }
 
 // Config defines the config for Antrea apiserver.
@@ -68,6 +71,17 @@ type Config struct {
 // APIServer contains state for a Kubernetes cluster apiserver.
 type APIServer struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
+	caCertController *certificate.CACertController
+}
+
+func (s *APIServer) Run(stopCh <-chan struct{}) error {
+	// Make sure CACertController runs once to publish the CA cert before starting APIServer.
+	if err := s.caCertController.RunOnce(); err != nil {
+		klog.Warningf("caCertController RunOnce failed: %v", err)
+	}
+	go s.caCertController.Run(1, stopCh)
+
+	return s.GenericAPIServer.PrepareRun().Run(stopCh)
 }
 
 type completedConfig struct {
@@ -78,6 +92,7 @@ type completedConfig struct {
 func NewConfig(
 	genericConfig *genericapiserver.Config,
 	addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface,
+	caCertController *certificate.CACertController,
 	controllerQuerier querier.ControllerQuerier) *Config {
 	return &Config{
 		genericConfig: genericConfig,
@@ -85,6 +100,7 @@ func NewConfig(
 			addressGroupStore:   addressGroupStore,
 			appliedToGroupStore: appliedToGroupStore,
 			networkPolicyStore:  networkPolicyStore,
+			caCertController:    caCertController,
 			controllerQuerier:   controllerQuerier,
 		},
 	}
@@ -102,6 +118,7 @@ func (c completedConfig) New() (*APIServer, error) {
 
 	s := &APIServer{
 		GenericAPIServer: genericServer,
+		caCertController: c.extraConfig.caCertController,
 	}
 
 	networkingGroup := genericapiserver.NewDefaultAPIGroupInfo(networking.GroupName, Scheme, metav1.ParameterCodec, Codecs)

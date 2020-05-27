@@ -11,12 +11,16 @@ spec:
   selector:
     component: antrea-controller
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: antrea-ca
+---
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
   name: v1beta1.networking.antrea.tanzu.vmware.com
 spec:
-  insecureSkipTLSVerify: true
   group: networking.antrea.tanzu.vmware.com
   groupPriorityMinimum: 100
   version: v1beta1
@@ -30,7 +34,6 @@ kind: APIService
 metadata:
   name: v1beta1.system.antrea.tanzu.vmware.com
 spec:
-  insecureSkipTLSVerify: true
   group: system.antrea.tanzu.vmware.com
   groupPriorityMinimum: 100
   version: v1beta1
@@ -111,12 +114,20 @@ spec:
               mountPath: /etc/antrea/antrea-controller.conf
               subPath: antrea-controller.conf
               readOnly: true
+            - name: antrea-controller-tls
+              mountPath: /var/run/antrea/antrea-controller-tls
             - name: host-var-log-antrea
               mountPath: /var/log/antrea
       volumes:
         - name: antrea-config
           configMap:
             name: antrea-config
+        # Make it optional as we only read it when selfSignedCert=false.
+        - name: antrea-controller-tls
+          secret:
+            secretName: antrea-controller-tls
+            defaultMode: 0400
+            optional: true
         - name: host-var-log-antrea
           hostPath:
             path: /var/log/antrea
