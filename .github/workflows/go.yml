@@ -3,12 +3,10 @@ on:
   pull_request:
     branches:
     - master
-    - windows
     - release-*
   push:
     branches:
     - master
-    - windows
     - release-*
 jobs:
 
