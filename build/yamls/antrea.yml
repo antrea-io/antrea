@@ -160,6 +160,16 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - ""
+  resourceNames:
+  - antrea-ca
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - watch
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -224,6 +234,25 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - ""
+  resourceNames:
+  - antrea-ca
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - apiregistration.k8s.io
+  resourceNames:
+  - v1beta1.system.antrea.tanzu.vmware.com
+  - v1beta1.networking.antrea.tanzu.vmware.com
+  resources:
+  - apiservices
+  verbs:
+  - get
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -269,6 +298,14 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: antrea-controller
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: antrea
+  name: antrea-ca
   namespace: kube-system
 ---
 apiVersion: v1
@@ -350,12 +387,19 @@ data:
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     #enablePrometheusMetrics: false
+
+    # Indicates whether to use auto-generated self-signed TLS certificate.
+    # If false, A secret named "kube-system/antrea-controller-tls" must be provided with the following keys:
+    #   ca.crt: <CA certificate>
+    #   tls.crt: <TLS certificate>
+    #   tls.key: <TLS private key>
+    #selfSignedCert: true
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-m8cb9g82tf
+  name: antrea-config-mf4t8c67c8
   namespace: kube-system
 ---
 apiVersion: v1
@@ -444,6 +488,8 @@ spec:
           name: antrea-config
           readOnly: true
           subPath: antrea-controller.conf
+        - mountPath: /var/run/antrea/antrea-controller-tls
+          name: antrea-controller-tls
         - mountPath: /var/log/antrea
           name: host-var-log-antrea
       hostNetwork: true
@@ -458,8 +504,13 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-m8cb9g82tf
+          name: antrea-config-mf4t8c67c8
         name: antrea-config
+      - name: antrea-controller-tls
+        secret:
+          defaultMode: 256
+          optional: true
+          secretName: antrea-controller-tls
       - hostPath:
           path: /var/log/antrea
           type: DirectoryOrCreate
@@ -474,7 +525,6 @@ metadata:
 spec:
   group: networking.antrea.tanzu.vmware.com
   groupPriorityMinimum: 100
-  insecureSkipTLSVerify: true
   service:
     name: antrea
     namespace: kube-system
@@ -490,7 +540,6 @@ metadata:
 spec:
   group: system.antrea.tanzu.vmware.com
   groupPriorityMinimum: 100
-  insecureSkipTLSVerify: true
   service:
     name: antrea
     namespace: kube-system
@@ -665,7 +714,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-m8cb9g82tf
+          name: antrea-config-mf4t8c67c8
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -69,7 +69,9 @@ func (o *Options) loadConfigFromFile(file string) (*ControllerConfig, error) {
 		return nil, err
 	}
 
-	var c ControllerConfig
+	c := ControllerConfig{
+		SelfSignedCert: true,
+	}
 	err = yaml.UnmarshalStrict(data, &c)
 	if err != nil {
 		return nil, err

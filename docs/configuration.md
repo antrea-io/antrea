@@ -90,6 +90,13 @@ clientConnection:
 
 # The port for the antrea-controller APIServer to serve on.
 #apiPort: 10349
+
+# Indicates whether to use auto-generated self-signed TLS certificate.
+# If false, A secret named "kube-system/antrea-controller-tls" must be provided with the following keys:
+#   ca.crt: <CA certificate>
+#   tls.crt: <TLS certificate>
+#   tls.key: <TLS private key>
+#selfSignedCert: true
 ```
 
 ## CNI configuration

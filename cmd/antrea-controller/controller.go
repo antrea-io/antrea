@@ -26,9 +26,12 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
+	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/vmware-tanzu/antrea/pkg/apiserver"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/openapi"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
@@ -49,8 +52,10 @@ const informerDefaultResync = 12 * time.Hour
 // run starts Antrea Controller with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.Infof("Starting Antrea Controller (version %s)", version.GetFullVersion())
-	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
-	client, crdClient, err := k8s.CreateClients(o.config.ClientConnection)
+	// Create K8s Clientset, Aggregator Clientset, CRD Clientset and SharedInformerFactory for the given config.
+	// Aggregator Clientset is used to update the CABundle of the APIServices backed by antrea-controller so that
+	// the aggregator can verify its serving certificate.
+	client, aggregatorClient, crdClient, err := k8s.CreateClients(o.config.ClientConnection)
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -78,6 +83,9 @@ func run(o *Options) error {
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
 
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
+		client,
+		aggregatorClient,
+		o.config.SelfSignedCert,
 		o.config.APIPort,
 		addressGroupStore,
 		appliedToGroupStore,
@@ -103,7 +111,7 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
-	go apiServer.GenericAPIServer.PrepareRun().Run(stopCh)
+	go apiServer.Run(stopCh)
 
 	if o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
@@ -115,31 +123,30 @@ func run(o *Options) error {
 }
 
 func createAPIServerConfig(kubeconfig string,
+	client clientset.Interface,
+	aggregatorClient aggregatorclientset.Interface,
+	selfSignedCert bool,
 	bindPort int,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
 	enableMetrics bool) (*apiserver.Config, error) {
-	// TODO:
-	// 1. Support user-provided certificate.
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions()
 
-	// Set the PairName but leave certificate directory blank to generate in-memory by default
-	secureServing.ServerCert.CertDirectory = ""
-	secureServing.ServerCert.PairName = "antrea-apiserver"
+	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, secureServing)
+	if err != nil {
+		return nil, fmt.Errorf("error applying server cert: %v", err)
+	}
+
 	secureServing.BindPort = bindPort
 	secureServing.BindAddress = net.ParseIP("0.0.0.0")
 	// kubeconfig file is useful when antrea-controller isn't not running as a pod, like during development.
 	if len(kubeconfig) > 0 {
 		authentication.RemoteKubeConfigFile = kubeconfig
 		authorization.RemoteKubeConfigFile = kubeconfig
-	}
-
-	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
-		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 
 	serverConfig := genericapiserver.NewConfig(apiserver.Codecs)
@@ -170,5 +177,6 @@ func createAPIServerConfig(kubeconfig string,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
+		caCertController,
 		controllerQuerier), nil
 }
