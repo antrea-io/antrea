@@ -6,6 +6,12 @@ metadata:
   labels:
     name: monitoring
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
 # Authorize Prometheus to view Kubernetes cluster components for service discovery purposes
 # Authorize Prometheus to retrieve metrics
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -39,7 +45,7 @@ roleRef:
   name: prometheus
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: prometheus
   namespace: monitoring
 ---
 # Prometheus Server configuration
@@ -127,6 +133,7 @@ spec:
               mountPath: /etc/prometheus/
             - name: prometheus-storage-volume
               mountPath: /prometheus/
+      serviceAccountName: prometheus
       volumes:
         - name: prometheus-config-volume
           configMap:
