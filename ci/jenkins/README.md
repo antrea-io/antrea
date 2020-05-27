@@ -22,6 +22,9 @@ should be deleted. This ensures that all tests are run on a clean testbed.
   "sig-storage", "sig-auth", "sig-api-machinery", "sig-apps" and "sig-node".
 * [network policy](https://jenkins.antrea-ci.rocks/job/antrea-networkpolicy-for-pull-request/):
   community tests using sonobuoy, focusing on "Feature:NetworkPolicy".
+* Microsoft Windows conformance: community tests related to Microsoft Windows.
+  It focuses on: "[sig-network].+[Conformance]|[sig-windows]".
+  It skips: "[LinuxOnly]|[Slow]|[Serial]|[Disruptive]|[Flaky]|[Feature:.+]|[sig-cli]|[sig-storage]|[sig-auth]|[sig-api-machinery]|[sig-apps]|[sig-node]|[Privileged]|should be able to change the type from|[sig-network] Services should be able to create a functioning NodePort service [Conformance]".
 * jenkins jobs validator: this job only executes for PRs that include changes to
   [ci/jenkins/jobs](/ci/jenkins/jobs). It validates the syntax of the jenkins jobs'
   configuration.
