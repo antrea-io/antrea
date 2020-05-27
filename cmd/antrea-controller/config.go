@@ -28,4 +28,11 @@ type ControllerConfig struct {
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to false.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// Indicates whether to use auto-generated self-signed TLS certificate.
+	// If false, A secret named "kube-system/antrea-controller-tls" must be provided with the following keys:
+	//   ca.crt: <CA certificate>
+	//   tls.crt: <TLS certificate>
+	//   tls.key: <TLS private key>
+	// Defaults to true.
+	SelfSignedCert bool `yaml:"selfSignedCert,omitempty"`
 }
