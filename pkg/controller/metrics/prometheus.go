@@ -15,48 +15,58 @@
 package metrics
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/component-base/metrics"
+	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 var (
-	OpsAppliedToGroupProcessed = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "antrea_controller_applied_to_group_processed",
-		Help: "The total number of applied-to-group processed",
+	OpsAppliedToGroupProcessed = metrics.NewCounter(&metrics.CounterOpts{
+		Name:           "antrea_controller_applied_to_group_processed",
+		Help:           "The total number of applied-to-group processed",
+		StabilityLevel: metrics.STABLE,
 	})
-	OpsAddressGroupProcessed = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "antrea_controller_address_group_processed",
-		Help: "The total number of address-group processed ",
+	OpsAddressGroupProcessed = metrics.NewCounter(&metrics.CounterOpts{
+		Name:           "antrea_controller_address_group_processed",
+		Help:           "The total number of address-group processed ",
+		StabilityLevel: metrics.STABLE,
 	})
-	OpsInternalNetworkPolicyProcessed = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "antrea_controller_network_policy_processed",
-		Help: "The total number of internal-networkpolicy processed",
+	OpsInternalNetworkPolicyProcessed = metrics.NewCounter(&metrics.CounterOpts{
+		Name:           "antrea_controller_network_policy_processed",
+		Help:           "The total number of internal-networkpolicy processed",
+		StabilityLevel: metrics.STABLE,
 	})
-	DurationAppliedToGroupSyncing = prometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "antrea_controller_applied_to_group_sync_duration_milliseconds",
-		Help: "The duration of syncing applied-to-group",
+	DurationAppliedToGroupSyncing = metrics.NewSummary(&metrics.SummaryOpts{
+		Name:           "antrea_controller_applied_to_group_sync_duration_milliseconds",
+		Help:           "The duration of syncing applied-to-group",
+		StabilityLevel: metrics.STABLE,
 	})
-	DurationAddressGroupSyncing = prometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "antrea_controller_address_group_sync_duration_milliseconds",
-		Help: "The duration of syncing address-group",
+	DurationAddressGroupSyncing = metrics.NewSummary(&metrics.SummaryOpts{
+		Name:           "antrea_controller_address_group_sync_duration_milliseconds",
+		Help:           "The duration of syncing address-group",
+		StabilityLevel: metrics.STABLE,
 	})
-	DurationInternalNetworkPolicySyncing = prometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "antrea_controller_network_policy_sync_duration_milliseconds",
-		Help: "The duration of syncing internal-networkpolicy",
+	DurationInternalNetworkPolicySyncing = metrics.NewSummary(&metrics.SummaryOpts{
+		Name:           "antrea_controller_network_policy_sync_duration_milliseconds",
+		Help:           "The duration of syncing internal-networkpolicy",
+		StabilityLevel: metrics.STABLE,
 	})
-	LengthAppliedToGroupQueue = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "antrea_controller_length_applied_to_group_queue",
-		Help: "The length of AppliedToGroupQueue",
+	LengthAppliedToGroupQueue = metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_controller_length_applied_to_group_queue",
+		Help:           "The length of AppliedToGroupQueue",
+		StabilityLevel: metrics.STABLE,
 	})
-	LengthAddressGroupQueue = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "antrea_controller_length_address_group_queue",
-		Help: "The length of AddressGroupQueue",
+	LengthAddressGroupQueue = metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_controller_length_address_group_queue",
+		Help:           "The length of AddressGroupQueue",
+		StabilityLevel: metrics.STABLE,
 	})
-	LengthInternalNetworkPolicyQueue = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "antrea_controller_length_network_policy_queue",
-		Help: "The length of InternalNetworkPolicyQueue",
+	LengthInternalNetworkPolicyQueue = metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_controller_length_network_policy_queue",
+		Help:           "The length of InternalNetworkPolicyQueue",
+		StabilityLevel: metrics.STABLE,
 	})
 )
 
@@ -68,40 +78,43 @@ func InitializePrometheusMetrics() {
 	}
 
 	klog.Info("Initializing prometheus metrics")
-	gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name:        "antrea_controller_runtime_info",
-		Help:        "Antrea controller runtime info, defined as labels. The value of the gauge is always set to 1.",
-		ConstLabels: prometheus.Labels{"k8s_nodename": nodeName, "k8s_podname": env.GetPodName()},
+	gaugeHost := metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_controller_runtime_info",
+		Help:           "Antrea controller runtime info, defined as labels. The value of the gauge is always set to 1.",
+		ConstLabels:    metrics.Labels{"k8s_nodename": nodeName, "k8s_podname": env.GetPodName()},
+		StabilityLevel: metrics.STABLE,
 	})
-	gaugeHost.Set(1)
-	if err = prometheus.Register(gaugeHost); err != nil {
+	if err = legacyregistry.Register(gaugeHost); err != nil {
 		klog.Errorf("Failed to register antrea_controller_runtime_info with Prometheus: %s", err.Error())
 	}
-	if err := prometheus.Register(OpsAppliedToGroupProcessed); err != nil {
+	// This must be after registering the metrics.Gauge as it is lazily instantiated
+	// and will not measure anything unless the collector is first registered.
+	gaugeHost.Set(1)
+	if err := legacyregistry.Register(OpsAppliedToGroupProcessed); err != nil {
 		klog.Errorf("Failed to register antrea_controller_applied_to_group_processed with Prometheus: %s", err.Error())
 	}
-	if err := prometheus.Register(OpsAddressGroupProcessed); err != nil {
+	if err := legacyregistry.Register(OpsAddressGroupProcessed); err != nil {
 		klog.Errorf("Failed to register antrea_controller_address_group_processed with Prometheus: %s", err.Error())
 	}
-	if err := prometheus.Register(OpsInternalNetworkPolicyProcessed); err != nil {
+	if err := legacyregistry.Register(OpsInternalNetworkPolicyProcessed); err != nil {
 		klog.Errorf("Failed to register antrea_controller_network_policy_processed with Prometheus: %s", err.Error())
 	}
-	if err := prometheus.Register(DurationAppliedToGroupSyncing); err != nil {
+	if err := legacyregistry.Register(DurationAppliedToGroupSyncing); err != nil {
 		klog.Errorf("Failed to register antrea_controller_applied_to_group_sync_duration_milliseconds with Prometheus: %s", err.Error())
 	}
-	if err := prometheus.Register(DurationAddressGroupSyncing); err != nil {
+	if err := legacyregistry.Register(DurationAddressGroupSyncing); err != nil {
 		klog.Errorf("Failed to register antrea_controller_address_group_sync_duration_milliseconds with Prometheus: %s", err.Error())
 	}
-	if err := prometheus.Register(DurationInternalNetworkPolicySyncing); err != nil {
+	if err := legacyregistry.Register(DurationInternalNetworkPolicySyncing); err != nil {
 		klog.Errorf("Failed to register antrea_controller_network_policy_sync_duration_milliseconds with Prometheus: %s", err.Error())
 	}
-	if err := prometheus.Register(LengthAppliedToGroupQueue); err != nil {
+	if err := legacyregistry.Register(LengthAppliedToGroupQueue); err != nil {
 		klog.Errorf("Failed to register antrea_controller_length_applied_to_group_queue with Prometheus: %s", err.Error())
 	}
-	if err := prometheus.Register(LengthAddressGroupQueue); err != nil {
+	if err := legacyregistry.Register(LengthAddressGroupQueue); err != nil {
 		klog.Errorf("Failed to register antrea_controller_length_address_group_queue with Prometheus: %s", err.Error())
 	}
-	if err := prometheus.Register(LengthInternalNetworkPolicyQueue); err != nil {
+	if err := legacyregistry.Register(LengthInternalNetworkPolicyQueue); err != nil {
 		klog.Errorf("Failed to register antrea_controller_length_network_policy_queue with Prometheus: %s", err.Error())
 	}
 }

@@ -18,6 +18,8 @@ import (
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/component-base/metrics"
+	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
@@ -76,14 +78,15 @@ func InitializePrometheusMetrics(
 	ofClient openflow.Client) {
 
 	klog.Info("Initializing prometheus metrics")
-	podCount := prometheus.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Name: "antrea_agent_local_pod_count",
-			Help: "Number of pods on local node which are managed by the Antrea Agent.",
+	podCount := metrics.NewGaugeFunc(
+		metrics.GaugeOpts{
+			Name:           "antrea_agent_local_pod_count",
+			Help:           "Number of pods on local node which are managed by the Antrea Agent.",
+			StabilityLevel: metrics.STABLE,
 		},
 		func() float64 { return float64(ifaceStore.GetContainerInterfaceNum()) },
 	)
-	if err := prometheus.Register(podCount); err != nil {
+	if err := legacyregistry.RawRegister(podCount); err != nil {
 		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
 	}
 
@@ -92,18 +95,21 @@ func InitializePrometheusMetrics(
 		klog.Errorf("Failed to retrieve agent K8S node name: %v", err)
 	}
 
-	gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name:        "antrea_agent_runtime_info",
-		Help:        "Antrea agent runtime info , defined as labels. The value of the gauge is always set to 1.",
-		ConstLabels: prometheus.Labels{"k8s_nodename": nodeName, "k8s_podname": env.GetPodName()},
+	gaugeHost := metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_agent_runtime_info",
+		Help:           "Antrea agent runtime info , defined as labels. The value of the gauge is always set to 1.",
+		ConstLabels:    metrics.Labels{"k8s_nodename": nodeName, "k8s_podname": env.GetPodName()},
+		StabilityLevel: metrics.STABLE,
 	})
-	gaugeHost.Set(1)
-	if err := prometheus.Register(gaugeHost); err != nil {
+	if err := legacyregistry.Register(gaugeHost); err != nil {
 		klog.Error("Failed to register antrea_agent_runtime_info with Prometheus")
 	}
+	// This must be after registering the metrics.Gauge as it is lazily instantiated
+	// and will not measure anything unless the collector is first registered.
+	gaugeHost.Set(1)
 
 	ovsStats := newOVSStatManager(ovsBridge, ofClient)
-	if err := prometheus.Register(ovsStats); err != nil {
+	if err := legacyregistry.RawRegister(ovsStats); err != nil {
 		klog.Error("Failed to register antrea_agent_ovs_flow_table with Prometheus")
 	}
 }
