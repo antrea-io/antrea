@@ -5,7 +5,11 @@ Param(
 )
 
 $ErrorActionPreference = "Stop"
-$OVSDownloadURL = "https://github.com/vmware-tanzu/antrea/releases/download/v0.7.0/ovs-2.12.90-win64.zip"
+# TODO: set up HTTPS so that the archive can be downloaded securely. In the
+# meantime, we use a SHA256 hash to ensure that the downloaded archive is
+# correct.
+$OVSDownloadURL = "http://downloads.antrea.io/ovs/ovs-2.12.90-win64.zip"
+$OVSPublishedHash = 'B5278BE3EFFEE322DFB71FABE97B0E4F5C1341CE31D609FD60E8B41D20416C2D'
 $OVSDownloadDir = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition)
 $InstallLog = "$OVSDownloadDir\install.log"
 $OVSZip = "$OVSDownloadDir\ovs-win64.zip"
@@ -17,6 +21,8 @@ if ($DownloadDir -ne "") {
 
 if ($DownloadURL -ne "") {
     $OVSDownloadURL = $DownloadURL
+    # For user-provided URLs, do not verify the hash for the archive.
+    $OVSPublishedHash = ""
 }
 
 function Log($Info) {
@@ -59,13 +65,18 @@ function CheckIfOVSInstalled() {
 }
 
 function DownloadOVS() {
-    if (!(Test-Path $OVSDownloadDir)) {
+    If (!(Test-Path $OVSDownloadDir)) {
         mkdir -p $OVSDownloadDir
     }
     Log "Downloading OVS package from $OVSDownloadURL to $OVSZip"
     curl.exe -sLo $OVSZip $OVSDownloadURL
-    if (!$?) {
+    If (!$?) {
         Log "Download OVS failed, URL: $OVSDownloadURL"
+        exit 1
+    }
+    $FileHash = Get-FileHash $OVSZip
+    If ($OVSPublishedHash -ne "" -And $FileHash.Hash -ne $OVSPublishedHash) {
+        Log "SHA256 mismatch for OVS download"
         exit 1
     }
     Log "Download OVS package success."
