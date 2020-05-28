@@ -28,27 +28,27 @@ type ExternalEntity struct {
 	// Standard metadata of the object.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// Desired state of the external entity.
-	Spec ExternalEntitySpec `json:"spec"`
+	Spec ExternalEntitySpec `json:"spec,omitempty"`
 }
 
 // ExternalEntitySpec defines the desired state for ExternalEntity.
 type ExternalEntitySpec struct {
 	// Endpoints is a list of external endpoints associated with this entity.
-	Endpoints []ExternalEndpoint `json:"endpoints"`
+	Endpoints []Endpoint `json:"endpoints,omitempty"`
 	// ExternalNode is the opaque identifier of the agent/controller responsible
-	// for additional computation of this external entity.
-	ExternalNode string `json:"externalNode"`
+	// for additional processing or handling of this external entity.
+	ExternalNode string `json:"externalNode,omitempty"`
 }
 
-// ExternalEndpoint refers to an endpoint associated with the ExternalEntity.
-type ExternalEndpoint struct {
+// Endpoint refers to an endpoint associated with the ExternalEntity.
+type Endpoint struct {
 	// IP associated with this endpoint.
-	IP IPAddress `json:"ip"`
+	IP string `json:"ip,omitempty"`
 	// Name identifies this endpoint. Could be the interface name in case of VMs.
 	// +optional
-	Name string `json:"name"`
+	Name string `json:"name,omitempty"`
 	// Ports maintain the list of named ports.
-	Ports []NamedPort `json:"ports"`
+	Ports []NamedPort `json:"ports,omitempty"`
 }
 
 // NamedPort describes the port and protocol to match in a rule.
@@ -56,17 +56,14 @@ type NamedPort struct {
 	// The protocol (TCP, UDP, or SCTP) which traffic must match.
 	// If not specified, this field defaults to TCP.
 	// +optional
-	Protocol *v1.Protocol `json:"protocol"`
+	Protocol v1.Protocol `json:"protocol,omitempty"`
 	// The port on the given protocol.
 	// +optional
-	Port int32 `json:"port"`
+	Port int32 `json:"port,omitempty"`
 	// Name associated with the Port.
 	// +optional
-	Name string `json:"name"`
+	Name string `json:"name,omitempty"`
 }
-
-// IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.
-type IPAddress []byte
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -75,5 +72,5 @@ type ExternalEntityList struct {
 	// +optional
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	Items []ExternalEntity `json:"items"`
+	Items []ExternalEntity `json:"items,omitempty"`
 }
