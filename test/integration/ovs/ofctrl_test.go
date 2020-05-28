@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/contiv/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -213,7 +214,7 @@ func TestOFctrlFlow(t *testing.T) {
 
 		// Test: DumpFlows
 		dumpCookieID, dumpCookieMask := getCookieIDMask()
-		flowStates := bridge.DumpFlows(dumpCookieID, dumpCookieMask)
+		flowStates, _ := bridge.DumpFlows(dumpCookieID, dumpCookieMask)
 		if len(flowStates) != len(flowList) {
 			t.Errorf("Flow count in dump result is incorrect")
 		}
@@ -549,6 +550,166 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 	require.Nil(t, err)
 	CheckFlowExists(t, ovsCtlClient, uint8(table.GetID()), false, expectedFlows)
 	CheckGroupExists(t, ovsCtlClient, groupID, "select", expectedGroupBuckets, false)
+}
+
+func TestPacketOutIn(t *testing.T) {
+	br := "br09"
+	err := PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	defer DeleteOVSBridge(br)
+
+	bridge := binding.NewOFBridge(br)
+	table0 := bridge.CreateTable(0, 1, binding.TableMissActionNext)
+	table1 := bridge.CreateTable(1, 2, binding.TableMissActionNext)
+
+	err = bridge.Connect(maxRetry, make(chan struct{}))
+	require.Nil(t, err, "Failed to start OFService")
+	defer bridge.Disconnect()
+
+	reason := uint8(1)
+	pktCh := make(chan *ofctrl.PacketIn)
+	err = bridge.SubscribePacketIn(reason, pktCh)
+	require.Nil(t, err)
+
+	srcMAC, _ := net.ParseMAC("11:11:11:11:11:11")
+	dstcMAC, _ := net.ParseMAC("11:11:11:11:11:22")
+	srcIP := net.ParseIP("1.1.1.2")
+	dstIP := net.ParseIP("2.2.2.2")
+	tunDst := net.ParseIP("10.10.10.2")
+	srcPort := uint16(10001)
+	dstPort := uint16(8080)
+	reg2Data := uint32(0x1234)
+	reg2Range := binding.Range{0, 15}
+	reg3Data := uint32(0x1234)
+	reg3Range := binding.Range{0, 31}
+	stopCh := make(chan struct{})
+
+	go func() {
+		pktIn := <-pktCh
+		matchers := pktIn.GetMatches()
+
+		reg2Match := matchers.GetMatchByName("NXM_NX_REG2")
+		assert.NotNil(t, reg2Match)
+		reg2Value := reg2Match.GetValue()
+		assert.NotNil(t, reg2Value)
+		value2, ok2 := reg2Value.(*ofctrl.NXRegister)
+		assert.True(t, ok2)
+		assert.Equal(t, reg2Data, ofctrl.GetUint32ValueWithRange(value2.Data, reg2Range.ToNXRange()))
+
+		reg3Match := matchers.GetMatchByName("NXM_NX_REG3")
+		assert.NotNil(t, reg3Match)
+		reg3Value := reg3Match.GetValue()
+		assert.NotNil(t, reg3Value)
+		value3, ok3 := reg3Value.(*ofctrl.NXRegister)
+		assert.True(t, ok3)
+		assert.Equal(t, reg3Data, value3.Data)
+
+		tunDstMatch := matchers.GetMatchByName("NXM_NX_TUN_IPV4_DST")
+		assert.NotNil(t, tunDstMatch)
+		tunDstValue := tunDstMatch.GetValue()
+		assert.NotNil(t, tunDstValue)
+		value4, ok4 := tunDstValue.(net.IP)
+		assert.True(t, ok4)
+		assert.Equal(t, tunDst, value4)
+
+		close(stopCh)
+	}()
+
+	pktBuilder := bridge.BuildPacketOut()
+	pkt := pktBuilder.SetSrcMAC(srcMAC).SetDstMAC(dstcMAC).
+		SetDstIP(dstIP).SetSrcIP(srcIP).SetIPProtocol(binding.ProtocolTCP).
+		SetTCPSrcPort(srcPort).SetTCPDstPort(dstPort).
+		AddLoadAction("NXM_NX_REG0", uint64(0x1), binding.Range{18, 18}).
+		Done()
+	require.Nil(t, err)
+	flow0 := table0.BuildFlow(100).
+		MatchSrcMAC(srcMAC).MatchDstMAC(dstcMAC).
+		MatchSrcIP(srcIP).MatchDstIP(dstIP).MatchProtocol(binding.ProtocolTCP).
+		MatchRegRange(0, 0x1, binding.Range{18, 18}).
+		Action().LoadRegRange(2, reg2Data, reg2Range).
+		Action().LoadRegRange(3, reg3Data, reg3Range).
+		Action().SetTunnelDst(tunDst).
+		Action().ResubmitToTable(table0.GetNext()).
+		Done()
+	flow1 := table1.BuildFlow(100).
+		MatchSrcMAC(srcMAC).MatchDstMAC(dstcMAC).
+		MatchSrcIP(srcIP).MatchDstIP(dstIP).MatchProtocol(binding.ProtocolTCP).
+		MatchRegRange(0, 0x1, binding.Range{18, 18}).
+		Action().SendToController(0x1).
+		Done()
+	err = bridge.AddFlowsInBundle([]binding.Flow{flow0, flow1}, nil, nil)
+	require.Nil(t, err)
+	err = bridge.SendPacketOut(pkt)
+	<-stopCh
+}
+
+func TestTLVMap(t *testing.T) {
+	br := "br10"
+	err := PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	//defer DeleteOVSBridge(br)
+
+	bridge := binding.NewOFBridge(br)
+	table := bridge.CreateTable(0, 1, binding.TableMissActionNext)
+
+	ch := make(chan struct{})
+	err = bridge.Connect(maxRetry, ch)
+	require.Nil(t, err, "Failed to start OFService")
+	defer bridge.Disconnect()
+
+	// Wait until the OVS Bridge is connected.
+	<-ch
+
+	err = bridge.AddTLVMap(0xffff, 0x1, 4, 0)
+	require.Nil(t, err)
+	time.Sleep(1 * time.Second)
+	flow1 := table.BuildFlow(100).
+		MatchProtocol(binding.ProtocolIP).MatchTunMetadata(0, 0x1234).
+		Action().ResubmitToTable(table.GetNext()).
+		Done()
+	err = bridge.AddFlowsInBundle([]binding.Flow{flow1}, nil, nil)
+	require.Nil(t, err)
+	expectedFlows := []*ExpectFlow{
+		{
+			MatchStr: "priority=100,ip,tun_metadata0=0x1234",
+			ActStr:   fmt.Sprintf("resubmit(,%d)", table.GetNext()),
+		},
+	}
+	ovsCtlClient := ovsctl.NewClient(br)
+	CheckFlowExists(t, ovsCtlClient, uint8(table.GetID()), true, expectedFlows)
+}
+
+func TestMoveTunMetadata(t *testing.T) {
+	br := "br11"
+	err := PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	//defer DeleteOVSBridge(br)
+
+	bridge := binding.NewOFBridge(br)
+	table := bridge.CreateTable(0, 1, binding.TableMissActionNext)
+
+	err = bridge.Connect(maxRetry, make(chan struct{}))
+	require.Nil(t, err, "Failed to start OFService")
+	defer bridge.Disconnect()
+
+	err = bridge.AddTLVMap(0xffff, 0x1, 4, 0)
+	require.Nil(t, err)
+	time.Sleep(1 * time.Second)
+	flow1 := table.BuildFlow(100).
+		MatchProtocol(binding.ProtocolIP).MatchTunMetadata(0, 0x1234).
+		Action().MoveRange("NXM_NX_TUN_METADATA0", "NXM_NX_REG0", binding.Range{28, 31}, binding.Range{28, 31}).
+		Action().ResubmitToTable(table.GetNext()).
+		Done()
+	err = bridge.AddFlowsInBundle([]binding.Flow{flow1}, nil, nil)
+	require.Nil(t, err)
+	expectedFlows := []*ExpectFlow{
+		{
+			MatchStr: "priority=100,ip,tun_metadata0=0x1234",
+			ActStr:   fmt.Sprintf("move:NXM_NX_TUN_METADATA0[28..31]->NXM_NX_REG0[28..31],resubmit(,%d)", table.GetNext()),
+		},
+	}
+	ovsCtlClient := ovsctl.NewClient(br)
+	CheckFlowExists(t, ovsCtlClient, uint8(table.GetID()), true, expectedFlows)
 }
 
 func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
