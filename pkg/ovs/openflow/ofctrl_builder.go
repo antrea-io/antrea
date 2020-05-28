@@ -13,6 +13,27 @@ type ofFlowBuilder struct {
 	ofFlow
 }
 
+func (b *ofFlowBuilder) MatchTunMetadata(index int, data uint32) FlowBuilder {
+	rng := openflow13.NewNXRange(0, 31)
+	tm := &ofctrl.NXTunMetadata{
+		ID:    index,
+		Data:  data,
+		Range: rng,
+	}
+	b.ofFlow.Match.TunMetadatas = append(b.ofFlow.Match.TunMetadatas, tm)
+	return b
+}
+
+func (b *ofFlowBuilder) SetHardTimeout(timout uint16) FlowBuilder {
+	b.ofFlow.HardTimeout = timout
+	return b
+}
+
+func (b *ofFlowBuilder) SetIdleTimeout(timeout uint16) FlowBuilder {
+	b.ofFlow.IdleTimeout = timeout
+	return b
+}
+
 func (b *ofFlowBuilder) Done() Flow {
 	if b.ctStates != nil {
 		b.Flow.Match.CtStates = b.ctStates
