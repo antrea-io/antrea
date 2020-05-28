@@ -81,13 +81,10 @@ func (t *ofTable) BuildFlow(priority uint16) FlowBuilder {
 }
 
 // DumpFlows dumps all existing Openflow entries from OFSwitch using cookie ID and table ID as filters.
-func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates, error) {
-	ofStats, err := t.Table.Switch.DumpFlowStats(cookieID, cookieMask, nil, &t.TableId)
-	if err != nil {
-		return nil, err
-	}
+func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates {
+	ofStats := t.Table.Switch.DumpFlowStats(cookieID, cookieMask, nil, &t.TableId)
 	if ofStats == nil {
-		return nil, nil
+		return nil
 	}
 	flowStats := make(map[uint64]*FlowStates)
 	for _, stat := range ofStats {
@@ -99,7 +96,7 @@ func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates
 		}
 		flowStats[cookie] = s
 	}
-	return flowStats, nil
+	return flowStats
 }
 
 func newOFTable(id, next TableIDType, missAction MissActionType) *ofTable {
@@ -133,8 +130,6 @@ type OFBridge struct {
 	connCh chan struct{}
 	// connected is an internal channel to notify if connected to the OFSwitch or not. It is used only in Connect method.
 	connected chan bool
-	// pktConsumers is a map from PacketIn reason to the channel that is used to publish the PacketIn message.
-	pktConsumers sync.Map
 }
 
 func (b *OFBridge) CreateGroup(id GroupIDType) Group {
@@ -194,12 +189,6 @@ func (b *OFBridge) DumpTableStatus() []TableStatus {
 // PacketRcvd is a callback when a packetIn is received on ofctrl.OFSwitch.
 func (b *OFBridge) PacketRcvd(sw *ofctrl.OFSwitch, packet *ofctrl.PacketIn) {
 	klog.Infof("Received packet: %+v", packet)
-	reason := packet.Reason
-	ch, found := b.pktConsumers.Load(reason)
-	if found {
-		pktCh, _ := ch.(chan *ofctrl.PacketIn)
-		pktCh <- packet
-	}
 }
 
 // SwitchConnected is a callback when the remote OFSwitch is connected.
@@ -227,7 +216,7 @@ func (b *OFBridge) SwitchDisconnected(sw *ofctrl.OFSwitch) {
 	klog.Infof("OFSwitch is disconnected: %v", sw.DPID())
 }
 
-// initialize creates ofctrl.Table for each table in the tableCache.
+// Initialize creates ofctrl.Table for each table in the tableCache.
 func (b *OFBridge) initialize() {
 	b.Lock()
 	defer b.Unlock()
@@ -281,13 +270,10 @@ func (b *OFBridge) Disconnect() error {
 
 // DumpFlows queries the Openflow entries from OFSwitch, the filter of the query is Openflow cookieID. The result is
 // a map from flow cookieID to FlowStates.
-func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates, error) {
-	ofStats, err := b.ofSwitch.DumpFlowStats(cookieID, cookieMask, nil, nil)
-	if err != nil {
-		return nil, err
-	}
+func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates {
+	ofStats := b.ofSwitch.DumpFlowStats(cookieID, cookieMask, nil, nil)
 	if ofStats == nil {
-		return nil, nil
+		return nil
 	}
 	flowStats := make(map[uint64]*FlowStates)
 	for _, stat := range ofStats {
@@ -299,7 +285,7 @@ func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowState
 		}
 		flowStats[cookie] = s
 	}
-	return flowStats, nil
+	return flowStats
 }
 
 // DeleteFlowsByCookie removes Openflow entries from OFSwitch. The removed Openflow entries use the specific CookieID.
@@ -516,32 +502,6 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 	return nil
 }
 
-func (b *OFBridge) SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error {
-	_, exist := b.pktConsumers.Load(reason)
-	if exist {
-		return fmt.Errorf("packetIn reason %d already exists", reason)
-	}
-	b.pktConsumers.Store(reason, ch)
-	return nil
-}
-
-func (b *OFBridge) AddTLVMap(optClass uint16, optType uint8, optLength uint8, tunMetadataIndex uint16) error {
-	if err := b.ofSwitch.AddTunnelTLVMap(optClass, optType, optLength, tunMetadataIndex); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (b *OFBridge) SendPacketOut(packetOut *ofctrl.PacketOut) error {
-	return b.ofSwitch.Send(packetOut.GetMessage())
-}
-
-func (b *OFBridge) BuildPacketOut() PacketOutBuilder {
-	return &ofPacketOutBuilder{
-		pktOut: new(ofctrl.PacketOut),
-	}
-}
-
 // MaxRetry is a callback from OFController. It sets the max retry count that OFController attempts to connect to OFSwitch.
 func (b *OFBridge) MaxRetry() int {
 	return b.maxRetrySec
@@ -559,7 +519,6 @@ func NewOFBridge(br string, mgmtAddr string) Bridge {
 		mgmtAddr:      mgmtAddr,
 		tableCache:    make(map[TableIDType]*ofTable),
 		retryInterval: 1 * time.Second,
-		pktConsumers:  sync.Map{},
 	}
 	s.controller = ofctrl.NewController(s)
 	return s

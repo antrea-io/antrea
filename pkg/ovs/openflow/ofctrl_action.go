@@ -30,7 +30,8 @@ func (a *ofFlowAction) Output(port int) FlowBuilder {
 
 // OutputFieldRange is an action to output packets to the port located in the specified NXM field with rng.
 func (a *ofFlowAction) OutputFieldRange(name string, rng Range) FlowBuilder {
-	a.builder.OutputReg(name, int(rng[0]), int(rng[1]))
+	outputAction, _ := ofctrl.NewNXOutput(name, int(rng[0]), int(rng[1]))
+	a.builder.ofFlow.lastAction = outputAction
 	return a.builder
 }
 
@@ -284,11 +285,6 @@ func (a *ofFlowAction) Group(id GroupIDType) FlowBuilder {
 		ID:     uint32(id),
 	}
 	a.builder.ofFlow.lastAction = group
-	return a.builder
-}
-
-func (a *ofFlowAction) SendToController(reason uint8) FlowBuilder {
-	a.builder.ofFlow.Controller(reason)
 	return a.builder
 }
 

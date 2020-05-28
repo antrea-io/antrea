@@ -84,8 +84,8 @@ github.com/containernetworking/cni v0.7.1 h1:fE3r16wpSEyaqY4Z4oFrLMmIGfBYIKpPrHK
 github.com/containernetworking/cni v0.7.1/go.mod h1:LGwApLUm2FpoOfxTDEeq8T9ipbpZ61X79hmU3w8FmsY=
 github.com/containernetworking/plugins v0.8.2-0.20190724153215-ded2f1757770 h1:AuFzUXPFhLlTfxhHMGdCIr7wZOQ0J0dEZLoffU0KfRM=
 github.com/containernetworking/plugins v0.8.2-0.20190724153215-ded2f1757770/go.mod h1:AlmXjbiLJBqvZ4vxkWAqjx1CKHVEoQf0/Ugrvc6Cv70=
-github.com/contiv/libOpenflow v0.0.0-20200424005919-3a6722c98962 h1:J5j3JV+Z9/Hg0ufQwk37uk8ZCJ+YUxEFxekBpIMI/JE=
-github.com/contiv/libOpenflow v0.0.0-20200424005919-3a6722c98962/go.mod h1:DtsPlJOByJZ+MO9YITEGUlbJ/jfh/ef0qeNyBYaeNR4=
+github.com/contiv/libOpenflow v0.0.0-20200319171453-882ba6d92cbc h1:xCk8SOFX7a5svlcuRKzJ4XqekAk+CpKQNWqPY/UXX9k=
+github.com/contiv/libOpenflow v0.0.0-20200319171453-882ba6d92cbc/go.mod h1:DtsPlJOByJZ+MO9YITEGUlbJ/jfh/ef0qeNyBYaeNR4=
 github.com/contiv/libovsdb v0.0.0-20170227191248-d0061a53e358 h1:AiA9SKyNXulsU7aAnyka3UFHYOIH00A9HvdIRnDXlg0=
 github.com/contiv/libovsdb v0.0.0-20170227191248-d0061a53e358/go.mod h1:+qKEHaNVPj+wrn5st7TEFH9wcUWCJq5ZBvVKPQwzAeg=
 github.com/coreos/bbolt v1.3.2/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
@@ -448,8 +448,8 @@ github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df h1:OviZH7qLw/7Zo
 github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df/go.mod h1:JP3t17pCcGlemwknint6hfoeCVQrEMVwxRLRjXpq+BU=
 github.com/vmware-tanzu/octant v0.10.2 h1:sqXei1wyxhajUt90HGHPEyRTv12T8Mwv6vyKKdLUYg4=
 github.com/vmware-tanzu/octant v0.10.2/go.mod h1:ree4Qu6ULumg1MlGrAG7avEQx3+NjWPc0Zs4nQWOmQE=
-github.com/wenyingd/ofnet v0.0.0-20200508122021-ed82d5d15cea h1:ikZqLrJNXLwo8OtCE1ZRoSzVatVJVQN+HKWYLopmPEo=
-github.com/wenyingd/ofnet v0.0.0-20200508122021-ed82d5d15cea/go.mod h1:+g6SfqhTVqeGEmUJ0l4WtCgsL4dflTUJE4k+TPCKqXo=
+github.com/wenyingd/ofnet v0.0.0-20200326015539-5862ec3fa686 h1:a6OxcU1iYvnisaTUHK4C1jqbawN+IFwtNF9DgeKt4dA=
+github.com/wenyingd/ofnet v0.0.0-20200326015539-5862ec3fa686/go.mod h1:kPb/y9p2i14dW8xNvRnVo2D+xhcthRQZdii5ltI0fjI=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 h1:eY9dn8+vbi4tKz5Qo6v2eYzo7kUS51QINcR5jNpbZS8=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=

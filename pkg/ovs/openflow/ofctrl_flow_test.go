@@ -22,10 +22,7 @@ func TestCopyToBuilder(t *testing.T) {
 		LoadToMark(uint32(12345)).
 		MoveToLabel(NxmFieldSrcMAC, &Range{0, 47}, &Range{0, 47}).CTDone().
 		Done()
-	newFlow := oriFlow.CopyToBuilder(0)
+	newFlow := oriFlow.CopyToBuilder()
 	assert.Equal(t, oriFlow.MatchString(), newFlow.Done().MatchString())
 	assert.Equal(t, oriFlow.(*ofFlow).Match, newFlow.Done().(*ofFlow).Match)
-	newPriority := uint16(200)
-	newFlow2 := oriFlow.CopyToBuilder(newPriority)
-	assert.Equal(t, newPriority, newFlow2.Done().(*ofFlow).Match.Priority)
 }
