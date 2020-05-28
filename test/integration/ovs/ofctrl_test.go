@@ -558,7 +558,7 @@ func TestPacketOutIn(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer DeleteOVSBridge(br)
 
-	bridge := binding.NewOFBridge(br)
+	bridge := newOFBridge(br)
 	table0 := bridge.CreateTable(0, 1, binding.TableMissActionNext)
 	table1 := bridge.CreateTable(1, 2, binding.TableMissActionNext)
 
@@ -647,9 +647,9 @@ func TestTLVMap(t *testing.T) {
 	br := "br10"
 	err := PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
-	//defer DeleteOVSBridge(br)
+	defer DeleteOVSBridge(br)
 
-	bridge := binding.NewOFBridge(br)
+	bridge := newOFBridge(br)
 	table := bridge.CreateTable(0, 1, binding.TableMissActionNext)
 
 	ch := make(chan struct{})
@@ -685,7 +685,7 @@ func TestMoveTunMetadata(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	//defer DeleteOVSBridge(br)
 
-	bridge := binding.NewOFBridge(br)
+	bridge := newOFBridge(br)
 	table := bridge.CreateTable(0, 1, binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
