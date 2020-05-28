@@ -254,7 +254,7 @@ func (ctx *conjMatchFlowContext) createOrUpdateConjunctiveMatchFlow(actions []*c
 	}
 
 	// Modify the existing Openflow entry and reset the actions.
-	flowBuilder := ctx.flow.CopyToBuilder()
+	flowBuilder := ctx.flow.CopyToBuilder(0)
 	for _, act := range actions {
 		flowBuilder.Action().Conjunction(act.conjID, act.clauseID, act.nClause)
 	}

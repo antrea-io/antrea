@@ -78,6 +78,34 @@ func (mr *MockBridgeMockRecorder) AddOFEntriesInBundle(arg0, arg1, arg2 interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOFEntriesInBundle", reflect.TypeOf((*MockBridge)(nil).AddOFEntriesInBundle), arg0, arg1, arg2)
 }
 
+// AddTLVMap mocks base method
+func (m *MockBridge) AddTLVMap(arg0 uint16, arg1, arg2 byte, arg3 uint16) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddTLVMap", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddTLVMap indicates an expected call of AddTLVMap
+func (mr *MockBridgeMockRecorder) AddTLVMap(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTLVMap", reflect.TypeOf((*MockBridge)(nil).AddTLVMap), arg0, arg1, arg2, arg3)
+}
+
+// BuildPacketOut mocks base method
+func (m *MockBridge) BuildPacketOut() openflow.PacketOutBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BuildPacketOut")
+	ret0, _ := ret[0].(openflow.PacketOutBuilder)
+	return ret0
+}
+
+// BuildPacketOut indicates an expected call of BuildPacketOut
+func (mr *MockBridgeMockRecorder) BuildPacketOut() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildPacketOut", reflect.TypeOf((*MockBridge)(nil).BuildPacketOut))
+}
+
 // Connect mocks base method
 func (m *MockBridge) Connect(arg0 int, arg1 chan struct{}) error {
 	m.ctrl.T.Helper()
@@ -177,11 +205,12 @@ func (mr *MockBridgeMockRecorder) Disconnect() *gomock.Call {
 }
 
 // DumpFlows mocks base method
-func (m *MockBridge) DumpFlows(arg0, arg1 uint64) map[uint64]*openflow.FlowStates {
+func (m *MockBridge) DumpFlows(arg0, arg1 uint64) (map[uint64]*openflow.FlowStates, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DumpFlows", arg0, arg1)
 	ret0, _ := ret[0].(map[uint64]*openflow.FlowStates)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // DumpFlows indicates an expected call of DumpFlows
@@ -216,6 +245,34 @@ func (m *MockBridge) IsConnected() bool {
 func (mr *MockBridgeMockRecorder) IsConnected() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockBridge)(nil).IsConnected))
+}
+
+// SendPacketOut mocks base method
+func (m *MockBridge) SendPacketOut(arg0 *ofctrl.PacketOut) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendPacketOut", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendPacketOut indicates an expected call of SendPacketOut
+func (mr *MockBridgeMockRecorder) SendPacketOut(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendPacketOut", reflect.TypeOf((*MockBridge)(nil).SendPacketOut), arg0)
+}
+
+// SubscribePacketIn mocks base method
+func (m *MockBridge) SubscribePacketIn(arg0 byte, arg1 chan *ofctrl.PacketIn) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubscribePacketIn", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SubscribePacketIn indicates an expected call of SubscribePacketIn
+func (mr *MockBridgeMockRecorder) SubscribePacketIn(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribePacketIn", reflect.TypeOf((*MockBridge)(nil).SubscribePacketIn), arg0, arg1)
 }
 
 // MockTable is a mock of Table interface
@@ -349,17 +406,17 @@ func (mr *MockFlowMockRecorder) Add() *gomock.Call {
 }
 
 // CopyToBuilder mocks base method
-func (m *MockFlow) CopyToBuilder() openflow.FlowBuilder {
+func (m *MockFlow) CopyToBuilder(arg0 uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CopyToBuilder")
+	ret := m.ctrl.Call(m, "CopyToBuilder", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // CopyToBuilder indicates an expected call of CopyToBuilder
-func (mr *MockFlowMockRecorder) CopyToBuilder() *gomock.Call {
+func (mr *MockFlowMockRecorder) CopyToBuilder(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyToBuilder", reflect.TypeOf((*MockFlow)(nil).CopyToBuilder))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyToBuilder", reflect.TypeOf((*MockFlow)(nil).CopyToBuilder), arg0)
 }
 
 // Delete mocks base method
@@ -746,6 +803,20 @@ func (m *MockAction) ResubmitToTable(arg0 openflow.TableIDType) openflow.FlowBui
 func (mr *MockActionMockRecorder) ResubmitToTable(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResubmitToTable", reflect.TypeOf((*MockAction)(nil).ResubmitToTable), arg0)
+}
+
+// SendToController mocks base method
+func (m *MockAction) SendToController(arg0 byte) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendToController", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// SendToController indicates an expected call of SendToController
+func (mr *MockActionMockRecorder) SendToController(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToController", reflect.TypeOf((*MockAction)(nil).SendToController), arg0)
 }
 
 // SetARPSha mocks base method
@@ -1289,6 +1360,20 @@ func (mr *MockFlowBuilderMockRecorder) MatchTCPDstPort(arg0 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTCPDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTCPDstPort), arg0)
 }
 
+// MatchTunMetadata mocks base method
+func (m *MockFlowBuilder) MatchTunMetadata(arg0 int, arg1 uint32) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchTunMetadata", arg0, arg1)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchTunMetadata indicates an expected call of MatchTunMetadata
+func (mr *MockFlowBuilderMockRecorder) MatchTunMetadata(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunMetadata", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunMetadata), arg0, arg1)
+}
+
 // MatchUDPDstPort mocks base method
 func (m *MockFlowBuilder) MatchUDPDstPort(arg0 uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -1301,4 +1386,32 @@ func (m *MockFlowBuilder) MatchUDPDstPort(arg0 uint16) openflow.FlowBuilder {
 func (mr *MockFlowBuilderMockRecorder) MatchUDPDstPort(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchUDPDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchUDPDstPort), arg0)
+}
+
+// SetHardTimeout mocks base method
+func (m *MockFlowBuilder) SetHardTimeout(arg0 uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetHardTimeout", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// SetHardTimeout indicates an expected call of SetHardTimeout
+func (mr *MockFlowBuilderMockRecorder) SetHardTimeout(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHardTimeout", reflect.TypeOf((*MockFlowBuilder)(nil).SetHardTimeout), arg0)
+}
+
+// SetIdleTimeout mocks base method
+func (m *MockFlowBuilder) SetIdleTimeout(arg0 uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIdleTimeout", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// SetIdleTimeout indicates an expected call of SetIdleTimeout
+func (mr *MockFlowBuilderMockRecorder) SetIdleTimeout(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIdleTimeout", reflect.TypeOf((*MockFlowBuilder)(nil).SetIdleTimeout), arg0)
 }
