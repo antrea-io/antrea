@@ -707,7 +707,7 @@ func (c *client) localProbeFlow(localGatewayIP net.IP, category cookie.Category)
 		Done()
 }
 
-func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort int, nodeIP net.IP, localSubnet net.IPNet, category cookie.Category) []binding.Flow {
+func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint32, nodeIP net.IP, localSubnet net.IPNet, category cookie.Category) []binding.Flow {
 	snatIPRange := &binding.IPRange{nodeIP, nodeIP}
 	vMACInt, _ := strconv.ParseUint(strings.Replace(globalVirtualMAC.String(), ":", "", -1), 16, 64)
 	flows := []binding.Flow{
@@ -723,7 +723,7 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort int, 
 		// local Pods.
 		c.pipeline[classifierTable].BuildFlow(priorityHigh).
 			MatchProtocol(binding.ProtocolIP).
-			MatchInPort(uint32(bridgeLocalPort)).
+			MatchInPort(bridgeLocalPort).
 			MatchDstIPNet(localSubnet).
 			Action().SetDstMAC(globalVirtualMAC).
 			Action().ResubmitToTable(conntrackTable).
@@ -756,7 +756,7 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort int, 
 		c.pipeline[conntrackStateTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchInPort(uplinkOfport).
-			Action().Output(bridgeLocalPort).
+			Action().Output(int(bridgeLocalPort)).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Resubmit the packet to L2ForwardingOutput table after the packet is SNATed. The "SNAT" packet has these
