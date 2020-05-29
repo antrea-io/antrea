@@ -9,6 +9,37 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 
 ## Unreleased
 
+## 0.7.0 - 2020-05-29
+
+### Added
+
+- Support for worker Nodes running Windows Server 2019 or higher. [Alpha]
+   * Refer to [Antrea Windows documentation] for usage
+   * A known limitation is that K8s NetworkPolicies are not enforced correctly for Service traffic, due to our reliance on userspace kube-proxy; this will be addressed in a future release
+- Support server certificate verification for Controller APIs; users can provide their own certificates (TLS certificate and corresponding CA certificate) or let the Controller generate them.
+- Add ability to collect Antrea support bundles (all the relevant information useful for providing support for Antrea) using new "antctl supportbundle" command, along with corresponding Antrea API resources at the Controller and Agent.
+- Support local packet tracing in a Node by leveraging 'ovs-appctl ofproto/trace'.
+- Add Antrea API port to the AgentInfo and ControllerInfo CRDs.
+- Additional documentation:
+   * user-facing documentation for antctl commands
+   * information about non-default "encapsulation" modes ("hybrid", "noEncap", "networkPolicyOnly") in architecture document
+   * design document for "networkPolicyOnly" mode (in particular, this mode is used for Antrea support in EKS)
+
+### Changed
+
+- Bump up K8s libraries to v0.17.6.
+- Replace usage of 'resubmit' with 'goto_table' action in OVS pipeline: pipeline functionality is unaffected.
+- Only include necessary Antrea binaries in Docker image to reduce its size.
+- Support getting kubeconfig path from KUBECONFIG env variable for antctl.
+
+### Fixed
+
+- Fix implementation of K8s NetworkPolicies with overlapping ipBlock CIDRs; in particular, the issue manifested itself when there was overlap between a 'cidr' field in one rule and an 'except' field in another rule.
+- Clean-up stale NetworkPolicies in the Agent after a reconnection to the Controller; this ensures that the corresponding stale flows are removed from the OVS bridge.
+- Fix usage of iptables-restore in Antrea Agent to support iptables >= 1.6.2.
+- Fix return path for NodePort Service traffic in EKS: an additional iptables rule is required in the mangle table, to ensure a correct reverse path through eth0 for traffic load-balanced to a Pod attached to a secondary ENI.
+- Register "antrea_agent_local_pod_count" metric, which was defined without being registered properly.
+
 ## 0.6.0 - 2020-04-30
 
 ### Added
@@ -201,3 +232,4 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [Octant]: https://github.com/vmware-tanzu/octant
 [EKS]: https://aws.amazon.com/eks/
 [GKE]: https://cloud.google.com/kubernetes-engine
+[Antrea Windows documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/windows.md
