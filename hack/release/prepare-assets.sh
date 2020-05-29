@@ -65,4 +65,7 @@ export IMG_NAME=antrea/antrea-ubuntu
 export IMG_NAME=antrea/octant-antrea-ubuntu
 ./hack/generate-manifest-octant.sh --mode release > $1/antrea-octant.yml
 
+export IMG_NAME=antrea/antrea-windows
+./hack/generate-manifest-windows.sh --mode release > $1/antrea-windows.yml
+
 ls $1 | cat

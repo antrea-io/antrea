@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    component: antrea-agent
+  name: antrea-agent-windows
+spec:
+  selector:
+    matchLabels:
+      component: antrea-agent
+  template:
+    metadata:
+      labels:
+        component: antrea-agent
+    spec:
+      containers:
+        - command:
+            - pwsh
+          args:
+            - -file
+            - /var/lib/antrea-windows/Run-AntreaAgent.ps1
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          image: antrea-windows
+          name: antrea-agent
+          volumeMounts:
+            - mountPath: /host
+              name: host
+            - mountPath: \\.\pipe\rancher_wins
+              name: wins
+            - mountPath: /etc/antrea
+              name: antrea-windows-config
+            - mountPath: /var/lib/antrea-windows
+              name: antrea-agent-windows
+            - mountPath: /host/k/antrea/
+              name: host-antrea-home
+      hostNetwork: true
+      initContainers:
+        - command:
+            - pwsh
+          args:
+            - -File
+            - /k/antrea/Install-WindowsCNI.ps1
+          image: antrea-windows
+          name: install-cni
+          volumeMounts:
+            - mountPath: /etc/antrea
+              name: antrea-windows-config
+              readOnly: true
+            - mountPath: /host/etc/cni/net.d
+              name: host-cni-conf
+            - mountPath: /host/opt/cni/bin
+              name: host-cni-bin
+            - mountPath: /host/k/antrea/
+              name: host-antrea-home
+            - mountPath: /host
+              name: host
+      nodeSelector:
+        kubernetes.io/os: windows
+      priorityClassName: system-node-critical
+      serviceAccountName: antrea-agent
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoSchedule
+          operator: Exists
+      volumes:
+        - configMap:
+            name: antrea-windows-config
+          name: antrea-windows-config
+        - configMap:
+            defaultMode: 420
+            name: antrea-agent-windows
+          name: antrea-agent-windows
+        - hostPath:
+            path: /etc/cni/net.d
+            type: DirectoryOrCreate
+          name: host-cni-conf
+        - hostPath:
+            path: /opt/cni/bin
+            type: DirectoryOrCreate
+          name: host-cni-bin
+        - hostPath:
+            path: /k/antrea
+            type: DirectoryOrCreate
+          name: host-antrea-home
+        - hostPath:
+            path: /
+          name: host
+        - name: wins
+          hostPath:
+            path: \\.\pipe\rancher_wins
+            type: null
+  updateStrategy:
+    type: RollingUpdate
