@@ -30,9 +30,11 @@ jobs:
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         TAG: ${{ github.ref }}
       run: |
-        VERSION="${TAG:10}" make build-windows
+        export VERSION="${TAG:10}"
+        make build-windows
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/antrea-windows:"${TAG:10}"
+      shell: bash
 
   build-octant-antrea-ubuntu:
     runs-on: [ubuntu-18.04]
