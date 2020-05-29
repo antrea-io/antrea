@@ -20,17 +20,15 @@ import (
 	"io"
 	"net"
 	"net/url"
-	"os"
-	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
 	agentapiserver "github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
 	"github.com/vmware-tanzu/antrea/pkg/apis"
 	controllerapiserver "github.com/vmware-tanzu/antrea/pkg/apiserver"
 )
@@ -63,35 +61,19 @@ type client struct {
 // It will return error if the stating of the file failed or the kubeconfig is malformed.
 // If the default kubeconfig not exists, it will try to use an in-cluster config.
 func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
-	var err error
-	var kubeconfig *rest.Config
-	if len(opt.kubeconfig) == 0 {
-		var hasIt bool
-		opt.kubeconfig, hasIt = os.LookupEnv("KUBECONFIG")
-		if !hasIt || len(strings.TrimSpace(opt.kubeconfig)) == 0 {
-			opt.kubeconfig = clientcmd.RecommendedHomeFile
-		}
-	}
-	if _, err = os.Stat(opt.kubeconfig); opt.kubeconfig == clientcmd.RecommendedHomeFile && os.IsNotExist(err) {
-		kubeconfig, err = rest.InClusterConfig()
-		if err != nil {
-			err = fmt.Errorf("unable to resolve in-cluster configuration: %v. Please specify the kubeconfig file", err)
-		}
-	} else {
-		kubeconfig, err = clientcmd.BuildConfigFromFlags("", opt.kubeconfig)
-	}
+	kubeconfig, err := runtime.ResolveKubeconfig(opt.kubeconfig)
 	if err != nil {
 		return nil, err
 	}
 	kubeconfig.NegotiatedSerializer = c.codec
-	if inPod {
+	if runtime.InPod {
 		kubeconfig.Insecure = true
 		kubeconfig.CAFile = ""
 		kubeconfig.CAData = nil
-		if runtimeMode == ModeAgent {
+		if runtime.Mode == runtime.ModeAgent {
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
 			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
-		} else if runtimeMode == ModeController {
+		} else if runtime.Mode == runtime.ModeController {
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaControllerAPIPort))
 			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
 		}
@@ -101,7 +83,7 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 
 func (c *client) request(opt *requestOption) (io.Reader, error) {
 	var e *endpoint
-	if runtimeMode == ModeAgent {
+	if runtime.Mode == runtime.ModeAgent {
 		e = opt.commandDefinition.agentEndpoint
 	} else {
 		e = opt.commandDefinition.controllerEndpoint

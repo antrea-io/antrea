@@ -26,6 +26,19 @@ rules:
       - agentinfos
     verbs:
       - get
+  - apiGroups:
+      - system.antrea.tanzu.vmware.com
+    resources:
+      - supportbundles
+    verbs:
+      - get
+      - post
+  - apiGroups:
+      - system.antrea.tanzu.vmware.com
+    resources:
+      - supportbundles/download
+    verbs:
+      - get
   - nonResourceURLs:
       - /agentinfo
       - /addressgroups

@@ -134,6 +134,11 @@ func (c *Client) Restore(data []byte, flush bool) error {
 	return nil
 }
 
+// Save calls iptables-saves to dump chains and tables in iptables.
+func (c *Client) Save() ([]byte, error) {
+	return exec.Command("iptables-save", "-c").CombinedOutput()
+}
+
 func contains(chains []string, targetChain string) bool {
 	for _, val := range chains {
 		if val == targetChain {
