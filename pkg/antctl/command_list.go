@@ -23,12 +23,15 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
 )
 
 // commandList organizes commands definitions.
 // It is the protocol for a pair of antctl client and server.
 type commandList struct {
 	definitions []commandDefinition
+	rawCommands []rawCommand
 	codec       serializer.CodecFactory
 }
 
@@ -48,14 +51,22 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
 	}
 	for i := range cl.definitions {
 		def := cl.definitions[i]
-		if (runtimeMode == ModeAgent && def.agentEndpoint == nil) ||
-			(runtimeMode == ModeController && def.controllerEndpoint == nil) {
+		if (runtime.Mode == runtime.ModeAgent && def.agentEndpoint == nil) ||
+			(runtime.Mode == runtime.ModeController && def.controllerEndpoint == nil) {
 			continue
 		}
 		def.applySubCommandToRoot(root, client)
 		klog.Infof("Added command %s", def.use)
 	}
 	cl.applyPersistentFlagsToRoot(root)
+
+	for _, cmd := range cl.rawCommands {
+		if (runtime.Mode == runtime.ModeAgent && cmd.supportAgent) ||
+			(runtime.Mode == runtime.ModeController && cmd.supportController) {
+			root.AddCommand(cmd.cobraCommand)
+		}
+	}
+
 	root.SilenceUsage = true
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		enableVerbose, err := root.PersistentFlags().GetBool("verbose")
@@ -97,8 +108,8 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 	var allCommands [][]string
 	for i := range cl.definitions {
 		def := cl.definitions[i]
-		if mode == ModeAgent && def.agentEndpoint != nil ||
-			mode == ModeController && def.controllerEndpoint != nil {
+		if mode == runtime.ModeAgent && def.agentEndpoint != nil ||
+			mode == runtime.ModeController && def.controllerEndpoint != nil {
 			var currentCommand []string
 			if group, ok := groupCommands[def.commandGroup]; ok {
 				currentCommand = append(currentCommand, group.Use)
@@ -107,12 +118,18 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 			allCommands = append(allCommands, currentCommand)
 		}
 	}
+	for i := range cl.rawCommands {
+		if mode == runtime.ModeController && cl.rawCommands[i].supportController ||
+			mode == runtime.ModeAgent && cl.rawCommands[i].supportAgent {
+			allCommands = append(allCommands, strings.Split(cl.rawCommands[i].cobraCommand.Use, " ")[:1])
+		}
+	}
 	return allCommands
 }
 
 // renderDescription replaces placeholders ${component} in Short and Long of a command
 // to the determined component during runtime.
 func renderDescription(command *cobra.Command) {
-	command.Short = strings.ReplaceAll(command.Short, "${component}", runtimeMode)
-	command.Long = strings.ReplaceAll(command.Long, "${component}", runtimeMode)
+	command.Short = strings.ReplaceAll(command.Short, "${component}", runtime.Mode)
+	command.Long = strings.ReplaceAll(command.Long, "${component}", runtime.Mode)
 }

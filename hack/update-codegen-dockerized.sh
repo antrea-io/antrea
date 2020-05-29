@@ -29,12 +29,17 @@ protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
 $GOPATH/bin/client-gen \
   --clientset-name versioned \
   --input-base "${ANTREA_PKG}/pkg/apis/" \
-  --input "clusterinformation/v1beta1,networking/v1beta1" \
+  --input "clusterinformation/v1beta1" \
+  --input "networking/v1beta1" \
+  --input "system/v1beta1" \
   --output-package "${ANTREA_PKG}/pkg/client/clientset" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/deepcopy-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1,${ANTREA_PKG}/pkg/apis/networking,${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/networking" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
   -O zz_generated.deepcopy \
   --go-header-file hack/boilerplate/license_header.go.txt
 
@@ -44,7 +49,9 @@ $GOPATH/bin/conversion-gen  \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/openapi-gen  \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1,${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
   --input-dirs "k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/util/intstr" \
   --input-dirs "k8s.io/api/core/v1" \
   --output-package "${ANTREA_PKG}/pkg/apiserver/openapi" \

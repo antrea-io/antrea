@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package antctl
+package runtime
 
 import (
 	"os"
 	"strings"
+
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -25,17 +28,33 @@ const (
 )
 
 var (
-	// runtimeMode tells which mode antctl is running against.
-	runtimeMode string
-	inPod       bool
+	// Mode tells which mode antctl is running against.
+	Mode  string
+	InPod bool
 )
+
+func ResolveKubeconfig(path string) (*rest.Config, error) {
+	var err error
+	if len(path) == 0 {
+		var hasIt bool
+		path, hasIt = os.LookupEnv("KUBECONFIG")
+		if !hasIt || len(strings.TrimSpace(path)) == 0 {
+			path = clientcmd.RecommendedHomeFile
+		}
+	}
+	if _, err = os.Stat(path); path == clientcmd.RecommendedHomeFile && os.IsNotExist(err) {
+		return rest.InClusterConfig()
+	} else {
+		return clientcmd.BuildConfigFromFlags("", path)
+	}
+}
 
 func init() {
 	podName, found := os.LookupEnv("POD_NAME")
-	inPod = found && (strings.HasPrefix(podName, "antrea-agent") || strings.HasPrefix(podName, "antrea-controller"))
+	InPod = found && (strings.HasPrefix(podName, "antrea-agent") || strings.HasPrefix(podName, "antrea-controller"))
 	if strings.HasPrefix(podName, "antrea-agent") {
-		runtimeMode = ModeAgent
+		Mode = ModeAgent
 	} else {
-		runtimeMode = ModeController
+		Mode = ModeController
 	}
 }

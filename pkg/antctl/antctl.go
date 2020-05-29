@@ -23,6 +23,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovstracing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
@@ -317,7 +318,13 @@ var CommandList = &commandList{
 			transformedResponse: reflect.TypeOf(ovstracing.Response{}),
 		},
 	},
-
+	rawCommands: []rawCommand{
+		{
+			cobraCommand:      supportbundle.Command,
+			supportAgent:      true,
+			supportController: true,
+		},
+	},
 	codec: scheme.Codecs,
 }
 

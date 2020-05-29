@@ -21,9 +21,12 @@ import (
 	"os"
 	"path"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	k8sversion "k8s.io/apimachinery/pkg/version"
+	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
@@ -35,6 +38,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovstracing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
+	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
+	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/supportbundle"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 	antreaversion "github.com/vmware-tanzu/antrea/pkg/version"
 )
@@ -46,6 +53,11 @@ var (
 	codecs    = serializer.NewCodecFactory(scheme)
 	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
+
+func init() {
+	systeminstall.Install(scheme)
+	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
+}
 
 type agentAPIServer struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
@@ -65,6 +77,16 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/ovstracing", ovstracing.HandleFunc(aq))
 }
 
+func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier) error {
+	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(systemv1beta1.GroupName, scheme, metav1.ParameterCodec, codecs)
+	systemStorage := map[string]rest.Storage{}
+	supportBundleStorage := supportbundle.NewStorage("agent", ovsctl.NewClient(aq.GetNodeConfig().OVSBridge))
+	systemStorage["supportbundles"] = supportBundleStorage.SupportBundle
+	systemStorage["supportbundles/download"] = supportBundleStorage.Download
+	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
+	return s.InstallAPIGroup(&systemGroup)
+}
+
 // New creates an APIServer for running in antrea agent.
 func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, bindPort int,
 	enableMetrics bool) (*agentAPIServer, error) {
@@ -74,6 +96,9 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	}
 	s, err := cfg.New(Name, genericapiserver.NewEmptyDelegate())
 	if err != nil {
+		return nil, err
+	}
+	if err := installAPIGroup(s, aq); err != nil {
 		return nil, err
 	}
 	installHandlers(aq, npq, s)
@@ -88,6 +113,7 @@ func newConfig(bindPort int, enableMetrics bool) (*genericapiserver.CompletedCon
 	// Set the PairName but leave certificate directory blank to generate in-memory by default.
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = Name
+	secureServing.BindAddress = net.ParseIP("0.0.0.0")
 	secureServing.BindPort = bindPort
 
 	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
