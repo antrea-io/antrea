@@ -106,3 +106,12 @@ jobs:
         asset_path: ./assets/antrea-octant.yml
         asset_name: antrea-octant.yml
         asset_content_type: application/octet-stream
+    - name: Upload antrea-windows.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-windows.yml
+        asset_name: antrea-windows.yml
+        asset_content_type: application/octet-stream
