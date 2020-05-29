@@ -8,10 +8,9 @@ data:
     C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr" --envs "KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME"
 kind: ConfigMap
 metadata:
-  annotations: {}
   labels:
     app: antrea
-  name: antrea-agent-windows
+  name: antrea-agent-windows-9ffbt88hmc
   namespace: kube-system
 ---
 apiVersion: v1
@@ -39,6 +38,11 @@ data:
     # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
     #serviceCIDR: 10.96.0.0/12
 
+    # The port for the antrea-agent APIServer to serve on.
+    #apiPort: 10350
+
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
+    #enablePrometheusMetrics: false
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -53,13 +57,11 @@ data:
             }
         ]
     }
-  antrea-controller.conf: ""
 kind: ConfigMap
 metadata:
-  annotations: {}
   labels:
     app: antrea
-  name: antrea-config-bckh9m3ace
+  name: antrea-windows-config-ktmt97647h
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -82,95 +84,95 @@ spec:
         component: antrea-agent
     spec:
       containers:
-        - command:
-            - pwsh
-          args:
-            - -file
-            - /var/lib/antrea-windows/Run-AntreaAgent.ps1
-          env:
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            - name: NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-          image: antrea/antrea-windows:latest
-          imagePullPolicy: IfNotPresent
-          name: antrea-agent
-          volumeMounts:
-            - mountPath: /host
-              name: host
-            - mountPath: \\.\pipe\rancher_wins
-              name: wins
-            - mountPath: /etc/antrea
-              name: antrea-config
-            - mountPath: /var/lib/antrea-windows
-              name: antrea-agent-windows
-            - mountPath: /host/k/antrea/
-              name: host-antrea-home
+      - args:
+        - -file
+        - /var/lib/antrea-windows/Run-AntreaAgent.ps1
+        command:
+        - pwsh
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        image: antrea/antrea-windows:latest
+        imagePullPolicy: IfNotPresent
+        name: antrea-agent
+        volumeMounts:
+        - mountPath: /host
+          name: host
+        - mountPath: \\.\pipe\rancher_wins
+          name: wins
+        - mountPath: /etc/antrea
+          name: antrea-windows-config
+        - mountPath: /var/lib/antrea-windows
+          name: antrea-agent-windows
+        - mountPath: /host/k/antrea/
+          name: host-antrea-home
       hostNetwork: true
       initContainers:
-        - command:
-            - pwsh
-          args:
-            - -File
-            - /k/antrea/Install-WindowsCNI.ps1
-          image: antrea/antrea-windows:latest
-          imagePullPolicy: IfNotPresent
-          name: install-cni
-          volumeMounts:
-            - mountPath: /etc/antrea
-              name: antrea-config
-              readOnly: true
-            - mountPath: /host/etc/cni/net.d
-              name: host-cni-conf
-            - mountPath: /host/opt/cni/bin
-              name: host-cni-bin
-            - mountPath: /host/k/antrea/
-              name: host-antrea-home
-            - mountPath: /host
-              name: host
+      - args:
+        - -File
+        - /k/antrea/Install-WindowsCNI.ps1
+        command:
+        - pwsh
+        image: antrea/antrea-windows:latest
+        imagePullPolicy: IfNotPresent
+        name: install-cni
+        volumeMounts:
+        - mountPath: /etc/antrea
+          name: antrea-windows-config
+          readOnly: true
+        - mountPath: /host/etc/cni/net.d
+          name: host-cni-conf
+        - mountPath: /host/opt/cni/bin
+          name: host-cni-bin
+        - mountPath: /host/k/antrea/
+          name: host-antrea-home
+        - mountPath: /host
+          name: host
       nodeSelector:
         kubernetes.io/os: windows
       priorityClassName: system-node-critical
       serviceAccountName: antrea-agent
       tolerations:
-        - key: CriticalAddonsOnly
-          operator: Exists
-        - effect: NoSchedule
-          operator: Exists
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        operator: Exists
       volumes:
-        - configMap:
-            name: antrea-config-bckh9m3ace
-          name: antrea-config
-        - configMap:
-            defaultMode: 420
-            name: antrea-agent-windows
-          name: antrea-agent-windows
-        - hostPath:
-            path: /etc/cni/net.d
-            type: DirectoryOrCreate
-          name: host-cni-conf
-        - hostPath:
-            path: /opt/cni/bin
-            type: DirectoryOrCreate
-          name: host-cni-bin
-        - hostPath:
-            path: /k/antrea
-            type: DirectoryOrCreate
-          name: host-antrea-home
-        - hostPath:
-            path: /
-          name: host
-        - name: wins
-          hostPath:
-            path: \\.\pipe\rancher_wins
-            type: null
+      - configMap:
+          name: antrea-windows-config-ktmt97647h
+        name: antrea-windows-config
+      - configMap:
+          defaultMode: 420
+          name: antrea-agent-windows-9ffbt88hmc
+        name: antrea-agent-windows
+      - hostPath:
+          path: /etc/cni/net.d
+          type: DirectoryOrCreate
+        name: host-cni-conf
+      - hostPath:
+          path: /opt/cni/bin
+          type: DirectoryOrCreate
+        name: host-cni-bin
+      - hostPath:
+          path: /k/antrea
+          type: DirectoryOrCreate
+        name: host-antrea-home
+      - hostPath:
+          path: /
+        name: host
+      - hostPath:
+          path: \\.\pipe\rancher_wins
+          type: null
+        name: wins
   updateStrategy:
     type: RollingUpdate
