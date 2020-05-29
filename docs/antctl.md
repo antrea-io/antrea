@@ -51,7 +51,8 @@ or Agent.
 
 When running out-of-cluster ("controller mode" only), antctl will look for your
 kubeconfig file at `$HOME/.kube/config` by default. You can select a different
-one with `--kubeconfig`.
+one by setting the `KUBECONFIG` environment variable or with `--kubeconfig`
+(the latter taking precedence over the former).
 
 The following sub-sections introduce a few commands which are useful for
 troubleshooting the Antrea system.
