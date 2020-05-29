@@ -229,6 +229,7 @@ manifest:
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --cloud EKS --encap-mode networkPolicyOnly > build/yamls/antrea-eks.yml
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --cloud GKE --encap-mode noEncap > build/yamls/antrea-gke.yml
 	$(CURDIR)/hack/generate-manifest-octant.sh --mode dev > build/yamls/antrea-octant.yml
+	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
 
 .PHONY: octant-antrea-ubuntu
 octant-antrea-ubuntu:
