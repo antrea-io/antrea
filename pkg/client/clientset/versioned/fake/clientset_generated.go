@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import (
 	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1/fake"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
 	fakenetworkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1/fake"
+	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
+	fakesystemv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/system/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -84,4 +86,9 @@ func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.Cluste
 // NetworkingV1beta1 retrieves the NetworkingV1beta1Client
 func (c *Clientset) NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface {
 	return &fakenetworkingv1beta1.FakeNetworkingV1beta1{Fake: &c.Fake}
+}
+
+// SystemV1beta1 retrieves the SystemV1beta1Client
+func (c *Clientset) SystemV1beta1() systemv1beta1.SystemV1beta1Interface {
+	return &fakesystemv1beta1.FakeSystemV1beta1{Fake: &c.Fake}
 }

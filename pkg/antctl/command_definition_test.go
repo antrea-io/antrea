@@ -31,6 +31,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
@@ -348,7 +349,7 @@ func TestFormat(t *testing.T) {
 // TestCommandDefinitionGenerateExample checks example strings are generated as
 // expected.
 func TestCommandDefinitionGenerateExample(t *testing.T) {
-	runtimeMode = ModeAgent
+	runtime.Mode = runtime.ModeAgent
 	for k, tc := range map[string]struct {
 		use        string
 		cmdChain   string

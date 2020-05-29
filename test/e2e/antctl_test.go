@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
 )
 
 type cmdAndReturnCode struct {
@@ -59,7 +60,7 @@ func TestAntctlAgentLocalAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when getting antrea-agent pod name: %v", err)
 	}
-	for _, c := range antctl.CommandList.GetDebugCommands(antctl.ModeAgent) {
+	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeAgent) {
 		args := append([]string{"antctl", "-v"}, c...)
 		cmd := strings.Join(args, " ")
 		t.Run(cmd, func(t *testing.T) {
@@ -99,7 +100,7 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 
 	testCmds := []cmdAndReturnCode{}
 	// Add all controller commands.
-	for _, c := range antctl.CommandList.GetDebugCommands(antctl.ModeController) {
+	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeController) {
 		cmd := append([]string{nodeAntctlPath, "-v"}, c...)
 		testCmds = append(testCmds, cmdAndReturnCode{args: cmd, expectedReturnCode: 0})
 	}

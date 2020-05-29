@@ -15,12 +15,14 @@
 package antctl
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
 )
 
@@ -49,6 +51,6 @@ func TestCommandListApplyToCommand(t *testing.T) {
 	// sub-commands should be attached
 	assert.True(t, testRoot.HasSubCommands())
 	// render should work as expected
-	assert.Contains(t, testRoot.Short, "The component is "+runtimeMode)
-	assert.Contains(t, testRoot.Long, "The component is "+runtimeMode)
+	assert.Contains(t, testRoot.Short, fmt.Sprintf("The component is %s", runtime.Mode))
+	assert.Contains(t, testRoot.Long, fmt.Sprintf("The component is %s", runtime.Mode))
 }
