@@ -116,10 +116,15 @@ cluster, and enforce NetworkPolicies for the cluster.
 * To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
 * To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
 
-### Deploying Antrea with IPsec Encyption
+### Deploying Antrea with IPsec Encryption
 
 Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
-IPsec encyption enabled, please refer to this [guide](/docs/ipsec-tunnel.md).
+IPsec encryption enabled, please refer to this [guide](/docs/ipsec-tunnel.md).
+
+### Deploying Antrea with Custom Certificates
+
+By default, Antrea generates the certificates needed for itself to run. To
+provide your own certificates, please refer to [Securing Control Plane](/docs/securing-control-plane.md).
 
 ### Antctl: Installation and Usage
 
