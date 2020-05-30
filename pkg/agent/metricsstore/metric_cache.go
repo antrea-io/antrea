@@ -20,14 +20,14 @@ import (
 
 var (
 	IngressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
-		Name: "antrea_agent_ingress_networkpolicy_rule",
-		Help: "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
+		Name:           "antrea_agent_ingress_networkpolicy_rule",
+		Help:           "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
 		StabilityLevel: metrics.STABLE,
 	})
 
 	EgressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
-		Name: "antrea_agent_egress_networkpolicy_rule",
-		Help: "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
+		Name:           "antrea_agent_egress_networkpolicy_rule",
+		Help:           "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
 		StabilityLevel: metrics.STABLE,
 	})
 )
