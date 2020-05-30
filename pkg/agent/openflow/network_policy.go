@@ -742,7 +742,7 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 
 	// Count up antrea_agent_ingress_networkpolicy_rule or antrea_agent_egress_networkpolicy_rule
 	if rule.Direction == v1beta1.DirectionIn {
-		metricsstore.IngressNetworkPolicyCount.Inc()	
+		metricsstore.IngressNetworkPolicyCount.Inc()
 	} else if rule.Direction == v1beta1.DirectionOut {
 		metricsstore.EgressNetworkPolicyCount.Inc()
 	}
@@ -952,10 +952,9 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
 	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
 		return err
 	}
-	
 
 	isFound := false
-	for _, ctxChange := range ctxChanges {		
+	for _, ctxChange := range ctxChanges {
 		switch ctxChange.clause.ruleTable.GetID() {
 		case ingressRuleTable:
 			metricsstore.IngressNetworkPolicyCount.Dec()
@@ -967,7 +966,7 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
 		if isFound {
 			break
 		}
-	}	
+	}
 
 	// Remove policyRuleConjunction from client's policyCache.
 	c.policyCache.Delete(ruleID)

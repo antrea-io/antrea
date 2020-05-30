@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,13 +21,13 @@ import (
 var (
 	IngressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
 		Name: "antrea_agent_ingress_networkpolicy_rule",
-		Help: "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",			
+		Help: "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
 		StabilityLevel: metrics.STABLE,
 	})
 
 	EgressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
 		Name: "antrea_agent_egress_networkpolicy_rule",
-		Help: "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",			
+		Help: "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
 		StabilityLevel: metrics.STABLE,
 	})
 )
