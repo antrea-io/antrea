@@ -118,7 +118,7 @@ enabled explicitly.
 * To load Antrea into the cluster with Prometheus enabled, use: 
 `./infra/vagrant/push_antrea.sh --prometheus`
 * To run the Prometheus tests within the e2e suite, use:
-`go test -v -prometheus github.com/vmware-tanzu/antrea/test/e2e`
+`go test -v github.com/vmware-tanzu/antrea/test/e2e --prometheus`
 
 
 ## Running the e2e tests on a Kind cluster
