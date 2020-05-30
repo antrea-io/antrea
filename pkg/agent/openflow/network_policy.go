@@ -740,12 +740,10 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 		return err
 	}
 
-	// Count up antrea_agent_local_ingress_networkpolicy_count or antrea_agent_local_engress_networkpolicy_count
+	// Count up antrea_agent_ingress_networkpolicy_rule or antrea_agent_egress_networkpolicy_rule
 	if rule.Direction == v1beta1.DirectionIn {
-		klog.Error("Ingress Rule create")
 		metricsstore.IngressNetworkPolicyCount.Inc()	
 	} else if rule.Direction == v1beta1.DirectionOut {
-		klog.Error("Egress Rule create")
 		metricsstore.EgressNetworkPolicyCount.Inc()
 	}
 
@@ -957,15 +955,12 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
 	
 
 	isFound := false
-	for _, ctxChange := range ctxChanges {
-		klog.Errorf("RuleID: %s, TableID", ruleID, ctxChange.clause.ruleTable.GetID())
+	for _, ctxChange := range ctxChanges {		
 		switch ctxChange.clause.ruleTable.GetID() {
 		case ingressRuleTable:
-			klog.Errorf("IngressRule Deleted")	
 			metricsstore.IngressNetworkPolicyCount.Dec()
 			isFound = true
 		case egressRuleTable:
-			klog.Errorf("EgressRule Deleted")	
 			metricsstore.EgressNetworkPolicyCount.Dec()
 			isFound = true
 		}

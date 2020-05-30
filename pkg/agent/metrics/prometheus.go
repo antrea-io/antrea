@@ -52,12 +52,12 @@ func InitializePrometheusMetrics() {
 		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
 	}
 
-	if err := legacyregistory.Register(metricsstore.IngressNetworkPolicyCount); err != nil {
-		klog.Error("Failed to register antrea_agent_local_ingress_networkpolicy_count with Prometheus")
+	if err := legacyregistry.Register(metricsstore.IngressNetworkPolicyCount); err != nil {
+		klog.Error("Failed to register antrea_agent_ingress_networkpolicy_rule with Prometheus")
 	}
 
-	if err := legacyregistory.Register(metricsstore.EgressNetworkPolicyCount); err != nil {
-		klog.Error("Failed to register antrea_agent_local_egress_networkpolicy_count with Prometheus")
+	if err := legacyregistry.Register(metricsstore.EgressNetworkPolicyCount); err != nil {
+		klog.Error("Failed to register antrea_agent_egress_networkpolicy_rule with Prometheus")
 	}
 
 	nodeName, err := env.GetNodeName()

@@ -15,17 +15,19 @@
 package metricsstore
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/component-base/metrics"
 )
 
 var (
-	IngressNetworkPolicyCount = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "antrea_agent_local_ingress_networkpolicy_count",
-		Help: "Number of ingress network policieson local node which are managed by the Antrea Agent.",			
+	IngressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
+		Name: "antrea_agent_ingress_networkpolicy_rule",
+		Help: "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",			
+		StabilityLevel: metrics.STABLE,
 	})
 
-	EgressNetworkPolicyCount = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "antrea_agent_local_egress_networkpolicy_count",
-		Help: "Number of egress network policieson local node which are managed by the Antrea Agent.",			
+	EgressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
+		Name: "antrea_agent_egress_networkpolicy_rule",
+		Help: "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",			
+		StabilityLevel: metrics.STABLE,
 	})
 )
