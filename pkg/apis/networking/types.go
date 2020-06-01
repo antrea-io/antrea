@@ -26,6 +26,8 @@ type AppliedToGroup struct {
 	metav1.ObjectMeta
 	// Pods is a list of Pods selected by this group.
 	Pods []GroupMemberPod
+	// GroupMembers is a list of resources selected by this group.
+	GroupMembers []GroupMember
 }
 
 // PodReference represents a Pod Reference.
@@ -56,13 +58,43 @@ type GroupMemberPod struct {
 	Ports []NamedPort
 }
 
+// ExternalEntityReference represents a ExternalEntity Reference.
+type ExternalEntityReference struct {
+	// The name of this ExternalEntity.
+	Name string
+	// The namespace of this ExternalEntity.
+	Namespace string
+}
+
+// Endpoint represents an external endpoint.
+type Endpoint struct {
+	// IP is the IP address of the Endpoint.
+	IP IPAddress
+	// Ports is the list NamedPort of the Endpoint.
+	Ports []NamedPort
+}
+
+// GroupMember represents an resource member to be populated in Groups.
+type GroupMember struct {
+	// Pod maintains the reference to the Pod.
+	Pod *PodReference
+
+	// ExternalEntity maintains the reference to the ExternalEntity.
+	ExternalEntity *ExternalEntityReference
+
+	// Endpoints maintains a list of EndPoints associated with this GroupMember.
+	Endpoints []Endpoint
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AppliedToGroupPatch describes the incremental update of an AppliedToGroup.
 type AppliedToGroupPatch struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	AddedPods   []GroupMemberPod
-	RemovedPods []GroupMemberPod
+	AddedPods           []GroupMemberPod
+	RemovedPods         []GroupMemberPod
+	AddedGroupMembers   []GroupMember
+	RemovedGroupMembers []GroupMember
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -80,6 +112,8 @@ type AddressGroup struct {
 	metav1.ObjectMeta
 	// Pods is a list of Pods selected by this group.
 	Pods []GroupMemberPod
+	// GroupMembers is a list of GroupMember selected by this group.
+	GroupMembers []GroupMember
 }
 
 // IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.
@@ -96,8 +130,10 @@ type IPNet struct {
 type AddressGroupPatch struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	AddedPods   []GroupMemberPod
-	RemovedPods []GroupMemberPod
+	AddedPods           []GroupMemberPod
+	RemovedPods         []GroupMemberPod
+	AddedGroupMembers   []GroupMember
+	RemovedGroupMembers []GroupMember
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
