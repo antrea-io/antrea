@@ -2,7 +2,7 @@
 
 This document further describes the developer workflow and how issues are
 managed as introduced in [CONTRIBUTING.md](../CONTRIBUTING.md). Please read
-CONTRIBUTING.md first before proceeding.
+[CONTRIBUTING.md](../CONTRIBUTING.md) first before proceeding.
 
 - [Issue Management](#issue-management)
   - [Developer Workflow Overview](#developer-workflow-overview)
@@ -66,7 +66,7 @@ To summarize:
 
 ## Issue and PR Triage Process
 
-When new issues or PRs are created, the MAINTAINERS must triage the issue
+When new issues or PRs are created, the maintainers must triage the issue
 to ensure the information is valid, complete, and properly categorized and
 prioritized.
 
@@ -148,7 +148,7 @@ worked.
 A `kind/api-change` label categorizes an issue or PR as related to adding, removing,
 or otherwise changing an API.
 
-All API changes must be reviewed by MAINTAINERS in addition to the standard code
+All API changes must be reviewed by maintainers in addition to the standard code
 review and approval workflow.
 
 To create an API change issue or PR:

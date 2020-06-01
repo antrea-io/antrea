@@ -10,14 +10,14 @@ to effectively get it merged upstream.
     - [CLA](#cla)
     - [Accounts Setup](#accounts-setup)
   - [Contribute](#contribute)
-    - [Filing An Issue](#filing-an-issue)
     - [GitHub Workflow](#github-workflow)
     - [Getting reviewers](#getting-reviewers)
     - [Building and testing your change](#building-and-testing-your-change)
+    - [CI testing](#ci-testing)
     - [Running the end-to-end tests](#running-the-end-to-end-tests)
     - [Reverting a commit](#reverting-a-commit)
   - [Issue and PR Management](#issue-and-pr-management)
-    - [New Issues](#new-issues)
+    - [Filing An Issue](#filing-an-issue)
     - [Issue Triage](#issue-triage)
     - [Issue and PR Kinds](#issue-and-pr-kinds)
 
@@ -57,37 +57,11 @@ At minimum, you need the following accounts for effective participation:
 There are multiple ways in which you can contribute, either by contributing
 code in the form of new features or bug-fixes or non-code contributions like
 helping with code reviews, triaging of bugs, documentation updates, filing
-new issues or writing blogs/manuals etc.
+[new issues](#filing-an-issue) or writing blogs/manuals etc.
 
 In order to help you get your hands "dirty", there is a list of
 [starter](https://github.com/vmware-tanzu/antrea/labels/Good%20first%20issue)
 issues from which you can choose.
-
-### Filing An Issue
-
-Help is always appreciated. If you find something that needs fixing, please file
-an issue [here](https://github.com/vmware-tanzu/antrea/issues). Please ensure
-that the issue is self explanatory and has enough information for an assignee to
-get started.
-
-Before picking up a task, go through the existing
-[issues](https://github.com/vmware-tanzu/antrea/issues) and make sure that your
-change is not already being worked on. If it does not exist, please create a new
-issue and discuss it with other members.
-
-For simple contributions to Antrea, please ensure that this minimum set of
-labels are included on your issue:
-
-* **kind** -- common ones are `kind/feature`, `kind/support`, `kind/bug`,
-  `kind/documentation`, or `kind/design`. For an overview of the different types
-  of issues that can be submitted, see [Issue and PR Kinds](#issue-and-pr-kinds).
-* **area** (optional) -- if you know the area the issue belongs in, you can assign it.
-  Otherwise, another community member will label the issue during triage. For an
-  overview of areas, see the [`docs/github-labels.md`](docs/github-labels.md).
-* **size** (optional) -- if you have an idea of the size (lines of code, complexity,
-  effort) of the issue, you can label it using a [size label](#size).
-
-All other labels will be assigned during issue triage.
 
 ### GitHub Workflow
 
@@ -212,22 +186,38 @@ We use labels and workflows (some manual, some automated with GitHub Actions) to
 help us manage triage, prioritize, and track issue progress. For a detailed
 discussion, see [docs/issue-management.md](docs/issue-management.md).
 
-### New Issues
+### Filing An Issue
 
-When submitting a new issue, please search the existing set of issues
-to see if an issue has already been created that addresses your concern.
+Help is always appreciated. If you find something that needs fixing, please file
+an issue [here](https://github.com/vmware-tanzu/antrea/issues). Please ensure
+that the issue is self explanatory and has enough information for an assignee to
+get started.
 
-When creating your new issue, please ensure that you:
+Before picking up a task, go through the existing
+[issues](https://github.com/vmware-tanzu/antrea/issues) and make sure that your
+change is not already being worked on. If it does not exist, please create a new
+issue and discuss it with other members.
 
-* label the issue with the appropriate [`kind/<?>`](#kinds) label. The kind of
-  issue will determine the issue workflow.
-* label the issue with the appropriate [`area/<?>`](#area-assigment) label. The
+For simple contributions to Antrea, please ensure that this minimum set of
+labels are included on your issue:
+
+* **kind** -- common ones are `kind/feature`, `kind/support`, `kind/bug`,
+  `kind/documentation`, or `kind/design`. For an overview of the different types
+  of issues that can be submitted, see [Issue and PR
+  Kinds](#issue-and-pr-kinds). 
+  The kind of issue will determine the issue workflow.
+* **area** (optional) -- if you know the area the issue belongs in, you can assign it.
+  Otherwise, another community member will label the issue during triage. The
   area label will identify the area of interest an issue or PR belongs in and
   will ensure the appropriate reviewers shepherd the issue or PR through to its
-  closure.
-* for issues, label the estimated size (if known). The size can be updated
-  during backlog grooming by the contributors. This estimate is used to guide
-  the number of features selected for a milestone.
+  closure. For an overview of areas, see the 
+  [`docs/github-labels.md`](docs/github-labels.md).
+* **size** (optional) -- if you have an idea of the size (lines of code, complexity,
+  effort) of the issue, you can label it using a [size label](#size). The size
+  can be updated during backlog grooming by contributors. This estimate is used
+  to guide the number of features selected for a milestone.
+
+All other labels will be assigned during issue triage.
 
 ### Issue Triage
 
