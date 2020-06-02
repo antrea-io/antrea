@@ -49,4 +49,4 @@ toc:
       - page: Code Generation
         url: /code-generation
       - page: Release Instructions
-        url: /release
+        url: /maintainers/release
