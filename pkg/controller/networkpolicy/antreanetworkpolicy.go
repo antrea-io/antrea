@@ -15,7 +15,6 @@
 package networkpolicy
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
@@ -23,14 +22,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
-)
-
-var (
-	// matchAllPodsPeerCrd is a secv1alpha1.NetworkPolicyPeer matching all
-	// Pods from all Namespaces.
-	matchAllPodsPeerCrd = secv1alpha1.NetworkPolicyPeer{
-		NamespaceSelector: &metav1.LabelSelector{},
-	}
 )
 
 // addANP receives Antrea NetworkPolicy ADD events and creates resources
@@ -53,7 +44,7 @@ func (n *NetworkPolicyController) addANP(obj interface{}) {
 func (n *NetworkPolicyController) updateANP(old, cur interface{}) {
 	defer n.heartbeat("updateANP")
 	curNP := cur.(*secv1alpha1.NetworkPolicy)
-	klog.Infof("Processing Antrea NetworkPolicy %s/%s UPDATE event", curCNP.Namespace, curCNP.Name)
+	klog.Infof("Processing Antrea NetworkPolicy %s/%s UPDATE event", curNP.Namespace, curNP.Name)
 	// Update an internal NetworkPolicy, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processAntreaNetworkPolicy(curNP)
@@ -126,36 +117,7 @@ func (n *NetworkPolicyController) deleteANP(old interface{}) {
 	n.deleteDereferencedAddressGroups(oldInternalNP)
 }
 
-// toAntreaServicesForCRD converts a secv1alpha1.NetworkPolicyPort object to an
-// Antrea Service object.
-func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) []networking.Service {
-	var antreaServices []networking.Service
-	for _, npPort := range npPorts {
-		antreaService := networking.Service{
-			Protocol: toAntreaProtocol(npPort.Protocol),
-			Port:     npPort.Port,
-		}
-		antreaServices = append(antreaServices, antreaService)
-	}
-	return antreaServices
-}
-
-// toAntreaIPBlockForCRD converts a secv1alpha1.IPBlock to an Antrea IPBlock.
-func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*networking.IPBlock, error) {
-	// Convert the allowed IPBlock to networkpolicy.IPNet.
-	ipNet, err := cidrStrToIPNet(ipBlock.CIDR)
-	if err != nil {
-		return nil, err
-	}
-	antreaIPBlock := &networking.IPBlock{
-		CIDR: *ipNet,
-		// secv1alpha.IPBlock does not have the Except slices.
-		Except: []networking.IPNet{},
-	}
-	return antreaIPBlock, nil
-}
-
-func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer, np *secv1alpha1.NetworkPolicy, dir networking.Direction) *networking.NetworkPolicyPeer {
+func (n *NetworkPolicyController) toAntreaPeerForANP(peers []secv1alpha1.NetworkPolicyPeer, np *secv1alpha1.NetworkPolicy, dir networking.Direction) *networking.NetworkPolicyPeer {
 	var addressGroups []string
 	// Empty NetworkPolicyPeer is supposed to match all addresses.
 	// It's treated as an IPBlock "0.0.0.0/0".
@@ -169,7 +131,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 		// For an egress Peer, create an AddressGroup matching all Pods in all
 		// Namespaces such that it can be used to resolve named Ports. This
 		// AddressGroup is set in the NetworkPolicyPeer of matchAllPeer.
-		allPodsGroupUID := n.createAddressGroupForCRD(matchAllPodsPeerCrd, np)
+		allPodsGroupUID := n.createAddressGroupForANP(matchAllPodsPeerCrd, np)
 		podsPeer := matchAllPeer
 		addressGroups = append(addressGroups, allPodsGroupUID)
 		podsPeer.AddressGroups = addressGroups
@@ -187,19 +149,19 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 			}
 			ipBlocks = append(ipBlocks, *ipBlock)
 		} else {
-			normalizedUID := n.createAddressGroupForCRD(peer, np)
+			normalizedUID := n.createAddressGroupForANP(peer, np)
 			addressGroups = append(addressGroups, normalizedUID)
 		}
 	}
 	return &networking.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
 }
 
-// createAddressGroupForCRD creates an AddressGroup object corresponding to a
+// createAddressGroupForANP creates an AddressGroup object corresponding to a
 // secv1alpha1.NetworkPolicyPeer object in Antrea NetworkPolicyRule. This
 // function simply creates the object without actually populating the
 // PodAddresses as the affected Pods are calculated during sync process.
-func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.NetworkPolicyPeer, np *secv1alpha1.NetworkPolicy) string {
-	groupSelector := toGroupSelector(np.Namespace, peer.PodSelector, peer.NamespaceSelector)
+func (n *NetworkPolicyController) createAddressGroupForANP(peer secv1alpha1.NetworkPolicyPeer, np *secv1alpha1.NetworkPolicy) string {
+	groupSelector := toGroupSelector(np.Namespace, peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector)
 	normalizedUID := getNormalizedUID(groupSelector.NormalizedName)
 	// Get or create an AddressGroup for the generated UID.
 	_, found, _ := n.addressGroupStore.Get(normalizedUID)
@@ -228,7 +190,8 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 	// Create AppliedToGroup for each AppliedTo present in
 	// Antrea NetworkPolicy spec.
 	for _, at := range np.Spec.AppliedTo {
-		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup(np.Namespace, at.PodSelector, at.NamespaceSelector))
+		groupName := n.createAppliedToGroup(np.Namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
+		appliedToGroupNames = append(appliedToGroupNames, groupName)
 	}
 	rules := make([]networking.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
 	// Compute NetworkPolicyRule for Egress Rule.
@@ -237,7 +200,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 		action := ingressRule.Action.ToUpper()
 		rules = append(rules, networking.NetworkPolicyRule{
 			Direction: networking.DirectionIn,
-			From:      *n.toAntreaPeerForCRD(ingressRule.From, np, networking.DirectionIn),
+			From:      *n.toAntreaPeerForANP(ingressRule.From, np, networking.DirectionIn),
 			Services:  toAntreaServicesForCRD(ingressRule.Ports),
 			Action:    &action,
 			Priority:  int32(idx),
@@ -249,7 +212,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 		action := egressRule.Action.ToUpper()
 		rules = append(rules, networking.NetworkPolicyRule{
 			Direction: networking.DirectionOut,
-			To:        *n.toAntreaPeerForCRD(egressRule.To, np, networking.DirectionOut),
+			To:        *n.toAntreaPeerForANP(egressRule.To, np, networking.DirectionOut),
 			Services:  toAntreaServicesForCRD(egressRule.Ports),
 			Action:    &action,
 			Priority:  int32(idx),

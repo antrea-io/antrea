@@ -165,6 +165,174 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
+  name: externalentities.core.antrea.tanzu.vmware.com
+spec:
+  group: core.antrea.tanzu.vmware.com
+  names:
+    kind: ExternalEntity
+    plural: externalentities
+    shortNames:
+    - ee
+    singular: externalentity
+  preserveUnknownFields: false
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            endpoints:
+              items:
+                properties:
+                  ip:
+                    format: ipv4
+                    type: string
+                  name:
+                    type: string
+                  ports:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        port:
+                          x-kubernetes-int-or-string: true
+                        protocol:
+                          type: string
+                      type: object
+                    type: array
+                type: object
+              type: array
+            externalNode:
+              type: string
+          type: object
+      type: object
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: networkpolicies.security.antrea.tanzu.vmware.com
+spec:
+  group: security.antrea.tanzu.vmware.com
+  names:
+    kind: NetworkPolicy
+    plural: networkpolicies
+    shortNames:
+    - anp
+    singular: networkpolicy
+  preserveUnknownFields: false
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            appliedTo:
+              items:
+                properties:
+                  externalEntitySelector:
+                    x-kubernetes-preserve-unknown-fields: true
+                  podSelector:
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+              type: array
+            egress:
+              items:
+                properties:
+                  action:
+                    pattern: \bAllow|\bDrop
+                    type: string
+                  ports:
+                    items:
+                      properties:
+                        port:
+                          x-kubernetes-int-or-string: true
+                        protocol:
+                          type: string
+                      type: object
+                    type: array
+                  to:
+                    items:
+                      properties:
+                        externalEntitySelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                        ipBlock:
+                          properties:
+                            cidr:
+                              format: cidr
+                              type: string
+                          type: object
+                        namespaceSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                        podSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                      type: object
+                    type: array
+                required:
+                - action
+                type: object
+              type: array
+            ingress:
+              items:
+                properties:
+                  action:
+                    pattern: \bAllow|\bDrop
+                    type: string
+                  from:
+                    items:
+                      properties:
+                        externalEntitySelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                        ipBlock:
+                          properties:
+                            cidr:
+                              format: cidr
+                              type: string
+                          type: object
+                        namespaceSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                        podSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                      type: object
+                    type: array
+                  ports:
+                    items:
+                      properties:
+                        port:
+                          x-kubernetes-int-or-string: true
+                        protocol:
+                          type: string
+                      type: object
+                    type: array
+                required:
+                - action
+                type: object
+              type: array
+            priority:
+              format: float
+              maximum: 10000
+              minimum: 1
+              type: number
+          required:
+          - appliedTo
+          - priority
+          type: object
+      type: object
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
   name: traceflows.ops.antrea.tanzu.vmware.com
 spec:
   group: ops.antrea.tanzu.vmware.com
@@ -459,6 +627,22 @@ rules:
   - list
   - update
   - patch
+- apiGroups:
+  - security.antrea.tanzu.vmware.com
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - core.antrea.tanzu.vmware.com
+  resources:
+  - externalentities
+  verbs:
+  - get
+  - watch
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

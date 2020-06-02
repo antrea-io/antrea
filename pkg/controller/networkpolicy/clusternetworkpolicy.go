@@ -199,7 +199,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 // function simply creates the object without actually populating the
 // PodAddresses as the affected Pods are calculated during sync process.
 func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.NetworkPolicyPeer, np *secv1alpha1.ClusterNetworkPolicy) string {
-	groupSelector := toGroupSelector("", peer.PodSelector, peer.NamespaceSelector)
+	groupSelector := toGroupSelector("", peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector)
 	normalizedUID := getNormalizedUID(groupSelector.NormalizedName)
 	// Get or create an AddressGroup for the generated UID.
 	_, found, _ := n.addressGroupStore.Get(normalizedUID)
@@ -228,7 +228,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	// Create AppliedToGroup for each AppliedTo present in
 	// ClusterNetworkPolicy spec.
 	for _, at := range cnp.Spec.AppliedTo {
-		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector))
+		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector))
 	}
 	rules := make([]networking.NetworkPolicyRule, 0, len(cnp.Spec.Ingress)+len(cnp.Spec.Egress))
 	// Compute NetworkPolicyRule for Egress Rule.

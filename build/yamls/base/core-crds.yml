@@ -43,6 +43,9 @@ spec:
                         protocol:
                           type: string
                         port:
-                          x-kubernetes-int-or-string: true
+                          format: int32
+                          type: true
+                        name:
+                          type: string
             externalNode:
               type: string

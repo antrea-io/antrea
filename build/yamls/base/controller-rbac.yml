@@ -109,6 +109,22 @@ rules:
       - list
       - update
       - patch
+  - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
+      - networkpolicies
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+    - core.antrea.tanzu.vmware.com
+    resources:
+      - externalentities
+    verbs:
+      - get
+      - watch
+      - list
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1

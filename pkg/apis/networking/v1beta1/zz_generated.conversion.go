@@ -421,8 +421,8 @@ func Convert_networking_ExternalEntityReference_To_v1beta1_ExternalEntityReferen
 }
 
 func autoConvert_v1beta1_GroupMember_To_networking_GroupMember(in *GroupMember, out *networking.GroupMember, s conversion.Scope) error {
-	out.ExternalEntity = (*networking.ExternalEntityReference)(unsafe.Pointer(in.ExternalEntity))
 	out.Pod = (*networking.PodReference)(unsafe.Pointer(in.Pod))
+	out.ExternalEntity = (*networking.ExternalEntityReference)(unsafe.Pointer(in.ExternalEntity))
 	out.Endpoints = *(*[]networking.Endpoint)(unsafe.Pointer(&in.Endpoints))
 	return nil
 }
