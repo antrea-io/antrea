@@ -156,16 +156,9 @@ created in the above step.
         }
       ]
     }
-<<<<<<< HEAD
     EOF
     ```
 
-=======
-  ]
-}
-EOF
-```
->>>>>>> Bumped advertised release to v0.5.1
 2. Install `antrea-cni` to `/opt/cni/bin/antrea`.
 
     ```bash

@@ -10,14 +10,11 @@ Antrea is designed to work as NetworkPolicy plug-in to work together with a rout
 For as long as a CNI implementation fits into this model, Antrea may be inserted to enforce
 NetworkPolicy in that CNI's environment using Open VSwitch(OVS).
 
-<<<<<<< HEAD
-In addition, Antrea working as NetworkPolicy plug-in automatically enables Antrea-proxy, because
-it requires Antrea-proxy to load balance Pod-to-Service traffic.
 
-<img src="/docs/assets/policy-only-cni.svg" width="600" alt="Antrea Switched CNI">
+!["Antrea Switched CNI"](assets/policy-only-cni.svg)
 =======
 !["Antrea Switched CNI"](assets/policy-only-cni.svg)
->>>>>>> Updated docs for v0.7.0 release.
+>>>>>>> Updated docs for v0.8.2 release.
 
 The above diagram depicts a routed CNI network topology on the left, and what it looks like 
 after Antrea inserts the OVS bridge into the data path.
