@@ -22,6 +22,8 @@ toc:
         external: true
       - page: GKE Installation (Alpha)
         url: /gke-installation
+      - page: Running Antrea In Policy Only Mode
+        url: /policy-only
   - title: Reference
     subfolderitems:
       - page: antctl
@@ -32,8 +34,14 @@ toc:
         url: /ipsec-tunnel
       - page: Octant Plugin Installation
         url: /octant-plugin-installation
+      - page: Prometheus Integration
+        url: /prometheus-integration
+      - page: Securing Control Plane
+        url: /securing-control-plane
       - page: Troubleshooting
         url: /troubleshooting
+      - page: OS-specific Known Issues
+        url: /os-issues
       - page: OVS Pipeline
         url: /ovs-pipeline
   - title: Developer Guide

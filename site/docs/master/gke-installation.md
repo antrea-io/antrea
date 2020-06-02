@@ -82,7 +82,7 @@ assign this permission.
 
     Deploy a released version of Antrea from the [list of releases](https://github.com/vmware-tanzu/antrea/releases).
 Note that GKE support was added in release 0.5.0, which means you cannot pick a release older than 0.5.0.
-For any given release `<TAG>` (e.g. `v0.5.0`), get the Antrea GKE deployment yaml at:
+For any given release `<TAG>` (e.g. `v0.7.0`), get the Antrea GKE deployment yaml at:
 
     ````
     https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-gke.yml

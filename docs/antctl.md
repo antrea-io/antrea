@@ -12,14 +12,16 @@ running in two different modes:
 
 ## Table of Contents
 
-- [Installation](#installation)
-- [Usage](#usage)
-  - [Collecting support information](#collecting-support-information)
-  - [`controllerinfo` and `agentinfo` commands](#controllerinfo-and-agentinfo-commands)
-  - [NetworkPolicy commands](#networkpolicy-commands)
-  - [Dumping Pod network interface information](#dumping-pod-network-interface-information)
-  - [Dumping OVS flows](#dumping-ovs-flows)
-  - [OVS packet tracing](#ovs-packet-tracing)
+- [Antctl](#antctl)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Usage](#usage)
+    - [Collecting support information](#collecting-support-information)
+    - [`controllerinfo` and `agentinfo` commands](#controllerinfo-and-agentinfo-commands)
+    - [NetworkPolicy commands](#networkpolicy-commands)
+    - [Dumping Pod network interface information](#dumping-pod-network-interface-information)
+    - [Dumping OVS flows](#dumping-ovs-flows)
+    - [OVS packet tracing](#ovs-packet-tracing)
 
 ## Installation
 
@@ -39,9 +41,8 @@ page](https://github.com/vmware-tanzu/antrea/releases) and download the
 appropriate one for your machine. For example:
 
 On Mac & Linux:
-
-```bash
-curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/v0.5.0/antctl-$(uname)-x86_64"
+```
+curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/v0.7.0/antctl-$(uname)-x86_64"
 chmod +x ./antctl
 mv ./antctl /some-dir-in-your-PATH/antctl
 antctl version
@@ -50,9 +51,8 @@ antctl version
 For Linux, we also publish binaries for Arm-based systems.
 
 On Windows, using PowerShell:
-
-```powershell
-Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/v0.5.0/antctl-windows-x86_64.exe -Outfile antctl.exe
+```
+Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/v0.7.0/antctl-windows-x86_64.exe -Outfile antctl.exe
 Move-Item .\antctl.exe c:\some-dir-in-your-PATH\antctl.exe
 antctl version
 ```
