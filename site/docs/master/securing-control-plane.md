@@ -6,13 +6,12 @@ You can also provide your own certificates. This page explains the certificates
 that Antrea requires and how to configure and rotate them for Antrea.
 
 ## Table of Contents
-
-- [What certificates are required by Antrea](#what-certificates-are-required-by-antrea)
-- [How certificates are used by Antrea](#how-certificates-are-used-by-antrea)
-- [Providing your own certificates](#providing-your-own-certificates)
-  - [Using kubectl](#using-kubectl)
-  - [Using cert-manager](#using-cert-manager)
-- [Certificate rotation](#certificate-rotation)
+  - [What certificates are required by Antrea](#what-certificates-are-required-by-antrea)
+  - [How certificates are used by Antrea](#how-certificates-are-used-by-antrea)
+  - [Providing your own certificates](#providing-your-own-certificates)
+    - [Using kubectl](#using-kubectl)
+    - [Using cert-manager](#using-cert-manager)
+  - [Certificate rotation](#certificate-rotation)
 
 ## What certificates are required by Antrea
 
@@ -97,6 +96,7 @@ data:
 
 You can use `kubectl apply -f <PATH TO SECRET YAML>` to create the above secret,
 or use `kubectl create secret`:
+
 ```bash
 kubectl create secret generic antrea-controller-tls -n kube-system \
   --from-file=ca.crt=<PATH TO CA CERTIFICATE> --from-file=tls.crt=<PATH TO TLS CERTIFICATE> --from-file=tls.key=<PATH TO TLS KEY>
@@ -114,6 +114,7 @@ and configure `Issuer` or `ClusterIssuer` resources.
 
 The `Certificate` should be created in the `kube-system` namespace. For example,
 A `Certificate` may look like:
+
 ```yaml
 apiVersion: cert-manager.io/v1alpha2
 kind: Certificate

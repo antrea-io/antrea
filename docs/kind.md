@@ -10,15 +10,19 @@ Toolbox](https://docs.docker.com/docker-for-mac/docker-toolbox/).
 ### Quick two Node Kind cluster setup
 
 To create a two worker Node cluster with Antrea installed using scripts, do
-```
+
+```bash
 ./ci/kind/kind-setup.sh create CLUSTER_NAME
 ```
+
 kind-setup.sh allows users to specify the number of worker Nodes, the docker
 bridge networks/subnets connected to worker Nodes, and some docker images to be
 pre-loaded in each Node. For more information on usage, run:
- ```
+
+ ```bash
 ./ci/kind/kind-setup.sh help
 ```
+
 Above is the short cut to a Kind setup with Antrea. Read further in order to
 setup a Kind cluster manually.
 
@@ -27,6 +31,7 @@ setup a Kind cluster manually.
 The only requirement is to use a Kind configuration file which disables the
 Kubernetes default CNI (`kubenet`). For example, your configuration file may
 look like this:
+
 ```yaml
 kind: Cluster
 apiVersion: kind.sigs.k8s.io/v1alpha3
@@ -41,6 +46,7 @@ nodes:
 
 Once you have created your configuration file (let's call it `kind-config.yml`),
 create your cluster with:
+
 ```bash
 kind create cluster --config kind-config.yml
 ```
@@ -63,6 +69,7 @@ kind load docker-image antrea/antrea-ubuntu:latest
 
 After a few seconds you should be able to observe the following when running
 `kubectl get -n kube-system pods -l app=antrea`:
+
 ```bash
 NAME                                 READY   STATUS    RESTARTS   AGE
 antrea-agent-dgsfs                   2/2     Running   0          8m56s

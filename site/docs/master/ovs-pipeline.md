@@ -47,9 +47,11 @@
 This guide includes a representative flow dump for every table in the pipeline,
 in order to illustrate the function of each table. If you have a cluster running
 Antrea, you can dump the flows for a given Node as follows:
-```
+
+```bash
 kubectl exec -n kube-system <ANTREA_AGENT_POD_NAME> -c antrea-ovs -- ovs-ofctl dump-flows <BRIDGE_NAME> [--no-stats] [--names]
 ```
+
 where `<ANTREA_AGENT_POD_NAME>` is the name of the Antrea Agent Pod running on
 that Node and `<BRIDGE_NAME>` is the name of the bridge created by Antrea
 (`br-int` by default).
@@ -134,6 +136,7 @@ ingress port for the packet. The appropriate value is then written to bits
 local Pod. This information is used by matches in subsequent tables.
 
 If you dump the flows for this table, you may see the following:
+
 ```
 1. table=0, priority=200,in_port=gw0 actions=load:0x1->NXM_NX_REG0[0..15],goto_table:10
 2. table=0, priority=200,in_port=tun0 actions=load:0->NXM_NX_REG0[0..15],goto_table:30
@@ -175,6 +178,7 @@ have an ARP spoofing check for the gateway however, since there is no reason for
 the host to advertise a different MAC address on gw0.
 
 If you dump the flows for this table, you may see the following:
+
 ```
 1. table=10, priority=200,ip,in_port=gw0 actions=goto_table:30
 2. table=10, priority=200,arp,in_port=gw0,arp_spa=10.10.0.1,arp_sha=e2:e5:a4:9b:1c:b1 actions=goto_table:20
@@ -204,6 +208,7 @@ going through the gateway. The Virtual MAC is used as the destination MAC
 address for all the traffic being tunnelled.
 
 If you dump the flows for this table, you may see the following:
+
 ```
 1. table=20, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],mod_dl_src:aa:bb:cc:dd:ee:ff,load:0x2->NXM_OF_ARP_OP[],move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],load:0xaabbccddeeff->NXM_NX_ARP_SHA[],move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],load:0xa0a0101->NXM_OF_ARP_SPA[],IN_PORT
 2. table=20, priority=190,arp actions=NORMAL
@@ -213,9 +218,11 @@ If you dump the flows for this table, you may see the following:
 Flow 1 is the "ARP responder" for the peer Node whose local Pod subnet is
 10.10.1.0/24. If we were to look at the routing table for the local Node, we
 would see the following "onlink" route:
+
 ```
 10.10.1.0/24 via 10.10.1.1 dev gw0 onlink
 ```
+
 A similar route is installed on the gateway (gw0) interface every time the
 Antrea Node Route Controller is notified that a new Node has joined the
 cluster. The route must be marked as "onlink" since the kernel does not have a
@@ -237,6 +244,7 @@ The sole purpose of this table is to invoke the `ct` action on all packets and
 set the `ct_zone` (connection tracking context) to an hard-coded value, then
 forward traffic to [ConntrackStateTable]. If you dump the flows for this table,
 you should only see 1 flow:
+
 ```
 1. table=30, priority=200,ip actions=ct(table=31,zone=65520)
 ```
@@ -273,6 +281,7 @@ purposes:
  * drop packets reported as invalid by conntrack
 
 If you dump the flows for this table, you should see the following:
+
 ```
 1. table=31, priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff actions=goto_table:40
 2. table=31, priority=200,ct_state=+inv+trk,ip actions=drop
@@ -296,6 +305,7 @@ care of load-balancing the connections across the different backends for each
 service.
 
 If you dump the flows for this table, you should see something like this:
+
 ```
 1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105
 2. table=40, priority=0 actions=goto_table:50
@@ -333,6 +343,7 @@ are allowed to talk to each other using TCP on port 80, but nothing else.
 
 This table is used to implement the egress rules across all Network Policies. If
 you dump the flows for this table, you should see something like this:
+
 ```
 1. table=50, priority=210,ct_state=-new+est,ip actions=goto_table:70
 2. table=50, priority=200,ip,nw_src=10.10.1.2 actions=conjunction(2,1/3)
@@ -396,6 +407,7 @@ whitelist rules.
 Accordingly, based on our Network Policy example, we would expect to see flows
 to drop traffic originating from our 2 Pods (10.10.1.2 and 10.10.1.3), which is
 confirmed by dumping the flows:
+
 ```
 1. table=60, priority=200,ip,nw_src=10.10.1.2 actions=drop
 2. table=60, priority=200,ip,nw_src=10.10.1.3 actions=drop
@@ -417,17 +429,19 @@ This is the L3 routing table. It implements the following functionality:
    tunnelled traffic) and its destination IP address (should match the IP
    address of a local Pod). We therefore install one flow for each Pod created
    locally on the Node. For example:
-```
-table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,dec_ttl,goto_table:80
-```
+
+  ```
+  table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,dec_ttl,goto_table:80
+  ```
 
  * All tunnelled traffic destined to the local gateway (i.e. for which the
    destination IP matches the local gateway's IP) is forwarded to the gateway
    port by rewriting the destination MAC (from the Global Virtual MAC to the
    local gateway's MAC).
-```
-table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
-```
+
+  ```
+  table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
+  ```
 
  * All traffic destined to a remote Pod is forwarded through the appropriate
    tunnel. This means that we install one flow for each peer Node, each one
@@ -440,9 +454,10 @@ table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_
    are not relevant for traffic destined to a tunnel (the destination port is
    the tunnel port and the ingress policy rules will be enforced at the
    destination Node). For a given peer Node, the flow may look like this:
-```
-table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=dec_ttl,mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:105
-```
+
+  ```
+  table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=dec_ttl,mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:105
+  ```
 
 If none of the flows described above are hit, traffic
 goes directly to [L2ForwardingCalcTable]. This is the case for external traffic,
@@ -455,13 +470,14 @@ required), as well as for local Pod-to-Pod traffic.
 This is essentially the "dmac" table of the switch. We program one flow for each
 port (gateway port, Pod ports and tunnel port), as you can see if you dump the
 flows:
-```
-1. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-2. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-3. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-4. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=load:0x4->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-5. table=80, priority=0 actions=goto_table:90
-```
+
+  ```
+  1. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+  2. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+  3. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+  4. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=load:0x4->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+  5. table=80, priority=0 actions=goto_table:90
+  ```
 
 For each port flow (1 through 4 in the example above), we set bit 16 of the
 NXM_NX_REG0 register to indicate that there was a matching entry for the
@@ -493,6 +509,7 @@ Pods running on the same Node, with IP addresses 10.10.1.2 to 10.10.1.3. They
 are allowed to talk to each other using TCP on port 80, but nothing else.
 
 If you dump the flows for this table, you should see something like this:
+
 ```
 1. table=90, priority=210,ct_state=-new+est,ip actions=goto_table:105
 2. table=90, priority=210,ip,nw_src=10.10.1.1 actions=goto_table:105
@@ -542,6 +559,7 @@ whitelist rules.
 Accordingly, based on our Network Policy example, we would expect to see flows
 to drop traffic destined to our 2 Pods (3 and 4), which is confirmed by dumping
 the flows:
+
 ```
 1. table=100, priority=200,ip,reg1=0x3 actions=drop
 2. table=100, priority=200,ip,reg1=0x4 actions=drop
