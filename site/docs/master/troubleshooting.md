@@ -1,17 +1,18 @@
-**Table of Contents**
-
-- [Troubleshooting](#troubleshooting)
-  - [Looking at the Antrea logs](#looking-at-the-antrea-logs)
-  - [Accessing the antrea-controller API](#accessing-the-antrea-controller-api)
-    - [Using antctl](#using-antctl)
-    - [Using kubectl proxy](#using-kubectl-proxy)
-    - [Directly accessing the antrea-controller API](#directly-accessing-the-antrea-controller-api)
-  - [Accessing the antrea-agent API](#accessing-the-antrea-agent-api)
-    - [Using antctl](#using-antctl-1)
-    - [Directly accessing the antrea-agent API](#directly-accessing-the-antrea-agent-api)
-  - [Debugging OVS](#debugging-ovs)
-
 # Troubleshooting
+
+## Table of Contents
+
+- [Looking at the Antrea logs](#looking-at-the-antrea-logs)
+- [Accessing the antrea-controller API](#accessing-the-antrea-controller-api)
+  - [Using antctl](#using-antctl)
+  - [Using kubectl proxy](#using-kubectl-proxy)
+  - [Directly accessing the antrea-controller API](#directly-accessing-the-antrea-controller-api)
+- [Accessing the antrea-agent API](#accessing-the-antrea-agent-api)
+  - [Using antctl](#using-antctl-1)
+  - [Directly accessing the antrea-agent API](#directly-accessing-the-antrea-agent-api)
+- [Troubleshooting OVS](#troubleshooting-ovs)
+- [Troubleshooting with antctl](#troubleshooting-with-antctl)
+
 
 ## Looking at the Antrea logs
 
@@ -53,7 +54,7 @@ You can specify other kubeconfig files by setting the `--kubeconfig` flag.
 
 For example, you can view internal NetworkPolicy objects with this command:
 ```
-antctl get network-policy
+antctl get networkpolicy
 ```
 
 ### Using kubectl proxy
@@ -99,19 +100,33 @@ agent with this command:
 # Get into the antrea-agent container
 kubectl exec -it <antrea-agent Pod name> -n kube-system -c antrea-agent bash
 # View the agent's NetworkPolicy
-antctl get network-policy
+antctl get networkpolicy
 ```
 
 ### Directly accessing the antrea-agent API
 
 If you want to directly access the antrea-agent API, you need to log into the
-Node that the antrea-agent runs on or any Pod in hostNetwork mode that runs on
-this Node. Then access the local endpoint directly:
+Node that the antrea-agent runs on or exec into the antrea-agent container. Then
+access the local endpoint directly using the Bearer Token stored in the file
+system:
 ```
-curl --insecure https://127.0.0.1:10443/
+TOKEN=$(cat /var/run/antrea/apiserver/loopback-client-token)
+curl --insecure --header "Authorization: Bearer $TOKEN" https://127.0.0.1:10350/
 ```
 
-## Debugging OVS
+Note that you can also access the antrea-agent API from outside the Node by
+using the authentication token of the `antctl` service account:
+```
+# Get the token value of antctl account.
+TOKEN=$(kubectl get secrets -n kube-system -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='antctl')].data.token}"|base64 --decode)
+# Access antrea API with TOKEN
+curl --insecure --header "Authorization: Bearer $TOKEN" https://<Node IP address>:10350/podinterfaces
+```
+However, in this case you will be limited to the endpoints that `antctl` is
+allowed to access, as defined
+[here](https://github.com/vmware-tanzu/antrea/blob/master/build/yamls/base/antctl.yml).
+
+## Troubleshooting OVS
 
 OVS agents (`ovsdb-server` and `ovs-vswitchd`) run inside the `antrea-ovs`
 container of the `antrea-agent` Pod. You can use `kubectl exec` to execute OVS
@@ -131,3 +146,12 @@ by specifying the socket file path explicitly, for example:
 ovs-vsctl --db unix:/var/run/antrea/openvswitch/db.sock show
 ovs-ofctl show unix:/var/run/antrea/openvswitch/br-int.mgmt
 ```
+
+## Troubleshooting with antctl
+
+`antctl` provides some useful commands to troubleshoot Antrea Controller and
+Agent, which can print the runtime information of `antrea-controller` and
+`antrea-agent`, dump NetworkPolicy objects, dump Pod network interface
+information on a Node, dump Antrea OVS flows, and perform OVS packet tracing.
+Refer to the [`antctl` guide](/docs/antctl.md#usage) to learn how to use these
+commands.
