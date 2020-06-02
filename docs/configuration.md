@@ -3,13 +3,16 @@
 ## antrea-agent
 
 ### Command line options
+
 ```
 --config string                    The path to the configuration file
 --v Level                          number for the log level verbosity
 ```
+
 Use `antrea-agent -h` to see complete options.
 
 ### Configuration
+
 ```yaml
 # clientConnection specifies the kubeconfig file and client connection settings for the agent
 # to communicate with the apiserver.
@@ -73,13 +76,16 @@ Use `antrea-agent -h` to see complete options.
 ## antrea-controller
 
 ### Command line options
+
 ```
 --config string                    The path to the configuration file
 --v Level                          number for the log level verbosity
 ```
+
 Use `antrea-controller -h` to see complete options.
 
 ### Configuration
+
 ```yaml
 # clientConnection specifies the kubeconfig file and client connection settings for the 
 # controller to communicate with the apiserver.
@@ -102,6 +108,7 @@ clientConnection:
 ## CNI configuration
 
 A typical CNI configuration looks like this:
+
 ```json
   {
     "cniVersion":"0.3.0",
@@ -134,7 +141,8 @@ performance degradation or packet drops.
 Antrea enables portmap CNI plugin by default to support `hostPort`
 functionality for Pods. In order to disable the portmap plugin, remove the
 following from Antrea CNI config:
-```
+
+```json
 {
   "type": "portmap",
   "capabilities": {
