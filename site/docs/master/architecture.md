@@ -12,16 +12,20 @@ in a high-performance and efficient manner. Thanks to the "programmable"
 characteristic of Open vSwitch, Antrea is able to implement an extensive set
 of networking and security features and services on top of Open vSwitch.
 
+Some information in this document and in particular when it comes to the Antrea
+Agent is specific to running Antrea on Linux Nodes. For information about how
+Antrea is run on Windows Nodes, please refer to [windows.md](/docs/windows.md).
+
 ## Components
 
 In a Kubernetes cluster, Antrea creates a Deployment that runs Antrea
 Controller, and a DaemonSet that includes two containers to run Antrea Agent
-and OVS daemons respectively, on every Node. The DaemonSet also includes an init
-container that installs the CNI plugin - `antrea-cni` - on the Node and ensures
-that the OVS kernel module is loaded. All Antrea Controller, Agent, OVS daemons,
-and `antrea-cni` bits are included in a single Docker image. Antrea also has a
-command-line tool called `antctl`, and an [Octant](https://github.com/vmware-tanzu/octant)
-UI plugin.
+and OVS daemons respectively, on every Node. The DaemonSet also includes an
+init container that installs the CNI plugin - `antrea-cni` - on the Node and
+ensures that the OVS kernel module is loaded and it is chained with the portmap
+CNI plugin. All Antrea Controller, Agent, OVS daemons, and `antrea-cni` bits
+are included in a single Docker image. Antrea also has a command-line tool
+called `antctl`, and an [Octant](https://github.com/vmware-tanzu/octant) UI plugin.
 
 <img src="assets/arch.svg.png" width="600" alt="Antrea Architecture Overview">
 
@@ -265,3 +269,41 @@ Associations based on the Security Policies. These additional tunnel ports are
 not used to send traffic to a remote Node - the tunnel traffic is still output
 to the default tunnel port (`tun0`) with OVS flow based tunneling. However, the
 traffic from a remote Node will be received from the Node's IPsec tunnel port.
+
+### Hybrid, NoEncap, NetworkPolicyOnly TrafficEncapMode
+Besides the default `Encap` mode, which always creates overlay tunnels among
+Nodes and encapsulates inter-Node Pod traffic, Antrea also supports other
+TrafficEncapModes including `Hybrid`, `NoEncap`, `NetworkPolicyOnly` modes. This
+section introduces these modes.
+
+* ***Hybrid*** When two Nodes are in two different subnets, Pod traffic between
+the two Nodes is encapsulated; when the two Nodes are in the same subnet, Pod
+traffic between them is not encapsulated, instead the traffic is routed from one
+Node to another. Antrea Agent adds routes on the Node to enable the routing
+within the same Node subnet. For every remote Node in the same subnet as the
+local Node, Agent adds a static route entry that uses the remote Node IP as the
+next hop of its Pod subnet.
+
+`Hybrid` mode requires the Node network to allow packets with Pod IPs to be sent
+out from the Nodes' NICs.
+
+* ***NoEncap*** Pod traffic is never encapsulated. Antrea just assumes the Node
+network can handle routing of Pod traffic across Nodes. Typically this is
+achieved by the Kubernetes Cloud Provider implementation which adds routes for
+Pod subnets to the Node network routers. Antrea Agent still creates static
+routes on each Node for remote Nodes in the same subnet, which is an optimization
+that routes Pod traffic directly to the destination Node without going through
+the extra hop of the Node network router. Antrea Agent also creates the iptables
+(MASQUERADE) rule for SNAT of Pod-to-external traffic.
+
+[Antrea supports GKE](/docs/gke-installation.md) with `NoEncap` mode.
+
+* ***NetworkPolicyOnly*** Inter-Node Pod traffic is neither tunneled nor routed
+by Antrea. Antrea just implements NetworkPolicies for Pod traffic, but relies on
+another cloud CNI and cloud network to implement Pod IPAM and cross-Node traffic
+forwarding. Refer to the [NetworkPolicyOnly mode design doc](docs/policy-only.md)
+for more information.
+
+[Antrea for AKS Engine](https://github.com/Azure/aks-engine/blob/master/docs/topics/features.md#feat-antrea)
+and [Antrea EKS support](/docs/eks-installation.md) work in `NetworkPolicyOnly`
+mode.

@@ -17,6 +17,7 @@ Use `antrea-agent -h` to see complete options.
   # Path of the kubeconfig file that is used to configure access to a K8s cluster.
   # If not specified, InClusterConfig will be used.
   #kubeconfig: <PATH_TO_KUBE_CONF>
+
 # antreaClientConnection specifies the kubeconfig file and client connection settings for the
 # agent to communicate with the Antrea Controller apiserver.
 #antreaClientConnection:
@@ -64,6 +65,9 @@ Use `antrea-agent -h` to see complete options.
 # as /host/proc in the antrea-agent container). When running antrea-agent as a process,
 # hostProcPathPrefix should be set to "/" in the YAML config.
 #hostProcPathPrefix: /host
+
+# The port for the antrea-agent APIServer to serve on.
+#apiPort: 10350
 ```
 
 ## antrea-controller
@@ -83,6 +87,16 @@ clientConnection:
   # Path of the kubeconfig file that is used to configure access to a K8s cluster.
   # If not specified, InClusterConfig will be used, which handles API host discovery and authentication automatically.
   #kubeconfig: <PATH_TO_KUBE_CONF>
+
+# The port for the antrea-controller APIServer to serve on.
+#apiPort: 10349
+
+# Indicates whether to use auto-generated self-signed TLS certificate.
+# If false, A secret named "kube-system/antrea-controller-tls" must be provided with the following keys:
+#   ca.crt: <CA certificate>
+#   tls.crt: <TLS certificate>
+#   tls.key: <TLS private key>
+#selfSignedCert: true
 ```
 
 ## CNI configuration
@@ -92,10 +106,20 @@ A typical CNI configuration looks like this:
   {
     "cniVersion":"0.3.0",
     "name": "antrea",
-    "type": "antrea",
-    "ipam": {
-      "type": "host-local"
-    }
+    "plugins": [
+      {
+        "type": "antrea",
+        "ipam": {
+          "type": "host-local"
+        }
+      },
+      {
+        "type": "portmap",
+        "capabilities": {
+          "portMappings": true
+        }
+      }
+    ]
   }
 ```
 
@@ -106,3 +130,15 @@ which will apply to all Pods and the host gateway interface on every Node. It is
 strongly discouraged to set the `"mtu"` field in the CNI configuration to a
 value that does not match the `defaultMTU` parameter, as it may lead to
 performance degradation or packet drops.
+
+Antrea enables portmap CNI plugin by default to support `hostPort`
+functionality for Pods. In order to disable the portmap plugin, remove the
+following from Antrea CNI config:
+```
+{
+  "type": "portmap",
+  "capabilities": {
+    "portMappings": true
+  }
+}
+```
