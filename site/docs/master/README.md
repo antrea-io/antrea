@@ -1,4 +1,4 @@
-![Antrea Logo](docs/assets/logo/antrea_logo.svg)
+![Antrea Logo](assets/logo/antrea_logo.svg)
 
 ![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vmware-tanzu/antrea)](https://goreportcard.com/report/github.com/vmware-tanzu/antrea)

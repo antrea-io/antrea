@@ -25,7 +25,8 @@ networkd is restarted for any reason, it will cause the interface to lose its IP
 configuration, and all the routes associated with the interface will be
 deleted. To avoid this issue, we recommend that you create the following
 configuration files:
-```
+
+```bash
 # /etc/systemd/network/90-antrea-ovs.network
 [Match]
 # use the correct name for the gateway if you changed the Antrea configuration
@@ -35,7 +36,8 @@ Driver=openvswitch
 [Network]
 Unmanaged=yes
 ```
-```
+
+```bash
 # /etc/systemd/network/90-antrea-veth.network
 # may be redundant with 50-docker-veth.network, which should not be an issue
 [Match]
@@ -44,7 +46,8 @@ Driver=veth
 [Network]
 Unmanaged=yes
 ```
-```
+
+```bash
 # /etc/systemd/network/90-antrea-tun.network
 [Match]
 Name=vxlan_sys_* genev_sys_* gre_sys stt_sys_*
@@ -71,12 +74,15 @@ bridge. This usually indicates that the Kernel was not compiled with the
 Photon OS. This option is required by the Antrea OVS datapath. To confirm that
 this is indeed the issue, you can run the following command on one of your
 Nodes:
-```
+
+```bash
 grep CONFIG_NF_CONNTRACK_ZONES= /boot/config-`uname -r`
 ```
+
 If you do *not* see the following output, then it confirms that your Kernel is
 indeed missing this option:
-```
+
+```bash
 CONFIG_NF_CONNTRACK_ZONES=y
 ```
 
@@ -91,6 +97,7 @@ rules, which are quite strict by
 easiest workaround is to accept all traffic on the gateway interface created by
 Antrea (`gw0` by default), which enables traffic to flow between the Node and
 the Pod network:
-```
+
+```bash
 iptables -A INPUT -i gw0 -j ACCEPT
 ```
