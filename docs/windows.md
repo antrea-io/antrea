@@ -46,7 +46,8 @@ management Pods. It is recommended to run OVS daemons as Windows services.
 #### Download & Configure Antrea for Linux
 Configure the Antrea for Linux on master Node following [Getting started](/docs/getting-started.md)
 document.
-```
+
+```bash
 # Example:
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml
 ```
@@ -55,13 +56,16 @@ Add Windows-compatible versions of kube-proxy by applying file `kube-proxy.yaml`
 
 Download `kube-proxy.yaml` from kubernetes official repository and set
 kube-proxy version.
-```
+
+```bash
 # Example:
 curl -L https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/kube-proxy.yml | sed 's/VERSION/v1.18.0/g'  > kube-proxy.yml
 ```
+
 Replace the content of `run-script.ps1` in configmap named `kube-proxy-windows`
 as following:
-```
+
+```yaml
 apiVersion: v1
 data:
   run-script.ps1: |-
@@ -82,8 +86,10 @@ metadata:
   name: kube-proxy-windows
   namespace: kube-system
 ``` 
+
 Set the `hostNetwork` option as true in spec of kube-proxy-windows daemonset.
-```
+
+```yaml
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -102,8 +108,10 @@ spec:
     spec:
       hostNetwork: true
 ```
+
 Then apply the `kube-proxy.yml`.
-```
+
+```bash
 kubectl apply -f kube-proxy.yml
 ```
 
@@ -126,25 +134,29 @@ script to install the OVS driver and register userspace binaries as services.
 
 Firstly, please make sure to [enable test-signed](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option)
 code on Windows Nodes.
-```
+
+```powershell
 Bcdedit.exe -set TESTSIGNING ON
 Restart-Computer
 ```
 
 Then, install the OVS using the script.
-```
+
+```powershell
 curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Install-OVS.ps1
 .\Install-OVS.ps1
 ```
+
 Verify the OVS services are installed.
-```
+
+```powershell
 get-service ovsdb-server
 get-service ovs-vswitchd
 ```
 
 2. Disable Windows Firewall
 
-```
+```powershell
 Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
 ```
 
@@ -154,7 +166,8 @@ Firstly, install wins, kubelet, kubeadm using script `PrepareNode.ps1` provided
 by kubernetes. The third component [`wins`](https://github.com/rancher/wins) is
 used to run kube-proxy and antrea-agent on Windows host inside the Windows
 container.
-```
+
+```powershell
 # Example:
 curl.exe -LO https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/PrepareNode.ps1
 .\PrepareNode.ps1 -KubernetesVersion v1.18.0
@@ -165,7 +178,8 @@ curl.exe -LO https://github.com/kubernetes-sigs/sig-windows-tools/releases/lates
 kube-proxy needs a network adapter to configure Kubernetes Service IPs and uses
 the adapter for proxying connections to Service. Use following script to create the network
 adapter.
-```
+
+```powershell
 curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Prepare-ServiceInterface.ps1
 .\Prepare-ServiceInterface.ps1
 ```
@@ -181,23 +195,29 @@ is provided by the master Node.
 If you forgot the token, or the token has expired, you can run
 `kubeadm token create --print-join-command` (on the master Node) to
 generate a new token and join command.
-```
+
+```bash
 # Example:
 kubeadm join 192.168.101.5:6443 --token tdp0jt.rshv3uobkuoobb4v  --discovery-token-ca-cert-hash sha256:84a163e57bf470f18565e44eaa2a657bed4da9748b441e9643ac856a274a30b9
 ```
 
 Then, set the Node IP used by kubelet.
 Open file `/var/lib/kubelet/kubeadm-flags.env`:
-```
+
+```bash
 KUBELET_KUBEADM_ARGS="--cgroup-driver= --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.1"
 ```
+
 Append `--node-ip=$NODE_IP` at the end of params. Replace `$NODE_IP` with
 the address for kubelet. It should look like:
-```
+
+```bash
 KUBELET_KUBEADM_ARGS="--cgroup-driver= --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.1 --node-ip=$NODE_IP"
 ```
+
 Restart kubelet service for changes to take effect.
-```
+
+```powershell
 restart-service kubelet
 ```
 
@@ -206,7 +226,8 @@ There will be temporary network interruption on Windows worker Node on the
 first startup of antrea-agent. It's because antrea-agent will set the OVS to
 take over the host network. After that you should be able to view the Windows
 Nodes and Pods in your cluster by running:
-```
+
+```bash
 # Show nodes
 kubectl get nodes -o wide -nkube-system
 NAME                           STATUS   ROLES    AGE    VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                                  KERNEL-VERSION     CONTAINER-RUNTIME

@@ -10,7 +10,7 @@ Antrea is designed to work as NetworkPolicy plug-in to work together with a rout
 For as long as a CNI implementation fits into this model, Antrea may be inserted to enforce
 NetworkPolicy in that CNI's environment using Open VSwitch(OVS).
 
-<img src="/docs/assets/policy-only-cni.svg" width="600" alt="Antrea Switched CNI">
+!["Antrea Switched CNI"](assets/policy-only-cni.svg)
 
 The above diagram depicts a routed CNI network topology on the left, and what it looks like 
 after Antrea inserts the OVS bridge into the data path.
@@ -105,6 +105,7 @@ table if traffic is marked in 1).
 forward all traffic to ``antrea-gw0``.
 
 The outcome may be something like this
+
 ```bash
 ip neigh | grep antrea-gw0
 169.254.253.1 dev antrea-gw0 lladdr 12:34:56:78:9a:bc PERMANENT

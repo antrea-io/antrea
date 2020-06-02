@@ -41,7 +41,8 @@ page](https://github.com/vmware-tanzu/antrea/releases) and download the
 appropriate one for your machine. For example:
 
 On Mac & Linux:
-```
+
+```bash
 curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/v0.7.0/antctl-$(uname)-x86_64"
 chmod +x ./antctl
 mv ./antctl /some-dir-in-your-PATH/antctl
@@ -51,7 +52,8 @@ antctl version
 For Linux, we also publish binaries for Arm-based systems.
 
 On Windows, using PowerShell:
-```
+
+```powershell
 Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/v0.7.0/antctl-windows-x86_64.exe -Outfile antctl.exe
 Move-Item .\antctl.exe c:\some-dir-in-your-PATH\antctl.exe
 antctl version

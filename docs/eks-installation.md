@@ -10,12 +10,14 @@ To deploy a released version of Antrea, pick a version from the
 Note that EKS support was added in release 0.5.0, which means you can not
 pick a release older than 0.5.0. For any given release `<TAG>` (e.g. `v0.7.0`),
 get the Antrea EKS deployment yaml at:
+
 ```
 https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-eks.yml
 ```
 
 To deploy the latest version of Antrea (built from the master branch) to EKS, get the Antrea EKS
 deployment yaml at:
+
 ```
 https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-eks.yml
 ```
@@ -26,6 +28,7 @@ in antrea-eks.yml accordingly, and apply antrea-eks.yml to the EKS cluster.
 ```bash
 kubectl apply -f antrea-eks.yaml 
 ```
+
 Now Antrea should be plugged into the EKS CNI and is ready to enforce NetworkPolicy.
 
 ### Caveats

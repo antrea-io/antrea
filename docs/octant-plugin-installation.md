@@ -61,7 +61,7 @@ environment. It may be due to the network policies or other security rules
 configured on your hosts.
 3. To deploy a released version of the plugin, you can download
 `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-octant.yml`,
-where `<TAG>` (e.g. `v0.3.0`) is the desired version (should match the version
+where `<TAG>` (e.g. `v0.7.0`) is the desired version (should match the version
 of Antrea you are using). After making the necessary edits, you can apply the
 yaml with `kubectl`.
 
@@ -79,6 +79,7 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
     wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.deb
     dpkg -i octant_0.13.1_Linux-64bit.deb
     ```
+
     or
     ```bash
     wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.rpm
