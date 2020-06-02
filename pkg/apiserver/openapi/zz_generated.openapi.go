@@ -1209,16 +1209,16 @@ func schema_pkg_apis_controlplane_v1beta1_GroupMember(ref common.ReferenceCallba
 				Description: "GroupMember represents resource member to be populated in Groups. This supersedes GroupMemberPod, and will eventually replace it.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"externalEntity": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ExternalEntity maintains the reference to the ExternalEntity.",
-							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.ExternalEntityReference"),
-						},
-					},
 					"pod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Pod maintains the reference to the Pod.",
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.PodReference"),
+						},
+					},
+					"externalEntity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ExternalEntity maintains the reference to the ExternalEntity.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.ExternalEntityReference"),
 						},
 					},
 					"endpoints": {

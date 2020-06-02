@@ -59,6 +59,8 @@ type GroupSelector struct {
 	PodSelector labels.Selector
 	// This is a label selector which selects Namespaces. It this field is set, Namespace can not be set.
 	NamespaceSelector labels.Selector
+	// This is a label selector which selects external entities.
+	ExternalEntitySelector labels.Selector
 }
 
 // AppliedToGroup describes a set of Pods to apply Network Policies to.
@@ -74,6 +76,8 @@ type AppliedToGroup struct {
 	// It will be converted to a slice of GroupMemberPod for transferring according
 	// to client's selection.
 	PodsByNode map[string]controlplane.GroupMemberPodSet
+	// ExternalEntityByNode is a mapping from externalNodeName to a set of GroupMembers on that externalNode
+	GroupMemberByNode map[string]controlplane.GroupMemberSet
 }
 
 // AddressGroup describes a set of addresses used as source or destination of Network Policy rules.
@@ -89,6 +93,9 @@ type AddressGroup struct {
 	// It will be converted to a slice of GroupMemberPod for transferring according
 	// to client's selection.
 	Pods controlplane.GroupMemberPodSet
+	// GroupMembers is a set of GroupMembers selected by this group
+	// TODO: Eventually Pods should be unified into the GroupMembers field
+	GroupMembers controlplane.GroupMemberSet
 }
 
 // NetworkPolicy describes what network traffic is allowed for a set of Pods.

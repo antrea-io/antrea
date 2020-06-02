@@ -1196,9 +1196,9 @@ func (m *GroupMember) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			dAtA[i] = 0x1a
 		}
 	}
-	if m.Pod != nil {
+	if m.ExternalEntity != nil {
 		{
-			size, err := m.Pod.MarshalToSizedBuffer(dAtA[:i])
+			size, err := m.ExternalEntity.MarshalToSizedBuffer(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
@@ -1208,9 +1208,9 @@ func (m *GroupMember) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x12
 	}
-	if m.ExternalEntity != nil {
+	if m.Pod != nil {
 		{
-			size, err := m.ExternalEntity.MarshalToSizedBuffer(dAtA[:i])
+			size, err := m.Pod.MarshalToSizedBuffer(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
@@ -1901,12 +1901,12 @@ func (m *GroupMember) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.ExternalEntity != nil {
-		l = m.ExternalEntity.Size()
-		n += 1 + l + sovGenerated(uint64(l))
-	}
 	if m.Pod != nil {
 		l = m.Pod.Size()
+		n += 1 + l + sovGenerated(uint64(l))
+	}
+	if m.ExternalEntity != nil {
+		l = m.ExternalEntity.Size()
 		n += 1 + l + sovGenerated(uint64(l))
 	}
 	if len(m.Endpoints) > 0 {
@@ -2296,8 +2296,8 @@ func (this *GroupMember) String() string {
 	}
 	repeatedStringForEndpoints += "}"
 	s := strings.Join([]string{`&GroupMember{`,
-		`ExternalEntity:` + strings.Replace(this.ExternalEntity.String(), "ExternalEntityReference", "ExternalEntityReference", 1) + `,`,
 		`Pod:` + strings.Replace(this.Pod.String(), "PodReference", "PodReference", 1) + `,`,
+		`ExternalEntity:` + strings.Replace(this.ExternalEntity.String(), "ExternalEntityReference", "ExternalEntityReference", 1) + `,`,
 		`Endpoints:` + repeatedStringForEndpoints + `,`,
 		`}`,
 	}, "")
@@ -3721,42 +3721,6 @@ func (m *GroupMember) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ExternalEntity", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowGenerated
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthGenerated
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthGenerated
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.ExternalEntity == nil {
-				m.ExternalEntity = &ExternalEntityReference{}
-			}
-			if err := m.ExternalEntity.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Pod", wireType)
 			}
 			var msglen int
@@ -3788,6 +3752,42 @@ func (m *GroupMember) Unmarshal(dAtA []byte) error {
 				m.Pod = &PodReference{}
 			}
 			if err := m.Pod.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExternalEntity", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.ExternalEntity == nil {
+				m.ExternalEntity = &ExternalEntityReference{}
+			}
+			if err := m.ExternalEntity.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

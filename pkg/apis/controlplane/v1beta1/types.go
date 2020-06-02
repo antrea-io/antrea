@@ -82,11 +82,11 @@ type Endpoint struct {
 // GroupMember represents resource member to be populated in Groups.
 // This supersedes GroupMemberPod, and will eventually replace it.
 type GroupMember struct {
-	// ExternalEntity maintains the reference to the ExternalEntity.
-	ExternalEntity *ExternalEntityReference `json:"externalEntity,omitempty" protobuf:"bytes,1,opt,name=externalEntity"`
-
 	// Pod maintains the reference to the Pod.
-	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,2,opt,name=pod"`
+	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
+
+	// ExternalEntity maintains the reference to the ExternalEntity.
+	ExternalEntity *ExternalEntityReference `json:"externalEntity,omitempty" protobuf:"bytes,2,opt,name=externalEntity"`
 
 	// Endpoints maintains a list of EndPoints associated with this groupMember.
 	Endpoints []Endpoint `json:"endpoints,omitempty" protobuf:"bytes,3,rep,name=endpoints"`

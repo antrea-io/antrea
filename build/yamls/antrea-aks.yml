@@ -283,6 +283,8 @@ spec:
                   to:
                     items:
                       properties:
+                        externalEntitySelector:
+                          x-kubernetes-preserve-unknown-fields: true
                         ipBlock:
                           properties:
                             cidr:
@@ -308,6 +310,8 @@ spec:
                   from:
                     items:
                       properties:
+                        externalEntitySelector:
+                          x-kubernetes-preserve-unknown-fields: true
                         ipBlock:
                           properties:
                             cidr:
@@ -804,6 +808,14 @@ rules:
   - patch
   - create
   - delete
+- apiGroups:
+  - core.antrea.tanzu.vmware.com
+  resources:
+  - externalentities
+  verbs:
+  - get
+  - watch
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

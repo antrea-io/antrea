@@ -132,7 +132,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorAll := metav1.LabelSelector{}
 	matchAllPodsPeer := matchAllPeer
-	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll).NormalizedName)}
+	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
 	tests := []struct {
 		name            string
 		inPeers         []secv1alpha1.NetworkPolicyPeer
@@ -153,8 +153,8 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
-					getNormalizedUID(toGroupSelector("", &selectorA, &selectorB).NormalizedName),
-					getNormalizedUID(toGroupSelector("", &selectorC, nil).NormalizedName),
+					getNormalizedUID(toGroupSelector("", &selectorA, &selectorB, nil).NormalizedName),
+					getNormalizedUID(toGroupSelector("", &selectorC, nil, nil).NormalizedName),
 				},
 			},
 			direction: controlplane.DirectionIn,
@@ -172,8 +172,8 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
-					getNormalizedUID(toGroupSelector("", &selectorA, &selectorB).NormalizedName),
-					getNormalizedUID(toGroupSelector("", &selectorC, nil).NormalizedName),
+					getNormalizedUID(toGroupSelector("", &selectorA, &selectorB, nil).NormalizedName),
+					getNormalizedUID(toGroupSelector("", &selectorC, nil, nil).NormalizedName),
 				},
 			},
 			direction: controlplane.DirectionOut,
