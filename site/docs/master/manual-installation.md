@@ -14,6 +14,21 @@ There are four components which need to be deployed in order to run Antrea:
 
 ## Instructions
 
+Prior to bringing up the individual components, follow the common steps:
+
+* Ensure Go v1.13 is [installed](https://golang.org/doc/install)
+
+* Git clone your forked Antrea repository and `cd` into the `antrea` directory
+    ```
+    git clone https://github.com/$user/antrea
+    cd antrea
+    ```
+
+* Build the binaries for all components under `bin` directory
+    ```
+    make bin
+    ```
+
 ### OpenVSwitch
 
 Open vSwitch >= 2.8.0 userspace daemon `ovs-vswitchd` and `ovsdb-server` should run on all worker nodes. See
@@ -105,14 +120,22 @@ bin/antrea-agent --config antrea-agent.conf
 ```shell script
 mkdir -p /etc/cni/net.d
 
-cat >/etc/cni/net.d/10-antrea.conf <<EOF
+cat >/etc/cni/net.d/10-antrea.conflist <<EOF
 {
   "cniVersion":"0.3.0",
   "name": "antrea",
-  "type": "antrea",
-  "ipam": {
-    "type": "host-local"
-  }
+  "plugins": [
+    {
+      "type": "antrea",
+      "ipam": {
+        "type": "host-local"
+      }
+    },
+    {
+      "type": "portmap",
+      "capabilities": {"portMappings": true}
+    }
+  ]
 }
 EOF
 ```
