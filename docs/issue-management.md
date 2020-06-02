@@ -61,7 +61,7 @@ To summarize:
   processes.
 * `help wanted` -- issues that represent clearly laid out tasks that are
   generally tractable for new contributors. The solution has already been
-  designed and requires no further discussion from the community. This labels
+  designed and requires no further discussion from the community. This label
   indicates we need additional contributors to help move this task along.
 
 ## Issue and PR Triage Process
@@ -112,7 +112,7 @@ A PR is triaged in the following way:
 3. Apply [`size/<size>`](#size) label to the submission. (TODO: we plan to
    automate this with a GitHub action and apply size based on lines of code).
 4. Ensure that the PR references an existing issue (exceptions to this should be
-   rare). If the PR is missing this or needs any additional information, notate
+   rare). If the PR is missing this or needs any additional information, note it
    in the comment and apply the `triage/needs-information` label.
 5. The PR should have the same `area/<area>`, `kind/<kind>`, and `lifecycle/<lifecycle>` labels as that of
    the referenced issue. (TODO: we plan to automate this with a GitHub action
@@ -319,7 +319,7 @@ An area may be changed, added or deleted during issue or PR triage.
 
 ### Size
 
-Size labels beting with `size/<size>` and estimate the relative complexity or work
+Size labels begin with `size/<size>` and estimate the relative complexity or work
 required to resolve an issue or PR. 
 
 TODO: For submitted PRs, the size can be automatically calculated and the
@@ -341,7 +341,7 @@ Size labels are defined in [`docs/github-labels.md`](docs/github-labels.md).
 
 ### Triage
 
-As soon as new issue are submitted, they must be triaged until they are ready to
+As soon as new issues are submitted, they must be triaged until they are ready to
 work. The maintainers may apply the following labels during the issue triage
 process:
 
@@ -379,7 +379,7 @@ periodically assess their relevance and progress.
 TODO: Additional CI automation (GitHub actions) will be used to automatically
 apply and manage some of these lifecycle labels.
 
-Lifecycle labels are defined in [`docs/github-labels.md`](docs/github-labels.md).
+Lifecycle labels are defined in [`github-labels.md`](github-labels.md).
 
 ### Priority
 

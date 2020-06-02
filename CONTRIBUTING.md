@@ -224,11 +224,10 @@ All other labels will be assigned during issue triage.
 Once an issue has been submitted, the CI (GitHub actions) or a human will
 automatically review the submitted issue or PR to ensure that it has all relevant
 information. If information is lacking or there is another problem with the
-submitted issue, an appropriate [`triage/<?>`](#triage) label will be
-applied.
+submitted issue, an appropriate `triage/<?>` label will be applied.
 
 After an issue has been triaged, the maintainers can prioritize the issue with
-an appropriate [`priority/<?>`](#priority) label.
+an appropriate `priority/<?>` label.
 
 Once an issue has been submitted, categorized, triaged, and prioritized it
 is marked as `ready-to-work`. A ready-to-work issue should have labels
@@ -251,7 +250,7 @@ kinds include:
 * [`kind/feature`](docs/issue-management.md#feature) -- for proposing a feature
 * [`kind/support`](docs/issue-management.md#support) -- to request support. You may also get support by
   using our [Slack](https://kubernetes.slack.com/archives/CR2J23M0X) channel for
-  interactive help. If you have not setup the appropriate accounts, please
+  interactive help. If you have not set up the appropriate accounts, please
   follow the instructions in [accounts setup](#accounts-setup).
 
 For more details on how we manage issues, please read our [Issue Management doc](docs/issue-management.md).
