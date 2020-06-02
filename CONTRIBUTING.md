@@ -2,35 +2,39 @@
 
 Thank you for taking the time out to contribute to project Antrea!
 
-This guide will walk you through the process of making your first commit and
-how to effectively get it merged upstream.
+This guide will walk you through the process of making your first commit and how
+to effectively get it merged upstream.
 
-Before getting started, go through the following:
+- [Developer Guide](#developer-guide)
+  - [Getting Started](#getting-started)
+    - [CLA](#cla)
+    - [Accounts Setup](#accounts-setup)
+  - [Contribute](#contribute)
+    - [GitHub Workflow](#github-workflow)
+    - [Getting reviewers](#getting-reviewers)
+    - [Building and testing your change](#building-and-testing-your-change)
+    - [CI testing](#ci-testing)
+    - [Running the end-to-end tests](#running-the-end-to-end-tests)
+    - [Reverting a commit](#reverting-a-commit)
+  - [Issue and PR Management](#issue-and-pr-management)
+    - [Filing An Issue](#filing-an-issue)
+    - [Issue Triage](#issue-triage)
+    - [Issue and PR Kinds](#issue-and-pr-kinds)
+
+## Getting Started
+
+To get started, let's ensure you have completed the following prerequisites for
+contributing to project Antrea:
 1. Read and observe the [code of conduct](CODE_OF_CONDUCT.md).
 2. Sign the [CLA](#cla).
-3. Check out the [Architecture document](/docs/architecture.md) for the Antrea architecture and design.
+3. Check out the [Architecture document](/docs/architecture.md) for the Antrea
+   architecture and design.
 4. Set up necessary [accounts](#accounts-setup).
 5. Set up your [development environment](docs/manual-installation.md)
 
-## Accounts setup
+Now that you're setup, skip ahead to learn how to [contribute](#contribute). 
 
-At minimum, you need the following accounts for effective participation:
-1. **Github**: Committing any change requires you to have a [github account](https://github.com/join).
-2. **Slack**: Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
-[#antrea](https://kubernetes.slack.com/messages/CR2J23M0X) channel.
-3. **Google Group**: Join our [mailing list](https://groups.google.com/forum/#!forum/projectantrea-dev).
-
-## Contribute
-
-There are multiple ways in which you can contribute, either by contributing
-code in the form of new features or bug-fixes or non-code contributions like
-helping with code reviews, triaging of bugs, documentation updates, filing
-new issues or writing blogs/manuals etc.
-
-In order to help you get your hands "dirty", there is a list of [starter](https://github.com/vmware-tanzu/antrea/labels/Good%20first%20issue)
-issues from which you can choose.
-
-## CLA
+### CLA
 
 We welcome contributions from everyone but we can only accept them if you sign
 our Contributor License Agreement (CLA). If you would like to contribute and you
@@ -39,19 +43,31 @@ a Pull Request. For questions about the CLA process, see the
 [FAQ](https://cla.vmware.com/faq) or submit a question through the GitHub issue
 tracker.
 
-## Developer workflow
+### Accounts Setup
 
-Before picking up a task, go through the existing [issues](https://github.com/vmware-tanzu/antrea/issues)
-and make sure that your change is not already being worked on. If it does not
-exist, please create a new issue and discuss it with other members.
+At minimum, you need the following accounts for effective participation:
+1. **Github**: Committing any change requires you to have a [github
+   account](https://github.com/join).
+2. **Slack**: Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
+   [#antrea](https://kubernetes.slack.com/messages/CR2J23M0X) channel.
+3. **Google Group**: Join our [mailing list](https://groups.google.com/forum/#!forum/projectantrea-dev).
 
-## Filing an issue
+## Contribute
 
-Help is always appreciated. If you find something that needs fixing, please
-file an issue [here](https://github.com/vmware-tanzu/antrea/issues). Please ensure that the issue is
-self explanatory and has enough information for an assignee to get started.
+There are multiple ways in which you can contribute, either by contributing
+code in the form of new features or bug-fixes or non-code contributions like
+helping with code reviews, triaging of bugs, documentation updates, filing
+[new issues](#filing-an-issue) or writing blogs/manuals etc.
 
-### GitHub workflow
+In order to help you get your hands "dirty", there is a list of
+[starter](https://github.com/vmware-tanzu/antrea/labels/Good%20first%20issue)
+issues from which you can choose.
+
+### GitHub Workflow
+
+Developers work in their own forked copy of the repository and when ready,
+submit pull requests to have their changes considered and merged into the
+project's repository.
 
 1. Fork your own copy of the repository to your GitHub account by clicking on
    `Fork` button on [Antrea's GitHub repository](https://github.com/vmware-tanzu/antrea).
@@ -163,3 +179,78 @@ including how to setup a local Kubernetes cluster, can be found in
 5. Create a Pull Request on GitHub.
    Visit your fork at `https://github.com/vmware-tanzu/antrea` and click
    `Compare & Pull Request` button next to your `remoteRevertName` branch.
+
+## Issue and PR Management
+
+We use labels and workflows (some manual, some automated with GitHub Actions) to
+help us manage triage, prioritize, and track issue progress. For a detailed
+discussion, see [docs/issue-management.md](docs/issue-management.md).
+
+### Filing An Issue
+
+Help is always appreciated. If you find something that needs fixing, please file
+an issue [here](https://github.com/vmware-tanzu/antrea/issues). Please ensure
+that the issue is self explanatory and has enough information for an assignee to
+get started.
+
+Before picking up a task, go through the existing
+[issues](https://github.com/vmware-tanzu/antrea/issues) and make sure that your
+change is not already being worked on. If it does not exist, please create a new
+issue and discuss it with other members.
+
+For simple contributions to Antrea, please ensure that this minimum set of
+labels are included on your issue:
+
+* **kind** -- common ones are `kind/feature`, `kind/support`, `kind/bug`,
+  `kind/documentation`, or `kind/design`. For an overview of the different types
+  of issues that can be submitted, see [Issue and PR
+  Kinds](#issue-and-pr-kinds). 
+  The kind of issue will determine the issue workflow.
+* **area** (optional) -- if you know the area the issue belongs in, you can assign it.
+  Otherwise, another community member will label the issue during triage. The
+  area label will identify the area of interest an issue or PR belongs in and
+  will ensure the appropriate reviewers shepherd the issue or PR through to its
+  closure. For an overview of areas, see the 
+  [`docs/github-labels.md`](docs/github-labels.md).
+* **size** (optional) -- if you have an idea of the size (lines of code, complexity,
+  effort) of the issue, you can label it using a [size label](#size). The size
+  can be updated during backlog grooming by contributors. This estimate is used
+  to guide the number of features selected for a milestone.
+
+All other labels will be assigned during issue triage.
+
+### Issue Triage
+
+Once an issue has been submitted, the CI (GitHub actions) or a human will
+automatically review the submitted issue or PR to ensure that it has all relevant
+information. If information is lacking or there is another problem with the
+submitted issue, an appropriate `triage/<?>` label will be applied.
+
+After an issue has been triaged, the maintainers can prioritize the issue with
+an appropriate `priority/<?>` label.
+
+Once an issue has been submitted, categorized, triaged, and prioritized it
+is marked as `ready-to-work`. A ready-to-work issue should have labels
+indicating assigned areas, prioritization, and should not have any remaining
+triage labels.
+
+### Issue and PR Kinds
+
+Use a `kind` label to describe the kind of issue or PR you are submitting. Valid
+kinds include:
+
+* [`kind/api-change`](docs/issue-management.md#api-change) -- for api changes
+* [`kind/bug`](docs/issue-management.md#bug) -- for filing a bug
+* [`kind/cleanup`](docs/issue-management.md#cleanup) -- for code cleanup and organization
+* [`kind/deprecation`](docs/issue-management.md#deprecation) -- for deprecating a feature
+* [`kind/design`](docs/issue-management.md#design) -- for proposing a design or architectural change
+* [`kind/documentation`](docs/issue-management.md#documentation) -- for updating documentation
+* [`kind/failing-test`](docs/issue-management.md#failing-test) -- for reporting a failed test (may
+  create with automation in future)
+* [`kind/feature`](docs/issue-management.md#feature) -- for proposing a feature
+* [`kind/support`](docs/issue-management.md#support) -- to request support. You may also get support by
+  using our [Slack](https://kubernetes.slack.com/archives/CR2J23M0X) channel for
+  interactive help. If you have not set up the appropriate accounts, please
+  follow the instructions in [accounts setup](#accounts-setup).
+
+For more details on how we manage issues, please read our [Issue Management doc](docs/issue-management.md).
