@@ -135,10 +135,10 @@ local Pod. This information is used by matches in subsequent tables.
 
 If you dump the flows for this table, you may see the following:
 ```
-1. table=0, priority=200,in_port=gw0 actions=load:0x1->NXM_NX_REG0[0..15],resubmit(,10)
-2. table=0, priority=200,in_port=tun0 actions=load:0->NXM_NX_REG0[0..15],resubmit(,30)
-3. table=0, priority=190,in_port="coredns5-8ec607" actions=load:0x2->NXM_NX_REG0[0..15],resubmit(,10)
-4. table=0, priority=190,in_port="coredns5-9d9530" actions=load:0x2->NXM_NX_REG0[0..15],resubmit(,10)
+1. table=0, priority=200,in_port=gw0 actions=load:0x1->NXM_NX_REG0[0..15],goto_table:10
+2. table=0, priority=200,in_port=tun0 actions=load:0->NXM_NX_REG0[0..15],goto_table:30
+3. table=0, priority=190,in_port="coredns5-8ec607" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
+4. table=0, priority=190,in_port="coredns5-9d9530" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
 5. table=0, priority=0 actions=drop
 ```
 
@@ -147,8 +147,8 @@ coming in through a VXLAN or Geneve tunnel (i.e. from another Node). The next
 two flows (3 and 4) are for local Pods (in this case Pods from the coredns
 deployment).
 
-Local traffic is then resubmitted to [SpoofGuardTable], while tunnel traffic
-from other Nodes is resubmitted to [ConntrackTable]. The table-miss flow entry
+Local traffic then goes to [SpoofGuardTable], while tunnel traffic
+from other Nodes goes to [ConntrackTable]. The table-miss flow entry
 will drop all unmatched packets (in practice this flow entry should almost never
 be used).
 
@@ -176,17 +176,17 @@ the host to advertise a different MAC address on gw0.
 
 If you dump the flows for this table, you may see the following:
 ```
-1. table=10, priority=200,ip,in_port=gw0 actions=resubmit(,30)
-2. table=10, priority=200,arp,in_port=gw0,arp_spa=10.10.0.1,arp_sha=e2:e5:a4:9b:1c:b1 actions=resubmit(,20)
-3. table=10, priority=200,ip,in_port="coredns5-8ec607",dl_src=12:9e:a6:47:d0:70,nw_src=10.10.0.2 actions=resubmit(,30)
-4. table=10, priority=200,ip,in_port="coredns5-9d9530",dl_src=ba:a8:13:ca:ed:cf,nw_src=10.10.0.3 actions=resubmit(,30)
-5. table=10, priority=200,arp,in_port="coredns5-8ec607",arp_spa=10.10.0.2,arp_sha=12:9e:a6:47:d0:70 actions=resubmit(,20)
-6. table=10, priority=200,arp,in_port="coredns5-9d9530",arp_spa=10.10.0.3,arp_sha=ba:a8:13:ca:ed:cf actions=resubmit(,20)
+1. table=10, priority=200,ip,in_port=gw0 actions=goto_table:30
+2. table=10, priority=200,arp,in_port=gw0,arp_spa=10.10.0.1,arp_sha=e2:e5:a4:9b:1c:b1 actions=goto_table:20
+3. table=10, priority=200,ip,in_port="coredns5-8ec607",dl_src=12:9e:a6:47:d0:70,nw_src=10.10.0.2 actions=goto_table:30
+4. table=10, priority=200,ip,in_port="coredns5-9d9530",dl_src=ba:a8:13:ca:ed:cf,nw_src=10.10.0.3 actions=goto_table:30
+5. table=10, priority=200,arp,in_port="coredns5-8ec607",arp_spa=10.10.0.2,arp_sha=12:9e:a6:47:d0:70 actions=goto_table:20
+6. table=10, priority=200,arp,in_port="coredns5-9d9530",arp_spa=10.10.0.3,arp_sha=ba:a8:13:ca:ed:cf actions=goto_table:20
 7. table=10, priority=0 actions=drop
 ```
 
-After this table, ARP traffic is resubmitted to [ARPResponderTable], while IP
-traffic is resubmitted to [ConnectionTrackTable]. Traffic which does not match
+After this table, ARP traffic goes to [ARPResponderTable], while IP
+traffic goes to [ConnectionTrackTable]. Traffic which does not match
 any of the rules described above will be dropped by the table-miss flow entry.
 
 ### ARPResponderTable (20)
@@ -228,14 +228,14 @@ learning switch (using the `normal` action). In particular, this takes care of
 forwarding ARP requests and replies between local Pods.
 
 The table-miss flow entry (flow 3) will drop all other packets. This flow should
-never be used because only ARP traffic should be resubmitted to this table, and
+never be used because only ARP traffic should go to this table, and
 ARP traffic will either match flow 1 or flow 2.
 
 ### ConntrackTable (30)
 
 The sole purpose of this table is to invoke the `ct` action on all packets and
 set the `ct_zone` (connection tracking context) to an hard-coded value, then
-resubmit traffic to [ConntrackStateTable]. If you dump the flows for this table,
+forward traffic to [ConntrackStateTable]. If you dump the flows for this table,
 you should only see 1 flow:
 ```
 1. table=30, priority=200,ip actions=ct(table=31,zone=65520)
@@ -274,10 +274,10 @@ purposes:
 
 If you dump the flows for this table, you should see the following:
 ```
-1. table=31, priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff actions=resubmit(,40)
+1. table=31, priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff actions=goto_table:40
 2. table=31, priority=200,ct_state=+inv+trk,ip actions=drop
-3. table=31, priority=200,ct_state=-new+trk,ct_mark=0x20,ip actions=load:0xe2e5a49b1cb1->NXM_OF_ETH_DST[],resubmit(,40)
-4. table=31, priority=0 actions=resubmit(,40)
+3. table=31, priority=200,ct_state=-new+trk,ct_mark=0x20,ip actions=load:0xe2e5a49b1cb1->NXM_OF_ETH_DST[],goto_table:40
+4. table=31, priority=0 actions=goto_table:40
 ```
 
 Flows 1 and 3 implement the destination MAC rewrite described above. Note that
@@ -285,7 +285,7 @@ at this stage we have not committed any connection yet. We commit all connection
 after enforcing Network Policies, in [ConntrackCommitTable]. This is also when
 we set the `ct_mark` to `0x20` for connections to service backends.
 
-Flow 2 drops invalid traffic. All non-dropped traffic is finally resubmitted to
+Flow 2 drops invalid traffic. All non-dropped traffic finally goes to
 the [DNATTable].
 
 ### DNATTable (40)
@@ -297,8 +297,8 @@ service.
 
 If you dump the flows for this table, you should see something like this:
 ```
-1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,105)
-2. table=40, priority=0 actions=resubmit(,50)
+1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105
+2. table=40, priority=0 actions=goto_table:50
 ```
 
 In the example above, 10.96.0.0/12 is the service CIDR (this is the default
@@ -311,13 +311,13 @@ rules when packets come back through the gateway and the destination IP has been
 rewritten by kube-proxy (DNAT to a backend for the service). We cannot output
 the service traffic to the gateway port directly as we haven't committed the
 connection yet; instead we store the port in NXM_NX_REG1 - similarly to how we
-process non-service traffic in [L2ForwardingCalcTable] - and resubmit it to
+process non-service traffic in [L2ForwardingCalcTable] - and forward it to
 [ConntrackCommitTable]. By committing the connection we ensure that reply
 traffic (traffic from the service backend which has already gone through
 kube-proxy for source IP rewrite) will not be dropped because of Network
 Policies.
 
-The table-miss flow entry (flow 2) for this table resubmits all non-service
+The table-miss flow entry (flow 2) for this table forwards all non-service
 traffic to the next table, [EgressRuleTable].
 
 In the future this table may support an additional mode of operations, in which
@@ -334,14 +334,14 @@ are allowed to talk to each other using TCP on port 80, but nothing else.
 This table is used to implement the egress rules across all Network Policies. If
 you dump the flows for this table, you should see something like this:
 ```
-1. table=50, priority=210,ct_state=-new+est,ip actions=resubmit(,70)
+1. table=50, priority=210,ct_state=-new+est,ip actions=goto_table:70
 2. table=50, priority=200,ip,nw_src=10.10.1.2 actions=conjunction(2,1/3)
 3. table=50, priority=200,ip,nw_src=10.10.1.3 actions=conjunction(2,1/3)
 4. table=50, priority=200,ip,nw_dst=10.10.1.2 actions=conjunction(2,2/3)
 5. table=50, priority=200,ip,nw_dst=10.10.1.3 actions=conjunction(2,2/3)
 6. table=50, priority=200,tcp,tp_dst=80 actions=conjunction(2,3/3)
-7. table=50, priority=190,conj_id=2,ip actions=resubmit(,70)
-8. table=50, priority=0 actions=resubmit(,60)
+7. table=50, priority=190,conj_id=2,ip actions=goto_table:70
+8. table=50, priority=0 actions=goto_table:60
 ```
 
 Notice how we use the OVS built-in `conjunction` action to implement policies
@@ -353,8 +353,8 @@ dimensions. For our use-case we have at most 3 dimensions.
 The above example flows read as follow: if the source IP address is in set
 {10.10.1.2, 10.10.1.3}, and the destination IP address is in the set {10.10.1.2,
 10.10.1.3}, and the destination TCP port is in the set {80}, then use the
-`conjunction` action with id 2, which is resubmit to
-[L3ForwardingTable]. Otherwise, resubmit to [EgressDefaultTable].
+`conjunction` action with id 2, which goes to
+[L3ForwardingTable]. Otherwise, go to [EgressDefaultTable].
 
 The only requirements on `conj_id` is for it to be a unique 32-bit integer
 within the table. At the moment we use a single custom allocator, which is
@@ -363,10 +363,11 @@ to 2 in the above example (1 was allocated for the ingress rule of our Network
 Policy example).
 
 If the Network Policy specification includes exceptions (`except` field), then
-the table will include additional rules, but we will not cover them in this
-document.
+the table will include multiple flows with conjunctive match, corresponding to
+each cidr that is present in `from` or `to` fields, but not in `except` field.
+Network Policy implementation details are not covered in this document.
 
-If the `conjunction` action is matched, packets are "allowed" and resubmitted
+If the `conjunction` action is matched, packets are "allowed" and forwarded
 directly to [L3ForwardingTable]. Other packets go to [EgressDefaultTable]. If a
 connection is established - as a reminder all connections are committed in
 [ConntrackCommitTable] - its packets go straight to [L3ForwardingTable], with no
@@ -398,10 +399,10 @@ confirmed by dumping the flows:
 ```
 1. table=60, priority=200,ip,nw_src=10.10.1.2 actions=drop
 2. table=60, priority=200,ip,nw_src=10.10.1.3 actions=drop
-3. table=60, priority=0 actions=resubmit(,70)
+3. table=60, priority=0 actions=goto_table:70
 ```
 
-The table-miss flow entry, which is used for non-isolated Pods, resubmits
+The table-miss flow entry, which is used for non-isolated Pods, forwards
 traffic to the next table ([L3ForwardingTable]).
 
 ### L3ForwardingTable (70)
@@ -417,7 +418,7 @@ This is the L3 routing table. It implements the following functionality:
    address of a local Pod). We therefore install one flow for each Pod created
    locally on the Node. For example:
 ```
-table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,dec_ttl,resubmit(,80)
+table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,dec_ttl,goto_table:80
 ```
 
  * All tunnelled traffic destined to the local gateway (i.e. for which the
@@ -425,7 +426,7 @@ table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_
    port by rewriting the destination MAC (from the Global Virtual MAC to the
    local gateway's MAC).
 ```
-table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,resubmit(,80)
+table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
 ```
 
  * All traffic destined to a remote Pod is forwarded through the appropriate
@@ -434,13 +435,13 @@ table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_
    the Node. In case of a match the source MAC is set to the local gateway MAC,
    the destination MAC is set to the Global Virtual MAC and we set the OF
    `tun_dst` field to the appropriate value (i.e. the IP address of the remote
-   gateway). Traffic is then resubmitted to [ConntrackCommitTable], thus
+   gateway). Traffic then goes to [ConntrackCommitTable], thus
    skipping [L2ForwardingCalcTable] and the ingress policy rules tables, which
    are not relevant for traffic destined to a tunnel (the destination port is
    the tunnel port and the ingress policy rules will be enforced at the
    destination Node). For a given peer Node, the flow may look like this:
 ```
-table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=dec_ttl,mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],resubmit(,105)
+table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=dec_ttl,mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:105
 ```
 
 If none of the flows described above are hit, traffic
@@ -455,11 +456,11 @@ This is essentially the "dmac" table of the switch. We program one flow for each
 port (gateway port, Pod ports and tunnel port), as you can see if you dump the
 flows:
 ```
-1. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)
-2. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)
-3. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)
-4. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=load:0x4->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)
-5. table=80, priority=0 actions=resubmit(,90)
+1. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+2. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+3. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+4. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=load:0x4->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+5. table=80, priority=0 actions=goto_table:90
 ```
 
 For each port flow (1 through 4 in the example above), we set bit 16 of the
@@ -470,13 +471,13 @@ this bit is not set. We also use the NXM_NX_REG1 register to store the egress
 port for the packet, which will be used as a parameter to the `output` OpenFlow
 action in [L2ForwardingOutTable].
 
-All packets - whether they have a matching dmac entry or not - are then
-resubmitted to the next table, [IngressRuleTable].
+All packets - whether they have a matching dmac entry or not - then goes
+to the next table, [IngressRuleTable].
 
 What about L2 multicast / broadcast traffic? ARP requests will never reach this
 table, as they will be handled by the OpenFlow `normal` action in the
 [ArpResponderTable]. As for the rest, if it is IP traffic, it will hit the
-"last" flow in this table and be resubmitted to [IngressRuleTable]. Assuming it
+"last" flow in this table and go to [IngressRuleTable]. Assuming it
 makes it to the last table of the pipeline ([L2ForwardingOutTable]), it will be
 dropped there since bit 16 of the NXM_NX_REG0 will not be set. Traffic which is
 non-ARP and non-IP (assuming any can be received by the switch) is actually
@@ -493,15 +494,15 @@ are allowed to talk to each other using TCP on port 80, but nothing else.
 
 If you dump the flows for this table, you should see something like this:
 ```
-1. table=90, priority=210,ct_state=-new+est,ip actions=resubmit(,105)
-2. table=90, priority=210,ip,nw_src=10.10.1.1 actions=resubmit(,105)
+1. table=90, priority=210,ct_state=-new+est,ip actions=goto_table:105
+2. table=90, priority=210,ip,nw_src=10.10.1.1 actions=goto_table:105
 3. table=90, priority=200,ip,nw_src=10.10.1.2 actions=conjunction(1,1/3)
 4. table=90, priority=200,ip,nw_src=10.10.1.3 actions=conjunction(1,1/3)
 5. table=90, priority=200,ip,reg1=0x3 actions=conjunction(1,2/3)
 6. table=90, priority=200,ip,reg1=0x4 actions=conjunction(1,2/3)
 7. table=90, priority=200,tcp,tp_dst=80 actions=conjunction(1,3/3)
-8. table=90, priority=190,conj_id=1,ip actions=resubmit(,105)
-9. table=90, priority=0 actions=resubmit(,100)
+8. table=90, priority=190,conj_id=1,ip actions=goto_table:105
+9. table=90, priority=0 actions=goto_table:100
 ```
 
 As for [EgressRuleTable], flow 1 (highest priority) ensures that for established
@@ -517,8 +518,8 @@ can go through.
 The rest of the flows read as follows: if the source IP address is in set
 {10.10.1.2, 10.10.1.3}, and the destination OF port is in the set {3, 4} (which
 correspond to IP addresses {10.10.1.2, 10.10.1.3}, and the destination TCP port
-is in the set {80}, then use `conjunction` action with id 1, which is resubmit
-to [L2ForwardingOutTable]. Otherwise, resubmit to [IngressDefaultTable]. One
+is in the set {80}, then use `conjunction` action with id 1, which goes
+to [L2ForwardingOutTable]. Otherwise, go to [IngressDefaultTable]. One
 notable difference is how we use OF ports to identify the destination of the
 traffic, while we use IP addresses in [EgressRuleTable] to identify the source
 of the traffic. We do this as an increased security measure in case a local Pod
@@ -544,10 +545,10 @@ the flows:
 ```
 1. table=100, priority=200,ip,reg1=0x3 actions=drop
 2. table=100, priority=200,ip,reg1=0x4 actions=drop
-3. table=100, priority=0 actions=resubmit(,105)
+3. table=100, priority=0 actions=goto_table:105
 ```
 
-The table-miss flow entry, which is used for non-isolated Pods, resubmits
+The table-miss flow entry, which is used for non-isolated Pods, forwards
 traffic to the next table ([ConntrackCommitTable]).
 
 ### ConntrackCommitTable (105)
@@ -559,7 +560,7 @@ table, you should see something like this:
 ```
 1. table=105, priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff actions=ct(commit,table=110,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[]))
 2. table=105, priority=190,ct_state=+new+trk,ip actions=ct(commit,table=110,zone=65520)
-3. table=105, priority=0 actions=resubmit(,110)
+3. table=105, priority=0 actions=goto_table:110
 ```
 
 Flow 1 ensures that we commit connections to service backends and mark them
@@ -569,7 +570,7 @@ MAC address for service backend reply traffic.
 
 Flow 2 commits all other new connections.
 
-All traffic is then resubmitted to the next table ([L2ForwardingOutTable]).
+All traffic then goes to the next table ([L2ForwardingOutTable]).
 
 ### L2ForwardingOutTable (110)
 
