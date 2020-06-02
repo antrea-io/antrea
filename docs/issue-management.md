@@ -179,10 +179,10 @@ To create a bug issue or bug fix PR:
 * describe your bug in the issue or PR body making sure to include:
   * version of Antrea
   * version of Kubernetes
-  * version of OS and any relevent environment or system configuration
+  * version of OS and any relevant environment or system configuration
   * steps and/or configuration to reproduce the bug
   * any tests that demonstrate the presence of the bug
-* please attach any relevent logs or diagnostic output
+* please attach any relevant logs or diagnostic output
 
 #### Cleanup
 
@@ -257,7 +257,7 @@ could include some of the following:
 
 * needs additional detail
 * no, this problem should be solved in another way
-* this is desireable but we need help completing other issues or PRs first; then we will
+* this is desirable but we need help completing other issues or PRs first; then we will
   consider this design
 
 _Note this was previously called `proposal`. We will add the `kind/design` label
@@ -373,7 +373,7 @@ The following schedule will be used to determine an issue's lifecycle:
   issue can be automatically closed.
 
 Issue lifecycle management ensures that the project backlog remains fresh and
-relevent. Project maintainers and contributors will need to revisit issues to
+relevant. Project maintainers and contributors will need to revisit issues to
 periodically assess their relevance and progress.
 
 TODO: Additional CI automation (GitHub actions) will be used to automatically
