@@ -48,4 +48,5 @@ type OVSBridgeClient interface {
 	GetOVSOtherConfig() (map[string]string, Error)
 	DeleteOVSOtherConfig(configs map[string]interface{}) Error
 	GetBridgeName() string
+	IsHardwareOffloadEnabled() bool
 }

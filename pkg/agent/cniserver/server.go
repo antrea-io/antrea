@@ -117,6 +117,7 @@ type NetworkConfig struct {
 	CNIVersion string          `json:"cniVersion,omitempty"`
 	Name       string          `json:"name,omitempty"`
 	Type       string          `json:"type,omitempty"`
+	DeviceID   string          `json:"deviceID"` // PCI address of a VF
 	MTU        int             `json:"mtu,omitempty"`
 	DNS        cnitypes.DNS    `json:"dns"`
 	IPAM       ipam.IPAMConfig `json:"ipam,omitempty"`
@@ -318,7 +319,7 @@ func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*c
 
 // validatePrevResult validates container and host interfaces configuration
 // the return value is nil if prevResult is valid
-func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8sArgs, prevResult *current.Result) *cnipb.CniCmdResponse {
+func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8sArgs, prevResult *current.Result, sriovVFDeviceID string) *cnipb.CniCmdResponse {
 	containerID := cfgArgs.ContainerId
 	netNS := s.hostNetNsPath(cfgArgs.Netns)
 
@@ -328,12 +329,12 @@ func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8
 		klog.Errorf("Failed to find interface %s of container %s", cfgArgs.Ifname, containerID)
 		return s.invalidNetworkConfigResponse("prevResult does not match network configuration")
 	}
-
 	if err := s.podConfigurator.checkInterfaces(
 		containerID,
 		netNS,
 		containerIntf,
-		prevResult); err != nil {
+		prevResult,
+		sriovVFDeviceID); err != nil {
 		return s.checkInterfaceFailureResponse(err)
 	}
 
@@ -411,6 +412,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		netNS,
 		cniConfig.Ifname,
 		cniConfig.MTU,
+		cniConfig.DeviceID,
 		result,
 		isInfraContainer,
 	); err != nil {
@@ -485,7 +487,7 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	if valid, _ := version.GreaterThanOrEqualTo(cniVersion, "0.4.0"); valid {
 		if prevResult, response := s.parsePrevResultFromRequest(cniConfig.NetworkConfig); response != nil {
 			return response, nil
-		} else if response := s.validatePrevResult(cniConfig.CniCmdArgs, cniConfig.k8sArgs, prevResult); response != nil {
+		} else if response := s.validatePrevResult(cniConfig.CniCmdArgs, cniConfig.k8sArgs, prevResult, cniConfig.DeviceID); response != nil {
 			return response, nil
 		}
 	}
@@ -522,7 +524,7 @@ func (s *CNIServer) Initialize(
 	ovsDatapathType string,
 ) error {
 	var err error
-	s.podConfigurator, err = newPodConfigurator(ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC, ovsDatapathType)
+	s.podConfigurator, err = newPodConfigurator(ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC, ovsDatapathType, ovsBridgeClient.IsHardwareOffloadEnabled())
 	if err != nil {
 		return fmt.Errorf("error during initialize podConfigurator: %v", err)
 	}

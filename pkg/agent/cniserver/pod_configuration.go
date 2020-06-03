@@ -61,10 +61,11 @@ const (
 )
 
 type interfaceConfigurator interface {
-	configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev string, mtu int, result *current.Result) error
+	configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev string, mtu int, sriovVFDeviceID string, result *current.Result) error
 	advertiseContainerAddr(containerNetNS string, containerIfaceName string, result *current.Result) error
 	removeContainerLink(containerID, hostInterfaceName string) error
-	checkContainerInterface(containerNetns, containerID string, containerIface *current.Interface, containerIPs []*current.IPConfig, containerRoutes []*cnitypes.Route) (*vethPair, error)
+	checkContainerInterface(containerNetns, containerID string, containerIface *current.Interface, containerIPs []*current.IPConfig, containerRoutes []*cnitypes.Route, sriovVFDeviceID string) (interface{}, error)
+	validateVFRepInterface(sriovVFDeviceID string) (string, error)
 	validateContainerPeerInterface(interfaces []*current.Interface, containerVeth *vethPair) (*vethPair, error)
 	getOVSInterfaceType() int
 	getInterceptedInterfaces(sandbox, containerNS, containerIFDev string) (*current.Interface, *current.Interface, error)
@@ -86,8 +87,9 @@ func newPodConfigurator(
 	ifaceStore interfacestore.InterfaceStore,
 	gatewayMAC net.HardwareAddr,
 	ovsDatapathType string,
+	isOvsHardwareOffloadEnabled bool,
 ) (*podConfigurator, error) {
-	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType)
+	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled)
 	if err != nil {
 		return nil, err
 	}
@@ -191,10 +193,11 @@ func (pc *podConfigurator) configureInterfaces(
 	containerNetNS string,
 	containerIFDev string,
 	mtu int,
+	sriovVFDeviceID string,
 	result *current.Result,
 	createOVSPort bool,
 ) error {
-	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, result)
+	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, sriovVFDeviceID, result)
 	if err != nil {
 		return err
 	}
@@ -294,20 +297,22 @@ func (pc *podConfigurator) removeInterfaces(containerID string) error {
 func (pc *podConfigurator) checkInterfaces(
 	containerID, containerNetNS string,
 	containerIface *current.Interface,
-	prevResult *current.Result) error {
-	if containerVeth, err := pc.ifConfigurator.checkContainerInterface(
+	prevResult *current.Result, sriovVFDeviceID string) error {
+	if link, err := pc.ifConfigurator.checkContainerInterface(
 		containerNetNS,
 		containerID,
 		containerIface,
 		prevResult.IPs,
-		prevResult.Routes); err != nil {
+		prevResult.Routes,
+		sriovVFDeviceID); err != nil {
 		return err
 	} else if err := pc.checkHostInterface(
 		containerID,
 		containerIface,
-		containerVeth,
+		link,
 		prevResult.IPs,
-		prevResult.Interfaces); err != nil {
+		prevResult.Interfaces,
+		sriovVFDeviceID); err != nil {
 		return err
 	}
 	return nil
@@ -316,18 +321,33 @@ func (pc *podConfigurator) checkInterfaces(
 func (pc *podConfigurator) checkHostInterface(
 	containerID string,
 	containerIntf *current.Interface,
-	containerVeth *vethPair,
+	containerIfKind interface{},
 	containerIPs []*current.IPConfig,
-	interfaces []*current.Interface) error {
-	hostVeth, errlink := pc.ifConfigurator.validateContainerPeerInterface(interfaces, containerVeth)
-	if errlink != nil {
-		klog.Errorf("Failed to check container %s interface on the host: %v",
-			containerID, errlink)
-		return errlink
+	interfaces []*current.Interface,
+	sriovVFDeviceID string,
+) error {
+	var ifname string
+	if sriovVFDeviceID != "" {
+		vfRep, errlink := pc.ifConfigurator.validateVFRepInterface(sriovVFDeviceID)
+		if errlink != nil {
+			klog.Errorf("Failed to check container %s interface on the host: %v",
+				containerID, errlink)
+			return errlink
+		}
+		ifname = vfRep
+	} else {
+		containerVeth := containerIfKind.(*vethPair)
+		hostVeth, errlink := pc.ifConfigurator.validateContainerPeerInterface(interfaces, containerVeth)
+		if errlink != nil {
+			klog.Errorf("Failed to check container %s interface on the host: %v",
+				containerID, errlink)
+			return errlink
+		}
+		ifname = hostVeth.name
 	}
 	if err := pc.validateOVSInterfaceConfig(containerID, containerIntf.Mac, containerIPs); err != nil {
 		klog.Errorf("Failed to check host link %s for container %s attaching status on ovs. err: %v",
-			hostVeth.name, containerID, err)
+			ifname, containerID, err)
 		return err
 	}
 	return nil
