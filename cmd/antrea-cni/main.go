@@ -29,7 +29,7 @@ func main() {
 		cni.ActionAdd.Request,
 		cni.ActionCheck.Request,
 		cni.ActionDel.Request,
-		cni_version.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1"),
+		cni_version.All,
 		fmt.Sprintf("Antrea CNI %s", version.GetFullVersionWithRuntimeInfo()),
 	)
 }

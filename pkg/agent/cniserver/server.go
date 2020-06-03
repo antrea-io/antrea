@@ -103,10 +103,6 @@ type CNIServer struct {
 	routeClient route.Interface
 }
 
-const (
-	supportedCNIVersions = "0.1.0,0.2.0,0.3.0,0.3.1,0.4.0"
-)
-
 var supportedCNIVersionSet map[string]bool
 
 type RuntimeDNS struct {
@@ -206,7 +202,7 @@ func (s *CNIServer) checkRequestMessage(request *cnipb.CniCmdRequest) (*CNIConfi
 	cniVersion := cniConfig.CNIVersion
 	// Check if CNI version in the request is supported
 	if !s.isCNIVersionSupported(cniVersion) {
-		klog.Errorf(fmt.Sprintf("Unsupported CNI version [%s], supported CNI versions [%s]", cniVersion, supportedCNIVersions))
+		klog.Errorf(fmt.Sprintf("Unsupported CNI version [%s], supported CNI versions %s", cniVersion, version.All.SupportedVersions()))
 		return cniConfig, s.incompatibleCniVersionResponse(cniVersion)
 	}
 	if s.isChaining {
@@ -246,7 +242,7 @@ func (s *CNIServer) decodingFailureResponse(what string) *cnipb.CniCmdResponse {
 
 func (s *CNIServer) incompatibleCniVersionResponse(cniVersion string) *cnipb.CniCmdResponse {
 	cniErrorCode := cnipb.ErrorCode_INCOMPATIBLE_CNI_VERSION
-	cniErrorMsg := fmt.Sprintf("Unsupported CNI version [%s], supported versions [%s]", cniVersion, supportedCNIVersions)
+	cniErrorMsg := fmt.Sprintf("Unsupported CNI version [%s], supported versions %s", cniVersion, version.All.SupportedVersions())
 	return s.generateCNIErrorResponse(cniErrorCode, cniErrorMsg)
 }
 
@@ -293,9 +289,9 @@ func (s *CNIServer) invalidNetworkConfigResponse(msg string) *cnipb.CniCmdRespon
 	)
 }
 
-func buildVersionSet(versions string) map[string]bool {
+func buildVersionSet() map[string]bool {
 	versionSet := make(map[string]bool)
-	for _, ver := range strings.Split(versions, ",") {
+	for _, ver := range version.All.SupportedVersions() {
 		versionSet[strings.Trim(ver, " ")] = true
 	}
 	return versionSet
@@ -625,5 +621,5 @@ func (s *CNIServer) reconcile() error {
 }
 
 func init() {
-	supportedCNIVersionSet = buildVersionSet(supportedCNIVersions)
+	supportedCNIVersionSet = buildVersionSet()
 }
