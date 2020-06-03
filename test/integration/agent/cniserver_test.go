@@ -417,7 +417,21 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 		return err
 	})
 	testRequire.Nil(err)
-	testRequire.Len(linkList, 2)
+	// when running the integration tests in a Docker image on macOS (Docker
+	// Desktop), we observe that the namespace includes 4 links, not 2
+	// (localhost and veth). It seems that the HyperKit Linux VM loads the
+	// ipip module, which means that the Linux Kernel creates 2 extra
+	// interfaces in each namespace (tunl0 and ip6tnl).
+	testRequire.GreaterOrEqual(len(linkList), 2)
+	// check that the list includes the eth0 veth
+	vethFound := false
+	for _, link := range linkList {
+		if link.Type() == "veth" && link.Attrs().Name == IFName {
+			vethFound = true
+			break
+		}
+	}
+	testRequire.Truef(vethFound, "Missing '%s' veth in target namespace", IFName)
 
 	// Find the veth peer in the container namespace and the default route.
 	tester.checkContainerNetworking(tc)
