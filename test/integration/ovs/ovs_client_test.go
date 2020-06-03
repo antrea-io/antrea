@@ -59,7 +59,10 @@ func (data *testData) setup(t *testing.T) {
 		t.Fatalf("Could not establish connection to %s after %s", UDSAddress, defaultConnectTimeout)
 	}
 
-	data.br = ovsconfig.NewOVSBridge(bridgeName, "system", data.ovsdb)
+	// using the netdev datapath type does not impact test coverage but
+	// ensures that the integration tests can be run with Docker Desktop on
+	// macOS.
+	data.br = ovsconfig.NewOVSBridge(bridgeName, "netdev", data.ovsdb)
 	err = data.br.Create()
 	require.Nil(t, err, "Failed to create bridge %s", bridgeName)
 }

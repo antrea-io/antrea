@@ -25,7 +25,10 @@ import (
 )
 
 func PrepareOVSBridge(brName string) error {
-	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s -- set Bridge %s protocols='OpenFlow10,OpenFlow13'", brName, brName)
+	// using the netdev datapath type does not impact test coverage but
+	// ensures that the integration tests can be run with Docker Desktop on
+	// macOS.
+	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s -- set Bridge %s protocols='OpenFlow10,OpenFlow13' datapath_type=netdev", brName, brName)
 	err := exec.Command("/bin/sh", "-c", cmdStr).Run()
 	if err != nil {
 		return err
