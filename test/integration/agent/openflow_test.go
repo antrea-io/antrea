@@ -771,11 +771,11 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,ip,in_port=%d", config1.UplinkOFPort),
-					"load:0x4->NXM_NX_REG0[0..15],resubmit(,30)",
+					"load:0x4->NXM_NX_REG0[0..15],goto_table:30",
 				},
 				{
 					fmt.Sprintf("priority=210,ip,in_port=LOCAL,nw_dst=%s", localSubnet.String()),
-					"set_field:aa:bb:cc:dd:ee:ff->eth_dst,resubmit(,30)",
+					"set_field:aa:bb:cc:dd:ee:ff->eth_dst,goto_table:30",
 				},
 			},
 		},
@@ -792,11 +792,11 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 			[]*ofTestUtils.ExpectFlow{
 				{
 					"priority=210,ct_state=-new+trk,ct_mark=0x40,ip,reg0=0x4/0xffff",
-					"load:0xaabbccddeeff->NXM_OF_ETH_DST[],resubmit(,40)",
+					"load:0xaabbccddeeff->NXM_OF_ETH_DST[],goto_table:40",
 				},
 				{
 					"priority=200,ct_state=-new+trk,ct_mark=0x40,ip",
-					"resubmit(,40)",
+					"goto_table:40",
 				},
 				{
 					fmt.Sprintf("priority=200,ip,in_port=%d", config1.UplinkOFPort),
@@ -808,19 +808,19 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 			uint8(70),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					"priority=200,ct_mark=0x20,ip,reg0=0x2/0xffff", "resubmit(,80)",
+					"priority=200,ct_mark=0x20,ip,reg0=0x2/0xffff", "goto_table:80",
 				},
 				{
 					fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", localSubnet.String()),
-					"resubmit(,80)",
+					"goto_table:80",
 				},
 				{
 					fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", nodeIP.String()),
-					"resubmit(,80)",
+					"goto_table:80",
 				},
 				{
 					"priority=180,ip,reg0=0x2/0xffff",
-					"load:0x1->NXM_NX_REG0[17],resubmit(,90)",
+					"load:0x1->NXM_NX_REG0[17],goto_table:90",
 				},
 			},
 		},
