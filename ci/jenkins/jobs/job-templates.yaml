@@ -100,29 +100,6 @@
     wrappers: '{wrappers}'
 
 - job-template:
-    name: '{name}-{test_name}-for-testbed'
-    node: '{node}'
-    block-downstream: false
-    block-upstream: false
-    builders: '{builders}'
-    concurrent: false
-    description: '{description}'
-    project-type: freestyle
-    parameters: '{parameters}'
-    properties:
-    - build-discarder:
-        artifact-days-to-keep: -1
-        artifact-num-to-keep: -1
-        days-to-keep: 7
-        num-to-keep: 30
-    - throttle:
-        max-per-node: 1
-        max-total: 0
-        categories: cleanup_and_gc
-        option: category
-        enabled: true
-
-- job-template:
     name: '{name}-{test_name}-for-period'
     block-downstream: false
     block-upstream: false
@@ -163,6 +140,11 @@
         enabled: true
     triggers:
     - timed: '{timed}'
+    wrappers:
+    - timeout:
+        fail: true
+        timeout: 40
+        type: absolute
 
 - job-template:
      name: 'cloud-{name}-{test_name}'
