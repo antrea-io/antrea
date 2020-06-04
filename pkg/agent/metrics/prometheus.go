@@ -40,7 +40,7 @@ var (
 
 	OVSFlowCount = metrics.NewGaugeVec(&metrics.GaugeOpts{
 		Name:           "antrea_agent_ovs_flow_count",
-		Help:           "Flow count for each OVS flow table. Table IDs are labels.",
+		Help:           "Flow count for each OVS flow table. The TableID is used as a label.",
 		StabilityLevel: metrics.STABLE,
 	}, []string{"table_id"})
 )
