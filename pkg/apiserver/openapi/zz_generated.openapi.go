@@ -43,6 +43,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.AppliedToGroup":                      schema_pkg_apis_networking_v1beta1_AppliedToGroup(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.AppliedToGroupList":                  schema_pkg_apis_networking_v1beta1_AppliedToGroupList(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.AppliedToGroupPatch":                 schema_pkg_apis_networking_v1beta1_AppliedToGroupPatch(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.Endpoint":                            schema_pkg_apis_networking_v1beta1_Endpoint(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.ExternalEntityReference":             schema_pkg_apis_networking_v1beta1_ExternalEntityReference(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember":                         schema_pkg_apis_networking_v1beta1_GroupMember(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMemberPod":                      schema_pkg_apis_networking_v1beta1_GroupMemberPod(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.IPBlock":                             schema_pkg_apis_networking_v1beta1_IPBlock(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.IPNet":                               schema_pkg_apis_networking_v1beta1_IPNet(ref),
@@ -799,11 +802,23 @@ func schema_pkg_apis_networking_v1beta1_AddressGroup(ref common.ReferenceCallbac
 							},
 						},
 					},
+					"groupMembers": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember", "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -904,11 +919,35 @@ func schema_pkg_apis_networking_v1beta1_AddressGroupPatch(ref common.ReferenceCa
 							},
 						},
 					},
+					"addedGroupMembers": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember"),
+									},
+								},
+							},
+						},
+					},
+					"removedGroupMembers": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember", "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -951,11 +990,24 @@ func schema_pkg_apis_networking_v1beta1_AppliedToGroup(ref common.ReferenceCallb
 							},
 						},
 					},
+					"groupMembers": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GroupMembers is list of resources selected by this group. This eventually will replace Pods",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember", "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -1056,11 +1108,137 @@ func schema_pkg_apis_networking_v1beta1_AppliedToGroupPatch(ref common.Reference
 							},
 						},
 					},
+					"addedGroupMembers": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember"),
+									},
+								},
+							},
+						},
+					},
+					"removedGroupMembers": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMember", "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_networking_v1beta1_Endpoint(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Endpoint represents an external endpoint.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ip": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IP is the IP address of the Endpoint.",
+							Type:        []string{"string"},
+							Format:      "byte",
+						},
+					},
+					"ports": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ports is the list NamedPort of the Endpoint.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.NamedPort"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.NamedPort"},
+	}
+}
+
+func schema_pkg_apis_networking_v1beta1_ExternalEntityReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ExternalEntityReference represents a ExternalEntity Reference.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The name of this ExternalEntity.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The namespace of this ExternalEntity.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_networking_v1beta1_GroupMember(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "GroupMember represents resource member to be populated in Groups. This supersedes GroupMemberPod, and will eventually replace it.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"externalEntity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ExternalEntity maintains the reference to the ExternalEntity.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.ExternalEntityReference"),
+						},
+					},
+					"pod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Pod maintains the reference to the Pod.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.PodReference"),
+						},
+					},
+					"endpoints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Endpoints maintains a list of EndPoints associated with this groupMember.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.Endpoint"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.Endpoint", "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.ExternalEntityReference", "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1.PodReference"},
 	}
 }
 
