@@ -494,14 +494,13 @@ func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[
 }
 
 func newCNIServer(t *testing.T) *CNIServer {
-	supportedVersions := "0.3.0,0.3.1,0.4.0"
 	cniServer := &CNIServer{
 		cniSocket:       testSocket,
 		nodeConfig:      testNodeConfig,
 		serverVersion:   cni.AntreaCNIVersion,
 		containerAccess: newContainerAccessArbitrator(),
 	}
-	cniServer.supportedCNIVersions = buildVersionSet(supportedVersions)
+	cniServer.supportedCNIVersions = buildVersionSet()
 	return cniServer
 }
 
