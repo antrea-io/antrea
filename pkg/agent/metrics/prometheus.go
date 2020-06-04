@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 package metrics
 
 import (
@@ -52,6 +53,21 @@ func InitializePrometheusMetrics() {
 		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
 	}
 
+	EgressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_agent_egress_networkpolicy_rule",
+		Help:           "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
+		StabilityLevel: metrics.STABLE,
+	},
+	)
+
+	IngressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_agent_ingress_networkpolicy_rule",
+		Help:           "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
+		StabilityLevel: metrics.STABLE,
+	},
+	)
+		
+	
 	OVSTotalFlowCount = metrics.NewGauge(&metrics.GaugeOpts{
 		Name:           "antrea_agent_ovs_total_flow_count",
 		Help:           "Total flow count of all OVS flow tables.",
@@ -91,8 +107,6 @@ func InitializePrometheusMetrics() {
 	// and will not measure anything unless the collector is first registered.
 	gaugeHost.Set(1)
 
-<<<<<<< HEAD
-=======
 	if err := legacyregistry.Register(IngressNetworkPolicyCount); err != nil {
 		klog.Error("Failed to register antrea_agent_ingress_networkpolicy_rule_count with Prometheus")
 	}
@@ -101,7 +115,6 @@ func InitializePrometheusMetrics() {
 		klog.Error("Failed to register antrea_agent_egress_networkpolicy_rule_count with Prometheus")
 	}
 
->>>>>>> Use reconcier to implement networkpolicy metrics
 	if err := legacyregistry.Register(OVSTotalFlowCount); err != nil {
 		klog.Error("Failed to register antrea_agent_ovs_total_flow_count with Prometheus")
 	}

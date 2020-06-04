@@ -430,6 +430,7 @@ func (r *reconciler) uninstallOFRule(ofID uint32, flowDirection v1beta1.Directio
 // Forget invokes UninstallPolicyRuleFlows to uninstall Openflow entries
 // associated with the provided ruleID if it was enforced before.
 func (r *reconciler) Forget(ruleID string) error {
+	klog.Infof("Forgetting rule %v", ruleID)
 
 	value, exists := r.lastRealizeds.Load(ruleID)
 
