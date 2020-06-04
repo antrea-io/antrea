@@ -503,7 +503,11 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		i.nodeConfig = &config.NodeConfig{Name: nodeName, NodeIPAddr: localAddr, BridgeName: i.ovsBridgeClient.GetBridgeName(), UplinkNetConfig: new(config.AdapterNetConfig)}
+		i.nodeConfig = &config.NodeConfig{
+			Name:            nodeName,
+			OVSBridge:       i.ovsBridge,
+			NodeIPAddr:      localAddr,
+			UplinkNetConfig: new(config.AdapterNetConfig)}
 		return nil
 	}
 
@@ -524,7 +528,6 @@ func (i *Initializer) initNodeLocalConfig() error {
 		OVSBridge:       i.ovsBridge,
 		PodCIDR:         localSubnet,
 		NodeIPAddr:      localAddr,
-		BridgeName:      i.ovsBridgeClient.GetBridgeName(),
 		UplinkNetConfig: new(config.AdapterNetConfig)}
 	return nil
 }
