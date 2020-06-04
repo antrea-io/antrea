@@ -23,7 +23,6 @@ import (
 )
 
 var (
-
 	EgressNetworkPolicyCount = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Name:           "antrea_agent_egress_networkpolicy_rule",
