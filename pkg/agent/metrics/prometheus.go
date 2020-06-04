@@ -24,6 +24,21 @@ import (
 )
 
 var (
+
+	EgressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_agent_egress_networkpolicy_rule",
+		Help:           "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
+		StabilityLevel: metrics.STABLE,
+	},
+	)
+
+	IngressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_agent_ingress_networkpolicy_rule",
+		Help:           "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
+		StabilityLevel: metrics.STABLE,
+	},
+	)
+
 	PodCount = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Name:           "antrea_agent_local_pod_count",
@@ -53,33 +68,6 @@ func InitializePrometheusMetrics() {
 		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
 	}
 
-	EgressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
-		Name:           "antrea_agent_egress_networkpolicy_rule",
-		Help:           "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
-		StabilityLevel: metrics.STABLE,
-	},
-	)
-
-	IngressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
-		Name:           "antrea_agent_ingress_networkpolicy_rule",
-		Help:           "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
-		StabilityLevel: metrics.STABLE,
-	},
-	)
-		
-	
-	OVSTotalFlowCount = metrics.NewGauge(&metrics.GaugeOpts{
-		Name:           "antrea_agent_ovs_total_flow_count",
-		Help:           "Total flow count of all OVS flow tables.",
-		StabilityLevel: metrics.STABLE,
-	},
-	)
-
-	OVSFlowCount = metrics.NewGaugeVec(&metrics.GaugeOpts{
-		Name:           "antrea_agent_ovs_flow_count",
-		Help:           "Flow count for each OVS flow table. Table IDs are labels.",
-		StabilityLevel: metrics.STABLE,
-	}, []string{"table_id"})
 )
 
 func InitializePrometheusMetrics() {
