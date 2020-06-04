@@ -1,15 +1,15 @@
-# Antrea on Windows
+# Deploying Antrea on Windows
 
 ## Overview
 Antrea supports Windows worker Node. On Windows Node, Antrea sets up an overlay
-network to forward packets between nodes. Currently VXLAN and STT tunnels are
-supported.
+network to forward packets between Nodes and implements NetworkPolicies. Currently
+VXLAN and STT tunnels are supported.
 
 This page shows how to install antrea-agent on Windows Nodes and register the
-Node to existing kubernetes cluster.
+Node to an existing Kubernetes cluster.
 
 For the detailed design of how antrea-agent works on Windows, please refer to
-the doc [Antrea on Windows](https://docs.google.com/document/d/1lSis0XnKz8UcJSkxTgRtDhP2DAwQtcZDjT6ZRySUb48).
+the [design doc](/docs/windows-design.md).
 
 ### Components that run on Windows
 
@@ -50,19 +50,9 @@ document.
 # Example:
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml
 ```
-#### Add Windows antrea-agent and kube-proxy DaemonSets
-Now you can add Windows-compatible versions of antrea-agent and kube-proxy by
-applying yaml files:
-- antrea-windows.yml:
-  - Deploy antrea-agent Windows DaemonSet.
-- kube-proxy.yaml:
-  - Deploy kube-proxy Windows DaemonSet.
+#### Add Windows kube-proxy DaemonSet
+Add Windows-compatible versions of kube-proxy by applying file `kube-proxy.yaml`.
 
-Download and apply `antrea-windows.yml`.
-```
-# Example:
-kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-windows.yml
-```
 Download `kube-proxy.yaml` from kubernetes official repository and set
 kube-proxy version.
 ```
@@ -117,6 +107,15 @@ Then apply the `kube-proxy.yml`.
 kubectl apply -f kube-proxy.yml
 ```
 
+#### Add Windows antrea-agent DaemonSet
+Now you can deploy antrea-agent Windows DaemonSet by applying file `antrea-windows.yml`.
+
+Download and apply `antrea-windows.yml`.
+```
+# Example:
+kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-windows.yml
+```
+
 #### Join Windows worker Nodes
 1. (Optional, Test-Only) Install OVS provided by Antrea
 
@@ -161,10 +160,10 @@ curl.exe -LO https://github.com/kubernetes-sigs/sig-windows-tools/releases/lates
 .\PrepareNode.ps1 -KubernetesVersion v1.18.0
 ```
 
-4. Prepare network adapter for kubernetes service
+4. Prepare network adapter for kube-proxy
 
-kube-proxy need a network adapter to configure kubernetes service IPs and use
-the adapter for network proxy. Use following script to create the network
+kube-proxy needs a network adapter to configure Kubernetes Service IPs and uses
+the adapter for proxying connections to Service. Use following script to create the network
 adapter.
 ```
 curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Prepare-ServiceInterface.ps1
@@ -172,15 +171,15 @@ curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/w
 ```
 
 > Note: The interface will be deleted automatically by Windows after Windows
-> Node reboot. So the script need to be executed after reboot the node.
+> Node reboots. So the script needs to be executed after rebooting the Node.
 
 5. Run kubeadm to join the Node
 
-On Windows Node, use the command that was given to you when you ran
-`kubeadm init` on a control plane host to join the node to cluster.
+On Windows Node, run the `kubeadm join` command to join the cluster. The token 
+is provided by the master Node.
 
-If you no longer have this command, or the token has expired, you can run
-`kubeadm token create --print-join-command` (on a control plane host) to
+If you forgot the token, or the token has expired, you can run
+`kubeadm token create --print-join-command` (on the master Node) to
 generate a new token and join command.
 ```
 # Example:
@@ -223,7 +222,7 @@ kube-proxy-windows-2d45w                               1/1     Running     0    
 
 
 ## Known issues
-1. HNS Network is not persistent on Windows. So after the Windows Node reboot,
+1. HNS Network is not persistent on Windows. So after the Windows Node reboots,
 the HNS Network created by antrea-agent is removed, and the Open vSwitch
 Extension is disabled by default. In this case, the stale OVS bridge and ports
 should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1)

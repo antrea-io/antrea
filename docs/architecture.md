@@ -14,7 +14,7 @@ of networking and security features and services on top of Open vSwitch.
 
 Some information in this document and in particular when it comes to the Antrea
 Agent is specific to running Antrea on Linux Nodes. For information about how
-Antrea is run on Windows Nodes, please refer to [windows.md](/docs/windows.md).
+Antrea is run on Windows Nodes, please refer to [windows-design.md](/docs/windows-design.md).
 
 ## Components
 
