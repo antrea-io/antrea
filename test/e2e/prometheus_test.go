@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-
 const monitoringNamespace string = "monitoring"
 
 // Agent metrics to validate

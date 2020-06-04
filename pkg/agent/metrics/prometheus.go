@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package metrics
 
 import (
@@ -25,18 +24,20 @@ import (
 
 var (
 
-	EgressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
-		Name:           "antrea_agent_egress_networkpolicy_rule",
-		Help:           "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
-		StabilityLevel: metrics.STABLE,
-	},
+	EgressNetworkPolicyCount = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Name:           "antrea_agent_egress_networkpolicy_rule",
+			Help:           "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
+			StabilityLevel: metrics.STABLE,
+		},
 	)
 
-	IngressNetworkPolicyCount = metrics.NewGauge(&metrics.GaugeOpts{
-		Name:           "antrea_agent_ingress_networkpolicy_rule",
-		Help:           "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
-		StabilityLevel: metrics.STABLE,
-	},
+	IngressNetworkPolicyCount = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Name:           "antrea_agent_ingress_networkpolicy_rule",
+			Help:           "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
+			StabilityLevel: metrics.STABLE,
+		},
 	)
 
 	PodCount = metrics.NewGauge(
@@ -59,15 +60,6 @@ var (
 		Help:           "Flow count for each OVS flow table. The TableID is used as a label.",
 		StabilityLevel: metrics.STABLE,
 	}, []string{"table_id"})
-)
-
-func InitializePrometheusMetrics() {
-	klog.Info("Initializing prometheus metrics")
-
-	if err := legacyregistry.Register(PodCount); err != nil {
-		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
-	}
-
 )
 
 func InitializePrometheusMetrics() {

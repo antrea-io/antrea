@@ -738,7 +738,6 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
 		return err
 	}
-
 	// Add the policyRuleConjunction into policyCache.
 	c.policyCache.Store(ruleID, conj)
 	return nil
