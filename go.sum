@@ -655,6 +655,7 @@ k8s.io/apimachinery v0.17.6 h1:P0MNfucrmKLPsOSRbhDuG0Tplrpg7hVY4fJHh5sUIUw=
 k8s.io/apimachinery v0.17.6/go.mod h1:Lg8zZ5iC/O8UjCqW6DNhcQG2m4TdjF9kwG3891OWbbA=
 k8s.io/apiserver v0.17.6 h1:P1fEOotHOL+kuH8HGKSsos8L+GdORppaY6fBkGW1zHY=
 k8s.io/apiserver v0.17.6/go.mod h1:sAYqm8hUDNA9aj/TzqwsJoExWrxprKv0tqs/z88qym0=
+k8s.io/apiserver v0.18.3 h1:BVjccwKP/kEqY+ResOyWs0EKs7f4XL0d0E5GkU3uiqI=
 k8s.io/code-generator v0.0.0-20191004115455-8e001e5d1894/go.mod h1:mJUgkl06XV4kstAnLHAIzJPVCOzVR+ZcfPIv4fUsFCY=
 k8s.io/code-generator v0.17.6/go.mod h1:iiHz51+oTx+Z9D0vB3CH3O4HDDPWrvZyUgUYaIE9h9M=
 k8s.io/component-base v0.17.6 h1:4S4FTX7/5VvO325vHm9/4pdql91OhrZpDYVzmyLSqNU=

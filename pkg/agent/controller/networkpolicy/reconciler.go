@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -347,7 +348,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 	}
 	// Remove stale Openflow rules.
 	for svcHash, ofID := range staleOFIDs {
-		if err := r.uninstallOFRule(ofID); err != nil {
+		if err := r.uninstallOFRule(ofID, newRule.Direction); err != nil {
 			return err
 		}
 		delete(lastRealized.ofIDs, svcHash)
@@ -368,6 +369,14 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule, npName, npNamespace
 		r.idAllocator.release(ofID)
 		return 0, fmt.Errorf("error installing ofRule %v: %v", ofID, err)
 	}
+
+	// Count up antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
+	if ofRule.Direction == v1beta1.DirectionIn {
+		metrics.IngressNetworkPolicyCount.Inc()
+	} else if ofRule.Direction == v1beta1.DirectionOut {
+		metrics.EgressNetworkPolicyCount.Inc()
+	}
+
 	return ofID, nil
 }
 
@@ -398,11 +407,19 @@ func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedT
 	return nil
 }
 
-func (r *reconciler) uninstallOFRule(ofID uint32) error {
+func (r *reconciler) uninstallOFRule(ofID uint32, flowDirection v1beta1.Direction) error {
 	klog.V(2).Infof("Uninstalling ofRule %d", ofID)
 	if err := r.ofClient.UninstallPolicyRuleFlows(ofID); err != nil {
 		return fmt.Errorf("error uninstalling ofRule %v: %v", ofID, err)
 	}
+
+	// Decrement antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
+	if flowDirection == v1beta1.DirectionIn {
+		metrics.IngressNetworkPolicyCount.Dec()
+	} else if flowDirection == v1beta1.DirectionOut {
+		metrics.EgressNetworkPolicyCount.Dec()
+	}
+
 	if err := r.idAllocator.release(ofID); err != nil {
 		// This should never happen. If it does, it is a programming error.
 		klog.Errorf("Error releasing Openflow ID for ofRule %v: %v", ofID, err)
@@ -413,7 +430,6 @@ func (r *reconciler) uninstallOFRule(ofID uint32) error {
 // Forget invokes UninstallPolicyRuleFlows to uninstall Openflow entries
 // associated with the provided ruleID if it was enforced before.
 func (r *reconciler) Forget(ruleID string) error {
-	klog.Infof("Forgetting rule %v", ruleID)
 
 	value, exists := r.lastRealizeds.Load(ruleID)
 
@@ -424,7 +440,7 @@ func (r *reconciler) Forget(ruleID string) error {
 
 	lastRealized := value.(*lastRealized)
 	for svcHash, ofID := range lastRealized.ofIDs {
-		if err := r.uninstallOFRule(ofID); err != nil {
+		if err := r.uninstallOFRule(ofID, lastRealized.Direction); err != nil {
 			return err
 		}
 		delete(lastRealized.ofIDs, svcHash)

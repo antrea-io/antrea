@@ -20,7 +20,6 @@ import (
 
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/metricsstore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -740,13 +739,6 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 		return err
 	}
 
-	// Count up antrea_agent_ingress_networkpolicy_rule or antrea_agent_egress_networkpolicy_rule
-	if rule.Direction == v1beta1.DirectionIn {
-		metricsstore.IngressNetworkPolicyCount.Inc()
-	} else if rule.Direction == v1beta1.DirectionOut {
-		metricsstore.EgressNetworkPolicyCount.Inc()
-	}
-
 	// Add the policyRuleConjunction into policyCache.
 	c.policyCache.Store(ruleID, conj)
 	return nil
@@ -951,21 +943,6 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) error {
 	// Send the changed OpenFlow entries to the OVS bridge and update the conjMatchFlowContext.
 	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
 		return err
-	}
-
-	isFound := false
-	for _, ctxChange := range ctxChanges {
-		switch ctxChange.clause.ruleTable.GetID() {
-		case ingressRuleTable:
-			metricsstore.IngressNetworkPolicyCount.Dec()
-			isFound = true
-		case egressRuleTable:
-			metricsstore.EgressNetworkPolicyCount.Dec()
-			isFound = true
-		}
-		if isFound {
-			break
-		}
 	}
 
 	// Remove policyRuleConjunction from client's policyCache.

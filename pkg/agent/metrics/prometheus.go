@@ -52,12 +52,25 @@ func InitializePrometheusMetrics() {
 		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
 	}
 
-	if err := legacyregistry.Register(metricsstore.IngressNetworkPolicyCount); err != nil {
-		klog.Error("Failed to register antrea_agent_ingress_networkpolicy_rule with Prometheus")
-	}
+	OVSTotalFlowCount = metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_agent_ovs_total_flow_count",
+		Help:           "Total flow count of all OVS flow tables.",
+		StabilityLevel: metrics.STABLE,
+	},
+	)
 
-	if err := legacyregistry.Register(metricsstore.EgressNetworkPolicyCount); err != nil {
-		klog.Error("Failed to register antrea_agent_egress_networkpolicy_rule with Prometheus")
+	OVSFlowCount = metrics.NewGaugeVec(&metrics.GaugeOpts{
+		Name:           "antrea_agent_ovs_flow_count",
+		Help:           "Flow count for each OVS flow table. Table IDs are labels.",
+		StabilityLevel: metrics.STABLE,
+	}, []string{"table_id"})
+)
+
+func InitializePrometheusMetrics() {
+	klog.Info("Initializing prometheus metrics")
+
+	if err := legacyregistry.Register(PodCount); err != nil {
+		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
 	}
 
 	nodeName, err := env.GetNodeName()
@@ -78,6 +91,17 @@ func InitializePrometheusMetrics() {
 	// and will not measure anything unless the collector is first registered.
 	gaugeHost.Set(1)
 
+<<<<<<< HEAD
+=======
+	if err := legacyregistry.Register(IngressNetworkPolicyCount); err != nil {
+		klog.Error("Failed to register antrea_agent_ingress_networkpolicy_rule_count with Prometheus")
+	}
+
+	if err := legacyregistry.Register(EgressNetworkPolicyCount); err != nil {
+		klog.Error("Failed to register antrea_agent_egress_networkpolicy_rule_count with Prometheus")
+	}
+
+>>>>>>> Use reconcier to implement networkpolicy metrics
 	if err := legacyregistry.Register(OVSTotalFlowCount); err != nil {
 		klog.Error("Failed to register antrea_agent_ovs_total_flow_count with Prometheus")
 	}
