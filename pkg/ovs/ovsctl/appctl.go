@@ -15,13 +15,10 @@
 package ovsctl
 
 import (
+	"bytes"
 	"fmt"
-	"os/exec"
 	"strings"
 )
-
-// File path of the ovs-vswitchd control UNIX domain socket.
-const ovsVSwitchdUDS = "/var/run/openvswitch/ovs-vswitchd.*.ctl"
 
 // Shell exits with 127 if the command to execute is not found.
 const exitCodeCommandNotFound = 127
@@ -128,6 +125,8 @@ func (c *ovsCtlClient) runTracing(flow string) (string, error) {
 	if execErr != nil {
 		return "", execErr
 	}
+	// Remove "\r" to avoid format issue on Windows.
+	out = bytes.ReplaceAll(out, []byte("\r"), []byte(""))
 	return string(out), nil
 }
 
@@ -137,7 +136,7 @@ func (c *ovsCtlClient) runAppctlCmd(cmd string, args ...string) ([]byte, *ExecEr
 	// to reach ovs-vswitchd using the PID.
 	cmdStr := fmt.Sprintf("ovs-appctl -t %s %s %s", ovsVSwitchdUDS, cmd, c.bridge)
 	cmdStr = cmdStr + " " + strings.Join(args, " ")
-	out, err := exec.Command("/bin/sh", "-c", cmdStr).CombinedOutput()
+	out, err := getOVSCommand(cmdStr).CombinedOutput()
 	if err != nil {
 		return nil, newExecError(err, string(out))
 	}
