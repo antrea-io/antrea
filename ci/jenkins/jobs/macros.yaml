@@ -11,15 +11,34 @@
     builders:
       - shell: |-
           #!/bin/bash
-          set -ex
+
+          saveLogs() {
+            echo "=== Truncate old logs ==="
+            export LOG_DIR=/var/lib/jenkins/antrea_logs
+            find ${LOG_DIR}/* -type d -mmin +10080 | xargs -r rm -rf
+
+            CLUSTER_LOG_DIR="${LOG_DIR}/${cluster}"
+            echo "=== Saving capi logs ==="
+            mkdir -p ${CLUSTER_LOG_DIR}/capi
+            kubectl get -n capi-system pods -o name | awk '{print $1}' | while read capi_pod; do
+              capi_pod_name=$(echo ${capi_pod} | cut -d'/' -f 2)
+              kubectl logs ${capi_pod_name} -n capi-system --tail=400 > ${CLUSTER_LOG_DIR}/capi/${capi_pod_name}
+            done
+
+            echo "=== Saving capv logs ==="
+            mkdir -p ${CLUSTER_LOG_DIR}/capv
+            kubectl get -n capv-system pods -o name | awk '{print $1}' | while read capv_pod; do
+              capv_pod_name=$(echo ${capv_pod} | cut -d'/' -f 2)
+              kubectl logs ${capv_pod_name} -n capv-system --tail=400 > ${CLUSTER_LOG_DIR}/capv/${capv_pod_name}
+            done
+          }
+
+          set -e
           cluster="${JOB_NAME}-${BUILD_NUMBER}"
-          newNS="${cluster}"
-          echo "=== This cluster is: ${cluster} ==="
-          echo "=== This namespace is: ${newNS} ==="
-          echo "CLUSTERNAME=${cluster}" >> ci_properties.txt
 
           WORK_HOME="/var/lib/jenkins"
-          export KUBECONFIG="${WORK_HOME}/kubeconfig-mgmt"
+          export KUBECONFIG="${WORK_HOME}/.kube/config"
+          rm -rf jenkins || true
 
           echo '=== Generate key pair ==='
           mkdir -p ${WORKSPACE}/jenkins/key
@@ -29,70 +48,62 @@
           echo "=== namespace value substitution ==="
           mkdir -p ${WORKSPACE}/jenkins/out
           cp ci/cluster-api/vsphere/templates/* ${WORKSPACE}/jenkins/out
-          manifests=("cluster" "controlplane" "machinedeployment")
-          for f in "${manifests[@]}"
-          do
-            sed -i "s/CLUSTERNAMESPACE/${newNS}/g" "${WORKSPACE}/jenkins/out/${f}.yaml"
-            sed -i "s/CLUSTERNAME/${cluster}/g" "${WORKSPACE}/jenkins/out/${f}.yaml"
-            sed -i "s|SSHAUTHORIZEDKEYS|${publickey}|g" "${WORKSPACE}/jenkins/out/${f}.yaml"
-          done
-          sed -i "s/NAMESPACENAME/${newNS}/g" "${WORKSPACE}/jenkins/out/namespace.yaml"
+          sed -i "s/CLUSTERNAMESPACE/${cluster}/g" "${WORKSPACE}/jenkins/out/cluster.yaml"
+          sed -i "s/CLUSTERNAME/${cluster}/g" "${WORKSPACE}/jenkins/out/cluster.yaml"
+          sed -i "s|SSHAUTHORIZEDKEYS|${publickey}|g" "${WORKSPACE}/jenkins/out/cluster.yaml"
+          sed -i "s/CLUSTERNAMESPACE/${cluster}/g" "${WORKSPACE}/jenkins/out/namespace.yaml"
 
           echo "=== network spec value substitution==="
           cluster_defaults="${WORK_HOME}/utils/CLUSTERDEFAULTS"
           while IFS= read -r line
           do
             IFS='=' read -ra kv <<< "$line"
-            for f in "${manifests[@]}"
-            do
-              sed -i "s|${kv[0]}|${kv[1]}|g" "${WORKSPACE}/jenkins/out/${f}.yaml"
-            done
+            sed -i "s|${kv[0]}|${kv[1]}|g" "${WORKSPACE}/jenkins/out/cluster.yaml"
           done < "$cluster_defaults"
 
           echo '=== Create a cluster in management cluster ==='
           kubectl apply -f "${WORKSPACE}/jenkins/out/namespace.yaml"
           kubectl apply -f "${WORKSPACE}/jenkins/out/cluster.yaml"
-          kubectl apply -f "${WORKSPACE}/jenkins/out/controlplane.yaml"
-          kubectl apply -f "${WORKSPACE}/jenkins/out/machinedeployment.yaml"
 
-          echo '=== Try to get secret for 10 min ==='
+          echo '=== Wait for workload cluster secret for 10 min ==='
           for t in {1..10}
           do
             sleep 1m
             echo '=== Get kubeconfig (try for 1m) ==='
-            if kubectl get secret ${cluster}-kubeconfig -n${newNS} ; then
-              kubectl get secret ${cluster}-kubeconfig -n${newNS} -o=jsonpath='{.data.value}' | \
-                { base64 -d 2>/dev/null ; } >"${WORKSPACE}/jenkins/out/kubeconfig"
+            if kubectl get secret/${cluster}-kubeconfig -n${cluster} ; then
+              kubectl get secret/${cluster}-kubeconfig -n${cluster} -o json \
+                | jq -r .data.value \
+                | base64 --decode \
+                > "${WORKSPACE}/jenkins/out/kubeconfig"
               touch jenkins/SECRET_EXIST
               break
             fi
           done
 
           if !(test -f jenkins/SECRET_EXIST); then
-            echo "=== Fail to get secret ==="
-
-            echo "=== Remove too many logs ==="
-            export LOG_DIR=/var/lib/jenkins/antrea_logs
-            find ${LOG_DIR}/* -type d -mmin +10080 | xargs rm -rf
-
-            CLUSTER_LOG_DIR="${LOG_DIR}/${cluster}"
-            echo "=== Saving capi logs ==="
-            mkdir -p ${CLUSTER_LOG_DIR}/capi
-            kubectl get -n capi-system pods -o name | awk '{print $1}' | while read capi_pod; do
-              capi_pod_name=$(echo ${capi_pod} | cut -d'/' -f 2)
-              kubectl logs ${capi_pod_name} -n capi-system --tail=100 > ${CLUSTER_LOG_DIR}/capi/${capi_pod_name}
-            done
-
-            echo "=== Saving capv logs ==="
-            mkdir -p ${CLUSTER_LOG_DIR}/capv
-            kubectl get -n capv-system pods -o name | awk '{print $1}' | while read capv_pod; do
-              capv_pod_name=$(echo ${capv_pod} | cut -d'/' -f 2)
-              kubectl logs ${capv_pod_name} -n capv-system --tail=100 > ${CLUSTER_LOG_DIR}/capv/${capv_pod_name}
-            done
-
+            echo "=== Failed to get secret ==="
+            savelogs
             exit 1
           else
-            echo "=== Setup cluster succeeded ==="
+            export KUBECONFIG="${WORKSPACE}/jenkins/out/kubeconfig"
+            echo "=== Waiting all nodes up for 10 min ==="
+
+            set +e
+            for t in {1..10}
+            do
+              sleep 1m
+              echo "=== Get node (try for 1m) ==="
+              mdNum="$(kubectl get node | grep -c ${cluster}-md)"
+              if [ "${mdNum}" == "2" ]; then
+                echo "=== Setup workload cluster succeeded ==="
+                exit 0
+              fi
+            done
+            set -e
+
+            echo "=== Failed to make all nodes up ==="
+            savelogs
+            exit 1
           fi
 
 - builder:
@@ -101,37 +112,21 @@
       - shell: |-
           #!/bin/bash
           set -ex
-          cluster="${CLUSTERNAME}"
+          echo '=== Clean up workload cluster ==='
+          export KUBECONFIG="/var/lib/jenkins/.kube/config"
 
-          echo '=== Clean up cluster ==='
-          export KUBECONFIG="/var/lib/jenkins/kubeconfig-mgmt"
-
-          kubectl delete --ignore-not-found=true Machine ${cluster}-controlplane-0 -n ${cluster}
-          kubectl delete --ignore-not-found=true MachineDeployment ${cluster}-md-0 -n ${cluster}
-
-          retry=12
-          while [ "${retry}" -gt 0 ]; do
-            echo '=== Waiting for Machines to be deleted ==='
-            machines="$(kubectl get machine -n ${cluster} --no-headers=true 2>/dev/null | wc -l)"
-            if [ "${machines}" -eq 0 ]; then
-              break
-            fi
-            echo '=== Remaining Machines ==='
-            kubectl get machine -n ${cluster}
-            sleep 10
-            retry=$((retry-1))
-          done
-          if [ "${retry}" -eq 0 ]; then
-            echo "=== Failed to delete machines! ==="
-            exit 1
-          fi
-
-          kubectl delete --ignore-not-found=true VSphereCluster ${cluster} -n ${cluster}
-          kubectl delete --ignore-not-found=true Cluster ${cluster} -n ${cluster}
-          kubectl delete --ignore-not-found=true ns ${cluster}
-
+          cluster="${JOB_NAME}-${BUILD_NUMBER}"
+          kubectl delete ns ${cluster}
           rm -rf "${WORKSPACE}/jenkins"
-          echo "=== Cleanup cluster ${cluster} succeeded ==="
+
+          echo "=== Cleanup workload cluster ${cluster} succeeded ==="
+
+          if !(test -f TEST_FAILURE); then
+            echo "=== SUCCESS !!! ==="
+            exit 0
+          fi
+          echo "=== FAILURE !!! ==="
+          exit 1
 
 - builder:
     name: builder-eks-cluster-cleanup
@@ -158,34 +153,12 @@
           #!/bin/bash
           set -ex
           echo "=== Auto cleanup starts ==="
-          export KUBECONFIG="/var/lib/jenkins/kubeconfig-mgmt"
+          export KUBECONFIG="/var/lib/jenkins/.kube/config"
 
-          kubectl get namespace -l antrea-ci | awk '$3 ~ "[0-9][hd]" && $2 ~ "Active" {print $1}' | while read cluster_name; do
-            echo "=== Currently ${cluster_name} has been live for more than 1h ==="
-            kubectl delete --ignore-not-found=true Machine ${cluster_name}-controlplane-0 -n ${cluster_name}
-            kubectl delete --ignore-not-found=true MachineDeployment ${cluster_name}-md-0 -n ${cluster_name}
-
-            retry=12
-            while [ "${retry}" -gt 0 ]; do
-              echo '=== Waiting for Machines to be deleted ==='
-              machines="$(kubectl get machine -n ${cluster_name} --no-headers=true 2>/dev/null | wc -l)"
-              if [ "${machines}" -eq 0 ]; then
-                break
-              fi
-              echo '=== Remaining Machines ==='
-              kubectl get machine -n ${cluster_name}
-              sleep 10
-              retry=$((retry-1))
-            done
-            if [ "${retry}" -eq 0 ]; then
-              echo "=== Failed to delete machines! ==="
-              continue
-            fi
-
-            kubectl delete --ignore-not-found=true VSphereCluster ${cluster_name} -n ${cluster_name}
-            kubectl delete --ignore-not-found=true Cluster ${cluster_name} -n ${cluster_name}
-            kubectl delete --ignore-not-found=true ns ${cluster_name}
-            echo "=== Old namespace ${cluster_name} is deleted !!! ==="
+          kubectl get namespace -l antrea-ci | awk '$3 ~ "[0-9][hd]" || $3 ~ "[6-9][0-9]m"  && $2 ~ "Active" {print $1}' | while read cluster; do
+            echo "=== Currently ${cluster} has been live for more than 1h ==="
+            kubectl delete ns ${cluster}
+            echo "=== Old namespace ${cluster} is deleted !!! ==="
           done
 
           echo "=== Auto cleanup finished ==="
@@ -298,15 +271,14 @@
 
           echo "=== Generate ssh-config ==="
           cp -f ci/jenkins/ssh-config test/e2e/infra/vagrant/ssh-config
-          kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}' | while read master_ip; do
-            echo "=== Master node ip: ${master_ip} ==="
-            sed -i "s/MASTERNODEIP/${master_ip}/g" test/e2e/infra/vagrant/ssh-config
-
-            echo "=== Move kubeconfig to master ==="
-            ssh -o StrictHostKeyChecking=no -i jenkins/key/antrea-ci-key -n capv@${master_ip} "mkdir .kube"
-            scp -o StrictHostKeyChecking=no -i jenkins/key/antrea-ci-key jenkins/out/kubeconfig capv@${master_ip}:~/.kube/config
-          done
-          sed -i "s/CONTROLPLANENODE/${cluster}-controlplane-0/g" test/e2e/infra/vagrant/ssh-config
+          master_name="$(kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $1}')"
+          master_ip="""$(kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}')"
+          echo "=== Master node ip: ${master_ip} ==="
+          sed -i "s/MASTERNODEIP/${master_ip}/g" test/e2e/infra/vagrant/ssh-config
+          echo "=== Move kubeconfig to master ==="
+          ssh -o StrictHostKeyChecking=no -i jenkins/key/antrea-ci-key -n capv@${master_ip} "mkdir .kube"
+          scp -o StrictHostKeyChecking=no -i jenkins/key/antrea-ci-key jenkins/out/kubeconfig capv@${master_ip}:~/.kube/config
+          sed -i "s/CONTROLPLANENODE/${master_name}/g" test/e2e/infra/vagrant/ssh-config
           echo "    IdentityFile ${WORKSPACE}/jenkins/key/antrea-ci-key" >> test/e2e/infra/vagrant/ssh-config
 
           # Run and configure Prometheus
@@ -333,10 +305,9 @@
           if [ "$test_rc" == "1" ]
           then
             echo "=== TEST FAILURE !!! ==="
-            exit 1
+            touch TEST_FAILURE
           fi
           echo "=== TEST SUCCESS !!! ==="
-          exit 0
 
 - builder:
     name: builder-conformance
@@ -397,9 +368,3 @@
           done
 
           kubectl delete ns antrea-test || true
-
-          if !(test -f TEST_FAILURE); then
-            echo "=== SUCCESS !!! ==="
-            exit 0
-          fi
-          echo "=== FAILURE !!! ==="

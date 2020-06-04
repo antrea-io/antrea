@@ -9,8 +9,9 @@ At the moment these Jenkins jobs are running on VMC (VMware on AWS). As a
 result, all jobs' results and details are available publicly
 [here](https://jenkins.antrea-ci.rocks/). We are using Cluster API for vSphere
 ([CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere)) for
-creating and managing workload clusters. For each job build, a completely new
-workload cluster will be created. As soon as the build finishes, the cluster
+creating and managing workload clusters. The management cluster is a kind cluster
+on Jenkins node. For each job build, a completely new workload cluster will be created
+by this management cluster. As soon as the build finishes, the cluster
 should be deleted. This ensures that all tests are run on a clean testbed.
 
 ### List of Jenkins jobs
