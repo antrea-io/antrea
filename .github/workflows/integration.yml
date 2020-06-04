@@ -11,7 +11,17 @@ on:
 jobs:
   test-integration:
     name: Integration tests
-    runs-on: [ubuntu-18.04, macos-latest]
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+    - name: Run integration tests
+      run: make docker-test-integration
+  test-integration-macos:
+    name: Integration tests on macOS
+    runs-on: [macos-latest]
     steps:
     - uses: actions/checkout@v2
     - uses: actions/setup-go@v1
