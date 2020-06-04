@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,8 @@ message AddressGroup {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   repeated GroupMemberPod pods = 2;
+
+  repeated GroupMember groupMembers = 3;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -53,6 +55,10 @@ message AddressGroupPatch {
   repeated GroupMemberPod addedPods = 2;
 
   repeated GroupMemberPod removedPods = 3;
+
+  repeated GroupMember addedGroupMembers = 4;
+
+  repeated GroupMember removedGroupMembers = 5;
 }
 
 // +genclient
@@ -65,6 +71,9 @@ message AppliedToGroup {
 
   // Pods is a list of Pods selected by this group.
   repeated GroupMemberPod pods = 2;
+
+  // GroupMembers is list of resources selected by this group. This eventually will replace Pods
+  repeated GroupMember groupMembers = 3;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -83,6 +92,41 @@ message AppliedToGroupPatch {
   repeated GroupMemberPod addedPods = 2;
 
   repeated GroupMemberPod removedPods = 3;
+
+  repeated GroupMember addedGroupMembers = 4;
+
+  repeated GroupMember removedGroupMembers = 5;
+}
+
+// Endpoint represents an external endpoint.
+message Endpoint {
+  // IP is the IP address of the Endpoint.
+  optional bytes ip = 1;
+
+  // Ports is the list NamedPort of the Endpoint.
+  repeated NamedPort ports = 2;
+}
+
+// ExternalEntityReference represents a ExternalEntity Reference.
+message ExternalEntityReference {
+  // The name of this ExternalEntity.
+  optional string name = 1;
+
+  // The namespace of this ExternalEntity.
+  optional string namespace = 2;
+}
+
+// GroupMember represents resource member to be populated in Groups.
+// This supersedes GroupMemberPod, and will eventually replace it.
+message GroupMember {
+  // ExternalEntity maintains the reference to the ExternalEntity.
+  optional ExternalEntityReference externalEntity = 1;
+
+  // Pod maintains the reference to the Pod.
+  optional PodReference pod = 2;
+
+  // Endpoints maintains a list of EndPoints associated with this groupMember.
+  repeated Endpoint endpoints = 3;
 }
 
 // GroupMemberPod represents a GroupMember related to Pods.
