@@ -15,78 +15,40 @@
 package metrics
 
 import (
-	"strconv"
-
-	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
-// ovsStatManager implements prometheus.Collector
-type ovsStatManager struct {
-	ofClient     openflow.Client
-	ovsBridge    string
-	ovsTableDesc *prometheus.Desc
-}
-
-func (c *ovsStatManager) getOVSStatistics() (ovsFlowsByTable map[string]float64) {
-	ovsFlowsByTable = make(map[string]float64)
-	flowTableStatus := c.ofClient.GetFlowTableStatus()
-	for _, tableStatus := range flowTableStatus {
-		ovsFlowsByTable[strconv.Itoa(int(tableStatus.ID))] = float64(tableStatus.FlowCount)
-	}
-	return
-}
-
-func (c *ovsStatManager) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.ovsTableDesc
-}
-
-func (c *ovsStatManager) Collect(ch chan<- prometheus.Metric) {
-	ovsFlowsByTable := c.getOVSStatistics()
-	for tableId, tableFlowCount := range ovsFlowsByTable {
-		ch <- prometheus.MustNewConstMetric(
-			c.ovsTableDesc,
-			prometheus.GaugeValue,
-			tableFlowCount,
-			tableId,
-		)
-	}
-}
-
-func newOVSStatManager(ovsBridge string, ofClient openflow.Client) *ovsStatManager {
-	return &ovsStatManager{
-		ofClient:  ofClient,
-		ovsBridge: ovsBridge,
-		ovsTableDesc: prometheus.NewDesc(
-			"antrea_agent_ovs_flow_table",
-			"OVS flow table flow count.",
-			[]string{"table_id"},
-			prometheus.Labels{"bridge": ovsBridge},
-		),
-	}
-}
-
-func InitializePrometheusMetrics(
-	ovsBridge string,
-	ifaceStore interfacestore.InterfaceStore,
-	ofClient openflow.Client) {
-
-	klog.Info("Initializing prometheus metrics")
-	podCount := metrics.NewGaugeFunc(
-		metrics.GaugeOpts{
+var (
+	PodCount = metrics.NewGauge(
+		&metrics.GaugeOpts{
 			Name:           "antrea_agent_local_pod_count",
 			Help:           "Number of pods on local node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
-		func() float64 { return float64(ifaceStore.GetContainerInterfaceNum()) },
 	)
-	if err := legacyregistry.RawRegister(podCount); err != nil {
+
+	OVSTotalFlowCount = metrics.NewGauge(&metrics.GaugeOpts{
+		Name:           "antrea_agent_ovs_total_flow_count",
+		Help:           "Total flow count of all OVS flow tables.",
+		StabilityLevel: metrics.STABLE,
+	},
+	)
+
+	OVSFlowCount = metrics.NewGaugeVec(&metrics.GaugeOpts{
+		Name:           "antrea_agent_ovs_flow_count",
+		Help:           "Flow count for each OVS flow table. The TableID is used as a label.",
+		StabilityLevel: metrics.STABLE,
+	}, []string{"table_id"})
+)
+
+func InitializePrometheusMetrics() {
+	klog.Info("Initializing prometheus metrics")
+
+	if err := legacyregistry.Register(PodCount); err != nil {
 		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
 	}
 
@@ -108,8 +70,10 @@ func InitializePrometheusMetrics(
 	// and will not measure anything unless the collector is first registered.
 	gaugeHost.Set(1)
 
-	ovsStats := newOVSStatManager(ovsBridge, ofClient)
-	if err := legacyregistry.RawRegister(ovsStats); err != nil {
-		klog.Error("Failed to register antrea_agent_ovs_flow_table with Prometheus")
+	if err := legacyregistry.Register(OVSTotalFlowCount); err != nil {
+		klog.Error("Failed to register antrea_agent_ovs_total_flow_count with Prometheus")
+	}
+	if err := legacyregistry.Register(OVSFlowCount); err != nil {
+		klog.Error("Failed to register antrea_agent_ovs_flow_count with Prometheus")
 	}
 }

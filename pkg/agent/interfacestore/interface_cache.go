@@ -17,6 +17,7 @@ package interfacestore
 import (
 	"sync"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 )
 
@@ -48,6 +49,9 @@ func (c *interfaceCache) Initialize(interfaces []*InterfaceConfig) {
 	for _, intf := range interfaces {
 		key := getInterfaceKey(intf)
 		c.cache[key] = intf
+		if intf.Type == ContainerInterface {
+			metrics.PodCount.Inc()
+		}
 	}
 }
 
@@ -72,6 +76,9 @@ func (c *interfaceCache) AddInterface(interfaceConfig *InterfaceConfig) {
 	c.Lock()
 	defer c.Unlock()
 	c.cache[key] = interfaceConfig
+	if interfaceConfig.Type == ContainerInterface {
+		metrics.PodCount.Inc()
+	}
 }
 
 // DeleteInterface deletes interface from local cache.
@@ -80,6 +87,9 @@ func (c *interfaceCache) DeleteInterface(interfaceConfig *InterfaceConfig) {
 	c.Lock()
 	defer c.Unlock()
 	delete(c.cache, key)
+	if interfaceConfig.Type == ContainerInterface {
+		metrics.PodCount.Dec()
+	}
 }
 
 // GetInterface retrieves interface from local cache given the interface key.
