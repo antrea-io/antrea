@@ -32,16 +32,16 @@ configuration files:
 Name=gw0 ovs-system
 Driver=openvswitch
 
-[Network]
+[Link]
 Unmanaged=yes
 ```
 ```
 # /etc/systemd/network/90-antrea-veth.network
-# may be redundant with 50-docker-veth.network, which should not be an issue
+# may be redundant with 50-docker-veth.network (name may differ based on CoreOS version), which should not be an issue
 [Match]
 Driver=veth
 
-[Network]
+[Link]
 Unmanaged=yes
 ```
 ```
@@ -49,7 +49,7 @@ Unmanaged=yes
 [Match]
 Name=vxlan_sys_* genev_sys_* gre_sys stt_sys_*
 
-[Network]
+[Link]
 Unmanaged=yes
 ```
 
