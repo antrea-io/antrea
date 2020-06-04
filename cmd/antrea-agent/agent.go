@@ -64,6 +64,11 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating Antrea client: %v", err)
 	}
 
+	// Register Antrea Agent metrics if EnablePrometheusMetrics is set
+	if o.config.EnablePrometheusMetrics {
+		metrics.InitializePrometheusMetrics()
+	}
+
 	// Create ovsdb and openflow clients.
 	ovsdbAddress := ovsconfig.GetConnAddress(o.config.OVSRunDir)
 	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS(ovsdbAddress)
@@ -172,10 +177,6 @@ func run(o *Options) error {
 		ovsBridgeClient,
 		networkPolicyController,
 		o.config.APIPort)
-
-	if o.config.EnablePrometheusMetrics {
-		metrics.InitializePrometheusMetrics(o.config.OVSBridge, ifaceStore, ofClient)
-	}
 
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
 

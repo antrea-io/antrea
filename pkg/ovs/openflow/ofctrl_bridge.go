@@ -3,12 +3,15 @@ package openflow
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 )
 
 const (
@@ -60,6 +63,10 @@ func (t *ofTable) UpdateStatus(flowCountDelta int) {
 	} else {
 		t.flowCount += uint(flowCountDelta)
 	}
+
+	metrics.OVSTotalFlowCount.Add(float64(flowCountDelta))
+	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Add(float64(flowCountDelta))
+
 	t.updateTime = time.Now()
 }
 
@@ -68,6 +75,9 @@ func (t *ofTable) ResetStatus() {
 	defer t.Unlock()
 
 	t.flowCount = 0
+
+	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Set(0)
+
 	t.updateTime = time.Now()
 }
 
@@ -245,6 +255,8 @@ func (b *OFBridge) initialize() {
 		// reset flow counts, which is needed for reconnections
 		table.ResetStatus()
 	}
+
+	metrics.OVSTotalFlowCount.Set(0)
 }
 
 // Connect initiates the connection to the OFSwitch, and initializes ofTables after connected.
