@@ -593,3 +593,54 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 		t.Errorf("Flow was still present after timeout")
 	}
 }
+
+// TestGratuitousARP verifies that we receive 3 GARP packets after a Pod is up.
+// There might be ARP packets other than GARP sent if there is any unintentional
+// traffic. So we just check the number of ARP packets is greater than 3.
+func TestGratuitousARP(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	podName := randName("test-pod-")
+	nodeName := workerNodeName(1)
+
+	t.Logf("Creating Pod '%s' on '%s'", podName, nodeName)
+	if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
+		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
+	}
+	defer deletePodWrapper(t, data, podName)
+
+	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	if err != nil {
+		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
+	}
+
+	podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace)
+	if err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
+	}
+
+	// Sending GARP is an asynchronous operation. The last GARP is supposed to
+	// be sent 100ms after processing CNI ADD request.
+	time.Sleep(100 * time.Millisecond)
+
+	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=10,arp,arp_spa=%s", podIP)}
+	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+	if err != nil {
+		t.Fatalf("Error when querying openflow: %v", err)
+	}
+
+	re := regexp.MustCompile(`n_packets=([0-9]+)`)
+	matches := re.FindStringSubmatch(stdout)
+	if len(matches) == 0 {
+		t.Fatalf("cannot retrieve n_packets, unexpected output: %s", stdout)
+	}
+	arpPackets, _ := strconv.ParseUint(matches[1], 10, 32)
+	if arpPackets < 3 {
+		t.Errorf("Expected at least 3 ARP packets, got %d", arpPackets)
+	}
+	t.Logf("Got %d ARP packets after Pod was up", arpPackets)
+}
