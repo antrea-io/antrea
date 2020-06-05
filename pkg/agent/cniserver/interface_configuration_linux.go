@@ -98,46 +98,41 @@ func configureContainerAddr(netns ns.NetNS, containerInterface *current.Interfac
 // installed async, and the gratuitous ARP could be sent out after the Openflow entries are installed. Using another
 // goroutine to ensure the processing of CNI ADD request is not blocked.
 func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containerIfaceName string, result *current.Result) error {
-	netns, err := ns.GetNS(containerNetNS)
-	if err != nil {
-		klog.Errorf("Failed to open netns with %s: %v", containerNetNS, err)
-		return err
+	if err := ns.IsNSorErr(containerNetNS); err != nil {
+		return fmt.Errorf("%s is not a valid network namespace: %v", containerNetNS, err)
 	}
-	defer netns.Close()
-	if err := netns.Do(func(containerNs ns.NetNS) error {
-		go func() {
-			// The container veth must exist when this function is called, and do not check error here.
-			containerVeth, err := net.InterfaceByName(containerIfaceName)
-			if err != nil {
-				klog.Errorf("Failed to find container interface %s in ns %s", containerIfaceName, netns.Path())
-				return
+	// Sending Gratuitous ARP is a best-effort action and is unlikely to fail as we have ensured the netns is valid.
+	go ns.WithNetNSPath(containerNetNS, func(_ ns.NetNS) error {
+		iface, err := net.InterfaceByName(containerIfaceName)
+		if err != nil {
+			klog.Errorf("Failed to find container interface %s in ns %s: %v", containerIfaceName, containerNetNS, err)
+			return nil
+		}
+		var targetIP net.IP
+		for _, ipc := range result.IPs {
+			if ipc.Version == "4" {
+				targetIP = ipc.Address.IP
 			}
-			var targetIP net.IP
-			for _, ipc := range result.IPs {
-				if ipc.Version == "4" {
-					targetIP = ipc.Address.IP
-					arping.GratuitousArpOverIface(ipc.Address.IP, *containerVeth)
-				}
+		}
+		if targetIP == nil {
+			klog.Warning("Failed to find an IPv4 address, skipped sending Gratuitous ARP")
+			return nil
+		}
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+		count := 0
+		for {
+			// Send gratuitous ARP to network in case of stale mappings for this IP address
+			// (e.g. if a previous - deleted - Pod was using the same IP).
+			arping.GratuitousArpOverIface(targetIP, *iface)
+			count++
+			if count == 3 {
+				break
 			}
-			if targetIP == nil {
-				klog.Warning("Failed to find a valid IP address for Gratuitous ARP, not send GARP")
-				return
-			}
-			count := 0
-			for count < 3 {
-				select {
-				case <-time.Tick(50 * time.Millisecond):
-					// Send gratuitous ARP to network in case of stale mappings for this IP address
-					// (e.g. if a previous - deleted - Pod was using the same IP).
-					arping.GratuitousArpOverIface(targetIP, *containerVeth)
-				}
-				count++
-			}
-		}()
+			<-ticker.C
+		}
 		return nil
-	}); err != nil {
-		return err
-	}
+	})
 	return nil
 }
 
