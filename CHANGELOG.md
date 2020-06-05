@@ -9,6 +9,14 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 
 ## Unreleased
 
+## 0.7.1 - 2020-06-05
+
+### Fixed
+
+- Fix Agent logic in charge of sending Gratuitous ARP messages when networking is configured for a Pod; stale ARP cache entries may otherwise cause connectivity issues. [#796](https://github.com/vmware-tanzu/antrea/pull/796)
+- Fix Agent crash when running in "networkPolicyOnly" mode, and in particular when running Antrea in [EKS]. [#793](https://github.com/vmware-tanzu/antrea/issues/793), [#795](https://github.com/vmware-tanzu/antrea/pull/795)
+- Replace usage of 'resubmit' with 'goto_table' action in new Windows-specific OVS flows. [#759](https://github.com/vmware-tanzu/antrea/issues/759)
+
 ## 0.7.0 - 2020-05-29
 
 ### Added
