@@ -58,12 +58,17 @@ type AdapterNetConfig struct {
 
 // Local Node configurations retrieved from K8s API or host networking state.
 type NodeConfig struct {
-	Name            string
-	OVSBridge       string
-	PodCIDR         *net.IPNet
-	NodeIPAddr      *net.IPNet
+	// The Node's name used in Kubernetes.
+	Name string
+	// The name of the OpenVSwitch bridge antrea-agent uses.
+	OVSBridge string
+	// The CIDR block to allocate Pod IPs out of.
+	// It's nil for the networkPolicyOnly trafficEncapMode which doesn't do IPAM.
+	PodCIDR *net.IPNet
+	// The Node's IP used in Kubernetes. It has the network mask information.
+	NodeIPAddr *net.IPNet
+	// The config of the gateway network device, i.e. gw0 by default.
 	GatewayConfig   *GatewayConfig
-	BridgeName      string
 	UplinkNetConfig *AdapterNetConfig
 }
 
