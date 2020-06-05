@@ -49,7 +49,7 @@ func GetGitSHA() string {
 // unreleased versions.
 func GetFullVersion() string {
 	if Version == "" {
-		return "UKNOWN"
+		return "UNKNOWN"
 	}
 	if ReleaseStatus == "released" {
 		return Version
