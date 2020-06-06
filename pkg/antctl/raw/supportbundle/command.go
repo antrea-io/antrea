@@ -57,8 +57,9 @@ const (
 var Command *cobra.Command
 
 var option = &struct {
-	dir           string
-	labelSelector string
+	dir            string
+	labelSelector  string
+	controllerOnly bool
 }{}
 
 var remoteControllerLongDescription = strings.TrimSpace(`
@@ -98,6 +99,7 @@ func init() {
 		defaultOutputPath := filepath.Join(cwd, "support-bundles_"+time.Now().Format(time.RFC3339))
 		Command.Flags().StringVarP(&option.dir, "dir", "d", defaultOutputPath, "support bundles output dir, the path will be created if it doesn't exist")
 		Command.Flags().StringVarP(&option.labelSelector, "label-selector", "l", "", "selector (label query) to filter nodes, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2)")
+		Command.Flags().BoolVar(&option.controllerOnly, "controller-only", false, "only collect the support bundle of the antrea controller")
 		Command.RunE = controllerRemoteRunE
 	}
 }
@@ -273,45 +275,47 @@ func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *res
 }
 
 func createSupportBundleClients(filter string, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config) (map[string]*rest.RESTClient, *rest.RESTClient, error) {
-	nodeAgentInfoMap := map[string]string{}
-	agentInfoList, err := antreaClientset.ClusterinformationV1beta1().AntreaAgentInfos().List(metav1.ListOptions{})
-	if err != nil {
-		return nil, nil, err
+	clients := map[string]*rest.RESTClient{}
+	if !option.controllerOnly {
+		nodeAgentInfoMap := map[string]string{}
+		agentInfoList, err := antreaClientset.ClusterinformationV1beta1().AntreaAgentInfos().List(metav1.ListOptions{})
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, agentInfo := range agentInfoList.Items {
+			nodeAgentInfoMap[agentInfo.NodeRef.Name] = fmt.Sprint(agentInfo.APIPort)
+		}
+		nodeList, err := k8sClientset.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: option.labelSelector})
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, node := range nodeList.Items {
+			if match, _ := filepath.Match(filter, node.Name); !match {
+				continue
+			}
+			port, ok := nodeAgentInfoMap[node.Name]
+			if !ok {
+				continue
+			}
+			ip, err := noderoute.GetNodeAddr(&node)
+			if err != nil {
+				klog.Warningf("Error when parsing IP of Node %s", node.Name)
+				continue
+			}
+			cfg := rest.CopyConfig(cfgTmpl)
+			cfg.Host = net.JoinHostPort(ip.String(), port)
+			client, err := rest.RESTClientFor(cfg)
+			if err != nil {
+				klog.Warningf("Error when creating agent client for node: %s", node.Name)
+				continue
+			}
+			clients[node.Name] = client
+		}
 	}
+
 	controllerInfo, err := antreaClientset.ClusterinformationV1beta1().AntreaControllerInfos().Get("antrea-controller", metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, err
-	}
-	for _, agentInfo := range agentInfoList.Items {
-		nodeAgentInfoMap[agentInfo.NodeRef.Name] = fmt.Sprint(agentInfo.APIPort)
-	}
-	nodeList, err := k8sClientset.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: option.labelSelector})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	clients := map[string]*rest.RESTClient{}
-	for _, node := range nodeList.Items {
-		if match, _ := filepath.Match(filter, node.Name); !match {
-			continue
-		}
-		port, ok := nodeAgentInfoMap[node.Name]
-		if !ok {
-			continue
-		}
-		ip, err := noderoute.GetNodeAddr(&node)
-		if err != nil {
-			klog.Warningf("Error when parsing IP of Node %s", node.Name)
-			continue
-		}
-		cfg := rest.CopyConfig(cfgTmpl)
-		cfg.Host = net.JoinHostPort(ip.String(), port)
-		client, err := rest.RESTClientFor(cfg)
-		if err != nil {
-			klog.Warningf("Error when creating agent client for node: %s", node.Name)
-			continue
-		}
-		clients[node.Name] = client
 	}
 
 	controllerNode, err := k8sClientset.CoreV1().Nodes().Get(controllerInfo.NodeRef.Name, metav1.GetOptions{})
