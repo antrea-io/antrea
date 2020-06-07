@@ -25,7 +25,7 @@ import (
 var (
 	EgressNetworkPolicyCount = metrics.NewGauge(
 		&metrics.GaugeOpts{
-			Name:           "antrea_agent_egress_networkpolicy_rule",
+			Name:           "antrea_agent_egress_networkpolicy_rule_count",
 			Help:           "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
@@ -33,7 +33,7 @@ var (
 
 	IngressNetworkPolicyCount = metrics.NewGauge(
 		&metrics.GaugeOpts{
-			Name:           "antrea_agent_ingress_networkpolicy_rule",
+			Name:           "antrea_agent_ingress_networkpolicy_rule_count",
 			Help:           "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
@@ -86,12 +86,12 @@ func InitializePrometheusMetrics() {
 	// and will not measure anything unless the collector is first registered.
 	gaugeHost.Set(1)
 
-	if err := legacyregistry.Register(IngressNetworkPolicyCount); err != nil {
-		klog.Error("Failed to register antrea_agent_ingress_networkpolicy_rule_count with Prometheus")
-	}
-
 	if err := legacyregistry.Register(EgressNetworkPolicyCount); err != nil {
 		klog.Error("Failed to register antrea_agent_egress_networkpolicy_rule_count with Prometheus")
+	}
+
+	if err := legacyregistry.Register(IngressNetworkPolicyCount); err != nil {
+		klog.Error("Failed to register antrea_agent_ingress_networkpolicy_rule_count with Prometheus")
 	}
 
 	if err := legacyregistry.Register(OVSTotalFlowCount); err != nil {
