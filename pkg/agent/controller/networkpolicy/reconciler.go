@@ -376,7 +376,6 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule, npName, npNamespace
 		r.idAllocator.release(ofID)
 		return 0, fmt.Errorf("error installing ofRule %v: %v", ofID, err)
 	}
-
 	return ofID, nil
 }
 
@@ -412,7 +411,6 @@ func (r *reconciler) uninstallOFRule(ofID uint32) error {
 	if err := r.ofClient.UninstallPolicyRuleFlows(ofID); err != nil {
 		return fmt.Errorf("error uninstalling ofRule %v: %v", ofID, err)
 	}
-
 	if err := r.idAllocator.release(ofID); err != nil {
 		// This should never happen. If it does, it is a programming error.
 		klog.Errorf("Error releasing Openflow ID for ofRule %v: %v", ofID, err)
