@@ -71,28 +71,28 @@ func TestReconcilerForget(t *testing.T) {
 		name              string
 		lastRealizeds     map[string]*lastRealized
 		args              string
-		expectedOFRuleIDs []uint32
+		expectedOFRuleIDs []uint32		
 		wantErr           bool
 	}{
 		{
 			"unknown-rule",
 			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8}}},
 			"unknown-rule-id",
-			nil,
+			nil,			
 			false,
 		},
 		{
 			"known-single-ofrule",
 			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8}}},
 			"foo",
-			[]uint32{8},
+			[]uint32{8},			
 			false,
 		},
 		{
 			"known-multiple-ofrule",
 			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8, servicesHash2: 9}}},
 			"foo",
-			[]uint32{8, 9},
+			[]uint32{8, 9},			
 			false,
 		},
 	}
