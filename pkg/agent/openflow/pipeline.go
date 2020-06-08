@@ -727,6 +727,7 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 			MatchDstIPNet(localSubnet).
 			Action().SetDstMAC(globalVirtualMAC).
 			Action().GotoTable(conntrackTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Enforce IP packet into the conntrack zone with SNAT. If the connection is SNATed, the reply packet should use
 		// Pod IP as the destination, and then is forwarded to conntrackStateTable.
@@ -802,6 +803,7 @@ func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputP
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
 			MatchDstIPNet(localSubnet).
 			Action().GotoTable(l2ForwardingCalcTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Add SNAT mark on the packet that is not filtered by other flow entries in L3Forwarding table. This is the
 		// table miss if SNAT feature is enabled.
@@ -817,6 +819,7 @@ func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputP
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
 			Action().Output(outputPort).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
 	return flows
