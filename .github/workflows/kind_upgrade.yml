@@ -25,8 +25,8 @@ jobs:
 
 # TODO: define an action to avoid repetition?
 
-  from-v0_5_0:
-    name: Upgrade from Antrea v0.5.0
+  from-N-1:
+    name: Upgrade from Antrea version N-1
     needs: build-antrea-image
     runs-on: [ubuntu-18.04]
     steps:
@@ -54,10 +54,10 @@ jobs:
         sudo mv kind /usr/local/bin
     - name: Run test
       run: |
-        ./ci/kind/test-upgrade-antrea.sh --from-tag v0.5.0
+        ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 1
 
-  from-v0_5_1:
-    name: Upgrade from Antrea v0.5.1
+  from-N-2:
+    name: Upgrade from Antrea version N-2
     needs: build-antrea-image
     runs-on: [ubuntu-18.04]
     steps:
@@ -85,35 +85,4 @@ jobs:
         sudo mv kind /usr/local/bin
     - name: Run test
       run: |
-        ./ci/kind/test-upgrade-antrea.sh --from-tag v0.5.1
-
-  from-v0_6_0:
-    name: Upgrade from Antrea v0.6.0
-    needs: build-antrea-image
-    runs-on: [ubuntu-18.04]
-    steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
-    - uses: actions/checkout@v2
-    - uses: actions/setup-go@v1
-      with:
-        go-version: 1.13
-    - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
-      with:
-        name: antrea-ubuntu
-    - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
-    - name: Install Kind
-      env:
-        KIND_VERSION: v0.7.0
-      run: |
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-        chmod +x ./kind
-        sudo mv kind /usr/local/bin
-    - name: Run test
-      run: |
-        ./ci/kind/test-upgrade-antrea.sh --from-tag v0.6.0
+        ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 2
