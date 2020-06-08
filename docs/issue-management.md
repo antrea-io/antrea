@@ -364,19 +364,15 @@ To track the state of an issue, the following labels will be assigned.
 
 * `lifecycle/active` -- indicates that an issue or PR is actively being worked on by a contributor
 * `lifecycle/frozen` -- indicates that an issue or PR should not be auto-closed due to staleness
-* `lifecycle/rotten` -- denotes an issue or PR that has aged beyond stale and will be auto-closed
 * `lifecycle/stale` -- denotes an issue or PR has remained open with no activity and has become stale
 
 The following schedule will be used to determine an issue's lifecycle:
 
-* after 90 days of inactivity, an issue will be automatically marked as `lifecycle/stale`
-* after 180 days of inactivity, an issue will be automatically marked as
-  `lifecycle/rotten` and can then be scheduled for auto closure
+* after 180 days of inactivity, an issue will be automatically marked as `lifecycle/stale`
+* after an extra 180 days of inactivity, an issue will be automatically closed
 * any issue marked as `lifecycle/frozen` will prevent automatic transitions to
-  stale or rotten state.
-* an issue marked as `lifecycle/active` adds an additional 30 days to the
-  scheduled stale and rotten transitions above. If no activity is present, the
-  issue can be automatically closed.
+  stale and prevent auto-closure
+* commenting on an issue will remove the `lifecycle/stale` label
 
 Issue lifecycle management ensures that the project backlog remains fresh and
 relevant. Project maintainers and contributors will need to revisit issues to
