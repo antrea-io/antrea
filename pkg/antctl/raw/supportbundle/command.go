@@ -95,9 +95,7 @@ func init() {
 		Command.Use += " [nodeName]"
 		Command.Long = remoteControllerLongDescription
 		Command.Example = remoteControllerExample
-		cwd, _ := os.Getwd()
-		defaultOutputPath := filepath.Join(cwd, "support-bundles_"+time.Now().Format(time.RFC3339))
-		Command.Flags().StringVarP(&option.dir, "dir", "d", defaultOutputPath, "support bundles output dir, the path will be created if it doesn't exist")
+		Command.Flags().StringVarP(&option.dir, "dir", "d", "", "support bundles output dir, the path will be created if it doesn't exist")
 		Command.Flags().StringVarP(&option.labelSelector, "label-selector", "l", "", "selector (label query) to filter nodes, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2)")
 		Command.Flags().BoolVar(&option.controllerOnly, "controller-only", false, "only collect the support bundle of the antrea controller")
 		Command.RunE = controllerRemoteRunE
@@ -428,13 +426,16 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 }
 
 func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
+	if option.dir == "" {
+		cwd, _ := os.Getwd()
+		const timeFormat = "Jan02-15-04-05"
+		option.dir = filepath.Join(cwd, "support-bundles_"+time.Now().Format(timeFormat))
+	}
 	dir, err := filepath.Abs(option.dir)
 	if err != nil {
 		return fmt.Errorf("error when resolving path '%s': %w", option.dir, err)
 	}
-	if err := os.MkdirAll(option.dir, 0700|os.ModeDir); err != nil {
-		return fmt.Errorf("error when creating output dir: %w", err)
-	}
+
 	kubeconfigPath, err := cmd.Flags().GetString("kubeconfig")
 	if err != nil {
 		return err
@@ -464,6 +465,9 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	agentClients, controllerClient, err := createSupportBundleClients(filter, k8sClientset, antreaClientset, restconfigTmpl)
 	if err != nil {
 		return fmt.Errorf("error when creating system clients: %w", err)
+	}
+	if err := os.MkdirAll(option.dir, 0700|os.ModeDir); err != nil {
+		return fmt.Errorf("error when creating output dir: %w", err)
 	}
 	amount := len(agentClients) * 2
 	if controllerClient != nil {
