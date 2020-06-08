@@ -297,6 +297,12 @@ To create a support issue or PR:
 * label your issue or PR with `kind/support`
 * title the issue or PR with a short description of your support request
 * answer all of the questions in the support issue template
+* to provide comprehensive information about your cluster that will be useful in
+  identifying and resolving the issue, you may want to consider producing a
+  ["support bundle"](antctl.md/#collecting-support-information) and uploading it
+  to a publicly-accessible location. **Be aware that the generated support
+  bundle includes a lot of information, including logs, so please ensure that
+  you do not share anything sensitive.**
 
 _Note this was previously called `support`. We will add the `kind/support` label
 to all issues currently labeled with `support`._
@@ -313,7 +319,7 @@ used to sort issues and PRs into categories such as:
 * operating or legal area (i.e., licensing), 
 * etc.
 
-A list of areas is maintained in [`docs/github-labels.md`](docs/github-labels.md).
+A list of areas is maintained in [`github-labels.md`](github-labels.md).
 
 An area may be changed, added or deleted during issue or PR triage.
 
@@ -337,7 +343,7 @@ Size labels include:
 * `size/L` -- denotes a large issue, or PR that changes 100-499 lines, ignoring generated files
 * `size/XL` -- denotes a very large issue, or PR that changes 500+ lines, ignoring generated files
 
-Size labels are defined in [`docs/github-labels.md`](docs/github-labels.md).
+Size labels are defined in [`github-labels.md`](github-labels.md).
 
 ### Triage
 
@@ -350,7 +356,7 @@ process:
 * `triage/not-reproducible` -- indicates an issue can not be reproduced as described
 * `triage/unresolved` -- indicates an issue that can not or will not be resolved
 
-Triage labels are defined in [`docs/github-labels.md`](docs/github-labels.md).
+Triage labels are defined in [`github-labels.md`](github-labels.md).
 
 ### Lifecycle
 
