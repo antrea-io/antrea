@@ -17,7 +17,6 @@ package ovsctl
 import (
 	"bufio"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -91,7 +90,7 @@ func (c *ovsCtlClient) DumpGroups(args ...string) ([][]string, error) {
 func (c *ovsCtlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
 	cmdStr := fmt.Sprintf("ovs-ofctl -O Openflow13 %s %s", cmd, c.bridge)
 	cmdStr = cmdStr + " " + strings.Join(args, " ")
-	out, err := exec.Command("/bin/sh", "-c", cmdStr).Output()
+	out, err := getOVSCommand(cmdStr).Output()
 	if err != nil {
 		return nil, err
 	}
