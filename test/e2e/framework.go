@@ -80,6 +80,7 @@ type TestOptions struct {
 	providerConfigPath  string
 	logsExportDir       string
 	logsExportOnSuccess bool
+	withBench           bool
 }
 
 var testOptions TestOptions
@@ -764,35 +765,31 @@ func validatePodIP(podNetworkCIDR, podIP string) (bool, error) {
 	return cidr.Contains(ip), nil
 }
 
-// createServiceOnNode creates a service with port and targetPort.
-func (data *TestData) createService(name string, service string, port int, targetPort int) error {
-	_, err := data.clientset.CoreV1().Services(testNamespace).Create(&v1.Service{
+// createService creates a service with port and targetPort.
+func (data *TestData) createService(serviceName string, port, targetPort int, selector map[string]string) (*v1.Service, error) {
+	service := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:      serviceName,
+			Namespace: testNamespace,
 			Labels: map[string]string{
-				"antrea-e2e": name,
-				"app":        service,
+				"antrea-e2e": serviceName,
+				"app":        serviceName,
 			},
 		},
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{{
-				Port: int32(port),
-				TargetPort: intstr.IntOrString{
-					Type:   0,
-					IntVal: int32(targetPort),
-				},
+				Port:       int32(port),
+				TargetPort: intstr.FromInt(targetPort),
 			}},
-			Selector: map[string]string{
-				"app": service,
-			},
+			Selector: selector,
 		},
-	})
-	return err
+	}
+	return data.clientset.CoreV1().Services(testNamespace).Create(&service)
 }
 
 // createNginxService create a nginx service with the given name.
-func (data *TestData) createNginxService(name string) error {
-	return data.createService(name, "nginx", 80, 80)
+func (data *TestData) createNginxService() (*v1.Service, error) {
+	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"})
 }
 
 // deleteService deletes the service.

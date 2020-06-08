@@ -194,7 +194,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 	if err != nil {
 		b.Fatalf("Error when creating perftool test Pod: %v", err)
 	}
-	b.Logf("Waiting IP assignment of the perftool test Pod")
+	b.Logf("Waiting for IP assignment of the perftool test Pod")
 	perfPodIP, err = data.podWaitForIP(defaultTimeout, perftoolPodName, testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of perftool test Pod: %v", err)
@@ -221,7 +221,7 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 		b.Fatalf("Error when populating workload network policy: %v", err)
 	}
 
-	b.Log("Waiting the workload network policy to be realized")
+	b.Log("Waiting for the workload network policy to be realized")
 	err = waitNetworkPolicyRealize(policyRules, data)
 	if err != nil {
 		b.Fatalf("Checking network policies realization failed: %v", err)
@@ -253,7 +253,7 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 			}
 		}()
 
-		b.Log("Waiting the network policy to be realized")
+		b.Log("Waiting for the network policy to be realized")
 		b.StartTimer()
 		err := waitNetworkPolicyRealize(policyRules, data)
 		if err != nil {

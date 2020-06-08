@@ -22,15 +22,21 @@ import (
 	"time"
 )
 
-func skipIfProviderIs(t *testing.T, name string, reason string) {
-	if testOptions.providerName == name {
-		t.Skipf("Skipping test for the '%s' provider: %s", name, reason)
+func skipIfNotBenchmarkTest(tb testing.TB) {
+	if !testOptions.withBench {
+		tb.Skipf("Skipping benchmark test: %s", tb.Name())
 	}
 }
 
-func skipIfNumNodesLessThan(t *testing.T, required int) {
+func skipIfProviderIs(tb testing.TB, name string, reason string) {
+	if testOptions.providerName == name {
+		tb.Skipf("Skipping test for the '%s' provider: %s", name, reason)
+	}
+}
+
+func skipIfNumNodesLessThan(tb testing.TB, required int) {
 	if clusterInfo.numNodes < required {
-		t.Skipf("Skipping test as it requires %d different Nodes but cluster only has %d", required, clusterInfo.numNodes)
+		tb.Skipf("Skipping test as it requires %d different Nodes but cluster only has %d", required, clusterInfo.numNodes)
 	}
 }
 
