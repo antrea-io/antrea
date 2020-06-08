@@ -34,6 +34,8 @@ const monitoringNamespace string = "monitoring"
 
 // Agent metrics to validate
 var antreaAgentMetrics = []string{
+	"antrea_agent_egress_networkpolicy_rule_count",
+	"antrea_agent_ingress_networkpolicy_rule_count",
 	"antrea_agent_local_pod_count",
 	"antrea_agent_ovs_total_flow_count",
 	"antrea_agent_ovs_flow_count",
