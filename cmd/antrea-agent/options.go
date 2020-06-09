@@ -42,6 +42,8 @@ type Options struct {
 	configFile string
 	// The configuration object
 	config *AgentConfig
+	// IPFIX flow collector
+	flowCollector net.Addr
 }
 
 func newOptions() *Options {
@@ -95,8 +97,20 @@ func (o *Options) validate(args []string) error {
 	if encapMode.SupportsNoEncap() && o.config.EnableIPSecTunnel {
 		return fmt.Errorf("IPSec tunnel may only be enabled on %s mode", config.TrafficEncapModeEncap)
 	}
-	if o.config.OVSDatapathType == ovsconfig.OVSDatapathNetdev && features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		return fmt.Errorf("FlowExporter feature is not supported for OVS datapath type %s", o.config.OVSDatapathType)
+	if o.config.FlowCollectorAddr != "" && features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		if o.config.OVSDatapathType == ovsconfig.OVSDatapathNetdev {
+			return fmt.Errorf("exporting flows is not supported for OVS datapath type %s", o.config.OVSDatapathType)
+		} else {
+			// Convert the string input in net.Addr format
+			_, _, err := net.SplitHostPort(o.config.FlowCollectorAddr)
+			if err != nil {
+				return fmt.Errorf("IPFIX flow collector is given in invalid format. Error: %v", err)
+			}
+			o.flowCollector, err = net.ResolveTCPAddr("tcp", o.config.FlowCollectorAddr)
+			if err != nil {
+				return fmt.Errorf("IPFIX flow collector server over TCP proto is not resolved. Error: %v", err)
+			}
+		}
 	}
 	return nil
 }
