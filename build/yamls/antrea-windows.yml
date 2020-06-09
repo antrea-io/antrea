@@ -26,6 +26,7 @@ data:
 
     # Encapsulation mode for communication between Pods across Nodes, supported values:
     # - vxlan (default)
+    # - geneve
     # - stt
     #tunnelType: vxlan
 
@@ -61,7 +62,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-ktmt97647h
+  name: antrea-windows-config-mthfbgb569
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -149,7 +150,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-ktmt97647h
+          name: antrea-windows-config-mthfbgb569
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

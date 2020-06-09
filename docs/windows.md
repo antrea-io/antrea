@@ -3,7 +3,7 @@
 ## Overview
 Antrea supports Windows worker Node. On Windows Node, Antrea sets up an overlay
 network to forward packets between Nodes and implements NetworkPolicies. Currently
-VXLAN and STT tunnels are supported.
+VXLAN, Geneve and STT tunnels are supported.
 
 This page shows how to install antrea-agent on Windows Nodes and register the
 Node to an existing Kubernetes cluster.
