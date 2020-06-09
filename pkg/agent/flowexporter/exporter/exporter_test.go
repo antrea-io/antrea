@@ -1,0 +1,171 @@
+package exporter
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+	"time"
+	"unicode"
+
+	"github.com/golang/mock/gomock"
+	"gotest.tools/assert"
+
+	ipfixentities "github.com/srikartati/go-ipfixlib/pkg/entities"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
+	ipfixtest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix/testing"
+)
+
+func TestFlowExporter_sendTemplateRecord(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
+	mockTempRec := ipfixtest.NewMockIPFIXRecord(ctrl)
+	flowExp := &flowExporter{
+		nil,
+		mockIPFIXExpProc,
+		nil,
+		256,
+	}
+	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
+	// Need only element name and other are dummys
+	elemList := make([]*ipfixentities.InfoElement, 0)
+	for _, ie := range IANAInfoElements {
+		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, 0, 0))
+	}
+	for _, ie := range AntreaInfoElements {
+		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, 0, 0))
+	}
+	// Expect calls for different mock objects
+	tempBytes := uint16(0)
+	var templateRecord ipfixentities.Record
+
+	mockTempRec.EXPECT().PrepareRecord().Return(tempBytes, nil)
+	for i, ie := range IANAInfoElements {
+		if !strings.Contains(ie, "reverse") {
+			mockIPFIXExpProc.EXPECT().GetIANARegistryInfoElement(ie, false).Return(elemList[i], nil)
+		} else {
+			split := strings.Split(ie, "_")
+			runeStr := []rune(split[1])
+			runeStr[0] = unicode.ToLower(runeStr[0])
+			mockIPFIXExpProc.EXPECT().GetIANARegistryInfoElement(string(runeStr), true).Return(elemList[i], nil)
+		}
+		mockTempRec.EXPECT().AddInfoElement(elemList[i], nil).Return(tempBytes, nil)
+	}
+	for i, ie := range AntreaInfoElements {
+		if !strings.Contains(ie, "reverse") {
+			mockIPFIXExpProc.EXPECT().GetAntreaRegistryInfoElement(ie, false).Return(elemList[i+len(IANAInfoElements)], nil)
+		} else {
+			split := strings.Split(ie, "_")
+			runeStr := []rune(split[1])
+			runeStr[0] = unicode.ToLower(runeStr[0])
+			mockIPFIXExpProc.EXPECT().GetAntreaRegistryInfoElement(string(runeStr), true).Return(elemList[i+len(IANAInfoElements)], nil)
+		}
+		mockTempRec.EXPECT().AddInfoElement(elemList[i+len(IANAInfoElements)], nil).Return(tempBytes, nil)
+	}
+	mockTempRec.EXPECT().GetRecord().Return(templateRecord)
+	// Passing 0 for sentBytes as it is not used anywhere in the test. In reality, this IPFIX message size
+	// for template record of above elements.
+	mockIPFIXExpProc.EXPECT().AddRecordAndSendMsg(ipfixentities.Template, templateRecord).Return(0, nil)
+
+	_, err := flowExp.sendTemplateRecord(mockTempRec)
+	if err != nil {
+		t.Errorf("Error in sending templated record: %v", err)
+	}
+
+	assert.Equal(t, len(IANAInfoElements)+len(AntreaInfoElements), len(flowExp.elementsList), "flowExp.elementsList and template record should have same number of elements")
+}
+
+// TestFlowExporter_sendDataRecord tests essentially if element names in the switch-case matches globals
+// IANAInfoElements and AntreaInfoElements.
+func TestFlowExporter_sendDataRecord(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Values in the connection are not important. Initializing with 0s.
+	flow1 := flowexporter.Connection{
+		StartTime:       time.Time{},
+		StopTime:        time.Time{},
+		OriginalPackets: 0,
+		OriginalBytes:   0,
+		ReversePackets:  0,
+		ReverseBytes:    0,
+		TupleOrig: flowexporter.Tuple{
+			SourceAddress:      nil,
+			DestinationAddress: nil,
+			Protocol:           0,
+			SourcePort:         0,
+			DestinationPort:    0,
+		},
+		TupleReply: flowexporter.Tuple{
+			SourceAddress:      nil,
+			DestinationAddress: nil,
+			Protocol:           0,
+			SourcePort:         0,
+			DestinationPort:    0,
+		},
+		SourcePodNamespace:      "",
+		SourcePodName:           "",
+		DestinationPodNamespace: "",
+		DestinationPodName:      "",
+	}
+	record1 := flowexporter.FlowRecord{
+		Conn:               &flow1,
+		PrevPackets:        0,
+		PrevBytes:          0,
+		PrevReversePackets: 0,
+		PrevReverseBytes:   0,
+	}
+	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
+	// Need only element name and other are dummys
+	elemList := make([]*ipfixentities.InfoElement, len(IANAInfoElements)+len(AntreaInfoElements))
+	for i, ie := range IANAInfoElements {
+		elemList[i] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
+	}
+	for i, ie := range AntreaInfoElements {
+		elemList[i+len(IANAInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
+	}
+	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
+	mockDataRec := ipfixtest.NewMockIPFIXRecord(ctrl)
+	flowExp := &flowExporter{
+		nil,
+		mockIPFIXExpProc,
+		elemList,
+		256,
+	}
+	// Expect calls required
+	var dataRecord ipfixentities.Record
+	var dataBuff bytes.Buffer
+	tempBytes := uint16(0)
+	for i, ie := range flowExp.elementsList {
+		// Could not come up with a way to exclude if else conditions as different IEs have different data types.
+		if i == 0 || i == 1 {
+			// For time elements
+			mockDataRec.EXPECT().AddInfoElement(ie, record1.Conn.StartTime.Unix()).Return(tempBytes, nil)
+		} else if i == 2 || i == 3 {
+			// For IP addresses
+			mockDataRec.EXPECT().AddInfoElement(ie, nil).Return(tempBytes, nil)
+		} else if i == 4 || i == 5 {
+			// For transport ports
+			mockDataRec.EXPECT().AddInfoElement(ie, uint16(0)).Return(tempBytes, nil)
+		} else if i == 6 {
+			// For proto identifier
+			mockDataRec.EXPECT().AddInfoElement(ie, uint8(0)).Return(tempBytes, nil)
+		} else if i >= 7 && i < 15 {
+			// For packets and octets
+			mockDataRec.EXPECT().AddInfoElement(ie, uint64(0)).Return(tempBytes, nil)
+		} else {
+			// For string elements
+			mockDataRec.EXPECT().AddInfoElement(ie, "").Return(tempBytes, nil)
+		}
+	}
+	mockDataRec.EXPECT().GetFieldCount().Return(uint16(len(flowExp.elementsList)))
+	mockDataRec.EXPECT().GetBuffer().Return(&dataBuff)
+	mockDataRec.EXPECT().GetRecord().Return(dataRecord)
+	mockIPFIXExpProc.EXPECT().AddRecordAndSendMsg(ipfixentities.Data, dataRecord).Return(0, nil)
+
+	err := flowExp.sendDataRecord(mockDataRec, record1)
+	if err != nil {
+		t.Errorf("Error in sending data record: %v", err)
+	}
+}

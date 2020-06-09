@@ -23,7 +23,7 @@ require (
 	github.com/go-openapi/spec v0.19.3
 	github.com/goccy/go-graphviz v0.0.5
 	github.com/gogo/protobuf v1.3.1
-	github.com/golang/mock v1.2.0
+	github.com/golang/mock v1.4.3
 	github.com/golang/protobuf v1.3.2
 	github.com/google/uuid v1.1.1
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
@@ -35,6 +35,7 @@ require (
 	github.com/spf13/afero v1.2.2
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
+	github.com/srikartati/go-ipfixlib v0.0.0-20200615234147-74c918af6836
 	github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 // indirect
 	github.com/stretchr/testify v1.5.1
 	github.com/ti-mo/conntrack v0.3.0
@@ -46,6 +47,7 @@ require (
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	google.golang.org/grpc v1.26.0
 	gopkg.in/yaml.v2 v2.2.8
+	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.4
 	k8s.io/apimachinery v0.18.4
 	k8s.io/apiserver v0.18.4

@@ -86,4 +86,8 @@ type AgentConfig struct {
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to false.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// Provide flow collector address as string with format IP:port. This also enables flow exporter that sends IPFIX
+	// flow records of conntrack flows on OVS bridge.
+	// Defaults to "".
+	FlowCollectorAddr string `yaml:"flowCollectorAddr,omitempty"`
 }
