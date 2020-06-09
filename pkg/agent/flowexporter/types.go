@@ -15,15 +15,20 @@
 package flowexporter
 
 import (
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix"
 	"net"
 	"time"
 )
 
 const (
-	PollInterval = 5 * time.Second
+	PollInterval       = 5 * time.Second
+	FlowExportInterval = 120 * time.Second
 )
 
 type ConnectionKey [5]string
+
+type FlowRecordUpdate func(key ConnectionKey, cxn Connection) error
+type FlowRecordSend func(dataRecord ipfix.IPFIXRecord, record FlowRecord) error
 
 type Tuple struct {
 	SourceAddress      net.IP
@@ -51,4 +56,12 @@ type Connection struct {
 	SourcePodName           string
 	DestinationPodNamespace string
 	DestinationPodName      string
+}
+
+type FlowRecord struct {
+	Conn               *Connection
+	PrevPackets        uint64
+	PrevBytes          uint64
+	PrevReversePackets uint64
+	PrevReverseBytes   uint64
 }

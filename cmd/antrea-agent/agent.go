@@ -31,6 +31,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/traceflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/exporter"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
@@ -236,11 +238,23 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		go ofClient.StartPacketInHandler(stopCh)
 	}
-	// Create connection store that polls conntrack flows with a given polling interval.
+
+	// Initialize flow exporter; start go routines to poll conntrack flows and export IPFIX flow records
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		ctDumper := connections.NewConnTrackDumper(nodeConfig, serviceCIDRNet, connections.NewConnTrackInterfacer())
-		connStore := connections.NewConnectionStore(ctDumper, ifaceStore)
-		go connStore.Run(stopCh)
+		if o.flowCollector != nil {
+			ctDumper := connections.NewConnTrackDumper(nodeConfig, serviceCIDRNet, connections.NewConnTrackInterfacer())
+			connStore := connections.NewConnectionStore(ctDumper, ifaceStore)
+			flowRecords := flowrecords.NewFlowRecords(connStore)
+			flowExporter, err := exporter.InitFlowExporter(o.flowCollector, flowRecords)
+			if err != nil {
+				// Antrea agent do not exit, if flow exporter cannot be initialized.
+				// Currently, only logging the error.
+				klog.Errorf("error when initializing flow exporter: %v", err)
+			} else {
+				go connStore.Run(stopCh)
+				go flowExporter.Run(stopCh)
+			}
+		}
 	}
 
 	<-stopCh

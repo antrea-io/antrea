@@ -29,6 +29,8 @@ var _ ConnectionStore = new(connectionStore)
 
 type ConnectionStore interface {
 	Run(stopCh <-chan struct{})
+	IterateCxnMapWithCB(updateCallback flowexporter.FlowRecordUpdate) error
+	FlushConnectionStore()
 }
 
 type connectionStore struct {
@@ -116,7 +118,25 @@ func (cs *connectionStore) getConnByKey(flowTuple flowexporter.ConnectionKey) (*
 	return &conn, found
 }
 
+func (cs *connectionStore) IterateCxnMapWithCB(updateCallback flowexporter.FlowRecordUpdate) error {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+
+	for k, v := range cs.connections {
+		cs.mutex.Unlock()
+		err := updateCallback(k, v)
+		if err != nil {
+			klog.Errorf("flow record update and send failed for flow with key: %v, cxn: %v", k, v)
+			return err
+		}
+		klog.V(2).Infof("Flow record added or updated")
+		cs.mutex.Lock()
+	}
+	return nil
+}
+
 // poll returns number of filtered connections after poll cycle
+// TODO: Optimize polling cycle--Only poll invalid/close connection during every poll. Poll established right before export
 func (cs *connectionStore) poll() (int, error) {
 	klog.V(2).Infof("Polling conntrack")
 
@@ -132,4 +152,17 @@ func (cs *connectionStore) poll() (int, error) {
 	klog.V(2).Infof("Conntrack polling successful")
 
 	return len(filteredConns), nil
+}
+
+// FlushConnectionStore after each IPFIX export of flow records.
+// Timed out conntrack connections will not be sent as IPFIX flow records.
+// TODO: Enhance/optimize this logic.
+func (cs *connectionStore) FlushConnectionStore() {
+	klog.Infof("Flushing connection map")
+
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+	for conn := range cs.connections {
+		delete(cs.connections, conn)
+	}
 }
