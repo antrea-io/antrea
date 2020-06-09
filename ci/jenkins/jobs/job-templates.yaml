@@ -101,6 +101,7 @@
 
 - job-template:
     name: '{name}-{test_name}-for-period'
+    node: '{node}'
     block-downstream: false
     block-upstream: false
     builders: '{builders}'
@@ -129,6 +130,7 @@
 
 - job-template:
     name: '{name}-{test_name}-for-gc'
+    node: '{node}'
     builders: '{builders}'
     description: '{description}'
     properties:
