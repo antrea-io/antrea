@@ -59,7 +59,7 @@ require (
 )
 
 replace (
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200601065543-2c7a62482f16
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200609044910-a72f3e66744e
 	// fake.NewSimpleClientset is quite slow when it's initialized with massive objects due to
 	// https://github.com/kubernetes/kubernetes/issues/89574. It takes more than tens of minutes to
 	// init a fake client with 200k objects, which makes it hard to run the NetworkPolicy scale test.
