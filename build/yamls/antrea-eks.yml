@@ -727,6 +727,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         operator: Exists
+      - effect: NoExecute
+        operator: Exists
       volumes:
       - configMap:
           name: antrea-config-hmd2mdhg89

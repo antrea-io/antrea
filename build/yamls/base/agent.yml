@@ -25,6 +25,9 @@ spec:
         # Make sure it gets scheduled on all nodes.
         - effect: NoSchedule
           operator: Exists
+        # Make sure it doesn't get evicted.
+        - effect: NoExecute
+          operator: Exists
       nodeSelector:
         kubernetes.io/os: linux
       serviceAccountName: antrea-agent
