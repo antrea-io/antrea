@@ -15,7 +15,6 @@
 package apiserver
 
 import (
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,6 +28,7 @@ import (
 	networkinginstall "github.com/vmware-tanzu/antrea/pkg/apis/networking/install"
 	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
 	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
@@ -132,7 +132,7 @@ func (c completedConfig) New() (*APIServer, error) {
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	systemStorage := map[string]rest.Storage{}
 	systemStorage["controllerinfos"] = controllerinfo.NewREST(c.extraConfig.controllerQuerier)
-	bundleStorage := supportbundle.NewStorage("controller", nil)
+	bundleStorage := supportbundle.NewControllerStorage()
 	systemStorage["supportbundles"] = bundleStorage.SupportBundle
 	systemStorage["supportbundles/download"] = bundleStorage.Download
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage

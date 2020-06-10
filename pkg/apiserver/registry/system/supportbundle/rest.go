@@ -37,31 +37,54 @@ import (
 	"k8s.io/klog"
 	"k8s.io/utils/exec"
 
+	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 	"github.com/vmware-tanzu/antrea/pkg/support"
 )
 
-const bundleExpireDuration = time.Hour
+const (
+	bundleExpireDuration = time.Hour
+	modeController       = "controller"
+	modeAgent            = "agent"
+)
 
 var (
 	defaultFS       = afero.NewOsFs()
 	defaultExecutor = exec.New()
 )
 
-// NewStorage creates a support bundle storage. The mode should be either agent
-// or controller. If the mode is agent, the client argument should not be nil.
-func NewStorage(mode string, client ovsctl.OVSCtlClient) Storage {
+// NewControllerStorage creates a support bundle storage for working on antrea controller.
+func NewControllerStorage() Storage {
 	bundle := &supportBundleREST{
-		mode:         mode,
-		ovsCtlClient: client,
+		mode: modeController,
 		cache: &systemv1beta1.SupportBundle{
-			ObjectMeta: metav1.ObjectMeta{Name: mode},
+			ObjectMeta: metav1.ObjectMeta{Name: modeController},
 			Status:     systemv1beta1.SupportBundleStatusNone,
 		},
 	}
 	return Storage{
-		Mode:          mode,
+		Mode:          modeController,
+		SupportBundle: bundle,
+		Download:      &downloadREST{supportBundle: bundle},
+	}
+}
+
+// NewAgentStorage creates a support bundle storage for working on antrea agent.
+func NewAgentStorage(client ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier) Storage {
+	bundle := &supportBundleREST{
+		mode:         modeAgent,
+		ovsCtlClient: client,
+		aq:           aq,
+		npq:          npq,
+		cache: &systemv1beta1.SupportBundle{
+			ObjectMeta: metav1.ObjectMeta{Name: modeAgent},
+			Status:     systemv1beta1.SupportBundleStatusNone,
+		},
+	}
+	return Storage{
+		Mode:          modeAgent,
 		SupportBundle: bundle,
 		Download:      &downloadREST{supportBundle: bundle},
 	}
@@ -88,7 +111,10 @@ type supportBundleREST struct {
 	statusLocker sync.RWMutex
 	cancelFunc   context.CancelFunc
 	cache        *systemv1beta1.SupportBundle
+
 	ovsCtlClient ovsctl.OVSCtlClient
+	aq           agentquerier.AgentQuerier
+	npq          querier.AgentNetworkPolicyInfoQuerier
 }
 
 // Create triggers a bundle generation. It only allows resource creation when
@@ -115,9 +141,9 @@ func (r *supportBundleREST) Create(ctx context.Context, obj runtime.Object, _ re
 	go func() {
 		var err error
 		var b *systemv1beta1.SupportBundle
-		if r.mode == "agent" {
+		if r.mode == modeAgent {
 			b, err = r.collectAgent(ctx)
-		} else if r.mode == "controller" {
+		} else if r.mode == modeController {
 			b, err = r.collectController(ctx)
 		}
 		func() {
@@ -225,7 +251,7 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 }
 
 func (r *supportBundleREST) collectAgent(ctx context.Context) (*systemv1beta1.SupportBundle, error) {
-	dumper := support.NewAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient)
+	dumper := support.NewAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient, r.aq, r.npq)
 	return r.collect(
 		ctx,
 		dumper.DumpLog,

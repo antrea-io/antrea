@@ -51,6 +51,7 @@ const (
 	barTmpl      pb.ProgressBarTemplate = `{{string . "prefix"}}{{bar . }} {{percent . }} {{rtime . "ETA %s"}}` // Example: 'Prefix[-->______] 20%'
 	requestRate                         = 50
 	requestBurst                        = 100
+	timeFormat                          = "20060102T150405Z0700"
 )
 
 // Command is the support bundle command implementation.
@@ -428,7 +429,6 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	if option.dir == "" {
 		cwd, _ := os.Getwd()
-		const timeFormat = "Jan02-15-04-05"
 		option.dir = filepath.Join(cwd, "support-bundles_"+time.Now().Format(timeFormat))
 	}
 	dir, err := filepath.Abs(option.dir)
