@@ -725,6 +725,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         operator: Exists
+      - effect: NoExecute
+        operator: Exists
       volumes:
       - configMap:
           name: antrea-config-ff5ff2btgc
