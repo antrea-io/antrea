@@ -317,7 +317,9 @@ func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*c
 	return prevResult, nil
 }
 
-func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8sArgs, prevResult *current.Result) (*cnipb.CniCmdResponse, error) {
+// validatePrevResult validates container and host interfaces configuration
+// the return value is nil if prevResult is valid
+func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8sArgs, prevResult *current.Result) *cnipb.CniCmdResponse {
 	containerID := cfgArgs.ContainerId
 	netNS := s.hostNetNsPath(cfgArgs.Netns)
 	podName := string(k8sCNIArgs.K8S_POD_NAME)
@@ -327,7 +329,7 @@ func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8
 	containerIntf := parseContainerIfaceFromResults(cfgArgs, prevResult)
 	if containerIntf == nil {
 		klog.Errorf("Failed to find interface %s of container %s", cfgArgs.Ifname, containerID)
-		return s.invalidNetworkConfigResponse("prevResult does not match network configuration"), nil
+		return s.invalidNetworkConfigResponse("prevResult does not match network configuration")
 	}
 
 	if err := s.podConfigurator.checkInterfaces(
@@ -337,10 +339,10 @@ func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8
 		podNamespace,
 		containerIntf,
 		prevResult); err != nil {
-		return s.checkInterfaceFailureResponse(err), nil
+		return s.checkInterfaceFailureResponse(err)
 	}
 
-	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
+	return nil
 }
 
 func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*cnipb.CniCmdResponse, error) {
@@ -489,8 +491,8 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	if valid, _ := version.GreaterThanOrEqualTo(cniVersion, "0.4.0"); valid {
 		if prevResult, response := s.parsePrevResultFromRequest(cniConfig.NetworkConfig); response != nil {
 			return response, nil
-		} else if response, err := s.validatePrevResult(cniConfig.CniCmdArgs, cniConfig.k8sArgs, prevResult); err != nil {
-			return response, err
+		} else if response := s.validatePrevResult(cniConfig.CniCmdArgs, cniConfig.k8sArgs, prevResult); response != nil {
+			return response, nil
 		}
 	}
 	klog.Info("Succeed to check network configuration")
