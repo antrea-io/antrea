@@ -252,7 +252,7 @@ func TestValidatePrevResult(t *testing.T) {
 		cniConfig := baseCNIConfig()
 		cniConfig.Ifname = "invalid_iface" // invalid
 		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		response, _ := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult)
+		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult)
 		checkErrorResponse(
 			t, response, cnipb.ErrorCode_INVALID_NETWORK_CONFIG,
 			"prevResult does not match network configuration",
@@ -265,7 +265,7 @@ func TestValidatePrevResult(t *testing.T) {
 		cniConfig.Netns = "invalid_netns"
 		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
 		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "")
-		response, _ := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult)
+		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult)
 		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
 	})
 }
