@@ -185,7 +185,7 @@ func TestPodFlows(t *testing.T) {
 		if tc.expectedStatus == http.StatusNotFound {
 			q.EXPECT().GetInterfaceStore().Return(i).Times(1)
 			if tc.port == "pod" {
-				i.EXPECT().GetContainerInterface("inPod", "inNS").Return(nil, false).Times(1)
+				i.EXPECT().GetContainerInterfacesByPod("inPod", "inNS").Return(nil).Times(1)
 			} else {
 				i.EXPECT().GetInterfaceByName(tc.port).Return(nil, false).Times(1)
 			}
@@ -201,12 +201,12 @@ func TestPodFlows(t *testing.T) {
 				q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
 				ofc.EXPECT().GetTunnelVirtualMAC().Return(tunnelVirtualMAC).Times(1)
 			} else if tc.port == "pod" {
-				i.EXPECT().GetContainerInterface("inPod", "inNS").Return(inPodInterface, true).Times(1)
+				i.EXPECT().GetContainerInterfacesByPod("inPod", "inNS").Return([]*interfacestore.InterfaceConfig{inPodInterface}).Times(1)
 			} else if tc.port != "" {
 				i.EXPECT().GetInterfaceByName(tc.port).Return(inPodInterface, true).Times(1)
 			}
-			i.EXPECT().GetContainerInterface("srcPod", "srcNS").Return(srcPodInterface, true).MaxTimes(1)
-			i.EXPECT().GetContainerInterface("dstPod", "dstNS").Return(dstPodInterface, true).MaxTimes(1)
+			i.EXPECT().GetContainerInterfacesByPod("srcPod", "srcNS").Return([]*interfacestore.InterfaceConfig{srcPodInterface}).MaxTimes(1)
+			i.EXPECT().GetContainerInterfacesByPod("dstPod", "dstNS").Return([]*interfacestore.InterfaceConfig{dstPodInterface}).MaxTimes(1)
 
 			if tc.expectedStatus == http.StatusBadRequest {
 				// "ovs-appctl" won't be executed. OVSCtlClient.Trace() will just

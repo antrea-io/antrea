@@ -36,3 +36,9 @@ func (s *CNIServer) hostNetNsPath(netNS string) string {
 func isInfraContainer(netNS string) bool {
 	return true
 }
+
+// getInfraContainer returns the sandbox container ID of a Pod.
+// On Linux, it's always the ContainerID in the request.
+func (c *CNIConfig) getInfraContainer() string {
+	return c.ContainerId
+}

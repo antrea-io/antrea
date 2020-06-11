@@ -99,7 +99,10 @@ func (ic *ifConfigurator) configureContainerLink(
 	mtu int,
 	result *current.Result,
 ) error {
-	epName := util.GenerateContainerInterfaceName(podName, podNameSpace)
+	// We must use the infra container to generate the endpoint name to ensure infra and workload containers use the
+	// same HNSEndpoint.
+	infraContainerID := getInfraContainer(containerID, containerNetNS)
+	epName := util.GenerateContainerInterfaceName(podName, podNameSpace, infraContainerID)
 	// Search endpoint from local cache.
 	endpoint, found := ic.getEndpoint(epName)
 	if !found {
@@ -107,7 +110,7 @@ func (ic *ifConfigurator) configureContainerLink(
 			return fmt.Errorf("failed to find HNSEndpoint: %s", epName)
 		}
 		// Only create HNS Endpoint for infra container.
-		ep, err := ic.createContainerLink(podName, podNameSpace, containerID, result)
+		ep, err := ic.createContainerLink(epName, result)
 		if err != nil {
 			return err
 		}
@@ -138,9 +141,7 @@ func (ic *ifConfigurator) configureContainerLink(
 }
 
 // createContainerLink creates HNSEndpoint using the IP configuration in the IPAM result.
-func (ic *ifConfigurator) createContainerLink(podName string, podNameSpace string, containerID string, result *current.Result) (hostLink *hcsshim.HNSEndpoint, err error) {
-	epName := util.GenerateContainerInterfaceName(podName, podNameSpace)
-
+func (ic *ifConfigurator) createContainerLink(endpointName string, result *current.Result) (hostLink *hcsshim.HNSEndpoint, err error) {
 	// Create a new Endpoint if not found.
 	if err := ic.ensureHNSNetwork(); err != nil {
 		return nil, err
@@ -150,7 +151,7 @@ func (ic *ifConfigurator) createContainerLink(podName string, podNameSpace strin
 		return nil, err
 	}
 	epRequest := &hcsshim.HNSEndpoint{
-		Name:           epName,
+		Name:           endpointName,
 		VirtualNetwork: ic.hnsNetwork.Id,
 		DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
 		DNSSuffix:      strings.Join(result.DNS.Search, ","),

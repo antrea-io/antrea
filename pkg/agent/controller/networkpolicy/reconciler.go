@@ -452,14 +452,16 @@ func (r *reconciler) Forget(ruleID string) error {
 func (r *reconciler) getPodOFPorts(pods v1beta1.GroupMemberPodSet) sets.Int32 {
 	ofPorts := sets.NewInt32()
 	for _, pod := range pods {
-		iface, found := r.ifaceStore.GetContainerInterface(pod.Pod.Name, pod.Pod.Namespace)
-		if !found {
+		ifaces := r.ifaceStore.GetContainerInterfacesByPod(pod.Pod.Name, pod.Pod.Namespace)
+		if len(ifaces) == 0 {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
 			klog.Infof("Can't find interface for Pod %s/%s, skipping", pod.Pod.Namespace, pod.Pod.Name)
 			continue
 		}
-		klog.V(2).Infof("Got OFPort %v for Pod %s/%s", iface.OFPort, pod.Pod.Namespace, pod.Pod.Name)
-		ofPorts.Insert(iface.OFPort)
+		for _, iface := range ifaces {
+			klog.V(2).Infof("Got OFPort %v for Pod %s/%s", iface.OFPort, pod.Pod.Namespace, pod.Pod.Name)
+			ofPorts.Insert(iface.OFPort)
+		}
 	}
 	return ofPorts
 }
@@ -467,14 +469,16 @@ func (r *reconciler) getPodOFPorts(pods v1beta1.GroupMemberPodSet) sets.Int32 {
 func (r *reconciler) getPodIPs(pods v1beta1.GroupMemberPodSet) sets.String {
 	ips := sets.NewString()
 	for _, pod := range pods {
-		iface, found := r.ifaceStore.GetContainerInterface(pod.Pod.Name, pod.Pod.Namespace)
-		if !found {
+		ifaces := r.ifaceStore.GetContainerInterfacesByPod(pod.Pod.Name, pod.Pod.Namespace)
+		if len(ifaces) == 0 {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
 			klog.Infof("Can't find interface for Pod %s/%s, skipping", pod.Pod.Namespace, pod.Pod.Name)
 			continue
 		}
-		klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IP, pod.Pod.Namespace, pod.Pod.Name)
-		ips.Insert(iface.IP.String())
+		for _, iface := range ifaces {
+			klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IP, pod.Pod.Namespace, pod.Pod.Name)
+			ips.Insert(iface.IP.String())
+		}
 	}
 	return ips
 }

@@ -101,7 +101,7 @@ func TestPodFlows(t *testing.T) {
 		if tc.expectedStatus != http.StatusNotFound {
 			ofc := oftest.NewMockClient(ctrl)
 			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
-			i.EXPECT().GetContainerInterface(tc.name, tc.namespace).Return(testInterface, true).Times(1)
+			i.EXPECT().GetContainerInterfacesByPod(tc.name, tc.namespace).Return([]*interfacestore.InterfaceConfig{testInterface}).Times(1)
 			ofc.EXPECT().GetPodFlowKeys(testInterface.InterfaceName).Return(testFlowKeys).Times(1)
 			q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
 			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
@@ -109,7 +109,7 @@ func TestPodFlows(t *testing.T) {
 				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpResults[i], nil).Times(1)
 			}
 		} else {
-			i.EXPECT().GetContainerInterface(tc.name, tc.namespace).Return(nil, false).Times(1)
+			i.EXPECT().GetContainerInterfacesByPod(tc.name, tc.namespace).Return(nil).Times(1)
 		}
 
 		runHTTPTest(t, &tc, q)

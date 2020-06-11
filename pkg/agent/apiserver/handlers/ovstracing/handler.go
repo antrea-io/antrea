@@ -86,10 +86,10 @@ func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer) (net.IP, *interf
 		return intf.IP, intf, nil
 	}
 
-	intf, ok := aq.GetInterfaceStore().GetContainerInterface(peer.name, peer.namespace)
-	if ok {
+	interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(peer.name, peer.namespace)
+	if len(interfaces) > 0 {
 		// Local Pod.
-		return intf.IP, intf, nil
+		return interfaces[0].IP, interfaces[0], nil
 	}
 
 	// Try getting the Pod from K8s API.
@@ -115,7 +115,11 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 		if req.inputPort.ovsPort != "" {
 			inPort, ok = aq.GetInterfaceStore().GetInterfaceByName(req.inputPort.ovsPort)
 		} else if req.inputPort.name != "" {
-			inPort, ok = aq.GetInterfaceStore().GetContainerInterface(req.inputPort.name, req.inputPort.namespace)
+			interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(req.inputPort.name, req.inputPort.namespace)
+			if len(interfaces) > 0 {
+				inPort = interfaces[0]
+				ok = true
+			}
 		}
 		if !ok {
 			return nil, handlers.NewHandlerError(errors.New("Input port not found"), http.StatusNotFound)
