@@ -23,12 +23,14 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -213,12 +215,12 @@ func (pc *podConfigurator) configureInterfaces(
 
 	// Check if the OVS configurations for the container exists or not. If yes, return immediately. This check is
 	// used on Windows, as kubelet on Windows will call CNI Add for infrastructure container for multiple times
-	// to query IP of Pod. But there should be only one OVS port created for the same Pod. And if the OVS port is added more than
-	// once, OVS will return an error.
+	// to query IP of Pod. But there should be only one OVS port created for the same Pod (identified by its sandbox
+	// container ID). And if the OVS port is added more than once, OVS will return an error.
 	// See https://github.com/kubernetes/kubernetes/issues/57253#issuecomment-358897721.
-	_, found := pc.ifaceStore.GetContainerInterface(podName, podNameSpace)
+	_, found := pc.ifaceStore.GetContainerInterface(containerID)
 	if found {
-		klog.V(2).Infof("Found an existed OVS port with podName %s podNamespace %s, returning", podName, podNameSpace)
+		klog.V(2).Infof("Found an existing OVS port for container %s, returning", containerID)
 		// Mark the operation as successful, otherwise the container link might be removed by mistake.
 		success = true
 		return nil
@@ -262,8 +264,8 @@ func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[s
 	}
 }
 
-func (pc *podConfigurator) removeInterfaces(podName, podNamespace, containerID string) error {
-	containerConfig, found := pc.ifaceStore.GetContainerInterface(podName, podNamespace)
+func (pc *podConfigurator) removeInterfaces(containerID string) error {
+	containerConfig, found := pc.ifaceStore.GetContainerInterface(containerID)
 	if !found {
 		klog.V(2).Infof("Did not find the port for container %s in local cache", containerID)
 		return nil
@@ -290,7 +292,7 @@ func (pc *podConfigurator) removeInterfaces(podName, podNamespace, containerID s
 }
 
 func (pc *podConfigurator) checkInterfaces(
-	containerID, containerNetNS, podName, podNamespace string,
+	containerID, containerNetNS string,
 	containerIface *current.Interface,
 	prevResult *current.Result) error {
 	if containerVeth, err := pc.ifConfigurator.checkContainerInterface(
@@ -302,8 +304,6 @@ func (pc *podConfigurator) checkInterfaces(
 		return err
 	} else if err := pc.checkHostInterface(
 		containerID,
-		podName,
-		podNamespace,
 		containerIface,
 		containerVeth,
 		prevResult.IPs,
@@ -314,7 +314,7 @@ func (pc *podConfigurator) checkInterfaces(
 }
 
 func (pc *podConfigurator) checkHostInterface(
-	containerID, podName, podNamespace string,
+	containerID string,
 	containerIntf *current.Interface,
 	containerVeth *vethPair,
 	containerIPs []*current.IPConfig,
@@ -325,11 +325,7 @@ func (pc *podConfigurator) checkHostInterface(
 			containerID, errlink)
 		return errlink
 	}
-	if err := pc.validateOVSInterfaceConfig(containerID,
-		podName,
-		podNamespace,
-		containerIntf.Mac,
-		containerIPs); err != nil {
+	if err := pc.validateOVSInterfaceConfig(containerID, containerIntf.Mac, containerIPs); err != nil {
 		klog.Errorf("Failed to check host link %s for container %s attaching status on ovs. err: %v",
 			hostVeth.name, containerID, err)
 		return err
@@ -337,11 +333,8 @@ func (pc *podConfigurator) checkHostInterface(
 	return nil
 }
 
-func (pc *podConfigurator) validateOVSInterfaceConfig(
-	containerID, podName, podNamespace string,
-	containerMAC string,
-	ips []*current.IPConfig) error {
-	if containerConfig, found := pc.ifaceStore.GetContainerInterface(podName, podNamespace); found {
+func (pc *podConfigurator) validateOVSInterfaceConfig(containerID string, containerMAC string, ips []*current.IPConfig) error {
+	if containerConfig, found := pc.ifaceStore.GetContainerInterface(containerID); found {
 		if containerConfig.MAC.String() != containerMAC {
 			return fmt.Errorf("interface MAC %s does not match container %s MAC",
 				containerConfig.MAC.String(), containerID)
@@ -379,71 +372,62 @@ func parsePrevResult(conf *NetworkConfig) error {
 }
 
 func (pc *podConfigurator) reconcile(pods []corev1.Pod) error {
-	// desiredInterfaces is the exact set of interfaces that should be present, based on the
-	// current list of Pods.
-	desiredInterfaces := make(map[string]bool)
+	// desiredPods is the set of Pods that should be present, based on the
+	// current list of Pods got from the Kubernetes API.
+	desiredPods := sets.NewString()
+	// actualPods is the set of Pods that are present, based on the container
+	// interfaces got from the OVSDB.
+	actualPods := sets.NewString()
 	// knownInterfaces is the list of interfaces currently in the local cache.
-	knownInterfaces := pc.ifaceStore.GetInterfaceKeysByType(interfacestore.ContainerInterface)
+	knownInterfaces := pc.ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
 
 	for _, pod := range pods {
 		// Skip Pods for which we are not in charge of the networking.
 		if pod.Spec.HostNetwork {
 			continue
 		}
-
-		// We rely on the interface cache / store - which is initialized from the persistent
-		// OVSDB - to map the Pod to its interface configuration. The interface
-		// configuration includes the parameters we need to replay the flows.
-		containerConfig, found := pc.ifaceStore.GetContainerInterface(pod.Name, pod.Namespace)
-		if !found {
-			// This should not happen since OVSDB is persisted on the Node.
-			// TODO: is there anything else we should be doing? Assuming that the Pod's
-			// interface still exists, we can repair the interface store since we can
-			// retrieve the name of the host interface for the Pod by calling
-			// GenerateContainerInterfaceName. One thing we would not be able to
-			// retrieve is the container ID which is part of the container configuration
-			// we store in the cache, but this ID is not used for anything at the
-			// moment. However, if the interface does not exist, there is nothing we can
-			// do since we do not have the original CNI parameters.
-			klog.Warningf("Interface for Pod %s/%s not found in the interface store", pod.Namespace, pod.Name)
-			continue
-		}
-		klog.V(4).Infof("Syncing interface %s for Pod %s/%s", containerConfig.InterfaceName, pod.Namespace, pod.Name)
-		if err := pc.ofClient.InstallPodFlows(
-			containerConfig.InterfaceName,
-			containerConfig.IP,
-			containerConfig.MAC,
-			pc.gatewayMAC,
-			uint32(containerConfig.OFPort),
-		); err != nil {
-			klog.Errorf("Error when re-installing flows for Pod %s/%s", pod.Namespace, pod.Name)
-			continue
-		}
-		desiredInterfaces[util.GenerateContainerInterfaceKey(pod.Name, pod.Namespace)] = true
+		desiredPods.Insert(k8s.NamespacedName(pod.Namespace, pod.Name))
 	}
 
-	for _, ifaceID := range knownInterfaces {
-		if _, found := desiredInterfaces[ifaceID]; found {
-			// this interface matches an existing Pod.
-			continue
+	for _, containerConfig := range knownInterfaces {
+		namespacedName := k8s.NamespacedName(containerConfig.PodNamespace, containerConfig.PodName)
+		actualPods.Insert(namespacedName)
+		if desiredPods.Has(namespacedName) {
+			// This interface matches an existing Pod.
+			// We rely on the interface cache / store - which is initialized from the persistent
+			// OVSDB - to map the Pod to its interface configuration. The interface
+			// configuration includes the parameters we need to replay the flows.
+			klog.V(4).Infof("Syncing interface %s for Pod %s", containerConfig.InterfaceName, namespacedName)
+			if err := pc.ofClient.InstallPodFlows(
+				containerConfig.InterfaceName,
+				containerConfig.IP,
+				containerConfig.MAC,
+				pc.gatewayMAC,
+				uint32(containerConfig.OFPort),
+			); err != nil {
+				klog.Errorf("Error when re-installing flows for Pod %s", namespacedName)
+			}
+		} else {
+			// clean-up and delete interface
+			klog.V(4).Infof("Deleting interface %s", containerConfig.InterfaceName)
+			if err := pc.removeInterfaces(containerConfig.ContainerID); err != nil {
+				klog.Errorf("Failed to delete interface %s: %v", containerConfig.InterfaceName, err)
+			}
+			// interface should no longer be in store after the call to removeInterfaces
 		}
-		// clean-up and delete interface
-		containerConfig, found := pc.ifaceStore.GetInterface(ifaceID)
-		if !found {
-			// should not happen, nothing should have concurrent access to the interface
-			// store.
-			klog.Errorf("Interface %s can no longer be found in the interface store", ifaceID)
-			continue
-		}
-		klog.V(4).Infof("Deleting interface %s", ifaceID)
-		if err := pc.removeInterfaces(
-			containerConfig.PodName,
-			containerConfig.PodNamespace,
-			containerConfig.ContainerID,
-		); err != nil {
-			klog.Errorf("Failed to delete interface %s: %v", ifaceID, err)
-		}
-		// interface should no longer be in store after the call to removeInterfaces
+	}
+
+	for pod := range desiredPods.Difference(actualPods) {
+		// This should not happen since OVSDB is persisted on the Node.
+		// TODO: is there anything else we should be doing? Assuming that the Pod's
+		// interface still exists, we can repair the interface store since we can
+		// retrieve the name of the host interface for the Pod by calling
+		// GenerateContainerInterfaceName. One thing we would not be able to
+		// retrieve is the container ID which is part of the container configuration
+		// we store in the cache, but this ID is not used for anything at the
+		// moment. However, if the interface does not exist, there is nothing we can
+		// do since we do not have the original CNI parameters.
+		klog.Warningf("Interface for Pod %s not found in the interface store", pod)
 	}
 	return nil
 }
@@ -542,7 +526,7 @@ func (pc *podConfigurator) connectInterceptedInterface(
 
 // disconnectInterceptedInterface disconnects intercepted interface from ovs br-int.
 func (pc *podConfigurator) disconnectInterceptedInterface(podName, podNamespace, containerID string) error {
-	containerConfig, found := pc.ifaceStore.GetContainerInterface(podName, podNamespace)
+	containerConfig, found := pc.ifaceStore.GetContainerInterface(containerID)
 	if !found {
 		klog.V(2).Infof("Did not find the port for container %s in local cache", containerID)
 		return nil
