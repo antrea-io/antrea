@@ -16,6 +16,7 @@ package interfacestore
 
 import (
 	"net"
+	"strconv"
 
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
@@ -32,6 +33,10 @@ const (
 )
 
 type InterfaceType uint8
+
+func (t InterfaceType) String() string {
+	return strconv.Itoa(int(t))
+}
 
 type OVSPortConfig struct {
 	PortUUID string
@@ -74,12 +79,12 @@ type InterfaceStore interface {
 	DeleteInterface(interfaceConfig *InterfaceConfig)
 	GetInterface(interfaceKey string) (*InterfaceConfig, bool)
 	GetInterfaceByName(interfaceName string) (*InterfaceConfig, bool)
-	GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool)
+	GetContainerInterface(containerID string) (*InterfaceConfig, bool)
+	GetContainerInterfacesByPod(podName string, podNamespace string) []*InterfaceConfig
 	GetNodeTunnelInterface(nodeName string) (*InterfaceConfig, bool)
 	GetContainerInterfaceNum() int
 	GetInterfacesByType(interfaceType InterfaceType) []*InterfaceConfig
 	Len() int
-	GetInterfaceKeys() []string
 	GetInterfaceKeysByType(interfaceType InterfaceType) []string
 }
 

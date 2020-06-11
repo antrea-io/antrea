@@ -322,8 +322,6 @@ func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*c
 func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8sArgs, prevResult *current.Result) *cnipb.CniCmdResponse {
 	containerID := cfgArgs.ContainerId
 	netNS := s.hostNetNsPath(cfgArgs.Netns)
-	podName := string(k8sCNIArgs.K8S_POD_NAME)
-	podNamespace := string(k8sCNIArgs.K8S_POD_NAMESPACE)
 
 	// Find interfaces from previous configuration
 	containerIntf := parseContainerIfaceFromResults(cfgArgs, prevResult)
@@ -335,8 +333,6 @@ func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8
 	if err := s.podConfigurator.checkInterfaces(
 		containerID,
 		netNS,
-		podName,
-		podNamespace,
 		containerIntf,
 		prevResult); err != nil {
 		return s.checkInterfaceFailureResponse(err)
@@ -372,8 +368,9 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		}
 	}()
 
-	s.containerAccess.lockContainer(cniConfig.getContainerKey())
-	defer s.containerAccess.unlockContainer(cniConfig.getContainerKey())
+	infraContainer := cniConfig.getInfraContainer()
+	s.containerAccess.lockContainer(infraContainer)
+	defer s.containerAccess.unlockContainer(infraContainer)
 
 	if s.isChaining {
 		resp, err := s.interceptAdd(cniConfig)
@@ -383,18 +380,17 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		return resp, err
 	}
 
-	podKey := util.GenerateContainerInterfaceName(string(cniConfig.K8S_POD_NAME), string(cniConfig.K8S_POD_NAMESPACE))
 	var ipamResult *current.Result
 	var err error
 	// Only allocate IP when handling CNI request from infra container.
 	// On windows platform, CNI plugin is called for all containers in a Pod.
 	if !isInfraContainer {
-		if ipamResult, _ = ipam.GetIPFromCache(podKey); ipamResult == nil {
+		if ipamResult, _ = ipam.GetIPFromCache(infraContainer); ipamResult == nil {
 			return nil, fmt.Errorf("allocated IP address not found")
 		}
 	} else {
 		// Request IP Address from IPAM driver.
-		ipamResult, err = ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, podKey)
+		ipamResult, err = ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, infraContainer)
 		if err != nil {
 			klog.Errorf("Failed to add IP addresses from IPAM driver: %v", err)
 			return s.ipamFailureResponse(err), nil
@@ -443,23 +439,21 @@ func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (
 		return response, nil
 	}
 
-	s.containerAccess.lockContainer(cniConfig.getContainerKey())
-	defer s.containerAccess.unlockContainer(cniConfig.getContainerKey())
+	infraContainer := cniConfig.getInfraContainer()
+	s.containerAccess.lockContainer(infraContainer)
+	defer s.containerAccess.unlockContainer(infraContainer)
 
 	if s.isChaining {
 		return s.interceptDel(cniConfig)
 	}
-	podKey := util.GenerateContainerInterfaceName(string(cniConfig.K8S_POD_NAME), string(cniConfig.K8S_POD_NAMESPACE))
 	// Release IP to IPAM driver
-	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, podKey); err != nil {
+	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, infraContainer); err != nil {
 		klog.Errorf("Failed to delete IP addresses by IPAM driver: %v", err)
 		return s.ipamFailureResponse(err), nil
 	}
 	klog.Info("Deleted IP addresses by IPAM driver")
 	// Remove host interface and OVS configuration
-	podName := string(cniConfig.K8S_POD_NAME)
-	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
-	if err := s.podConfigurator.removeInterfaces(podName, podNamespace, cniConfig.ContainerId); err != nil {
+	if err := s.podConfigurator.removeInterfaces(cniConfig.ContainerId); err != nil {
 		klog.Errorf("Failed to remove interfaces for container %s: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
@@ -475,8 +469,9 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 		return response, nil
 	}
 
-	s.containerAccess.lockContainer(cniConfig.getContainerKey())
-	defer s.containerAccess.unlockContainer(cniConfig.getContainerKey())
+	infraContainer := cniConfig.getInfraContainer()
+	s.containerAccess.lockContainer(infraContainer)
+	defer s.containerAccess.unlockContainer(infraContainer)
 
 	if s.isChaining {
 		return s.interceptCheck(cniConfig)
@@ -497,11 +492,6 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	}
 	klog.Info("Succeed to check network configuration")
 	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
-}
-
-// getContainerKey returns the key of a Pod, which is a string with format "$K8S_POD_NAMESPACE/$K8S_POD_NAME".
-func (c *CNIConfig) getContainerKey() string {
-	return fmt.Sprintf("%s/%s", string(c.K8S_POD_NAMESPACE), string(c.K8S_POD_NAME))
 }
 
 func New(

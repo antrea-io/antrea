@@ -399,7 +399,7 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 	testRequire.Equal(tester.targetNS.Path(), result.Interfaces[1].Sandbox)
 
 	// Check for the veth link in the test namespace.
-	hostIfaceName := util.GenerateContainerInterfaceName(testPod, testPodNamespace)
+	hostIfaceName := util.GenerateContainerInterfaceName(testPod, testPodNamespace, ContainerID)
 	testRequire.Equal(hostIfaceName, result.Interfaces[0].Name)
 	testRequire.Len(result.Interfaces[0].Mac, 17)
 
@@ -574,7 +574,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	ipamMock.EXPECT().Add(mock.Any(), mock.Any()).Return(ipamResult, nil).AnyTimes()
 
 	// Mock ovs output while get ovs port external configuration
-	ovsPortname := util.GenerateContainerInterfaceName(testPod, testPodNamespace)
+	ovsPortname := util.GenerateContainerInterfaceName(testPod, testPodNamespace, ContainerID)
 	ovsPortUUID := uuid.New().String()
 	ovsServiceMock.EXPECT().CreatePort(ovsPortname, ovsPortname, mock.Any()).Return(ovsPortUUID, nil).AnyTimes()
 	ovsServiceMock.EXPECT().GetOFPort(ovsPortname).Return(int32(10), nil).AnyTimes()

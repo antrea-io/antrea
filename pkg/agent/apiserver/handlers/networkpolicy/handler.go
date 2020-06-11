@@ -46,8 +46,8 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			}
 		} else if pod != "" {
 			// Query NetworkPolicies applied to the Pod
-			_, ok := aq.GetInterfaceStore().GetContainerInterface(pod, ns)
-			if ok {
+			interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(pod, ns)
+			if len(interfaces) > 0 {
 				nps := npq.GetAppliedNetworkPolicies(pod, ns)
 				obj = networkingv1beta1.NetworkPolicyList{Items: nps}
 			}

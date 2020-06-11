@@ -89,13 +89,13 @@ func TestInitstore(t *testing.T) {
 	if store.Len() != 2 {
 		t.Errorf("Failed to load OVS port in store")
 	}
-	container1, found1 := store.GetContainerInterface("pod1", "ns1")
+	container1, found1 := store.GetContainerInterface(uuid1)
 	if !found1 {
 		t.Errorf("Failed to load OVS port into local store")
 	} else if container1.OFPort != 1 || container1.IP.String() != p1IP || container1.MAC.String() != p1MAC || container1.InterfaceName != "p1" {
 		t.Errorf("Failed to load OVS port configuration into local store")
 	}
-	_, found2 := store.GetContainerInterface("pod2", "ns2")
+	_, found2 := store.GetContainerInterface(uuid2)
 	if !found2 {
 		t.Errorf("Failed to load OVS port into local store")
 	}
