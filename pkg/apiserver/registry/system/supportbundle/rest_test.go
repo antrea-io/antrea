@@ -66,7 +66,7 @@ func TestClean(t *testing.T) {
 			require.NoError(t, err)
 			defer defaultFS.Remove(f.Name())
 			require.NoError(t, f.Close())
-			storage := NewStorage("controller", nil)
+			storage := NewControllerStorage()
 			ctx, cancelFunc := context.WithCancel(context.Background())
 			if tc.needCancel {
 				cancelFunc()

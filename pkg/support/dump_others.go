@@ -12,60 +12,79 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !linux
+// +build !windows
 
 package support
 
 import (
+	"flag"
 	"fmt"
+	"path"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/afero"
-	"k8s.io/utils/exec"
 
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
 )
 
-// TODO: Implement it when antrea on windows is ready and antctl installation .
-type agentDumper struct {
-	fs           afero.Fs
-	executor     exec.Interface
-	ovsCtlClient ovsctl.OVSCtlClient
-}
-
-func (d *agentDumper) DumpAgentInfo(basedir string) error {
-	return nil
-}
-
-func (d *agentDumper) DumpNetworkPolicyResources(basedir string) error {
-	return nil
-}
-
 func (d *agentDumper) DumpLog(basedir string) error {
-	return nil
-}
-
-func (d *agentDumper) DumpFlows(basedir string) error {
-	flows, err := d.ovsCtlClient.DumpFlows()
-	if err != nil {
-		return fmt.Errorf("error when dumping flows: %w", err)
+	logDirFlag := flag.CommandLine.Lookup("log_dir")
+	var logDir string
+	if logDirFlag == nil {
+		logDir = antreaLinuxWellKnownLogDir
+	} else if len(logDirFlag.Value.String()) == 0 {
+		logDir = logDirFlag.DefValue
+	} else {
+		logDir = logDirFlag.Value.String()
 	}
-	err = afero.WriteFile(d.fs, filepath.Join(basedir, "flows"), []byte(strings.Join(flows, "\n")), 0644)
-	if err != nil {
-		return fmt.Errorf("error when creating flows output file: %w", err)
+	if err := fileCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent"); err != nil {
+		return err
 	}
-	return nil
+	return fileCopy(d.fs, path.Join(basedir, "logs", "ovs"), logDir, "ovs")
 }
 
 func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
+	if err := d.dumpIPTables(basedir); err != nil {
+		return err
+	}
+	if err := d.dumpIPToolInfo(basedir); err != nil {
+		return err
+	}
 	return nil
 }
 
-func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient) AgentDumper {
-	return &agentDumper{
-		fs:           fs,
-		executor:     executor,
-		ovsCtlClient: ovsCtlClient,
+func (d *agentDumper) dumpIPTables(basedir string) error {
+	c, err := iptables.New()
+	if err != nil {
+		return err
 	}
+	data, err := c.Save()
+	if err != nil {
+		return err
+	}
+	err = afero.WriteFile(d.fs, filepath.Join(basedir, "iptables"), data, 0644)
+	if err != nil {
+		return fmt.Errorf("error when writing iptables dumps: %w", err)
+	}
+	return nil
+}
+
+func (d *agentDumper) dumpIPToolInfo(basedir string) error {
+	dump := func(name string) error {
+		output, err := d.executor.Command("ip", name).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("error when dumping %s: %w", name, err)
+		}
+		err = afero.WriteFile(d.fs, filepath.Join(basedir, name), output, 0644)
+		if err != nil {
+			return fmt.Errorf("error when writing %s: %w", name, err)
+		}
+		return nil
+	}
+	for _, item := range []string{"route", "link", "address"} {
+		if err := dump(item); err != nil {
+			return err
+		}
+	}
+	return nil
 }
