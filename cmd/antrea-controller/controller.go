@@ -134,7 +134,7 @@ func createAPIServerConfig(kubeconfig string,
 	enableMetrics bool) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
-	authorization := genericoptions.NewDelegatingAuthorizationOptions()
+	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz")
 
 	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, secureServing)
 	if err != nil {
