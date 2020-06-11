@@ -43,10 +43,16 @@ func generateInterfaceName(key string, name string, useHead bool) string {
 	return fmt.Sprintf("%s-%s", prefix, interfaceKey[:interfaceKeyLength])
 }
 
-// GenerateContainerInterfaceKey generates a unique string for a Pod
-// interface as: pod/<Pod-Namespace-name>/<Pod-name>.
-func GenerateContainerInterfaceKey(podName, podNamespace string) string {
-	return fmt.Sprintf("pod/%s/%s", podNamespace, podName)
+// GenerateContainerInterfaceKey generates a unique string for a Pod's
+// interface as: container/<Container-ID>.
+// We must use ContainerID instead of PodNamespace + PodName because there could
+// be more than one container associated with the same Pod at some point.
+// For example, when deleting a StatefulSet Pod with 0 second grace period, the
+// Pod will be removed from the Kubernetes API very quickly and a new Pod will
+// be created immediately, and kubelet may process the deletion of the previous
+// Pod and the addition of the new Pod simultaneously.
+func GenerateContainerInterfaceKey(containerID string) string {
+	return fmt.Sprintf("container/%s", containerID)
 }
 
 // GenerateNodeTunnelInterfaceKey generates a unique string for a Node's
@@ -56,12 +62,14 @@ func GenerateNodeTunnelInterfaceKey(nodeName string) string {
 }
 
 // GenerateContainerInterfaceName generates a unique interface name using the
-// Pod's Namespace and name. The output should be deterministic (so that
+// Pod's namespace, name and containerID. The output should be deterministic (so that
 // multiple calls to GenerateContainerInterfaceName with the same parameters
 // return the same value). The output has the length of interfaceNameLength(15).
 // The probability of collision should be neglectable.
-func GenerateContainerInterfaceName(podName string, podNamespace string) string {
-	return generateInterfaceName(GenerateContainerInterfaceKey(podNamespace, podName), podName, true)
+func GenerateContainerInterfaceName(podName, podNamespace, containerID string) string {
+	// Use the podName as the prefix and the containerID as the hashing key.
+	// podNamespace is not used currently.
+	return generateInterfaceName(containerID, podName, true)
 }
 
 // GenerateNodeTunnelInterfaceName generates a unique interface name for the

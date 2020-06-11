@@ -73,18 +73,18 @@ func (mr *MockInterfaceStoreMockRecorder) DeleteInterface(arg0 interface{}) *gom
 }
 
 // GetContainerInterface mocks base method
-func (m *MockInterfaceStore) GetContainerInterface(arg0, arg1 string) (*interfacestore.InterfaceConfig, bool) {
+func (m *MockInterfaceStore) GetContainerInterface(arg0 string) (*interfacestore.InterfaceConfig, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetContainerInterface", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetContainerInterface", arg0)
 	ret0, _ := ret[0].(*interfacestore.InterfaceConfig)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
 
 // GetContainerInterface indicates an expected call of GetContainerInterface
-func (mr *MockInterfaceStoreMockRecorder) GetContainerInterface(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockInterfaceStoreMockRecorder) GetContainerInterface(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainerInterface", reflect.TypeOf((*MockInterfaceStore)(nil).GetContainerInterface), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainerInterface", reflect.TypeOf((*MockInterfaceStore)(nil).GetContainerInterface), arg0)
 }
 
 // GetContainerInterfaceNum mocks base method
@@ -99,6 +99,20 @@ func (m *MockInterfaceStore) GetContainerInterfaceNum() int {
 func (mr *MockInterfaceStoreMockRecorder) GetContainerInterfaceNum() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainerInterfaceNum", reflect.TypeOf((*MockInterfaceStore)(nil).GetContainerInterfaceNum))
+}
+
+// GetContainerInterfacesByPod mocks base method
+func (m *MockInterfaceStore) GetContainerInterfacesByPod(arg0, arg1 string) []*interfacestore.InterfaceConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetContainerInterfacesByPod", arg0, arg1)
+	ret0, _ := ret[0].([]*interfacestore.InterfaceConfig)
+	return ret0
+}
+
+// GetContainerInterfacesByPod indicates an expected call of GetContainerInterfacesByPod
+func (mr *MockInterfaceStoreMockRecorder) GetContainerInterfacesByPod(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainerInterfacesByPod", reflect.TypeOf((*MockInterfaceStore)(nil).GetContainerInterfacesByPod), arg0, arg1)
 }
 
 // GetInterface mocks base method
@@ -129,20 +143,6 @@ func (m *MockInterfaceStore) GetInterfaceByName(arg0 string) (*interfacestore.In
 func (mr *MockInterfaceStoreMockRecorder) GetInterfaceByName(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceByName", reflect.TypeOf((*MockInterfaceStore)(nil).GetInterfaceByName), arg0)
-}
-
-// GetInterfaceKeys mocks base method
-func (m *MockInterfaceStore) GetInterfaceKeys() []string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetInterfaceKeys")
-	ret0, _ := ret[0].([]string)
-	return ret0
-}
-
-// GetInterfaceKeys indicates an expected call of GetInterfaceKeys
-func (mr *MockInterfaceStoreMockRecorder) GetInterfaceKeys() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceKeys", reflect.TypeOf((*MockInterfaceStore)(nil).GetInterfaceKeys))
 }
 
 // GetInterfaceKeysByType mocks base method
