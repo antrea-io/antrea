@@ -47,15 +47,14 @@ func newInterfaceConfigurator(ovsDatapathType string) (*ifConfigurator, error) {
 // setupInterfaces creates a veth pair: containerIface is in the container
 // network namespace and hostIface is in the host network namespace.
 func (ic *ifConfigurator) setupInterfaces(
-	podName, podNamespace, ifname string,
+	hostIfaceName, containerIfaceName string,
 	netns ns.NetNS,
 	mtu int) (hostIface *current.Interface, containerIface *current.Interface, err error) {
-	hostVethName := util.GenerateContainerInterfaceName(podName, podNamespace)
 	hostIface = &current.Interface{}
 	containerIface = &current.Interface{}
 
 	if err := netns.Do(func(hostNS ns.NetNS) error {
-		hostVeth, containerVeth, err := ip.SetupVethWithName(ifname, hostVethName, mtu, hostNS)
+		hostVeth, containerVeth, err := ip.SetupVethWithName(containerIfaceName, hostIfaceName, mtu, hostNS)
 		if err != nil {
 			return err
 		}
@@ -78,20 +77,6 @@ func (ic *ifConfigurator) setupInterfaces(
 	}
 
 	return hostIface, containerIface, nil
-}
-
-// configureContainerAddr takes the result of the IPAM plugin, and adds the appropriate IP
-// addresses and routes to the interface. It then sends a gratuitous ARP to the network.
-func configureContainerAddr(netns ns.NetNS, containerInterface *current.Interface, result *current.Result) error {
-	if err := netns.Do(func(containerNs ns.NetNS) error {
-		if err := ipam.ConfigureIface(containerInterface.Name, result); err != nil {
-			return err
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	return nil
 }
 
 // advertiseContainerAddr sends 3 GARP packets in another goroutine with 50ms interval. It's because Openflow entries are
@@ -138,10 +123,10 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 
 func (ic *ifConfigurator) configureContainerLink(
 	podName string,
-	podNameSpace string,
+	podNamespace string,
 	containerID string,
 	containerNetNS string,
-	containerIFDev string,
+	containerIfaceName string,
 	mtu int,
 	result *current.Result,
 ) error {
@@ -151,18 +136,18 @@ func (ic *ifConfigurator) configureContainerLink(
 	}
 	defer netns.Close()
 	// Create veth pair and link up
-	hostIface, containerIface, err := ic.setupInterfaces(podName, podNameSpace, containerIFDev, netns, mtu)
+	hostIfaceName := util.GenerateContainerInterfaceName(podName, podNamespace, containerID)
+	hostIface, containerIface, err := ic.setupInterfaces(hostIfaceName, containerIfaceName, netns, mtu)
 	if err != nil {
 		return fmt.Errorf("failed to create veth devices for container %s: %v", containerID, err)
 	}
 
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 
-	// Note that configuring IP will send gratuitous ARP, it must be executed
-	// after Pod Openflow entries are installed, otherwise gratuitous ARP would
-	// be dropped.
 	klog.V(2).Infof("Configuring IP address for container %s", containerID)
-	if err = configureContainerAddr(netns, containerIface, result); err != nil {
+	if err := netns.Do(func(_ ns.NetNS) error {
+		return ipam.ConfigureIface(containerIface.Name, result)
+	}); err != nil {
 		return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
 	}
 	return nil
