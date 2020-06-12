@@ -25,9 +25,8 @@ const (
 
 	defaultConnNetwork = "winpipe"
 	namedPipePrefix    = `\\.\pipe\`
-	// Wait up to 2 seconds when get port, the operation of port creation
-	// takes longer on Windows platform than on Linux.
-	defaultGetPortTimeout = 2 * time.Second
+	// Wait up to 5 seconds when getting port.
+	defaultGetPortTimeout = 5 * time.Second
 )
 
 func GetConnAddress(ovsRunDir string) string {
