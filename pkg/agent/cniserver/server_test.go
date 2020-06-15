@@ -132,6 +132,7 @@ func TestIPAMService(t *testing.T) {
 
 	t.Run("Error on ADD", func(t *testing.T) {
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Return(nil)
 		response, err := cniServer.CmdAdd(cxt, &requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
@@ -165,7 +166,7 @@ func TestIPAMService(t *testing.T) {
 
 	t.Run("Idempotent Call of IPAM ADD/DEL for the same Pod", func(t *testing.T) {
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Times(1)
-		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(1)
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(2)
 		cniConfig, response := cniServer.checkRequestMessage(&requestMsg)
 		require.Nil(t, response, "expected no rpc error")
 		podKey := util.GenerateContainerInterfaceName(string(cniConfig.K8S_POD_NAME), string(cniConfig.K8S_POD_NAMESPACE))
@@ -182,7 +183,7 @@ func TestIPAMService(t *testing.T) {
 
 	t.Run("Idempotent Call of IPAM ADD/DEL for the same Pod with different containers", func(t *testing.T) {
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Times(1)
-		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(1)
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(2)
 		cniConfig, response := cniServer.checkRequestMessage(&requestMsg)
 		require.Nil(t, response, "expected no rpc error")
 		podKey := util.GenerateContainerInterfaceName(string(cniConfig.K8S_POD_NAME), string(cniConfig.K8S_POD_NAMESPACE))

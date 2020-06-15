@@ -26,9 +26,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 )
 
 // TestDeploy is a "no-op" test that simply performs setup and teardown.
@@ -75,15 +75,25 @@ func TestPodAssignIP(t *testing.T) {
 }
 
 func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName string) {
-	ifName := util.GenerateContainerInterfaceName(podName, testNamespace)
-	t.Logf("Host interface name for Pod is '%s'", ifName)
-
 	var antreaPodName string
 	var err error
 	if antreaPodName, err = data.getAntreaPodOnNode(nodeName); err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
+
+	cmds := []string{"antctl", "get", "podinterface", podName, "-n", testNamespace, "-o", "json"}
+	stdout, _, err := runAntctl(antreaPodName, cmds, data, t)
+	var podInterfaces []podinterface.Response
+	if err := json.Unmarshal([]byte(stdout), &podInterfaces); err != nil {
+		t.Fatalf("Error when querying the pod interface: %v", err)
+	}
+	if len(podInterfaces) != 1 {
+		t.Fatalf("Expected 1 pod interface, got %d", len(podInterfaces))
+	}
+	ifName := podInterfaces[0].InterfaceName
+	podIP := podInterfaces[0].IP
+	t.Logf("Host interface name for Pod is '%s'", ifName)
 
 	doesInterfaceExist := func() bool {
 		cmd := fmt.Sprintf("ip link show %s", ifName)
@@ -103,12 +113,25 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		return exists
 	}
 
+	doesIPAllocationExist := func() bool {
+		cmd := fmt.Sprintf("test -f /var/run/antrea/cni/networks/antrea/%s", podIP)
+		if rc, _, _, err := RunCommandOnNode(nodeName, cmd); err != nil {
+			t.Fatalf("Error when running ip command on Node '%s': %v", nodeName, err)
+		} else {
+			return rc == 0
+		}
+		return false
+	}
+
 	t.Logf("Checking that the veth interface and the OVS port exist")
 	if !doesInterfaceExist() {
 		t.Errorf("Interface '%s' does not exist on Node '%s'", ifName, nodeName)
 	}
 	if !doesOVSPortExist() {
 		t.Errorf("OVS port '%s' does not exist on Node '%s'", ifName, nodeName)
+	}
+	if !doesIPAllocationExist() {
+		t.Errorf("IP allocation '%s' does not exist on Node '%s'", podIP, nodeName)
 	}
 
 	t.Logf("Deleting Pod '%s'", podName)
@@ -122,6 +145,9 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	}
 	if doesOVSPortExist() {
 		t.Errorf("OVS port '%s' still exists on Node '%s' after Pod deletion", ifName, nodeName)
+	}
+	if doesIPAllocationExist() {
+		t.Errorf("IP allocation '%s' still exists on Node '%s'", podIP, nodeName)
 	}
 }
 
