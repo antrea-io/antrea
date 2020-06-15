@@ -102,11 +102,6 @@ func (aq agentQuerier) GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyI
 	return aq.networkPolicyInfoQuerier
 }
 
-// GetNetworkPolicyInfoQuerier returns AgentNetworkPolicyInfoQuerier.
-func (aq agentQuerier) GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier {
-	return aq.networkPolicyInfoQuerier
-}
-
 // getOVSVersion gets current OVS version.
 func (aq agentQuerier) getOVSVersion() string {
 	v, err := aq.ovsBridgeClient.GetOVSVersion()

@@ -139,12 +139,9 @@ var (
 	ofPortMarkRange = binding.Range{16, 16}
 	// ofPortRegRange takes a 32-bit range of register portCacheReg to cache the ofPort number of the interface.
 	ofPortRegRange = binding.Range{0, 31}
-<<<<<<< HEAD
 	// snatMarkRange takes the 17th bit of register marksReg to indicate if the packet needs to be SNATed with Node's IP
 	// or not. Its value is 0x1 if yes.
 	snatMarkRange = binding.Range{17, 17}
-=======
->>>>>>> Add elastiflow deployment
 
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	ReentranceMAC, _    = net.ParseMAC("de:ad:be:ef:de:ad")
@@ -345,11 +342,7 @@ func (c *client) reEntranceBypassCTFlow(gwPort, reentPort uint32, category cooki
 	return conntrackCommitTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		MatchInPort(gwPort).MatchReg(int(portCacheReg), reentPort).
-<<<<<<< HEAD
 		Action().GotoTable(conntrackCommitTable.GetNext()).
-=======
-		Action().ResubmitToTable(conntrackCommitTable.GetNext()).
->>>>>>> Add elastiflow deployment
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -675,11 +668,7 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue 
 	return fb
 }
 
-<<<<<<< HEAD
 // conjunctionExceptionFlow generates the flow to jump to a specific table if both policyRuleConjunction ID and except address are matched.
-=======
-// conjunctionExceptionFlow generates the flow to resubmit to a specific table if both policyRuleConjunction ID and except address are matched.
->>>>>>> Add elastiflow deployment
 // Keeping this for reference to generic exception flow.
 func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, matchKey int, matchValue interface{}) binding.Flow {
 	fb := c.pipeline[tableID].BuildFlow(priorityNormal).MatchConjID(conjunctionID)

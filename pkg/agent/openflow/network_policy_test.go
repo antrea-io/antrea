@@ -375,11 +375,7 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlowBuilder.EXPECT().Action().Return(ruleAction).AnyTimes()
 	ruleFlow = mocks.NewMockFlow(ctrl)
 	ruleFlowBuilder.EXPECT().Done().Return(ruleFlow).AnyTimes()
-<<<<<<< HEAD
 	ruleFlow.EXPECT().CopyToBuilder(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
-=======
-	ruleFlow.EXPECT().CopyToBuilder().Return(ruleFlowBuilder).AnyTimes()
->>>>>>> Add elastiflow deployment
 	ruleFlow.EXPECT().MatchString().Return("").AnyTimes()
 	return ruleFlowBuilder
 }

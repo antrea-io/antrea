@@ -18,10 +18,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"k8s.io/client-go/tools/clientcmd"
 	"net"
 	"net/url"
-	"os"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"

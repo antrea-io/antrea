@@ -147,15 +147,6 @@
          ./ci/test-conformance-gke.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
 
 - builder:
-    name: builder-eks-cluster-cleanup
-    builders:
-      - shell: |-
-          #!/bin/bash
-          set -ex
-          source /home/ubuntu/.bashrc
-          ./ci/test-conformance-eks.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
-
-- builder:
     name: builder-workload-cluster-gc
     builders:
       - shell: |-
