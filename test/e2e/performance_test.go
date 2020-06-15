@@ -194,11 +194,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 	if err != nil {
 		b.Fatalf("Error when creating perftool test Pod: %v", err)
 	}
-<<<<<<< HEAD
 	b.Logf("Waiting for IP assignment of the perftool test Pod")
-=======
-	b.Logf("Waiting IP assignment of the perftool test Pod")
->>>>>>> Add elastiflow deployment
 	perfPodIP, err = data.podWaitForIP(defaultTimeout, perftoolPodName, testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of perftool test Pod: %v", err)

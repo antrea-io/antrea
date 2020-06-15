@@ -35,11 +35,7 @@ type Response struct {
 func dumpMatchedFlows(aq querier.AgentQuerier, flowKeys []string) ([]Response, error) {
 	resps := []Response{}
 	for _, f := range flowKeys {
-<<<<<<< HEAD
 		flowStr, err := aq.GetOVSCtlClient().DumpMatchedFlow(f)
-=======
-		flowStr, err := aq.GetOfctlClient().DumpMatchedFlow(f)
->>>>>>> Add elastiflow deployment
 		if err != nil {
 			klog.Errorf("Failed to dump flows %s: %v", f, err)
 			return nil, err
@@ -56,15 +52,9 @@ func dumpFlows(aq querier.AgentQuerier, table binding.TableIDType) ([]Response, 
 	var flowStrs []string
 	var err error
 	if table != binding.TableIDAll {
-<<<<<<< HEAD
 		flowStrs, err = aq.GetOVSCtlClient().DumpTableFlows(uint8(table))
 	} else {
 		flowStrs, err = aq.GetOVSCtlClient().DumpFlows()
-=======
-		flowStrs, err = aq.GetOfctlClient().DumpTableFlows(uint8(table))
-	} else {
-		flowStrs, err = aq.GetOfctlClient().DumpFlows()
->>>>>>> Add elastiflow deployment
 	}
 	if err != nil {
 		return nil, err
@@ -101,11 +91,7 @@ func getPodFlows(aq querier.AgentQuerier, podName, namespace string) ([]Response
 		return nil, nil
 	}
 
-<<<<<<< HEAD
 	flowKeys := aq.GetOpenflowClient().GetPodFlowKeys(interfaces[0].InterfaceName)
-=======
-	flowKeys := aq.GetOpenflowClient().GetPodFlowKeys(intf.InterfaceName)
->>>>>>> Add elastiflow deployment
 	return dumpMatchedFlows(aq, flowKeys)
 
 }

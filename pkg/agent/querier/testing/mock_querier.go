@@ -25,14 +25,9 @@ import (
 	interfacestore "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	openflow "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-<<<<<<< HEAD
 	ovsctl "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	querier "github.com/vmware-tanzu/antrea/pkg/querier"
 	kubernetes "k8s.io/client-go/kubernetes"
-=======
-	ofctl "github.com/vmware-tanzu/antrea/pkg/ovs/ofctl"
-	querier "github.com/vmware-tanzu/antrea/pkg/querier"
->>>>>>> Add elastiflow deployment
 	reflect "reflect"
 )
 
@@ -85,27 +80,8 @@ func (mr *MockAgentQuerierMockRecorder) GetInterfaceStore() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceStore", reflect.TypeOf((*MockAgentQuerier)(nil).GetInterfaceStore))
 }
 
-<<<<<<< HEAD
 // GetK8sClient mocks base method
 func (m *MockAgentQuerier) GetK8sClient() kubernetes.Interface {
-=======
-// GetNetworkPolicyInfoQuerier mocks base method
-func (m *MockAgentQuerier) GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNetworkPolicyInfoQuerier")
-	ret0, _ := ret[0].(querier.AgentNetworkPolicyInfoQuerier)
-	return ret0
-}
-
-// GetNetworkPolicyInfoQuerier indicates an expected call of GetNetworkPolicyInfoQuerier
-func (mr *MockAgentQuerierMockRecorder) GetNetworkPolicyInfoQuerier() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyInfoQuerier", reflect.TypeOf((*MockAgentQuerier)(nil).GetNetworkPolicyInfoQuerier))
-}
-
-// GetNodeName mocks base method
-func (m *MockAgentQuerier) GetNodeName() string {
->>>>>>> Add elastiflow deployment
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetK8sClient")
 	ret0, _ := ret[0].(kubernetes.Interface)
@@ -118,19 +94,11 @@ func (mr *MockAgentQuerierMockRecorder) GetK8sClient() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetK8sClient", reflect.TypeOf((*MockAgentQuerier)(nil).GetK8sClient))
 }
 
-<<<<<<< HEAD
 // GetNetworkPolicyInfoQuerier mocks base method
 func (m *MockAgentQuerier) GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNetworkPolicyInfoQuerier")
 	ret0, _ := ret[0].(querier.AgentNetworkPolicyInfoQuerier)
-=======
-// GetOfctlClient mocks base method
-func (m *MockAgentQuerier) GetOfctlClient() ofctl.OfctlClient {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOfctlClient")
-	ret0, _ := ret[0].(ofctl.OfctlClient)
->>>>>>> Add elastiflow deployment
 	return ret0
 }
 

@@ -51,13 +51,8 @@ type ExpectFlow struct {
 	ActStr   string
 }
 
-<<<<<<< HEAD
 func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableID uint8, exist bool, flows []*ExpectFlow) []string {
 	flowList, _ := OfctlDumpTableFlows(ovsCtlClient, tableID)
-=======
-func CheckFlowExists(t *testing.T, ofctlClient ofctl.OfctlClient, tableID uint8, exist bool, flows []*ExpectFlow) []string {
-	flowList, _ := OfctlDumpTableFlows(ofctlClient, tableID)
->>>>>>> Add elastiflow deployment
 	if exist {
 		for _, flow := range flows {
 			if !OfctlFlowMatch(flowList, tableID, flow) {
@@ -74,11 +69,7 @@ func CheckFlowExists(t *testing.T, ofctlClient ofctl.OfctlClient, tableID uint8,
 	return flowList
 }
 
-<<<<<<< HEAD
 func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
-=======
-func CheckGroupExists(t *testing.T, ofctlClient ofctl.OfctlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
->>>>>>> Add elastiflow deployment
 	// dump groups
 	groupList, err := ovsCtlClient.DumpGroups()
 	if err != nil {
@@ -129,38 +120,23 @@ func formatFlowDump(rawFlows []string) []string {
 	return flowList
 }
 
-<<<<<<< HEAD
 func OfctlDumpFlows(ovsCtlClient ovsctl.OVSCtlClient, args ...string) ([]string, error) {
 	rawFlows, err := ovsCtlClient.DumpFlows(args...)
-=======
-func OfctlDumpFlows(ofctlClient ofctl.OfctlClient, args ...string) ([]string, error) {
-	rawFlows, err := ofctlClient.DumpFlows(args...)
->>>>>>> Add elastiflow deployment
 	if err != nil {
 		return nil, err
 	}
 	return formatFlowDump(rawFlows), nil
 }
 
-<<<<<<< HEAD
 func OfctlDumpTableFlows(ovsCtlClient ovsctl.OVSCtlClient, table uint8) ([]string, error) {
 	rawFlows, err := ovsCtlClient.DumpTableFlows(table)
-=======
-func OfctlDumpTableFlows(ofctlClient ofctl.OfctlClient, table uint8) ([]string, error) {
-	rawFlows, err := ofctlClient.DumpTableFlows(table)
->>>>>>> Add elastiflow deployment
 	if err != nil {
 		return nil, err
 	}
 	return formatFlowDump(rawFlows), nil
 }
 
-<<<<<<< HEAD
 func OfctlDeleteFlows(ovsCtlClient ovsctl.OVSCtlClient) error {
 	_, err := ovsCtlClient.RunOfctlCmd("del-flows")
-=======
-func OfctlDeleteFlows(ofctlClient ofctl.OfctlClient) error {
-	_, err := ofctlClient.RunOfctlCmd("del-flows")
->>>>>>> Add elastiflow deployment
 	return err
 }

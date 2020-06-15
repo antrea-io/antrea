@@ -132,11 +132,7 @@ func prepareOverlapFlows(table binding.Table, ipStr string, sameCookie bool) ([]
 	return flows, expectFlows
 }
 
-<<<<<<< HEAD
 func testDeleteSingleFlow(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, table binding.Table, flows []binding.Flow, expectFlows []*ExpectFlow) {
-=======
-func testDeleteSingleFlow(t *testing.T, ofctlClient ofctl.OfctlClient, table binding.Table, flows []binding.Flow, expectFlows []*ExpectFlow) {
->>>>>>> Add elastiflow deployment
 	for id, flow := range flows {
 		if err := flow.Add(); err != nil {
 			t.Fatalf("Failed to install flow%d: %v", id, err)

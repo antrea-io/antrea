@@ -22,7 +22,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-<<<<<<< HEAD
 const iperfPort = 5201
 
 // TestBenchmarkBandwidthIntraNode runs the bandwidth benchmark between Pods on same node.
@@ -98,38 +97,4 @@ func TestBenchmarkBandwidthServiceRemoteAccess(t *testing.T) {
 	skipIfNotBenchmarkTest(t)
 	skipIfNumNodesLessThan(t, 2)
 	benchmarkBandwidthService(t, masterNodeName(), workerNodeName(1))
-=======
-// BenchmarkBandwidthIntraNode runs the benchmark of bandwidth between Pods on same node.
-func BenchmarkBandwidthIntraNode(b *testing.B) {
-	withPerfTestSetup(func(data *TestData) {
-		b.StartTimer()
-
-		podDefA := createPerfTestPodDefinition("perftest-a", perftoolContainerName, perftoolImage)
-		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(podDefA); err != nil {
-			b.Fatalf("Error when creating the first perftest Pod: %v", err)
-		}
-		podDefB := createPerfTestPodDefinition("perftest-b", perftoolContainerName, perftoolImage)
-		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(podDefB); err != nil {
-			b.Fatalf("Error when creating the second perftest Pod: %v", err)
-		}
-		podBIP, err := data.podWaitForIP(defaultTimeout, podDefB.Name, testNamespace)
-		if err != nil {
-			b.Fatalf("Error when getting perftest Pod IP: %v", err)
-		}
-		stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", perftoolContainerName, []string{"bash", "-c", fmt.Sprintf("iperf3 -c %s|grep sender|awk '{print $7,$8}'", podBIP)})
-		if err != nil {
-			b.Fatalf("Error when running iperf3 client: %v", err)
-		}
-		stdout = strings.TrimSpace(stdout)
-		results := strings.Split(stdout, " ")
-		if len(results) != 2 {
-			b.Fatalf("Error when parsing iperf result: cannot parse output `%s`", stdout)
-		}
-		// Disable default output.
-		b.ReportMetric(0, "ns/op")
-		bandwidthNum, _ := strconv.ParseFloat(results[0], 64)
-		bandwidthUnit := strings.TrimSpace(results[1])
-		b.ReportMetric(bandwidthNum, bandwidthUnit)
-	}, b)
->>>>>>> Add elastiflow deployment
 }
