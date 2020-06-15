@@ -12,9 +12,9 @@ import (
 var _ ConnTrackPoller = new(connTrackPoller)
 
 type connTrackPoller struct {
-	nodeConfig *config.NodeConfig
+	nodeConfig  *config.NodeConfig
 	serviceCIDR *net.IPNet
-	conntrack  ConnTrack
+	conntrack   ConnTrack
 }
 
 func NewConnTrackPoller(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, conntrack ConnTrack) *connTrackPoller {

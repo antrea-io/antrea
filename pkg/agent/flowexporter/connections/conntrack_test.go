@@ -93,7 +93,7 @@ func TestConnTrack_DumpFilter(t *testing.T) {
 		TupleReply: revTuple3,
 		Zone:       openflow.CtZone,
 	}
-	antreServiceFlow := conntrack.Flow{
+	antreaServiceFlow := conntrack.Flow{
 		TupleOrig:  tuple5,
 		TupleReply: revTuple5,
 		Zone:       openflow.CtZone,
@@ -109,7 +109,7 @@ func TestConnTrack_DumpFilter(t *testing.T) {
 		Zone:       100,
 	}
 
-	testFlows := []conntrack.Flow{antreaFlow, antreaGWFlow, nonAntreaFlow}
+	testFlows := []conntrack.Flow{antreaFlow, antreaServiceFlow, antreaGWFlow, nonAntreaFlow}
 
 	// Create mock ConnTrack interface
 	mockCT := connectionstest.NewMockConnTrack(ctrl)
@@ -131,7 +131,7 @@ func TestConnTrack_DumpFilter(t *testing.T) {
 	mockCT.EXPECT().Dial().Return(nil)
 	mockCT.EXPECT().DumpFilter(conntrack.Filter{}).Return(testFlows, nil)
 
-	connTrackPoller := NewConnTrackPoller(nodeConfig,serviceCIDR, mockCT)
+	connTrackPoller := NewConnTrackPoller(nodeConfig, serviceCIDR, mockCT)
 	conns, err := connTrackPoller.DumpFlows(openflow.CtZone)
 	if err != nil {
 		t.Errorf("Dump filter function returned error: %v", err)
