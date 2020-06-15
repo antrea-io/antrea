@@ -18,7 +18,10 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+<<<<<<< HEAD
 	"strconv"
+=======
+>>>>>>> Add elastiflow deployment
 	"time"
 
 	"github.com/blang/semver"
@@ -111,6 +114,7 @@ func (c *Client) Restore(data []byte, flush bool) error {
 	}
 	cmd := exec.Command("iptables-restore", args...)
 	cmd.Stdin = bytes.NewBuffer(data)
+<<<<<<< HEAD
 	// We acquire xtables lock for iptables-restore to prevent it from conflicting
 	// with iptables/iptables-restore which might being called by kube-proxy.
 	// iptables supports "--wait" option and go-iptables has enabled it.
@@ -128,6 +132,17 @@ func (c *Client) Restore(data []byte, flush bool) error {
 		}
 		defer unlockFunc()
 	}
+=======
+	// We acquire xtables lock explicitly for iptables-restore to prevent it from conflicting
+	// with iptables/iptables-restore which might being called by kube-proxy.
+	// iptables supports "--wait" option and go-iptables has enabled it.
+	// iptables-restore doesn't support the option until 1.6.2, but it's not widely deployed yet.
+	unlockFunc, err := lock(xtablesLockFilePath, 10*time.Second)
+	if err != nil {
+		return err
+	}
+	defer unlockFunc()
+>>>>>>> Add elastiflow deployment
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error executing iptables-restore: %v", err)
 	}

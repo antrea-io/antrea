@@ -11,6 +11,7 @@
     builders:
       - shell: |-
           #!/bin/bash
+<<<<<<< HEAD
 
           saveLogs() {
             echo "=== Truncate old logs ==="
@@ -34,6 +35,9 @@
           }
 
           set -e
+=======
+          set -ex
+>>>>>>> Add elastiflow deployment
           cluster="${JOB_NAME}-${BUILD_NUMBER}"
 
           WORK_HOME="/var/lib/jenkins"
@@ -81,12 +85,20 @@
           done
 
           if !(test -f jenkins/SECRET_EXIST); then
+<<<<<<< HEAD
             echo "=== Failed to get secret ==="
             savelogs
             exit 1
           else
             export KUBECONFIG="${WORKSPACE}/jenkins/out/kubeconfig"
             echo "=== Waiting all nodes up for 10 min ==="
+=======
+            echo "=== Fail to get secret ==="
+
+            echo "=== Remove too many logs ==="
+            export LOG_DIR=/var/lib/jenkins/antrea_logs
+            find ${LOG_DIR}/* -type d -mmin +10080 | xargs rm -rf
+>>>>>>> Add elastiflow deployment
 
             set +e
             for t in {1..10}
@@ -101,8 +113,18 @@
             done
             set -e
 
+<<<<<<< HEAD
             echo "=== Failed to make all nodes up ==="
             savelogs
+=======
+            echo "=== Saving capv logs ==="
+            mkdir -p ${CLUSTER_LOG_DIR}/capv
+            kubectl get -n capv-system pods -o name | awk '{print $1}' | while read capv_pod; do
+              capv_pod_name=$(echo ${capv_pod} | cut -d'/' -f 2)
+              kubectl logs ${capv_pod_name} -n capv-system --tail=100 > ${CLUSTER_LOG_DIR}/capv/${capv_pod_name}
+            done
+
+>>>>>>> Add elastiflow deployment
             exit 1
           fi
 
@@ -112,8 +134,12 @@
       - shell: |-
           #!/bin/bash
           set -ex
+<<<<<<< HEAD
           echo '=== Clean up workload cluster ==='
           export KUBECONFIG="/var/lib/jenkins/.kube/config"
+=======
+          cluster="${CLUSTERNAME}"
+>>>>>>> Add elastiflow deployment
 
           cluster="${JOB_NAME}-${BUILD_NUMBER}"
           kubectl delete ns ${cluster}
@@ -145,6 +171,15 @@
          set -ex
          source /home/ubuntu/.bashrc
          ./ci/test-conformance-gke.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
+
+- builder:
+    name: builder-eks-cluster-cleanup
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          source /home/ubuntu/.bashrc
+          ./ci/test-conformance-eks.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
 
 - builder:
     name: builder-workload-cluster-gc

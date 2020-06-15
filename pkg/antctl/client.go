@@ -28,7 +28,10 @@ import (
 	"k8s.io/client-go/rest"
 
 	agentapiserver "github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
+<<<<<<< HEAD
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
+=======
+>>>>>>> Add elastiflow deployment
 	"github.com/vmware-tanzu/antrea/pkg/apis"
 	controllerapiserver "github.com/vmware-tanzu/antrea/pkg/apiserver"
 )
@@ -61,6 +64,7 @@ type client struct {
 // It will return error if the stating of the file failed or the kubeconfig is malformed.
 // If the default kubeconfig not exists, it will try to use an in-cluster config.
 func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
+<<<<<<< HEAD
 	kubeconfig, err := runtime.ResolveKubeconfig(opt.kubeconfig)
 	if err != nil {
 		return nil, err
@@ -74,6 +78,30 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
 			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
 		} else if runtime.Mode == runtime.ModeController {
+=======
+	var err error
+	var kubeconfig *rest.Config
+	if _, err = os.Stat(opt.kubeconfig); opt.kubeconfig == clientcmd.RecommendedHomeFile && os.IsNotExist(err) {
+		kubeconfig, err = rest.InClusterConfig()
+		if err != nil {
+			err = fmt.Errorf("unable to resolve in-cluster configuration: %v. Please specify the kubeconfig file", err)
+		}
+	} else {
+		kubeconfig, err = clientcmd.BuildConfigFromFlags("", opt.kubeconfig)
+	}
+	if err != nil {
+		return nil, err
+	}
+	kubeconfig.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: c.codec}
+	if inPod {
+		kubeconfig.Insecure = true
+		kubeconfig.CAFile = ""
+		kubeconfig.CAData = nil
+		if runtimeMode == ModeAgent {
+			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
+			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
+		} else if runtimeMode == ModeController {
+>>>>>>> Add elastiflow deployment
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaControllerAPIPort))
 			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
 		}

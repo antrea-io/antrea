@@ -142,6 +142,7 @@
         enabled: true
     triggers:
     - timed: '{timed}'
+<<<<<<< HEAD
     wrappers:
     - timeout:
         fail: true
@@ -150,6 +151,11 @@
 
 - job-template:
      name: 'cloud-{name}-{test_name}'
+=======
+
+- job-template:
+     name: 'cloud-{name}-{test_name}-for-eks'
+>>>>>>> Add elastiflow deployment
      node: '{node}'
      triggers: '{triggers}'
      builders: '{builders}'

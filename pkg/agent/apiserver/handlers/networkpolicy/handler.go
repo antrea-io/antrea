@@ -46,8 +46,13 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			}
 		} else if pod != "" {
 			// Query NetworkPolicies applied to the Pod
+<<<<<<< HEAD
 			interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(pod, ns)
 			if len(interfaces) > 0 {
+=======
+			_, ok := aq.GetInterfaceStore().GetContainerInterface(pod, ns)
+			if ok {
+>>>>>>> Add elastiflow deployment
 				nps := npq.GetAppliedNetworkPolicies(pod, ns)
 				obj = networkingv1beta1.NetworkPolicyList{Items: nps}
 			}

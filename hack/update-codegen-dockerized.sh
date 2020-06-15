@@ -84,7 +84,11 @@ MOCKGEN_TARGETS=(
   "pkg/agent/route Interface"
   "pkg/ovs/openflow Bridge,Table,Flow,Action,FlowBuilder"
   "pkg/ovs/ovsconfig OVSBridgeClient"
+<<<<<<< HEAD
   "pkg/ovs/ovsctl OVSCtlClient"
+=======
+  "pkg/ovs/ofctl OfctlClient"
+>>>>>>> Add elastiflow deployment
   "pkg/agent/querier AgentQuerier"
   "pkg/controller/querier ControllerQuerier"
   "pkg/querier AgentNetworkPolicyInfoQuerier"

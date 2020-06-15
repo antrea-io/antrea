@@ -1,0 +1,224 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: elastic-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: Immediate
+reclaimPolicy: Delete
+allowVolumeExpansion: True
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elasticsearch-pvc
+spec:
+  storageClassName: elastic-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: elasticsearch-pv
+spec:
+  storageClassName: elastic-storage
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/data/elasticsearch/"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  labels:
+    type: database
+    app: elasticsearch
+spec:
+  selector:
+    type: database
+    app: elasticsearch
+  ports:
+    - port: 9200
+      targetPort: 9200
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  labels:
+    type: database
+    app: elasticsearch
+spec:
+  selector:
+    matchLabels:
+      type: database
+      app: elasticsearch
+  serviceName: elasticsearch
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        type: database
+        app: elasticsearch
+    spec:
+      initContainers:
+        - name: init-sysctl
+          image: busybox:1.27.2
+          command:
+            - sysctl
+            - -w
+            - vm.max_map_count=262144
+          securityContext:
+            privileged: true
+      containers:
+        - name: es-data
+          image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.3.0
+          env:
+            - name: ES_JAVA_OPTS
+              value: "-Xms1g -Xmx2g"
+            - name: cluster.name
+              value: "elastiflow"
+            - name: bootstrap.memory_lock
+              value: "false"
+            - name: network.host
+              value: "0.0.0.0"
+            - name: http.port
+              value: "9200"
+            - name: discovery.type
+              value: "single-node"
+            - name: indices.query.bool.max_clause_count
+              value: "8192"
+            - name: search.max_buckets
+              value: "100000"
+            - name: action.destructive_requires_name
+              value: "true"
+          ports:
+            - containerPort: 9200
+              name: http
+            - containerPort: 9300
+              name: transport
+          livenessProbe:
+            tcpSocket:
+              port: transport
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: http
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: es-data
+              mountPath: /data
+      volumes:
+        - name: es-data
+          persistentVolumeClaim:
+            claimName: elasticsearch-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  labels:
+    type: kibana
+    app: elasticsearch
+spec:
+  selector:
+    type: kibana
+    app: elasticsearch
+  ports:
+    - port: 5601
+      targetPort: 5601
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  labels:
+    app: elasticsearch
+    type: kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+      type: kibana
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+        type: kibana
+    spec:
+      containers:
+        - name: kibana
+          image: docker.elastic.co/kibana/kibana-oss:7.3.0
+          env:
+            - name: action.destructive_requires_name
+              value: "true"
+            - name: SERVER_HOST
+              value: "0.0.0.0"
+            - name: SERVER_PORT
+              value: "5601"
+            - name: ELASTICSEARCH_URL
+              value: "http://elasticsearch:9200"
+            - name: KIBANA_DEFAULTAPPID
+              value: "dashboard/653cf1e0-2fd2-11e7-99ed-49759aed30f5"
+            - name: LOGGING_QUIET
+              value: "true"
+          ports:
+            - containerPort: 5601
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+  labels:
+    app: elastiflow
+spec:
+  selector:
+    app: elastiflow
+  ports:
+    - port: 4739
+      targetPort: 4739
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elastiflow
+  labels:
+    app: elastiflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elastiflow
+  template:
+    metadata:
+      labels:
+        app: elastiflow
+    spec:
+      containers:
+        - name: logstash
+          image: robcowart/elastiflow-logstash-oss:3.5.1
+          volumeMounts:
+            - name: logstash-definition-volume
+              mountPath: /usr/share/logstash/definitions
+          env:
+            - name: ELASTIFLOW_ES_HOST
+              value: "http://elasticsearch:9200"
+            - name: LS_JAVA_OPTS
+              value: "-Xms4g -Xmx4g"
+            - name: ELASTIFLOW_DEFINITION_PATH
+              value: "/usr/share/logstash/definitions"
+      volumes:
+        - name: logstash-definition-volume
+          configMap:
+            name: logstash-definitions

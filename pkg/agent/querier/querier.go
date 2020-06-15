@@ -34,12 +34,21 @@ import (
 var _ AgentQuerier = new(agentQuerier)
 
 type AgentQuerier interface {
+<<<<<<< HEAD
 	GetNodeConfig() *config.NodeConfig
 	GetInterfaceStore() interfacestore.InterfaceStore
 	GetK8sClient() clientset.Interface
+=======
+	GetNodeName() string
+>>>>>>> Add elastiflow deployment
 	GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool)
+	GetInterfaceStore() interfacestore.InterfaceStore
 	GetOpenflowClient() openflow.Client
+<<<<<<< HEAD
 	GetOVSCtlClient() ovsctl.OVSCtlClient
+=======
+	GetOfctlClient() ofctl.OfctlClient
+>>>>>>> Add elastiflow deployment
 	GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier
 }
 
@@ -92,9 +101,20 @@ func (aq *agentQuerier) GetOpenflowClient() openflow.Client {
 	return aq.ofClient
 }
 
+<<<<<<< HEAD
 // GetOVSCtlClient returns a new OVSCtlClient.
 func (aq *agentQuerier) GetOVSCtlClient() ovsctl.OVSCtlClient {
 	return ovsctl.NewClient(aq.nodeConfig.OVSBridge)
+}
+
+// GetNetworkPolicyInfoQuerier returns AgentNetworkPolicyInfoQuerier.
+func (aq agentQuerier) GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier {
+	return aq.networkPolicyInfoQuerier
+=======
+// GetOfctlClient returns a new OfctlClient.
+func (aq *agentQuerier) GetOfctlClient() ofctl.OfctlClient {
+	return ofctl.NewClient(aq.ovsBridge)
+>>>>>>> Add elastiflow deployment
 }
 
 // GetNetworkPolicyInfoQuerier returns AgentNetworkPolicyInfoQuerier.
@@ -175,7 +195,11 @@ func (aq agentQuerier) getNetworkPolicyControllerInfo() v1beta1.NetworkPolicyCon
 func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool) {
 	// LocalPodNum, FlowTable, NetworkPolicyControllerInfo, OVSVersion and AgentConditions can be changed, so reset these fields.
 	// Only these fields are updated when partial is true.
+<<<<<<< HEAD
 	agentInfo.Name = aq.nodeConfig.Name
+=======
+	agentInfo.Name = aq.nodeName
+>>>>>>> Add elastiflow deployment
 	agentInfo.LocalPodNum = int32(aq.interfaceStore.GetContainerInterfaceNum())
 	agentInfo.OVSInfo.FlowTable = aq.getOVSFlowTable()
 	agentInfo.NetworkPolicyControllerInfo = aq.getNetworkPolicyControllerInfo()

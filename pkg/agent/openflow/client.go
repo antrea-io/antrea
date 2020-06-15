@@ -126,9 +126,12 @@ type Client interface {
 	// the new round number.
 	DeleteStaleFlows() error
 
+<<<<<<< HEAD
 	// GetTunnelVirtualMAC() returns globalVirtualMAC used for tunnel traffic.
 	GetTunnelVirtualMAC() net.HardwareAddr
 
+=======
+>>>>>>> Add elastiflow deployment
 	// GetPodFlowKeys returns the keys (match strings) of the cached flows for a
 	// Pod.
 	GetPodFlowKeys(interfaceName string) []string

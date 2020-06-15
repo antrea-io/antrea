@@ -37,12 +37,24 @@ func TestDifferentNamedPorts(t *testing.T) {
 	defer teardownTest(t, data)
 
 	server0Port := 80
+<<<<<<< HEAD
 	_, server0IP, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
 		return data.createServerPod(name, "http", server0Port, false)
 	}, "test-server-", "")
 	defer cleanupFunc()
+=======
+	if err = data.createServerPod(server0Name, "http", server0Port, false); err != nil {
+		t.Fatalf("Error when creating server pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, server0Name)
+	server0IP, err := data.podWaitForIP(defaultTimeout, server0Name, testNamespace)
+	if err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", server0Name, err)
+	}
+>>>>>>> Add elastiflow deployment
 
 	server1Port := 8080
+<<<<<<< HEAD
 	_, server1IP, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
 		return data.createServerPod(name, "http", server1Port, false)
 	}, "test-server-", "")
@@ -53,6 +65,34 @@ func TestDifferentNamedPorts(t *testing.T) {
 
 	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
 	defer cleanupFunc()
+=======
+	if err = data.createServerPod(server1Name, "http", server1Port, false); err != nil {
+		t.Fatalf("Error when creating server pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, server1Name)
+	server1IP, err := data.podWaitForIP(defaultTimeout, server1Name, testNamespace)
+	if err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", server1Name, err)
+	}
+
+	client0Name := randName("test-client-")
+	if err := data.createBusyboxPod(client0Name); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, client0Name)
+	if _, err := data.podWaitForIP(defaultTimeout, client0Name, testNamespace); err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", client0Name, err)
+	}
+
+	client1Name := randName("test-client-")
+	if err := data.createBusyboxPod(client1Name); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, client1Name)
+	if _, err := data.podWaitForIP(defaultTimeout, client1Name, testNamespace); err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", client1Name, err)
+	}
+>>>>>>> Add elastiflow deployment
 
 	// Both clients can connect to both servers.
 	for _, clientName := range []string{client0Name, client1Name} {
@@ -115,11 +155,31 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 	defer teardownTest(t, data)
 
 	serverPort := 80
+<<<<<<< HEAD
 	_, serverIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
 	defer cleanupFunc()
 
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
 	defer cleanupFunc()
+=======
+	if err = data.createServerPod(serverName, "http", serverPort, false); err != nil {
+		t.Fatalf("Error when creating server pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, serverName)
+	serverIP, err := data.podWaitForIP(defaultTimeout, serverName, testNamespace)
+	if err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", serverName, err)
+	}
+
+	clientName := randName("test-client-")
+	if err := data.createBusyboxPod(clientName); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, clientName)
+	if _, err := data.podWaitForIP(defaultTimeout, clientName, testNamespace); err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
+	}
+>>>>>>> Add elastiflow deployment
 
 	if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err != nil {
 		t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, serverIP, serverPort)
