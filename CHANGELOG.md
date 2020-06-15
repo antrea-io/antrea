@@ -9,6 +9,17 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 
 ## Unreleased
 
+## 0.7.2 - 2020-06-15
+
+### Fixed
+
+- Fix handling of StatefulSet Pod rescheduling on same Node: a fast rescheduling can cause unexpected ordering of CNI ADD and DELETE commands, which means Antrea cannot use the Pod Namespace+Name as the unique identifier for a Pod's network configuration. [#827](https://github.com/vmware-tanzu/antrea/pull/827)
+- Fix IP address leak in IPAM caused by Antrea in-memory cache being out-of-sync with IPAM store. [#828](https://github.com/vmware-tanzu/antrea/pull/828)
+- Increase timeout to 5 seconds when waiting for ovs-vswitchd to report the allocated of_port number. [#830](https://github.com/vmware-tanzu/antrea/pull/830)
+- Fix CNI CHECK command implementation: the CNI server was always returning success even in case of failure. [#821](https://github.com/vmware-tanzu/antrea/pull/821)
+- Update ofnet library version to avoid a goroutine leak. [#813](https://github.com/vmware-tanzu/antrea/pull/813)
+- Exclude /healthz from authorization to avoid unnecessary calls to K8s API in readiness probes. [#816](https://github.com/vmware-tanzu/antrea/pull/816)
+
 ## 0.7.1 - 2020-06-05
 
 ### Fixed
