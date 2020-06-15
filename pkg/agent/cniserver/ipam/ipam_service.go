@@ -82,10 +82,6 @@ func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) (
 }
 
 func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) error {
-	_, ok := GetIPFromCache(resultKey)
-	if !ok {
-		return nil
-	}
 	args := argsFromEnv(cniArgs)
 	driver := ipamDrivers[ipamType]
 	err := driver.Del(args, cniArgs.NetworkConfiguration)
