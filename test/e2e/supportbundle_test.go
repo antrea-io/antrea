@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -81,15 +82,15 @@ func testSupportBundle(name string, t *testing.T) {
 	clients, err := clientset.NewForConfig(localConfig)
 	require.NoError(t, err)
 	// Clearing any existing support bundle.
-	err = clients.SystemV1beta1().SupportBundles().Delete(name, &metav1.DeleteOptions{})
+	err = clients.SystemV1beta1().SupportBundles().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	require.NoError(t, nil)
 	time.Sleep(100 * time.Millisecond)
 	// Checking the initial status.
-	bundle, err := clients.SystemV1beta1().SupportBundles().Get(name, metav1.GetOptions{})
+	bundle, err := clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.Equal(t, systemv1beta1.SupportBundleStatusNone, bundle.Status)
 	// Creating a new support bundle.
-	bundle, err = clients.SystemV1beta1().SupportBundles().Create(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: name}})
+	bundle, err = clients.SystemV1beta1().SupportBundles().Create(context.TODO(), &systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: name}}, metav1.CreateOptions{})
 	require.NoError(t, err)
 	require.Equal(t, systemv1beta1.SupportBundleStatusCollecting, bundle.Status)
 	// Waiting for the generation to be completed.
@@ -100,13 +101,13 @@ func testSupportBundle(name string, t *testing.T) {
 			return false, fmt.Errorf("collecting timeout")
 		default:
 		}
-		bundle, err = clients.SystemV1beta1().SupportBundles().Get(name, metav1.GetOptions{})
+		bundle, err = clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
 		require.NoError(t, err)
 		return bundle.Status == systemv1beta1.SupportBundleStatusCollected, nil
 	}, nil)
 	require.NoError(t, err)
 	// Checking the complete status.
-	bundle, err = clients.SystemV1beta1().SupportBundles().Get(name, metav1.GetOptions{})
+	bundle, err = clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.Equal(t, systemv1beta1.SupportBundleStatusCollected, bundle.Status)
 	// Downloading the bundle and verifying sha256sum.
@@ -115,7 +116,7 @@ func testSupportBundle(name string, t *testing.T) {
 		Resource("supportbundles").
 		Name(name).
 		SubResource("download").
-		Stream()
+		Stream(context.TODO())
 	require.NoError(t, err)
 	defer readStream.Close()
 	hasher := sha256.New()
@@ -123,11 +124,11 @@ func testSupportBundle(name string, t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bundle.Sum, fmt.Sprintf("%x", hasher.Sum(nil)))
 	// Deleting the bundle.
-	err = clients.SystemV1beta1().SupportBundles().Delete(name, &metav1.DeleteOptions{})
+	err = clients.SystemV1beta1().SupportBundles().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	require.NoError(t, nil)
 	time.Sleep(100 * time.Millisecond)
 	// Checking that the bundle was deleted.
-	bundle, err = clients.SystemV1beta1().SupportBundles().Get(name, metav1.GetOptions{})
+	bundle, err = clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.Equal(t, systemv1beta1.SupportBundleStatusNone, bundle.Status)
 }

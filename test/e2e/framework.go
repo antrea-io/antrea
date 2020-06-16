@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"net"
@@ -153,7 +154,7 @@ func collectClusterInfo() error {
 	}
 
 	// retrieve Node information
-	nodes, err := testData.clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodes, err := testData.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error when listing cluster Nodes: %v", err)
 	}
@@ -214,7 +215,7 @@ func (data *TestData) createNamespace(namespace string) error {
 			Name: namespace,
 		},
 	}
-	if ns, err := data.clientset.CoreV1().Namespaces().Create(&ns); err != nil {
+	if ns, err := data.clientset.CoreV1().Namespaces().Create(context.TODO(), &ns, metav1.CreateOptions{}); err != nil {
 		// Ignore error if the namespace already exists
 		if !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("error when creating '%s' Namespace: %v", namespace, err)
@@ -236,11 +237,11 @@ func (data *TestData) createTestNamespace() error {
 func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) error {
 	var gracePeriodSeconds int64 = 0
 	var propagationPolicy metav1.DeletionPropagation = metav1.DeletePropagationForeground
-	deleteOptions := &metav1.DeleteOptions{
+	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-	if err := data.clientset.CoreV1().Namespaces().Delete(namespace, deleteOptions); err != nil {
+	if err := data.clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, deleteOptions); err != nil {
 		if errors.IsNotFound(err) {
 			// namespace does not exist, we return right away
 			return nil
@@ -248,7 +249,7 @@ func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) e
 		return fmt.Errorf("error when deleting '%s' Namespace: %v", namespace, err)
 	}
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if ns, err := data.clientset.CoreV1().Namespaces().Get(namespace, metav1.GetOptions{}); err != nil {
+		if ns, err := data.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				// Success
 				return true, nil
@@ -298,7 +299,7 @@ func (data *TestData) deployAntreaIPSec() error {
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 	err := wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
-		daemonSet, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(antreaDaemonSet, metav1.GetOptions{})
+		daemonSet, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
 		}
@@ -329,7 +330,7 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 // waitForCoreDNSPods waits for the K8s apiserver to report that all the CoreDNS Pods are available.
 func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
 	err := wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
-		deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get("coredns", metav1.GetOptions{})
+		deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(context.TODO(), "coredns", metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
 		}
@@ -351,13 +352,13 @@ func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
 // for all the Pods to become available, by calling waitForCoreDNSPods.
 func (data *TestData) restartCoreDNSPods(timeout time.Duration) error {
 	var gracePeriodSeconds int64 = 1
-	deleteOptions := &metav1.DeleteOptions{
+	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
 	listOptions := metav1.ListOptions{
 		LabelSelector: "k8s-app=kube-dns",
 	}
-	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
 		return fmt.Errorf("error when deleting all CoreDNS Pods: %v", err)
 	}
 	return data.waitForCoreDNSPods(timeout)
@@ -367,7 +368,7 @@ func (data *TestData) restartCoreDNSPods(timeout time.Duration) error {
 // deletes all the Pods to force them to restart and waits up to timeout for the Pods to become
 // ready.
 func (data *TestData) checkCoreDNSPods(timeout time.Duration) error {
-	if deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get("coredns", metav1.GetOptions{}); err != nil {
+	if deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(context.TODO(), "coredns", metav1.GetOptions{}); err != nil {
 		return fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
 	} else if deployment.Status.UnavailableReplicas == 0 {
 		// deployment ready, nothing to do
@@ -414,11 +415,11 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 	// Foreground deletion policy ensures that by the time the DaemonSet is deleted, there are
 	// no Antrea Pods left.
 	var propagationPolicy metav1.DeletionPropagation = metav1.DeletePropagationForeground
-	deleteOptions := &metav1.DeleteOptions{
+	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-	if err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Delete(antreaDaemonSet, deleteOptions); err != nil {
+	if err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Delete(context.TODO(), antreaDaemonSet, deleteOptions); err != nil {
 		if errors.IsNotFound(err) {
 			// no Antrea DaemonSet running, we return right away
 			return nil
@@ -426,7 +427,7 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 		return fmt.Errorf("error when trying to delete Antrea DaemonSet: %v", err)
 	}
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if _, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(antreaDaemonSet, metav1.GetOptions{}); err != nil {
+		if _, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				// Antrea DaemonSet does not exist any more, success
 				return true, nil
@@ -492,7 +493,7 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 		},
 		Spec: podSpec,
 	}
-	if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(pod); err != nil {
+	if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
 		return err
 	}
 	return nil
@@ -538,10 +539,10 @@ func (data *TestData) createServerPod(name string, portName string, portNum int,
 // deletePod deletes a Pod in the test namespace.
 func (data *TestData) deletePod(name string) error {
 	var gracePeriodSeconds int64 = 5
-	deleteOptions := &metav1.DeleteOptions{
+	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
-	if err := data.clientset.CoreV1().Pods(testNamespace).Delete(name, deleteOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(testNamespace).Delete(context.TODO(), name, deleteOptions); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
@@ -557,7 +558,7 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error
 	}
 
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if _, err := data.clientset.CoreV1().Pods(testNamespace).Get(name, metav1.GetOptions{}); err != nil {
+		if _, err := data.clientset.CoreV1().Pods(testNamespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
 			}
@@ -578,7 +579,7 @@ type PodCondition func(*v1.Pod) (bool, error)
 // the condition predicate is met (or until the provided timeout expires).
 func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*v1.Pod, error) {
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		if pod, err := data.clientset.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{}); err != nil {
+		if pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
 			}
@@ -590,7 +591,7 @@ func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, 
 	if err != nil {
 		return nil, err
 	}
-	return data.clientset.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
+	return data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // podWaitForRunning polls the k8s apiserver until the specified Pod is in the "running" state (or
@@ -630,7 +631,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	}
 	// we do not use DeleteCollection directly because we want to ensure the resources no longer
 	// exist by the time we return
-	pods, err := data.clientset.CoreV1().Pods("kube-system").List(listOptions)
+	pods, err := data.clientset.CoreV1().Pods("kube-system").List(context.TODO(), listOptions)
 	if err != nil {
 		return 0, fmt.Errorf("failed to list antrea-agent Pods on Node '%s': %v", nodeName, err)
 	}
@@ -638,18 +639,18 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	if len(pods.Items) == 0 {
 		return 0, fmt.Errorf("no available antrea-agent Pods on Node '%s'", nodeName)
 	}
-	deleteOptions := &metav1.DeleteOptions{
+	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
 
 	start := time.Now()
-	if err := data.clientset.CoreV1().Pods("kube-system").DeleteCollection(deleteOptions, listOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods("kube-system").DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
 		return 0, fmt.Errorf("error when deleting antrea-agent Pods on Node '%s': %v", nodeName, err)
 	}
 
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
 		for _, pod := range pods.Items {
-			if _, err := data.clientset.CoreV1().Pods("kube-system").Get(pod.Name, metav1.GetOptions{}); err != nil {
+			if _, err := data.clientset.CoreV1().Pods("kube-system").Get(context.TODO(), pod.Name, metav1.GetOptions{}); err != nil {
 				if errors.IsNotFound(err) {
 					continue
 				}
@@ -667,7 +668,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 
 	// wait for new antrea-agent Pod
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		pods, err := data.clientset.CoreV1().Pods("kube-system").List(listOptions)
+		pods, err := data.clientset.CoreV1().Pods("kube-system").List(context.TODO(), listOptions)
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-agent Pods on Node '%s': %v", nodeName, err)
 		}
@@ -694,7 +695,7 @@ func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err e
 		LabelSelector: "app=antrea,component=antrea-agent",
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	}
-	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(listOptions)
+	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 	if err != nil {
 		return "", fmt.Errorf("failed to list Antrea Pods: %v", err)
 	}
@@ -709,7 +710,7 @@ func (data *TestData) getAntreaController() (*v1.Pod, error) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea,component=antrea-controller",
 	}
-	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(listOptions)
+	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Antrea Controller: %v", err)
 	}
@@ -723,20 +724,20 @@ func (data *TestData) getAntreaController() (*v1.Pod, error) {
 // for the new Pod to become available, and returns it.
 func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*v1.Pod, error) {
 	var gracePeriodSeconds int64 = 1
-	deleteOptions := &metav1.DeleteOptions{
+	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea,component=antrea-controller",
 	}
-	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(deleteOptions, listOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
 		return nil, fmt.Errorf("error when deleting antrea-controller Pod: %v", err)
 	}
 
 	var newPod *v1.Pod
 	// wait for new antrea-controller Pod
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		pods, err := data.clientset.CoreV1().Pods("kube-system").List(listOptions)
+		pods, err := data.clientset.CoreV1().Pods("kube-system").List(context.TODO(), listOptions)
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-controller Pods: %v", err)
 		}
@@ -791,7 +792,7 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 			Selector: selector,
 		},
 	}
-	return data.clientset.CoreV1().Services(testNamespace).Create(&service)
+	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }
 
 // createNginxService create a nginx service with the given name.
@@ -801,7 +802,7 @@ func (data *TestData) createNginxService() (*v1.Service, error) {
 
 // deleteService deletes the service.
 func (data *TestData) deleteService(name string) error {
-	if err := data.clientset.CoreV1().Services(testNamespace).Delete(name, nil); err != nil {
+	if err := data.clientset.CoreV1().Services(testNamespace).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("unable to cleanup service %v: %v", name, err)
 	}
 	return nil
@@ -818,12 +819,12 @@ func (data *TestData) createNetworkPolicy(name string, spec *networkingv1.Networ
 		},
 		Spec: *spec,
 	}
-	return data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(policy)
+	return data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(context.TODO(), policy, metav1.CreateOptions{})
 }
 
 // deleteNetworkpolicy deletes the network policy.
 func (data *TestData) deleteNetworkpolicy(policy *networkingv1.NetworkPolicy) error {
-	if err := data.clientset.NetworkingV1().NetworkPolicies(policy.Namespace).Delete(policy.Name, nil); err != nil {
+	if err := data.clientset.NetworkingV1().NetworkPolicies(policy.Namespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("unable to cleanup policy %v: %v", policy.Name, err)
 	}
 	return nil
@@ -896,7 +897,7 @@ func (data *TestData) forAllAntreaPods(fn func(nodeName, podName string) error) 
 			LabelSelector: "app=antrea",
 			FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.name),
 		}
-		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(listOptions)
+		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 		if err != nil {
 			return fmt.Errorf("failed to list Antrea Pods on Node '%s': %v", node.name, err)
 		}
@@ -962,13 +963,13 @@ func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (b
 }
 
 func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
-	mapList, err := data.clientset.CoreV1().ConfigMaps("kube-system").List(metav1.ListOptions{})
+	mapList, err := data.clientset.CoreV1().ConfigMaps("kube-system").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return config.TrafficEncapModeInvalid, err
 	}
 	for _, m := range mapList.Items {
 		if strings.HasPrefix(m.Name, "antrea-config") {
-			configMap, err := data.clientset.CoreV1().ConfigMaps("kube-system").Get(m.Name, metav1.GetOptions{})
+			configMap, err := data.clientset.CoreV1().ConfigMaps("kube-system").Get(context.TODO(), m.Name, metav1.GetOptions{})
 			if err != nil {
 				return config.TrafficEncapModeInvalid, err
 			}
@@ -987,7 +988,7 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 }
 
 func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*v1.ConfigMap, error) {
-	deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(antreaDeployment, metav1.GetOptions{})
+	deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(context.TODO(), antreaDeployment, metav1.GetOptions{})
 	var configMapName string
 	for _, volume := range deployment.Spec.Template.Spec.Volumes {
 		if volume.ConfigMap != nil && volume.Name == antreaConfigVolume {
@@ -998,7 +999,7 @@ func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*v1.ConfigMap,
 	if len(configMapName) == 0 {
 		return nil, fmt.Errorf("Failed to locate %s ConfigMap volume", antreaConfigVolume)
 	}
-	configMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Get(configMapName, metav1.GetOptions{})
+	configMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get ConfigMap %s: %v", configMapName, err)
 	}

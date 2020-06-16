@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package fake
 
 import (
+	"context"
+
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -35,7 +37,7 @@ var appliedtogroupsResource = schema.GroupVersionResource{Group: "networking.ant
 var appliedtogroupsKind = schema.GroupVersionKind{Group: "networking.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "AppliedToGroup"}
 
 // Get takes name of the appliedToGroup, and returns the corresponding appliedToGroup object, and an error if there is any.
-func (c *FakeAppliedToGroups) Get(name string, options v1.GetOptions) (result *v1beta1.AppliedToGroup, err error) {
+func (c *FakeAppliedToGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.AppliedToGroup, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootGetAction(appliedtogroupsResource, name), &v1beta1.AppliedToGroup{})
 	if obj == nil {
@@ -45,7 +47,7 @@ func (c *FakeAppliedToGroups) Get(name string, options v1.GetOptions) (result *v
 }
 
 // List takes label and field selectors, and returns the list of AppliedToGroups that match those selectors.
-func (c *FakeAppliedToGroups) List(opts v1.ListOptions) (result *v1beta1.AppliedToGroupList, err error) {
+func (c *FakeAppliedToGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.AppliedToGroupList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootListAction(appliedtogroupsResource, appliedtogroupsKind, opts), &v1beta1.AppliedToGroupList{})
 	if obj == nil {
@@ -66,7 +68,7 @@ func (c *FakeAppliedToGroups) List(opts v1.ListOptions) (result *v1beta1.Applied
 }
 
 // Watch returns a watch.Interface that watches the requested appliedToGroups.
-func (c *FakeAppliedToGroups) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeAppliedToGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(appliedtogroupsResource, opts))
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package fake
 
 import (
+	"context"
+
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -35,7 +37,7 @@ var addressgroupsResource = schema.GroupVersionResource{Group: "networking.antre
 var addressgroupsKind = schema.GroupVersionKind{Group: "networking.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "AddressGroup"}
 
 // Get takes name of the addressGroup, and returns the corresponding addressGroup object, and an error if there is any.
-func (c *FakeAddressGroups) Get(name string, options v1.GetOptions) (result *v1beta1.AddressGroup, err error) {
+func (c *FakeAddressGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.AddressGroup, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootGetAction(addressgroupsResource, name), &v1beta1.AddressGroup{})
 	if obj == nil {
@@ -45,7 +47,7 @@ func (c *FakeAddressGroups) Get(name string, options v1.GetOptions) (result *v1b
 }
 
 // List takes label and field selectors, and returns the list of AddressGroups that match those selectors.
-func (c *FakeAddressGroups) List(opts v1.ListOptions) (result *v1beta1.AddressGroupList, err error) {
+func (c *FakeAddressGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.AddressGroupList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootListAction(addressgroupsResource, addressgroupsKind, opts), &v1beta1.AddressGroupList{})
 	if obj == nil {
@@ -66,7 +68,7 @@ func (c *FakeAddressGroups) List(opts v1.ListOptions) (result *v1beta1.AddressGr
 }
 
 // Watch returns a watch.Interface that watches the requested addressGroups.
-func (c *FakeAddressGroups) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeAddressGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(addressgroupsResource, opts))
 }

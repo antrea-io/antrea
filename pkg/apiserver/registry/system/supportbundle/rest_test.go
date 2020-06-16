@@ -35,8 +35,8 @@ type testExec struct {
 
 func (te *testExec) Command(cmd string, args ...string) exec.Cmd {
 	fakeCmd := new(exectesting.FakeCmd)
-	fakeCmd.CombinedOutputScript = append(fakeCmd.CombinedOutputScript, func() ([]byte, error) {
-		return []byte(fmt.Sprintf("%s %s", cmd, strings.Join(args, " "))), nil
+	fakeCmd.CombinedOutputScript = append(fakeCmd.CombinedOutputScript, func() ([]byte, []byte, error) {
+		return []byte(fmt.Sprintf("%s %s", cmd, strings.Join(args, " "))), nil, nil
 	})
 	return fakeCmd
 }

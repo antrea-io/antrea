@@ -15,6 +15,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -487,7 +488,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 	if err != nil {
 		return err
 	}
-	node, err := i.client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	node, err := i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("Failed to get node from K8s with name %s: %v", nodeName, err)
 		return err

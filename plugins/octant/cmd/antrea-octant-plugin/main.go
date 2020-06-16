@@ -15,11 +15,11 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
 
-	"github.com/vmware-tanzu/octant/pkg/icon"
 	"github.com/vmware-tanzu/octant/pkg/navigation"
 	"github.com/vmware-tanzu/octant/pkg/plugin"
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
@@ -116,7 +116,7 @@ func initRoutes(router *service.Router) {
 	agentCols := component.NewTableCols(versionCol, podCol, nodeCol, subnetCol, bridgeCol, podNumCol, crdCol, heartbeatCol)
 
 	// Click on navigation bar named Antrea Information to display Antrea components (both Controller and Agent) information.
-	router.HandleFunc("/components", func(request *service.Request) (component.ContentResponse, error) {
+	router.HandleFunc("/components", func(request service.Request) (component.ContentResponse, error) {
 		controllerRows := getControllerRows()
 		agentRows := getAgentRows()
 		return component.ContentResponse{
@@ -125,41 +125,35 @@ func initRoutes(router *service.Router) {
 				component.NewTableWithRows(controllerTitle, "", controllerCols, controllerRows),
 				component.NewTableWithRows(agentTitle, "", agentCols, agentRows),
 			},
-			IconName:   "cloud",
-			IconSource: "cloud",
 		}, nil
 	})
 
 	// Click on navigation child named Antrea Controller Info to display Controller information.
-	router.HandleFunc("/components/controller", func(request *service.Request) (component.ContentResponse, error) {
+	router.HandleFunc("/components/controller", func(request service.Request) (component.ContentResponse, error) {
 		controllerRows := getControllerRows()
 		return component.ContentResponse{
 			Title: component.TitleFromString(controllerTitle),
 			Components: []component.Component{
 				component.NewTableWithRows(controllerTitle, "", controllerCols, controllerRows),
 			},
-			IconName:   icon.OverviewDeployment,
-			IconSource: icon.OverviewDeployment,
 		}, nil
 	})
 
 	// Click on navigation child named Antrea Agent Info to display Agent information.
-	router.HandleFunc("/components/agent", func(request *service.Request) (component.ContentResponse, error) {
+	router.HandleFunc("/components/agent", func(request service.Request) (component.ContentResponse, error) {
 		agentRows := getAgentRows()
 		return component.ContentResponse{
 			Title: component.TitleFromString(agentTitle),
 			Components: []component.Component{
 				component.NewTableWithRows(agentTitle, "", agentCols, agentRows),
 			},
-			IconName:   icon.OverviewDaemonSet,
-			IconSource: icon.OverviewDaemonSet,
 		}, nil
 	})
 }
 
 // getControllerRows gets rows for displaying Controller information
 func getControllerRows() []component.TableRow {
-	controllers, err := client.ClusterinformationV1beta1().AntreaControllerInfos().List(v1.ListOptions{})
+	controllers, err := client.ClusterinformationV1beta1().AntreaControllerInfos().List(context.TODO(), v1.ListOptions{})
 	if err != nil {
 		log.Fatalf("Failed to get AntreaControllerInfos %v", err)
 	}
@@ -183,7 +177,7 @@ func getControllerRows() []component.TableRow {
 
 // getAgentRows gets table rows for displaying Agent information.
 func getAgentRows() []component.TableRow {
-	agents, err := client.ClusterinformationV1beta1().AntreaAgentInfos().List(v1.ListOptions{})
+	agents, err := client.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), v1.ListOptions{})
 	if err != nil {
 		log.Fatalf("Failed to get AntreaAgentInfos %v", err)
 	}

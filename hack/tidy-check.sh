@@ -17,9 +17,13 @@
 set +e
 
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-PROJECT_DIR=$(dirname "$THIS_DIR")
 
-pushd "$THIS_DIR" >/dev/null || exit
+pushd "$(dirname "$THIS_DIR")" >/dev/null || exit
+
+
+PROJECT_RELATIVE_DIR=${1:-.}
+PROJECT_DIR=$(dirname "$THIS_DIR")/$PROJECT_RELATIVE_DIR
+TIDY_COMMAND="cd $PROJECT_RELATIVE_DIR && go mod tidy >> /dev/null 2>&1"
 
 MOD_FILE="$PROJECT_DIR/go.mod"
 SUM_FILE="$PROJECT_DIR/go.sum"
@@ -27,7 +31,7 @@ TMP_DIR="$THIS_DIR/.tmp.tidy-check"
 TMP_MOD_FILE="$TMP_DIR/go.mod"
 TMP_SUM_FILE="$TMP_DIR/go.sum"
 TARGET_GO_VERSION="1.13"
-TARGET_GO_VERSION_PATTERN="go$TARGET_GO_VERSION.*"
+TARGET_GO_VERSION_PATTERN="go$TARGET_GO_VERSION*"
 
 # if Go environment variable is set, use it as it is, otherwise default to "go"
 : "${GO:=go}"
@@ -64,14 +68,14 @@ function tidy {
   mv "$SUM_FILE" "$TMP_SUM_FILE"
 
   if [ -n "$GO" ] && [[ "$($GO version|awk '{print $3}')" == $TARGET_GO_VERSION_PATTERN ]]; then
-    /usr/bin/env bash -c "$GO mod tidy" >>/dev/null 2>&1
+    /usr/bin/env bash -c "$TIDY_COMMAND"
   else
     docker run --rm -u "$(id -u):$(id -g)" \
       -e "GOCACHE=/tmp/gocache" \
       -e "GOPATH=/tmp/gopath" \
       -w /usr/src/github.com/vmware-tanzu/antrea \
-      -v "$PROJECT_DIR:/usr/src/github.com/vmware-tanzu/antrea" \
-      golang:$TARGET_GO_VERSION bash -c "go mod tidy >> /dev/null 2>&1"
+      -v "$(dirname "$THIS_DIR"):/usr/src/github.com/vmware-tanzu/antrea" \
+      golang:$TARGET_GO_VERSION bash -c "$TIDY_COMMAND"
   fi
 }
 
