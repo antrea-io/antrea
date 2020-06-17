@@ -124,12 +124,14 @@ func (exp *flowExporter) Run(stopCh <-chan struct{}) {
 			err := exp.flowRecords.BuildFlowRecords()
 			if err != nil {
 				klog.Errorf("Error when building flow records: %v", err)
-				return
+				exp.process.CloseConnToCollector()
+				break
 			}
 			err = exp.sendFlowRecords()
 			if err != nil {
 				klog.Errorf("Error when sending flow records: %v", err)
-				return
+				exp.process.CloseConnToCollector()
+				break
 			}
 		}
 	}
