@@ -245,6 +245,10 @@ func podIndexFunc(obj interface{}) ([]string, error) {
 
 func interfaceIPIndexFunc(obj interface{}) ([]string, error) {
 	interfaceConfig := obj.(*InterfaceConfig)
+	if interfaceConfig.IP == nil {
+		// If interfaceConfig IP is not set, we return empty key.
+		return []string{}, nil
+	}
 	return []string{interfaceConfig.IP.String()}, nil
 }
 

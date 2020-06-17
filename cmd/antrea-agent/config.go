@@ -86,7 +86,4 @@ type AgentConfig struct {
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to false.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
-	// Enable flow exporter that exports IPFIX flow records of conntrack flows on OVS bridge
-	// Defaults to false.
-	EnableFlowExporter bool `yaml:"enableFlowExporter,omitempty"`
 }

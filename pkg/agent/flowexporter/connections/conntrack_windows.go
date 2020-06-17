@@ -1,5 +1,19 @@
 // +build windows
 
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package connections
 
 import (
@@ -9,33 +23,33 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 )
 
-var _ ConnTrackPoller = new(connTrackPoller)
+var _ ConnTrackDumper = new(connTrackDumper)
 
-type connTrackPoller struct {
+type connTrackDumper struct {
 	nodeConfig  *config.NodeConfig
 	serviceCIDR *net.IPNet
-	conntrack   ConnTrack
+	connTrack   ConnTrackInterfacer
 }
 
-func NewConnTrackPoller(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, conntrack ConnTrack) *connTrackPoller {
-	return &connTrackPoller{
+func NewConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, conntrack ConnTrackInterfacer) *connTrackDumper {
+	return &connTrackDumper{
 		nodeConfig,
 		serviceCIDR,
 		conntrack,
 	}
 }
 
-// TODO: These will be defined when polling from ovs-dpctl dump conntrack is supported
-var _ ConnTrack = new(connTrack)
+// TODO: These will be defined when polling from ovs-dpctl dump conntrack is supported for windows.
+var _ ConnTrackInterfacer = new(connTrackSystem)
 
-type ConnTrack interface{}
+type ConnTrackInterfacer interface{}
 
-type connTrack struct{}
+type connTrackSystem struct{}
 
-func NewConnTrack() *connTrack {
-	return &connTrack{}
+func NewConnTrackInterfacer() *connTrackSystem {
+	return &connTrackSystem{}
 }
 
-func (c *connTrackPoller) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error) {
+func (cp *connTrackDumper) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error) {
 	return nil, nil
 }

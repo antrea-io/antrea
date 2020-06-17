@@ -239,8 +239,8 @@ func run(o *Options) error {
 		go ofClient.StartPacketInHandler(stopCh)
 	}
 	// Create connection store that polls conntrack flows with a given polling interval.
-	if o.config.EnableFlowExporter {
-		connTrack := connections.NewConnTrackPoller(nodeConfig, serviceCIDRNet, connections.NewConnTrack())
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		connTrack := connections.NewConnTrackDumper(nodeConfig, serviceCIDRNet, connections.NewConnTrackInterfacer())
 		connStore := connections.NewConnectionStore(connTrack, ifaceStore)
 		go connStore.Run(stopCh)
 	}

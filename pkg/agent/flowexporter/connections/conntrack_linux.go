@@ -1,9 +1,24 @@
-// +build linux
+//+build linux
+
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package connections
 
 import (
 	"net"
+	"os"
 
 	"github.com/ti-mo/conntrack"
 	"k8s.io/klog"
@@ -11,18 +26,19 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/util/sysctl"
 )
 
-var _ ConnTrackPoller = new(connTrackPoller)
+var _ ConnTrackDumper = new(connTrackDumper)
 
-type connTrackPoller struct {
+type connTrackDumper struct {
 	nodeConfig  *config.NodeConfig
 	serviceCIDR *net.IPNet
-	conntrack   ConnTrack
+	connTrack   ConnTrackInterfacer
 }
 
-func NewConnTrackPoller(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, conntrack ConnTrack) *connTrackPoller {
-	return &connTrackPoller{
+func NewConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, conntrack ConnTrackInterfacer) *connTrackDumper {
+	return &connTrackDumper{
 		nodeConfig,
 		serviceCIDR,
 		conntrack,
@@ -31,18 +47,41 @@ func NewConnTrackPoller(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, c
 
 // DumpFlows opens netlink connection and dumps all the flows in Antrea ZoneID
 // of conntrack table, i.e., corresponding to Antrea OVS bridge.
-func (cp *connTrackPoller) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error) {
+func (ctdump *connTrackDumper) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error) {
 	// Get netlink Connection to netfilter
-	err := cp.conntrack.Dial()
+	err := ctdump.connTrack.Dial()
 	if err != nil {
 		klog.Errorf("Error when getting netlink conn: %v", err)
 		return nil, err
 	}
 
+	// Check value of setting net.netfilter.nf_conntrack_acct. Set to value 1, if it is not set.
+	connTrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
+	if err != nil {
+		if !os.IsPermission(err) {
+			klog.Errorf("Error when getting net.netfilter.nf_conntrack_acct")
+			return nil, err
+		} else {
+			klog.Errorf("Permission denied to access net.netfilter.nf_conntrack_acct: Counters in flow records may not update")
+		}
+	} else {
+		if connTrackAcct == 0 {
+			err = sysctl.SetSysctlNet("netfilter/nf_conntrack_acct", 1)
+			if err != nil {
+				if !os.IsPermission(err) {
+					klog.Errorf("Error when setting net.netfilter.nf_conntrack_acct")
+					return nil, err
+				} else {
+					klog.Errorf("Permission denied to access net.netfilter.nf_conntrack_acct: Counters in flow records may not update")
+				}
+			}
+		}
+	}
+
 	// ZoneID filter is not supported currently in tl-mo/conntrack library.
 	// Link to issue: https://github.com/ti-mo/conntrack/issues/23
 	// Dump all flows in the conntrack table for now.
-	conns, err := cp.conntrack.DumpFilter(conntrack.Filter{})
+	conns, err := ctdump.connTrack.DumpFilter(conntrack.Filter{})
 	if err != nil {
 		klog.Errorf("Error when dumping flows from conntrack: %v", err)
 		return nil, err
@@ -56,7 +95,7 @@ func (cp *connTrackPoller) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 		srcIP := conn.TupleOrig.IP.SourceAddress
 		dstIP := conn.TupleReply.IP.SourceAddress
 		// Only get Pod-to-Pod flows. Pod-to-ExternalService flows are ignored for now.
-		if srcIP.Equal(cp.nodeConfig.GatewayConfig.IP) || dstIP.Equal(cp.nodeConfig.GatewayConfig.IP) {
+		if srcIP.Equal(ctdump.nodeConfig.GatewayConfig.IP) || dstIP.Equal(ctdump.nodeConfig.GatewayConfig.IP) {
 			continue
 		}
 
@@ -68,7 +107,7 @@ func (cp *connTrackPoller) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 		// Therefore, we ignore the connection with ClusterIP and keep the connection with Endpoint Pod IP.
 		// Conntrack flows will be different for Pod-to-Service flows w/ Antrea-proxy. This implementation will be simpler, when the
 		// Antrea proxy is supported.
-		if cp.serviceCIDR.Contains(srcIP) || cp.serviceCIDR.Contains(dstIP) {
+		if ctdump.serviceCIDR.Contains(srcIP) || ctdump.serviceCIDR.Contains(dstIP) {
 			continue
 		}
 		filteredConns = append(filteredConns, createAntreaConn(&conn))
@@ -79,24 +118,25 @@ func (cp *connTrackPoller) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 	return filteredConns, nil
 }
 
-// ConnTrack is an interface created to consume the required functions from the third party
-// conntrack library. This is helpful in writing unit tests.
-var _ ConnTrack = new(connTrack)
+// connTrackSystem implements ConnTrackInterfacer
+var _ ConnTrackInterfacer = new(connTrackSystem)
 
-type ConnTrack interface {
+// ConnTrackInterfacer is an interface created to consume the required functions from the third party
+// conntrack library. This is helpful in writing unit tests.
+type ConnTrackInterfacer interface {
 	Dial() error
 	DumpFilter(filter conntrack.Filter) ([]conntrack.Flow, error)
 }
 
-type connTrack struct {
+type connTrackSystem struct {
 	netlinkConn *conntrack.Conn
 }
 
-func NewConnTrack() *connTrack {
-	return &connTrack{}
+func NewConnTrackInterfacer() *connTrackSystem {
+	return &connTrackSystem{}
 }
 
-func (c *connTrack) Dial() error {
+func (c *connTrackSystem) Dial() error {
 	// Get conntrack in current namespace
 	conn, err := conntrack.Dial(nil)
 	if err != nil {
@@ -107,7 +147,7 @@ func (c *connTrack) Dial() error {
 	return nil
 }
 
-func (c *connTrack) DumpFilter(filter conntrack.Filter) ([]conntrack.Flow, error) {
+func (c *connTrackSystem) DumpFilter(filter conntrack.Filter) ([]conntrack.Flow, error) {
 	conns, err := c.netlinkConn.DumpFilter(filter)
 	if err != nil {
 		klog.Errorf("Error when dumping flows from conntrack: %v", err)

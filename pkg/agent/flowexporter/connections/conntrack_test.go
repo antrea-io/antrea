@@ -1,5 +1,19 @@
 // +build linux
 
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package connections
 
 import (
@@ -111,8 +125,8 @@ func TestConnTrack_DumpFilter(t *testing.T) {
 
 	testFlows := []conntrack.Flow{antreaFlow, antreaServiceFlow, antreaGWFlow, nonAntreaFlow}
 
-	// Create mock ConnTrack interface
-	mockCT := connectionstest.NewMockConnTrack(ctrl)
+	// Create mock ConnTrackInterfacer interface
+	mockCTInterfacer := connectionstest.NewMockConnTrackInterfacer(ctrl)
 
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
@@ -128,13 +142,13 @@ func TestConnTrack_DumpFilter(t *testing.T) {
 		Mask: net.IPMask{255, 255, 255, 0},
 	}
 	// set expects for mocks
-	mockCT.EXPECT().Dial().Return(nil)
-	mockCT.EXPECT().DumpFilter(conntrack.Filter{}).Return(testFlows, nil)
+	mockCTInterfacer.EXPECT().Dial().Return(nil)
+	mockCTInterfacer.EXPECT().DumpFilter(conntrack.Filter{}).Return(testFlows, nil)
 
-	connTrackPoller := NewConnTrackPoller(nodeConfig, serviceCIDR, mockCT)
-	conns, err := connTrackPoller.DumpFlows(openflow.CtZone)
+	connTrack := NewConnTrackDumper(nodeConfig, serviceCIDR, mockCTInterfacer)
+	conns, err := connTrack.DumpFlows(openflow.CtZone)
 	if err != nil {
-		t.Errorf("Dump filter function returned error: %v", err)
+		t.Errorf("Dump flows function returned error: %v", err)
 	}
 	assert.Equal(t, 1, len(conns), "number of filtered connections should be equal")
 }

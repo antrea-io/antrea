@@ -1,3 +1,17 @@
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package connections
 
 import (
@@ -18,39 +32,43 @@ type ConnectionStore interface {
 }
 
 type connectionStore struct {
-	connections     map[flowexporter.ConnectionKey]flowexporter.Connection // Add 5-tuple as string array
-	connTrackPoller ConnTrackPoller
-	ifaceStore      interfacestore.InterfaceStore
-	mutex           sync.Mutex
+	connections map[flowexporter.ConnectionKey]flowexporter.Connection // Add 5-tuple as string array
+	connDumper  ConnTrackDumper
+	ifaceStore  interfacestore.InterfaceStore
+	mutex       sync.Mutex
 }
 
-func NewConnectionStore(connTrack ConnTrackPoller, ifaceStore interfacestore.InterfaceStore) *connectionStore {
+func NewConnectionStore(ctDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore) *connectionStore {
 	return &connectionStore{
-		connections:     make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		connTrackPoller: connTrack,
-		ifaceStore:      ifaceStore,
+		connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		connDumper:  ctDumper,
+		ifaceStore:  ifaceStore,
 	}
 }
 
-// Run polls the conntrack module periodically to get connections. These connections are used
-// to build connection store.
+// Run polls the connTrackDumper module periodically to get connections. These connections are used
+// to build connection store. If there is an error in poll cycle, we break the loop and exit the routine.
 func (cs *connectionStore) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting conntrack polling")
+
+	ticker := time.NewTicker(flowexporter.PollInterval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-stopCh:
 			break
-		case <-time.After(flowexporter.PollInterval):
+		case <-ticker.C:
 			_, err := cs.poll()
 			if err != nil {
 				klog.Errorf("Error during conntrack poll cycle: %v", err)
+				break
 			}
 		}
 	}
 }
 
 // addOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
-// or add a new Connection by 5-tuple of the flow along with local Pod and PodNameSpace.
+// or adds a new Connection by 5-tuple of the flow along with local Pod and PodNameSpace.
 func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 	connKey := flowexporter.NewConnectionKey(conn)
 
@@ -101,7 +119,7 @@ func (cs *connectionStore) getConnByKey(flowTuple flowexporter.ConnectionKey) (*
 func (cs *connectionStore) poll() (int, error) {
 	klog.V(2).Infof("Polling conntrack")
 
-	filteredConns, err := cs.connTrackPoller.DumpFlows(openflow.CtZone)
+	filteredConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
 	if err != nil {
 		klog.Errorf("Error when dumping flows from conntrack: %v", err)
 		return 0, err

@@ -42,6 +42,10 @@ const (
 	// alpha: v0.8
 	// Allows to trace path from a generated packet.
 	Traceflow featuregate.Feature = "Traceflow"
+
+	// alpha: v0.9
+	// Flow exporter exports IPFIX flow records of Antrea flows seen in conntrack module.
+	FlowExporter featuregate.Feature = "FlowExporter"
 )
 
 var (
@@ -59,6 +63,7 @@ var (
 		ClusterNetworkPolicy: {Default: false, PreRelease: featuregate.Alpha},
 		AntreaProxy:          {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:            {Default: false, PreRelease: featuregate.Alpha},
+		FlowExporter:         {Default: false, PreRelease: featuregate.Alpha},
 	}
 )
 
