@@ -399,10 +399,10 @@
     - :uint32
     - :observationDomainId
   150:
-    - :uint32
+    - :int64
     - :flowStartSeconds
   151:
-    - :uint32
+    - :int64
     - :flowEndSeconds
   152:
     - :uint64

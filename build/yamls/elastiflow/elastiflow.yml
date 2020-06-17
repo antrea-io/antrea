@@ -188,6 +188,7 @@ spec:
   ports:
     - port: 4739
       targetPort: 4739
+      protocol: UDP
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -218,6 +219,9 @@ spec:
               value: "-Xms4g -Xmx4g"
             - name: ELASTIFLOW_DEFINITION_PATH
               value: "/usr/share/logstash/definitions"
+          ports:
+            - containerPort: 4739
+              protocol: UDP
       volumes:
         - name: logstash-definition-volume
           configMap:
