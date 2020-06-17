@@ -146,6 +146,9 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 		}
 	} else {
 		antreaController, err = data.getAntreaController()
+		if err != nil {
+			t.Fatalf("Error when getting antrea-controller Pod: %v", err)
+		}
 		timeout += 2 * time.Minute
 	}
 
