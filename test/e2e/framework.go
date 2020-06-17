@@ -739,13 +739,19 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*v1.Pod
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-controller Pods: %v", err)
 		}
-		for _, pod := range pods.Items {
-			if pod.Status.Phase == v1.PodRunning && pod.DeletionTimestamp == nil {
-				newPod = &pod
-				return true, nil
-			}
+		// Even though the strategy is "Recreate", the old Pod might still be in terminating state when the new Pod is
+		// running as this is deleting a Pod manually, not upgrade.
+		// See https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#recreate-deployment.
+		// So we should ensure there's only 1 Pod and it's running.
+		if len(pods.Items) != 1 {
+			return false, nil
 		}
-		return false, nil
+		pod := pods.Items[0]
+		if pod.Status.Phase != v1.PodRunning || pod.DeletionTimestamp != nil {
+			return false, nil
+		}
+		newPod = &pod
+		return true, nil
 	}); err != nil {
 		return nil, err
 	}
