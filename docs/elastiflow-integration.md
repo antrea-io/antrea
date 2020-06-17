@@ -15,10 +15,11 @@ Antrea supports sending IPFIX flow records as flow exporter. Elastiflow works as
  | destinationNodeName       | 55829         | 105      | string      |
  | destinationClusterIP      | 55829         | 106      | ipv4Address |
  | destinationServicePort    | 55829         | 107      | unsigned16  |
+ 
 For the requirements to deploy Elastiflow, please refer to [this](https://github.com/robcowart/elastiflow/blob/master/INSTALL.md#requirements).
 
 ## Instruction
-To put everyting in elastiflow namespace and get the configuration up and running, run:
+To put everything in elastiflow namespace and get the configuration up and running, run:
 ```shell script
 kubectl create namespace elastiflow
 kubectl create configmap logstash-definitions -n elastiflow --from-file=build/yamls/elastiflow/src/definitions/
