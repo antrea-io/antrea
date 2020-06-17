@@ -12,9 +12,6 @@ RUN mkdir -p /opt/cni/bin && \
 
 FROM antrea/openvswitch:2.13.0
 
-RUN apt-get update && apt-get install -y --no-install-recommends jq && \
-    rm -rf /var/cache/apt/* /var/lib/apt/lists/*
-
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image to deploy the Antrea CNI. Requires the Antrea binaries to be built prior to building the image."
 
@@ -22,6 +19,7 @@ USER root
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ipset \
+    jq \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
