@@ -832,7 +832,7 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 		if rule.IsAntreaNetworkPolicyRule() {
 			ruleTable = clnt.pipeline[cnpEgressRuleTable]
 		} else {
-			ruleTable = clnt.pipeline[egressRuleTable]
+			ruleTable = clnt.pipeline[EgressRuleTable]
 		}
 		dropTable = clnt.pipeline[egressDefaultTable]
 		isEgressRule = true
@@ -840,7 +840,7 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 		if rule.IsAntreaNetworkPolicyRule() {
 			ruleTable = clnt.pipeline[cnpIngressRuleTable]
 		} else {
-			ruleTable = clnt.pipeline[ingressRuleTable]
+			ruleTable = clnt.pipeline[IngressRuleTable]
 		}
 		dropTable = clnt.pipeline[ingressDefaultTable]
 	}
@@ -952,6 +952,14 @@ func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction 
 		return nil
 	}
 	return conj.(*policyRuleConjunction)
+}
+
+func (c *client) GetPolicyFromConjunction(ruleID uint32) (string, string) {
+	conjunction := c.getPolicyRuleConjunction(ruleID)
+	if conjunction == nil {
+		return "", ""
+	}
+	return conjunction.npName, conjunction.npNamespace
 }
 
 // UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.

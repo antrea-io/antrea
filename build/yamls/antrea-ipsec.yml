@@ -166,6 +166,27 @@ spec:
     - tf
     singular: traceflow
   scope: Cluster
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            source:
+              properties:
+                namespace:
+                  type: string
+                pod:
+                  type: string
+              required:
+              - pod
+              - namespace
+              type: object
+          required:
+          - source
+          type: object
+      required:
+      - spec
+      type: object
   versions:
   - name: v1alpha1
     served: true
@@ -318,6 +339,16 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - ops.antrea.tanzu.vmware.com
+  resources:
+  - traceflows
+  verbs:
+  - get
+  - watch
+  - list
+  - update
+  - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -409,6 +440,16 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - ops.antrea.tanzu.vmware.com
+  resources:
+  - traceflows
+  verbs:
+  - get
+  - watch
+  - list
+  - update
+  - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -473,6 +514,8 @@ data:
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic.
     #  AntreaProxy: false
+    # Enable traceflow which provides packet tracing feature to diagnose network issue.
+    #  Traceflow: false
 
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -544,7 +587,9 @@ data:
     }
   antrea-controller.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
-    #featureGates:
+    featureGates:
+    # Enable traceflow which provides packet tracing feature to diagnose network issue.
+    #  Traceflow: false
 
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
@@ -567,7 +612,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-6dfb5t2tkk
+  name: antrea-config-5kmdd477m5
   namespace: kube-system
 ---
 apiVersion: v1
@@ -681,7 +726,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-6dfb5t2tkk
+          name: antrea-config-5kmdd477m5
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -930,7 +975,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-6dfb5t2tkk
+          name: antrea-config-5kmdd477m5
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
