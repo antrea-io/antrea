@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	EgressNetworkPolicyCount = metrics.NewGauge(
+	EgressNetworkPolicyRuleCount = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Name:           "antrea_agent_egress_networkpolicy_rule_count",
 			Help:           "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
@@ -31,7 +31,7 @@ var (
 		},
 	)
 
-	IngressNetworkPolicyCount = metrics.NewGauge(
+	IngressNetworkPolicyRuleCount = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Name:           "antrea_agent_ingress_networkpolicy_rule_count",
 			Help:           "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
@@ -43,6 +43,14 @@ var (
 		&metrics.GaugeOpts{
 			Name:           "antrea_agent_local_pod_count",
 			Help:           "Number of pods on local node which are managed by the Antrea Agent.",
+			StabilityLevel: metrics.STABLE,
+		},
+	)
+
+	NetworkPolicyCount = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Name:           "antrea_agent_networkpolicy_count",
+			Help:           "Number of networkpolicies on local node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
 	)
@@ -86,12 +94,16 @@ func InitializePrometheusMetrics() {
 	// and will not measure anything unless the collector is first registered.
 	gaugeHost.Set(1)
 
-	if err := legacyregistry.Register(EgressNetworkPolicyCount); err != nil {
+	if err := legacyregistry.Register(EgressNetworkPolicyRuleCount); err != nil {
 		klog.Error("Failed to register antrea_agent_egress_networkpolicy_rule_count with Prometheus")
 	}
 
-	if err := legacyregistry.Register(IngressNetworkPolicyCount); err != nil {
+	if err := legacyregistry.Register(IngressNetworkPolicyRuleCount); err != nil {
 		klog.Error("Failed to register antrea_agent_ingress_networkpolicy_rule_count with Prometheus")
+	}
+
+	if err := legacyregistry.Register(NetworkPolicyCount); err != nil {
+		klog.Error("Failed to register antrea_agent_networkpolicy_count with Prometheus")
 	}
 
 	if err := legacyregistry.Register(OVSTotalFlowCount); err != nil {

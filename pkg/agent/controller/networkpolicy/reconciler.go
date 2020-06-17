@@ -27,7 +27,6 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -255,13 +254,6 @@ func (r *reconciler) add(rule *CompletedRule) error {
 		lastRealized.ofIDs[svcHash] = ofID
 	}
 
-	// Count up antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
-	if rule.Direction == v1beta1.DirectionIn {
-		metrics.IngressNetworkPolicyCount.Inc()
-	} else if rule.Direction == v1beta1.DirectionOut {
-		metrics.EgressNetworkPolicyCount.Inc()
-	}
-
 	return nil
 }
 
@@ -436,13 +428,6 @@ func (r *reconciler) Forget(ruleID string) error {
 			return err
 		}
 		delete(lastRealized.ofIDs, svcHash)
-	}
-
-	// Decrement antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
-	if lastRealized.Direction == v1beta1.DirectionIn {
-		metrics.IngressNetworkPolicyCount.Dec()
-	} else if lastRealized.Direction == v1beta1.DirectionOut {
-		metrics.EgressNetworkPolicyCount.Dec()
 	}
 
 	r.lastRealizeds.Delete(ruleID)
