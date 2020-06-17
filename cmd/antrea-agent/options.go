@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"strings"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
@@ -101,14 +102,38 @@ func (o *Options) validate(args []string) error {
 		if o.config.OVSDatapathType == ovsconfig.OVSDatapathNetdev {
 			return fmt.Errorf("exporting flows is not supported for OVS datapath type %s", o.config.OVSDatapathType)
 		} else {
-			// Convert the string input in net.Addr format
-			_, _, err := net.SplitHostPort(o.config.FlowCollectorAddr)
-			if err != nil {
-				return fmt.Errorf("IPFIX flow collector is given in invalid format. Error: %v", err)
+			// Check if it is TCP or UDP
+			strSlice := strings.Split(o.config.FlowCollectorAddr, ":")
+			var proto string
+			if len(strSlice) == 2 {
+				// No separator "." and proto is given
+				proto = "tcp"
+			} else if len(strSlice) > 2 {
+				if strSlice[2] == "udp" {
+					proto = "udp"
+				} else {
+					// All other cases default proto is tcp
+					proto = "tcp"
+				}
+			} else {
+				return fmt.Errorf("IPFIX flow collector is given in invalid format: %v", err)
 			}
-			o.flowCollector, err = net.ResolveTCPAddr("tcp", o.config.FlowCollectorAddr)
+			// Convert the string input in net.Addr format
+			hostPortAddr := strSlice[0]+":"+strSlice[1]
+			_, _, err := net.SplitHostPort(hostPortAddr)
 			if err != nil {
-				return fmt.Errorf("IPFIX flow collector server over TCP proto is not resolved. Error: %v", err)
+				return fmt.Errorf("IPFIX flow collector is given in invalid format: %v", err)
+			}
+			if proto == "udp" {
+				o.flowCollector, err = net.ResolveUDPAddr("udp", hostPortAddr)
+				if err != nil {
+					return fmt.Errorf("IPFIX flow collector over UDP proto is not resolved. Error: %v", err)
+				}
+			} else {
+				o.flowCollector, err = net.ResolveTCPAddr("tcp", hostPortAddr)
+				if err != nil {
+					return fmt.Errorf("IPFIX flow collector server TCP proto is not resolved. Error: %v", err)
+				}
 			}
 		}
 	}
