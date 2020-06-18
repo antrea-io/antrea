@@ -293,7 +293,7 @@
                 focus_regex: ''
                 skip_regex: ''
             - builder-workload-cluster-cleanup
-          trigger_phrase: .*/test-(whole-conformance|all).*
+          trigger_phrase: .*/test-(whole-conformance).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
@@ -310,7 +310,7 @@
           wrappers:
           - timeout:
               fail: true
-              timeout: 120
+              timeout: 150
               type: absolute
           publishers:
           - archive:
