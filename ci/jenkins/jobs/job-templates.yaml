@@ -127,6 +127,7 @@
         url: 'https://github.com/{org_repo}'
         wipe-workspace: true
         included-regions: '{included_regions}'
+    publishers: '{publishers}'
 
 - job-template:
     name: '{name}-{test_name}-for-gc'

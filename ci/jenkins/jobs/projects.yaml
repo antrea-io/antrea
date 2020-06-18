@@ -17,6 +17,27 @@
           - ci/jenkins/jobs/.*
           cron: 'H/15 * * * *'
           ignore_post_commit_hooks: false
+          publishers: []
+      - '{name}-{test_name}-for-period':
+          test_name: daily-whole-conformance
+          node: 'antrea-test-node'
+          description: 'This is for testing all conformance daily.'
+          builders:
+            - builder-workload-cluster-setup
+            - builder-prepare-antrea
+            - builder-conformance:
+                mode_regex: 'certified-conformance'
+                focus_regex: ''
+                skip_regex: ''
+            - builder-workload-cluster-cleanup
+          branches:
+          - '*/master'
+          included_regions: []
+          cron: 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers:
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
       - '{name}-{test_name}-for-gc':
           test_name: workload-cluster
           node: 'antrea-test-node'
@@ -186,6 +207,7 @@
             - builder-workload-cluster-setup
             - builder-prepare-antrea
             - builder-conformance:
+                mode_regex: ''
                 focus_regex: '\[Conformance\]'
                 skip_regex: '\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]'
             - builder-workload-cluster-cleanup
@@ -238,6 +260,88 @@
           wrappers: []
           publishers: []
       - '{name}-{test_name}-for-pull-request':
+          test_name: whole-conformance-pending-label
+          node: null
+          description: 'This is for marking PR as pending for whole conformance test.'
+          builders:
+            - builder-pending-label
+          trigger_phrase: null
+          allow_whitelist_orgs_as_admins: false
+          admin_list: []
+          org_list: []
+          white_list: []
+          only_trigger_phrase: false
+          trigger_permit_all: true
+          status_context: jenkins-whole-conformance
+          status_url: --none--
+          success_status: Pending test. Mark as failure. Not required for merging. Add comment /test-whole-conformance to trigger.
+          failure_status: Pending test. Mark as failure. Not required for merging. Add comment /test-whole-conformance to trigger.
+          error_status: Pending test. Mark as failure. Not required for merging. Add comment /test-whole-conformance to trigger.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: whole-conformance
+          node: 'antrea-test-node'
+          description: 'This is the {test_name} test for {name}.'
+          builders:
+            - builder-workload-cluster-setup
+            - builder-prepare-antrea
+            - builder-conformance:
+                mode_regex: 'certified-conformance'
+                focus_regex: ''
+                skip_regex: ''
+            - builder-workload-cluster-cleanup
+          trigger_phrase: .*/test-(whole-conformance|all).*
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          status_context: jenkins-whole-conformance
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-whole-conformance to re-trigger.
+          error_status: Failed. Add comment /test-whole-conformance to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 120
+              type: absolute
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+          test_name: whole-conformance-skip
+          node: null
+          description: 'This is for marking PR as passed.'
+          builders: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: .*/skip-(whole-conformance|all).*
+          status_context: jenkins-whole-conformance
+          status_url: --none--
+          success_status: Skipped test. Mark as succeeded.
+          failure_status: Skipped test. Mark as succeeded.
+          error_status: Skipped test. Mark as succeeded.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy-pending-label
           node: null
           description: 'This is for marking PR as pending for networkpolicy test.'
@@ -267,6 +371,7 @@
             - builder-workload-cluster-setup
             - builder-prepare-antrea
             - builder-conformance:
+                mode_regex: ''
                 focus_regex: '\[Feature:NetworkPolicy\]'
                 skip_regex: 'SKIP_NO_TESTCASE'
             - builder-workload-cluster-cleanup

@@ -21,13 +21,18 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 * [conformance [gated check-in]](https://jenkins.antrea-ci.rocks/job/antrea-conformance-for-pull-request/):
   community tests using sonobuoy, focusing on "Conformance", and skipping "Slow",
   "Serial", "Disruptive", "Flaky", "Feature", "sig-cli",
-  "sig-storage", "sig-auth", "sig-api-machinery", "sig-apps" and "sig-node". [gated check-in]
+  "sig-storage", "sig-auth", "sig-api-machinery", "sig-apps" and "sig-node".
 * [network policy [gated check-in]](https://jenkins.antrea-ci.rocks/job/antrea-networkpolicy-for-pull-request/):
   community tests using sonobuoy, focusing on "Feature:NetworkPolicy".
+* [whole-conformance [daily]](https://jenkins.antrea-ci.rocks/job/antrea-whole-conformance-for-pull-request/):
+  community tests using sonobuoy, with certified-conformance mode.
+* [daily-whole-conformance](https://jenkins.antrea-ci.rocks/job/antrea-daily-whole-conformance-for-period/):
+  daily community tests using sonobuoy, with certified-conformance mode. If build fails, Jenkins will
+  send an email to projectantrea-dev@googlegroups.com for notification.
 * Microsoft Windows conformance: community tests related to Microsoft Windows.
   It focuses on: "[sig-network].+[Conformance]|[sig-windows]".
   It skips: "[LinuxOnly]|[Slow]|[Serial]|[Disruptive]|[Flaky]|[Feature:.+]|[sig-cli]|[sig-storage]|[sig-auth]|[sig-api-machinery]|[sig-apps]|[sig-node]|[Privileged]|should be able to change the type from|[sig-network] Services should be able to create a functioning NodePort service [Conformance]".
-* jenkins jobs validator [gated check-in]: this job only executes for PRs that include changes to
+* Jenkins jobs validator [gated check-in]: this job only executes for PRs that include changes to
   [ci/jenkins/jobs](/ci/jenkins/jobs). It validates the syntax of the jenkins jobs'
   configuration.
 * [EKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-test-native/)
