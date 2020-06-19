@@ -46,9 +46,10 @@ const (
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
 	antreaNamespace      string = "kube-system"
+	antreaConfigVolume   string = "antrea-config"
 	antreaDaemonSet      string = "antrea-agent"
 	antreaDeployment     string = "antrea-controller"
-	antreaGWName         string = "gw0"
+	antreaDefaultGW      string = "gw0"
 	testNamespace        string = "antrea-test"
 	busyboxContainerName string = "busybox"
 	ovsContainerName     string = "antrea-ovs"
@@ -983,4 +984,37 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 		}
 	}
 	return config.TrafficEncapModeInvalid, fmt.Errorf("antrea-conf config map is not found")
+}
+
+func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*v1.ConfigMap, error) {
+	deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(antreaDeployment, metav1.GetOptions{})
+	var configMapName string
+	for _, volume := range deployment.Spec.Template.Spec.Volumes {
+		if volume.ConfigMap != nil && volume.Name == antreaConfigVolume {
+			configMapName = volume.ConfigMap.Name
+			break
+		}
+	}
+	if len(configMapName) == 0 {
+		return nil, fmt.Errorf("Failed to locate %s ConfigMap volume", antreaConfigVolume)
+	}
+	configMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Get(configMapName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get ConfigMap %s: %v", configMapName, err)
+	}
+	return configMap, nil
+}
+
+func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, error) {
+	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		return "", err
+	}
+	agentConfData := configMap.Data["antrea-agent.conf"]
+	for _, line := range strings.Split(agentConfData, "\n") {
+		if strings.HasPrefix(line, "hostGateway") {
+			return strings.Fields(line)[1], nil
+		}
+	}
+	return antreaDefaultGW, nil
 }
