@@ -288,6 +288,10 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		return antreaPodName
 	}
 
+	antreaGWName, err := data.GetGatewayInterfaceName(antreaNamespace)
+	if err != nil {
+		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
+	}
 	getGatewayRoutes := func() (routes []Route, err error) {
 		cmd := fmt.Sprintf("ip route list dev %s", antreaGWName)
 		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)
