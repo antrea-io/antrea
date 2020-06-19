@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
 
@@ -563,6 +564,7 @@ func (c *ruleCache) AddNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 
 func (c *ruleCache) addNetworkPolicyLocked(policy *v1beta1.NetworkPolicy) error {
 	c.policyMap[string(policy.UID)] = &types.NamespacedName{policy.Namespace, policy.Name}
+	metrics.NetworkPolicyCount.Inc()
 	return c.UpdateNetworkPolicy(policy)
 }
 
@@ -576,21 +578,33 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 	}
 
 	for i := range policy.Rules {
-		rule := toRule(&policy.Rules[i], policy)
-		if _, exists := ruleByID[rule.ID]; exists {
+		r := toRule(&policy.Rules[i], policy)
+		if _, exists := ruleByID[r.ID]; exists {
 			// If rule already exists, remove it from the map so the ones left finally are orphaned.
-			klog.V(2).Infof("Rule %v was not changed", rule.ID)
-			delete(ruleByID, rule.ID)
+			klog.V(2).Infof("Rule %v was not changed", r.ID)
+			delete(ruleByID, r.ID)
 		} else {
 			// If rule doesn't exist, add it to cache, mark it as dirty.
-			c.rules.Add(rule)
-			c.dirtyRuleHandler(rule.ID)
+			c.rules.Add(r)
+			// Count up antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
+			if r.Direction == v1beta1.DirectionIn {
+				metrics.IngressNetworkPolicyRuleCount.Inc()
+			} else {
+				metrics.EgressNetworkPolicyRuleCount.Inc()
+			}
+			c.dirtyRuleHandler(r.ID)
 		}
 	}
 
 	// At this moment, the remaining rules are orphaned, remove them from store and mark them as dirty.
-	for ruleID, rule := range ruleByID {
-		c.rules.Delete(rule)
+	for ruleID, r := range ruleByID {
+		c.rules.Delete(r)
+		// Count down antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
+		if r.(*rule).Direction == v1beta1.DirectionIn {
+			metrics.IngressNetworkPolicyRuleCount.Dec()
+		} else {
+			metrics.EgressNetworkPolicyRuleCount.Dec()
+		}
 		c.dirtyRuleHandler(ruleID)
 	}
 	return nil
@@ -610,9 +624,16 @@ func (c *ruleCache) deleteNetworkPolicyLocked(uid string) error {
 	existingRules, _ := c.rules.ByIndex(policyIndex, uid)
 	for _, r := range existingRules {
 		ruleID := r.(*rule).ID
+		// Count down antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
+		if r.(*rule).Direction == v1beta1.DirectionIn {
+			metrics.IngressNetworkPolicyRuleCount.Dec()
+		} else {
+			metrics.EgressNetworkPolicyRuleCount.Dec()
+		}
 		c.rules.Delete(r)
 		c.dirtyRuleHandler(ruleID)
 	}
+	metrics.NetworkPolicyCount.Dec()
 	return nil
 }
 

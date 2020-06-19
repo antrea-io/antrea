@@ -83,14 +83,14 @@ func TestReconcilerForget(t *testing.T) {
 		},
 		{
 			"known-single-ofrule",
-			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8}, CompletedRule: &CompletedRule{rule: &rule{Direction: v1beta1.DirectionIn}}}},
+			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8}}},
 			"foo",
 			[]uint32{8},
 			false,
 		},
 		{
 			"known-multiple-ofrule",
-			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8, servicesHash2: 9}, CompletedRule: &CompletedRule{rule: &rule{Direction: v1beta1.DirectionOut}}}},
+			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8, servicesHash2: 9}}},
 			"foo",
 			[]uint32{8, 9},
 			false,
