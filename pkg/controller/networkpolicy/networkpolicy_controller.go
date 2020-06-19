@@ -47,12 +47,13 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	secinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security/v1alpha1"
 	seclisters "github.com/vmware-tanzu/antrea/pkg/client/listers/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
 const (
@@ -952,9 +953,16 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	defer klog.Info("Shutting down NetworkPolicy controller")
 
 	klog.Info("Waiting for caches to sync for NetworkPolicy controller")
-	if !cache.WaitForCacheSync(stopCh, n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced, n.cnpListerSynced) {
+	if !cache.WaitForCacheSync(stopCh, n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced) {
 		klog.Error("Unable to sync caches for NetworkPolicy controller")
 		return
+	}
+	// Only wait for CNPListerSynced when ClusterNetworkPolicy feature gate is enabled.
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		if !cache.WaitForCacheSync(stopCh, n.cnpListerSynced) {
+			klog.Error("Unable to sync CNP caches for NetworkPolicy controller")
+			return
+		}
 	}
 	klog.Info("Caches are synced for NetworkPolicy controller")
 

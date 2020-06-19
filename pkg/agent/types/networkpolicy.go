@@ -53,3 +53,11 @@ type PolicyRule struct {
 func (r *PolicyRule) IsAntreaNetworkPolicyRule() bool {
 	return r.Priority != nil
 }
+
+// Priority is a struct that is composed of CNP priority, rule priority and
+// tier/category priority in the future. It is used as the basic unit for
+// priority sorting.
+type Priority struct {
+	PolicyPriority float64
+	RulePriority   int32
+}

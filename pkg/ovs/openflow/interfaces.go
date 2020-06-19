@@ -155,8 +155,8 @@ type Flow interface {
 	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions. It
 	// resets the priority of the new FlowBuilder if the provided value is not 0.
 	CopyToBuilder(priority uint16) FlowBuilder
-	// CopyToBuilder returns a new FlowBuilder that duplicates all the contents of the Flow
-	DuplicateToBuilder() FlowBuilder
+	// ToBuilder returns a new FlowBuilder with all the contents of the original Flow
+	ToBuilder() FlowBuilder
 }
 
 type Action interface {

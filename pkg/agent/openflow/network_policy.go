@@ -735,7 +735,6 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 			return nil
 		}
 		// Add the action flows after the Openflow entries are installed on the OVS bridge successfully.
-		klog.V(4).Infof("Successfully added action flows!")
 		conj.actionFlows = actionFlows
 	}
 	c.conjMatchFlowLock.Lock()
@@ -748,7 +747,7 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
 		return err
 	}
-	// Add the policyRuleConjunction into policyCache
+	// Add the policyRuleConjunction into policyCache.
 	c.policyCache.Add(conj)
 	return nil
 }
@@ -1137,7 +1136,7 @@ func (c *client) ReassignActionPriority(updates map[uint16]uint16) error {
 					// The OF flow was created at the priority which need to be re-installed
 					// at the NewPriority now
 					updatedFlow := actionFlow.
-						DuplicateToBuilder().
+						ToBuilder().
 						MatchPriority(newPriority).
 						Done()
 					addFlows = append(addFlows, updatedFlow)

@@ -133,13 +133,12 @@ func (f *ofFlow) CopyToBuilder(priority uint16) FlowBuilder {
 	return &ofFlowBuilder{newFlow}
 }
 
-func (f *ofFlow) DuplicateToBuilder() FlowBuilder {
-	newFlowMatchers := make([]string, len(f.matchers))
-	copy(newFlowMatchers, f.matchers)
+// ToBuilder returns a new FlowBuilder with all the contents of the original Flow
+func (f *ofFlow) ToBuilder() FlowBuilder {
 	newFlow := ofFlow{
 		table:    f.table,
 		Flow:     f.Flow,
-		matchers: newFlowMatchers,
+		matchers: f.matchers,
 		protocol: f.protocol,
 	}
 	return &ofFlowBuilder{newFlow}

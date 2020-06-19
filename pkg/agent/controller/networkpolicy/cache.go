@@ -107,6 +107,10 @@ func (r *CompletedRule) String() string {
 	return fmt.Sprintf("%s (Direction: %v, Pods: %d, %s, Services: %d)", r.ID, r.Direction, len(r.Pods), addressString, len(r.Services))
 }
 
+func (r *CompletedRule) isAntreaNetworkPolicyRule() bool {
+	return r.PolicyPriority != nil
+}
+
 // ruleCache caches Antrea AddressGroups, AppliedToGroups and NetworkPolicies,
 // can construct complete rules that can be used by reconciler to enforce.
 type ruleCache struct {
