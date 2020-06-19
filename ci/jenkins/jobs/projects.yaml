@@ -260,28 +260,6 @@
           wrappers: []
           publishers: []
       - '{name}-{test_name}-for-pull-request':
-          test_name: whole-conformance-pending-label
-          node: null
-          description: 'This is for marking PR as pending for whole conformance test.'
-          builders:
-            - builder-pending-label
-          trigger_phrase: null
-          allow_whitelist_orgs_as_admins: false
-          admin_list: []
-          org_list: []
-          white_list: []
-          only_trigger_phrase: false
-          trigger_permit_all: true
-          status_context: jenkins-whole-conformance
-          status_url: --none--
-          success_status: Pending test. Mark as failure. Not required for merging. Add comment /test-whole-conformance to trigger.
-          failure_status: Pending test. Mark as failure. Not required for merging. Add comment /test-whole-conformance to trigger.
-          error_status: Pending test. Mark as failure. Not required for merging. Add comment /test-whole-conformance to trigger.
-          triggered_status: null
-          started_status: null
-          wrappers: []
-          publishers: []
-      - '{name}-{test_name}-for-pull-request':
           test_name: whole-conformance
           node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
@@ -331,7 +309,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: .*/skip-(whole-conformance|all).*
+          trigger_phrase: .*/skip-(whole-conformance).*
           status_context: jenkins-whole-conformance
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
