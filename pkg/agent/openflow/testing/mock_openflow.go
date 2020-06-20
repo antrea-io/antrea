@@ -236,17 +236,17 @@ func (mr *MockClientMockRecorder) InstallDefaultTunnelFlows(arg0 interface{}) *g
 }
 
 // InstallEndpointFlows mocks base method
-func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 net.HardwareAddr, arg2 upstream.Endpoint) error {
+func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 []upstream.Endpoint) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallEndpointFlows", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "InstallEndpointFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallEndpointFlows indicates an expected call of InstallEndpointFlows
-func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).InstallEndpointFlows), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).InstallEndpointFlows), arg0, arg1)
 }
 
 // InstallExternalFlows mocks base method
@@ -373,23 +373,18 @@ func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplayFlows", reflect.TypeOf((*MockClient)(nil).ReplayFlows))
 }
 
-// UninstallEndpointsFlows mocks base method
-func (m *MockClient) UninstallEndpointsFlows(arg0 openflow.Protocol, arg1 ...upstream.Endpoint) error {
+// UninstallEndpointFlows mocks base method
+func (m *MockClient) UninstallEndpointFlows(arg0 openflow.Protocol, arg1 upstream.Endpoint) error {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0}
-	for _, a := range arg1 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "UninstallEndpointsFlows", varargs...)
+	ret := m.ctrl.Call(m, "UninstallEndpointFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// UninstallEndpointsFlows indicates an expected call of UninstallEndpointsFlows
-func (mr *MockClientMockRecorder) UninstallEndpointsFlows(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
+// UninstallEndpointFlows indicates an expected call of UninstallEndpointFlows
+func (mr *MockClientMockRecorder) UninstallEndpointFlows(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0}, arg1...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallEndpointsFlows", reflect.TypeOf((*MockClient)(nil).UninstallEndpointsFlows), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).UninstallEndpointFlows), arg0, arg1)
 }
 
 // UninstallNodeFlows mocks base method

@@ -98,11 +98,11 @@ type Client interface {
 	// InstallEndpointFlows installs flows for accessing an Endpoint. If
 	// the mac argument is not nil, it means the Endpoint is on the current Node.
 	// If the Endpoint is on the current Node, then flows for hairpin and endpoint
-	// l2 forwarding should also be installed.
-	InstallEndpointFlows(protocol binding.Protocol, mac net.HardwareAddr, endpoint upstream.Endpoint) error
-	// UninstallEndpointsFlows removes flows of the Endpoint installed by
+	// L2 forwarding should also be installed.
+	InstallEndpointFlows(protocol binding.Protocol, endpoints []upstream.Endpoint) error
+	// UninstallEndpointFlows removes flows of the Endpoint installed by
 	// InstallEndpointFlows.
-	UninstallEndpointsFlows(protocol binding.Protocol, endpoints ...upstream.Endpoint) error
+	UninstallEndpointFlows(protocol binding.Protocol, endpoint upstream.Endpoint) error
 
 	// InstallServiceFlows installs flows for accessing Service with clusterIP.
 	// It installs the flow that uses the group/bucket to do service LB. If the
@@ -326,55 +326,37 @@ func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
 	return nil
 }
 
-func (c *client) InstallEndpointFlows(protocol binding.Protocol, mac net.HardwareAddr, endpoint upstream.Endpoint) error {
+func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []upstream.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	var flows []binding.Flow
-	endpointPort, _ := endpoint.Port()
-	endpointIP := net.ParseIP(endpoint.IP()).To4()
-	portVal := uint16(endpointPort)
-	cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpointIP, endpointPort, protocol)
-	flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
-	if len(mac) > 0 {
-		flows = append(flows,
-			c.hairpinSNATFlow(endpointIP),
-			c.localEndpointForwardFlow(endpointIP, mac),
-		)
-	}
-	if err := c.addFlows(c.serviceFlowCache, cacheKey, flows); err != nil {
-		return err
+
+	for _, endpoint := range endpoints {
+		var flows []binding.Flow
+		endpointPort, _ := endpoint.Port()
+		endpointIP := net.ParseIP(endpoint.IP()).To4()
+		portVal := uint16(endpointPort)
+		cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpointIP, endpointPort, protocol)
+		flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
+		if endpoint.GetIsLocal() {
+			flows = append(flows, c.hairpinSNATFlow(endpointIP))
+		}
+		if err := c.addFlows(c.serviceFlowCache, cacheKey, flows); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (c *client) UninstallEndpointsFlows(protocol binding.Protocol, endpoints ...upstream.Endpoint) error {
+func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint upstream.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	var keys []string
-	var flows []binding.Flow
-	for _, endpoint := range endpoints {
-		port, err := endpoint.Port()
-		if err != nil {
-			return fmt.Errorf("error when getting port: %w", err)
-		}
-		cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpoint.IP(), port, protocol)
-		fCacheI, ok := c.serviceFlowCache.Load(cacheKey)
-		if !ok {
-			continue
-		}
-		fCache := fCacheI.(flowCache)
-		for _, flow := range fCache {
-			flows = append(flows, flow)
-		}
-		keys = append(keys, cacheKey)
+
+	port, err := endpoint.Port()
+	if err != nil {
+		return fmt.Errorf("error when getting port: %w", err)
 	}
-	if err := c.DeleteAll(flows); err != nil {
-		return err
-	}
-	for _, key := range keys {
-		c.serviceFlowCache.Delete(key)
-	}
-	return nil
+	cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpoint.IP(), port, protocol)
+	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
 func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
@@ -402,7 +384,7 @@ func (c *client) InstallClusterServiceFlows() error {
 		c.serviceHairpinResponseDNATFlow(),
 		c.serviceNeedLBFlow(),
 		c.sessionAffinityReselectFlow(),
-		c.hairpinDNATFlow(),
+		c.serviceLBBypassFlow(),
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
@@ -481,7 +463,6 @@ func (c *client) initialize() error {
 	if err := c.ofEntryOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip established connections: %v", err)
 	}
-
 	if c.encapMode.SupportsNoEncap() {
 		if err := c.ofEntryOperations.Add(c.l2ForwardOutputReentInPortFlow(c.gatewayPort, cookie.Default)); err != nil {
 			return fmt.Errorf("failed to install L2 forward same in-port and out-port flow: %v", err)

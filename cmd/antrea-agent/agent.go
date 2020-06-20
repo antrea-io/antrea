@@ -133,24 +133,10 @@ func run(o *Options) error {
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
 	}
-
-	agentQuerier := querier.NewAgentQuerier(
-		nodeConfig,
-		ifaceStore,
-		k8sClient,
-		ofClient,
-		ovsBridgeClient,
-		networkPolicyController,
-		o.config.APIPort)
-
-	var proxyInstance *proxy.Instance
+	var proxier *proxy.Instance
 	if o.config.EnableAntreaProxy {
-		proxyInstance, err = proxy.New(nodeConfig.Name, informerFactory, agentQuerier, ofClient)
-		if err != nil {
-			return err
-		}
+		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
 	}
-
 	cniServer := cniserver.New(
 		o.config.CNISocket,
 		o.config.HostProcPathPrefix,
@@ -189,12 +175,21 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
+	agentQuerier := querier.NewAgentQuerier(
+		nodeConfig,
+		ifaceStore,
+		k8sClient,
+		ofClient,
+		ovsBridgeClient,
+		networkPolicyController,
+		o.config.APIPort)
+
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
 
 	go agentMonitor.Run(stopCh)
 
-	if o.config.EnableAntreaProxy {
-		go proxyInstance.Run(stopCh)
+	if o.config.EnableAntreaProxy && proxier != nil {
+		go proxier.Run(stopCh)
 	}
 
 	apiServer, err := apiserver.New(

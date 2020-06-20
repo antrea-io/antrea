@@ -18,5 +18,5 @@
 
 package upstream
 
-//TODO: remove this package once the github.com/kubernetes/pkg/proxy becomes
+// TODO: remove this package once the github.com/kubernetes/pkg/proxy becomes
 // an independent module

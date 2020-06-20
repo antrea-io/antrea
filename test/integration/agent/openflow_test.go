@@ -664,7 +664,7 @@ func prepareServiceHelperFlows() []expectTableFlows {
 			uint8(40),
 			[]*ofTestUtils.ExpectFlow{
 				{fmt.Sprint("priority=0"),
-					fmt.Sprint("load:0x1->NXM_NX_REG4[16..19]"),
+					fmt.Sprint("load:0x1->NXM_NX_REG4[16..18]"),
 				},
 			},
 		},
@@ -712,10 +712,6 @@ func prepareDefaultFlows() []expectTableFlows {
 		},
 		{
 			uint8(70),
-			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:71"}},
-		},
-		{
-			uint8(71),
 			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:80"}},
 		},
 		{
@@ -812,7 +808,7 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 				},
 				{
 					fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", localSubnet.String()),
-					"goto_table:71",
+					"goto_table:80",
 				},
 				{
 					fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", nodeIP.String()),

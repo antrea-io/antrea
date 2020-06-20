@@ -438,6 +438,12 @@ func (a *ofLearnAction) LoadReg(regID int, data uint32, rng Range) LearnAction {
 	return a
 }
 
+func (a *ofLearnAction) SetDstMAC(mac net.HardwareAddr) LearnAction {
+	toField := &ofctrl.LearnField{Name: "NXM_OF_ETH_DST"}
+	a.nxLearn.AddLoadAction(toField, 48, nil, mac)
+	return a
+}
+
 func (a *ofLearnAction) Done() FlowBuilder {
 	a.flowBuilder.ApplyAction(a.nxLearn)
 	return a.flowBuilder

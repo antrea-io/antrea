@@ -31,26 +31,25 @@ import (
 
 const (
 	// Flow table id index
-	classifierTable              binding.TableIDType = 0
-	spoofGuardTable              binding.TableIDType = 10
-	arpResponderTable            binding.TableIDType = 20
-	serviceHairpinTable          binding.TableIDType = 29
-	conntrackTable               binding.TableIDType = 30
-	conntrackStateTable          binding.TableIDType = 31
-	sessionAffinityTable         binding.TableIDType = 40
-	dnatTable                    binding.TableIDType = 40
-	serviceLBTable               binding.TableIDType = 41
-	endpointDNATTable            binding.TableIDType = 42
-	egressRuleTable              binding.TableIDType = 50
-	egressDefaultTable           binding.TableIDType = 60
-	l3ForwardingTable            binding.TableIDType = 70
-	localEndpointForwardingTable binding.TableIDType = 71
-	l2ForwardingCalcTable        binding.TableIDType = 80
-	ingressRuleTable             binding.TableIDType = 90
-	ingressDefaultTable          binding.TableIDType = 100
-	conntrackCommitTable         binding.TableIDType = 105
-	hairpinSNATTable             binding.TableIDType = 106
-	l2ForwardingOutTable         binding.TableIDType = 110
+	classifierTable       binding.TableIDType = 0
+	spoofGuardTable       binding.TableIDType = 10
+	arpResponderTable     binding.TableIDType = 20
+	serviceHairpinTable   binding.TableIDType = 29
+	conntrackTable        binding.TableIDType = 30
+	conntrackStateTable   binding.TableIDType = 31
+	sessionAffinityTable  binding.TableIDType = 40
+	dnatTable             binding.TableIDType = 40
+	serviceLBTable        binding.TableIDType = 41
+	endpointDNATTable     binding.TableIDType = 42
+	egressRuleTable       binding.TableIDType = 50
+	egressDefaultTable    binding.TableIDType = 60
+	l3ForwardingTable     binding.TableIDType = 70
+	l2ForwardingCalcTable binding.TableIDType = 80
+	ingressRuleTable      binding.TableIDType = 90
+	ingressDefaultTable   binding.TableIDType = 100
+	conntrackCommitTable  binding.TableIDType = 105
+	hairpinSNATTable      binding.TableIDType = 106
+	l2ForwardingOutTable  binding.TableIDType = 110
 
 	// Flow priority level
 	priorityHigh   = uint16(210)
@@ -85,7 +84,6 @@ var (
 		{egressRuleTable, "EgressRule"},
 		{egressDefaultTable, "EgressDefaultRule"},
 		{l3ForwardingTable, "L3Forwarding"},
-		{localEndpointForwardingTable, "LocalEndpointForwarding"},
 		{l2ForwardingCalcTable, "L2Forwarding"},
 		{ingressRuleTable, "IngressRule"},
 		{ingressDefaultTable, "IngressDefaultRule"},
@@ -178,11 +176,12 @@ var (
 	// endpointPortRegRange takes a 16-bit range of register endpointPortReg to store
 	// the selected Service Endpoint port.
 	endpointPortRegRange = binding.Range{0, 15}
+	// TODO
 	// serviceLearnRegRange takes a 16-bit range of register serviceLearnReg to
 	// indicate if the Service accessing packet selected the Service Endpoint,
 	// needs to select an Endpoint or needs to be learned the Endpoint selection
 	// decision.
-	serviceLearnRegRange = binding.Range{16, 19}
+	serviceLearnRegRange = binding.Range{16, 18}
 
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	ReentranceMAC, _    = net.ParseMAC("de:ad:be:ef:de:ad")
@@ -432,13 +431,14 @@ func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr, category cooki
 		Done()
 }
 
-// hairpinDNATFlow transforms the destination IP of the packet to the virtual
-// IP in case the packet to be dropped by OVS.
-func (c *client) hairpinDNATFlow() binding.Flow {
+// serviceLBBypassFlow makes packets that belong to a tracked connection to bypass
+// service LB tables and enter egressRuleTable directly.
+func (c *client) serviceLBBypassFlow() binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchCTMark(serviceCTMark).
 		MatchCTStateNew(false).MatchCTStateTrk(true).
+		Action().SetDstMAC(globalVirtualMAC).
 		Action().GotoTable(egressRuleTable).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
@@ -478,7 +478,7 @@ func (c *client) l2ForwardOutputReentInPortFlow(gwPort uint32, category cookie.C
 }
 
 // l2ForwardOutputServiceHairpinFlow uses in_port action for Service
-// hairpin packets to avoid packets being dropped by OVS.
+// hairpin packets to avoid packets from being dropped by OVS.
 func (c *client) l2ForwardOutputServiceHairpinFlow() binding.Flow {
 	return c.pipeline[l2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
@@ -992,8 +992,10 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 		LoadRegToReg(int(endpointIPReg), int(endpointIPReg), endpointIPRegRange, endpointIPRegRange).
 		LoadRegToReg(int(endpointPortReg), int(endpointPortReg), endpointPortRegRange, endpointPortRegRange).
 		LoadReg(int(serviceLearnReg), marksRegServiceHitted, serviceLearnRegRange).
+		SetDstMAC(globalVirtualMAC).
 		Done().
 		Action().LoadRegRange(int(serviceLearnReg), marksRegServiceHitted, serviceLearnRegRange).
+		Action().SetDstMAC(globalVirtualMAC).
 		Action().GotoTable(endpointDNATTable).
 		Done()
 }
@@ -1012,6 +1014,7 @@ func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPor
 	lbFlow := lbFlowBuilder.
 		MatchDstIP(svcIP).
 		MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLB, serviceLearnRegRange).
+		Action().SetDstMAC(globalVirtualMAC).
 		Action().Group(groupID).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
@@ -1053,18 +1056,6 @@ func (c *client) hairpinSNATFlow(endpointIP net.IP) binding.Flow {
 		Done()
 }
 
-// localEndpointForwardFlow generates the flow to set the MAC address of the Endpoint
-// which is located on current Node.
-func (c *client) localEndpointForwardFlow(podIP net.IP, podMAC net.HardwareAddr) binding.Flow {
-	return c.pipeline[localEndpointForwardingTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchCTMark(serviceCTMark).
-		MatchDstIP(podIP).
-		Action().SetDstMAC(podMAC).
-		Action().GotoTable(l2ForwardingCalcTable).
-		Cookie(c.cookieAllocator.Request(cookie.Pod).Raw()).
-		Done()
-}
-
 // serviceEndpointGroup creates/modifies the group/buckets of Endpoints. If the
 // withSessionAffinity is true, then buckets will resubmit packets back to
 // serviceLBTable to trigger the learn flow, the learn flow will then send packets
@@ -1101,25 +1092,24 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 func generatePipeline(bridge binding.Bridge, enableProxy bool) map[binding.TableIDType]binding.Table {
 	if enableProxy {
 		return map[binding.TableIDType]binding.Table{
-			classifierTable:              bridge.CreateTable(classifierTable, spoofGuardTable, binding.TableMissActionDrop),
-			spoofGuardTable:              bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop),
-			serviceHairpinTable:          bridge.CreateTable(serviceHairpinTable, conntrackTable, binding.TableMissActionNext),
-			conntrackTable:               bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
-			conntrackStateTable:          bridge.CreateTable(conntrackStateTable, endpointDNATTable, binding.TableMissActionNext),
-			sessionAffinityTable:         bridge.CreateTable(sessionAffinityTable, binding.LastTableID, binding.TableMissActionNone),
-			serviceLBTable:               bridge.CreateTable(serviceLBTable, endpointDNATTable, binding.TableMissActionNext),
-			endpointDNATTable:            bridge.CreateTable(endpointDNATTable, egressRuleTable, binding.TableMissActionNext),
-			egressRuleTable:              bridge.CreateTable(egressRuleTable, egressDefaultTable, binding.TableMissActionNext),
-			egressDefaultTable:           bridge.CreateTable(egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
-			l3ForwardingTable:            bridge.CreateTable(l3ForwardingTable, localEndpointForwardingTable, binding.TableMissActionNext),
-			localEndpointForwardingTable: bridge.CreateTable(localEndpointForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-			l2ForwardingCalcTable:        bridge.CreateTable(l2ForwardingCalcTable, ingressRuleTable, binding.TableMissActionNext),
-			arpResponderTable:            bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
-			ingressRuleTable:             bridge.CreateTable(ingressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
-			ingressDefaultTable:          bridge.CreateTable(ingressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
-			conntrackCommitTable:         bridge.CreateTable(conntrackCommitTable, hairpinSNATTable, binding.TableMissActionNext),
-			hairpinSNATTable:             bridge.CreateTable(hairpinSNATTable, l2ForwardingOutTable, binding.TableMissActionNext),
-			l2ForwardingOutTable:         bridge.CreateTable(l2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
+			classifierTable:       bridge.CreateTable(classifierTable, spoofGuardTable, binding.TableMissActionDrop),
+			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop),
+			serviceHairpinTable:   bridge.CreateTable(serviceHairpinTable, conntrackTable, binding.TableMissActionNext),
+			conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
+			conntrackStateTable:   bridge.CreateTable(conntrackStateTable, endpointDNATTable, binding.TableMissActionNext),
+			sessionAffinityTable:  bridge.CreateTable(sessionAffinityTable, binding.LastTableID, binding.TableMissActionNone),
+			serviceLBTable:        bridge.CreateTable(serviceLBTable, endpointDNATTable, binding.TableMissActionNext),
+			endpointDNATTable:     bridge.CreateTable(endpointDNATTable, egressRuleTable, binding.TableMissActionNext),
+			egressRuleTable:       bridge.CreateTable(egressRuleTable, egressDefaultTable, binding.TableMissActionNext),
+			egressDefaultTable:    bridge.CreateTable(egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
+			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, ingressRuleTable, binding.TableMissActionNext),
+			arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
+			ingressRuleTable:      bridge.CreateTable(ingressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
+			ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
+			conntrackCommitTable:  bridge.CreateTable(conntrackCommitTable, hairpinSNATTable, binding.TableMissActionNext),
+			hairpinSNATTable:      bridge.CreateTable(hairpinSNATTable, l2ForwardingOutTable, binding.TableMissActionNext),
+			l2ForwardingOutTable:  bridge.CreateTable(l2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 		}
 	}
 	return map[binding.TableIDType]binding.Table{

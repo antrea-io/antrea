@@ -126,7 +126,6 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 
 	keywords := map[int]string{
 		42: fmt.Sprintf("nat(dst=%s:80)", nginxIP), // endpointNATTable
-		71: fmt.Sprintf("nw_dst=%s", nginxIP),      // endpointForwardingTable
 	}
 
 	for tableID, keyword := range keywords {
@@ -169,9 +168,8 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 	keywords := map[int]string{
 		41: fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP), // serviceLBTable
 		42: fmt.Sprintf("nat(dst=%s:80)", nginxIP),                 // endpointNATTable
-		71: fmt.Sprintf("nw_dst=%s", nginxIP),                      // endpointForwardingTable
 	}
-	groupKeyword := fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..19]", hexString(net.ParseIP(nginxIP).To4()), 80)
+	groupKeyword := fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18]", hexString(net.ParseIP(nginxIP).To4()), 80)
 	groupOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
 	require.NoError(t, err)
 	require.Contains(t, groupOutput, groupKeyword)

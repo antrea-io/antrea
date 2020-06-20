@@ -249,6 +249,7 @@ type LearnAction interface {
 	MatchReg(regID int, data uint32, rng Range) LearnAction
 	LoadReg(regID int, data uint32, rng Range) LearnAction
 	LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
+	SetDstMAC(mac net.HardwareAddr) LearnAction
 	Done() FlowBuilder
 }
 
