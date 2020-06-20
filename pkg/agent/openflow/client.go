@@ -265,12 +265,9 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIP net.IP, po
 		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.arpSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, cookie.Pod),
+		c.l3FlowsToLocalPodMACDNAT(podInterfaceIP, podInterfaceMAC, cookie.Pod),
 	}
 
-	// NoEncap mode has no tunnel.
-	if c.encapMode.SupportsEncap() {
-		flows = append(flows, c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod))
-	}
 	if c.encapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, traffic to local Pod is routed based on destination IP.
 		flows = append(flows,
@@ -462,6 +459,11 @@ func (c *client) initialize() error {
 	}
 	if err := c.ofEntryOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip established connections: %v", err)
+	}
+	if c.encapMode.SupportsEncap() {
+		if err := c.ofEntryOperations.Add(c.l3FlowsToPodMACSNAT(c.nodeConfig.GatewayConfig.MAC, *c.nodeConfig.PodCIDR)); err != nil {
+			return fmt.Errorf("failed to install flows to add mac rewrite marks: %v", err)
+		}
 	}
 	if c.encapMode.SupportsNoEncap() {
 		if err := c.ofEntryOperations.Add(c.l2ForwardOutputReentInPortFlow(c.gatewayPort, cookie.Default)); err != nil {

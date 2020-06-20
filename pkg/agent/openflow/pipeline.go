@@ -31,25 +31,26 @@ import (
 
 const (
 	// Flow table id index
-	classifierTable       binding.TableIDType = 0
-	spoofGuardTable       binding.TableIDType = 10
-	arpResponderTable     binding.TableIDType = 20
-	serviceHairpinTable   binding.TableIDType = 29
-	conntrackTable        binding.TableIDType = 30
-	conntrackStateTable   binding.TableIDType = 31
-	sessionAffinityTable  binding.TableIDType = 40
-	dnatTable             binding.TableIDType = 40
-	serviceLBTable        binding.TableIDType = 41
-	endpointDNATTable     binding.TableIDType = 42
-	egressRuleTable       binding.TableIDType = 50
-	egressDefaultTable    binding.TableIDType = 60
-	l3ForwardingTable     binding.TableIDType = 70
-	l2ForwardingCalcTable binding.TableIDType = 80
-	ingressRuleTable      binding.TableIDType = 90
-	ingressDefaultTable   binding.TableIDType = 100
-	conntrackCommitTable  binding.TableIDType = 105
-	hairpinSNATTable      binding.TableIDType = 106
-	l2ForwardingOutTable  binding.TableIDType = 110
+	classifierTable           binding.TableIDType = 0
+	spoofGuardTable           binding.TableIDType = 10
+	arpResponderTable         binding.TableIDType = 20
+	serviceHairpinTable       binding.TableIDType = 29
+	conntrackTable            binding.TableIDType = 30
+	conntrackStateTable       binding.TableIDType = 31
+	sessionAffinityTable      binding.TableIDType = 40
+	dnatTable                 binding.TableIDType = 40
+	serviceLBTable            binding.TableIDType = 41
+	endpointDNATTable         binding.TableIDType = 42
+	egressRuleTable           binding.TableIDType = 50
+	egressDefaultTable        binding.TableIDType = 60
+	l3ForwardingTable         binding.TableIDType = 70
+	localPodL3ForwardingTable binding.TableIDType = 71
+	l2ForwardingCalcTable     binding.TableIDType = 80
+	ingressRuleTable          binding.TableIDType = 90
+	ingressDefaultTable       binding.TableIDType = 100
+	conntrackCommitTable      binding.TableIDType = 105
+	hairpinSNATTable          binding.TableIDType = 106
+	l2ForwardingOutTable      binding.TableIDType = 110
 
 	// Flow priority level
 	priorityHigh   = uint16(210)
@@ -65,7 +66,6 @@ const (
 	markTrafficFromUplink  = 4
 )
 
-// TODO: return current using name.
 var (
 	FlowTables = []struct {
 		Number binding.TableIDType
@@ -77,13 +77,14 @@ var (
 		{serviceHairpinTable, "ServiceHairpin"},
 		{conntrackTable, "ConntrackZone"},
 		{conntrackStateTable, "ConntrackState"},
-		{dnatTable, "DNAT"},
+		{dnatTable, "DNAT(SessionAffinity)"},
 		{sessionAffinityTable, "SessionAffinity"},
 		{serviceLBTable, "ServiceLB"},
 		{endpointDNATTable, "EndpointDNAT"},
 		{egressRuleTable, "EgressRule"},
 		{egressDefaultTable, "EgressDefaultRule"},
-		{l3ForwardingTable, "L3Forwarding"},
+		{l3ForwardingTable, "l3Forwarding"},
+		{localPodL3ForwardingTable, "LocalPodL3Forwarding"},
 		{l2ForwardingCalcTable, "L2Forwarding"},
 		{ingressRuleTable, "IngressRule"},
 		{ingressDefaultTable, "IngressDefaultRule"},
@@ -152,6 +153,7 @@ const (
 	portFoundMark    = 0b1
 	snatRequiredMark = 0b1
 	hairpinMark      = 0b1
+	macRewriteMark   = 0b1
 
 	gatewayCTMark = 0x20
 	snatCTMark    = 0x40
@@ -169,16 +171,16 @@ var (
 	snatMarkRange = binding.Range{17, 17}
 	// hairpinMarkRange takes the 18th bit of register marksReg to indicate
 	// if the packet needs DNAT to virtual IP or not. Its value is 0x1 if yes.
-	hairpinMarkRange = binding.Range{18, 18}
+	hairpinMarkRange    = binding.Range{18, 18}
+	macRewriteMarkRange = binding.Range{19, 19}
 	// endpointIPRegRange takes a 32-bit range of register endpointIPReg to store
 	// the selected Service Endpoint IP.
 	endpointIPRegRange = binding.Range{0, 31}
 	// endpointPortRegRange takes a 16-bit range of register endpointPortReg to store
 	// the selected Service Endpoint port.
 	endpointPortRegRange = binding.Range{0, 15}
-	// TODO
-	// serviceLearnRegRange takes a 16-bit range of register serviceLearnReg to
-	// indicate if the Service accessing packet selected the Service Endpoint,
+	// serviceLearnRegRange takes a 3 bits range of register serviceLearnReg to
+	// indicate if the Service accessing packet is selected the Service Endpoint,
 	// needs to select an Endpoint or needs to be learned the Endpoint selection
 	// decision.
 	serviceLearnRegRange = binding.Range{16, 18}
@@ -361,7 +363,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Action().CT(false, connectionTrackTable.GetNext(), ctZone).NAT().CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
-			connectionTrackCommitTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 				MatchCTStateTrk(true).
 				MatchCTMark(serviceCTMark).
 				MatchRegRange(int(serviceLearnReg), marksRegServiceHitted, serviceLearnRegRange).
@@ -438,7 +440,7 @@ func (c *client) serviceLBBypassFlow() binding.Flow {
 	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchCTMark(serviceCTMark).
 		MatchCTStateNew(false).MatchCTStateTrk(true).
-		Action().SetDstMAC(globalVirtualMAC).
+		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 		Action().GotoTable(egressRuleTable).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
@@ -487,10 +489,25 @@ func (c *client) l2ForwardOutputServiceHairpinFlow() binding.Flow {
 		Done()
 }
 
+// l3FlowsToPodMACSNAT generate the flow to do MAC SNAT if the packet is received
+// from tunnel port and destined for local Pods, then marks packets with
+// macRewriteMark. Marked packets will do MAC DNAT in localL3Forwarding table.
+func (c *client) l3FlowsToPodMACSNAT(localGatewayMAC net.HardwareAddr, podCIDR net.IPNet) binding.Flow {
+	return c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		MatchDstMAC(globalVirtualMAC).
+		MatchDstIPNet(podCIDR).
+		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+		Action().SetSrcMAC(localGatewayMAC).
+		Action().GotoTable(c.pipeline[l3ForwardingTable].GetNext()).
+		Action().DecTTL().
+		Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
+		Done()
+}
+
 // l3BypassMACRewriteFlow bypasses remaining l3forwarding flows if the MAC is set via ctRewriteDstMACFlow in
 // conntrackState stage.
 func (c *client) l3BypassMACRewriteFlow(gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
-	l3FwdTable := c.pipeline[l3ForwardingTable]
+	l3FwdTable := c.pipeline[localPodL3ForwardingTable]
 	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchCTMark(gatewayCTMark).
 		MatchDstMAC(gatewayMAC).
@@ -499,21 +516,16 @@ func (c *client) l3BypassMACRewriteFlow(gatewayMAC net.HardwareAddr, category co
 		Done()
 }
 
-// l3FlowsToPod generates the flow to rewrite MAC if the packet is received from tunnel port and destined for local Pods.
-func (c *client) l3FlowsToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP net.IP, podInterfaceMAC net.HardwareAddr, category cookie.Category) binding.Flow {
-	l3FwdTable := c.pipeline[l3ForwardingTable]
-	nextTable := l3FwdTable.GetNext()
-	if c.enableProxy {
-		nextTable = l2ForwardingCalcTable
-	}
+// l3FlowsToLocalPodMACDNAT generates the flow to do MAC DNAT if the packet is
+// destined for local Pods.
+func (c *client) l3FlowsToLocalPodMACDNAT(podInterfaceIP net.IP, podInterfaceMAC net.HardwareAddr, category cookie.Category) binding.Flow {
+	l3FwdTable := c.pipeline[localPodL3ForwardingTable]
 	// Rewrite src MAC to local gateway MAC, and rewrite dst MAC to pod MAC
 	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchDstMAC(globalVirtualMAC).
+		MatchRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 		MatchDstIP(podInterfaceIP).
-		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(podInterfaceMAC).
-		Action().DecTTL().
-		Action().GotoTable(nextTable).
+		Action().GotoTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -521,7 +533,7 @@ func (c *client) l3FlowsToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP n
 // l3ToPodFromGwFlow generates the flow to rewrite MAC if the packet IP matches an local IP.
 // This flow is used in policy only traffic mode.
 func (c *client) l3ToPodFlow(podInterfaceIP net.IP, podInterfaceMAC net.HardwareAddr, category cookie.Category) binding.Flow {
-	l3FwdTable := c.pipeline[l3ForwardingTable]
+	l3FwdTable := c.pipeline[localPodL3ForwardingTable]
 	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstIP(podInterfaceIP).
 		Action().SetDstMAC(podInterfaceMAC).
@@ -534,7 +546,7 @@ func (c *client) l3ToPodFlow(podInterfaceIP net.IP, podInterfaceMAC net.Hardware
 // l3ToGWFlow generates the flow to rewrite MAC to gw port if the packet received is unmatched by local Pod flows.
 // This flow is used in policy only traffic mode.
 func (c *client) l3ToGWFlow(gwMAC net.HardwareAddr, category cookie.Category) binding.Flow {
-	l3FwdTable := c.pipeline[l3ForwardingTable]
+	l3FwdTable := c.pipeline[localPodL3ForwardingTable]
 	return l3FwdTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 		Action().SetDstMAC(gwMAC).
 		Action().DecTTL().
@@ -546,15 +558,11 @@ func (c *client) l3ToGWFlow(gwMAC net.HardwareAddr, category cookie.Category) bi
 // l3ToGatewayFlow generates flow that rewrites MAC of the packet received from tunnel port and destined to local gateway.
 func (c *client) l3ToGatewayFlow(localGatewayIP net.IP, localGatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
-	nextTable := l3FwdTable.GetNext()
-	if c.enableProxy {
-		nextTable = l2ForwardingCalcTable
-	}
-	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+	return l3FwdTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchDstMAC(globalVirtualMAC).
 		MatchDstIP(localGatewayIP).
 		Action().SetDstMAC(localGatewayMAC).
-		Action().GotoTable(nextTable).
+		Action().GotoTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -590,7 +598,7 @@ func (c *client) l3FwdFlowToRemoteViaGW(
 	localGatewayMAC net.HardwareAddr,
 	peerSubnet net.IPNet,
 	category cookie.Category) binding.Flow {
-	l3FwdTable := c.pipeline[l3ForwardingTable]
+	l3FwdTable := c.pipeline[localPodL3ForwardingTable]
 	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstIPNet(peerSubnet).
 		Action().DecTTL().
@@ -918,7 +926,7 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputPort int, category cookie.Category) []binding.Flow {
 	flows := []binding.Flow{
 		// Forward the packet to L2ForwardingCalc table if it is communicating to a Service.
-		c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).
+		c.pipeline[localPodL3ForwardingTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
 			MatchCTMark(gatewayCTMark).
@@ -928,7 +936,7 @@ func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputP
 		// Forward the packet to L2ForwardingCalc table if it is sent to the Node IP(not to the host gateway). Since
 		// the packet is using the host gateway's MAC as dst MAC, it will be sent out from "gw0". This flow entry is to
 		// avoid SNAT on such packet, otherwise the source and destination IP are the same.
-		c.pipeline[l3ForwardingTable].BuildFlow(priorityLow).
+		c.pipeline[localPodL3ForwardingTable].BuildFlow(priorityLow).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
 			MatchDstIP(nodeIP).
@@ -937,16 +945,16 @@ func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputP
 			Done(),
 		// Forward the packet to L2ForwardingCalc table if it is a packet sent to a local Pod. This flow entry has a
 		// low priority to avoid overlapping with those packets received from tunnel port.
-		c.pipeline[l3ForwardingTable].BuildFlow(priorityLow).
+		c.pipeline[localPodL3ForwardingTable].BuildFlow(priorityLow).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
 			MatchDstIPNet(localSubnet).
-			Action().GotoTable(c.pipeline[l3ForwardingTable].GetNext()).
+			Action().GotoTable(c.pipeline[localPodL3ForwardingTable].GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Add SNAT mark on the packet that is not filtered by other flow entries in L3Forwarding table. This is the
 		// table miss if SNAT feature is enabled.
-		c.pipeline[l3ForwardingTable].BuildFlow(prioritySNAT).
+		c.pipeline[localPodL3ForwardingTable].BuildFlow(prioritySNAT).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
 			Action().LoadRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
@@ -992,10 +1000,9 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 		LoadRegToReg(int(endpointIPReg), int(endpointIPReg), endpointIPRegRange, endpointIPRegRange).
 		LoadRegToReg(int(endpointPortReg), int(endpointPortReg), endpointPortRegRange, endpointPortRegRange).
 		LoadReg(int(serviceLearnReg), marksRegServiceHitted, serviceLearnRegRange).
-		SetDstMAC(globalVirtualMAC).
+		LoadReg(int(marksReg), macRewriteMark, macRewriteMarkRange).
 		Done().
 		Action().LoadRegRange(int(serviceLearnReg), marksRegServiceHitted, serviceLearnRegRange).
-		Action().SetDstMAC(globalVirtualMAC).
 		Action().GotoTable(endpointDNATTable).
 		Done()
 }
@@ -1014,7 +1021,6 @@ func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPor
 	lbFlow := lbFlowBuilder.
 		MatchDstIP(svcIP).
 		MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLB, serviceLearnRegRange).
-		Action().SetDstMAC(globalVirtualMAC).
 		Action().Group(groupID).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
@@ -1083,6 +1089,7 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 			LoadReg(int(endpointIPReg), ipVal).
 			LoadRegRange(int(endpointPortReg), uint32(portVal), endpointPortRegRange).
 			LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
+			LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 			ResubmitToTable(resubmitTableID).
 			Done()
 	}
@@ -1092,41 +1099,43 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 func generatePipeline(bridge binding.Bridge, enableProxy bool) map[binding.TableIDType]binding.Table {
 	if enableProxy {
 		return map[binding.TableIDType]binding.Table{
-			classifierTable:       bridge.CreateTable(classifierTable, spoofGuardTable, binding.TableMissActionDrop),
-			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop),
-			serviceHairpinTable:   bridge.CreateTable(serviceHairpinTable, conntrackTable, binding.TableMissActionNext),
-			conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
-			conntrackStateTable:   bridge.CreateTable(conntrackStateTable, endpointDNATTable, binding.TableMissActionNext),
-			sessionAffinityTable:  bridge.CreateTable(sessionAffinityTable, binding.LastTableID, binding.TableMissActionNone),
-			serviceLBTable:        bridge.CreateTable(serviceLBTable, endpointDNATTable, binding.TableMissActionNext),
-			endpointDNATTable:     bridge.CreateTable(endpointDNATTable, egressRuleTable, binding.TableMissActionNext),
-			egressRuleTable:       bridge.CreateTable(egressRuleTable, egressDefaultTable, binding.TableMissActionNext),
-			egressDefaultTable:    bridge.CreateTable(egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
-			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, ingressRuleTable, binding.TableMissActionNext),
-			arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
-			ingressRuleTable:      bridge.CreateTable(ingressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
-			ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
-			conntrackCommitTable:  bridge.CreateTable(conntrackCommitTable, hairpinSNATTable, binding.TableMissActionNext),
-			hairpinSNATTable:      bridge.CreateTable(hairpinSNATTable, l2ForwardingOutTable, binding.TableMissActionNext),
-			l2ForwardingOutTable:  bridge.CreateTable(l2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
+			classifierTable:           bridge.CreateTable(classifierTable, spoofGuardTable, binding.TableMissActionDrop),
+			spoofGuardTable:           bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop),
+			serviceHairpinTable:       bridge.CreateTable(serviceHairpinTable, conntrackTable, binding.TableMissActionNext),
+			conntrackTable:            bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
+			conntrackStateTable:       bridge.CreateTable(conntrackStateTable, endpointDNATTable, binding.TableMissActionNext),
+			sessionAffinityTable:      bridge.CreateTable(sessionAffinityTable, binding.LastTableID, binding.TableMissActionNone),
+			serviceLBTable:            bridge.CreateTable(serviceLBTable, endpointDNATTable, binding.TableMissActionNext),
+			endpointDNATTable:         bridge.CreateTable(endpointDNATTable, egressRuleTable, binding.TableMissActionNext),
+			egressRuleTable:           bridge.CreateTable(egressRuleTable, egressDefaultTable, binding.TableMissActionNext),
+			egressDefaultTable:        bridge.CreateTable(egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
+			l3ForwardingTable:         bridge.CreateTable(l3ForwardingTable, localPodL3ForwardingTable, binding.TableMissActionNext),
+			localPodL3ForwardingTable: bridge.CreateTable(localPodL3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+			l2ForwardingCalcTable:     bridge.CreateTable(l2ForwardingCalcTable, ingressRuleTable, binding.TableMissActionNext),
+			arpResponderTable:         bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
+			ingressRuleTable:          bridge.CreateTable(ingressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
+			ingressDefaultTable:       bridge.CreateTable(ingressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
+			conntrackCommitTable:      bridge.CreateTable(conntrackCommitTable, hairpinSNATTable, binding.TableMissActionNext),
+			hairpinSNATTable:          bridge.CreateTable(hairpinSNATTable, l2ForwardingOutTable, binding.TableMissActionNext),
+			l2ForwardingOutTable:      bridge.CreateTable(l2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 		}
 	}
 	return map[binding.TableIDType]binding.Table{
-		classifierTable:       bridge.CreateTable(classifierTable, spoofGuardTable, binding.TableMissActionDrop),
-		spoofGuardTable:       bridge.CreateTable(spoofGuardTable, conntrackTable, binding.TableMissActionDrop),
-		conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
-		conntrackStateTable:   bridge.CreateTable(conntrackStateTable, dnatTable, binding.TableMissActionNext),
-		dnatTable:             bridge.CreateTable(dnatTable, egressRuleTable, binding.TableMissActionNext),
-		egressRuleTable:       bridge.CreateTable(egressRuleTable, egressDefaultTable, binding.TableMissActionNext),
-		egressDefaultTable:    bridge.CreateTable(egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
-		l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-		l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, ingressRuleTable, binding.TableMissActionNext),
-		arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
-		ingressRuleTable:      bridge.CreateTable(ingressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
-		ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
-		conntrackCommitTable:  bridge.CreateTable(conntrackCommitTable, l2ForwardingOutTable, binding.TableMissActionNext),
-		l2ForwardingOutTable:  bridge.CreateTable(l2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
+		classifierTable:           bridge.CreateTable(classifierTable, spoofGuardTable, binding.TableMissActionDrop),
+		spoofGuardTable:           bridge.CreateTable(spoofGuardTable, conntrackTable, binding.TableMissActionDrop),
+		conntrackTable:            bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
+		conntrackStateTable:       bridge.CreateTable(conntrackStateTable, dnatTable, binding.TableMissActionNext),
+		dnatTable:                 bridge.CreateTable(dnatTable, egressRuleTable, binding.TableMissActionNext),
+		egressRuleTable:           bridge.CreateTable(egressRuleTable, egressDefaultTable, binding.TableMissActionNext),
+		egressDefaultTable:        bridge.CreateTable(egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
+		l3ForwardingTable:         bridge.CreateTable(l3ForwardingTable, localPodL3ForwardingTable, binding.TableMissActionNext),
+		localPodL3ForwardingTable: bridge.CreateTable(localPodL3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+		l2ForwardingCalcTable:     bridge.CreateTable(l2ForwardingCalcTable, ingressRuleTable, binding.TableMissActionNext),
+		arpResponderTable:         bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
+		ingressRuleTable:          bridge.CreateTable(ingressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
+		ingressDefaultTable:       bridge.CreateTable(ingressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
+		conntrackCommitTable:      bridge.CreateTable(conntrackCommitTable, l2ForwardingOutTable, binding.TableMissActionNext),
+		l2ForwardingOutTable:      bridge.CreateTable(l2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 	}
 }
 

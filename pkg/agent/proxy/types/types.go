@@ -25,7 +25,15 @@ import (
 type ServiceInfo struct {
 	*upstream.BaseServiceInfo
 	// cache for performance
-	OFTransportProtocol openflow.Protocol
+	OFTransportProtocol    openflow.Protocol
+	AffinityTimeoutSeconds uint16
+}
+
+func (si *ServiceInfo) Equal(bSvcInfo *ServiceInfo) bool {
+	return si.SessionAffinityType() == bSvcInfo.SessionAffinityType() &&
+		si.StickyMaxAgeSeconds() == bSvcInfo.StickyMaxAgeSeconds() &&
+		si.OFTransportProtocol == bSvcInfo.OFTransportProtocol &&
+		si.Port() == bSvcInfo.Port()
 }
 
 // NewServiceInfo returns a new upstream.ServicePort which abstracts a serviceInfo
@@ -36,6 +44,12 @@ func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo 
 		info.OFTransportProtocol = openflow.ProtocolUDP
 	} else if port.Protocol == corev1.ProtocolSCTP {
 		info.OFTransportProtocol = openflow.ProtocolSCTP
+	}
+	if info.SessionAffinityType() == corev1.ServiceAffinityClientIP {
+		info.AffinityTimeoutSeconds = uint16(info.StickyMaxAgeSeconds())
+		if info.AffinityTimeoutSeconds == 0 {
+			info.AffinityTimeoutSeconds = uint16(corev1.DefaultClientIPServiceAffinitySeconds)
+		}
 	}
 	return info
 }

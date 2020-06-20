@@ -118,58 +118,50 @@ func (i *Instance) removeStaleEndpoints(staleEndpoints map[upstream.ServicePortN
 	}
 }
 
-func getAffinityTimeoutSeconds(svcInfo *types.ServiceInfo) uint16 {
-	var affinityTimeoutSeconds uint16
-	if svcInfo.SessionAffinityType() == corev1.ServiceAffinityClientIP {
-		affinityTimeoutSeconds = uint16(svcInfo.StickyMaxAgeSeconds())
-		if affinityTimeoutSeconds == 0 {
-			affinityTimeoutSeconds = uint16(corev1.DefaultClientIPServiceAffinitySeconds)
-		}
-	}
-	return affinityTimeoutSeconds
-}
-
 func (i *Instance) installServices() {
 	for svcPortName, svcPort := range i.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
-		affinityTimeoutSeconds := getAffinityTimeoutSeconds(svcInfo)
 		groupID, _ := i.groupCounter.Get(svcPortName)
-
 		endpoints, ok := i.endpointsMap[svcPortName]
 		if !ok || len(endpoints) == 0 {
 			continue
 		}
-		if _, ok := i.endpointInstalledMap[svcPortName]; !ok {
+
+		endpointInstalled, ok := i.endpointInstalledMap[svcPortName]
+		if !ok {
 			i.endpointInstalledMap[svcPortName] = map[string]struct{}{}
+			endpointInstalled = i.endpointInstalledMap[svcPortName]
 		}
+
+		installedSvcPort, ok := i.serviceInstalledMap[svcPortName]
+		needUpdate := !ok || !installedSvcPort.(*types.ServiceInfo).Equal(svcInfo)
 
 		var endpointUpdateList []upstream.Endpoint
 		for _, endpoint := range endpoints {
-			if _, ok := i.endpointInstalledMap[svcPortName][endpoint.String()]; ok {
-				continue
+			if _, ok := endpointInstalled[endpoint.String()]; !ok {
+				needUpdate = true
+				endpointInstalled[endpoint.String()] = struct{}{}
 			}
-			i.endpointInstalledMap[svcPortName][endpoint.String()] = struct{}{}
 			endpointUpdateList = append(endpointUpdateList, endpoint)
 		}
 
-		if len(endpointUpdateList) > 0 {
-			if err := i.ofClient.InstallEndpointFlows(svcInfo.OFTransportProtocol, endpointUpdateList); err != nil {
-				klog.Errorf("Error when installing Endpoints flows: %v", err)
-				continue
-			}
-			err := i.ofClient.InstallServiceGroup(groupID, affinityTimeoutSeconds != 0, endpointUpdateList)
-			if err != nil {
-				klog.Errorf("Error when installing Endpoints groups: %v", err)
-				i.endpointInstalledMap[svcPortName] = nil
-				continue
-			}
+		if !needUpdate {
+			continue
 		}
 
-		if _, ok := i.serviceInstalledMap[svcPortName]; !ok {
-			if err := i.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFTransportProtocol, affinityTimeoutSeconds); err != nil {
-				klog.Errorf("Error when installing Service flows: %v", err)
-				continue
-			}
+		if err := i.ofClient.InstallEndpointFlows(svcInfo.OFTransportProtocol, endpointUpdateList); err != nil {
+			klog.Errorf("Error when installing Endpoints flows: %v", err)
+			continue
+		}
+		err := i.ofClient.InstallServiceGroup(groupID, svcInfo.AffinityTimeoutSeconds != 0, endpointUpdateList)
+		if err != nil {
+			klog.Errorf("Error when installing Endpoints groups: %v", err)
+			i.endpointInstalledMap[svcPortName] = nil
+			continue
+		}
+		if err := i.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFTransportProtocol, svcInfo.AffinityTimeoutSeconds); err != nil {
+			klog.Errorf("Error when installing Service flows: %v", err)
+			continue
 		}
 		i.serviceInstalledMap[svcPortName] = svcPort
 	}
