@@ -86,8 +86,4 @@ type AgentConfig struct {
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to false.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
-	// Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
-	// It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
-	// Service traffic.
-	EnableAntreaProxy bool `yaml:"enableAntreaProxy,omitempty"`
 }

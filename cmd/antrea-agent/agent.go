@@ -36,6 +36,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -81,7 +82,7 @@ func run(o *Options) error {
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, o.config.EnableAntreaProxy)
+	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, o.config.FeatureGates[string(features.AntreaProxy)])
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
@@ -107,7 +108,7 @@ func run(o *Options) error {
 		o.config.DefaultMTU,
 		serviceCIDRNet,
 		networkConfig,
-		o.config.EnableAntreaProxy)
+		o.config.FeatureGates[string(features.AntreaProxy)])
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -134,7 +135,7 @@ func run(o *Options) error {
 		isChaining = true
 	}
 	var proxier *proxy.Instance
-	if o.config.EnableAntreaProxy {
+	if o.config.FeatureGates[string(features.AntreaProxy)] {
 		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
 	}
 	cniServer := cniserver.New(
@@ -188,7 +189,7 @@ func run(o *Options) error {
 
 	go agentMonitor.Run(stopCh)
 
-	if o.config.EnableAntreaProxy && proxier != nil {
+	if o.config.FeatureGates[string(features.AntreaProxy)] && proxier != nil {
 		go proxier.Run(stopCh)
 	}
 

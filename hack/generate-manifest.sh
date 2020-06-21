@@ -159,7 +159,7 @@ if $IPSEC; then
 fi
 
 if $PROXY; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableAntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableAntreaProxy: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: true/" antrea-agent.conf
 fi
 
 if $NP; then
