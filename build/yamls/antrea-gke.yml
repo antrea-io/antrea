@@ -344,6 +344,9 @@ metadata:
 apiVersion: v1
 data:
   antrea-agent.conf: |
+    # FeatureGates is a map of feature names to bools that enable or disable experimental features.
+    #featureGates:
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     #ovsBridge: br-int
@@ -413,6 +416,9 @@ data:
         ]
     }
   antrea-controller.conf: |
+    # FeatureGates is a map of feature names to bools that enable or disable experimental features.
+    #featureGates:
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -432,7 +438,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-ff5ff2btgc
+  name: antrea-config-cfhgb2tt48
   namespace: kube-system
 ---
 apiVersion: v1
@@ -537,7 +543,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-ff5ff2btgc
+          name: antrea-config-cfhgb2tt48
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -749,7 +755,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-ff5ff2btgc
+          name: antrea-config-cfhgb2tt48
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

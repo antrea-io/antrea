@@ -39,6 +39,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
@@ -111,8 +112,8 @@ func run(o *Options) error {
 	stopCh := signals.RegisterSignalHandlers()
 
 	informerFactory.Start(stopCh)
-	// Only start watching Security CRDs when config option is set to true.
-	if o.config.EnableSecurityCRDs {
+	// Only start watching Security CRDs when ClusterNetworkPolicy is enabled.
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
 		crdInformerFactory.Start(stopCh)
 	}
 
