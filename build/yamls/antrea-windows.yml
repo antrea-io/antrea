@@ -29,7 +29,7 @@ data:
 
     # Name of the interface antrea-agent will create and use for host <--> pod communication.
     # Make sure it doesn't conflict with your existing interfaces.
-    #hostGateway: gw0
+    #hostGateway: antrea-gw0
 
     # Encapsulation mode for communication between Pods across Nodes, supported values:
     # - geneve (default)
@@ -69,7 +69,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-8ktf86t8d5
+  name: antrea-windows-config-2b4h888dt2
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -157,7 +157,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-8ktf86t8d5
+          name: antrea-windows-config-2b4h888dt2
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

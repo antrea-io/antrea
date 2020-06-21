@@ -43,7 +43,9 @@ import (
 )
 
 const (
-	maxRetryForHostLink = 5
+	// Default name of the default tunnel interface on the OVS bridge.
+	defaultTunInterfaceName = "antrea-tun0"
+	maxRetryForHostLink     = 5
 	// ipsecPSKEnvKey is environment variable.
 	ipsecPSKEnvKey          = "ANTREA_IPSEC_PSK"
 	roundNumKey             = "roundNum" // round number key in externalIDs.
@@ -115,7 +117,7 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
-	if err := i.setupDefaultTunnelInterface(config.DefaultTunPortName); err != nil {
+	if err := i.setupDefaultTunnelInterface(); err != nil {
 		return err
 	}
 	// Set up host gateway interface
@@ -145,11 +147,17 @@ func (i *Initializer) initInterfaceStore() error {
 			OFPort:   port.OFPort}
 		var intf *interfacestore.InterfaceConfig
 		switch {
-		case port.Name == i.hostGateway:
+		case port.OFPort == config.HostGatewayOFPort:
 			intf = &interfacestore.InterfaceConfig{
 				Type:          interfacestore.GatewayInterface,
 				InterfaceName: port.Name,
 				OVSPortConfig: ovsPort}
+			if intf.InterfaceName != i.hostGateway {
+				klog.Warningf("The discovered gateway interface name %s is different from the configured value: %s",
+					intf.InterfaceName, i.hostGateway)
+				// Set the gateway interface name to the discovered name.
+				i.hostGateway = intf.InterfaceName
+			}
 		case port.Name == uplinkIfName:
 			intf = &interfacestore.InterfaceConfig{
 				Type:          interfacestore.UplinkInterface,
@@ -164,6 +172,13 @@ func (i *Initializer) initInterfaceStore() error {
 			fallthrough
 		case port.IFType == ovsconfig.STTTunnel:
 			intf = noderoute.ParseTunnelInterfaceConfig(port, ovsPort)
+			if intf != nil && port.OFPort == config.DefaultTunOFPort &&
+				intf.InterfaceName != i.nodeConfig.DefaultTunName {
+				klog.Infof("The discovered default tunnel interface name %s is different from the default value: %s",
+					intf.InterfaceName, i.nodeConfig.DefaultTunName)
+				// Set the default tunnel interface name to the discovered name.
+				i.nodeConfig.DefaultTunName = intf.InterfaceName
+			}
 		default:
 			// The port should be for a container interface.
 			intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
@@ -432,10 +447,11 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 		return err
 	}
 
+	i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: gwMAC}
+	gatewayIface.MAC = gwMAC
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, Node IP is also assigned to local gateway for masquerade.
-		i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: gwMAC, IP: i.nodeConfig.NodeIPAddr.IP}
-		gatewayIface.MAC = i.nodeConfig.GatewayConfig.MAC
+		i.nodeConfig.GatewayConfig.IP = i.nodeConfig.NodeIPAddr.IP
 		gatewayIface.IP = i.nodeConfig.NodeIPAddr.IP
 		return nil
 	}
@@ -444,9 +460,6 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 	localSubnet := i.nodeConfig.PodCIDR
 	subnetID := localSubnet.IP.Mask(localSubnet.Mask)
 	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
-	i.nodeConfig.GatewayConfig = &config.GatewayConfig{LinkIndex: gwLinkIdx, Name: i.hostGateway, IP: gwIP.IP, MAC: gwMAC}
-	gatewayIface.IP = gwIP.IP
-	gatewayIface.MAC = gwMAC
 
 	// Check IP address configuration on existing interface first, return if the interface has the desired address.
 	// We perform this check unconditionally, even if the OVS port does not exist when this function is called
@@ -457,10 +470,14 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 		return err
 	}
 
+	i.nodeConfig.GatewayConfig.LinkIndex = gwLinkIdx
+	i.nodeConfig.GatewayConfig.IP = gwIP.IP
+	gatewayIface.IP = gwIP.IP
 	return nil
 }
 
-func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
+func (i *Initializer) setupDefaultTunnelInterface() error {
+	tunnelPortName := i.nodeConfig.DefaultTunName
 	tunnelIface, portExists := i.ifaceStore.GetInterface(tunnelPortName)
 	localIP := i.getTunnelPortLocalIP()
 	localIPStr := ""
@@ -489,8 +506,14 @@ func (i *Initializer) setupDefaultTunnelInterface(tunnelPortName string) error {
 		}
 	}
 
-	// Create default tunnel port.
+	// Create the default tunnel port and interface.
 	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
+		if tunnelPortName != defaultTunInterfaceName {
+			// Reset the tunnel interface name to the desired name before
+			// recreating the tunnel port and interface.
+			tunnelPortName = defaultTunInterfaceName
+			i.nodeConfig.DefaultTunName = tunnelPortName
+		}
 		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, localIPStr, "", "", nil)
 		if err != nil {
 			klog.Errorf("Failed to create tunnel port %s type %s on OVS bridge: %v", tunnelPortName, i.networkConfig.TunnelType, err)
@@ -525,12 +548,14 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return fmt.Errorf("failed to get local IPNet:  %v", err)
 	}
 
+	i.nodeConfig = &config.NodeConfig{
+		Name:            nodeName,
+		OVSBridge:       i.ovsBridge,
+		DefaultTunName:  defaultTunInterfaceName,
+		NodeIPAddr:      localAddr,
+		UplinkNetConfig: new(config.AdapterNetConfig)}
+
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		i.nodeConfig = &config.NodeConfig{
-			Name:            nodeName,
-			OVSBridge:       i.ovsBridge,
-			NodeIPAddr:      localAddr,
-			UplinkNetConfig: new(config.AdapterNetConfig)}
 		return nil
 	}
 
@@ -545,13 +570,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
 		return err
 	}
-
-	i.nodeConfig = &config.NodeConfig{
-		Name:            nodeName,
-		OVSBridge:       i.ovsBridge,
-		PodCIDR:         localSubnet,
-		NodeIPAddr:      localAddr,
-		UplinkNetConfig: new(config.AdapterNetConfig)}
+	i.nodeConfig.PodCIDR = localSubnet
 	return nil
 }
 

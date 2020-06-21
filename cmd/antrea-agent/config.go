@@ -46,7 +46,7 @@ type AgentConfig struct {
 	OVSRunDir string `yaml:"ovsRunDir,omitempty"`
 	// Name of the interface antrea-agent will create and use for host <--> pod communication.
 	// Make sure it doesn't conflict with your existing interfaces.
-	// Defaults to gw0.
+	// Defaults to antrea-gw0.
 	HostGateway string `yaml:"hostGateway,omitempty"`
 	// Encapsulation mode for communication between Pods across Nodes, supported values:
 	// - geneve (default)

@@ -149,8 +149,8 @@ their health and runtime information.
 On every Node, Antrea Agent creates an OVS bridge (named `br-int` by default),
 and creates a veth pair for each Pod, with one end being in the Pod's network
 namespace and the other connected to the OVS bridge. On the OVS bridge, Antrea
-Agent also creates an internal port - `gw0` by default - to be the gateway of
-the Node's subnet, and a tunnel port `tun0` which is for creating overlay
+Agent also creates an internal port - `antrea-gw0` by default - to be the gateway of
+the Node's subnet, and a tunnel port `antrea-tun0` which is for creating overlay
 tunnels to other Nodes.
 
 <img src="/docs/assets/node.svg.png" width="300" alt="Antrea Node Network">
@@ -160,7 +160,7 @@ the subnet. Antrea leverages Kubernetes' `NodeIPAMController` for the Node
 subnet allocation, which sets the `podCIDR` field of the Kubernetes Node spec
 to the allocated subnet. Antrea Agent retrieves the subnets of Nodes from the
 `podCIDR` field. It reserves the first IP of the local Node's subnet to be the
-gateway IP and assigns it to the `gw0` port, and invokes the
+gateway IP and assigns it to the `antrea-gw0` port, and invokes the
 [host-local IPAM plugin](https://github.com/containernetworking/plugins/tree/master/plugins/ipam/host-local)
 to allocate IPs from the subnet to all local Pods. A local Pod is assigned an IP
 when the CNI ADD command is received for that Pod.
@@ -177,12 +177,12 @@ IP against each Node's subnet.
 the OVS bridge directly.
 
 * ***Inter-node traffic*** Packets to a Pod on another Node will be first
-forwarded to the `tun0` port, encapsulated, and sent to the destination Node
-through the tunnel; then they will be decapsulated, injected through the `tun0`
+forwarded to the `antrea-tun0` port, encapsulated, and sent to the destination Node
+through the tunnel; then they will be decapsulated, injected through the `antrea-tun0`
 port to the OVS bridge, and finally forwarded to the destination Pod.
 
 * ***Pod to external traffic*** Packets sent to an external IP or the Nodes'
-network will be forwarded to the `gw0` port (as it is the gateway of the local
+network will be forwarded to the `antrea-gw0` port (as it is the gateway of the local
 Pod subnet), and will be routed (based on routes configured on the Node) to the
 appropriate network interface of the Node (e.g. a physical network interface for
 a baremetal Node) and sent out to the Node network from there. Antrea Agent
@@ -195,7 +195,7 @@ so their source IP will be rewritten to the Node's IP before going out.
 
 At the moment, Antrea leverages `kube-proxy` to serve traffic for ClusterIP and
 NodePort type Services. The packets from a Pod to a Service's ClusterIP will be
-forwarded through the `gw0` port, then `kube-proxy` will select one Service
+forwarded through the `antrea-gw0` port, then `kube-proxy` will select one Service
 backend Pod to be the connection's destination and DNAT the packets to the Pod's
 IP and port. If the destination Pod is on the local Node the packets will be
 forwarded to the Pod directly; if it is on another Node the packets will be sent
@@ -267,7 +267,7 @@ IP address to two OVS interface options of the tunnel interface. Then
 with PSK for the remote Node, and strongSwan can create the IPsec Security
 Associations based on the Security Policies. These additional tunnel ports are
 not used to send traffic to a remote Node - the tunnel traffic is still output
-to the default tunnel port (`tun0`) with OVS flow based tunneling. However, the
+to the default tunnel port (`antrea-tun0`) with OVS flow based tunneling. However, the
 traffic from a remote Node will be received from the Node's IPsec tunnel port.
 
 ### Hybrid, NoEncap, NetworkPolicyOnly TrafficEncapMode

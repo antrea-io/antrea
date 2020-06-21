@@ -521,7 +521,7 @@ func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cooki
 		Done()
 }
 
-// l2ForwardOutputReentInPortFlow generates the flow that forward re-entrance peer Node traffic via gw0.
+// l2ForwardOutputReentInPortFlow generates the flow that forwards re-entrance peer Node traffic via antrea-gw0.
 // This flow supersedes default output flow because ovs by default auto-skips packets with output = input port.
 func (c *client) l2ForwardOutputReentInPortFlow(gwPort uint32, category cookie.Category) binding.Flow {
 	return c.pipeline[l2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
@@ -1036,8 +1036,8 @@ func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputP
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Forward the packet to L2ForwardingCalc table if it is sent to the Node IP(not to the host gateway). Since
-		// the packet is using the host gateway's MAC as dst MAC, it will be sent out from "gw0". This flow entry is to
-		// avoid SNAT on such packet, otherwise the source and destination IP are the same.
+		// the packet is using the host gateway's MAC as dst MAC, it will be sent out from "antrea-gw0". This flow
+		// entry is to avoid SNAT on such packet, otherwise the source and destination IP are the same.
 		c.pipeline[l3ForwardingTable].BuildFlow(priorityLow).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).

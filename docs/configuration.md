@@ -38,7 +38,7 @@ Use `antrea-agent -h` to see complete options.
 
 # Name of the gateway interface for the local Pod subnet. antrea-agent will create the interface on the OVS bridge.
 # Make sure it doesn't conflict with your existing interfaces.
-#hostGateway: gw0
+#hostGateway: antrea-gw0
 
 # Encapsulation mode for communication between Pods across Nodes, supported values:
 # - geneve (default)

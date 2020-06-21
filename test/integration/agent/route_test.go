@@ -56,7 +56,7 @@ var (
 	_, serviceCIDR, _ = net.ParseCIDR("200.200.0.0/16")
 	gwIP              = net.ParseIP("10.10.10.1")
 	gwMAC, _          = net.ParseMAC("12:34:56:78:bb:cc")
-	gwName            = "gw0"
+	gwName            = "antrea-gw0"
 	svcTblIdx         = route.AntreaServiceTableIdx
 	svcTblName        = route.AntreaServiceTable
 	mainTblIdx        = 254
@@ -110,7 +110,7 @@ func TestInitialize(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Logf("Running Initialize test with mode %s node config %s", tc.mode, nodeConfig)
-		routeClient, err := route.NewClient(gwName, serviceCIDR, tc.mode)
+		routeClient, err := route.NewClient(serviceCIDR, tc.mode)
 		if err != nil {
 			t.Error(err)
 		}
@@ -169,8 +169,8 @@ func TestInitialize(t *testing.T) {
 		expectedIPTables := map[string]string{
 			"filter": `:ANTREA-FORWARD - [0:0]
 -A FORWARD -m comment --comment "Antrea: jump to Antrea forwarding rules" -j ANTREA-FORWARD
--A ANTREA-FORWARD -i gw0 -m comment --comment "Antrea: accept packets from local pods" -j ACCEPT
--A ANTREA-FORWARD -o gw0 -m comment --comment "Antrea: accept packets to local pods" -j ACCEPT
+-A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local pods" -j ACCEPT
+-A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local pods" -j ACCEPT
 `,
 			"raw": `:ANTREA-RAW - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea raw rules" -j ANTREA-RAW
@@ -186,12 +186,12 @@ func TestInitialize(t *testing.T) {
 		if tc.mode.SupportsNoEncap() {
 			expectedIPTables["mangle"] = `:ANTREA-MANGLE - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea mangle rules" -j ANTREA-MANGLE
--A ANTREA-MANGLE -d 200.200.0.0/16 -i gw0 -m comment --comment "Antrea: mark pod to service packets" -j MARK --set-xmark 0x800/0x800
--A ANTREA-MANGLE ! -d 200.200.0.0/16 -i gw0 -m comment --comment "Antrea: unmark post LB service packets" -j MARK --set-xmark 0x0/0xffffffff
+-A ANTREA-MANGLE -d 200.200.0.0/16 -i antrea-gw0 -m comment --comment "Antrea: mark pod to service packets" -j MARK --set-xmark 0x800/0x800
+-A ANTREA-MANGLE ! -d 200.200.0.0/16 -i antrea-gw0 -m comment --comment "Antrea: unmark post LB service packets" -j MARK --set-xmark 0x0/0xffffffff
 `
 			expectedIPTables["raw"] = `:ANTREA-RAW - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea raw rules" -j ANTREA-RAW
--A ANTREA-RAW -i gw0 -m comment --comment "Antrea: reentry pod traffic skip conntrack" -m mac --mac-source DE:AD:BE:EF:DE:AD -j CT --notrack
+-A ANTREA-RAW -i antrea-gw0 -m comment --comment "Antrea: reentry pod traffic skip conntrack" -m mac --mac-source DE:AD:BE:EF:DE:AD -j CT --notrack
 `
 		}
 
@@ -236,7 +236,7 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Logf("Running test with mode %s peer cidr %s peer ip %s node config %s", tc.mode, tc.peerCIDR, tc.peerIP, nodeConfig)
-		routeClient, err := route.NewClient(gwName, serviceCIDR, tc.mode)
+		routeClient, err := route.NewClient(serviceCIDR, tc.mode)
 		if err != nil {
 			t.Error(err)
 		}
@@ -338,7 +338,7 @@ func TestReconcile(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		routeClient, err := route.NewClient(gwName, serviceCIDR, tc.mode)
+		routeClient, err := route.NewClient(serviceCIDR, tc.mode)
 		if err != nil {
 			t.Error(err)
 		}
@@ -379,7 +379,7 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
 
-	routeClient, err := route.NewClient(gwName, serviceCIDR, config.TrafficEncapModeNetworkPolicyOnly)
+	routeClient, err := route.NewClient(serviceCIDR, config.TrafficEncapModeNetworkPolicyOnly)
 	if err != nil {
 		t.Error(err)
 	}
@@ -399,11 +399,11 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	assert.Contains(t, gwIPOut, gwIP.String())
 	// verify default routes and neigh
 	expRoute := strings.Join(strings.Fields(
-		"default via 169.254.253.1 dev gw0 onlink"), "")
+		"default via 169.254.253.1 dev antrea-gw0 onlink"), "")
 	routeOut, err := ExecOutputTrim(fmt.Sprintf("ip route show table %d", svcTblIdx))
 	assert.Equal(t, expRoute, routeOut)
 	expNeigh := strings.Join(strings.Fields(
-		"169.254.253.1 dev gw0 lladdr 12:34:56:78:9a:bc PERMANENT"), "")
+		"169.254.253.1 dev antrea-gw0 lladdr 12:34:56:78:9a:bc PERMANENT"), "")
 	neighOut, err := ExecOutputTrim(fmt.Sprintf("ip neigh | grep %s", gwName))
 	assert.Equal(t, expNeigh, neighOut)
 
@@ -449,7 +449,7 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	}
 	output, _ = ExecOutputTrim(fmt.Sprintf("ip route show"))
 	assert.NotContainsf(t, output, expRoute, output)
-	// note unmigrate does not remove ip addresses given to gw0
+	// note unmigrate does not remove ip addresses given to antrea-gw0
 	output, _ = ExecOutputTrim(fmt.Sprintf("ip add show %s", gwName))
 	assert.Containsf(t, output, ipAddr.String(), output)
 	_ = netlink.LinkDel(gwLink)

@@ -39,13 +39,12 @@ func getNetLinkIndex(dev string) int {
 func TestRouteOperation(t *testing.T) {
 	// Leverage loopback interface for testing.
 	hostGateway := "Loopback Pseudo-Interface 1"
-	_, serviceCIDR, _ := net.ParseCIDR("1.1.0.0/16")
 	gwLink := getNetLinkIndex("Loopback Pseudo-Interface 1")
 
+	_, serviceCIDR, _ := net.ParseCIDR("1.1.0.0/16")
 	peerNodeIP := net.ParseIP("10.0.0.2")
 	gwIP1 := net.ParseIP("192.168.2.1")
 	_, destCIDR1, _ := net.ParseCIDR("192.168.2.0/24")
-
 	dest2 := "192.168.3.0/24"
 	gwIP2 := net.ParseIP("192.168.3.1")
 	_, destCIDR2, _ := net.ParseCIDR(dest2)
@@ -53,10 +52,11 @@ func TestRouteOperation(t *testing.T) {
 	nr := netroute.New()
 	defer nr.Exit()
 
-	client, err := NewClient(hostGateway, serviceCIDR, 0)
+	client, err := NewClient(serviceCIDR, 0)
 	require.Nil(t, err)
 	nodeConfig := &config.NodeConfig{
 		GatewayConfig: &config.GatewayConfig{
+			Name:      hostGateway,
 			LinkIndex: gwLink,
 		},
 	}
