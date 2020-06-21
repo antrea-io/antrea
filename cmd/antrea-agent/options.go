@@ -25,6 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -71,7 +72,7 @@ func (o *Options) complete(args []string) error {
 		o.config = c
 	}
 	o.setDefaults()
-	return nil
+	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
 }
 
 // validate validates all the required options. It must be called after complete.
