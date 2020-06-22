@@ -80,7 +80,6 @@ type testConfig struct {
 	tunnelOFPort uint32
 	serviceCIDR  *net.IPNet
 	globalMAC    net.HardwareAddr
-	localSubnet  *net.IPNet
 }
 
 func TestConnectivityFlows(t *testing.T) {
@@ -141,9 +140,8 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	c = ofClient.NewClient(br, bridgeMgmtAddr, true)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
-	config := prepareConfiguration()
-	nodeConfig := &config1.NodeConfig{PodCIDR: config.localSubnet, GatewayConfig: &config1.GatewayConfig{MAC: config.localGateway.mac}}
-	_, err = c.Initialize(roundInfo, nodeConfig, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort)
+
+	_, err = c.Initialize(roundInfo, &config1.NodeConfig{}, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -182,10 +180,11 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 
 func testExternalFlows(t *testing.T, config *testConfig) {
 	nodeIP := net.ParseIP("10.10.10.1")
-	if err := c.InstallExternalFlows(nodeIP, *config.localSubnet); err != nil {
+	_, localSubnet, _ := net.ParseCIDR("172.16.1.0/24")
+	if err := c.InstallExternalFlows(nodeIP, *localSubnet); err != nil {
 		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
 	}
-	for _, tableFlow := range prepareExternalFlows(nodeIP, config.localSubnet) {
+	for _, tableFlow := range prepareExternalFlows(nodeIP, localSubnet) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -212,14 +211,10 @@ func testReplayFlows(t *testing.T) {
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
-	nodeCfg := &config1.NodeConfig{
-		PodCIDR:       config.localSubnet,
-		GatewayConfig: &config1.GatewayConfig{MAC: config.localGateway.mac},
-	}
-	if _, err := c.Initialize(roundInfo, nodeCfg, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort); err != nil {
+	if _, err := c.Initialize(roundInfo, &config1.NodeConfig{}, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
-	for _, tableFlow := range prepareDefaultFlows(config) {
+	for _, tableFlow := range prepareDefaultFlows() {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -237,7 +232,7 @@ func testInstallTunnelFlows(t *testing.T, config *testConfig) {
 func testInstallServiceFlows(t *testing.T, config *testConfig) {
 	err := c.InstallClusterServiceFlows()
 	if err != nil {
-		t.Fatalf("Failed to install Openflow entries to skip service CIDR from egress table: %s", err)
+		t.Fatalf("Failed to install Openflow entries to skip service CIDR from egress table: %v", err)
 	}
 	for _, tableFlow := range prepareServiceHelperFlows() {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
@@ -274,7 +269,7 @@ func testInstallPodFlows(t *testing.T, config *testConfig) {
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for pod: %v", err)
 		}
-		for _, tableFlow := range preparePodFlows(pod.ip, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC, config.localSubnet) {
+		for _, tableFlow := range preparePodFlows(pod.ip, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 		}
 	}
@@ -286,7 +281,7 @@ func testUninstallPodFlows(t *testing.T, config *testConfig) {
 		if err != nil {
 			t.Fatalf("Failed to uninstall Openflow entries for pod: %v", err)
 		}
-		for _, tableFlow := range preparePodFlows(pod.ip, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC, config.localSubnet) {
+		for _, tableFlow := range preparePodFlows(pod.ip, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, false, tableFlow.flows)
 		}
 	}
@@ -296,9 +291,8 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	c = ofClient.NewClient(br, bridgeMgmtAddr, true)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
-	config := prepareConfiguration()
-	nodeConfig := &config1.NodeConfig{PodCIDR: config.localSubnet, GatewayConfig: &config1.GatewayConfig{MAC: config.localGateway.mac}}
-	_, err = c.Initialize(roundInfo, nodeConfig, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort)
+
+	_, err = c.Initialize(roundInfo, &config1.NodeConfig{}, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -528,7 +522,6 @@ func prepareConfiguration() *testConfig {
 	}
 	_, serviceCIDR, _ := net.ParseCIDR("172.16.0.0/16")
 	_, peerSubnet, _ := net.ParseCIDR("192.168.2.0/24")
-	_, localSubnet, _ := net.ParseCIDR("192.168.1.0/24")
 	peerNode := &testPeerConfig{
 		name:        "n2",
 		nodeAddress: net.ParseIP("10.1.1.2"),
@@ -544,11 +537,10 @@ func prepareConfiguration() *testConfig {
 		tunnelOFPort: uint32(2),
 		serviceCIDR:  serviceCIDR,
 		globalMAC:    vMAC,
-		localSubnet:  localSubnet,
 	}
 }
 
-func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gwMAC, vMAC net.HardwareAddr, subnet *net.IPNet) []expectTableFlows {
+func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gwMAC, vMAC net.HardwareAddr) []expectTableFlows {
 	return []expectTableFlows{
 		{
 			uint8(0),
@@ -567,11 +559,11 @@ func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gw
 			},
 		},
 		{
-			uint8(71),
+			uint8(70),
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,ip,reg0=0x80000/0x80000,nw_dst=%s", podIP.String()),
-					fmt.Sprintf("set_field:%s->eth_dst,goto_table:80", podMAC.String())},
+					fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,dec_ttl,goto_table:80", gwMAC.String(), podMAC.String())},
 			},
 		},
 		{
@@ -612,8 +604,8 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			uint8(70),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					fmt.Sprintf("priority=210,ip,dl_dst=%s,nw_dst=%s", vMAC.String(), gwIP.String()),
-					fmt.Sprintf("set_field:%s->eth_dst,goto_table:71", gwMAC.String())},
+					fmt.Sprintf("priority=200,ip,dl_dst=%s,nw_dst=%s", vMAC.String(), gwIP.String()),
+					fmt.Sprintf("set_field:%s->eth_dst,goto_table:80", gwMAC.String())},
 			},
 		},
 		{
@@ -640,7 +632,7 @@ func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableF
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{
-				{fmt.Sprintf("priority=200,in_port=%d", tunnelPort), "load:0->NXM_NX_REG0[0..15],goto_table:30"},
+				{fmt.Sprintf("priority=200,in_port=%d", tunnelPort), "load:0->NXM_NX_REG0[0..15],load:0x1->NXM_NX_REG1[19],goto_table:30"},
 			},
 		},
 	}
@@ -679,7 +671,7 @@ func prepareServiceHelperFlows() []expectTableFlows {
 	}
 }
 
-func prepareDefaultFlows(config *testConfig) []expectTableFlows {
+func prepareDefaultFlows() []expectTableFlows {
 	return []expectTableFlows{
 		{
 			uint8(0),
@@ -720,16 +712,6 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		},
 		{
 			uint8(70),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					fmt.Sprintf("priority=200,ip,dl_dst=%s,nw_dst=%s", config.globalMAC.String(), config.localSubnet.String()),
-					fmt.Sprintf("load:0x1->NXM_NX_REG0[19],set_field:%s->eth_src,dec_ttl,goto_table:71", config.localGateway.mac.String()),
-				},
-				{"priority=0", "goto_table:71"},
-			},
-		},
-		{
-			uint8(71),
 			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:80"}},
 		},
 		{
@@ -819,14 +801,10 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 			},
 		},
 		{
-			uint8(71),
+			uint8(70),
 			[]*ofTestUtils.ExpectFlow{
 				{
 					"priority=200,ct_mark=0x20,ip,reg0=0x2/0xffff", "goto_table:80",
-				},
-				{
-					fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", localSubnet.String()),
-					"goto_table:80",
 				},
 				{
 					fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", nodeIP.String()),

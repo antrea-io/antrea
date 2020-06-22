@@ -29,15 +29,15 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	ofmock "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 func makeNamespaceName(namespace, name string) apimachinerytypes.NamespacedName {
 	return apimachinerytypes.NamespacedName{Namespace: namespace, Name: name}
 }
 
-func makeServiceMap(proxier *Instance, allServices ...*corev1.Service) {
+func makeServiceMap(proxier *Proxier, allServices ...*corev1.Service) {
 	for i := range allServices {
 		proxier.serviceChanges.OnServiceUpdate(nil, allServices[i])
 	}
@@ -58,7 +58,7 @@ func makeTestService(namespace, name string, svcFunc func(*corev1.Service)) *cor
 	return svc
 }
 
-func makeEndpointsMap(proxier *Instance, allEndpoints ...*corev1.Endpoints) {
+func makeEndpointsMap(proxier *Proxier, allEndpoints ...*corev1.Endpoints) {
 	for i := range allEndpoints {
 		proxier.endpointsChanges.OnEndpointUpdate(nil, allEndpoints[i])
 	}
@@ -76,19 +76,19 @@ func makeTestEndpoints(namespace, name string, eptFunc func(*corev1.Endpoints)) 
 	return ept
 }
 
-func NewFakeProxier(ofClient openflow.Client) *Instance {
+func NewFakeProxier(ofClient openflow.Client) *Proxier {
 	hostname := "localhost"
 	eventBroadcaster := record.NewBroadcaster()
 	recorder := eventBroadcaster.NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
 	)
-	p := &Instance{
+	p := &Proxier{
 		endpointsChanges:     newEndpointsChangesTracker(hostname),
 		serviceChanges:       newServiceChangesTracker(recorder),
-		serviceMap:           upstream.ServiceMap{},
-		serviceInstalledMap:  upstream.ServiceMap{},
-		endpointInstalledMap: map[upstream.ServicePortName]map[string]struct{}{},
+		serviceMap:           k8sproxy.ServiceMap{},
+		serviceInstalledMap:  k8sproxy.ServiceMap{},
+		endpointInstalledMap: map[k8sproxy.ServicePortName]map[string]struct{}{},
 		endpointsMap:         types.EndpointsMap{},
 		groupCounter:         types.NewGroupCounter(),
 		ofClient:             ofClient,
@@ -104,7 +104,7 @@ func TestClusterIP(t *testing.T) {
 
 	svcIPv4 := net.ParseIP("10.20.30.41")
 	svcPort := 80
-	svcPortName := upstream.ServicePortName{
+	svcPortName := k8sproxy.ServicePortName{
 		NamespacedName: makeNamespaceName("ns1", "svc1"),
 		Port:           "80",
 		Protocol:       corev1.ProtocolTCP,
@@ -152,7 +152,7 @@ func TestClusterIPRemoval(t *testing.T) {
 
 	svcIPv4 := net.ParseIP("10.20.30.41")
 	svcPort := 80
-	svcPortName := upstream.ServicePortName{
+	svcPortName := k8sproxy.ServicePortName{
 		NamespacedName: makeNamespaceName("ns1", "svc1"),
 		Port:           fmt.Sprint(svcPort),
 		Protocol:       corev1.ProtocolTCP,
@@ -205,7 +205,7 @@ func TestClusterIPNoEndpoint(t *testing.T) {
 	svcIP := "10.20.30.41"
 	svcPort := 80
 	svcNodePort := 3001
-	svcPortName := upstream.ServicePortName{
+	svcPortName := k8sproxy.ServicePortName{
 		NamespacedName: makeNamespaceName("ns1", "svc1"),
 		Port:           "80",
 		Protocol:       corev1.ProtocolTCP,
@@ -235,12 +235,12 @@ func TestClusterIPRemoveSamePortEndpoint(t *testing.T) {
 
 	svcIPv4 := net.ParseIP("10.20.30.41")
 	svcPort := 80
-	svcPortName := upstream.ServicePortName{
+	svcPortName := k8sproxy.ServicePortName{
 		NamespacedName: makeNamespaceName("ns1", "svc1"),
 		Port:           "80",
 		Protocol:       corev1.ProtocolTCP,
 	}
-	svcPortNameUDP := upstream.ServicePortName{
+	svcPortNameUDP := k8sproxy.ServicePortName{
 		NamespacedName: makeNamespaceName("ns1", "svc1-udp"),
 		Port:           "80",
 		Protocol:       corev1.ProtocolUDP,
@@ -314,7 +314,7 @@ func TestClusterIPRemoveEndpoints(t *testing.T) {
 
 	svcIPv4 := net.ParseIP("10.20.30.41")
 	svcPort := 80
-	svcPortName := upstream.ServicePortName{
+	svcPortName := k8sproxy.ServicePortName{
 		NamespacedName: makeNamespaceName("ns1", "svc1"),
 		Port:           "80",
 		Protocol:       corev1.ProtocolTCP,
@@ -365,7 +365,7 @@ func TestSessionAffinityNoEndpoint(t *testing.T) {
 	svcPort := 80
 	svcNodePort := 3001
 	svcExternalIPs := "50.60.70.81"
-	svcPortName := upstream.ServicePortName{
+	svcPortName := k8sproxy.ServicePortName{
 		NamespacedName: makeNamespaceName("ns1", "svc1"),
 		Port:           "80",
 		Protocol:       corev1.ProtocolTCP,
@@ -425,7 +425,7 @@ func TestSessionAffinity(t *testing.T) {
 	svcPort := 80
 	svcNodePort := 3001
 	svcExternalIPs := "50.60.70.81"
-	svcPortName := upstream.ServicePortName{
+	svcPortName := k8sproxy.ServicePortName{
 		NamespacedName: makeNamespaceName("ns1", "svc1"),
 		Port:           "80",
 		Protocol:       corev1.ProtocolTCP,

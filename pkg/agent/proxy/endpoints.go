@@ -25,7 +25,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream"
+	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 type endpointsChange struct {
@@ -119,13 +119,13 @@ func (t *endpointsChangesTracker) endpointsToEndpointsMap(endpoints *corev1.Endp
 				klog.Warningf("Ignoring invalid endpoint port %s", port.Name)
 				continue
 			}
-			svcPortName := upstream.ServicePortName{
+			svcPortName := k8sproxy.ServicePortName{
 				NamespacedName: apimachinerytypes.NamespacedName{Namespace: endpoints.Namespace, Name: endpoints.Name},
 				Protocol:       port.Protocol,
 				Port:           port.Name,
 			}
 			if _, ok := endpointsMap[svcPortName]; !ok {
-				endpointsMap[svcPortName] = map[string]upstream.Endpoint{}
+				endpointsMap[svcPortName] = map[string]k8sproxy.Endpoint{}
 			}
 			for i := range ss.Addresses {
 				addr := &ss.Addresses[i]
@@ -134,7 +134,7 @@ func (t *endpointsChangesTracker) endpointsToEndpointsMap(endpoints *corev1.Endp
 					continue
 				}
 				isLocal := addr.NodeName != nil && *addr.NodeName == t.hostname
-				ei := types.NewEndpointInfo(&upstream.BaseEndpointInfo{
+				ei := types.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
 					Endpoint: net.JoinHostPort(addr.IP, fmt.Sprint(port.Port)),
 					IsLocal:  isLocal,
 				})
@@ -145,8 +145,8 @@ func (t *endpointsChangesTracker) endpointsToEndpointsMap(endpoints *corev1.Endp
 	return endpointsMap
 }
 
-func (t *endpointsChangesTracker) Update(em types.EndpointsMap) map[upstream.ServicePortName]map[string]upstream.Endpoint {
-	staleEndpoints := map[upstream.ServicePortName]map[string]upstream.Endpoint{}
+func (t *endpointsChangesTracker) Update(em types.EndpointsMap) map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint {
+	staleEndpoints := map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint{}
 	for _, change := range t.checkoutChanges() {
 		for spn := range change.previous {
 			delete(em, spn)
@@ -159,7 +159,7 @@ func (t *endpointsChangesTracker) Update(em types.EndpointsMap) map[upstream.Ser
 	return staleEndpoints
 }
 
-func detectStaleConnections(oldEndpointsMap, newEndpointsMap types.EndpointsMap, staleEndpoints map[upstream.ServicePortName]map[string]upstream.Endpoint) {
+func detectStaleConnections(oldEndpointsMap, newEndpointsMap types.EndpointsMap, staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
 	for svcPortName, epList := range oldEndpointsMap {
 		for _, ep := range epList {
 			stale := true
@@ -171,7 +171,7 @@ func detectStaleConnections(oldEndpointsMap, newEndpointsMap types.EndpointsMap,
 			}
 			if stale {
 				if _, ok := staleEndpoints[svcPortName]; !ok {
-					staleEndpoints[svcPortName] = map[string]upstream.Endpoint{}
+					staleEndpoints[svcPortName] = map[string]k8sproxy.Endpoint{}
 				}
 				staleEndpoints[svcPortName][ep.String()] = ep
 			}

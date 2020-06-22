@@ -37,10 +37,10 @@ Modifies:
   "NewEndpointChangeTracker", "detectStaleConnections"
 - Remove structs: "EndpointChangeTracker", "EndpointsMap"
 */
-package upstream
+package proxy
 
 import (
-	utilproxy "github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream/util"
+	utilproxy "github.com/vmware-tanzu/antrea/third_party/proxy/util"
 )
 
 // BaseEndpointInfo contains base information that defines an endpoint.

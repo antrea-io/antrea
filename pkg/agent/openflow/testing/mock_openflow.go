@@ -22,9 +22,9 @@ package testing
 import (
 	gomock "github.com/golang/mock/gomock"
 	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
-	upstream "github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream"
 	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	openflow "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	proxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 	net "net"
 	reflect "reflect"
 )
@@ -236,7 +236,7 @@ func (mr *MockClientMockRecorder) InstallDefaultTunnelFlows(arg0 interface{}) *g
 }
 
 // InstallEndpointFlows mocks base method
-func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 []upstream.Endpoint) error {
+func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 []proxy.Endpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallEndpointFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -334,7 +334,7 @@ func (mr *MockClientMockRecorder) InstallServiceFlows(arg0, arg1, arg2, arg3, ar
 }
 
 // InstallServiceGroup mocks base method
-func (m *MockClient) InstallServiceGroup(arg0 openflow.GroupIDType, arg1 bool, arg2 []upstream.Endpoint) error {
+func (m *MockClient) InstallServiceGroup(arg0 openflow.GroupIDType, arg1 bool, arg2 []proxy.Endpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallServiceGroup", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -374,7 +374,7 @@ func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
 }
 
 // UninstallEndpointFlows mocks base method
-func (m *MockClient) UninstallEndpointFlows(arg0 openflow.Protocol, arg1 upstream.Endpoint) error {
+func (m *MockClient) UninstallEndpointFlows(arg0 openflow.Protocol, arg1 proxy.Endpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UninstallEndpointFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)

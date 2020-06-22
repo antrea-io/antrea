@@ -16,7 +16,7 @@
 // k8s.io/kubernetes@/v1.17.6(https://github.com/kubernetes/kubernetes/tree/v1.17.6)
 // to avoid importing the whole kubernetes repo. Some unneeded functions are removed.
 
-package upstream
+package proxy
 
 // TODO: remove this package once the github.com/kubernetes/pkg/proxy becomes
 // an independent module

@@ -17,8 +17,8 @@ package types
 import (
 	"sync"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 // GroupCounter generates and manages global unique group ID.
@@ -27,10 +27,10 @@ type GroupCounter interface {
 	// If the group ID of the service has been generated, then return the
 	// prior one. The bool return value indicates whether the groupID is newly
 	// generated.
-	Get(svcPortName upstream.ServicePortName) (binding.GroupIDType, bool)
+	Get(svcPortName k8sproxy.ServicePortName) (binding.GroupIDType, bool)
 	// Recycle removes a Service Group ID mapping. The recycled groupID should
 	// be able to be reused.
-	Recycle(svcPortName upstream.ServicePortName) bool
+	Recycle(svcPortName k8sproxy.ServicePortName) bool
 }
 
 type groupCounter struct {
@@ -38,14 +38,14 @@ type groupCounter struct {
 	groupIDCounter binding.GroupIDType
 	recycled       []binding.GroupIDType
 
-	groupMap map[upstream.ServicePortName]binding.GroupIDType
+	groupMap map[k8sproxy.ServicePortName]binding.GroupIDType
 }
 
 func NewGroupCounter() *groupCounter {
-	return &groupCounter{groupMap: map[upstream.ServicePortName]binding.GroupIDType{}}
+	return &groupCounter{groupMap: map[k8sproxy.ServicePortName]binding.GroupIDType{}}
 }
 
-func (c *groupCounter) Get(svcPortName upstream.ServicePortName) (binding.GroupIDType, bool) {
+func (c *groupCounter) Get(svcPortName k8sproxy.ServicePortName) (binding.GroupIDType, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -62,7 +62,7 @@ func (c *groupCounter) Get(svcPortName upstream.ServicePortName) (binding.GroupI
 	}
 }
 
-func (c *groupCounter) Recycle(svcPortName upstream.ServicePortName) bool {
+func (c *groupCounter) Recycle(svcPortName k8sproxy.ServicePortName) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

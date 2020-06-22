@@ -21,11 +21,11 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream"
+	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 type serviceChangesTracker struct {
-	tracker *upstream.ServiceChangeTracker
+	tracker *k8sproxy.ServiceChangeTracker
 
 	sync.Mutex
 	initialized bool
@@ -33,7 +33,7 @@ type serviceChangesTracker struct {
 
 func newServiceChangesTracker(recorder record.EventRecorder) *serviceChangesTracker {
 	enableIPV6 := false
-	return &serviceChangesTracker{tracker: upstream.NewServiceChangeTracker(types.NewServiceInfo, &enableIPV6, recorder)}
+	return &serviceChangesTracker{tracker: k8sproxy.NewServiceChangeTracker(types.NewServiceInfo, &enableIPV6, recorder)}
 }
 
 func (sh *serviceChangesTracker) OnServiceSynced() {
@@ -53,6 +53,6 @@ func (sh *serviceChangesTracker) Synced() bool {
 	return sh.initialized
 }
 
-func (sh *serviceChangesTracker) Update(serviceMap upstream.ServiceMap) upstream.UpdateServiceMapResult {
-	return upstream.UpdateServiceMap(serviceMap, sh.tracker)
+func (sh *serviceChangesTracker) Update(serviceMap k8sproxy.ServiceMap) k8sproxy.UpdateServiceMapResult {
+	return k8sproxy.UpdateServiceMap(serviceMap, sh.tracker)
 }

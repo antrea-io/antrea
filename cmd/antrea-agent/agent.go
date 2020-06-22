@@ -82,7 +82,7 @@ func run(o *Options) error {
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, o.config.FeatureGates[string(features.AntreaProxy)])
+	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, features.DefaultFeatureGate.Enabled(features.AntreaProxy))
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
@@ -108,7 +108,7 @@ func run(o *Options) error {
 		o.config.DefaultMTU,
 		serviceCIDRNet,
 		networkConfig,
-		o.config.FeatureGates[string(features.AntreaProxy)])
+		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -134,8 +134,8 @@ func run(o *Options) error {
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
 	}
-	var proxier *proxy.Instance
-	if o.config.FeatureGates[string(features.AntreaProxy)] {
+	var proxier *proxy.Proxier
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
 	}
 	cniServer := cniserver.New(
@@ -189,7 +189,7 @@ func run(o *Options) error {
 
 	go agentMonitor.Run(stopCh)
 
-	if o.config.FeatureGates[string(features.AntreaProxy)] && proxier != nil {
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		go proxier.Run(stopCh)
 	}
 

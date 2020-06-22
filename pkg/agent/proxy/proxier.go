@@ -26,10 +26,10 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
+	"github.com/vmware-tanzu/antrea/third_party/proxy/config"
 )
 
 const (
@@ -38,7 +38,7 @@ const (
 )
 
 // TODO: Add metrics
-type Instance struct {
+type Proxier struct {
 	once            sync.Once
 	endpointsConfig *config.EndpointsConfig
 	serviceConfig   *config.ServiceConfig
@@ -51,51 +51,52 @@ type Instance struct {
 	// syncProxyRulesMutex protects internal caches and states.
 	syncProxyRulesMutex sync.Mutex
 	// serviceMap stores services we expected to be installed.
-	serviceMap upstream.ServiceMap
+	serviceMap k8sproxy.ServiceMap
 	// serviceInstalledMap stores services we actually installed.
-	serviceInstalledMap upstream.ServiceMap
+	serviceInstalledMap k8sproxy.ServiceMap
 	// endpointsMap stores endpoints we expected to be installed.
 	endpointsMap types.EndpointsMap
 	// endpointInstalledMap stores endpoints we actually installed.
-	endpointInstalledMap map[upstream.ServicePortName]map[string]struct{}
+	endpointInstalledMap map[k8sproxy.ServicePortName]map[string]struct{}
 	groupCounter         types.GroupCounter
 
-	runner       *upstream.BoundedFrequencyRunner
+	runner       *k8sproxy.BoundedFrequencyRunner
 	stopChan     <-chan struct{}
 	agentQuerier querier.AgentQuerier
 	ofClient     openflow.Client
 }
 
-func (i *Instance) isInitialized() bool {
-	return i.endpointsChanges.Synced() && i.serviceChanges.Synced()
+func (p *Proxier) isInitialized() bool {
+	return p.endpointsChanges.Synced() && p.serviceChanges.Synced()
 }
 
-func (i *Instance) removeStaleServices() {
-	for svcPortName, svcPort := range i.serviceInstalledMap {
-		if _, ok := i.serviceMap[svcPortName]; ok {
+func (p *Proxier) removeStaleServices() {
+	for svcPortName, svcPort := range p.serviceInstalledMap {
+		if _, ok := p.serviceMap[svcPortName]; ok {
 			continue
 		}
 		svcInfo := svcPort.(*types.ServiceInfo)
-		if err := i.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFTransportProtocol); err != nil {
+		if err := p.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
 		}
-		for _, endpoint := range i.endpointsMap[svcPortName] {
-			if err := i.ofClient.UninstallEndpointFlows(svcInfo.OFTransportProtocol, endpoint); err != nil {
+		for _, endpoint := range p.endpointsMap[svcPortName] {
+			if err := p.ofClient.UninstallEndpointFlows(svcInfo.OFProtocol, endpoint); err != nil {
 				klog.Errorf("Failed to remove flows of Service Endpoints %v: %v", svcPortName, err)
 				continue
 			}
 		}
-		groupID, _ := i.groupCounter.Get(svcPortName)
-		if err := i.ofClient.UninstallServiceGroup(groupID); err != nil {
+		groupID, _ := p.groupCounter.Get(svcPortName)
+		if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
 		}
-		delete(i.serviceInstalledMap, svcPortName)
+		delete(p.serviceInstalledMap, svcPortName)
+		p.groupCounter.Recycle(svcPortName)
 	}
 }
 
-func (i *Instance) removeStaleEndpoints(staleEndpoints map[upstream.ServicePortName]map[string]upstream.Endpoint) {
+func (p *Proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
 	for svcPortName, endpoints := range staleEndpoints {
 		bindingProtocol := binding.ProtocolTCP
 		if svcPortName.Protocol == corev1.ProtocolUDP {
@@ -104,39 +105,39 @@ func (i *Instance) removeStaleEndpoints(staleEndpoints map[upstream.ServicePortN
 			bindingProtocol = binding.ProtocolSCTP
 		}
 		for _, endpoint := range endpoints {
-			if err := i.ofClient.UninstallEndpointFlows(bindingProtocol, endpoint); err != nil {
+			if err := p.ofClient.UninstallEndpointFlows(bindingProtocol, endpoint); err != nil {
 				klog.Errorf("Error when removing Endpoint %v for %v", endpoint, svcPortName)
 				continue
 			}
-			if m, ok := i.endpointInstalledMap[svcPortName]; ok {
+			if m, ok := p.endpointInstalledMap[svcPortName]; ok {
 				delete(m, endpoint.String())
 				if len(m) == 0 {
-					delete(i.endpointInstalledMap, svcPortName)
+					delete(p.endpointInstalledMap, svcPortName)
 				}
 			}
 		}
 	}
 }
 
-func (i *Instance) installServices() {
-	for svcPortName, svcPort := range i.serviceMap {
+func (p *Proxier) installServices() {
+	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
-		groupID, _ := i.groupCounter.Get(svcPortName)
-		endpoints, ok := i.endpointsMap[svcPortName]
+		groupID, _ := p.groupCounter.Get(svcPortName)
+		endpoints, ok := p.endpointsMap[svcPortName]
 		if !ok || len(endpoints) == 0 {
 			continue
 		}
 
-		endpointInstalled, ok := i.endpointInstalledMap[svcPortName]
+		endpointInstalled, ok := p.endpointInstalledMap[svcPortName]
 		if !ok {
-			i.endpointInstalledMap[svcPortName] = map[string]struct{}{}
-			endpointInstalled = i.endpointInstalledMap[svcPortName]
+			p.endpointInstalledMap[svcPortName] = map[string]struct{}{}
+			endpointInstalled = p.endpointInstalledMap[svcPortName]
 		}
 
-		installedSvcPort, ok := i.serviceInstalledMap[svcPortName]
+		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
 		needUpdate := !ok || !installedSvcPort.(*types.ServiceInfo).Equal(svcInfo)
 
-		var endpointUpdateList []upstream.Endpoint
+		var endpointUpdateList []k8sproxy.Endpoint
 		for _, endpoint := range endpoints {
 			if _, ok := endpointInstalled[endpoint.String()]; !ok {
 				needUpdate = true
@@ -149,122 +150,122 @@ func (i *Instance) installServices() {
 			continue
 		}
 
-		if err := i.ofClient.InstallEndpointFlows(svcInfo.OFTransportProtocol, endpointUpdateList); err != nil {
+		if err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList); err != nil {
 			klog.Errorf("Error when installing Endpoints flows: %v", err)
 			continue
 		}
-		err := i.ofClient.InstallServiceGroup(groupID, svcInfo.AffinityTimeoutSeconds != 0, endpointUpdateList)
+		err := p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, endpointUpdateList)
 		if err != nil {
 			klog.Errorf("Error when installing Endpoints groups: %v", err)
-			i.endpointInstalledMap[svcPortName] = nil
+			p.endpointInstalledMap[svcPortName] = nil
 			continue
 		}
-		if err := i.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFTransportProtocol, svcInfo.AffinityTimeoutSeconds); err != nil {
+		if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
 			klog.Errorf("Error when installing Service flows: %v", err)
 			continue
 		}
-		i.serviceInstalledMap[svcPortName] = svcPort
+		p.serviceInstalledMap[svcPortName] = svcPort
 	}
 }
 
 // syncProxyRulesMutex applies current changes in change trackers and then updates
 // flows for services and endpoints. It will abort if either endpoints or services
 // resources is not synced.
-func (i *Instance) syncProxyRules() {
-	i.syncProxyRulesMutex.Lock()
-	defer i.syncProxyRulesMutex.Unlock()
+func (p *Proxier) syncProxyRules() {
+	p.syncProxyRulesMutex.Lock()
+	defer p.syncProxyRulesMutex.Unlock()
 
 	start := time.Now()
 	defer func() {
 		klog.Infof("syncProxyRules took %v", time.Since(start))
 	}()
-	if !i.isInitialized() {
+	if !p.isInitialized() {
 		klog.Info("Not syncing rules until both Services and Endpoints have been received")
 		return
 	}
 
-	staleEndpoints := i.endpointsChanges.Update(i.endpointsMap)
-	i.serviceChanges.Update(i.serviceMap)
+	staleEndpoints := p.endpointsChanges.Update(p.endpointsMap)
+	p.serviceChanges.Update(p.serviceMap)
 
-	i.removeStaleEndpoints(staleEndpoints)
-	i.removeStaleServices()
-	i.installServices()
+	p.removeStaleEndpoints(staleEndpoints)
+	p.removeStaleServices()
+	p.installServices()
 }
 
-func (i *Instance) SyncLoop() {
-	i.runner.Loop(i.stopChan)
+func (p *Proxier) SyncLoop() {
+	p.runner.Loop(p.stopChan)
 }
 
-func (i *Instance) OnEndpointsAdd(endpoints *corev1.Endpoints) {
-	i.OnEndpointsUpdate(nil, endpoints)
+func (p *Proxier) OnEndpointsAdd(endpoints *corev1.Endpoints) {
+	p.OnEndpointsUpdate(nil, endpoints)
 }
 
-func (i *Instance) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
-	if i.endpointsChanges.OnEndpointUpdate(oldEndpoints, endpoints) && i.isInitialized() {
-		i.runner.Run()
+func (p *Proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
+	if p.endpointsChanges.OnEndpointUpdate(oldEndpoints, endpoints) && p.isInitialized() {
+		p.runner.Run()
 	}
 }
 
-func (i *Instance) OnEndpointsDelete(endpoints *corev1.Endpoints) {
-	i.OnEndpointsUpdate(endpoints, nil)
+func (p *Proxier) OnEndpointsDelete(endpoints *corev1.Endpoints) {
+	p.OnEndpointsUpdate(endpoints, nil)
 }
 
-func (i *Instance) OnEndpointsSynced() {
-	i.endpointsChanges.OnEndpointsSynced()
-	if i.isInitialized() {
-		i.runner.Run()
+func (p *Proxier) OnEndpointsSynced() {
+	p.endpointsChanges.OnEndpointsSynced()
+	if p.isInitialized() {
+		p.runner.Run()
 	}
 }
 
-func (i *Instance) OnServiceAdd(service *corev1.Service) {
-	i.OnServiceUpdate(nil, service)
+func (p *Proxier) OnServiceAdd(service *corev1.Service) {
+	p.OnServiceUpdate(nil, service)
 }
 
-func (i *Instance) OnServiceUpdate(oldService, service *corev1.Service) {
-	if i.serviceChanges.OnServiceUpdate(oldService, service) && i.isInitialized() {
-		i.runner.Run()
+func (p *Proxier) OnServiceUpdate(oldService, service *corev1.Service) {
+	if p.serviceChanges.OnServiceUpdate(oldService, service) && p.isInitialized() {
+		p.runner.Run()
 	}
 }
 
-func (i *Instance) OnServiceDelete(service *corev1.Service) {
-	i.OnServiceUpdate(service, nil)
+func (p *Proxier) OnServiceDelete(service *corev1.Service) {
+	p.OnServiceUpdate(service, nil)
 }
 
-func (i *Instance) OnServiceSynced() {
-	i.serviceChanges.OnServiceSynced()
-	if i.isInitialized() {
-		i.runner.Run()
+func (p *Proxier) OnServiceSynced() {
+	p.serviceChanges.OnServiceSynced()
+	if p.isInitialized() {
+		p.runner.Run()
 	}
 }
 
-func (i *Instance) Run(stopCh <-chan struct{}) {
-	i.once.Do(func() {
-		go i.serviceConfig.Run(stopCh)
-		go i.endpointsConfig.Run(stopCh)
-		i.stopChan = stopCh
-		i.SyncLoop()
+func (p *Proxier) Run(stopCh <-chan struct{}) {
+	p.once.Do(func() {
+		go p.serviceConfig.Run(stopCh)
+		go p.endpointsConfig.Run(stopCh)
+		p.stopChan = stopCh
+		p.SyncLoop()
 	})
 }
 
-func New(hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) *Instance {
+func New(hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) *Proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
 	)
-	p := &Instance{
+	p := &Proxier{
 		endpointsConfig:      config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:        config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
 		endpointsChanges:     newEndpointsChangesTracker(hostname),
 		serviceChanges:       newServiceChangesTracker(recorder),
-		serviceMap:           upstream.ServiceMap{},
-		serviceInstalledMap:  upstream.ServiceMap{},
-		endpointInstalledMap: map[upstream.ServicePortName]map[string]struct{}{},
+		serviceMap:           k8sproxy.ServiceMap{},
+		serviceInstalledMap:  k8sproxy.ServiceMap{},
+		endpointInstalledMap: map[k8sproxy.ServicePortName]map[string]struct{}{},
 		endpointsMap:         types.EndpointsMap{},
 		groupCounter:         types.NewGroupCounter(),
 		ofClient:             ofClient,
 	}
 	p.serviceConfig.RegisterEventHandler(p)
 	p.endpointsConfig.RegisterEventHandler(p)
-	p.runner = upstream.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, 0, 30*time.Second, -1)
+	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, 0, 30*time.Second, -1)
 	return p
 }

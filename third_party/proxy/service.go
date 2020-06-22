@@ -33,7 +33,7 @@ Modifies:
 - Remove import "k8s.io/kubernetes/pkg/proxy/metrics" and related invokes
 */
 
-package upstream
+package proxy
 
 import (
 	"fmt"
@@ -49,7 +49,7 @@ import (
 	"k8s.io/klog"
 	utilnet "k8s.io/utils/net"
 
-	utilproxy "github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream/util"
+	utilproxy "github.com/vmware-tanzu/antrea/third_party/proxy/util"
 )
 
 // BaseServiceInfo contains base information that defines a service.

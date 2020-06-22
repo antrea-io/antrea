@@ -17,46 +17,39 @@ package types
 import (
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 // ServiceInfo is the internal struct for string service information
 type ServiceInfo struct {
-	*upstream.BaseServiceInfo
+	*k8sproxy.BaseServiceInfo
 	// cache for performance
-	OFTransportProtocol    openflow.Protocol
-	AffinityTimeoutSeconds uint16
+	OFProtocol openflow.Protocol
 }
 
 func (si *ServiceInfo) Equal(bSvcInfo *ServiceInfo) bool {
 	return si.SessionAffinityType() == bSvcInfo.SessionAffinityType() &&
 		si.StickyMaxAgeSeconds() == bSvcInfo.StickyMaxAgeSeconds() &&
-		si.OFTransportProtocol == bSvcInfo.OFTransportProtocol &&
+		si.OFProtocol == bSvcInfo.OFProtocol &&
 		si.Port() == bSvcInfo.Port()
 }
 
 // NewServiceInfo returns a new upstream.ServicePort which abstracts a serviceInfo
-func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo *upstream.BaseServiceInfo) upstream.ServicePort {
+func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo *k8sproxy.BaseServiceInfo) k8sproxy.ServicePort {
 	info := &ServiceInfo{BaseServiceInfo: baseInfo}
-	info.OFTransportProtocol = openflow.ProtocolTCP
+	info.OFProtocol = openflow.ProtocolTCP
 	if port.Protocol == corev1.ProtocolUDP {
-		info.OFTransportProtocol = openflow.ProtocolUDP
+		info.OFProtocol = openflow.ProtocolUDP
 	} else if port.Protocol == corev1.ProtocolSCTP {
-		info.OFTransportProtocol = openflow.ProtocolSCTP
-	}
-	if info.SessionAffinityType() == corev1.ServiceAffinityClientIP {
-		info.AffinityTimeoutSeconds = uint16(info.StickyMaxAgeSeconds())
-		if info.AffinityTimeoutSeconds == 0 {
-			info.AffinityTimeoutSeconds = uint16(corev1.DefaultClientIPServiceAffinitySeconds)
-		}
+		info.OFProtocol = openflow.ProtocolSCTP
 	}
 	return info
 }
 
 // NewEndpointInfo returns a new upstream.Endpoint which abstracts a endpointsInfo
-func NewEndpointInfo(baseInfo *upstream.BaseEndpointInfo) upstream.Endpoint {
+func NewEndpointInfo(baseInfo *k8sproxy.BaseEndpointInfo) k8sproxy.Endpoint {
 	return baseInfo
 }
 
-type EndpointsMap map[upstream.ServicePortName]map[string]upstream.Endpoint
+type EndpointsMap map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint

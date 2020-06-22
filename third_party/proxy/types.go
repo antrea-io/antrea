@@ -33,7 +33,7 @@ Modifies:
 - Remove import "k8s.io/kubernetes/pkg/proxy/config"
 */
 
-package upstream
+package proxy
 
 import (
 	"fmt"

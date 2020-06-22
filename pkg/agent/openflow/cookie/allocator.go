@@ -24,7 +24,6 @@ const (
 	BitwidthReserved        = 64 - BitwidthCategory - BitwidthRound
 	RoundMask        uint64 = 0xffff_0000_0000_0000
 	CategoryMask     uint64 = 0x0000_ff00_0000_0000
-	ReservedMask     uint64 = 0x0000_00ff_ffff_ffff
 )
 
 // Category represents the flow entry category.
@@ -63,16 +62,16 @@ func (c Category) String() string {
 
 // ID defines segments a cookie ID contains. An ID is composed like:
 //  |------------------------- ID --------------------------|
-//  |- round 16bits -|- category 8bits -|- reserved 40bits -|
+//  |- round 16bits -|- category 8bits -|- reserved 8bits -|- objectID 32bits -|
 // The round segment represents the round id.
 // The category segment represents the category of flow this ID belongs.
 type ID uint64
 
-func newID(round uint64, cat Category, mask uint64) ID {
+func newID(round uint64, cat Category, objectID uint32) ID {
 	r := uint64(0)
 	r |= round << (64 - BitwidthRound)
 	r |= (uint64(cat) << BitwidthReserved) & CategoryMask
-	r |= mask & ReservedMask
+	r |= uint64(objectID)
 	return ID(r)
 }
 
@@ -104,11 +103,10 @@ func (i ID) String() string {
 
 // Allocator defines operations of a cookie ID allocator.
 type Allocator interface {
-	// Request cookie IDs of flow categories.
+	// Request gets a cookie IDs of the flow category.
 	Request(cat Category) ID
-	// Request cookie IDs of flow categories and populates mask to reserved bits.
-	// Only last 48bits (BigEndian) of the mask will be used.
-	RequestMask(cat Category, mask uint64) ID
+	// RequestMask gets a cookie ID of the flow category and objectID.
+	RequestMask(cat Category, objectID uint32) ID
 }
 
 type allocator struct {
@@ -120,8 +118,8 @@ func (a *allocator) Request(cat Category) ID {
 	return newID(a.round, cat, 0)
 }
 
-func (a *allocator) RequestMask(cat Category, mask uint64) ID {
-	return newID(a.round, cat, mask)
+func (a *allocator) RequestMask(cat Category, objectID uint32) ID {
+	return newID(a.round, cat, objectID)
 }
 
 // NewAllocator creates a cookie ID allocator by using the given round number.

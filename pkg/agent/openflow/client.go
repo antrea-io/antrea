@@ -22,9 +22,9 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 const maxRetryForOFSwitch = 5
@@ -90,19 +90,18 @@ type Client interface {
 
 	// InstallServiceGroup installs a group for Service LB. Each endpoint
 	// is a bucket of the group. For now, each bucket has the same weight.
-	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []upstream.Endpoint) error
+	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error
 	// UninstallServiceGroup removes the group and its buckets that are
 	// installed by InstallServiceGroup.
 	UninstallServiceGroup(groupID binding.GroupIDType) error
 
-	// InstallEndpointFlows installs flows for accessing an Endpoint. If
-	// the mac argument is not nil, it means the Endpoint is on the current Node.
-	// If the Endpoint is on the current Node, then flows for hairpin and endpoint
+	// InstallEndpointFlows installs flows for accessing Endpoints.
+	// If an Endpoint is on the current Node, then flows for hairpin and endpoint
 	// L2 forwarding should also be installed.
-	InstallEndpointFlows(protocol binding.Protocol, endpoints []upstream.Endpoint) error
+	InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error
 	// UninstallEndpointFlows removes flows of the Endpoint installed by
 	// InstallEndpointFlows.
-	UninstallEndpointFlows(protocol binding.Protocol, endpoint upstream.Endpoint) error
+	UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error
 
 	// InstallServiceFlows installs flows for accessing Service with clusterIP.
 	// It installs the flow that uses the group/bucket to do service LB. If the
@@ -265,7 +264,7 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIP net.IP, po
 		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.arpSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, cookie.Pod),
-		c.l3FlowsToLocalPodMACDNAT(podInterfaceIP, podInterfaceMAC, cookie.Pod),
+		c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod),
 	}
 
 	if c.encapMode.IsNetworkPolicyOnly() {
@@ -302,7 +301,7 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 	return flowKeys
 }
 
-func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []upstream.Endpoint) error {
+func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	group := c.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
@@ -317,13 +316,13 @@ func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	if !c.bridge.DeleteGroup(groupID) {
-		return fmt.Errorf("group %d was not installed", groupID)
+		return fmt.Errorf("group %d delete failed", groupID)
 	}
 	c.groupCache.Delete(groupID)
 	return nil
 }
 
-func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []upstream.Endpoint) error {
+func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
@@ -344,7 +343,7 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []ups
 	return nil
 }
 
-func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint upstream.Endpoint) error {
+func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
@@ -459,11 +458,6 @@ func (c *client) initialize() error {
 	}
 	if err := c.ofEntryOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip established connections: %v", err)
-	}
-	if c.encapMode.SupportsEncap() {
-		if err := c.ofEntryOperations.Add(c.l3FlowsToPodMACSNAT(c.nodeConfig.GatewayConfig.MAC, *c.nodeConfig.PodCIDR)); err != nil {
-			return fmt.Errorf("failed to install flows to add mac rewrite marks: %v", err)
-		}
 	}
 	if c.encapMode.SupportsNoEncap() {
 		if err := c.ofEntryOperations.Add(c.l2ForwardOutputReentInPortFlow(c.gatewayPort, cookie.Default)); err != nil {
