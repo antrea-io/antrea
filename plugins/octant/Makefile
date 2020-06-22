@@ -10,6 +10,11 @@ antrea-octant-plugin:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/plugins/octant/cmd/antrea-octant-plugin
 
+.PHONY: antrea-traceflow-plugin
+antrea-traceflow-plugin:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/plugins/octant/cmd/antrea-traceflow-plugin
+
 .PHONY: octant-plugins
 octant-plugins:
 	@mkdir -p $(BINDIR)
