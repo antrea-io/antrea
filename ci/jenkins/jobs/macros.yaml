@@ -22,14 +22,14 @@
             mkdir -p ${CLUSTER_LOG_DIR}/capi
             kubectl get -n capi-system pods -o name | awk '{print $1}' | while read capi_pod; do
               capi_pod_name=$(echo ${capi_pod} | cut -d'/' -f 2)
-              kubectl logs ${capi_pod_name} -n capi-system --tail=400 > ${CLUSTER_LOG_DIR}/capi/${capi_pod_name}
+              kubectl logs ${capi_pod_name} -c manager -n capi-system --tail=400 > ${CLUSTER_LOG_DIR}/capi/${capi_pod_name}
             done
 
             echo "=== Saving capv logs ==="
             mkdir -p ${CLUSTER_LOG_DIR}/capv
             kubectl get -n capv-system pods -o name | awk '{print $1}' | while read capv_pod; do
               capv_pod_name=$(echo ${capv_pod} | cut -d'/' -f 2)
-              kubectl logs ${capv_pod_name} -n capv-system --tail=400 > ${CLUSTER_LOG_DIR}/capv/${capv_pod_name}
+              kubectl logs ${capv_pod_name} -c manager -n capv-system --tail=400 > ${CLUSTER_LOG_DIR}/capv/${capv_pod_name}
             done
           }
 
@@ -82,7 +82,7 @@
 
           if !(test -f jenkins/SECRET_EXIST); then
             echo "=== Failed to get secret ==="
-            savelogs
+            saveLogs
             kubectl delete ns ${cluster}
             exit 1
           else
@@ -103,8 +103,8 @@
             set -e
 
             echo "=== Failed to make all nodes up ==="
-            savelogs
-            kubectl delete ns ${cluster}
+            saveLogs
+            KUBECONFIG="${WORK_HOME}/.kube/config" kubectl delete ns ${cluster}
             exit 1
           fi
 
@@ -157,7 +157,7 @@
           echo "=== Auto cleanup starts ==="
           export KUBECONFIG="/var/lib/jenkins/.kube/config"
 
-          kubectl get namespace -l antrea-ci | awk '$3 ~ "[0-9][hd]" || $3 ~ "[6-9][0-9]m"  && $2 ~ "Active" {print $1}' | while read cluster; do
+          kubectl get namespace -l antrea-ci | awk '$3 ~ "[0-9][hd]" || $3 ~ "[6-9][0-9]m" || $3 ~ "1[0-9][0-9]m" && $2 ~ "Active" {print $1}' | while read cluster; do
             echo "=== Currently ${cluster} has been live for more than 1h ==="
             kubectl delete ns ${cluster}
             echo "=== Old namespace ${cluster} is deleted !!! ==="
@@ -231,7 +231,15 @@
           # Clean up dangling images generated in previous builds. Recent ones must be excluded
           # because they might be being used in other builds running simultaneously.
           docker image prune -f --filter "until=1h" || true
-          VERSION="$JOB_NAME-$BUILD_NUMBER" make
+          for i in `seq 2`
+          do
+            VERSION="$JOB_NAME-$BUILD_NUMBER" make && break
+          done
+
+          if [ "$?" -ne "0" ]; then
+            echo "=== Antrea Image build failed ==="
+            exit 1
+          fi
 
           sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" build/yamls/antrea.yml
           sed -i 's|#enablePrometheusMetrics: false|enablePrometheusMetrics: true|g' build/yamls/antrea.yml
@@ -343,9 +351,9 @@
 
             sonobuoy delete --wait --kubeconfig jenkins/out/kubeconfig
             if [ '{mode_regex}' == "" ]; then
-              sonobuoy run --wait --timeout 1800 --e2e-focus '{focus_regex}' --e2e-skip '{skip_regex}' --e2e-parallel y --kube-conformance-image-version ${{conformance_image_version}} --kubeconfig jenkins/out/kubeconfig
+              sonobuoy run --wait --timeout 3600 --e2e-focus '{focus_regex}' --e2e-skip '{skip_regex}' --e2e-parallel y --kube-conformance-image-version ${{conformance_image_version}} --kubeconfig jenkins/out/kubeconfig
             else
-              sonobuoy run --wait --timeout 9000 --mode='{mode_regex}' --kube-conformance-image-version ${{conformance_image_version}} --kubeconfig jenkins/out/kubeconfig
+              sonobuoy run --wait --timeout 10000 --mode='{mode_regex}' --kube-conformance-image-version ${{conformance_image_version}} --kubeconfig jenkins/out/kubeconfig
             fi
             sonobuoy retrieve --kubeconfig jenkins/out/kubeconfig
             echo '=== Print all results ==='
