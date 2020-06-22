@@ -49,8 +49,8 @@ type AgentConfig struct {
 	// Defaults to gw0.
 	HostGateway string `yaml:"hostGateway,omitempty"`
 	// Encapsulation mode for communication between Pods across Nodes, supported values:
-	// - vxlan (default)
-	// - geneve
+	// - geneve (default)
+	// - vxlan
 	// - gre
 	// - stt
 	TunnelType string `yaml:"tunnelType,omitempty"`

@@ -25,10 +25,10 @@ data:
     #hostGateway: gw0
 
     # Encapsulation mode for communication between Pods across Nodes, supported values:
-    # - vxlan (default)
-    # - geneve
+    # - geneve (default)
+    # - vxlan
     # - stt
-    #tunnelType: vxlan
+    #tunnelType: geneve
 
     # Default MTU to use for the host gateway interface and the network interface of each Pod. If
     # omitted, antrea-agent will default this value to 1450 to accommodate for tunnel encapsulate
@@ -62,7 +62,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-mthfbgb569
+  name: antrea-windows-config-kc69htmck4
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -150,7 +150,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-mthfbgb569
+          name: antrea-windows-config-kc69htmck4
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
