@@ -71,6 +71,7 @@ const (
 const (
 	flat commandGroup = iota
 	get
+	query
 )
 
 var groupCommands = map[commandGroup]*cobra.Command{
@@ -78,6 +79,12 @@ var groupCommands = map[commandGroup]*cobra.Command{
 		Use:   "get",
 		Short: "Get the status or resource of a topic",
 		Long:  "Get the status or resource of a topic",
+	},
+	//TODO
+	query: {
+		Use:   "query",
+		Short: "TODO",
+		Long:  "TODO",
 	},
 }
 
@@ -232,6 +239,7 @@ func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client *
 	cmd.RunE = cd.newCommandRunE(client)
 }
 
+//TODO: make sure to validate query
 // validate checks if the commandDefinition is valid.
 func (cd *commandDefinition) validate() []error {
 	var errs []error
@@ -470,6 +478,11 @@ func (cd *commandDefinition) tableOutputForGetCommands(obj interface{}, writer i
 	return nil
 }
 
+//TODO: can I use the tableOutputForGetCommands func or should I implement one specific to query?
+func (cd *commandDefinition) tableOutputForQueryCommands(obj interface{}, writer io.Writer) error {
+	return cd.tableOutputForGetCommands(obj, writer)
+}
+
 func (cd *commandDefinition) tableOutput(obj interface{}, writer io.Writer) error {
 	target, err := respTransformer(obj)
 	if err != nil {
@@ -558,13 +571,13 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 			return fmt.Errorf("error when decoding response: %w", err)
 		}
 	} else {
+		//TODO: call addonTransfrom with arguments
 		obj, err = addonTransform(resp, single)
 		if err != nil {
 			return fmt.Errorf("error when doing local transform: %w", err)
 		}
 		klog.Infof("After transforming %v", obj)
 	}
-
 	// Output structure data in format
 	switch ft {
 	case jsonFormatter:
@@ -574,6 +587,8 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 	case tableFormatter:
 		if cd.commandGroup == get {
 			return cd.tableOutputForGetCommands(obj, writer)
+		} else if cd.commandGroup == query {
+			return cd.tableOutputForQueryCommands(obj, writer)
 		} else {
 			return cd.tableOutput(obj, writer)
 		}
@@ -606,6 +621,11 @@ func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (ma
 // checks the args according to argOption and flags.
 func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
+		//TODO: add parameter to access args
+		fmt.Println(args)
+		for _, arg := range args {
+			fmt.Println(arg)
+		}
 		argMap, err := cd.collectFlags(cmd, args)
 		if err != nil {
 			return err
@@ -657,6 +677,8 @@ func (cd *commandDefinition) applyFlagsToCommand(cmd *cobra.Command) {
 		cmd.Args = cobra.NoArgs
 	}
 	if cd.commandGroup == get {
+		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
+	} else if cd.commandGroup == query {
 		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
 	} else {
 		cmd.Flags().StringP("output", "o", "yaml", "output format: json|table|yaml")

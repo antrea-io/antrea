@@ -20,6 +20,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
@@ -48,6 +49,8 @@ type AgentNetworkPolicyInfoQuerier interface {
 type ControllerNetworkPolicyInfoQuerier interface {
 	NetworkPolicyInfoQuerier
 	GetConnectedAgentNum() int
+	GetNetworkPolicies(namespace string, podName string) (applied []antreatypes.NetworkPolicy,
+		egress []antreatypes.NetworkPolicy, ingress []antreatypes.NetworkPolicy)
 }
 
 // GetSelfPod gets current pod.

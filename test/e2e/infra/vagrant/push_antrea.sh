@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-: "${NUM_WORKERS:=1}"
+: "${NUM_WORKERS:=0}"
 SAVED_IMG=/tmp/antrea-ubuntu.tar
 IMG_NAME=antrea/antrea-ubuntu:latest
 

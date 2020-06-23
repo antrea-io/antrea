@@ -1,0 +1,102 @@
+antctl query endpoint testing and implementation
+
+
+antctl query endpoint test cases:
+
+The first iteration of query endpoint takes an inputted pod and namespace (representing a network endpoint), and outputs
+a list of network policies, separated into groups (applied, egress, and ingress) with respect to the endpoint. For the
+behavior of the first iteration of query endpoint, the format of the request is as follows:
+
+antctl query endpoint --pod <pod-name> --namespace <pod-namespace>
+
+
+Case 1
+If either --pod or --namespace is not specified, the command returns an error which informs the user of the proper usage
+of antctl query endpoint (both --pod and --namespace must be specified). To test this behavior, we check that the output
+of antctl query endpoint with one of either --pod or --namespace unspecified, and the output when both are unspecified,
+and see that the proper error is returned to the user.
+
+
+Case 2
+If both --pod and --namespace are specified, but do not select any pods on the cluster, then an error should be returned
+to the user informing them that no such pod exists in the given namespace. I will test this by testing the return value
+for when a pod (which exists in some namespace) is referenced alongside an invalid namespace, the reverse except for an
+existing namespace, and the result when the namespace and pod both do not exist.
+
+
+Case 3
+Assuming --pod and --namespace are specified and correctly select some pod in the cluster, we must test that the return
+value of antctl query lists the correct relevant policies. This will be performed by checking that the correct policies
+are returned by category (applied, egress, ingress). In order to check that the returned policies are correct, it is
+useful to use a representation of the returned policy independent from the output transform. So, testing will utilize
+the UID of the network policy for comparing different representations of the same policy. Testing will be done in parts,
+checking the validity of antctl query return values for applied, egress, and ingress individual under a single general
+framework.
+
+SubCase A
+No network policies are relevant to the category of a given endpoint. Check that the return value from the controller is
+an empty list
+
+SubCase B
+A single network policy is relevant to the category of a given endpoint. Check that the UID of the returned policy is
+correct, and that this is the only returned policy.
+
+SubCase C
+Multiple network policies are relevant to the category of a given endpoint. Check that the UID of all returned policies
+are correct, and that these are the only returned policies.
+
+
+Case 4
+Assuming --pod and --namespace are specified and correctly select some pod in the cluster, we must test that when large
+amounts of policies are relevant across all categories, that antctl returns correctly and in a timely manner (Note, I
+expect the current implementation (v1) to perform poorly at scale, though eventually indexing policies should fix any
+relevant performance issues.
+
+SubCase A
+Policies which apply to arbitrarily large amounts of endpoints.
+
+SubCase B
+Arbitrarily large amount of policies relevant to an endpoint.
+
+SubCase C
+Both case A and B combined.
+
+
+Interfaces: antctl query endpoint return value (A), handler function return value (B), internal query return value (C)
+
+Each test case needs to be tested along appropriate interfaces for end to end testing. Case 1 needs to be tested along
+A, B, C with mocks at each subsequent level. Case 2 needs to be tested along A, B, C with mocks at each subsequent
+level. Case 3 needs to be tested along A (with addOnTransform and flags testing for all output types), B, C with mocks
+at each subsequent level. Case 4 needs to be tested for C.
+
+
+CURRENT (v1) antctl query endpoint implementation:
+
+antctl query endpoint is a command line tool for project antrea which interfaces with the antrea controller to query
+policies relevent to endpoints selected by antctl query endpoint (note, current implementation only supports selection
+of a single endpoint denoted in the --pod and --namespace flags). antctl query endpoint is intended for use inside the
+antrea controller, and not inside antrea agents.
+
+The implementation of the querying function within the antrea controller is inspired by the handler function
+implementation of nonResourceEndpoint queries within the antrea agent. A handler function is created which uses
+a querier to call function GetNetworkPolicies within networkpolicy_controller. The handler function is installed onto
+the generic api server in the apiserver file in the apiserver directory.
+
+(Brute force approach) To make the Applied list, GetNetworkPolicies works by iterating through all internalNetworkPolicy
+objects, for each object iterating through all applied to groups, for each applied to groups iterating through all pods.
+If a pod matches the selected pod, the network policy is added to the Applied list.
+
+TODO: Egress and Ingress (still needs to be implemented)
+
+
+NEXT (v2) antctl query endpoint implementation:
+
+General plan: convert brute force filtering to an indexing approach using NetworkPolicyLister.
+
+
+Questions:
+
+
+External changes:
+
+change file name of mock_querier in querier to mock_agent_querier to match mock_controller_querier

@@ -26,12 +26,14 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
+	endpointtransform "github.com/vmware-tanzu/antrea/pkg/antctl/transform/endpoint"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/version"
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	controllerinforest "github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
+	//endpointhandler "github.com/vmware-tanzu/antrea/pkg/controller/apiserver/handlers/endpoint"
 )
 
 // CommandList defines all commands that could be used in the antctl for both agents
@@ -315,6 +317,36 @@ var CommandList = &commandList{
 			},
 			commandGroup:        flat,
 			transformedResponse: reflect.TypeOf(ovstracing.Response{}),
+		},
+		{
+			use:     "endpoint",
+			aliases: []string{"endpoints"},
+			short:   "Query network policies relevant to an endpoint.",
+			long:    "TODO",
+			//TODO: fill in examples
+			example:      "TODO",
+			commandGroup: get,
+			controllerEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/endpoint",
+					params: []flagInfo{
+						{
+							name:      "namespace",
+							usage:     "Namespace of the entity",
+							shorthand: "n",
+						},
+						{
+							name:      "pod",
+							usage:     "Name of a local Pod. If present, Namespace must be provided.",
+							shorthand: "p",
+						},
+					},
+					outputType: defaultType,
+				},
+				addonTransform: endpointtransform.Transform,
+			},
+			agentEndpoint:       nil,
+			transformedResponse: reflect.TypeOf(endpointtransform.Response{}),
 		},
 	},
 

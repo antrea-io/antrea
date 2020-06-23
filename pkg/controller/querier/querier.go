@@ -28,10 +28,13 @@ const (
 
 var _ ControllerQuerier = new(controllerQuerier)
 
+//TODO: expand this interface similarly to AgentQuerier
 type ControllerQuerier interface {
 	GetControllerInfo(controllInfo *v1beta1.AntreaControllerInfo, partial bool)
+	GetNetworkPolicyInfoQuerier() querier.ControllerNetworkPolicyInfoQuerier
 }
 
+//TODO: implement interface methods
 type controllerQuerier struct {
 	networkPolicyInfoQuerier querier.ControllerNetworkPolicyInfoQuerier
 	apiPort                  int
@@ -42,6 +45,10 @@ func NewControllerQuerier(networkPolicyInfoQuerier querier.ControllerNetworkPoli
 }
 
 // GetNodeSubnet gets current network policy info querier.
+func (cq controllerQuerier) GetNetworkPolicyInfoQuerier() querier.ControllerNetworkPolicyInfoQuerier {
+	return cq.networkPolicyInfoQuerier
+}
+
 func (cq controllerQuerier) getNetworkPolicyInfoQuerier() querier.ControllerNetworkPolicyInfoQuerier {
 	return cq.networkPolicyInfoQuerier
 }
