@@ -78,7 +78,7 @@ spec:
             privileged: true
       containers:
         - name: es-data
-          image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.3.0
+          image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.5.0
           env:
             - name: ES_JAVA_OPTS
               value: "-Xms1g -Xmx2g"
@@ -130,12 +130,14 @@ metadata:
     type: kibana
     app: elasticsearch
 spec:
+  type: NodePort
   selector:
     type: kibana
     app: elasticsearch
   ports:
     - port: 5601
       targetPort: 5601
+      nodePort: 30007
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -158,7 +160,7 @@ spec:
     spec:
       containers:
         - name: kibana
-          image: docker.elastic.co/kibana/kibana-oss:7.3.0
+          image: docker.elastic.co/kibana/kibana-oss:7.5.0
           env:
             - name: action.destructive_requires_name
               value: "true"
@@ -188,7 +190,12 @@ spec:
   ports:
     - port: 4739
       targetPort: 4739
+      protocol: TCP
+      name: tcp
+    - port: 4739
+      targetPort: 4739
       protocol: UDP
+      name: udp
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -208,21 +215,17 @@ spec:
     spec:
       containers:
         - name: logstash
-          image: robcowart/elastiflow-logstash-oss:3.5.1
-          volumeMounts:
-            - name: logstash-definition-volume
-              mountPath: /usr/share/logstash/definitions
+          image: robcowart/elastiflow-logstash-oss:3.5.3
+          imagePullPolicy: IfNotPresent
           env:
             - name: ELASTIFLOW_ES_HOST
               value: "http://elasticsearch:9200"
             - name: LS_JAVA_OPTS
               value: "-Xms4g -Xmx4g"
-            - name: ELASTIFLOW_DEFINITION_PATH
-              value: "/usr/share/logstash/definitions"
           ports:
             - containerPort: 4739
+              protocol: TCP
+              name: tcp
+            - containerPort: 4739
               protocol: UDP
-      volumes:
-        - name: logstash-definition-volume
-          configMap:
-            name: logstash-definitions
+              name: udp
