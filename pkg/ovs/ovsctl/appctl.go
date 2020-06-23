@@ -121,7 +121,7 @@ func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
 }
 
 func (c *ovsCtlClient) runTracing(flow string) (string, error) {
-	out, execErr := c.runAppctlCmd("ofproto/trace", flow)
+	out, execErr := c.RunAppctlCmd("ofproto/trace", true, flow)
 	if execErr != nil {
 		return "", execErr
 	}
@@ -130,11 +130,16 @@ func (c *ovsCtlClient) runTracing(flow string) (string, error) {
 	return string(out), nil
 }
 
-func (c *ovsCtlClient) runAppctlCmd(cmd string, args ...string) ([]byte, *ExecError) {
+func (c *ovsCtlClient) RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, *ExecError) {
 	// Use the control UNIX domain socket to connect to ovs-vswitchd, as Agent can
 	// run in a different PID namespace from ovs-vswitchd, and so might not be able
 	// to reach ovs-vswitchd using the PID.
-	cmdStr := fmt.Sprintf("ovs-appctl -t %s %s %s", ovsVSwitchdUDS, cmd, c.bridge)
+	var cmdStr string
+	if needsBridge {
+		cmdStr = fmt.Sprintf("ovs-appctl -t %s %s %s", ovsVSwitchdUDS, cmd, c.bridge)
+	} else {
+		cmdStr = fmt.Sprintf("ovs-appctl -t %s %s", ovsVSwitchdUDS, cmd)
+	}
 	cmdStr = cmdStr + " " + strings.Join(args, " ")
 	out, err := getOVSCommand(cmdStr).CombinedOutput()
 	if err != nil {

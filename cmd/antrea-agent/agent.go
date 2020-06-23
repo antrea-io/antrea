@@ -242,13 +242,17 @@ func run(o *Options) error {
 	// Initialize flow exporter; start go routines to poll conntrack flows and export IPFIX flow records
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		if o.flowCollector != nil {
-			ctDumper := connections.NewConnTrackDumper(nodeConfig, serviceCIDRNet, connections.NewConnTrackInterfacer())
-			connStore := connections.NewConnectionStore(ctDumper, ifaceStore)
+			var connTrackDumper connections.ConnTrackDumper
+			if o.config.OVSDatapathType == ovsconfig.OVSDatapathSystem {
+				connTrackDumper = connections.NewConnTrackDumper(connections.NewConnTrackSystem(), nodeConfig, serviceCIDRNet, o.config.OVSDatapathType, agentQuerier.GetOVSCtlClient())
+			} else if o.config.OVSDatapathType == ovsconfig.OVSDatapathNetdev {
+				connTrackDumper = connections.NewConnTrackDumper(connections.NewConnTrackNetdev(), nodeConfig, serviceCIDRNet, o.config.OVSDatapathType, agentQuerier.GetOVSCtlClient())
+			}
+			connStore := connections.NewConnectionStore(connTrackDumper, ifaceStore, o.pollingInterval)
 			flowRecords := flowrecords.NewFlowRecords(connStore)
-			flowExporter, err := exporter.InitFlowExporter(o.flowCollector, flowRecords)
+			flowExporter, err := exporter.InitFlowExporter(o.flowCollector, flowRecords, o.exportInterval)
 			if err != nil {
-				// Antrea agent do not exit, if flow exporter cannot be initialized.
-				// Currently, only logging the error.
+				// If flow exporter cannot be initialized, then Antrea agent does not exit; only error is logged.
 				klog.Errorf("error when initializing flow exporter: %v", err)
 			} else {
 				go connStore.Run(stopCh)

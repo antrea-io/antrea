@@ -1,5 +1,3 @@
-// +build windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +15,28 @@
 package connections
 
 import (
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
+	"net"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
-func (cp *connTrackDumper) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error) {
-	return nil, nil
+var _ ConnTrackDumper = new(connTrackDumper)
+
+type connTrackDumper struct {
+	connTrack    ConnTrackInterfacer
+	nodeConfig   *config.NodeConfig
+	serviceCIDR  *net.IPNet
+	datapathType string
+	ovsctlClient ovsctl.OVSCtlClient
 }
 
-// TODO:  Implement ConnTrackInterfacer when flow exporter is supported for windows.
-func NewConnTrackSystem() ConnTrackInterfacer {
-	return nil
-}
-
-func NewConnTrackNetdev() ConnTrackInterfacer {
-	return nil
+func NewConnTrackDumper(connTrack ConnTrackInterfacer, nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, dpType string, ovsctlClient ovsctl.OVSCtlClient) *connTrackDumper {
+	return &connTrackDumper{
+		connTrack,
+		nodeConfig,
+		serviceCIDR,
+		dpType,
+		ovsctlClient,
+	}
 }
