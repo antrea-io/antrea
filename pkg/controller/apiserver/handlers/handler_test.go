@@ -175,6 +175,7 @@ func evaluateTestCases(testCases map[string]TestCase, mockCtrl *gomock.Controlle
 		mockQuerier := queriermock.NewMockControllerNetworkPolicyInfoQuerier(mockCtrl)
 		println("hello")
 		println(tc.argsMock[0])
+		println(tc.argsMock[1])
 		mockQuerier.EXPECT().GetNetworkPolicies(tc.argsMock[0], tc.argsMock[1]).Return(tc.appliedMock, tc.egressMock,
 			tc.ingressMock)
 		// initialize handler with mockQuerier

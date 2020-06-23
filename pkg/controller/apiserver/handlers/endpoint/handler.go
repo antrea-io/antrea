@@ -35,6 +35,10 @@ func HandleFunc(cnpq querier.ControllerNetworkPolicyInfoQuerier) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		podName := r.URL.Query().Get("pod")
 		namespace := r.URL.Query().Get("namespace")
+		println("query")
+		println(podName)
+		println("query")
+		println(namespace)
 		//TODO: error handling for name and namespace and GetNetworkPolicies
 		applied, egress, ingress := cnpq.GetNetworkPolicies(namespace, podName)
 
