@@ -90,6 +90,7 @@ MOCKGEN_TARGETS=(
   "pkg/ovs/ovsconfig OVSBridgeClient"
   "pkg/ovs/ovsctl OVSCtlClient"
   "pkg/agent/querier AgentQuerier"
+  "pkg/controller/networkpolicy EndpointQuerier"
   "pkg/controller/querier ControllerQuerier"
   "pkg/querier AgentNetworkPolicyInfoQuerier"
   "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack"

@@ -101,6 +101,8 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore)
 
+	endpointQueryReplier := networkpolicy.NewEndpointQueryReplier(networkPolicyController)
+
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
@@ -119,6 +121,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		controllerQuerier,
+		endpointQueryReplier,
 		o.config.EnablePrometheusMetrics)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
@@ -127,7 +130,6 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating API server: %v", err)
 	}
-
 	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
@@ -166,6 +168,7 @@ func createAPIServerConfig(kubeconfig string,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
+	endpointQueryReplier *networkpolicy.EndpointQueryReplier,
 	enableMetrics bool) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
@@ -214,5 +217,6 @@ func createAPIServerConfig(kubeconfig string,
 		appliedToGroupStore,
 		networkPolicyStore,
 		caCertController,
-		controllerQuerier), nil
+		controllerQuerier,
+		endpointQueryReplier), nil
 }
