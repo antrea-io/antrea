@@ -34,6 +34,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/openapi"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	queryapiserver "github.com/vmware-tanzu/antrea/pkg/controller/apiserver"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
@@ -105,6 +106,8 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating API server: %v", err)
 	}
+	// install handlers for query functionality onto apiServer
+	queryapiserver.InstallHandlers(controllerQuerier.GetNetworkPolicyInfoQuerier(), apiServer.GenericAPIServer)
 
 	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
