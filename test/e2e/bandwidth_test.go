@@ -32,13 +32,13 @@ func TestBenchmarkBandwidthIntraNode(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil); err != nil {
+	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil, false); err != nil {
 		t.Fatalf("Error when creating the perftest client Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, "perftest-a", testNamespace); err != nil {
 		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
+	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
 	podBIP, err := data.podWaitForIP(defaultTimeout, "perftest-b", testNamespace)
@@ -64,13 +64,13 @@ func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string) {
 	if err != nil {
 		t.Fatalf("Error when creating perftest service: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-a", clientNode, perftoolImage, nil, nil, nil, nil); err != nil {
+	if err := data.createPodOnNode("perftest-a", clientNode, perftoolImage, nil, nil, nil, nil, false); err != nil {
 		t.Fatalf("Error when creating the perftest client Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, "perftest-a", testNamespace); err != nil {
 		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-b", endpointNode, perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
+	if err := data.createPodOnNode("perftest-b", endpointNode, perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, "perftest-b", testNamespace); err != nil {

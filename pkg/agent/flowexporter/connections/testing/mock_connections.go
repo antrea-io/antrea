@@ -21,7 +21,6 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	conntrack "github.com/ti-mo/conntrack"
 	flowexporter "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	reflect "reflect"
 )
@@ -87,25 +86,11 @@ func (m *MockConnTrackInterfacer) EXPECT() *MockConnTrackInterfacerMockRecorder 
 	return m.recorder
 }
 
-// Dial mocks base method
-func (m *MockConnTrackInterfacer) Dial() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Dial")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Dial indicates an expected call of Dial
-func (mr *MockConnTrackInterfacerMockRecorder) Dial() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dial", reflect.TypeOf((*MockConnTrackInterfacer)(nil).Dial))
-}
-
 // DumpFilter mocks base method
-func (m *MockConnTrackInterfacer) DumpFilter(arg0 conntrack.Filter) ([]conntrack.Flow, error) {
+func (m *MockConnTrackInterfacer) DumpFilter(arg0 interface{}) ([]*flowexporter.Connection, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DumpFilter", arg0)
-	ret0, _ := ret[0].([]conntrack.Flow)
+	ret0, _ := ret[0].([]*flowexporter.Connection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -114,4 +99,18 @@ func (m *MockConnTrackInterfacer) DumpFilter(arg0 conntrack.Filter) ([]conntrack
 func (mr *MockConnTrackInterfacerMockRecorder) DumpFilter(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFilter", reflect.TypeOf((*MockConnTrackInterfacer)(nil).DumpFilter), arg0)
+}
+
+// GetConnTrack mocks base method
+func (m *MockConnTrackInterfacer) GetConnTrack(arg0 interface{}) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetConnTrack", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetConnTrack indicates an expected call of GetConnTrack
+func (mr *MockConnTrackInterfacerMockRecorder) GetConnTrack(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConnTrack", reflect.TypeOf((*MockConnTrackInterfacer)(nil).GetConnTrack), arg0)
 }

@@ -20,11 +20,6 @@ import (
 	"time"
 )
 
-const (
-	PollInterval       = 5 * time.Second
-	FlowExportInterval = 120 * time.Second
-)
-
 type ConnectionKey [5]string
 
 type FlowRecordUpdate func(key ConnectionKey, cxn Connection) error
@@ -48,6 +43,7 @@ type Connection struct {
 	StopTime                       time.Time
 	Zone                           uint16
 	StatusFlag                     uint32
+	// TODO: Have a separate field for protocol. No need to keep it in Tuple.
 	TupleOrig, TupleReply          Tuple
 	OriginalPackets, OriginalBytes uint64
 	ReversePackets, ReverseBytes   uint64

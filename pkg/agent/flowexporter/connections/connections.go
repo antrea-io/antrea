@@ -34,17 +34,19 @@ type ConnectionStore interface {
 }
 
 type connectionStore struct {
-	connections map[flowexporter.ConnectionKey]flowexporter.Connection // Add 5-tuple as string array
-	connDumper  ConnTrackDumper
-	ifaceStore  interfacestore.InterfaceStore
-	mutex       sync.Mutex
+	connections  map[flowexporter.ConnectionKey]flowexporter.Connection // Add 5-tuple as string array
+	connDumper   ConnTrackDumper
+	ifaceStore   interfacestore.InterfaceStore
+	pollInterval time.Duration
+	mutex        sync.Mutex
 }
 
-func NewConnectionStore(ctDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore) *connectionStore {
+func NewConnectionStore(ctDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, interval time.Duration) *connectionStore {
 	return &connectionStore{
-		connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		connDumper:  ctDumper,
-		ifaceStore:  ifaceStore,
+		connections:  make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		connDumper:   ctDumper,
+		ifaceStore:   ifaceStore,
+		pollInterval: interval,
 	}
 }
 
@@ -53,7 +55,7 @@ func NewConnectionStore(ctDumper ConnTrackDumper, ifaceStore interfacestore.Inte
 func (cs *connectionStore) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting conntrack polling")
 
-	ticker := time.NewTicker(flowexporter.PollInterval)
+	ticker := time.NewTicker(cs.pollInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -97,6 +99,7 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		if !srcFound && !dstFound {
 			klog.Warningf("Cannot map any of the IP %s or %s to a local Pod", conn.TupleOrig.SourceAddress.String(), conn.TupleReply.SourceAddress.String())
 		}
+		// sourceIP/destinationIP are mapped only to local pods and not remote pods.
 		if srcFound && sIface.Type == interfacestore.ContainerInterface {
 			conn.SourcePodName = sIface.ContainerInterfaceConfig.PodName
 			conn.SourcePodNamespace = sIface.ContainerInterfaceConfig.PodNamespace
@@ -126,10 +129,9 @@ func (cs *connectionStore) IterateCxnMapWithCB(updateCallback flowexporter.FlowR
 		cs.mutex.Unlock()
 		err := updateCallback(k, v)
 		if err != nil {
-			klog.Errorf("flow record update and send failed for flow with key: %v, cxn: %v", k, v)
+			klog.Errorf("Update callback failed for flow with key: %v, conn: %v, k, v: %v", k, v, err)
 			return err
 		}
-		klog.V(2).Infof("Flow record added or updated")
 		cs.mutex.Lock()
 	}
 	return nil
@@ -142,7 +144,6 @@ func (cs *connectionStore) poll() (int, error) {
 
 	filteredConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
 	if err != nil {
-		klog.Errorf("Error when dumping flows from conntrack: %v", err)
 		return 0, err
 	}
 	// Update only the Connection store. IPFIX records are generated based on Connection store.

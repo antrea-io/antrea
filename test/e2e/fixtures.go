@@ -23,6 +23,11 @@ import (
 	"time"
 )
 
+const (
+	ipfixCollectorImage = "antrea/ipfix-collector:06252020.1"
+	ipfixCollectorPort  = "4739"
+)
+
 func skipIfNotBenchmarkTest(tb testing.TB) {
 	if !testOptions.withBench {
 		tb.Skipf("Skipping benchmark test: %s", tb.Name())
@@ -71,6 +76,41 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	}
 	if err := ensureAntreaRunning(tb, data); err != nil {
 		return nil, err
+	}
+	return data, nil
+}
+
+func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error) {
+	data := &TestData{}
+	tb.Logf("Creating K8s clientset")
+	// TODO: it is probably not needed to re-create the clientset in each test, maybe we could
+	// just keep it in clusterInfo?
+	if err := data.createClient(); err != nil {
+		return nil, err
+	}
+	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
+	if err := data.createTestNamespace(); err != nil {
+		return nil, err
+	}
+	// Create pod using ipfix collector image
+	if err := data.createPodOnNode("ipfix-collector", masterNodeName(), ipfixCollectorImage, nil, nil, nil, nil, true); err != nil {
+		tb.Fatalf("Error when creating the ipfix collector Pod: %v", err)
+	}
+	ipfixCollIP, err := data.podWaitForIP(defaultTimeout, "ipfix-collector", testNamespace)
+	if err != nil {
+		tb.Fatalf("Error when waiting to get ipfix collector Pod IP: %v", err)
+	}
+	tb.Logf("Applying Antrea YAML with ipfix collector address")
+	if err := data.deployAntreaFlowExporter(ipfixCollIP + ":" + ipfixCollectorPort + ":tcp"); err != nil {
+		return data, err
+	}
+	tb.Logf("Waiting for all Antrea DaemonSet Pods")
+	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
+		return data, err
+	}
+	tb.Logf("Checking CoreDNS deployment")
+	if err := data.checkCoreDNSPods(defaultTimeout); err != nil {
+		return data, err
 	}
 	return data, nil
 }

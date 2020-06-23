@@ -90,4 +90,10 @@ type AgentConfig struct {
 	// flow records of conntrack flows on OVS bridge. If no L4 transport proto is given, we consider tcp as default.
 	// Defaults to "".
 	FlowCollectorAddr string `yaml:"flowCollectorAddr,omitempty"`
+	// Provide flow exporter poll and export interval in format "0s:0s". This determines how often flow exporter polls connections
+	// in conntrack module and exports IPFIX flow records that are built from connection store.
+	// Any value in range [1s, ExportInterval(s)) for poll interval is acceptable.
+	// Any value in range (PollInterval(s), 600s] for export interval is acceptable.
+	// Defaults to "5s:60s". Follow the time units of duration.
+	PollAndExportInterval string `yaml:"pollAndExportInterval,omitempty"`
 }

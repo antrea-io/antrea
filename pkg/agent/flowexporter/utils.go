@@ -14,7 +14,9 @@
 
 package flowexporter
 
-import "strconv"
+import (
+	"strconv"
+)
 
 // NewConnectionKey creates 5-tuple of flow as connection key
 func NewConnectionKey(conn *Connection) ConnectionKey {
