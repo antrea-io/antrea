@@ -12,7 +12,7 @@
       - shell: |-
           #!/bin/bash
 
-          saveLogs() {
+          function saveLogs() {
             echo "=== Truncate old logs ==="
             export LOG_DIR=/var/lib/jenkins/antrea_logs
             find ${LOG_DIR}/* -type d -mmin +10080 | xargs -r rm -rf
@@ -83,6 +83,7 @@
           if !(test -f jenkins/SECRET_EXIST); then
             echo "=== Failed to get secret ==="
             savelogs
+            kubectl delete ns ${cluster}
             exit 1
           else
             export KUBECONFIG="${WORKSPACE}/jenkins/out/kubeconfig"
@@ -103,6 +104,7 @@
 
             echo "=== Failed to make all nodes up ==="
             savelogs
+            kubectl delete ns ${cluster}
             exit 1
           fi
 
