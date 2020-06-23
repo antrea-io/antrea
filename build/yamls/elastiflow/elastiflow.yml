@@ -216,12 +216,20 @@ spec:
       containers:
         - name: logstash
           image: robcowart/elastiflow-logstash-oss:3.5.3
-          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: logstash-definition-volume
+              mountPath: /usr/share/logstash/definitions
+            - name: config-volume
+              mountPath: /usr/share/logstash/config
+            - name: logstash-pipeline-volume
+              mountPath: /usr/share/logstash/pipeline
           env:
             - name: ELASTIFLOW_ES_HOST
               value: "http://elasticsearch:9200"
             - name: LS_JAVA_OPTS
               value: "-Xms4g -Xmx4g"
+            - name: ELASTIFLOW_DEFINITION_PATH
+              value: "/usr/share/logstash/definitions"
           ports:
             - containerPort: 4739
               protocol: TCP
@@ -229,3 +237,22 @@ spec:
             - containerPort: 4739
               protocol: UDP
               name: udp
+      volumes:
+        - name: logstash-definition-volume
+          configMap:
+            name: logstash-configmap
+            items:
+              - key: ipfix.yml
+                path: ipfix.yml
+        - name: config-volume
+          configMap:
+            name: logstash-configmap
+            items:
+              - key: logstash.yml
+                path: logstash.yml
+        - name: logstash-pipeline-volume
+          configMap:
+            name: logstash-configmap
+            items:
+              - key: logstash.conf
+                path: logstash.conf

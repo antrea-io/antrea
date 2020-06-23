@@ -27,17 +27,14 @@ For the requirements to deploy Elastiflow, please refer to
 [this](https://github.com/robcowart/elastiflow/blob/master/INSTALL.md#requirements).
 
 ## Instruction
-To build Elastiflow image, in `build/yamls/elastiflow/src` run:
-```shell script
-docker build --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --no-cache -t robcowart/elastiflow-logstash-oss:3.5.3 .
-```
 To put everything in elastiflow namespace and get the configuration up and
 running, run:
 ```shell script
 kubectl create namespace elastiflow
+kubectl create configmap logstash-configmap -n elastiflow --from-file=build/yamls/elastiflow/logstash/
 kubectl apply -n elastiflow -f build/yamls/elastiflow/elastiflow.yml
 ```
 Kibana dashboard is exposed as a Nodeport, which can be accessed via `http://[NodeIP]: 30007`
 ```
 To import the dashboard into Kibana, go to `Management -> Saved Objects` and
-import `build/yamls/elastiflow/src/kibana.ndjson`
+import `build/yamls/elastiflow/kibana.ndjson`
