@@ -35,6 +35,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/openapi"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
+	queryapiserver "github.com/vmware-tanzu/antrea/pkg/controller/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -87,6 +88,8 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore)
 
+	endpointQueryReplier := networkpolicy.NewEndpointQueryReplier(networkPolicyController)
+
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
@@ -113,6 +116,8 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating API server: %v", err)
 	}
+	// install handlers for query functionality onto apiServer
+	queryapiserver.InstallHandlers(*endpointQueryReplier, apiServer.GenericAPIServer)
 
 	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
