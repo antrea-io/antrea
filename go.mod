@@ -35,7 +35,7 @@ require (
 	github.com/spf13/afero v1.2.2
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
-	github.com/srikartati/go-ipfixlib v0.0.0-20200615234147-74c918af6836
+	github.com/srikartati/go-ipfixlib v0.0.0-20200624191537-df05a1e72f7c
 	github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 // indirect
 	github.com/stretchr/testify v1.5.1
 	github.com/ti-mo/conntrack v0.3.0

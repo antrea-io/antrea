@@ -116,6 +116,26 @@ func (mr *MockOVSCtlClientMockRecorder) DumpTableFlows(arg0 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpTableFlows), arg0)
 }
 
+// RunAppctlCmd mocks base method
+func (m *MockOVSCtlClient) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...string) ([]byte, *ovsctl.ExecError) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "RunAppctlCmd", varargs...)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(*ovsctl.ExecError)
+	return ret0, ret1
+}
+
+// RunAppctlCmd indicates an expected call of RunAppctlCmd
+func (mr *MockOVSCtlClientMockRecorder) RunAppctlCmd(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunAppctlCmd", reflect.TypeOf((*MockOVSCtlClient)(nil).RunAppctlCmd), varargs...)
+}
+
 // RunOfctlCmd mocks base method
 func (m *MockOVSCtlClient) RunOfctlCmd(arg0 string, arg1 ...string) ([]byte, error) {
 	m.ctrl.T.Helper()

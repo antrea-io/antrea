@@ -25,109 +25,88 @@ import (
 	"github.com/ti-mo/conntrack"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	connectionstest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
 )
 
 var (
-	tuple3 = conntrack.Tuple{
-		IP: conntrack.IPTuple{
-			SourceAddress:      net.IP{1, 2, 3, 4},
-			DestinationAddress: net.IP{4, 3, 2, 1},
-		},
-		Proto: conntrack.ProtoTuple{
-			Protocol:        6,
-			SourcePort:      65280,
-			DestinationPort: 255,
-		},
+	tuple3 = flowexporter.Tuple{
+		SourceAddress:      net.IP{1, 2, 3, 4},
+		DestinationAddress: net.IP{4, 3, 2, 1},
+		Protocol:           6,
+		SourcePort:         65280,
+		DestinationPort:    255,
 	}
-	revTuple3 = conntrack.Tuple{
-		IP: conntrack.IPTuple{
-			SourceAddress:      net.IP{4, 3, 2, 1},
-			DestinationAddress: net.IP{1, 2, 3, 4},
-		},
-		Proto: conntrack.ProtoTuple{
-			Protocol:        6,
-			SourcePort:      255,
-			DestinationPort: 65280,
-		},
+	revTuple3 = flowexporter.Tuple{
+		SourceAddress:      net.IP{4, 3, 2, 1},
+		DestinationAddress: net.IP{1, 2, 3, 4},
+		Protocol:           6,
+		SourcePort:         255,
+		DestinationPort:    65280,
 	}
-	tuple4 = conntrack.Tuple{
-		IP: conntrack.IPTuple{
-			SourceAddress:      net.IP{5, 6, 7, 8},
-			DestinationAddress: net.IP{8, 7, 6, 5},
-		},
-		Proto: conntrack.ProtoTuple{
-			Protocol:        6,
-			SourcePort:      60001,
-			DestinationPort: 200,
-		},
+	tuple4 = flowexporter.Tuple{
+		SourceAddress:      net.IP{5, 6, 7, 8},
+		DestinationAddress: net.IP{8, 7, 6, 5},
+		Protocol:           6,
+		SourcePort:         60001,
+		DestinationPort:    200,
 	}
-	revTuple4 = conntrack.Tuple{
-		IP: conntrack.IPTuple{
-			SourceAddress:      net.IP{8, 7, 6, 5},
-			DestinationAddress: net.IP{5, 6, 7, 8},
-		},
-		Proto: conntrack.ProtoTuple{
-			Protocol:        6,
-			SourcePort:      200,
-			DestinationPort: 60001,
-		},
+	revTuple4 = flowexporter.Tuple{
+		SourceAddress:      net.IP{8, 7, 6, 5},
+		DestinationAddress: net.IP{5, 6, 7, 8},
+		Protocol:           6,
+		SourcePort:         200,
+		DestinationPort:    60001,
 	}
-	tuple5 = conntrack.Tuple{
-		IP: conntrack.IPTuple{
-			SourceAddress:      net.IP{1, 2, 3, 4},
-			DestinationAddress: net.IP{100, 50, 25, 5},
-		},
-		Proto: conntrack.ProtoTuple{
-			Protocol:        6,
-			SourcePort:      60001,
-			DestinationPort: 200,
-		},
+	tuple5 = flowexporter.Tuple{
+		SourceAddress:      net.IP{1, 2, 3, 4},
+		DestinationAddress: net.IP{100, 50, 25, 5},
+		Protocol:           6,
+		SourcePort:         60001,
+		DestinationPort:    200,
 	}
-	revTuple5 = conntrack.Tuple{
-		IP: conntrack.IPTuple{
-			SourceAddress:      net.IP{100, 50, 25, 5},
-			DestinationAddress: net.IP{1, 2, 3, 4},
-		},
-		Proto: conntrack.ProtoTuple{
-			Protocol:        6,
-			SourcePort:      200,
-			DestinationPort: 60001,
-		},
+	revTuple5 = flowexporter.Tuple{
+		SourceAddress:      net.IP{100, 50, 25, 5},
+		DestinationAddress: net.IP{1, 2, 3, 4},
+		Protocol:           6,
+		SourcePort:         200,
+		DestinationPort:    60001,
 	}
 )
 
-func TestConnTrack_DumpFilter(t *testing.T) {
+func TestConnTrack_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	// Create flows to test
-	antreaFlow := conntrack.Flow{
+	antreaFlow := &flowexporter.Connection{
 		TupleOrig:  tuple3,
 		TupleReply: revTuple3,
 		Zone:       openflow.CtZone,
 	}
-	antreaServiceFlow := conntrack.Flow{
+	antreaServiceFlow := &flowexporter.Connection{
 		TupleOrig:  tuple5,
 		TupleReply: revTuple5,
 		Zone:       openflow.CtZone,
 	}
-	antreaGWFlow := conntrack.Flow{
+	antreaGWFlow := &flowexporter.Connection{
 		TupleOrig:  tuple4,
 		TupleReply: revTuple4,
 		Zone:       openflow.CtZone,
 	}
-	nonAntreaFlow := conntrack.Flow{
+	nonAntreaFlow := &flowexporter.Connection{
 		TupleOrig:  tuple4,
 		TupleReply: revTuple4,
 		Zone:       100,
 	}
 
-	testFlows := []conntrack.Flow{antreaFlow, antreaServiceFlow, antreaGWFlow, nonAntreaFlow}
+	testFlows := []*flowexporter.Connection{antreaFlow, antreaServiceFlow, antreaGWFlow, nonAntreaFlow}
 
-	// Create mock ConnTrackInterfacer interface
+	// Create mock interfaces
 	mockCTInterfacer := connectionstest.NewMockConnTrackInterfacer(ctrl)
-
+	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
 	gwConfig := &config.GatewayConfig{
@@ -142,11 +121,11 @@ func TestConnTrack_DumpFilter(t *testing.T) {
 		Mask: net.IPMask{255, 255, 255, 0},
 	}
 	// set expects for mocks
-	mockCTInterfacer.EXPECT().Dial().Return(nil)
+	mockCTInterfacer.EXPECT().GetConnTrack(nil).Return(nil)
 	mockCTInterfacer.EXPECT().DumpFilter(conntrack.Filter{}).Return(testFlows, nil)
 
-	connTrack := NewConnTrackDumper(nodeConfig, serviceCIDR, mockCTInterfacer)
-	conns, err := connTrack.DumpFlows(openflow.CtZone)
+	connDumper := NewConnTrackDumper(mockCTInterfacer, nodeConfig, serviceCIDR, ovsconfig.OVSDatapathSystem, mockOVSCtlClient)
+	conns, err := connDumper.DumpFlows(openflow.CtZone)
 	if err != nil {
 		t.Errorf("Dump flows function returned error: %v", err)
 	}

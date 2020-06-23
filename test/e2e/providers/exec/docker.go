@@ -32,7 +32,13 @@ func RunDockerExecCommand(container string, cmd string, workdir string) (
 ) {
 	args := make([]string, 0)
 	args = append(args, "exec", "-w", workdir, "-t", container)
-	args = append(args, strings.Fields(cmd)...)
+	if strings.Contains(cmd, "/bin/sh") {
+		// Just split in to "/bin/sh" "-c" and "actual_cmd"
+		// This is useful for passing piped commands in to exec
+		args = append(args, strings.SplitN(cmd, " ", 3)...)
+	} else {
+		args = append(args, strings.Fields(cmd)...)
+	}
 	dockerCmd := exec.Command("docker", args...)
 	stdoutPipe, err := dockerCmd.StdoutPipe()
 	if err != nil {

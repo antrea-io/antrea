@@ -47,7 +47,7 @@ import (
 )
 
 const (
-	defaultTimeout time.Duration = 90 * time.Second
+	defaultTimeout = 90 * time.Second
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
 	antreaNamespace      string = "kube-system"
@@ -288,6 +288,7 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) e
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when waiting for Antrea rollout to complete")
 	}
+
 	return nil
 }
 
@@ -299,6 +300,57 @@ func (data *TestData) deployAntrea() error {
 // deployAntreaIPSec deploys Antrea with IPSec tunnel enabled.
 func (data *TestData) deployAntreaIPSec() error {
 	return data.deployAntreaCommon(antreaIPSecYML, "")
+}
+
+// deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
+func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
+	// This is to add ipfixCollector address and pollAndExportInterval config params to antrea agent configmap
+	cmd := fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#flowCollectorAddr: \"\"|flowCollectorAddr: \"%s\"|g' %s", ipfixCollector, antreaYML)
+	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+	}
+	// pollAndExportInterval is added as harcoded value "1s:5s"
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#pollAndExportInterval: \"\"|pollAndExportInterval: \"1s:5s\"|g' %s", antreaYML)
+	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+	}
+	// Turn on FlowExporter feature in featureGates
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#featureGates:|featureGates:\\n      FlowExporter: true|g' %s", antreaYML)
+	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+	}
+
+	// Delete and re-deploy antrea for config map settings to take effect.
+	// Question: Can end-to-end tests run in parallel? Is there an issue deleting Antrea daemon set?
+	// TODO: Remove this when configmap can be changed runtime
+	if err := data.deleteAntrea(defaultTimeout); err != nil {
+		return err
+	}
+	if err := data.deployAntreaCommon(antreaYML, ""); err != nil {
+		return err
+	}
+
+	// Change the yaml file back for other tests
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|flowCollectorAddr: \"%s\"|#flowCollectorAddr: \"\"|g' %s", ipfixCollector, antreaYML)
+	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+	}
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|pollAndExportInterval: \"1s:5s\"|#pollAndExportInterval: \"\"|g' %s", antreaYML)
+	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+	}
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|featureGates:\\n      FlowExporter: true|#featureGates:|g' %s", antreaYML)
+	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+	}
+
+	return nil
 }
 
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
@@ -467,7 +519,7 @@ func getImageName(uri string) string {
 
 // createPodOnNode creates a pod in the test namespace with a container whose type is decided by imageName.
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createPodOnNode(name string, nodeName string, image string, command []string, args []string, env []corev1.EnvVar, ports []corev1.ContainerPort) error {
+func (data *TestData) createPodOnNode(name string, nodeName string, image string, command []string, args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool) error {
 	// image could be a fully qualified URI which can't be used as container name and label value,
 	// extract the image name from it.
 	imageName := getImageName(image)
@@ -484,6 +536,7 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 			},
 		},
 		RestartPolicy: corev1.RestartPolicyNever,
+		HostNetwork:   hostNetwork,
 	}
 	if nodeName != "" {
 		podSpec.NodeSelector = map[string]string{
@@ -519,7 +572,7 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, nodeName, "busybox", []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil)
+	return data.createPodOnNode(name, nodeName, "busybox", []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false)
 }
 
 // createBusyboxPod creates a Pod in the test namespace with a single busybox container.
@@ -536,7 +589,7 @@ func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
 			ContainerPort: 80,
 			Protocol:      corev1.ProtocolTCP,
 		},
-	})
+	}, false)
 }
 
 // createNginxPod creates a Pod in the test namespace with a single nginx container.
@@ -555,7 +608,7 @@ func (data *TestData) createServerPod(name string, portName string, portNum int,
 		// If hostPort is to be set, it must match the container port number.
 		port.HostPort = int32(portNum)
 	}
-	return data.createPodOnNode(name, "", image, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port})
+	return data.createPodOnNode(name, "", image, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false)
 }
 
 // deletePod deletes a Pod in the test namespace.

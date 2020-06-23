@@ -1,11 +1,25 @@
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package exporter
 
 import (
 	"fmt"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	"hash/fnv"
 	"net"
-	"os"
 	"strings"
 	"time"
 	"unicode"
@@ -50,29 +64,15 @@ type FlowExporter interface {
 }
 
 type flowExporter struct {
-	flowRecords  flowrecords.FlowRecords
-	process      ipfix.IPFIXExportingProcess
-	elementsList []*ipfixentities.InfoElement
-	templateID   uint16
-}
-
-func getNodeName() (string, error) {
-	const nodeNameEnvKey = "NODE_NAME"
-	nodeName := os.Getenv(nodeNameEnvKey)
-	if nodeName != "" {
-		return nodeName, nil
-	}
-	klog.Infof("Environment variable %s not found, using hostname instead", nodeNameEnvKey)
-	var err error
-	nodeName, err = os.Hostname()
-	if err != nil {
-		return "", fmt.Errorf("failed to get local hostname: %v", err)
-	}
-	return nodeName, nil
+	flowRecords    flowrecords.FlowRecords
+	process        ipfix.IPFIXExportingProcess
+	elementsList   []*ipfixentities.InfoElement
+	exportInterval time.Duration
+	templateID     uint16
 }
 
 func genObservationID() (uint32, error) {
-	name, err := getNodeName()
+	name, err := env.GetNodeName()
 	if err != nil {
 		return 0, err
 	}
@@ -81,7 +81,7 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
-func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords) (*flowExporter, error) {
+func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expInterval time.Duration) (*flowExporter, error) {
 	// Create IPFIX exporting expProcess and initialize registries and other related entities
 	obsID, err := genObservationID()
 	if err != nil {
@@ -98,6 +98,7 @@ func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords) (*flo
 		records,
 		expProcess,
 		nil,
+		expInterval,
 		0,
 	}
 
@@ -115,12 +116,15 @@ func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords) (*flo
 
 func (exp *flowExporter) Run(stopCh <-chan struct{}) {
 	klog.Infof("Start exporting IPFIX flow records")
+	ticker := time.NewTicker(exp.exportInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-stopCh:
 			exp.process.CloseConnToCollector()
 			break
-		case <-time.After(flowexporter.FlowExportInterval):
+		case <-ticker.C:
 			err := exp.flowRecords.BuildFlowRecords()
 			if err != nil {
 				klog.Errorf("Error when building flow records: %v", err)

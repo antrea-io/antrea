@@ -47,6 +47,9 @@ type OVSCtlClient interface {
 	SetPortNoFlood(ofport int) error
 	// Trace executes "ovs-appctl ofproto/trace" to perform OVS packet tracing.
 	Trace(req *TracingRequest) (string, error)
+	// RunAppctlCmd executes "ovs-appctl" command and returns the outputs.
+	// Some commands are bridge specific and some are not. Passing a bool to distinguish that.
+	RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, *ExecError)
 }
 
 type BadRequestError string
