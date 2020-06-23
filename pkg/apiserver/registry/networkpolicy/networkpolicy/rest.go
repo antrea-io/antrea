@@ -106,3 +106,7 @@ func (r *REST) Watch(ctx context.Context, options *internalversion.ListOptions) 
 	}
 	return r.networkPolicyStore.Watch(ctx, key, label, field)
 }
+
+func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*v1.Table, error) {
+	return rest.NewDefaultTableConvertor(networking.Resource("networkpolicy")).ConvertToTable(ctx, obj, tableOptions)
+}

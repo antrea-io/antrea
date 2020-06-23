@@ -72,17 +72,17 @@ detailed installation instructions.
 
 You can follow the steps listed below to install octant and antrea-octant-plugin on linux.
 
-1. Get and install Octant v0.10.2.
+1. Get and install Octant v0.13.1.
 
-    Depending on your linux operating system, to install Octant v0.10.2, you can use either
+    Depending on your linux operating system, to install Octant v0.13.1, you can use either
     ```
-    wget https://github.com/vmware-tanzu/octant/releases/download/v0.10.2/octant_0.10.2_Linux-64bit.deb
-    dpkg -i octant_0.10.2_Linux-64bit.deb
+    wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.deb
+    dpkg -i octant_0.13.1_Linux-64bit.deb
     ```
     or
     ```
-    wget https://github.com/vmware-tanzu/octant/releases/download/v0.10.2/octant_0.10.2_Linux-64bit.rpm
-    rpm -i octant_0.10.2_Linux-64bit.rpm
+    wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.rpm
+    rpm -i octant_0.13.1_Linux-64bit.rpm
     ```
 
 2. Export your kubeconfig path (file location depends on your setup) to environment variable $KUBECONFIG.
@@ -94,6 +94,7 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
 3. Build antrea-octant-plugin.
 
     ```
+    cd plugins/octant
     make antrea-octant-plugin
     ```
 
@@ -101,7 +102,7 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
 
     ```
     # If you did not change OCTANT_PLUGIN_PATH, the default folder should be $HOME/.config/octant/plugins.
-    mv antrea/bin/antrea-octant-plugin $HOME/.config/octant/plugins/
+    mv antrea/plugins/octant/bin/antrea-octant-plugin $HOME/.config/octant/plugins/
     ```
 
 5. Start Octant as a background process with UI related environment variables.

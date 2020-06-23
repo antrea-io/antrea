@@ -16,6 +16,7 @@ package antctl
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -113,7 +114,7 @@ func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) 
 	}
 	u.RawQuery = q.Encode()
 	getter := restClient.Get().RequestURI(u.RequestURI()).Timeout(opt.timeout)
-	result, err := getter.DoRaw()
+	result, err := getter.DoRaw(context.TODO())
 	if err != nil {
 		statusErr, ok := err.(*errors.StatusError)
 		if !ok {
@@ -158,7 +159,7 @@ func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Re
 			resGetter = resGetter.Param(arg, val)
 		}
 	}
-	result := resGetter.Do()
+	result := resGetter.Do(context.TODO())
 	if result.Error() != nil {
 		return nil, generateMessage(opt, result)
 	}

@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"flag"
@@ -79,7 +80,7 @@ func skipIfPrometheusDisabled(t *testing.T) {
 // getMonitoringAuthToken retrieves monitoring authorization token, required for access to Antrea apiserver/metrics
 // resource
 func getMonitoringAuthToken(t *testing.T, data *TestData) string {
-	secrets, err := data.clientset.CoreV1().Secrets(monitoringNamespace).List(metav1.ListOptions{})
+	secrets, err := data.clientset.CoreV1().Secrets(monitoringNamespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("Error fetching monitoring secrets: %v", err)
 	}
@@ -138,7 +139,7 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea,component=" + component,
 	}
-	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(listOptions)
+	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 	if err != nil {
 		t.Fatalf("Error fetching agent Pods: %v", err)
 	}
@@ -186,7 +187,7 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 
 // getPrometheusEndpoint retrieves Prometheus endpoint from K8S
 func getPrometheusEndpoint(t *testing.T, data *TestData) (string, int32) {
-	pods, err := data.clientset.CoreV1().Pods("monitoring").List(metav1.ListOptions{})
+	pods, err := data.clientset.CoreV1().Pods("monitoring").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("Error fetching monitoring pods: %v", err)
 	}
@@ -198,7 +199,7 @@ func getPrometheusEndpoint(t *testing.T, data *TestData) (string, int32) {
 	}
 
 	// Find nodePort by querying the Prometheus Service
-	services, err := data.clientset.CoreV1().Services("monitoring").List(metav1.ListOptions{})
+	services, err := data.clientset.CoreV1().Services("monitoring").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("Error fetching monitoring Services: %v", err)
 	}

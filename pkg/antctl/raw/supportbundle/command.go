@@ -140,7 +140,7 @@ func localSupportBundleRequest(cmd *cobra.Command, mode string) error {
 	_, err = client.Post().
 		Resource("supportbundles").
 		Body(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: mode}}).
-		DoRaw()
+		DoRaw(context.TODO())
 	if err != nil {
 		return fmt.Errorf("error when requesting the agent support bundle: %w", err)
 	}
@@ -149,7 +149,7 @@ func localSupportBundleRequest(cmd *cobra.Command, mode string) error {
 		err := client.Get().
 			Resource("supportbundles").
 			Name(mode).
-			Do().
+			Do(context.TODO()).
 			Into(&supportBundle)
 		if err != nil {
 			return fmt.Errorf("error when requesting the agent support bundle: %w", err)
@@ -177,7 +177,7 @@ func request(component string, client *rest.RESTClient) error {
 	_, err = client.Post().
 		Resource("supportbundles").
 		Body(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: component}}).
-		DoRaw()
+		DoRaw(context.TODO())
 	if err == nil {
 		return nil
 	}
@@ -221,7 +221,7 @@ func requestAll(agentClients map[string]*rest.RESTClient, controllerClient *rest
 func download(suffix, downloadPath string, client *rest.RESTClient, component string) error {
 	for {
 		var supportBundle systemv1beta1.SupportBundle
-		err := client.Get().Resource("supportbundles").Name(component).Do().Into(&supportBundle)
+		err := client.Get().Resource("supportbundles").Name(component).Do(context.TODO()).Into(&supportBundle)
 		if err != nil {
 			return fmt.Errorf("error when requesting the agent support bundle: %w", err)
 		}
@@ -244,7 +244,7 @@ func download(suffix, downloadPath string, client *rest.RESTClient, component st
 				Resource("supportbundles").
 				Name(component).
 				SubResource("download").
-				Stream()
+				Stream(context.TODO())
 			if err != nil {
 				return fmt.Errorf("error when downloading the support bundle: %w", err)
 			}
@@ -277,14 +277,14 @@ func createSupportBundleClients(filter string, k8sClientset kubernetes.Interface
 	clients := map[string]*rest.RESTClient{}
 	if !option.controllerOnly {
 		nodeAgentInfoMap := map[string]string{}
-		agentInfoList, err := antreaClientset.ClusterinformationV1beta1().AntreaAgentInfos().List(metav1.ListOptions{})
+		agentInfoList, err := antreaClientset.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return nil, nil, err
 		}
 		for _, agentInfo := range agentInfoList.Items {
 			nodeAgentInfoMap[agentInfo.NodeRef.Name] = fmt.Sprint(agentInfo.APIPort)
 		}
-		nodeList, err := k8sClientset.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: option.labelSelector})
+		nodeList, err := k8sClientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: option.labelSelector})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -312,12 +312,12 @@ func createSupportBundleClients(filter string, k8sClientset kubernetes.Interface
 		}
 	}
 
-	controllerInfo, err := antreaClientset.ClusterinformationV1beta1().AntreaControllerInfos().Get("antrea-controller", metav1.GetOptions{})
+	controllerInfo, err := antreaClientset.ClusterinformationV1beta1().AntreaControllerInfos().Get(context.TODO(), "antrea-controller", metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	controllerNode, err := k8sClientset.CoreV1().Nodes().Get(controllerInfo.NodeRef.Name, metav1.GetOptions{})
+	controllerNode, err := k8sClientset.CoreV1().Nodes().Get(context.TODO(), controllerInfo.NodeRef.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("error when searching the Node of the controller: %w", err)
 	}
@@ -364,7 +364,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 	}
 
 	g.Go(func() error {
-		pods, err := k8sClient.CoreV1().Pods(metav1.NamespaceAll).List(metav1.ListOptions{})
+		pods, err := k8sClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -374,7 +374,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		nodes, err := k8sClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		nodes, err := k8sClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -384,7 +384,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		deployments, err := k8sClient.AppsV1().Deployments(metav1.NamespaceAll).List(metav1.ListOptions{})
+		deployments, err := k8sClient.AppsV1().Deployments(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -394,7 +394,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		replicas, err := k8sClient.AppsV1().ReplicaSets(metav1.NamespaceAll).List(metav1.ListOptions{})
+		replicas, err := k8sClient.AppsV1().ReplicaSets(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -404,7 +404,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		daemonsets, err := k8sClient.AppsV1().DaemonSets(metav1.NamespaceAll).List(metav1.ListOptions{})
+		daemonsets, err := k8sClient.AppsV1().DaemonSets(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -414,7 +414,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		configs, err := k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).List(metav1.ListOptions{LabelSelector: "app=antrea"})
+		configs, err := k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).List(context.TODO(), metav1.ListOptions{LabelSelector: "app=antrea"})
 		if err != nil {
 			return err
 		}

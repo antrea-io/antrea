@@ -81,3 +81,7 @@ func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (
 func (r *REST) NamespaceScoped() bool {
 	return false
 }
+
+func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*v1.Table, error) {
+	return rest.NewDefaultTableConvertor(system.Resource("clusterinfos")).ConvertToTable(ctx, obj, tableOptions)
+}
