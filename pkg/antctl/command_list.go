@@ -108,6 +108,10 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 	var allCommands [][]string
 	for i := range cl.definitions {
 		def := cl.definitions[i]
+		// TODO: incorporate query commands into e2e testing once proxy access is implemented
+		if def.commandGroup == query {
+			continue
+		}
 		if mode == runtime.ModeAgent && def.agentEndpoint != nil ||
 			mode == runtime.ModeController && def.controllerEndpoint != nil {
 			var currentCommand []string
