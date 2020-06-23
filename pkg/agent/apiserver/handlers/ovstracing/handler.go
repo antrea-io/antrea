@@ -15,6 +15,7 @@
 package ovstracing
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,7 +58,7 @@ type request struct {
 }
 
 func getServiceClusterIP(aq querier.AgentQuerier, name, namespace string) (net.IP, *handlers.HandlerError) {
-	srv, err := aq.GetK8sClient().CoreV1().Services(namespace).Get(name, metav1.GetOptions{})
+	srv, err := aq.GetK8sClient().CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil, handlers.NewHandlerError(errors.New("Service not found"), http.StatusNotFound)
@@ -93,7 +94,7 @@ func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer) (net.IP, *interf
 	}
 
 	// Try getting the Pod from K8s API.
-	pod, err := aq.GetK8sClient().CoreV1().Pods(peer.namespace).Get(peer.name, metav1.GetOptions{})
+	pod, err := aq.GetK8sClient().CoreV1().Pods(peer.namespace).Get(context.TODO(), peer.name, metav1.GetOptions{})
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			err := handlers.NewHandlerError(fmt.Errorf("Pod %s/%s not found", peer.namespace, peer.name), http.StatusNotFound)

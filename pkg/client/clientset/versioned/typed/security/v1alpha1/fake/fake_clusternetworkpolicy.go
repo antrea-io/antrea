@@ -17,6 +17,8 @@
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -36,7 +38,7 @@ var clusternetworkpoliciesResource = schema.GroupVersionResource{Group: "securit
 var clusternetworkpoliciesKind = schema.GroupVersionKind{Group: "security.antrea.tanzu.vmware.com", Version: "v1alpha1", Kind: "ClusterNetworkPolicy"}
 
 // Get takes name of the clusterNetworkPolicy, and returns the corresponding clusterNetworkPolicy object, and an error if there is any.
-func (c *FakeClusterNetworkPolicies) Get(name string, options v1.GetOptions) (result *v1alpha1.ClusterNetworkPolicy, err error) {
+func (c *FakeClusterNetworkPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ClusterNetworkPolicy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootGetAction(clusternetworkpoliciesResource, name), &v1alpha1.ClusterNetworkPolicy{})
 	if obj == nil {
@@ -46,7 +48,7 @@ func (c *FakeClusterNetworkPolicies) Get(name string, options v1.GetOptions) (re
 }
 
 // List takes label and field selectors, and returns the list of ClusterNetworkPolicies that match those selectors.
-func (c *FakeClusterNetworkPolicies) List(opts v1.ListOptions) (result *v1alpha1.ClusterNetworkPolicyList, err error) {
+func (c *FakeClusterNetworkPolicies) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ClusterNetworkPolicyList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootListAction(clusternetworkpoliciesResource, clusternetworkpoliciesKind, opts), &v1alpha1.ClusterNetworkPolicyList{})
 	if obj == nil {
@@ -67,13 +69,13 @@ func (c *FakeClusterNetworkPolicies) List(opts v1.ListOptions) (result *v1alpha1
 }
 
 // Watch returns a watch.Interface that watches the requested clusterNetworkPolicies.
-func (c *FakeClusterNetworkPolicies) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeClusterNetworkPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(clusternetworkpoliciesResource, opts))
 }
 
 // Create takes the representation of a clusterNetworkPolicy and creates it.  Returns the server's representation of the clusterNetworkPolicy, and an error, if there is any.
-func (c *FakeClusterNetworkPolicies) Create(clusterNetworkPolicy *v1alpha1.ClusterNetworkPolicy) (result *v1alpha1.ClusterNetworkPolicy, err error) {
+func (c *FakeClusterNetworkPolicies) Create(ctx context.Context, clusterNetworkPolicy *v1alpha1.ClusterNetworkPolicy, opts v1.CreateOptions) (result *v1alpha1.ClusterNetworkPolicy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootCreateAction(clusternetworkpoliciesResource, clusterNetworkPolicy), &v1alpha1.ClusterNetworkPolicy{})
 	if obj == nil {
@@ -83,7 +85,7 @@ func (c *FakeClusterNetworkPolicies) Create(clusterNetworkPolicy *v1alpha1.Clust
 }
 
 // Update takes the representation of a clusterNetworkPolicy and updates it. Returns the server's representation of the clusterNetworkPolicy, and an error, if there is any.
-func (c *FakeClusterNetworkPolicies) Update(clusterNetworkPolicy *v1alpha1.ClusterNetworkPolicy) (result *v1alpha1.ClusterNetworkPolicy, err error) {
+func (c *FakeClusterNetworkPolicies) Update(ctx context.Context, clusterNetworkPolicy *v1alpha1.ClusterNetworkPolicy, opts v1.UpdateOptions) (result *v1alpha1.ClusterNetworkPolicy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootUpdateAction(clusternetworkpoliciesResource, clusterNetworkPolicy), &v1alpha1.ClusterNetworkPolicy{})
 	if obj == nil {
@@ -93,22 +95,22 @@ func (c *FakeClusterNetworkPolicies) Update(clusterNetworkPolicy *v1alpha1.Clust
 }
 
 // Delete takes name of the clusterNetworkPolicy and deletes it. Returns an error if one occurs.
-func (c *FakeClusterNetworkPolicies) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeClusterNetworkPolicies) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewRootDeleteAction(clusternetworkpoliciesResource, name), &v1alpha1.ClusterNetworkPolicy{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeClusterNetworkPolicies) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(clusternetworkpoliciesResource, listOptions)
+func (c *FakeClusterNetworkPolicies) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewRootDeleteCollectionAction(clusternetworkpoliciesResource, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ClusterNetworkPolicyList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched clusterNetworkPolicy.
-func (c *FakeClusterNetworkPolicies) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterNetworkPolicy, err error) {
+func (c *FakeClusterNetworkPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ClusterNetworkPolicy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootPatchSubresourceAction(clusternetworkpoliciesResource, name, pt, data, subresources...), &v1alpha1.ClusterNetworkPolicy{})
 	if obj == nil {

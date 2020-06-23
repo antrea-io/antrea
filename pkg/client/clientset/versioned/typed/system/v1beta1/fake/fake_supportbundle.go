@@ -17,6 +17,8 @@
 package fake
 
 import (
+	"context"
+
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -33,7 +35,7 @@ var supportbundlesResource = schema.GroupVersionResource{Group: "system.antrea.t
 var supportbundlesKind = schema.GroupVersionKind{Group: "system.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "SupportBundle"}
 
 // Get takes name of the supportBundle, and returns the corresponding supportBundle object, and an error if there is any.
-func (c *FakeSupportBundles) Get(name string, options v1.GetOptions) (result *v1beta1.SupportBundle, err error) {
+func (c *FakeSupportBundles) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.SupportBundle, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootGetAction(supportbundlesResource, name), &v1beta1.SupportBundle{})
 	if obj == nil {
@@ -43,7 +45,7 @@ func (c *FakeSupportBundles) Get(name string, options v1.GetOptions) (result *v1
 }
 
 // Create takes the representation of a supportBundle and creates it.  Returns the server's representation of the supportBundle, and an error, if there is any.
-func (c *FakeSupportBundles) Create(supportBundle *v1beta1.SupportBundle) (result *v1beta1.SupportBundle, err error) {
+func (c *FakeSupportBundles) Create(ctx context.Context, supportBundle *v1beta1.SupportBundle, opts v1.CreateOptions) (result *v1beta1.SupportBundle, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootCreateAction(supportbundlesResource, supportBundle), &v1beta1.SupportBundle{})
 	if obj == nil {
@@ -53,7 +55,7 @@ func (c *FakeSupportBundles) Create(supportBundle *v1beta1.SupportBundle) (resul
 }
 
 // Delete takes name of the supportBundle and deletes it. Returns an error if one occurs.
-func (c *FakeSupportBundles) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeSupportBundles) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewRootDeleteAction(supportbundlesResource, name), &v1beta1.SupportBundle{})
 	return err

@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -199,12 +200,12 @@ func TestNetworkPolicyResyncAfterRestart(t *testing.T) {
 	}
 
 	scaleFunc := func(replicas int32) {
-		scale, err := data.clientset.AppsV1().Deployments(antreaNamespace).GetScale(antreaDeployment, metav1.GetOptions{})
+		scale, err := data.clientset.AppsV1().Deployments(antreaNamespace).GetScale(context.TODO(), antreaDeployment, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("error when getting scale of Antrea Deployment: %v", err)
 		}
 		scale.Spec.Replicas = replicas
-		if _, err := data.clientset.AppsV1().Deployments(antreaNamespace).UpdateScale(antreaDeployment, scale); err != nil {
+		if _, err := data.clientset.AppsV1().Deployments(antreaNamespace).UpdateScale(context.TODO(), antreaDeployment, scale, metav1.UpdateOptions{}); err != nil {
 			t.Fatalf("error when scaling Antrea Deployment to %d: %v", replicas, err)
 		}
 	}

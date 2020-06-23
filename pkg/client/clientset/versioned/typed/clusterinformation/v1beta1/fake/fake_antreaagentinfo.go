@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package fake
 
 import (
+	"context"
+
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -36,7 +38,7 @@ var antreaagentinfosResource = schema.GroupVersionResource{Group: "clusterinform
 var antreaagentinfosKind = schema.GroupVersionKind{Group: "clusterinformation.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "AntreaAgentInfo"}
 
 // Get takes name of the antreaAgentInfo, and returns the corresponding antreaAgentInfo object, and an error if there is any.
-func (c *FakeAntreaAgentInfos) Get(name string, options v1.GetOptions) (result *v1beta1.AntreaAgentInfo, err error) {
+func (c *FakeAntreaAgentInfos) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.AntreaAgentInfo, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootGetAction(antreaagentinfosResource, name), &v1beta1.AntreaAgentInfo{})
 	if obj == nil {
@@ -46,7 +48,7 @@ func (c *FakeAntreaAgentInfos) Get(name string, options v1.GetOptions) (result *
 }
 
 // List takes label and field selectors, and returns the list of AntreaAgentInfos that match those selectors.
-func (c *FakeAntreaAgentInfos) List(opts v1.ListOptions) (result *v1beta1.AntreaAgentInfoList, err error) {
+func (c *FakeAntreaAgentInfos) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.AntreaAgentInfoList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootListAction(antreaagentinfosResource, antreaagentinfosKind, opts), &v1beta1.AntreaAgentInfoList{})
 	if obj == nil {
@@ -67,13 +69,13 @@ func (c *FakeAntreaAgentInfos) List(opts v1.ListOptions) (result *v1beta1.Antrea
 }
 
 // Watch returns a watch.Interface that watches the requested antreaAgentInfos.
-func (c *FakeAntreaAgentInfos) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeAntreaAgentInfos) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(antreaagentinfosResource, opts))
 }
 
 // Create takes the representation of a antreaAgentInfo and creates it.  Returns the server's representation of the antreaAgentInfo, and an error, if there is any.
-func (c *FakeAntreaAgentInfos) Create(antreaAgentInfo *v1beta1.AntreaAgentInfo) (result *v1beta1.AntreaAgentInfo, err error) {
+func (c *FakeAntreaAgentInfos) Create(ctx context.Context, antreaAgentInfo *v1beta1.AntreaAgentInfo, opts v1.CreateOptions) (result *v1beta1.AntreaAgentInfo, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootCreateAction(antreaagentinfosResource, antreaAgentInfo), &v1beta1.AntreaAgentInfo{})
 	if obj == nil {
@@ -83,7 +85,7 @@ func (c *FakeAntreaAgentInfos) Create(antreaAgentInfo *v1beta1.AntreaAgentInfo) 
 }
 
 // Update takes the representation of a antreaAgentInfo and updates it. Returns the server's representation of the antreaAgentInfo, and an error, if there is any.
-func (c *FakeAntreaAgentInfos) Update(antreaAgentInfo *v1beta1.AntreaAgentInfo) (result *v1beta1.AntreaAgentInfo, err error) {
+func (c *FakeAntreaAgentInfos) Update(ctx context.Context, antreaAgentInfo *v1beta1.AntreaAgentInfo, opts v1.UpdateOptions) (result *v1beta1.AntreaAgentInfo, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootUpdateAction(antreaagentinfosResource, antreaAgentInfo), &v1beta1.AntreaAgentInfo{})
 	if obj == nil {
@@ -93,22 +95,22 @@ func (c *FakeAntreaAgentInfos) Update(antreaAgentInfo *v1beta1.AntreaAgentInfo) 
 }
 
 // Delete takes name of the antreaAgentInfo and deletes it. Returns an error if one occurs.
-func (c *FakeAntreaAgentInfos) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeAntreaAgentInfos) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewRootDeleteAction(antreaagentinfosResource, name), &v1beta1.AntreaAgentInfo{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeAntreaAgentInfos) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(antreaagentinfosResource, listOptions)
+func (c *FakeAntreaAgentInfos) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewRootDeleteCollectionAction(antreaagentinfosResource, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1beta1.AntreaAgentInfoList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched antreaAgentInfo.
-func (c *FakeAntreaAgentInfos) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1beta1.AntreaAgentInfo, err error) {
+func (c *FakeAntreaAgentInfos) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.AntreaAgentInfo, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootPatchSubresourceAction(antreaagentinfosResource, name, pt, data, subresources...), &v1beta1.AntreaAgentInfo{})
 	if obj == nil {

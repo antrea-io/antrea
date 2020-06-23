@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -51,13 +52,13 @@ func TestUserProvidedCert(t *testing.T) {
 	antreaControllerConf, _ := configMap.Data["antrea-controller.conf"]
 	antreaControllerConf = strings.Replace(antreaControllerConf, "#selfSignedCert: true", "selfSignedCert: false", 1)
 	configMap.Data["antrea-controller.conf"] = antreaControllerConf
-	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(configMap); err != nil {
+	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
 		t.Fatalf("Failed to update ConfigMap %s: %v", configMap.Name, err)
 	}
 
 	genCertKeyAndUpdateSecret := func() ([]byte, []byte) {
 		certPem, keyPem, err := certutil.GenerateSelfSignedCertKey("antrea", nil, certificate.AntreaServerNames)
-		secret, err := data.clientset.CoreV1().Secrets(certificate.TLSSecretNamespace).Get(certificate.TLSSecretName, metav1.GetOptions{})
+		secret, err := data.clientset.CoreV1().Secrets(certificate.TLSSecretNamespace).Get(context.TODO(), certificate.TLSSecretName, metav1.GetOptions{})
 		exists := true
 		if err != nil {
 			if !errors.IsNotFound(err) {
@@ -83,11 +84,11 @@ func TestUserProvidedCert(t *testing.T) {
 			certificate.TLSKeyFile:  keyPem,
 		}
 		if exists {
-			if _, err := data.clientset.CoreV1().Secrets(certificate.TLSSecretNamespace).Update(secret); err != nil {
+			if _, err := data.clientset.CoreV1().Secrets(certificate.TLSSecretNamespace).Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
 				t.Fatalf("Failed to update Secret %s: %v", certificate.TLSSecretName, err)
 			}
 		} else {
-			if _, err := data.clientset.CoreV1().Secrets(certificate.TLSSecretNamespace).Create(secret); err != nil {
+			if _, err := data.clientset.CoreV1().Secrets(certificate.TLSSecretNamespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
 				t.Fatalf("Failed to create Secret %s: %v", certificate.TLSSecretName, err)
 			}
 		}
@@ -143,7 +144,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 
 	var caBundle string
 	if err := wait.Poll(2*time.Second, timeout, func() (bool, error) {
-		configMap, err := data.clientset.CoreV1().ConfigMaps(certificate.CAConfigMapNamespace).Get(certificate.CAConfigMapName, metav1.GetOptions{})
+		configMap, err := data.clientset.CoreV1().ConfigMaps(certificate.CAConfigMapNamespace).Get(context.TODO(), certificate.CAConfigMapName, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("cannot get ConfigMap antrea-ca")
 		}
@@ -190,7 +191,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea",
 	}
-	apiServices, err := data.aggregatorClient.ApiregistrationV1().APIServices().List(listOptions)
+	apiServices, err := data.aggregatorClient.ApiregistrationV1().APIServices().List(context.TODO(), listOptions)
 	if err != nil {
 		t.Fatalf("Failed to list Antrea APIServices: %v", err)
 	}

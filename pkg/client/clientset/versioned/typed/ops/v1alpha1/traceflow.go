@@ -17,6 +17,7 @@
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
@@ -35,15 +36,15 @@ type TraceflowsGetter interface {
 
 // TraceflowInterface has methods to work with Traceflow resources.
 type TraceflowInterface interface {
-	Create(*v1alpha1.Traceflow) (*v1alpha1.Traceflow, error)
-	Update(*v1alpha1.Traceflow) (*v1alpha1.Traceflow, error)
-	UpdateStatus(*v1alpha1.Traceflow) (*v1alpha1.Traceflow, error)
-	Delete(name string, options *v1.DeleteOptions) error
-	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
-	Get(name string, options v1.GetOptions) (*v1alpha1.Traceflow, error)
-	List(opts v1.ListOptions) (*v1alpha1.TraceflowList, error)
-	Watch(opts v1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.Traceflow, err error)
+	Create(ctx context.Context, traceflow *v1alpha1.Traceflow, opts v1.CreateOptions) (*v1alpha1.Traceflow, error)
+	Update(ctx context.Context, traceflow *v1alpha1.Traceflow, opts v1.UpdateOptions) (*v1alpha1.Traceflow, error)
+	UpdateStatus(ctx context.Context, traceflow *v1alpha1.Traceflow, opts v1.UpdateOptions) (*v1alpha1.Traceflow, error)
+	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.Traceflow, error)
+	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.TraceflowList, error)
+	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.Traceflow, err error)
 	TraceflowExpansion
 }
 
@@ -60,19 +61,19 @@ func newTraceflows(c *OpsV1alpha1Client) *traceflows {
 }
 
 // Get takes name of the traceflow, and returns the corresponding traceflow object, and an error if there is any.
-func (c *traceflows) Get(name string, options v1.GetOptions) (result *v1alpha1.Traceflow, err error) {
+func (c *traceflows) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Traceflow, err error) {
 	result = &v1alpha1.Traceflow{}
 	err = c.client.Get().
 		Resource("traceflows").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // List takes label and field selectors, and returns the list of Traceflows that match those selectors.
-func (c *traceflows) List(opts v1.ListOptions) (result *v1alpha1.TraceflowList, err error) {
+func (c *traceflows) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.TraceflowList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -82,13 +83,13 @@ func (c *traceflows) List(opts v1.ListOptions) (result *v1alpha1.TraceflowList, 
 		Resource("traceflows").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Watch returns a watch.Interface that watches the requested traceflows.
-func (c *traceflows) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *traceflows) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -98,81 +99,84 @@ func (c *traceflows) Watch(opts v1.ListOptions) (watch.Interface, error) {
 		Resource("traceflows").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(ctx)
 }
 
 // Create takes the representation of a traceflow and creates it.  Returns the server's representation of the traceflow, and an error, if there is any.
-func (c *traceflows) Create(traceflow *v1alpha1.Traceflow) (result *v1alpha1.Traceflow, err error) {
+func (c *traceflows) Create(ctx context.Context, traceflow *v1alpha1.Traceflow, opts v1.CreateOptions) (result *v1alpha1.Traceflow, err error) {
 	result = &v1alpha1.Traceflow{}
 	err = c.client.Post().
 		Resource("traceflows").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(traceflow).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Update takes the representation of a traceflow and updates it. Returns the server's representation of the traceflow, and an error, if there is any.
-func (c *traceflows) Update(traceflow *v1alpha1.Traceflow) (result *v1alpha1.Traceflow, err error) {
+func (c *traceflows) Update(ctx context.Context, traceflow *v1alpha1.Traceflow, opts v1.UpdateOptions) (result *v1alpha1.Traceflow, err error) {
 	result = &v1alpha1.Traceflow{}
 	err = c.client.Put().
 		Resource("traceflows").
 		Name(traceflow.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(traceflow).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-
-func (c *traceflows) UpdateStatus(traceflow *v1alpha1.Traceflow) (result *v1alpha1.Traceflow, err error) {
+func (c *traceflows) UpdateStatus(ctx context.Context, traceflow *v1alpha1.Traceflow, opts v1.UpdateOptions) (result *v1alpha1.Traceflow, err error) {
 	result = &v1alpha1.Traceflow{}
 	err = c.client.Put().
 		Resource("traceflows").
 		Name(traceflow.Name).
 		SubResource("status").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(traceflow).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Delete takes name of the traceflow and deletes it. Returns an error if one occurs.
-func (c *traceflows) Delete(name string, options *v1.DeleteOptions) error {
+func (c *traceflows) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Resource("traceflows").
 		Name(name).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *traceflows) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+func (c *traceflows) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	var timeout time.Duration
-	if listOptions.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	if listOpts.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
 		Resource("traceflows").
-		VersionedParams(&listOptions, scheme.ParameterCodec).
+		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // Patch applies the patch and returns the patched traceflow.
-func (c *traceflows) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.Traceflow, err error) {
+func (c *traceflows) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.Traceflow, err error) {
 	result = &v1alpha1.Traceflow{}
 	err = c.client.Patch(pt).
 		Resource("traceflows").
-		SubResource(subresources...).
 		Name(name).
+		SubResource(subresources...).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(data).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package v1beta1
 
 import (
+	"context"
 	"time"
 
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -34,9 +35,9 @@ type AppliedToGroupsGetter interface {
 
 // AppliedToGroupInterface has methods to work with AppliedToGroup resources.
 type AppliedToGroupInterface interface {
-	Get(name string, options v1.GetOptions) (*v1beta1.AppliedToGroup, error)
-	List(opts v1.ListOptions) (*v1beta1.AppliedToGroupList, error)
-	Watch(opts v1.ListOptions) (watch.Interface, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.AppliedToGroup, error)
+	List(ctx context.Context, opts v1.ListOptions) (*v1beta1.AppliedToGroupList, error)
+	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	AppliedToGroupExpansion
 }
 
@@ -53,19 +54,19 @@ func newAppliedToGroups(c *NetworkingV1beta1Client) *appliedToGroups {
 }
 
 // Get takes name of the appliedToGroup, and returns the corresponding appliedToGroup object, and an error if there is any.
-func (c *appliedToGroups) Get(name string, options v1.GetOptions) (result *v1beta1.AppliedToGroup, err error) {
+func (c *appliedToGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.AppliedToGroup, err error) {
 	result = &v1beta1.AppliedToGroup{}
 	err = c.client.Get().
 		Resource("appliedtogroups").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // List takes label and field selectors, and returns the list of AppliedToGroups that match those selectors.
-func (c *appliedToGroups) List(opts v1.ListOptions) (result *v1beta1.AppliedToGroupList, err error) {
+func (c *appliedToGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.AppliedToGroupList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -75,13 +76,13 @@ func (c *appliedToGroups) List(opts v1.ListOptions) (result *v1beta1.AppliedToGr
 		Resource("appliedtogroups").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Watch returns a watch.Interface that watches the requested appliedToGroups.
-func (c *appliedToGroups) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *appliedToGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -91,5 +92,5 @@ func (c *appliedToGroups) Watch(opts v1.ListOptions) (watch.Interface, error) {
 		Resource("appliedtogroups").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(ctx)
 }
