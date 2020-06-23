@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -33,6 +34,8 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 )
 
 type formatterType string
@@ -72,6 +75,7 @@ const (
 const (
 	flat commandGroup = iota
 	get
+	query
 )
 
 var groupCommands = map[commandGroup]*cobra.Command{
@@ -79,6 +83,11 @@ var groupCommands = map[commandGroup]*cobra.Command{
 		Use:   "get",
 		Short: "Get the status or resource of a topic",
 		Long:  "Get the status or resource of a topic",
+	},
+	query: {
+		Use:   "query",
+		Short: "List relevant resources to an endpoint",
+		Long:  "List relevant resources to an endpoint",
 	},
 }
 
@@ -430,19 +439,24 @@ func (cd *commandDefinition) tableOutputForGetCommands(obj interface{}, writer i
 			return true
 		})
 	}
+	// Construct the table.
+	numRows, numCols := len(list)+1, len(args)
+	widths := getColumnWidths(numRows, numCols, rows)
+	return constructTable(numRows, numCols, widths, rows, writer)
+}
 
-	numColumns := len(args)
-	widths := make([]int, numColumns)
-	if numColumns == 1 {
+func getColumnWidths(numRows int, numCols int, rows [][]string) []int {
+	widths := make([]int, numCols)
+	if numCols == 1 {
 		// Do not limit the column length for a single column table.
 		// This is for the case a single column table can have long rows which cannot
 		// fit into a single line (one example is the ovsflows outputs).
 		widths[0] = 0
 	} else {
 		// Get the width of every column.
-		for j := 0; j < numColumns; j++ {
+		for j := 0; j < numCols; j++ {
 			width := len(rows[0][j])
-			for i := 1; i < len(list)+1; i++ {
+			for i := 1; i < numRows; i++ {
 				if len(rows[i][j]) == 0 {
 					rows[i][j] = "<NONE>"
 				}
@@ -456,11 +470,13 @@ func (cd *commandDefinition) tableOutputForGetCommands(obj interface{}, writer i
 			}
 		}
 	}
+	return widths
+}
 
-	// Construct the table.
+func constructTable(numRows int, numCols int, widths []int, rows [][]string, writer io.Writer) error {
 	var buffer bytes.Buffer
-	for i := 0; i < len(list)+1; i++ {
-		for j := 0; j < len(args); j++ {
+	for i := 0; i < numRows; i++ {
+		for j := 0; j < numCols; j++ {
 			val := ""
 			if j != 0 {
 				val = " " + val
@@ -477,6 +493,111 @@ func (cd *commandDefinition) tableOutputForGetCommands(obj interface{}, writer i
 		return fmt.Errorf("error when copy output into writer: %w", err)
 	}
 
+	return nil
+}
+
+// tableOutputForQueryEndpoint implements printing sub tables (list of tables) for each response, utilizing constructTable
+// with multiplicity.
+func (cd *commandDefinition) tableOutputForQueryEndpoint(obj interface{}, writer io.Writer) error {
+	// intermittent new line buffer
+	var buffer bytes.Buffer
+	newLine := func() error {
+		buffer.WriteString("\n")
+		if _, err := io.Copy(writer, &buffer); err != nil {
+			return fmt.Errorf("error when copy output into writer: %w", err)
+		}
+		buffer.Reset()
+		return nil
+	}
+	// sort rows of sub table
+	sortRows := func(rows [][]string) {
+		body := rows[1:]
+		sort.Slice(body, func(i, j int) bool {
+			for k := range body[i] {
+				if body[i][k] != body[j][k] {
+					return body[i][k] < body[j][k]
+				}
+			}
+			return true
+		})
+	}
+	// constructs sub tables for responses
+	constructSubTable := func(header [][]string, body [][]string) error {
+		rows := append(header, body...)
+		sortRows(rows)
+		numRows, numCol := len(rows), len(rows[0])
+		widths := getColumnWidths(numRows, numCol, rows)
+		if err := constructTable(numRows, numCol, widths, rows, writer); err != nil {
+			return err
+		}
+		return nil
+	}
+	// construct sections of sub tables for responses (applied, ingress, egress)
+	constructSection := func(label [][]string, header [][]string, body [][]string, nonEmpty bool) error {
+		if err := constructSubTable(label, [][]string{}); err != nil {
+			return err
+		}
+		if nonEmpty {
+			if err := constructSubTable(header, body); err != nil {
+				return err
+			}
+		}
+		if err := newLine(); err != nil {
+			return err
+		}
+		return nil
+	}
+	// iterate through each endpoint and construct response
+	endpointQueryResponse := obj.(*networkpolicy.EndpointQueryResponse)
+	for _, endpoint := range endpointQueryResponse.Endpoints {
+		// transform applied policies to string representation
+		policies := make([][]string, 0)
+		for _, policy := range endpoint.Policies {
+			policyStr := []string{policy.Name, policy.Namespace, string(policy.UID)}
+			policies = append(policies, policyStr)
+		}
+		// transform egress and ingress rules to string representation
+		egress, ingress := make([][]string, 0), make([][]string, 0)
+		for _, rule := range endpoint.Rules {
+			ruleStr := []string{rule.Name, rule.Namespace, strconv.Itoa(rule.RuleIndex), string(rule.UID)}
+			if rule.Direction == v1beta1.DirectionIn {
+				ingress = append(ingress, ruleStr)
+			} else if rule.Direction == v1beta1.DirectionOut {
+				egress = append(egress, ruleStr)
+			}
+		}
+		// table label
+		if err := constructSubTable([][]string{{"Endpoint " + endpoint.Namespace + "/" + endpoint.Name}}, [][]string{}); err != nil {
+			return err
+		}
+		// applied policies
+		nonEmpty := len(policies) > 0
+		policyLabel := []string{"Applied Policies: None"}
+		if nonEmpty {
+			policyLabel = []string{"Applied Policies:"}
+		}
+		if err := constructSection([][]string{policyLabel}, [][]string{{"Name", "Namespace", "UID"}}, policies, nonEmpty); err != nil {
+			return err
+		}
+		// egress rules
+		nonEmpty = len(egress) > 0
+		egressLabel := []string{"Egress Rules: None"}
+		if nonEmpty {
+			egressLabel = []string{"Egress Rules:"}
+		}
+		if err := constructSection([][]string{egressLabel}, [][]string{{"Name", "Namespace", "Index", "UID"}}, egress, nonEmpty); err != nil {
+			return err
+		}
+		// ingress rules
+		nonEmpty = len(ingress) > 0
+		ingressLabel := []string{"Ingress Rules: None"}
+		if nonEmpty {
+			ingressLabel = []string{"Ingress Rules:"}
+		}
+		if err := constructSection([][]string{ingressLabel}, [][]string{{"Name", "Namespace", "Index", "UID"}}, ingress, nonEmpty); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -576,7 +697,6 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 		}
 		klog.Infof("After transforming %v", obj)
 	}
-
 	// Output structure data in format
 	switch ft {
 	case jsonFormatter:
@@ -586,12 +706,17 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 	case tableFormatter:
 		if cd.commandGroup == get {
 			return cd.tableOutputForGetCommands(obj, writer)
+		} else if cd.commandGroup == query {
+			if cd.controllerEndpoint.nonResourceEndpoint.path == "/endpoint" {
+				return cd.tableOutputForQueryEndpoint(obj, writer)
+			}
 		} else {
 			return cd.tableOutput(obj, writer)
 		}
 	default:
 		return fmt.Errorf("unsupport format type: %v", ft)
 	}
+	return nil
 }
 
 func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (map[string]string, error) {
@@ -670,6 +795,8 @@ func (cd *commandDefinition) applyFlagsToCommand(cmd *cobra.Command) {
 	}
 	if cd.commandGroup == get {
 		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
+	} else if cd.commandGroup == query {
+		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
 	} else {
 		cmd.Flags().StringP("output", "o", "yaml", "output format: json|table|yaml")
 	}
@@ -685,7 +812,6 @@ func (cd *commandDefinition) applyExampleToCommand(cmd *cobra.Command) {
 		cmd.Example = cd.example
 		return
 	}
-
 	var commands []string
 	for iter := cmd; iter != nil; iter = iter.Parent() {
 		commands = append(commands, iter.Name())

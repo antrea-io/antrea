@@ -1132,7 +1132,10 @@ func TestAddPod(t *testing.T) {
 			} else {
 				assert.Len(t, podsAdded, 0, "expected Pod not to match AppliedToGroup")
 			}
-			memberPod := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
+			memberPod := &networking.GroupMemberPod{
+				IP:  ipStrToIPAddress("1.2.3.4"),
+				Pod: &networking.PodReference{Name: "podA", Namespace: "nsA"},
+			}
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod))
 		})
@@ -1315,8 +1318,14 @@ func TestAddNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			memberPod1 := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
-			memberPod2 := &networking.GroupMemberPod{IP: ipStrToIPAddress("2.2.3.4")}
+			memberPod1 := &networking.GroupMemberPod{
+				IP:  ipStrToIPAddress("1.2.3.4"),
+				Pod: &networking.PodReference{Name: "p1", Namespace: "nsA"},
+			}
+			memberPod2 := &networking.GroupMemberPod{
+				IP:  ipStrToIPAddress("2.2.3.4"),
+				Pod: &networking.PodReference{Name: "p2", Namespace: "nsA"},
+			}
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod1))
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod2))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod1))

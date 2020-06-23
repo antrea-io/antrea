@@ -34,6 +34,7 @@ import (
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	controllerinforest "github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
+	controllernetworkpolicy "github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 )
 
 // CommandList defines all commands that could be used in the antctl for both agents
@@ -317,6 +318,35 @@ var CommandList = &commandList{
 			},
 			commandGroup:        flat,
 			transformedResponse: reflect.TypeOf(ovstracing.Response{}),
+		},
+		{
+			use:     "endpoint",
+			aliases: []string{"endpoints"},
+			short:   "Filter network policies relevant to an endpoint.",
+			long:    "Filter network policies relevant to an endpoint into three categories: network policies which apply to the endpoint and policies which select the endpoint in an ingress and/or egress rule.",
+			example: `  Query network policies given pod and namespace
+  $ antctl query endpoint -p pod1 -n ns1
+`,
+			commandGroup: query,
+			controllerEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/endpoint",
+					params: []flagInfo{
+						{
+							name:      "namespace",
+							usage:     "Namespace of the endpoint (required)",
+							shorthand: "n",
+						},
+						{
+							name:      "pod",
+							usage:     "Name of a local Pod (required)",
+							shorthand: "p",
+						},
+					},
+					outputType: single,
+				},
+			},
+			transformedResponse: reflect.TypeOf(controllernetworkpolicy.EndpointQueryResponse{}),
 		},
 	},
 	rawCommands: []rawCommand{
