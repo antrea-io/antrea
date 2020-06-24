@@ -27,8 +27,7 @@ For the requirements to deploy Elastiflow, please refer to
 [this](https://github.com/robcowart/elastiflow/blob/master/INSTALL.md#requirements).
 
 ## Instruction
-To put everything in elastiflow namespace and get the configuration up and
-running, run:
+To create all the necessary resources in the `elastiflow` namespace and get everything up-and-running, run:
 ```shell script
 kubectl create namespace elastiflow
 kubectl create configmap logstash-configmap -n elastiflow --from-file=build/yamls/elastiflow/logstash/
