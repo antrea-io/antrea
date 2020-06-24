@@ -190,12 +190,6 @@ spec:
   ports:
     - port: 4739
       targetPort: 4739
-      protocol: TCP
-      name: tcp
-    - port: 4739
-      targetPort: 4739
-      protocol: UDP
-      name: udp
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -232,11 +226,6 @@ spec:
               value: "/usr/share/logstash/definitions"
           ports:
             - containerPort: 4739
-              protocol: TCP
-              name: tcp
-            - containerPort: 4739
-              protocol: UDP
-              name: udp
       volumes:
         - name: logstash-definition-volume
           configMap:

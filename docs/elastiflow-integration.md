@@ -1,9 +1,9 @@
 # Elastiflow Integration
 ## Purpose
 Antrea supports sending IPFIX flow records as flow exporter. Elastiflow works
-as data collector for flow records and visualizes the flow-related information
-in Kibana. This doc provides guidelines for deploying Elastiflow with
-Antrea-specific fields in Kubenetes cluster.
+as a data collector for flow records and flow-related information can be visualized
+in Kibana. This doc provides guidelines for deploying Elastiflow with support for
+Antrea-specific fields in a Kubenetes cluster.
 
 ## About Elastiflow
 [Elastiflow](https://github.com/robcowart/elastiflow) is a network flow data
@@ -27,14 +27,13 @@ For the requirements to deploy Elastiflow, please refer to
 [this](https://github.com/robcowart/elastiflow/blob/master/INSTALL.md#requirements).
 
 ## Instruction
-To put everything in elastiflow namespace and get the configuration up and
-running, run:
-```shell script
+To create all the necessary resources in the `elastiflow` namespace and get everything up-and-running, run:
+```shell
 kubectl create namespace elastiflow
 kubectl create configmap logstash-configmap -n elastiflow --from-file=build/yamls/elastiflow/logstash/
 kubectl apply -n elastiflow -f build/yamls/elastiflow/elastiflow.yml
 ```
 Kibana dashboard is exposed as a Nodeport, which can be accessed via `http://[NodeIP]: 30007`
 ```
-To import the dashboard into Kibana, go to `Management -> Saved Objects` and
+To import the dashboard into Kibana, go to **Management -> Saved Objects** and
 import `build/yamls/elastiflow/kibana.ndjson`
