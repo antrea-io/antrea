@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 
+source logging
+
 # Find the cni conf file with lowest name
-cni_conf=$(ls /host/etc/cni/net.d | head -n1)
+while true; do
+  cni_conf=$(ls /host/etc/cni/net.d | head -n1)
+  if [[ ! -z $cni_conf ]]; then
+    break
+  fi
+  log_info "CNI conf file not found. Retrying after 2 secs"
+  sleep 2s
+done
 cni_conf="/host/etc/cni/net.d/$cni_conf"
 cat $cni_conf | jq '.plugins[] | .type' | grep antrea > /dev/null 2>&1
 if [[ $? != 0 ]]; then
