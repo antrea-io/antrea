@@ -1,9 +1,9 @@
 # Elastiflow Integration
 ## Purpose
 Antrea supports sending IPFIX flow records as flow exporter. Elastiflow works
-as data collector for flow records and visualizes the flow-related information
+as a data collector for flow records and flow-related information can be visualized
 in Kibana. This doc provides guidelines for deploying Elastiflow with
-Antrea-specific fields in Kubenetes cluster.
+support for Antrea-specific fields in a Kubernetes cluster.
 
 ## About Elastiflow
 [Elastiflow](https://github.com/robcowart/elastiflow) is a network flow data
