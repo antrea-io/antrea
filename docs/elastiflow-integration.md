@@ -34,6 +34,6 @@ kubectl create configmap logstash-configmap -n elastiflow --from-file=build/yaml
 kubectl apply -n elastiflow -f build/yamls/elastiflow/elastiflow.yml
 ```
 Kibana dashboard is exposed as a Nodeport, which can be accessed via `http://[NodeIP]: 30007`
-```
+
 To import the dashboard into Kibana, go to **Management -> Saved Objects** and
 import `build/yamls/elastiflow/kibana.ndjson`
