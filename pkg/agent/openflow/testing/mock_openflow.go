@@ -53,31 +53,31 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // AddPolicyRuleAddress mocks base method
-func (m *MockClient) AddPolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address) error {
+func (m *MockClient) AddPolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address, arg3 *uint16) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddPolicyRuleAddress", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddPolicyRuleAddress", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddPolicyRuleAddress indicates an expected call of AddPolicyRuleAddress
-func (mr *MockClientMockRecorder) AddPolicyRuleAddress(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) AddPolicyRuleAddress(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).AddPolicyRuleAddress), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).AddPolicyRuleAddress), arg0, arg1, arg2, arg3)
 }
 
 // DeletePolicyRuleAddress mocks base method
-func (m *MockClient) DeletePolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address) error {
+func (m *MockClient) DeletePolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address, arg3 *uint16) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeletePolicyRuleAddress", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "DeletePolicyRuleAddress", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeletePolicyRuleAddress indicates an expected call of DeletePolicyRuleAddress
-func (mr *MockClientMockRecorder) DeletePolicyRuleAddress(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) DeletePolicyRuleAddress(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).DeletePolicyRuleAddress), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).DeletePolicyRuleAddress), arg0, arg1, arg2, arg3)
 }
 
 // DeleteStaleFlows mocks base method
@@ -361,18 +361,18 @@ func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
 }
 
-// ReassignActionPriority mocks base method
-func (m *MockClient) ReassignActionPriority(arg0 map[uint16]uint16) error {
+// ReassignFlowPriorities mocks base method
+func (m *MockClient) ReassignFlowPriorities(arg0 map[uint16]uint16) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReassignActionPriority", arg0)
+	ret := m.ctrl.Call(m, "ReassignFlowPriorities", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ReassignActionPriority indicates an expected call of ReassignActionPriority
-func (mr *MockClientMockRecorder) ReassignActionPriority(arg0 interface{}) *gomock.Call {
+// ReassignFlowPriorities indicates an expected call of ReassignFlowPriorities
+func (mr *MockClientMockRecorder) ReassignFlowPriorities(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignActionPriority", reflect.TypeOf((*MockClient)(nil).ReassignActionPriority), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignFlowPriorities", reflect.TypeOf((*MockClient)(nil).ReassignFlowPriorities), arg0)
 }
 
 // ReplayFlows mocks base method

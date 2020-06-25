@@ -46,7 +46,9 @@ const (
 // calculate an ID based on the rule's fields. That means:
 // 1. If a rule's selector/services/direction changes, it becomes "another" rule.
 // 2. If inserting rules before a rule or shuffling rules in a NetworkPolicy, we
-//    can know the existing rules don't change and skip processing them.
+//    can know the existing rules don't change and skip processing them. Note that
+//    if the rule's position (from top down) within a networkpolicy changes, it
+//    affects the Priority of the rule.
 type rule struct {
 	// ID is calculated from the hash value of all other fields.
 	ID string
@@ -58,11 +60,11 @@ type rule struct {
 	To v1beta1.NetworkPolicyPeer
 	// Protocols and Ports of this rule.
 	Services []v1beta1.Service
-	// Action of this rule. nil for k8s network policy.
+	// Action of this rule. nil for k8s NetworkPolicy.
 	Action *secv1alpha1.RuleAction
-	// Priority of this rule within the network policy.
+	// Priority of this rule within the NetworkPolicy.
 	Priority int32
-	// Priority of the network policy to which this rule belong. nil for k8s network policy.
+	// Priority of the NetworkPolicy to which this rule belong. nil for k8s NetworkPolicy.
 	PolicyPriority *float64
 	// Targets of this rule.
 	AppliedToGroups []string
@@ -71,7 +73,8 @@ type rule struct {
 	PolicyUID types.UID
 	// The metadata of parent Policy. Used to associate the rule with Policy
 	// for troubleshooting purpose (logging and CLI).
-	PolicyName      string
+	PolicyName string
+	// PolicyNamespace is empty for ClusterNetworkPolicy.
 	PolicyNamespace string
 }
 
@@ -104,9 +107,11 @@ func (r *CompletedRule) String() string {
 	} else {
 		addressString = fmt.Sprintf("ToAddressGroups: %d, ToIPBlocks: %d, ToAddresses: %d", len(r.To.AddressGroups), len(r.To.IPBlocks), len(r.ToAddresses))
 	}
-	return fmt.Sprintf("%s (Direction: %v, Pods: %d, %s, Services: %d)", r.ID, r.Direction, len(r.Pods), addressString, len(r.Services))
+	return fmt.Sprintf("%s (Direction: %v, Pods: %d, %s, Services: %d, PolicyPriority: %v, RulePriority: %v)",
+		r.ID, r.Direction, len(r.Pods), addressString, len(r.Services), r.PolicyPriority, r.Priority)
 }
 
+// isAntreaNetworkPolicyRule returns if the rule is part of a ClusterNetworkPolicy.
 func (r *CompletedRule) isAntreaNetworkPolicyRule() bool {
 	return r.PolicyPriority != nil
 }

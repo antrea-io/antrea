@@ -96,10 +96,8 @@ spec:
                 # Ensure that Spec.AppliedTo does not allow IPBlock field
                 properties:
                   podSelector:
-                    type: object
                     x-kubernetes-preserve-unknown-fields: true
                   namespaceSelector:
-                    type: object
                     x-kubernetes-preserve-unknown-fields: true
             ingress:
               type: array

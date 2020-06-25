@@ -27,14 +27,14 @@ import (
 
 const (
 	PriorityBottomCNP     = uint16(100)
-	InitialPriorityOffest = uint16(130)
+	InitialPriorityOffset = uint16(130)
 	InitialPriorityZones  = 100
 	DefaultTierStart      = uint16(13100)
 )
 
 // priorityAssigner is a struct that maintains the current boundaries of
 // all ClusterNetworkPolicy category/priorities and rule priorities, and knows
-// how to re-assgin priorities if certain section overflows.
+// how to re-assign priorities if certain section overflows.
 type priorityAssigner struct {
 	// priorityHash maintains the current mapping between a known CNP priority to OF priority.
 	priorityHash map[Priority]uint16
@@ -46,10 +46,10 @@ type priorityAssigner struct {
 	numPriorityZones int32
 }
 
-func newPriorityAssinger() *priorityAssigner {
+func newPriorityAssigner() *priorityAssigner {
 	pa := &priorityAssigner{
 		priorityHash:     map[Priority]uint16{},
-		priorityOffset:   InitialPriorityOffest,
+		priorityOffset:   InitialPriorityOffset,
 		numPriorityZones: InitialPriorityZones,
 	}
 	return pa
@@ -109,7 +109,7 @@ func (pa *priorityAssigner) getIndexSamePriorityZone(p Priority) []Priority {
 func (pa *priorityAssigner) syncPriorityZone(p Priority) (*uint16, map[uint16]uint16, error) {
 
 	// newPriority is the OF priority to be assigned for a new priority.
-	// For priority Forget, newPriority returned should be nil.
+	// For priority Release, newPriority returned should be nil.
 	var newPriority uint16
 	// priorityUpdates stores all the OF priority re-assignments to be performed by client
 	priorityUpdates := map[uint16]uint16{}
@@ -145,8 +145,7 @@ func (pa *priorityAssigner) GetOFPriority(p Priority) (*uint16, map[uint16]uint1
 	return &ofPriority, map[uint16]uint16{}, nil
 }
 
-// Forget removes the priority that currently corresponds to the input OFPriority from the priorityHash,
-// and returns installed priorities that need to be re-assigned if necessary.
+// Release removes the priority that currently corresponds to the input OFPriority from the priorityHash.
 func (pa *priorityAssigner) Release(priorityStr string) error {
 	priorityNum, err := strconv.ParseUint(priorityStr, 10, 16)
 	if err != nil {
@@ -159,6 +158,6 @@ func (pa *priorityAssigner) Release(priorityStr string) error {
 			return nil
 		}
 	}
-	klog.Infof("OF priority %s not stored in hash, skip forgetting priority.", priorityStr)
+	klog.Infof("OF priority %s not stored in hash, skip releasing priority.", priorityStr)
 	return nil
 }

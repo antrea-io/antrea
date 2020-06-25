@@ -60,7 +60,7 @@ func TestPolicyRuleConjunction(t *testing.T) {
 
 	var addedAddrs = parseAddresses([]string{"192.168.1.3", "192.168.1.30", "192.168.2.0/24", "103", "104"})
 	expectConjunctionsCount([]*expectConjunctionTimes{{5, ruleID1, clauseID, nClause}})
-	flowChanges1 := clause1.addAddrFlows(c, types.SrcAddress, addedAddrs)
+	flowChanges1 := clause1.addAddrFlows(c, types.SrcAddress, addedAddrs, nil)
 	err := c.applyConjunctiveMatchFlows(flowChanges1)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	checkFlowCount(t, len(addedAddrs))
@@ -70,7 +70,7 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	var currentFlowCount = len(c.globalConjMatchFlowCache)
 
 	var deletedAddrs = parseAddresses([]string{"192.168.1.3", "103"})
-	flowChanges2 := clause1.deleteAddrFlows(types.SrcAddress, deletedAddrs)
+	flowChanges2 := clause1.deleteAddrFlows(types.SrcAddress, deletedAddrs, nil)
 	err = c.applyConjunctiveMatchFlows(flowChanges2)
 	require.Nil(t, err, "Failed to invoke deleteAddrFlows")
 	checkFlowCount(t, currentFlowCount-len(deletedAddrs))
@@ -85,7 +85,7 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	var addedAddrs2 = parseAddresses([]string{"192.168.1.30", "192.168.1.50"})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID2, clauseID2, nClause}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID1, clauseID, nClause}})
-	flowChanges3 := clause2.addAddrFlows(c, types.SrcAddress, addedAddrs2)
+	flowChanges3 := clause2.addAddrFlows(c, types.SrcAddress, addedAddrs2, nil)
 	err = c.applyConjunctiveMatchFlows(flowChanges3)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	testAddr := NewIPAddress(net.ParseIP("192.168.1.30"))
@@ -101,12 +101,12 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	nClause3 := uint8(1)
 	clause3 := conj3.newClause(clauseID3, nClause3, outTable, outDropTable)
 	var addedAddrs3 = parseAddresses([]string{"192.168.1.30"})
-	flowChanges4 := clause3.addAddrFlows(c, types.SrcAddress, addedAddrs3)
+	flowChanges4 := clause3.addAddrFlows(c, types.SrcAddress, addedAddrs3, nil)
 	err = c.applyConjunctiveMatchFlows(flowChanges4)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	checkConjMatchFlowActions(t, c, clause3, testAddr, types.SrcAddress, 2, 1)
 	checkFlowCount(t, currentFlowCount)
-	flowChanges5 := clause3.deleteAddrFlows(types.SrcAddress, addedAddrs3)
+	flowChanges5 := clause3.deleteAddrFlows(types.SrcAddress, addedAddrs3, nil)
 	err = c.applyConjunctiveMatchFlows(flowChanges5)
 	require.Nil(t, err, "Failed to invoke deleteAddrFlows")
 	checkConjMatchFlowActions(t, c, clause3, testAddr, types.SrcAddress, 2, 0)
@@ -238,7 +238,7 @@ func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 		id: ruleID1,
 	}
 	clause1 := conj1.newClause(1, 3, outTable, outDropTable)
-	flowChange1 := clause1.addAddrFlows(c, types.DstAddress, parseAddresses([]string{ip.String()}))
+	flowChange1 := clause1.addAddrFlows(c, types.DstAddress, parseAddresses([]string{ip.String()}), nil)
 	err := c.applyConjunctiveMatchFlows(flowChange1)
 	require.Nil(t, err, "no error expect in applyConjunctiveMatchFlows")
 
@@ -247,11 +247,11 @@ func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 		id: ruleID2,
 	}
 	clause2 := conj2.newClause(1, 3, outTable, outDropTable)
-	flowChange2 := clause2.addAddrFlows(c, types.DstAddress, parseAddresses([]string{ipNet.String()}))
+	flowChange2 := clause2.addAddrFlows(c, types.DstAddress, parseAddresses([]string{ipNet.String()}), nil)
 	err = c.applyConjunctiveMatchFlows(flowChange2)
 	require.Nil(t, err, "no error expect in applyConjunctiveMatchFlows")
 
-	expectedMatchKey := fmt.Sprintf("table:%d,type:%d,value:%s", egressRuleTable, MatchDstIPNet, ipNet.String())
+	expectedMatchKey := fmt.Sprintf("table:%d,priority:%s,type:%d,value:%s", egressRuleTable, DefaultPriorityStr, MatchDstIPNet, ipNet.String())
 	ctx, found := c.globalConjMatchFlowCache[expectedMatchKey]
 	assert.True(t, found)
 	assert.Equal(t, 2, len(ctx.actions))
@@ -327,7 +327,7 @@ func checkFlowCount(t *testing.T, expectCount int) {
 }
 
 func checkConjMatchFlowActions(t *testing.T, client *client, c *clause, address types.Address, addressType types.AddressType, actionCount int, anyDropRuleCount int) {
-	addrMatch := c.generateAddressConjMatch(address, addressType)
+	addrMatch := c.generateAddressConjMatch(address, addressType, nil)
 	context, found := client.globalConjMatchFlowCache[addrMatch.generateGlobalMapKey()]
 	require.True(t, found, "Failed to add conjunctive match flow to global cache")
 	assert.Equal(t, actionCount, len(context.actions), fmt.Sprintf("Incorrect policyRuleConjunction action number, expect: %d, actual: %d", actionCount, len(context.actions)))

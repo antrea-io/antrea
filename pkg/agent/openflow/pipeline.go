@@ -864,10 +864,10 @@ func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.
 }
 
 // conjunctiveMatchFlow generates the flow to set conjunctive actions if the match condition is matched.
-func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey int, matchValue interface{}, actions ...*conjunctiveAction) binding.Flow {
+func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey int, matchValue interface{}, priority *uint16, actions ...*conjunctiveAction) binding.Flow {
 	var ofPriority uint16
-	if tableID == cnpEgressRuleTable || tableID == cnpIngressRuleTable {
-		ofPriority = priorityTopCNP
+	if priority != nil {
+		ofPriority = *priority
 	} else {
 		ofPriority = priorityNormal
 	}

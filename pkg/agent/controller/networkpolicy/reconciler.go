@@ -170,7 +170,7 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 		ifaceStore:       ifaceStore,
 		lastRealizeds:    sync.Map{},
 		idAllocator:      newIDAllocator(),
-		priorityAssigner: newPriorityAssinger(),
+		priorityAssigner: newPriorityAssigner(),
 	}
 	return reconciler
 }
@@ -211,7 +211,7 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 // and re-arrange installed priorities on OVS if necessary.
 func (r *reconciler) getOFPriority(rule *CompletedRule) (*uint16, error) {
 	if rule.PolicyPriority == nil {
-		klog.V(4).Infof("Assigning default priority for k8s network policy.")
+		klog.V(2).Infof("Assigning default priority for k8s NetworkPolicy.")
 		return nil, nil
 	}
 	p := types.Priority{PolicyPriority: *rule.PolicyPriority, RulePriority: rule.Priority}
@@ -221,14 +221,14 @@ func (r *reconciler) getOFPriority(rule *CompletedRule) (*uint16, error) {
 	}
 	// Re-assign installed priorities on OVS
 	if len(priorityUpdates) > 0 {
-		err := r.ofClient.ReassignActionPriority(priorityUpdates)
+		err := r.ofClient.ReassignFlowPriorities(priorityUpdates)
 		if err != nil {
 			priorityStr := strconv.Itoa(int(*ofPriority))
 			r.priorityAssigner.Release(priorityStr)
 			return nil, err
 		}
 	}
-	klog.V(4).Infof("Assigning OFPriority %v for rule %v", *ofPriority, rule.ID)
+	klog.V(2).Infof("Assigning OFPriority %v for rule %v", *ofPriority, rule.ID)
 	return ofPriority, nil
 }
 
@@ -361,7 +361,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 			} else {
 				addedTo := ofPortsToOFAddresses(newOFPorts.Difference(lastRealized.podOFPorts[svcHash]))
 				deletedTo := ofPortsToOFAddresses(lastRealized.podOFPorts[svcHash].Difference(newOFPorts))
-				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo); err != nil {
+				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
 				// Delete valid servicesHash from staleOFIDs.
@@ -403,7 +403,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 			} else {
 				addedTo := podsToOFAddresses(pods.Difference(prevPodsByServicesMap[svcHash]))
 				deletedTo := podsToOFAddresses(prevPodsByServicesMap[svcHash].Difference(pods))
-				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo); err != nil {
+				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
 				// Delete valid servicesHash from staleOFIDs.
@@ -438,27 +438,27 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule, npName, npNamespace
 	return ofID, nil
 }
 
-func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedTo []types.Address, deletedFrom []types.Address, deletedTo []types.Address) error {
+func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedTo []types.Address, deletedFrom []types.Address, deletedTo []types.Address, priority *uint16) error {
 	klog.V(2).Infof("Updating ofRule %d (addedFrom: %d, addedTo: %d, deleteFrom: %d, deletedTo: %d)",
 		ofID, len(addedFrom), len(addedTo), len(deletedFrom), len(deletedTo))
 	// TODO: This might be unnecessarily complex and hard for error handling, consider revising the Openflow interfaces.
 	if len(addedFrom) > 0 {
-		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.SrcAddress, addedFrom); err != nil {
+		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.SrcAddress, addedFrom, priority); err != nil {
 			return fmt.Errorf("error adding policy rule source addresses for ofRule %v: %v", ofID, err)
 		}
 	}
 	if len(addedTo) > 0 {
-		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.DstAddress, addedTo); err != nil {
+		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.DstAddress, addedTo, priority); err != nil {
 			return fmt.Errorf("error adding policy rule destination addresses for ofRule %v: %v", ofID, err)
 		}
 	}
 	if len(deletedFrom) > 0 {
-		if err := r.ofClient.DeletePolicyRuleAddress(ofID, types.SrcAddress, deletedFrom); err != nil {
+		if err := r.ofClient.DeletePolicyRuleAddress(ofID, types.SrcAddress, deletedFrom, priority); err != nil {
 			return fmt.Errorf("error deleting policy rule source addresses for ofRule %v: %v", ofID, err)
 		}
 	}
 	if len(deletedTo) > 0 {
-		if err := r.ofClient.DeletePolicyRuleAddress(ofID, types.DstAddress, deletedTo); err != nil {
+		if err := r.ofClient.DeletePolicyRuleAddress(ofID, types.DstAddress, deletedTo, priority); err != nil {
 			return fmt.Errorf("error deleting policy rule destination addresses for ofRule %v: %v", ofID, err)
 		}
 	}

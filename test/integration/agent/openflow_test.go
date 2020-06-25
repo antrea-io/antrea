@@ -169,10 +169,10 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 
-	err = c.AddPolicyRuleAddress(ruleID, types.SrcAddress, prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"}))
+	err = c.AddPolicyRuleAddress(ruleID, types.SrcAddress, prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"}), nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 	ofport := int32(100)
-	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)})
+	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	testReplayFlows(t)
@@ -327,7 +327,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	checkDeleteAddress(t, ingressRuleTable, priorityNormal, ruleID, addedFrom, types.SrcAddress)
 
 	ofport := int32(100)
-	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)})
+	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// Dump flows.
@@ -411,7 +411,7 @@ func getCmdMatchKey(matchType int) string {
 }
 
 func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32, addedAddress []types.Address, addrType types.AddressType) {
-	err := c.AddPolicyRuleAddress(ruleID, addrType, addedAddress)
+	err := c.AddPolicyRuleAddress(ruleID, addrType, addedAddress, nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// dump flows
@@ -439,7 +439,7 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 }
 
 func checkDeleteAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32, addedAddress []types.Address, addrType types.AddressType) {
-	err := c.DeletePolicyRuleAddress(ruleID, addrType, addedAddress)
+	err := c.DeletePolicyRuleAddress(ruleID, addrType, addedAddress, nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 	flowList, err := ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
