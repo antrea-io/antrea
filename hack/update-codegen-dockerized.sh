@@ -89,7 +89,7 @@ MOCKGEN_TARGETS=(
   "pkg/ovs/ovsctl OVSCtlClient"
   "pkg/agent/querier AgentQuerier"
   "pkg/controller/querier ControllerQuerier"
-  "pkg/querier AgentNetworkPolicyInfoQuerier,ControllerNetworkPolicyInfoQuerier"
+  "pkg/querier AgentNetworkPolicyInfoQuerier"
 )
 
 # Command mockgen does not automatically replace variable YEAR with current year

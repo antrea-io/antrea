@@ -22,7 +22,7 @@ package testing
 import (
 	gomock "github.com/golang/mock/gomock"
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	querier "github.com/vmware-tanzu/antrea/pkg/querier"
+	types "github.com/vmware-tanzu/antrea/pkg/controller/types"
 	reflect "reflect"
 )
 
@@ -61,16 +61,18 @@ func (mr *MockControllerQuerierMockRecorder) GetControllerInfo(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetControllerInfo", reflect.TypeOf((*MockControllerQuerier)(nil).GetControllerInfo), arg0, arg1)
 }
 
-// GetNetworkPolicyInfoQuerier mocks base method
-func (m *MockControllerQuerier) GetNetworkPolicyInfoQuerier() querier.ControllerNetworkPolicyInfoQuerier {
+// QueryNetworkPolicies mocks base method
+func (m *MockControllerQuerier) QueryNetworkPolicies(arg0, arg1 string) ([]types.NetworkPolicy, []types.NetworkPolicy, []types.NetworkPolicy) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNetworkPolicyInfoQuerier")
-	ret0, _ := ret[0].(querier.ControllerNetworkPolicyInfoQuerier)
-	return ret0
+	ret := m.ctrl.Call(m, "QueryNetworkPolicies", arg0, arg1)
+	ret0, _ := ret[0].([]types.NetworkPolicy)
+	ret1, _ := ret[1].([]types.NetworkPolicy)
+	ret2, _ := ret[2].([]types.NetworkPolicy)
+	return ret0, ret1, ret2
 }
 
-// GetNetworkPolicyInfoQuerier indicates an expected call of GetNetworkPolicyInfoQuerier
-func (mr *MockControllerQuerierMockRecorder) GetNetworkPolicyInfoQuerier() *gomock.Call {
+// QueryNetworkPolicies indicates an expected call of QueryNetworkPolicies
+func (mr *MockControllerQuerierMockRecorder) QueryNetworkPolicies(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyInfoQuerier", reflect.TypeOf((*MockControllerQuerier)(nil).GetNetworkPolicyInfoQuerier))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryNetworkPolicies", reflect.TypeOf((*MockControllerQuerier)(nil).QueryNetworkPolicies), arg0, arg1)
 }

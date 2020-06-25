@@ -342,7 +342,7 @@ var CommandList = &commandList{
 							shorthand: "p",
 						},
 					},
-					outputType: defaultType,
+					outputType: single,
 				},
 				addonTransform: endpointtransform.Transform,
 			},

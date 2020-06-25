@@ -20,8 +20,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/vmware-tanzu/antrea/pkg/controller/apiserver/handlers/endpoint"
+	queriermock "github.com/vmware-tanzu/antrea/pkg/controller/querier/testing"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
-	queriermock "github.com/vmware-tanzu/antrea/pkg/querier/testing"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -68,6 +68,8 @@ var responses = []endpoint.Policies{
 				Name:      "policy2",
 			},
 		},
+		Egress: []antreatypes.NetworkPolicy{},
+		Ingress: []antreatypes.NetworkPolicy{},
 	},
 }
 
@@ -75,7 +77,7 @@ func TestIncompleteOrInvalidArguments(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	// sample selector arguments (right now, only supports podname and namespace)
-	podName, namespace := "podName", "namespace"
+	pod, namespace := "pod", "namespace"
 	// outline test cases with expected behavior
 	testCases := map[string]TestCase{
 		"Responds with empty list given no name and no namespace": {
@@ -97,10 +99,10 @@ func TestIncompleteOrInvalidArguments(t *testing.T) {
 			ingressMock: make([]antreatypes.NetworkPolicy, 0),
 		},
 		"Responds with empty list given no namespace": {
-			handlerArgs:           []string{"", podName},
+			handlerArgs:           []string{"", pod},
 			expectedStatus:  http.StatusOK,
 			expectedContent: responses[0],
-			argsMock: []string{"", podName},
+			argsMock: []string{"", pod},
 			appliedMock: make([]antreatypes.NetworkPolicy, 0),
 			egressMock: make([]antreatypes.NetworkPolicy, 0),
 			ingressMock: make([]antreatypes.NetworkPolicy, 0),
@@ -115,14 +117,14 @@ func TestSinglePolicyResponse(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	// sample selector arguments (right now, only supports podName and namespace)
-	podName, namespace := "podName", "namespace"
+	pod, namespace := "pod", "namespace"
 	// outline test cases with expected behavior
 	testCases := map[string]TestCase{
 		"Responds with list of single element": {
-			handlerArgs:           []string{namespace, podName},
+			handlerArgs:           []string{namespace, pod},
 			expectedStatus:  http.StatusOK,
 			expectedContent: responses[1],
-			argsMock: []string{namespace, podName},
+			argsMock: []string{namespace, pod},
 			appliedMock: []antreatypes.NetworkPolicy{
 				{
 					SpanMeta:  antreatypes.SpanMeta{},
@@ -142,14 +144,14 @@ func TestMultiPolicyResponse(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	// sample selector arguments (right now, only supports podName and namespace)
-	podName, namespace := "podName", "namespace"
+	pod, namespace := "pod", "namespace"
 	// outline test cases with expected behavior
 	testCases := map[string]TestCase{
 		"Responds with list of single element": {
-			handlerArgs:           []string{namespace, podName},
+			handlerArgs:           []string{namespace, pod},
 			expectedStatus:  http.StatusOK,
 			expectedContent: responses[2],
-			argsMock: []string{namespace, podName},
+			argsMock: []string{namespace, pod},
 			appliedMock: []antreatypes.NetworkPolicy{
 				{
 					SpanMeta:  antreatypes.SpanMeta{},
@@ -172,11 +174,8 @@ func TestMultiPolicyResponse(t *testing.T) {
 func evaluateTestCases(testCases map[string]TestCase, mockCtrl *gomock.Controller, t *testing.T) {
 	for k, tc := range testCases {
 		// create mock querier with expected behavior outlined in testCase
-		mockQuerier := queriermock.NewMockControllerNetworkPolicyInfoQuerier(mockCtrl)
-		println("hello")
-		println(tc.argsMock[0])
-		println(tc.argsMock[1])
-		mockQuerier.EXPECT().GetNetworkPolicies(tc.argsMock[0], tc.argsMock[1]).Return(tc.appliedMock, tc.egressMock,
+		mockQuerier := queriermock.NewMockControllerQuerier(mockCtrl)
+		mockQuerier.EXPECT().QueryNetworkPolicies(tc.argsMock[0], tc.argsMock[1]).Return(tc.appliedMock, tc.egressMock,
 			tc.ingressMock)
 		// initialize handler with mockQuerier
 		handler := endpoint.HandleFunc(mockQuerier)
@@ -195,8 +194,21 @@ func evaluateTestCases(testCases map[string]TestCase, mockCtrl *gomock.Controlle
 	}
 }
 
-func genHTTPRequest(args []string) string {
-	return "?name=" + args[1] + "&&namespace=" + args[0]
+func genHTTPRequest(args []string) (request string) {
+	request = ""
+	arg0, arg1 := "namespace=" + args[0], "pod=" + args[1]
+	if args[0] != "" {
+		request += "?" + arg0
+		if args[1] != "" {
+			request += "&&" + arg1
+			return request
+		}
+	} else {
+		if args[1] != "" {
+			request += "?" + arg1
+		}
+	}
+	return
 }
 
 func genSampleNetworkPolicies() (np1 antreatypes.NetworkPolicy, np2 antreatypes.NetworkPolicy,

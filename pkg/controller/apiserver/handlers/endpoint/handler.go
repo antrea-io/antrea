@@ -19,7 +19,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 	"net/http"
 
-	"github.com/vmware-tanzu/antrea/pkg/querier"
+	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
 )
 
 // Policies describes the policies relevant to a certain endpoint
@@ -31,16 +31,12 @@ type Policies struct {
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query network policy rules in current agent.
-func HandleFunc(cnpq querier.ControllerNetworkPolicyInfoQuerier) http.HandlerFunc {
+func HandleFunc(cq querier.ControllerQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		podName := r.URL.Query().Get("pod")
 		namespace := r.URL.Query().Get("namespace")
-		println("query")
-		println(podName)
-		println("query")
-		println(namespace)
-		//TODO: error handling for name and namespace and GetNetworkPolicies
-		applied, egress, ingress := cnpq.GetNetworkPolicies(namespace, podName)
+		//TODO: error handling for name and namespace and QueryNetworkPolicies
+		applied, egress, ingress := cq.QueryNetworkPolicies(namespace, podName)
 
 		policies := Policies{
 			Applied: applied,

@@ -249,41 +249,6 @@ func (n *NetworkPolicyController) GetAppliedToGroupNum() int {
 	return len(n.appliedToGroupStore.List())
 }
 
-//TODO: new method for NetworkPolicyController
-func (n *NetworkPolicyController) GetNetworkPolicies(namespace string, podName string) (applied []antreatypes.NetworkPolicy,
-	egress []antreatypes.NetworkPolicy, ingress []antreatypes.NetworkPolicy) {
-	// grab list of all policies from internalNetworkPolicyStore
-	internalPolicies := n.internalNetworkPolicyStore.List()
-	// create network policies categories
-	applied, egress, ingress = make([]antreatypes.NetworkPolicy, 0), make([]antreatypes.NetworkPolicy, 0),
-		make([]antreatypes.NetworkPolicy, 0)
-	// filter all policies into appropriate groups
-	for _, policy := range internalPolicies {
-		for _, key := range policy.(*antreatypes.NetworkPolicy).AppliedToGroups {
-			// Check if policy is applied to endpoint
-			//TODO: what is this boolean. what is this error?
-			appliedToGroupInterface, _, _ := n.appliedToGroupStore.Get(key)
-			appliedToGroup := appliedToGroupInterface.(*antreatypes.AppliedToGroup)
-			// if appliedToGroup selects pod in namespace, append policy to applied category
-			for _, podSet := range appliedToGroup.PodsByNode {
-				for _, member := range podSet {
-					trialPodName, trialNamespace := member.Pod.Name, member.Pod.Namespace
-					if podName == trialPodName && namespace == trialNamespace {
-						applied = append(applied, *policy.(*antreatypes.NetworkPolicy))
-					}
-				}
-			}
-			// Check if policy defines an egress or ingress rule on endpoint
-			for _, rule := range policy.(*antreatypes.NetworkPolicy).Rules {
-				//TODO: figure out how to see if namespace, pod correlates with NetworkPolicyPeer
-				_, _ = rule.From, rule.To
-			}
-		}
-	}
-
-	return
-}
-
 // GetConnectedAgentNum gets the number of Agents which are connected to this Controller.
 // Since Agent will watch all the three stores (internalNetworkPolicyStore, appliedToGroupStore, addressGroupStore),
 // the number of watchers of one of these three stores is equal to the number of connected Agents.
