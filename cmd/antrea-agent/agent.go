@@ -90,6 +90,9 @@ func run(o *Options) error {
 		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
 
 	routeClient, err := route.NewClient(o.config.HostGateway, serviceCIDRNet, encapMode)
+	if err != nil {
+		return fmt.Errorf("error creating route client: %v", err)
+	}
 
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()

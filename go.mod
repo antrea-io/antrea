@@ -16,7 +16,7 @@ require (
 	github.com/containernetworking/plugins v0.8.2-0.20190724153215-ded2f1757770
 	github.com/contiv/libOpenflow v0.0.0-20200424005919-3a6722c98962
 	github.com/contiv/ofnet v0.0.0-00010101000000-000000000000
-	github.com/coreos/go-iptables v0.4.1
+	github.com/coreos/go-iptables v0.4.5
 	github.com/davecgh/go-spew v1.1.1
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
