@@ -10,12 +10,12 @@ aimed towards developers to secure their apps.
 
 An example ClusterNetworkPolicy might look like this:
 ```
-apiVersion: security.antrea.tanzu.vmware.com/v1beta1
+apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
 kind: ClusterNetworkPolicy
 metadata:
   name: test-cnp
 spec:
-    priority: 1
+    priority: 5
     appliedTo:
     - podSelector:
         matchLabels:
@@ -89,6 +89,23 @@ to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
 **Note**: The order in which the egress rules are set matter. i.e. rules will be
 evaluated in the order in which they are written.
 
+## Rule evaluation based on priorities
+
+Rules belonging to Cluster NetworkPolicy CRDs are associated with various
+priorities, such as the `priority` at the CNP level and the priority at rule
+level. Overall, Cluster Policy with highest precedence (lowest priority number
+value) is evaluated first. Within this policy, rules are evaluated in the order
+in which they are set. For example, consider the following:
+
+- CNP1{priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
+- CNP2{priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
+
+This translates to the following order:
+- Ingress rules: ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
+- Egress rules: er1.1 -> er1.2 -> er2.1 -> er2.2
+
+Once a rule is matched, it is executed based on the action set.
+
 ## Behavior of `to` and `from` selectors
 
 There are four kinds of selectors that can be specified in an ingress from
@@ -120,3 +137,9 @@ ephemeral and unpredictable.
   to simulate the behavior of IPBlock field with `cidr` and `except` set.
 - Rules assume the priority in which they are written. i.e. rule set at top
   takes precedence over a rule set below it.
+
+## Notes
+
+- The v1alpha1 CNP CRD supports up to 10000 unique priority at policy level. In
+  order to reduce churn in the agent, it is recommended to set the priority
+  within the range 1 to 100.
