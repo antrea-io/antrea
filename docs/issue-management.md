@@ -260,9 +260,6 @@ could include some of the following:
 * this is desirable but we need help completing other issues or PRs first; then we will
   consider this design
 
-_Note this was previously called `proposal`. We will add the `kind/design` label
-to all issues currently labeled with `proposal`._
-
 #### Documentation
 
 A `kind/documentation` label categorizes issue or PR as related to a
@@ -303,9 +300,6 @@ To create a support issue or PR:
   to a publicly-accessible location. **Be aware that the generated support
   bundle includes a lot of information, including logs, so please ensure that
   you do not share anything sensitive.**
-
-_Note this was previously called `support`. We will add the `kind/support` label
-to all issues currently labeled with `support`._
 
 ### Area
 

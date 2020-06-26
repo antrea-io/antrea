@@ -2,7 +2,7 @@
 name: Support request
 about: You are trying to use Antrea and need help
 title: ''
-labels: support
+labels: kind/support
 assignees: ''
 
 ---
