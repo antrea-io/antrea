@@ -27,6 +27,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 var (
@@ -34,24 +36,31 @@ var (
 	certDir = "/var/run/antrea/antrea-controller-tls"
 	// certReadyTimeout is the timeout we will wait for the TLS Secret being ready. Declaring it as a variable for testing.
 	certReadyTimeout = 2 * time.Minute
-	// The DNS names that the TLS certificate will be signed with.
-	// TODO: Although antrea-agent and kube-aggregator only verify the server name "antrea.kube-system.svc",
-	// We should add the whole FQDN "antrea.kube-system.svc.<Cluster Domain>" as an alternate DNS name when
-	// other clients need to access it directly with that name.
-	AntreaServerNames = []string{
-		"antrea.kube-system.svc",
-	}
 )
 
 const (
-	// The namespace and name of the Secret that holds user-provided TLS certificate.
-	TLSSecretNamespace = "kube-system"
-	TLSSecretName      = "antrea-controller-tls"
 	// The names of the files that should contain the CA certificate and the TLS key pair.
 	CACertFile  = "ca.crt"
 	TLSCertFile = "tls.crt"
 	TLSKeyFile  = "tls.key"
+
+	defaultAntreaNamespace = "kube-system"
 )
+
+// GetAntreaServerNames returns the DNS names that the TLS certificate will be signed with.
+func GetAntreaServerNames() []string {
+	namespace := env.GetPodNamespace()
+	if namespace == "" {
+		klog.Warningf("Failed to get Pod Namespace from environment. Using \"%s\" as the Antrea Service Namespace", defaultAntreaNamespace)
+		namespace = defaultAntreaNamespace
+	}
+
+	antreaServerName := "antrea." + namespace + ".svc"
+	// TODO: Although antrea-agent and kube-aggregator only verify the server name "antrea.<Namespace>.svc",
+	// We should add the whole FQDN "antrea.<Namespace>.svc.<Cluster Domain>" as an alternate DNS name when
+	// other clients need to access it directly with that name.
+	return []string{antreaServerName}
+}
 
 func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregatorClient clientset.Interface, secureServing *options.SecureServingOptionsWithLoopback) (*CACertController, error) {
 	var err error
@@ -61,7 +70,7 @@ func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregato
 		secureServing.ServerCert.CertDirectory = ""
 		secureServing.ServerCert.PairName = "antrea-controller"
 
-		if err := secureServing.MaybeDefaultWithSelfSignedCerts("antrea", AntreaServerNames, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+		if err := secureServing.MaybeDefaultWithSelfSignedCerts("antrea", GetAntreaServerNames(), []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 			return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 		}
 
@@ -87,7 +96,7 @@ func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregato
 			}
 			return true, nil
 		}); err != nil {
-			return nil, fmt.Errorf("error reading TLS certificate and/or key. Please make sure the Secret '%s' is present and has '%s', '%s', and '%s' when selfSignedCert is set to false", TLSSecretName, CACertFile, TLSCertFile, TLSKeyFile)
+			return nil, fmt.Errorf("error reading TLS certificate and/or key. Please make sure the TLS CA (%s), cert (%s), and key (%s) files are present in \"%s\", when selfSignedCert is set to false", CACertFile, TLSCertFile, TLSKeyFile, certDir)
 		}
 		// Since 1.17.0 (https://github.com/kubernetes/kubernetes/commit/3f5fbfbfac281f40c11de2f57d58cc332affc37b),
 		// apiserver reloads certificate cert and key file from disk every minute, allowing serving tls config to be updated.
