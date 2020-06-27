@@ -25,6 +25,7 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
@@ -47,6 +48,7 @@ func newControllerCommand() *cobra.Command {
 		Use:  "antrea-controller",
 		Long: "The Antrea Controller.",
 		Run: func(cmd *cobra.Command, args []string) {
+			log.InitLogFileLimits(cmd.Flags())
 			if err := opts.complete(args); err != nil {
 				klog.Fatalf("Failed to complete: %v", err)
 			}
@@ -62,6 +64,7 @@ func newControllerCommand() *cobra.Command {
 
 	flags := cmd.Flags()
 	opts.addFlags(flags)
+	log.AddFlags(flags)
 	// Install log flags
 	flags.AddGoFlagSet(flag.CommandLine)
 	return cmd
