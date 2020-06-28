@@ -34,8 +34,8 @@ const (
 	defaultHostGateway        = "gw0"
 	defaultHostProcPathPrefix = "/host"
 	defaultServiceCIDR        = "10.96.0.0/12"
-	defaultMTUVXLAN           = 1450
 	defaultMTUGeneve          = 1450
+	defaultMTUVXLAN           = 1450
 	defaultMTUGRE             = 1462
 	defaultMTUSTT             = 1500
 	defaultMTU                = 1500

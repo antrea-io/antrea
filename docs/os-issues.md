@@ -47,7 +47,7 @@ Unmanaged=yes
 ```
 # /etc/systemd/network/90-antrea-tun.network
 [Match]
-Name=vxlan_sys_* genev_sys_* gre_sys stt_sys_*
+Name=genev_sys_* vxlan_sys_* gre_sys stt_sys_*
 
 [Link]
 Unmanaged=yes

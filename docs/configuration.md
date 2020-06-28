@@ -41,11 +41,11 @@ Use `antrea-agent -h` to see complete options.
 #hostGateway: gw0
 
 # Encapsulation mode for communication between Pods across Nodes, supported values:
-# - vxlan (default)
-# - geneve
+# - geneve (default)
+# - vxlan
 # - gre
 # - stt
-#tunnelType: vxlan
+#tunnelType: geneve
 
 # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
 # for the GRE tunnel type.

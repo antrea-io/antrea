@@ -98,7 +98,7 @@ OVS flows check out the [OVS pipeline doc](/docs/ovs-pipeline.md).
 
 Antrea Agent includes two Kubernetes controllers:
 - The Node controller watches the Kubernetes API server for new Nodes, and
-creates an OVS (VXLAN / Geneve / GRE / STT) tunnel to each remote Node.
+creates an OVS (Geneve / VXLAN / GRE / STT) tunnel to each remote Node.
 - The NetworkPolicy controller watches the computed NetworkPolicies from the
 Antrea Controller API, and installs OVS flows to implement the NetworkPolicies
 for the local Pods.
