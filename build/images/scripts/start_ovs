@@ -5,9 +5,21 @@ source daemon_status
 source /usr/share/openvswitch/scripts/ovs-lib
 
 CONTAINER_NAME="antrea-ovs"
-OVS_DB_FILE="/var/run/openvswitch/conf.db"
+OVS_RUN_DIR="/var/run/openvswitch"
+OVS_DB_FILE="${OVS_RUN_DIR}/conf.db"
 
 set -euo pipefail
+
+# We once (issue #870) observed that ovsdb-server failed to restart with error:
+# "ovsdb-server: /var/run/openvswitch/ovsdb-server.pid: pidfile check failed
+# (No such process), aborting", until we deleted the stale OVS PID files.
+# So here we delete stale OVS PID, UDS, and OVSDB lock files before starting the
+# OVS daemons to avoid running into the failure.
+function cleanup_ovs_run_files {
+    rm -rf ${OVS_RUN_DIR}/ovs*.pid
+    rm -rf ${OVS_RUN_DIR}/ovs*.ctl
+    rm -rf ${OVS_RUN_DIR}/.conf.db.*~lock~
+}
 
 function start_ovs {
     if daemon_is_running ovsdb-server; then
@@ -49,6 +61,8 @@ function quit {
 # Do not trap EXIT as it would then ignore the "exit 0" statement in quit and
 # exit with code 128 + SIGNAL
 trap "quit" INT TERM
+
+cleanup_ovs_run_files
 
 start_ovs
 
