@@ -152,9 +152,9 @@ func (i *Initializer) initInterfaceStore() error {
 				InterfaceName: port.Name,
 				OVSPortConfig: ovsPort,
 			}
-		case port.IFType == ovsconfig.VXLANTunnel:
-			fallthrough
 		case port.IFType == ovsconfig.GeneveTunnel:
+			fallthrough
+		case port.IFType == ovsconfig.VXLANTunnel:
 			fallthrough
 		case port.IFType == ovsconfig.GRETunnel:
 			fallthrough

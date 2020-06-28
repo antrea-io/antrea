@@ -9,7 +9,7 @@
   the tunnel to the new Node). When a Node is deleted, it performs the necessary
   clean-ups.
 * *peer Node*: this is how we refer to other Nodes in the cluster, to which the
-  local Node is connected through a VXLAN or Geneve tunnel.
+  local Node is connected through a Geneve, VXLAN, GRE, or STT tunnel.
 * *Global Virtual MAC*: a virtual MAC address which is used as the destination
   MAC for all tunnelled traffic across all Nodes. This simplifies networking by
   enabling all Nodes to use this MAC address instead of the actual MAC address
@@ -143,8 +143,8 @@ If you dump the flows for this table, you may see the following:
 ```
 
 Flow 1 is for traffic coming in on the local gateway. Flow 2 is for traffic
-coming in through a VXLAN or Geneve tunnel (i.e. from another Node). The next
-two flows (3 and 4) are for local Pods (in this case Pods from the coredns
+coming in through an overlay tunnel (i.e. from another Node). The next two
+flows (3 and 4) are for local Pods (in this case Pods from the coredns
 deployment).
 
 Local traffic then goes to [SpoofGuardTable], while tunnel traffic

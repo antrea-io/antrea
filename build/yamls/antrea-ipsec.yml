@@ -363,8 +363,8 @@ data:
     #hostGateway: gw0
 
     # Encapsulation mode for communication between Pods across Nodes, supported values:
-    # - vxlan (default)
-    # - geneve
+    # - geneve (default)
+    # - vxlan
     # - gre
     # - stt
     tunnelType: gre
@@ -438,7 +438,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-57kg4gbmk6
+  name: antrea-config-576575d7g8
   namespace: kube-system
 ---
 apiVersion: v1
@@ -552,7 +552,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-57kg4gbmk6
+          name: antrea-config-576575d7g8
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -799,7 +799,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-57kg4gbmk6
+          name: antrea-config-576575d7g8
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

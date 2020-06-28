@@ -1,7 +1,7 @@
 # IPsec Encryption of Tunnel Traffic with Antrea
 
 Antrea supports encrypting tunnel traffic across Nodes with IPsec ESP. At this
-moment, IPsec encyption works only for GRE tunnel (but not VXLAN, Geneve, and
+moment, IPsec encyption works only for GRE tunnel (but not Geneve, VXLAN, and
 STT tunnel types).
 
 ## Prerequisites
