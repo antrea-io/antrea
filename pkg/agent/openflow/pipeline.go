@@ -384,7 +384,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Done(),
 			// Enable NAT.
 			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-				Action().CT(false, connectionTrackTable.GetNext(), ctZone).NAT().CTDone().
+				Action().CT(false, connectionTrackTable.GetNext(), CtZone).NAT().CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
 			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
@@ -398,7 +398,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 	} else {
 		flows = append(flows,
 			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-				Action().CT(false, connectionTrackTable.GetNext(), ctZone).CTDone().
+				Action().CT(false, connectionTrackTable.GetNext(), CtZone).CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
 		)
@@ -1140,7 +1140,7 @@ func (c *client) endpointDNATFlow(endpointIP net.IP, endpointPort uint16, protoc
 		MatchProtocol(protocol).
 		MatchReg(int(endpointIPReg), ipVal).
 		MatchRegRange(int(endpointPortReg), unionVal, binding.Range{0, 18}).
-		Action().CT(true, EgressRuleTable, ctZone).
+		Action().CT(true, EgressRuleTable, CtZone).
 		DNAT(
 			&binding.IPRange{StartIP: endpointIP, EndIP: endpointIP},
 			&binding.PortRange{StartPort: endpointPort, EndPort: endpointPort},

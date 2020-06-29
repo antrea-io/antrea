@@ -18,7 +18,6 @@ package connections
 
 import (
 	"net"
-	"os"
 
 	"github.com/ti-mo/conntrack"
 	"k8s.io/klog"
@@ -26,7 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/util/sysctl"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
 )
 
 var _ ConnTrackDumper = new(connTrackDumper)
@@ -53,29 +52,6 @@ func (ctdump *connTrackDumper) DumpFlows(zoneFilter uint16) ([]*flowexporter.Con
 	if err != nil {
 		klog.Errorf("Error when getting netlink conn: %v", err)
 		return nil, err
-	}
-
-	// Check value of setting net.netfilter.nf_conntrack_acct. Set to value 1, if it is not set.
-	connTrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
-	if err != nil {
-		if !os.IsPermission(err) {
-			klog.Errorf("Error when getting net.netfilter.nf_conntrack_acct")
-			return nil, err
-		} else {
-			klog.Errorf("Permission denied to access net.netfilter.nf_conntrack_acct: Counters in flow records may not update")
-		}
-	} else {
-		if connTrackAcct == 0 {
-			err = sysctl.SetSysctlNet("netfilter/nf_conntrack_acct", 1)
-			if err != nil {
-				if !os.IsPermission(err) {
-					klog.Errorf("Error when setting net.netfilter.nf_conntrack_acct")
-					return nil, err
-				} else {
-					klog.Errorf("Permission denied to access net.netfilter.nf_conntrack_acct: Counters in flow records may not update")
-				}
-			}
-		}
 	}
 
 	// ZoneID filter is not supported currently in tl-mo/conntrack library.
@@ -133,6 +109,26 @@ type connTrackSystem struct {
 }
 
 func NewConnTrackInterfacer() *connTrackSystem {
+	// Check value of setting net.netfilter.nf_conntrack_acct. Set to value 1, if it is not set.
+	connTrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
+	if err != nil {
+		// Continue with creation of interfacer object as we can dump flows with no stats and that information can still be useful.
+		// If permission error, please provide access to net.netfilter.nf_conntrack_acct. This will enable flow exporter to export stats and timestamps of connections.
+		klog.Errorf("Error when getting net.netfilter.nf_conntrack_acct: %v", err)
+	} else {
+		if connTrackAcct == 0 {
+			err = sysctl.SetSysctlNet("netfilter/nf_conntrack_acct", 1)
+			if err != nil {
+				// If permission error, please provide access to net.netfilter.nf_conntrack_acct.
+				klog.Errorf("Error when setting net.netfilter.nf_conntrack_acct: %v", err)
+			}
+			// Set the conntrack timestamp setting to get timestamps of connections
+			err = sysctl.SetSysctlNet("netfilter/nf_conntrack_timestamp", 1)
+			if err != nil {
+				klog.Errorf("Error when setting net.netfilter.nf_conntrack_timestamp: %v", err)
+			}
+		}
+	}
 	return &connTrackSystem{}
 }
 

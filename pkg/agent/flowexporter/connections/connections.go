@@ -60,8 +60,9 @@ func (cs *connectionStore) Run(stopCh <-chan struct{}) {
 		case <-ticker.C:
 			_, err := cs.poll()
 			if err != nil {
+				// Not failing here as errors can be transient and could be resolved in future poll cycles.
+				// TODO: Come up with a backoff/retry mechanism by increasing poll interval and adding retry timeout
 				klog.Errorf("Error during conntrack poll cycle: %v", err)
-				break
 			}
 		}
 	}

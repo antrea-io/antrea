@@ -35,9 +35,11 @@ type Tuple struct {
 
 type Connection struct {
 	// Fields from conntrack flows
-	ID                             uint32
-	Timeout                        uint32
-	StartTime                      time.Time
+	ID        uint32
+	Timeout   uint32
+	StartTime time.Time
+	// For invalid and closed connections: StopTime is the time when connection was updated last.
+	// For established connections: StopTime is latest time when it was polled.
 	StopTime                       time.Time
 	Zone                           uint16
 	StatusFlag                     uint32
