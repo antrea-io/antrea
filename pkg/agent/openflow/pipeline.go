@@ -659,11 +659,23 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue 
 	case MatchSrcOFPort:
 		fb = fb.MatchProtocol(binding.ProtocolIP).MatchInPort(uint32(matchValue.(int32)))
 	case MatchTCPDstPort:
-		fb = fb.MatchProtocol(binding.ProtocolTCP).MatchTCPDstPort(matchValue.(uint16))
+		fb = fb.MatchProtocol(binding.ProtocolTCP)
+		portValue := matchValue.(uint16)
+		if portValue > 0 {
+			fb = fb.MatchTCPDstPort(portValue)
+		}
 	case MatchUDPDstPort:
-		fb = fb.MatchProtocol(binding.ProtocolUDP).MatchUDPDstPort(matchValue.(uint16))
+		fb = fb.MatchProtocol(binding.ProtocolUDP)
+		portValue := matchValue.(uint16)
+		if portValue > 0 {
+			fb = fb.MatchUDPDstPort(portValue)
+		}
 	case MatchSCTPDstPort:
-		fb = fb.MatchProtocol(binding.ProtocolSCTP).MatchSCTPDstPort(matchValue.(uint16))
+		fb = fb.MatchProtocol(binding.ProtocolSCTP)
+		portValue := matchValue.(uint16)
+		if portValue > 0 {
+			fb = fb.MatchSCTPDstPort(portValue)
+		}
 	}
 	return fb
 }
