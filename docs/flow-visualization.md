@@ -1,24 +1,20 @@
 # Flow Visualization
 ## Purpose
-Antrea supports sending IPFIX flow records as flow exporter. The Elastic Stack
-(ELK Stack) works
-as a data collector for flow records and flow-related information can be
-visualized
-in Kibana. This doc provides guidelines for deploying Elastic Stack with
-support for
-Antrea-specific fields in a Kubenetes cluster.
+Antrea supports sending IPFIX flow records through a flow exporter. The Elastic
+Stack (ELK Stack) works as the data collector, data storage and visualization tool
+for flow records and flow-related information. This doc provides guidelines for
+deploying Elastic Stack with support for Antrea-specific fields in a Kubenetes
+cluster.
 
 ## About Elastic Stack
-[Elastic Stack](https://www.elastic.co) is a group of open source products from
-Elastic to help collect, store, search, analyze and visualize data in real
-time. We will use Logstash, Elasticsearch and Kibana in Antrea flow
-visualization.
+[Elastic Stack](https://www.elastic.co) is a group of open source products to
+help collect, store, search, analyze and visualize data in real time. We will
+use Logstash, Elasticsearch and Kibana in Antrea flow visualization.
 [Logstash](https://www.elastic.co/logstash) works as data collector to
-centralize flow records. [Logstash Netflow codec
-plugin](https://www.elastic.co/guide/en/logstash/current/plugins-codecs-netflow.html)
-supports Netflow v5/v9, sFlow and IPFIX protocols for flow data collection.
-Flow exporter feature in Antrea Agent uses IPFIX protocol to export flow
-records.
+centralize flow records. [Logstash Netflow codec plugin](https://www.elastic.co/guide/en/logstash/current/plugins-codecs-netflow.html)
+supports Netflow v5/v9/v10(IPFIX) protocols for flow data collection.
+Flow exporter feature in Antrea Agent uses IPFIX (Netflow v10) protocol to
+export flow records.
 
 IPFIX flow records contain following Antrea specific fields along with standard
 IANA fields.
@@ -40,13 +36,15 @@ engine, supports storing, searching and indexing records received.
 exploration.
 
 ## Deployment Steps
-To create all the necessary resources in the `antreaflow` namespace and get
+To create all the necessary resources in the `antrea-flow-collector` namespace
+and get
 everything up-and-running, run:
 ```shell
-kubectl create namespace antreaflow
-kubectl create configmap logstash-configmap -n antreaflow
---from-file=build/yamls/flow/logstash/
-kubectl apply -f build/yamls/flow/flow-visualization.yml -n antreaflow
+kubectl create namespace antrea-flow-collector
+kubectl create configmap logstash-configmap -n antrea-flow-collector
+--from-file=build/yamls/flow-collector/logstash/
+kubectl apply -f build/yamls/flow-collector/flow-collector.yml -n
+antrea-flow-collector
 ```
 Kibana dashboard is exposed as a Nodeport, which can be accessed via
 `http://[NodeIP]: 30007`
@@ -60,13 +58,13 @@ import `build/yamls/flow/kibana.ndjson`
 The following dashboards are pre-built and recommended for Antrea flow
 visualization.
 ### Overview
-<img src="/docs/assets/flow-visualization-overview.png" width="600" alt="Flow
+<img src="/docs/assets/flow-visualization-overview.png" width="900" alt="Flow
 Visualization Overview Dashboard"> 
 
 ### Flows
-<img src="/docs/assets/flow-visualization-flows.png" width="600" alt="Flow
+<img src="/docs/assets/flow-visualization-flows.png" width="900" alt="Flow
 Visualization Flows Dashboard"> 
 
 ### Flow Records 
-<img src="/docs/assets/flow-visualization-records.png" width="600" alt="Flow
+<img src="/docs/assets/flow-visualization-records.png" width="900" alt="Flow
 Visualization Flow Records Dashboard">

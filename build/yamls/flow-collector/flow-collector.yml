@@ -83,7 +83,7 @@ spec:
             - name: ES_JAVA_OPTS
               value: "-Xms1g -Xmx2g"
             - name: cluster.name
-              value: "antreaflow"
+              value: "antrea-flow-collector"
             - name: bootstrap.memory_lock
               value: "false"
             - name: network.host
@@ -181,10 +181,10 @@ kind: Service
 metadata:
   name: logstash
   labels:
-    app: antreaflow
+    app: antrea-flow-collector
 spec:
   selector:
-    app: antreaflow
+    app: antrea-flow-collector
   ports:
     - port: 4739
       targetPort: 4739
@@ -195,16 +195,16 @@ kind: Deployment
 metadata:
   name: logstash
   labels:
-    app: antreaflow
+    app: antrea-flow-collector
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: antreaflow
+      app: antrea-flow-collector
   template:
     metadata:
       labels:
-        app: antreaflow
+        app: antrea-flow-collector
     spec:
       containers:
         - name: logstash
