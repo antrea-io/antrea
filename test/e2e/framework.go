@@ -39,6 +39,7 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/test/e2e/providers"
 )
@@ -96,6 +97,7 @@ type TestData struct {
 	clientset        kubernetes.Interface
 	aggregatorClient aggregatorclientset.Interface
 	securityClient   secv1alpha1.SecurityV1alpha1Interface
+	crdClient        crdclientset.Interface
 }
 
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
@@ -406,10 +408,15 @@ func (data *TestData) createClient() error {
 	if err != nil {
 		return fmt.Errorf("error when creating Antrea securityClient: %v", err)
 	}
+	crdClient, err := crdclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return fmt.Errorf("error when creating CRD client: %v", err)
+	}
 	data.kubeConfig = kubeConfig
 	data.clientset = clientset
 	data.aggregatorClient = aggregatorClient
 	data.securityClient = securityClient
+	data.crdClient = crdClient
 	return nil
 }
 
@@ -771,6 +778,44 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*v1.Pod
 		return nil, err
 	}
 	return newPod, nil
+}
+
+// restartAntreaAgentPod deletes the antrea-agent Pod to force it to be re-scheduled. It then waits
+// for the new Pod to become available, and returns it.
+func (data *TestData) restartAntreaAgentPod(timeout time.Duration) ([]*v1.Pod, error) {
+	var gracePeriodSeconds int64 = 1
+	deleteOptions := metav1.DeleteOptions{
+		GracePeriodSeconds: &gracePeriodSeconds,
+	}
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=antrea,component=antrea-agent",
+	}
+	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
+		return nil, fmt.Errorf("error when deleting antrea-agent Pod: %v", err)
+	}
+
+	var newPods []*v1.Pod
+	// wait for new antrea-agent Pod
+	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+		pods, err := data.clientset.CoreV1().Pods("kube-system").List(context.TODO(), listOptions)
+		if err != nil {
+			return false, fmt.Errorf("failed to list antrea-agent Pods: %v", err)
+		}
+		if len(pods.Items) != clusterInfo.numNodes {
+			return false, nil
+		}
+		for i := 0; i < clusterInfo.numNodes; i++ {
+			pod := pods.Items[i]
+			if pod.Status.Phase != v1.PodRunning || pod.DeletionTimestamp != nil {
+				return false, nil
+			}
+			newPods = append(newPods, &pod)
+		}
+		return true, nil
+	}); err != nil {
+		return nil, err
+	}
+	return newPods, nil
 }
 
 // validatePodIP checks that the provided IP address is in the Pod Network CIDR for the cluster.
