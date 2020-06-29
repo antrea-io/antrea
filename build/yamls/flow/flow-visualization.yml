@@ -83,7 +83,7 @@ spec:
             - name: ES_JAVA_OPTS
               value: "-Xms1g -Xmx2g"
             - name: cluster.name
-              value: "elastiflow"
+              value: "antreaflow"
             - name: bootstrap.memory_lock
               value: "false"
             - name: network.host
@@ -101,8 +101,6 @@ spec:
           ports:
             - containerPort: 9200
               name: http
-            - containerPort: 9300
-              name: transport
           livenessProbe:
             tcpSocket:
               port: transport
@@ -183,33 +181,34 @@ kind: Service
 metadata:
   name: logstash
   labels:
-    app: elastiflow
+    app: antreaflow
 spec:
   selector:
-    app: elastiflow
+    app: antreaflow
   ports:
     - port: 4739
       targetPort: 4739
+      protocol: UDP
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: elastiflow
+  name: logstash
   labels:
-    app: elastiflow
+    app: antreaflow
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: elastiflow
+      app: antreaflow
   template:
     metadata:
       labels:
-        app: elastiflow
+        app: antreaflow
     spec:
       containers:
         - name: logstash
-          image: robcowart/elastiflow-logstash-oss:3.5.3
+          image: docker.elastic.co/logstash/logstash-oss:7.8.0
           volumeMounts:
             - name: logstash-definition-volume
               mountPath: /usr/share/logstash/definitions
@@ -217,15 +216,9 @@ spec:
               mountPath: /usr/share/logstash/config
             - name: logstash-pipeline-volume
               mountPath: /usr/share/logstash/pipeline
-          env:
-            - name: ELASTIFLOW_ES_HOST
-              value: "http://elasticsearch:9200"
-            - name: LS_JAVA_OPTS
-              value: "-Xms4g -Xmx4g"
-            - name: ELASTIFLOW_DEFINITION_PATH
-              value: "/usr/share/logstash/definitions"
           ports:
             - containerPort: 4739
+              protocol: UDP
       volumes:
         - name: logstash-definition-volume
           configMap:
