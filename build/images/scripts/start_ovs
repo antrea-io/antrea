@@ -61,7 +61,7 @@ while true; do
     SLEEP_PID=$!
     wait $SLEEP_PID
 
-    if ! check_ovs_status ; then
+    if ! check_ovs_status > /dev/null ; then
         # OVS was stopped in the container.
         log_warning $CONTAINER_NAME "OVS was stopped. Starting it again"
 

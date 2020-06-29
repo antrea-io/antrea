@@ -159,12 +159,16 @@ spec:
                 - IPC_LOCK
           livenessProbe:
             exec:
+              # docker CRI doesn't honor timeoutSeconds, add "timeout" to the command as a workaround.
+              # https://github.com/kubernetes/kubernetes/issues/51901
               command:
                 - /bin/sh
                 - -c
-                - timeout 5 container_liveness_probe ovs
+                - timeout 10 container_liveness_probe ovs
             initialDelaySeconds: 5
-            periodSeconds: 5
+            timeoutSeconds: 10
+            periodSeconds: 10
+            failureThreshold: 5
           volumeMounts:
           - name: host-var-run-antrea
             mountPath: /var/run/openvswitch

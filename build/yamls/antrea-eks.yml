@@ -694,9 +694,11 @@ spec:
             command:
             - /bin/sh
             - -c
-            - timeout 5 container_liveness_probe ovs
+            - timeout 10 container_liveness_probe ovs
+          failureThreshold: 5
           initialDelaySeconds: 5
-          periodSeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 10
         name: antrea-ovs
         resources:
           requests:
