@@ -14,7 +14,7 @@ Elastic to help collect, store, search, analyze and visualize data in real
 time. We will use Logstash, Elasticsearch and Kibana in Antrea flow
 visualization.
 [Logstash](https://www.elastic.co/logstash) works as data collector to
-centralize flow records. [Logstach Netflow codec
+centralize flow records. [Logstash Netflow codec
 plugin](https://www.elastic.co/guide/en/logstash/current/plugins-codecs-netflow.html)
 supports Netflow v5/v9, sFlow and IPFIX protocols for flow data collection.
 Flow exporter feature in Antrea Agent uses IPFIX protocol to export flow
