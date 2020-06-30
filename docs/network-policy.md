@@ -17,36 +17,35 @@ metadata:
 spec:
     priority: 5
     appliedTo:
-    - podSelector:
-        matchLabels:
-          role: db
-    - namespaceSelector:
-        matchLabels:
-          env: prod
+      - podSelector:
+          matchLabels:
+            role: db
+      - namespaceSelector:
+          matchLabels:
+            env: prod
     ingress:
-    - action: Allow
-      from:
-      - podSelector:
-          matchLabels:
-            role: db
-      - podSelector:
-          matchLabels:
-            role: db
-        namespaceSelector:
-          matchLabels:
-            role: db
-      ports:
-      - protocol: TCP
-        port: 8080
-        name: httpPort
+      - action: Allow
+        from:
+          - podSelector:
+              matchLabels:
+                role: frontend
+          - podSelector:
+              matchLabels:
+                role: nondb
+            namespaceSelector:
+              matchLabels:
+                role: db
+        ports:
+          - protocol: TCP
+            port: 8080
     egress:
-    - action: Drop
-      to:
-      - ipBlock:
-        cidr: 10.0.10.0/24
-      ports:
-      - protocol: TCP
-        port: 5978
+      - action: Drop
+        to:
+          - ipBlock:
+            cidr: 10.0.10.0/24
+        ports:
+          - protocol: TCP
+            port: 5978
 ```
 
 **spec**: The ClusterNetworkPolicy `spec` has all the information needed to
@@ -66,7 +65,7 @@ labels "env=prod".
 **priority**: The `priority` field determines the relative priority of the policy
 among all ClusterNetworkPolicies in the given cluster. This field is mandatory.
 A lower priority value indicates higher precedence. Priority values can range
-from 1-10000.
+from 1.0-10000.0.
 **Note**: Policies with same priorities will be evaluated
 indeterministically. Users should therefore take care to use priorities to
 ensure the behavior they expect.
@@ -142,4 +141,4 @@ ephemeral and unpredictable.
 
 - The v1alpha1 CNP CRD supports up to 10000 unique priority at policy level. In
   order to reduce churn in the agent, it is recommended to set the priority
-  within the range 1 to 100.
+  within the range 1.0 to 100.0.
