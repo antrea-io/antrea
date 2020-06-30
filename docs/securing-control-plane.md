@@ -33,20 +33,23 @@ for client authentication.
 By default, antrea-controller generates a self-signed certificate. You can
 override the behavior by [providing your own certificates](#providing-your-own-certificates).
 Either way, the antrea-controller will distribute the CA certificate as a
-ConfigMap named `antrea-ca` in the `kube-system` Namespace and inject it into
-the APIServices resources created by Antrea in order to allow its clients (i.e.
-antrea-agent, kube-apiserver) to perform authentication.
+ConfigMap named `antrea-ca` in the Antrea deployment Namespace and inject it
+into the APIServices resources created by Antrea in order to allow its clients
+(i.e. antrea-agent, kube-apiserver) to perform authentication.
 
 Typically, clients that wish to access the antrea-controller API can
 authenticate the server by validating against the CA certificate published in
-the `kube-system/antrea-ca` ConfigMap.
+the `antrea-ca` ConfigMap.
 
 ## Providing your own certificates
 
 Since Antrea v0.7.0, you can provide your own certificates to Antrea. To do so,
 you must set the `selfSignedCert` field of `antrea-controller.conf` to `false`,
 so that the antrea-controller will read the certificate key pair from the
-`kube-system/antrea-controller-tls` Secret.
+`antrea-controller-tls` Secret. The example manifests and descriptions below
+assume Antrea is deployed in the `kube-system` Namespace. If you deploy Antrea
+in a different Namepace, please update the Namespace name in the manifests
+accordingly.
 
 ```yaml
 apiVersion: v1
@@ -77,8 +80,8 @@ DNS names:
 **Note: It assumes you are using `cluster.local` as the cluster domain, you
 should replace it with the actual one of your Kubernetes cluster.**
 
-You can then create the `kube-system/antrea-controller-tls` Secret with the
-certificate key pair and the CA certificate in the following form:
+You can then create the `antrea-controller-tls` Secret with the certificate key
+pair and the CA certificate in the following form:
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -147,7 +150,7 @@ to the antrea-controller Pod if the Pod starts before the Secret is created.**
 ## Certificate rotation
 
 Antrea v0.7.0 and higher supports certificate rotation. It can be achieved by
-simply updating the `kube-system/antrea-controller-tls` Secret. The
+simply updating the `antrea-controller-tls` Secret. The
 antrea-controller will react to the change, updating its serving certificate and
 re-distributing the latest CA certificate (if applicable).
 

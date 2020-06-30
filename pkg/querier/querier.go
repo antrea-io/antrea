@@ -15,18 +15,11 @@
 package querier
 
 import (
-	"os"
-
 	v1 "k8s.io/api/core/v1"
 
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	"github.com/vmware-tanzu/antrea/pkg/version"
-)
-
-const (
-	podName      = "POD_NAME"
-	podNamespace = "POD_NAMESPACE"
-	nodeName     = "NODE_NAME"
 )
 
 type NetworkPolicyInfoQuerier interface {
@@ -52,10 +45,12 @@ type ControllerNetworkPolicyInfoQuerier interface {
 
 // GetSelfPod gets current pod.
 func GetSelfPod() v1.ObjectReference {
-	if os.Getenv(podName) == "" || os.Getenv(podNamespace) == "" {
+	podName := env.GetPodName()
+	podNamespace := env.GetPodNamespace()
+	if podName == "" || podNamespace == "" {
 		return v1.ObjectReference{}
 	}
-	return v1.ObjectReference{Kind: "Pod", Name: os.Getenv(podName), Namespace: os.Getenv(podNamespace)}
+	return v1.ObjectReference{Kind: "Pod", Name: podName, Namespace: podNamespace}
 }
 
 // GetSelfNode gets current node.
@@ -66,10 +61,11 @@ func GetSelfNode(isAgent bool, node string) v1.ObjectReference {
 		}
 		return v1.ObjectReference{Kind: "Node", Name: node}
 	}
-	if os.Getenv(nodeName) == "" {
+	nodeName, _ := env.GetNodeName()
+	if nodeName == "" {
 		return v1.ObjectReference{}
 	}
-	return v1.ObjectReference{Kind: "Node", Name: os.Getenv(nodeName)}
+	return v1.ObjectReference{Kind: "Node", Name: nodeName}
 }
 
 // GetVersion gets current version.
