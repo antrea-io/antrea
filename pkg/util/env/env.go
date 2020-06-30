@@ -23,8 +23,9 @@ import (
 
 // nodeNameEnvKey is environment variable.
 const (
-	nodeNameEnvKey = "NODE_NAME"
-	podNameEnvKey  = "POD_NAME"
+	nodeNameEnvKey     = "NODE_NAME"
+	podNameEnvKey      = "POD_NAME"
+	podNamespaceEnvKey = "POD_NAMESPACE"
 
 	antreaCloudEKSEnvKey = "ANTREA_CLOUD_EKS"
 )
@@ -47,13 +48,22 @@ func GetNodeName() (string, error) {
 	return nodeName, nil
 }
 
-// GetPodName returns the pod name where the code executes
+// GetPodName returns name of the Pod where the code executes.
 func GetPodName() string {
 	podName := os.Getenv(podNameEnvKey)
 	if podName == "" {
 		klog.Warningf("Environment variable %s not found", podNameEnvKey)
 	}
 	return podName
+}
+
+// GetPodNamespace returns Namespace of the Pod where the code executes.
+func GetPodNamespace() string {
+	podNamespace := os.Getenv(podNamespaceEnvKey)
+	if podNamespace == "" {
+		klog.Warningf("Environment variable %s not found", podNamespaceEnvKey)
+	}
+	return podNamespace
 }
 
 func getBoolEnvVar(name string, defaultValue bool) bool {

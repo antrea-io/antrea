@@ -428,17 +428,19 @@ data:
     #enablePrometheusMetrics: false
 
     # Indicates whether to use auto-generated self-signed TLS certificate.
-    # If false, A secret named "kube-system/antrea-controller-tls" must be provided with the following keys:
+    # If false, A Secret named "antrea-controller-tls" must be provided with the following keys:
     #   ca.crt: <CA certificate>
     #   tls.crt: <TLS certificate>
     #   tls.key: <TLS private key>
+    # And the Secret must be mounted to directory "/var/run/antrea/antrea-controller-tls" of the
+    # antrea-controller container.
     #selfSignedCert: true
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-576575d7g8
+  name: antrea-config-6fg7ftb7c2
   namespace: kube-system
 ---
 apiVersion: v1
@@ -552,7 +554,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-576575d7g8
+          name: antrea-config-6fg7ftb7c2
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -801,7 +803,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-576575d7g8
+          name: antrea-config-6fg7ftb7c2
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
