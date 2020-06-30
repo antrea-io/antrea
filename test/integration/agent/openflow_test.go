@@ -336,14 +336,16 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	conjMatch := fmt.Sprintf("priority=%d,ip,reg1=0x%x", priorityNormal, ofport)
 	flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
 	assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow), "Failed to install conjunctive match flow")
+	serviceConjMatch := fmt.Sprintf("priority=%d,tcp,tp_dst=8080", priorityNormal)
+	flow = &ofTestUtils.ExpectFlow{MatchStr: serviceConjMatch, ActStr: fmt.Sprintf("conjunction(%d,3/3)", ruleID)}
+	assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow), "Failed to install service flow")
 
 	// Verify multiple conjunctions share the same match conditions.
 	ruleID2 := uint32(101)
 	toList2 := []string{"192.168.3.4"}
 	toIPList2 := prepareIPAddresses(toList2)
-	port3 := intstr.FromInt(206)
 	udpProtocol := v1beta1.ProtocolUDP
-	npPort2 := v1beta1.Service{Protocol: &udpProtocol, Port: &port3}
+	npPort2 := v1beta1.Service{Protocol: &udpProtocol}
 	rule2 := &types.PolicyRule{
 		Direction: v1beta1.DirectionIn,
 		To:        toIPList2,
@@ -358,9 +360,12 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	conjMatch = fmt.Sprintf("priority=%d,ip,nw_dst=192.168.3.4", priorityNormal)
 	flow1 := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3),conjunction(%d,1/2)", ruleID, ruleID2)}
 	flow2 := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,1/2),conjunction(%d,2/3)", ruleID2, ruleID)}
+	serviceConjMatch = fmt.Sprintf("priority=%d,udp", priorityNormal)
+	flow3 := &ofTestUtils.ExpectFlow{MatchStr: serviceConjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/2)", ruleID2)}
 	if !ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow1) && !ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow2) {
 		t.Errorf("Failed to install conjunctive match flow")
 	}
+	require.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow3), "Failed to install service flow")
 	err = c.UninstallPolicyRuleFlows(ruleID2)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList2, true)
