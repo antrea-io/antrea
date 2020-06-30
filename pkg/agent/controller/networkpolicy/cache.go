@@ -47,7 +47,7 @@ const (
 // 1. If a rule's selector/services/direction changes, it becomes "another" rule.
 // 2. If inserting rules before a rule or shuffling rules in a NetworkPolicy, we
 //    can know the existing rules don't change and skip processing them. Note that
-//    if the rule's position (from top down) within a networkpolicy changes, it
+//    if a CNP/ANP rule's position (from top down) within a networkpolicy changes, it
 //    affects the Priority of the rule.
 type rule struct {
 	// ID is calculated from the hash value of all other fields.
@@ -62,7 +62,7 @@ type rule struct {
 	Services []v1beta1.Service
 	// Action of this rule. nil for k8s NetworkPolicy.
 	Action *secv1alpha1.RuleAction
-	// Priority of this rule within the NetworkPolicy.
+	// Priority of this rule within the NetworkPolicy. Defaults to -1 for k8s NetworkPolicy.
 	Priority int32
 	// Priority of the NetworkPolicy to which this rule belong. nil for k8s NetworkPolicy.
 	PolicyPriority *float64
@@ -111,7 +111,7 @@ func (r *CompletedRule) String() string {
 		r.ID, r.Direction, len(r.Pods), addressString, len(r.Services), r.PolicyPriority, r.Priority)
 }
 
-// isAntreaNetworkPolicyRule returns if the rule is part of a ClusterNetworkPolicy.
+// isAntreaNetworkPolicyRule returns true if the rule is part of a ClusterNetworkPolicy.
 func (r *CompletedRule) isAntreaNetworkPolicyRule() bool {
 	return r.PolicyPriority != nil
 }

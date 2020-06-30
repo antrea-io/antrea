@@ -28,6 +28,7 @@ import (
 	ofClient "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
@@ -157,6 +158,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta1.ProtocolTCP
+	defaultAction := secv1alpha1.RuleActionAllow
 	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
@@ -164,6 +166,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 		From:      prepareIPAddresses(fromList),
 		To:        toIPList,
 		Service:   []v1beta1.Service{npPort1},
+		Action:    &defaultAction,
 	}
 
 	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
@@ -308,6 +311,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta1.ProtocolTCP
+	defaultAction := secv1alpha1.RuleActionAllow
 	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
@@ -315,6 +319,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		From:      prepareIPAddresses(fromList),
 		To:        toIPList,
 		Service:   []v1beta1.Service{npPort1},
+		Action:    &defaultAction,
 	}
 
 	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
@@ -350,6 +355,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		Direction: v1beta1.DirectionIn,
 		To:        toIPList2,
 		Service:   []v1beta1.Service{npPort2},
+		Action:    &defaultAction,
 	}
 	err = c.InstallPolicyRuleFlows(ruleID2, rule2, "np1", "ns1")
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
@@ -708,7 +714,7 @@ func prepareDefaultFlows() []expectTableFlows {
 			},
 		},
 		{
-			uint8(40),
+			uint8(42),
 			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:45"}},
 		},
 		{

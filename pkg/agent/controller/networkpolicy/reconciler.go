@@ -185,7 +185,7 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 	value, exists := r.lastRealizeds.Load(rule.ID)
 	if rule.isAntreaNetworkPolicyRule() {
 		// For CNP, only release priorityMutex after rule is installed on OVS. Otherwise,
-		// priority re-assignments for flows that has already been assigned priority but
+		// priority re-assignments for flows that have already been assigned priorities but
 		// not yet installed on OVS will be missed.
 		r.priorityMutex.Lock()
 		defer r.priorityMutex.Unlock()
@@ -201,14 +201,13 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 		ofRuleInstallErr = r.update(value.(*lastRealized), rule, ofPriority)
 	}
 	if ofRuleInstallErr != nil && ofPriority != nil {
-		priorityStr := strconv.Itoa(int(*ofPriority))
-		r.priorityAssigner.Release(priorityStr)
+		r.priorityAssigner.Release(*ofPriority)
 	}
 	return ofRuleInstallErr
 }
 
-// getOFPriority retrieves the OFPriority for the input CompleteRule to be installed,
-// and re-arrange installed priorities on OVS if necessary.
+// getOFPriority retrieves the OFPriority for the input CompletedRule to be installed,
+// and re-arranges installed priorities on OVS if necessary.
 func (r *reconciler) getOFPriority(rule *CompletedRule) (*uint16, error) {
 	if rule.PolicyPriority == nil {
 		klog.V(2).Infof("Assigning default priority for k8s NetworkPolicy.")
@@ -223,8 +222,8 @@ func (r *reconciler) getOFPriority(rule *CompletedRule) (*uint16, error) {
 	if len(priorityUpdates) > 0 {
 		err := r.ofClient.ReassignFlowPriorities(priorityUpdates)
 		if err != nil {
-			priorityStr := strconv.Itoa(int(*ofPriority))
-			r.priorityAssigner.Release(priorityStr)
+			// TODO: revert the priorityUpdates in priorityMap if err occurred here.
+			r.priorityAssigner.Release(*ofPriority)
 			return nil, err
 		}
 	}
@@ -282,8 +281,8 @@ func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16) error {
 		// We must ensure there is at least one PolicyRule, otherwise the Pods won't be
 		// isolated, so we create a PolicyRule with the original services if it doesn't exist.
 		// If there are IPBlocks or Pods that cannot resolve any named port, they will share
-		// this PolicyRule. ClusterNetworkPolicy do not need this default isolation.
-		if !rule.isAntreaNetworkPolicyRule() {
+		// this PolicyRule. ClusterNetworkPolicy does not need this default isolation.
+		if !rule.isAntreaNetworkPolicyRule() || len(rule.To.IPBlocks) > 0 {
 			svcHash := hashServices(rule.Services)
 			ofRule, exists := ofRuleByServicesMap[svcHash]
 			// Create a new Openflow rule if the group doesn't exist.
@@ -473,10 +472,15 @@ func (r *reconciler) uninstallOFRule(ofID uint32) error {
 	if err != nil {
 		return fmt.Errorf("error uninstalling ofRule %v: %v", ofID, err)
 	}
-	if stalePriorities != nil {
-		for _, p := range *stalePriorities {
-			klog.V(2).Infof("Forgetting old priority %v", p)
-			r.priorityAssigner.Release(p)
+	if len(stalePriorities) > 0 {
+		for _, p := range stalePriorities {
+			klog.V(2).Infof("Releasing stale priority %v", p)
+			priorityNum, err := strconv.ParseUint(p, 10, 16)
+			if err != nil {
+				// Cannot parse the priority str. Theoretically this should never happen.
+				return err
+			}
+			r.priorityAssigner.Release(uint16(priorityNum))
 		}
 	}
 	if err := r.idAllocator.release(ofID); err != nil {

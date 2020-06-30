@@ -234,24 +234,22 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	// Compute NetworkPolicyRule for Egress Rule.
 	for idx, ingressRule := range cnp.Spec.Ingress {
 		// Set default action to ALLOW to allow traffic.
-		action := ingressRule.Action.ToUpper()
 		rules = append(rules, networking.NetworkPolicyRule{
 			Direction: networking.DirectionIn,
 			From:      *n.toAntreaPeerForCRD(ingressRule.From, cnp, networking.DirectionIn),
 			Services:  toAntreaServicesForCRD(ingressRule.Ports),
-			Action:    &action,
+			Action:    ingressRule.Action,
 			Priority:  int32(idx),
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
 	for idx, egressRule := range cnp.Spec.Egress {
 		// Set default action to ALLOW to allow traffic.
-		action := egressRule.Action.ToUpper()
 		rules = append(rules, networking.NetworkPolicyRule{
 			Direction: networking.DirectionOut,
 			To:        *n.toAntreaPeerForCRD(egressRule.To, cnp, networking.DirectionOut),
 			Services:  toAntreaServicesForCRD(egressRule.Ports),
-			Action:    &action,
+			Action:    egressRule.Action,
 			Priority:  int32(idx),
 		})
 	}

@@ -229,7 +229,7 @@ type client struct {
 	// ofEntryOperations is a wrapper interface for OpenFlow entry Add / Modify / Delete operations. It
 	// enables convenient mocking in unit tests.
 	ofEntryOperations OFEntryOperations
-	// policyCache is a  a storage that supports listing policyRuleConjunction with different indexers.
+	// policyCache is a storage that supports listing policyRuleConjunction with different indexers.
 	// It's guaranteed that one policyRuleConjunction is processed by at most one goroutine at any given time.
 	policyCache       cache.Indexer
 	conjMatchFlowLock sync.Mutex // Lock for access globalConjMatchFlowCache
@@ -748,7 +748,7 @@ func (c *client) arpNormalFlow(category cookie.Category) binding.Flow {
 }
 
 // conjunctionActionFlow generates the flow to jump to a specific table if policyRuleConjunction ID is matched. Priority of
-// conjunctionActionFlow is priorityLow for k8s network policies, and *priority assigned by PriorityAssigner for CNP.
+// conjunctionActionFlow is created at priorityLow for k8s network policies, and *priority assigned by PriorityAssigner for CNP.
 func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, priority *uint16) binding.Flow {
 	var ofPriority uint16
 	if priority == nil {

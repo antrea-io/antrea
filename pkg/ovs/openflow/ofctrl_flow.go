@@ -2,7 +2,6 @@ package openflow
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/contiv/libOpenflow/openflow13"
@@ -90,8 +89,8 @@ func (f *ofFlow) MatchString() string {
 	return repr
 }
 
-func (f *ofFlow) FlowPriority() string {
-	return strconv.Itoa(int(f.Match.Priority))
+func (f *ofFlow) FlowPriority() uint16 {
+	return f.Match.Priority
 }
 
 func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMessage, error) {

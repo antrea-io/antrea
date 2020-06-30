@@ -150,7 +150,7 @@ type OFEntry interface {
 type Flow interface {
 	OFEntry
 	// Returns the flow priority associated with OFEntry
-	FlowPriority() string
+	FlowPriority() uint16
 	MatchString() string
 	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions. It
 	// resets the priority of the new FlowBuilder if the provided value is not 0.

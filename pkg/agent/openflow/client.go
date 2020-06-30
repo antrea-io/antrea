@@ -123,8 +123,9 @@ type Client interface {
 	InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, npName, npNamespace string) error
 
 	// UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
+	// It also returns a slice of stale ofPriorities used by ClusterNetworkPolicies.
 	// UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
-	UninstallPolicyRuleFlows(ruleID uint32) (*[]string, error)
+	UninstallPolicyRuleFlows(ruleID uint32) ([]string, error)
 
 	// AddPolicyRuleAddress adds one or multiple addresses to the specified NetworkPolicy rule. If addrType is true, the
 	// addresses are added to PolicyRule.From, else to PolicyRule.To.
@@ -169,8 +170,8 @@ type Client interface {
 	// rules.
 	GetNetworkPolicyFlowKeys(npName, npNamespace string) []string
 
-	// ReassignFlowPriorities takes a list of PriorityUpdates and update the actionFlows that
-	// match the old priority to new priority desired, for each PriorityUpdate.
+	// ReassignFlowPriorities takes a list of priority updates, and update the actionFlows to replace
+	// the old priority with the desired one, for each priority update.
 	ReassignFlowPriorities(updates map[uint16]uint16) error
 }
 

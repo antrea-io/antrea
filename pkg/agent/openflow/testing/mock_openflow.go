@@ -430,10 +430,10 @@ func (mr *MockClientMockRecorder) UninstallPodFlows(arg0 interface{}) *gomock.Ca
 }
 
 // UninstallPolicyRuleFlows mocks base method
-func (m *MockClient) UninstallPolicyRuleFlows(arg0 uint32) (*[]string, error) {
+func (m *MockClient) UninstallPolicyRuleFlows(arg0 uint32) ([]string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UninstallPolicyRuleFlows", arg0)
-	ret0, _ := ret[0].(*[]string)
+	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -434,10 +434,10 @@ func (mr *MockFlowMockRecorder) Delete() *gomock.Call {
 }
 
 // FlowPriority mocks base method
-func (m *MockFlow) FlowPriority() string {
+func (m *MockFlow) FlowPriority() uint16 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FlowPriority")
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(uint16)
 	return ret0
 }
 

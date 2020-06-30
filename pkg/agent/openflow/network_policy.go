@@ -38,8 +38,6 @@ const (
 	MatchUDPDstPort
 	MatchSCTPDstPort
 	Unsupported
-
-	DefaultPriorityStr string = "K8sDefault"
 )
 
 // IP address calculated from Pod's address.
@@ -177,7 +175,7 @@ func (m *conjunctiveMatch) generateGlobalMapKey() string {
 		valueStr = fmt.Sprintf("%s", m.matchValue)
 	}
 	if m.priority == nil {
-		priorityStr = DefaultPriorityStr
+		priorityStr = strconv.Itoa(int(priorityNormal))
 	} else {
 		priorityStr = strconv.Itoa(int(*m.priority))
 	}
@@ -805,7 +803,8 @@ func (c *client) sendConjunctiveMatchFlows(changes []*conjMatchFlowContextChange
 func (c *policyRuleConjunction) ActionFlowPriorities() []string {
 	priorities := make([]string, 0, len(c.actionFlows))
 	for _, flow := range c.actionFlows {
-		priorities = append(priorities, flow.FlowPriority())
+		priorityStr := strconv.Itoa(int(flow.FlowPriority()))
+		priorities = append(priorities, priorityStr)
 	}
 	return priorities
 }
@@ -956,8 +955,9 @@ func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction 
 }
 
 // UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
+// It also returns a slice of stale ofPriorities used by ClusterNetworkPolicies.
 // UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
-func (c *client) UninstallPolicyRuleFlows(ruleID uint32) (*[]string, error) {
+func (c *client) UninstallPolicyRuleFlows(ruleID uint32) ([]string, error) {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
@@ -967,8 +967,8 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) (*[]string, error) {
 		return nil, nil
 	}
 
-	ofPrioritiesToUninstall := conj.ActionFlowPriorities()
-	klog.V(2).Infof("Old priority %v found", ofPrioritiesToUninstall)
+	ofPrioritiesToUninstallFlows := conj.ActionFlowPriorities()
+	klog.V(2).Infof("Old priority %v found", ofPrioritiesToUninstallFlows)
 	var staleOFPriorities []string
 	// Delete action flows from the OVS bridge.
 	if err := c.ofEntryOperations.DeleteAll(conj.actionFlows); err != nil {
@@ -984,15 +984,15 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) (*[]string, error) {
 		return nil, err
 	}
 
-	c.policyCache.Delete(conj)
-	for _, p := range ofPrioritiesToUninstall {
+	for _, p := range ofPrioritiesToUninstallFlows {
 		conjsStalePriority, _ := c.policyCache.ByIndex(priorityIndex, p)
 		if len(conjsStalePriority) == 0 {
 			klog.V(2).Infof("ofPriority %v is now stale", p)
 			staleOFPriorities = append(staleOFPriorities, p)
 		}
 	}
-	return &staleOFPriorities, nil
+	c.policyCache.Delete(conj)
+	return staleOFPriorities, nil
 }
 
 func (c *client) replayPolicyFlows() {
@@ -1126,12 +1126,12 @@ func (c *client) getMatchFlowUpdates(conj *policyRuleConjunction, newPriority ui
 
 // processFlowUpdates identifies the update cases in flow adds and deletes.
 // For conjunctiveMatchFlow updates, the following scenario is possible:
-//  A flow {priority=100,ip,reg1=0x1f action=conjunction(1,1/3)} need to be re-assigned to priority=99.
+//  A flow {priority=100,ip,reg1=0x1f action=conjunction(1,1/3)} need to be re-assigned priority=99.
 //  In this case, an addFlow of <priority=99,ip,reg1=0x1f> and delFlow <priority=100,ip,reg1=0x1f> will be issued.
-//  At the same time, another flow {priority=99,ip,reg1=0x1f action=conjunction(2,1/3)} exists and now need to
-//  be re-assigned to priority 98. This operation will issue a delFlow <priority=99,ip,reg1=0x1f>, which
-//  essentially voids the add flow for conj=1.
-// In this case, we remove the conflicting delFlow and set addFlow as an modifyFlow
+//  At the same time, another flow {priority=99,ip,reg1=0x1f action=conjunction(2,1/3)} exists and now needs to
+//  be re-assigned priority 98. This operation will issue a delFlow <priority=99,ip,reg1=0x1f>, which
+//  would essentially void the add flow for conj=1.
+// In this case, we remove the conflicting delFlow and set addFlow as a modifyFlow.
 func (c *client) processFlowUpdates(addFlows, delFlows []binding.Flow) (add, update, del []binding.Flow) {
 	for _, a := range addFlows {
 		matched := false
@@ -1195,15 +1195,15 @@ func (c *client) updateConjunctionMatchFlows(conj *policyRuleConjunction, newPri
 func (c *client) calculateFlowUpdates(updates map[uint16]uint16) (addFlows, delFlows []binding.Flow, conjFlowUpdates map[uint32]flowUpdates) {
 	conjFlowUpdates = map[uint32]flowUpdates{}
 	for original, newPriority := range updates {
-		originalPriority := strconv.Itoa(int(original))
-		conjs, _ := c.policyCache.ByIndex(priorityIndex, originalPriority)
+		originalPriorityStr := strconv.Itoa(int(original))
+		conjs, _ := c.policyCache.ByIndex(priorityIndex, originalPriorityStr)
 		klog.V(4).Infof("%d policyRuleConjunctions have flows installed at priority %v previously",
-			len(conjs), originalPriority)
+			len(conjs), originalPriorityStr)
 		for _, conjObj := range conjs {
 			conj := conjObj.(*policyRuleConjunction)
 			for _, actionFlow := range conj.actionFlows {
-				priorityStr := actionFlow.FlowPriority()
-				if priorityStr == originalPriority {
+				flowPriority := actionFlow.FlowPriority()
+				if flowPriority == original {
 					// The OF flow was created at the priority which need to be re-installed
 					// at the NewPriority now
 					updatedFlow := actionFlow.
@@ -1228,8 +1228,8 @@ func (c *client) calculateFlowUpdates(updates map[uint16]uint16) (addFlows, delF
 	return addFlows, delFlows, conjFlowUpdates
 }
 
-// ReassignFlowPriorities takes a list of PriorityUpdates and update the actionFlows that
-// match the old priority to new priority desired, for each priority update in the input map.
+// ReassignFlowPriorities takes a list of priority updates, and update the actionFlows to replace
+// the old priority with the desired one, for each priority update.
 func (c *client) ReassignFlowPriorities(updates map[uint16]uint16) error {
 	addFlows, delFlows, conjFlowUpdates := c.calculateFlowUpdates(updates)
 	add, update, del := c.processFlowUpdates(addFlows, delFlows)

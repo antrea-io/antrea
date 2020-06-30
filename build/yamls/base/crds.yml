@@ -109,7 +109,7 @@ spec:
                   # Ensure that Action field allows only ALLOW and DROP values
                   action:
                     type: string
-                    pattern: '\bALLOW|\bAllow|\ballow|\bDROP|\bDrop|\bdrop'
+                    pattern: '\bAllow|\bDrop'
                   ports:
                     type: array
                     items:
@@ -144,7 +144,7 @@ spec:
                   # Ensure that Action field allows only ALLOW and DROP values
                   action:
                     type: string
-                    pattern: '\bALLOW|\bAllow|\ballow|\bDROP|\bDrop|\bdrop'
+                    pattern: '\bAllow|\bDrop'
                   ports:
                     type: array
                     items:

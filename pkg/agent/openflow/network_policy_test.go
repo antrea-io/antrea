@@ -17,6 +17,7 @@ import (
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	mocks "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
 )
@@ -118,10 +119,12 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	defer ctrl.Finish()
 
 	c = prepareClient(ctrl)
+	defaultAction := secv1alpha1.RuleActionAllow
 	ruleID1 := uint32(101)
 	rule1 := &types.PolicyRule{
 		Direction: v1beta1.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.30", "192.168.1.50"}),
+		Action:    &defaultAction,
 		Priority:  nil,
 	}
 
@@ -145,6 +148,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	rule2 := &types.PolicyRule{
 		Direction: v1beta1.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
+		Action:    &defaultAction,
 		To:        parseAddresses([]string{"0.0.0.0/0"}),
 	}
 	conj2 := &policyRuleConjunction{id: ruleID2}
@@ -179,6 +183,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		Direction: v1beta1.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.60"}),
 		To:        parseAddresses([]string{"192.168.2.0/24"}),
+		Action:    &defaultAction,
 		Service:   []v1beta1.Service{npPort1, npPort2},
 	}
 	conj3 := &policyRuleConjunction{id: ruleID3}
@@ -251,7 +256,7 @@ func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 	err = c.applyConjunctiveMatchFlows(flowChange2)
 	require.Nil(t, err, "no error expect in applyConjunctiveMatchFlows")
 
-	expectedMatchKey := fmt.Sprintf("table:%d,priority:%s,type:%d,value:%s", egressRuleTable, DefaultPriorityStr, MatchDstIPNet, ipNet.String())
+	expectedMatchKey := fmt.Sprintf("table:%d,priority:%s,type:%d,value:%s", egressRuleTable, strconv.Itoa(int(priorityNormal)), MatchDstIPNet, ipNet.String())
 	ctx, found := c.globalConjMatchFlowCache[expectedMatchKey]
 	assert.True(t, found)
 	assert.Equal(t, 2, len(ctx.actions))
@@ -380,7 +385,7 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlow = mocks.NewMockFlow(ctrl)
 	ruleFlowBuilder.EXPECT().Done().Return(ruleFlow).AnyTimes()
 	ruleFlow.EXPECT().CopyToBuilder(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
-	ruleFlow.EXPECT().FlowPriority().Return("").AnyTimes()
+	ruleFlow.EXPECT().FlowPriority().Return(uint16(priorityNormal)).AnyTimes()
 	ruleFlow.EXPECT().MatchString().Return("").AnyTimes()
 	return ruleFlowBuilder
 }

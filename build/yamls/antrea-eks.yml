@@ -72,7 +72,7 @@ spec:
               items:
                 properties:
                   action:
-                    pattern: \bALLOW|\bAllow|\ballow|\bDROP|\bDrop|\bdrop
+                    pattern: \bAllow|\bDrop
                     type: string
                   ports:
                     items:
@@ -106,7 +106,7 @@ spec:
               items:
                 properties:
                   action:
-                    pattern: \bALLOW|\bAllow|\ballow|\bDROP|\bDrop|\bdrop
+                    pattern: \bAllow|\bDrop
                     type: string
                   from:
                     items:
