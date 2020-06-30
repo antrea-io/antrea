@@ -549,7 +549,11 @@ func getServiceMatchType(protocol *v1beta1.Protocol) int {
 
 func (c *clause) generateServicePortConjMatch(port v1beta1.Service) *conjunctiveMatch {
 	matchKey := getServiceMatchType(port.Protocol)
-	matchValue := uint16(port.Port.IntVal)
+	// Match all ports with the given protocol type if the matchValue is not specified (value is 0).
+	matchValue := uint16(0)
+	if port.Port != nil {
+		matchValue = uint16(port.Port.IntVal)
+	}
 	match := &conjunctiveMatch{
 		tableID:    c.ruleTable.GetID(),
 		matchKey:   matchKey,
