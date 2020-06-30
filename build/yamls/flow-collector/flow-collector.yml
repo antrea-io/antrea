@@ -37,11 +37,9 @@ kind: Service
 metadata:
   name: elasticsearch
   labels:
-    type: database
     app: elasticsearch
 spec:
   selector:
-    type: database
     app: elasticsearch
   ports:
     - port: 9200
@@ -52,19 +50,16 @@ kind: StatefulSet
 metadata:
   name: elasticsearch
   labels:
-    type: database
     app: elasticsearch
 spec:
   selector:
     matchLabels:
-      type: database
       app: elasticsearch
   serviceName: elasticsearch
   replicas: 1
   template:
     metadata:
       labels:
-        type: database
         app: elasticsearch
     spec:
       initContainers:
@@ -125,13 +120,11 @@ kind: Service
 metadata:
   name: kibana
   labels:
-    type: kibana
-    app: elasticsearch
+    app: kibana
 spec:
   type: NodePort
   selector:
-    type: kibana
-    app: elasticsearch
+    app: kibana
   ports:
     - port: 5601
       targetPort: 5601
@@ -142,19 +135,16 @@ kind: Deployment
 metadata:
   name: kibana
   labels:
-    app: elasticsearch
-    type: kibana
+    app: kibana
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: elasticsearch
-      type: kibana
+      app: kibana
   template:
     metadata:
       labels:
-        app: elasticsearch
-        type: kibana
+        app: kibana
     spec:
       containers:
         - name: kibana
@@ -181,10 +171,10 @@ kind: Service
 metadata:
   name: logstash
   labels:
-    app: antrea-flow-collector
+    app: logstash
 spec:
   selector:
-    app: antrea-flow-collector
+    app: logstash
   ports:
     - port: 4739
       targetPort: 4739
@@ -195,16 +185,16 @@ kind: Deployment
 metadata:
   name: logstash
   labels:
-    app: antrea-flow-collector
+    app: logstash
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: antrea-flow-collector
+      app: logstash
   template:
     metadata:
       labels:
-        app: antrea-flow-collector
+        app: logstash
     spec:
       containers:
         - name: logstash
