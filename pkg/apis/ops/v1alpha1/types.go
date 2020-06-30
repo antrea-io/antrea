@@ -78,7 +78,7 @@ type Destination struct {
 	Namespace string `json:"namespace,omitempty"`
 	// Pod is the destination pod, exclusive with destination service.
 	Pod string `json:"pod,omitempty"`
-	// Service is the destination service, exlusive with destination pod.
+	// Service is the destination service, exclusive with destination pod.
 	Service string `json:"service,omitempty"`
 	// IP is the destination IP.
 	IP string `json:"IP,omitempty"`
