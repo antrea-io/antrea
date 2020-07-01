@@ -103,59 +103,6 @@ func (o *Options) validate(args []string) error {
 	if encapMode.SupportsNoEncap() && o.config.EnableIPSecTunnel {
 		return fmt.Errorf("IPSec tunnel may only be enabled on %s mode", config.TrafficEncapModeEncap)
 	}
-	if o.config.FlowCollectorAddr != ""  && features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		// Check if it is TCP or UDP
-		strSlice := strings.Split(o.config.FlowCollectorAddr, ":")
-		var proto string
-		if len(strSlice) == 2 {
-			// No separator "." and proto is given
-			proto = "tcp"
-		} else if len(strSlice) > 2 {
-			if strSlice[2] == "udp" {
-				proto = "udp"
-			} else {
-				// All other cases default proto is tcp
-				proto = "tcp"
-			}
-		} else {
-			return fmt.Errorf("IPFIX flow collector is given in invalid format: %v", err)
-		}
-		// Convert the string input in net.Addr format
-		hostPortAddr := strSlice[0] + ":" + strSlice[1]
-		_, _, err := net.SplitHostPort(hostPortAddr)
-		if err != nil {
-			return fmt.Errorf("IPFIX flow collector is given in invalid format: %v", err)
-		}
-		if proto == "udp" {
-			o.flowCollector, err = net.ResolveUDPAddr("udp", hostPortAddr)
-			if err != nil {
-				return fmt.Errorf("IPFIX flow collector over UDP proto is not resolved: %v", err)
-			}
-		} else {
-			o.flowCollector, err = net.ResolveTCPAddr("tcp", hostPortAddr)
-			if err != nil {
-				return fmt.Errorf("IPFIX flow collector server TCP proto is not resolved: %v", err)
-			}
-		}
-
-		if o.config.PollAndExportInterval != "" {
-			intervalSlice := strings.Split(o.config.PollAndExportInterval, ":")
-			if len(intervalSlice) != 2 {
-				return fmt.Errorf("flow exporter intervals %s is not in acceptable format \"OOs:OOs\"", o.config.PollAndExportInterval)
-			}
-			o.pollingInterval, err = time.ParseDuration(intervalSlice[0])
-			if err != nil {
-				return fmt.Errorf("poll interval is not provided in right format: %v", err)
-			}
-			o.exportInterval, err = time.ParseDuration(intervalSlice[1])
-			if err != nil {
-				return fmt.Errorf("export interval is not provided in right format: %v", err)
-			}
-			if o.pollingInterval > o.exportInterval {
-				return fmt.Errorf("poll interval should be less than or equal to export interval")
-			}
-		}
-	}
 	return nil
 }
 
@@ -209,4 +156,63 @@ func (o *Options) setDefaults() {
 		o.pollingInterval = 5 * time.Second
 		o.exportInterval = 60 * time.Second
 	}
+}
+
+func (o *Options) validateFlowExporterConfig() error {
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		if o.config.FlowCollectorAddr != "" {
+			// Check if it is TCP or UDP
+			strSlice := strings.Split(o.config.FlowCollectorAddr, ":")
+			var proto string
+			if len(strSlice) == 2 {
+				// No separator "." and proto is given
+				proto = "tcp"
+			} else if len(strSlice) > 2 {
+				if strSlice[2] == "udp" {
+					proto = "udp"
+				} else {
+					// All other cases default proto is tcp
+					proto = "tcp"
+				}
+			} else {
+				return fmt.Errorf("IPFIX flow collector is given in invalid format")
+			}
+			// Convert the string input in net.Addr format
+			hostPortAddr := strSlice[0] + ":" + strSlice[1]
+			_, _, err := net.SplitHostPort(hostPortAddr)
+			if err != nil {
+				return fmt.Errorf("IPFIX flow collector is given in invalid format: %v", err)
+			}
+			if proto == "udp" {
+				o.flowCollector, err = net.ResolveUDPAddr("udp", hostPortAddr)
+				if err != nil {
+					return fmt.Errorf("IPFIX flow collector over UDP proto is not resolved: %v", err)
+				}
+			} else {
+				o.flowCollector, err = net.ResolveTCPAddr("tcp", hostPortAddr)
+				if err != nil {
+					return fmt.Errorf("IPFIX flow collector server TCP proto is not resolved: %v", err)
+				}
+			}
+
+			if o.config.PollAndExportInterval != "" {
+				intervalSlice := strings.Split(o.config.PollAndExportInterval, ":")
+				if len(intervalSlice) != 2 {
+					return fmt.Errorf("flow exporter intervals %s is not in acceptable format \"OOs:OOs\"", o.config.PollAndExportInterval)
+				}
+				o.pollingInterval, err = time.ParseDuration(intervalSlice[0])
+				if err != nil {
+					return fmt.Errorf("poll interval is not provided in right format: %v", err)
+				}
+				o.exportInterval, err = time.ParseDuration(intervalSlice[1])
+				if err != nil {
+					return fmt.Errorf("export interval is not provided in right format: %v", err)
+				}
+				if o.pollingInterval > o.exportInterval {
+					return fmt.Errorf("poll interval should be less than or equal to export interval")
+				}
+			}
+		}
+	}
+	return nil
 }
