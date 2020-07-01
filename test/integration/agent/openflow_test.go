@@ -28,6 +28,7 @@ import (
 	ofClient "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
@@ -157,6 +158,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta1.ProtocolTCP
+	defaultAction := secv1alpha1.RuleActionAllow
 	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
@@ -164,15 +166,16 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 		From:      prepareIPAddresses(fromList),
 		To:        toIPList,
 		Service:   []v1beta1.Service{npPort1},
+		Action:    &defaultAction,
 	}
 
 	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 
-	err = c.AddPolicyRuleAddress(ruleID, types.SrcAddress, prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"}))
+	err = c.AddPolicyRuleAddress(ruleID, types.SrcAddress, prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"}), nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 	ofport := int32(100)
-	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)})
+	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	testReplayFlows(t)
@@ -308,6 +311,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta1.ProtocolTCP
+	defaultAction := secv1alpha1.RuleActionAllow
 	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
@@ -315,6 +319,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		From:      prepareIPAddresses(fromList),
 		To:        toIPList,
 		Service:   []v1beta1.Service{npPort1},
+		Action:    &defaultAction,
 	}
 
 	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
@@ -327,7 +332,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	checkDeleteAddress(t, ingressRuleTable, priorityNormal, ruleID, addedFrom, types.SrcAddress)
 
 	ofport := int32(100)
-	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)})
+	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// Dump flows.
@@ -350,6 +355,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		Direction: v1beta1.DirectionIn,
 		To:        toIPList2,
 		Service:   []v1beta1.Service{npPort2},
+		Action:    &defaultAction,
 	}
 	err = c.InstallPolicyRuleFlows(ruleID2, rule2, "np1", "ns1")
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
@@ -366,11 +372,11 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		t.Errorf("Failed to install conjunctive match flow")
 	}
 	require.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow3), "Failed to install service flow")
-	err = c.UninstallPolicyRuleFlows(ruleID2)
+	_, err = c.UninstallPolicyRuleFlows(ruleID2)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList2, true)
 
-	err = c.UninstallPolicyRuleFlows(ruleID)
+	_, err = c.UninstallPolicyRuleFlows(ruleID)
 	require.Nil(t, err, "Failed to DeletePolicyRuleService")
 	checkConjunctionFlows(t, ingressRuleTable, ingressDefaultTable, contrackCommitTable, priorityNormal, ruleID, rule, assert.False)
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList, false)
@@ -411,7 +417,7 @@ func getCmdMatchKey(matchType int) string {
 }
 
 func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32, addedAddress []types.Address, addrType types.AddressType) {
-	err := c.AddPolicyRuleAddress(ruleID, addrType, addedAddress)
+	err := c.AddPolicyRuleAddress(ruleID, addrType, addedAddress, nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// dump flows
@@ -439,7 +445,7 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 }
 
 func checkDeleteAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32, addedAddress []types.Address, addrType types.AddressType) {
-	err := c.DeletePolicyRuleAddress(ruleID, addrType, addedAddress)
+	err := c.DeletePolicyRuleAddress(ruleID, addrType, addedAddress, nil)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 	flowList, err := ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ruleTable)
 	require.Nil(t, err, "Failed to dump flows")
@@ -576,7 +582,7 @@ func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gw
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,dl_dst=%s", podMAC.String()),
-					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90", podOFPort)},
+					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:85", podOFPort)},
 			},
 		},
 	}
@@ -618,7 +624,7 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			[]*ofTestUtils.ExpectFlow{
 				{
 					fmt.Sprintf("priority=200,dl_dst=%s", gwMAC.String()),
-					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90", gwOFPort)},
+					fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:85", gwOFPort)},
 			},
 		},
 		{
@@ -708,6 +714,14 @@ func prepareDefaultFlows() []expectTableFlows {
 			},
 		},
 		{
+			uint8(42),
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:45"}},
+		},
+		{
+			uint8(45),
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:50"}},
+		},
+		{
 			uint8(50),
 			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:60"}},
 		},
@@ -721,6 +735,10 @@ func prepareDefaultFlows() []expectTableFlows {
 		},
 		{
 			uint8(80),
+			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:85"}},
+		},
+		{
+			uint8(85),
 			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:90"}},
 		},
 		{

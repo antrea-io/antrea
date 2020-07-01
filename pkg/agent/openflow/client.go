@@ -123,16 +123,17 @@ type Client interface {
 	InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, npName, npNamespace string) error
 
 	// UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
+	// It also returns a slice of stale ofPriorities used by ClusterNetworkPolicies.
 	// UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
-	UninstallPolicyRuleFlows(ruleID uint32) error
+	UninstallPolicyRuleFlows(ruleID uint32) ([]string, error)
 
 	// AddPolicyRuleAddress adds one or multiple addresses to the specified NetworkPolicy rule. If addrType is true, the
 	// addresses are added to PolicyRule.From, else to PolicyRule.To.
-	AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error
+	AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16) error
 
 	// DeletePolicyRuleAddress removes addresses from the specified NetworkPolicy rule. If addrType is srcAddress, the addresses
 	// are removed from PolicyRule.From, else from PolicyRule.To.
-	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error
+	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16) error
 
 	// InstallExternalFlows sets up flows to enable Pods to communicate to the external IP addresses. The corresponding
 	// OpenFlow entries include: 1) identify the packets from local Pods to the external IP address, 2) mark the traffic
@@ -168,6 +169,10 @@ type Client interface {
 	// entries can be added due to conjunctive match flows shared by multiple
 	// rules.
 	GetNetworkPolicyFlowKeys(npName, npNamespace string) []string
+
+	// ReassignFlowPriorities takes a list of priority updates, and update the actionFlows to replace
+	// the old priority with the desired one, for each priority update.
+	ReassignFlowPriorities(updates map[uint16]uint16) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.

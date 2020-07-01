@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 
 	"github.com/davecgh/go-spew/spew"
@@ -154,15 +155,22 @@ type reconciler struct {
 
 	// idAllocator provides interfaces to allocate and release uint32 id.
 	idAllocator *idAllocator
+
+	// priorityAssigner provides interfaces to manage OF priorities.
+	priorityAssigner *priorityAssigner
+
+	// priorityMutex prevents concurrent priority re-assignments
+	priorityMutex sync.RWMutex
 }
 
 // newReconciler returns a new *reconciler.
 func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore) *reconciler {
 	reconciler := &reconciler{
-		ofClient:      ofClient,
-		ifaceStore:    ifaceStore,
-		lastRealizeds: sync.Map{},
-		idAllocator:   newIDAllocator(),
+		ofClient:         ofClient,
+		ifaceStore:       ifaceStore,
+		lastRealizeds:    sync.Map{},
+		idAllocator:      newIDAllocator(),
+		priorityAssigner: newPriorityAssigner(),
 	}
 	return reconciler
 }
@@ -171,22 +179,67 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 // invoke the add or update method accordingly.
 func (r *reconciler) Reconcile(rule *CompletedRule) error {
 	klog.Infof("Reconciling rule %s of NetworkPolicy %s/%s", rule.ID, rule.PolicyNamespace, rule.PolicyName)
+	var err error
+	var ofPriority *uint16
 
 	value, exists := r.lastRealizeds.Load(rule.ID)
-	if !exists {
-		return r.add(rule)
+	if rule.isAntreaNetworkPolicyRule() {
+		// For CNP, only release priorityMutex after rule is installed on OVS. Otherwise,
+		// priority re-assignments for flows that have already been assigned priorities but
+		// not yet installed on OVS will be missed.
+		r.priorityMutex.Lock()
+		defer r.priorityMutex.Unlock()
 	}
-	return r.update(value.(*lastRealized), rule)
+	ofPriority, err = r.getOFPriority(rule)
+	if err != nil {
+		return err
+	}
+	var ofRuleInstallErr error
+	if !exists {
+		ofRuleInstallErr = r.add(rule, ofPriority)
+	} else {
+		ofRuleInstallErr = r.update(value.(*lastRealized), rule, ofPriority)
+	}
+	if ofRuleInstallErr != nil && ofPriority != nil {
+		r.priorityAssigner.Release(*ofPriority)
+	}
+	return ofRuleInstallErr
+}
+
+// getOFPriority retrieves the OFPriority for the input CompletedRule to be installed,
+// and re-arranges installed priorities on OVS if necessary.
+func (r *reconciler) getOFPriority(rule *CompletedRule) (*uint16, error) {
+	if rule.PolicyPriority == nil {
+		klog.V(2).Infof("Assigning default priority for k8s NetworkPolicy.")
+		return nil, nil
+	}
+	p := types.Priority{PolicyPriority: *rule.PolicyPriority, RulePriority: rule.Priority}
+	ofPriority, priorityUpdates, err := r.priorityAssigner.GetOFPriority(p)
+	if err != nil {
+		return nil, err
+	}
+	// Re-assign installed priorities on OVS
+	if len(priorityUpdates) > 0 {
+		err := r.ofClient.ReassignFlowPriorities(priorityUpdates)
+		if err != nil {
+			// TODO: revert the priorityUpdates in priorityMap if err occurred here.
+			r.priorityAssigner.Release(*ofPriority)
+			return nil, err
+		}
+	}
+	klog.V(2).Infof("Assigning OFPriority %v for rule %v", *ofPriority, rule.ID)
+	return ofPriority, nil
 }
 
 // add converts CompletedRule to PolicyRule(s) and invokes installOFRule to install them.
-func (r *reconciler) add(rule *CompletedRule) error {
+func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16) error {
 	klog.V(2).Infof("Adding new rule %v", rule)
 	lastRealized := newLastRealized(rule)
 	// TODO: Handle the case that the following processing fails or partially succeeds.
 	r.lastRealizeds.Store(rule.ID, lastRealized)
 
 	ofRuleByServicesMap := map[servicesHash]*types.PolicyRule{}
+
 	if rule.Direction == v1beta1.DirectionIn {
 		// Addresses got from source Pod IPs.
 		from1 := podsToOFAddresses(rule.FromAddresses)
@@ -194,6 +247,7 @@ func (r *reconciler) add(rule *CompletedRule) error {
 		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks)
 
 		podsByServicesMap, servicesMap := groupPodsByServices(rule.Services, rule.Pods)
+
 		for svcHash, pods := range podsByServicesMap {
 			ofPorts := r.getPodOFPorts(pods)
 			lastRealized.podOFPorts[svcHash] = ofPorts
@@ -202,6 +256,8 @@ func (r *reconciler) add(rule *CompletedRule) error {
 				From:      append(from1, from2...),
 				To:        ofPortsToOFAddresses(ofPorts),
 				Service:   filterUnresolvablePort(servicesMap[svcHash]),
+				Action:    rule.Action,
+				Priority:  ofPriority,
 			}
 		}
 	} else {
@@ -216,6 +272,8 @@ func (r *reconciler) add(rule *CompletedRule) error {
 				From:      from,
 				To:        podsToOFAddresses(pods),
 				Service:   filterUnresolvablePort(servicesMap[svcHash]),
+				Action:    rule.Action,
+				Priority:  ofPriority,
 			}
 		}
 
@@ -223,23 +281,27 @@ func (r *reconciler) add(rule *CompletedRule) error {
 		// We must ensure there is at least one PolicyRule, otherwise the Pods won't be
 		// isolated, so we create a PolicyRule with the original services if it doesn't exist.
 		// If there are IPBlocks or Pods that cannot resolve any named port, they will share
-		// this PolicyRule.
-		svcHash := hashServices(rule.Services)
-		ofRule, exists := ofRuleByServicesMap[svcHash]
-		// Create a new Openflow rule if the group doesn't exist.
-		if !exists {
-			ofRule = &types.PolicyRule{
-				Direction: v1beta1.DirectionOut,
-				From:      from,
-				To:        []types.Address{},
-				Service:   filterUnresolvablePort(rule.Services),
+		// this PolicyRule. ClusterNetworkPolicy does not need this default isolation.
+		if !rule.isAntreaNetworkPolicyRule() || len(rule.To.IPBlocks) > 0 {
+			svcHash := hashServices(rule.Services)
+			ofRule, exists := ofRuleByServicesMap[svcHash]
+			// Create a new Openflow rule if the group doesn't exist.
+			if !exists {
+				ofRule = &types.PolicyRule{
+					Direction: v1beta1.DirectionOut,
+					From:      from,
+					To:        []types.Address{},
+					Service:   filterUnresolvablePort(rule.Services),
+					Action:    rule.Action,
+					Priority:  nil,
+				}
+				ofRuleByServicesMap[svcHash] = ofRule
 			}
-			ofRuleByServicesMap[svcHash] = ofRule
-		}
-		if len(rule.To.IPBlocks) > 0 {
-			// Diff Addresses between To and Except of IPBlocks
-			to := ipBlocksToOFAddresses(rule.To.IPBlocks)
-			ofRule.To = append(ofRule.To, to...)
+			if len(rule.To.IPBlocks) > 0 {
+				// Diff Addresses between To and Except of IPBlocks
+				to := ipBlocksToOFAddresses(rule.To.IPBlocks)
+				ofRule.To = append(ofRule.To, to...)
+			}
 		}
 	}
 
@@ -259,7 +321,7 @@ func (r *reconciler) add(rule *CompletedRule) error {
 
 // update calculates the difference of Addresses between oldRule and newRule,
 // and invokes Openflow client's methods to reconcile them.
-func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) error {
+func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, ofPriority *uint16) error {
 	klog.V(2).Infof("Updating existing rule %v", newRule)
 	// staleOFIDs tracks servicesHash that are no long needed.
 	// Firstly fill it with the last realized ofIDs.
@@ -287,6 +349,8 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 					From:      append(from1, from2...),
 					To:        ofPortsToOFAddresses(newOFPorts),
 					Service:   filterUnresolvablePort(servicesMap[svcHash]),
+					Action:    newRule.Action,
+					Priority:  ofPriority,
 				}
 				ofID, err := r.installOFRule(ofRule, newRule.PolicyName, newRule.PolicyNamespace)
 				if err != nil {
@@ -296,7 +360,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 			} else {
 				addedTo := ofPortsToOFAddresses(newOFPorts.Difference(lastRealized.podOFPorts[svcHash]))
 				deletedTo := ofPortsToOFAddresses(lastRealized.podOFPorts[svcHash].Difference(newOFPorts))
-				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo); err != nil {
+				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
 				// Delete valid servicesHash from staleOFIDs.
@@ -327,6 +391,8 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 					From:      from,
 					To:        podsToOFAddresses(pods),
 					Service:   filterUnresolvablePort(servicesMap[svcHash]),
+					Action:    newRule.Action,
+					Priority:  ofPriority,
 				}
 				ofID, err := r.installOFRule(ofRule, newRule.PolicyName, newRule.PolicyNamespace)
 				if err != nil {
@@ -336,7 +402,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule) 
 			} else {
 				addedTo := podsToOFAddresses(pods.Difference(prevPodsByServicesMap[svcHash]))
 				deletedTo := podsToOFAddresses(prevPodsByServicesMap[svcHash].Difference(pods))
-				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo); err != nil {
+				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
 				// Delete valid servicesHash from staleOFIDs.
@@ -371,27 +437,27 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule, npName, npNamespace
 	return ofID, nil
 }
 
-func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedTo []types.Address, deletedFrom []types.Address, deletedTo []types.Address) error {
+func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedTo []types.Address, deletedFrom []types.Address, deletedTo []types.Address, priority *uint16) error {
 	klog.V(2).Infof("Updating ofRule %d (addedFrom: %d, addedTo: %d, deleteFrom: %d, deletedTo: %d)",
 		ofID, len(addedFrom), len(addedTo), len(deletedFrom), len(deletedTo))
 	// TODO: This might be unnecessarily complex and hard for error handling, consider revising the Openflow interfaces.
 	if len(addedFrom) > 0 {
-		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.SrcAddress, addedFrom); err != nil {
+		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.SrcAddress, addedFrom, priority); err != nil {
 			return fmt.Errorf("error adding policy rule source addresses for ofRule %v: %v", ofID, err)
 		}
 	}
 	if len(addedTo) > 0 {
-		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.DstAddress, addedTo); err != nil {
+		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.DstAddress, addedTo, priority); err != nil {
 			return fmt.Errorf("error adding policy rule destination addresses for ofRule %v: %v", ofID, err)
 		}
 	}
 	if len(deletedFrom) > 0 {
-		if err := r.ofClient.DeletePolicyRuleAddress(ofID, types.SrcAddress, deletedFrom); err != nil {
+		if err := r.ofClient.DeletePolicyRuleAddress(ofID, types.SrcAddress, deletedFrom, priority); err != nil {
 			return fmt.Errorf("error deleting policy rule source addresses for ofRule %v: %v", ofID, err)
 		}
 	}
 	if len(deletedTo) > 0 {
-		if err := r.ofClient.DeletePolicyRuleAddress(ofID, types.DstAddress, deletedTo); err != nil {
+		if err := r.ofClient.DeletePolicyRuleAddress(ofID, types.DstAddress, deletedTo, priority); err != nil {
 			return fmt.Errorf("error deleting policy rule destination addresses for ofRule %v: %v", ofID, err)
 		}
 	}
@@ -400,8 +466,22 @@ func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedT
 
 func (r *reconciler) uninstallOFRule(ofID uint32) error {
 	klog.V(2).Infof("Uninstalling ofRule %d", ofID)
-	if err := r.ofClient.UninstallPolicyRuleFlows(ofID); err != nil {
+	r.priorityMutex.Lock()
+	defer r.priorityMutex.Unlock()
+	stalePriorities, err := r.ofClient.UninstallPolicyRuleFlows(ofID)
+	if err != nil {
 		return fmt.Errorf("error uninstalling ofRule %v: %v", ofID, err)
+	}
+	if len(stalePriorities) > 0 {
+		for _, p := range stalePriorities {
+			klog.V(2).Infof("Releasing stale priority %v", p)
+			priorityNum, err := strconv.ParseUint(p, 10, 16)
+			if err != nil {
+				// Cannot parse the priority str. Theoretically this should never happen.
+				return err
+			}
+			r.priorityAssigner.Release(uint16(priorityNum))
+		}
 	}
 	if err := r.idAllocator.release(ofID); err != nil {
 		// This should never happen. If it does, it is a programming error.
