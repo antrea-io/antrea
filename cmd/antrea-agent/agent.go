@@ -32,9 +32,11 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -80,7 +82,7 @@ func run(o *Options) error {
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr)
+	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, features.DefaultFeatureGate.Enabled(features.AntreaProxy))
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
@@ -108,7 +110,8 @@ func run(o *Options) error {
 		o.config.HostGateway,
 		o.config.DefaultMTU,
 		serviceCIDRNet,
-		networkConfig)
+		networkConfig,
+		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -133,6 +136,10 @@ func run(o *Options) error {
 	isChaining := false
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
+	}
+	var proxier *proxy.Proxier
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
 	}
 	cniServer := cniserver.New(
 		o.config.CNISocket,
@@ -184,6 +191,10 @@ func run(o *Options) error {
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
 
 	go agentMonitor.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		go proxier.Run(stopCh)
+	}
 
 	apiServer, err := apiserver.New(
 		agentQuerier,

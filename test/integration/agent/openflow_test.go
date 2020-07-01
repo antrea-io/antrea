@@ -83,7 +83,7 @@ type testConfig struct {
 }
 
 func TestConnectivityFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -110,7 +110,7 @@ func TestConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsConnectivityFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -137,7 +137,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -230,11 +230,11 @@ func testInstallTunnelFlows(t *testing.T, config *testConfig) {
 }
 
 func testInstallServiceFlows(t *testing.T, config *testConfig) {
-	err := c.InstallClusterServiceCIDRFlows(config.serviceCIDR, config.localGateway.mac, config.localGateway.ofPort)
+	err := c.InstallClusterServiceFlows()
 	if err != nil {
-		t.Fatalf("Failed to install Openflow entries to skip service CIDR from egress table")
+		t.Fatalf("Failed to install Openflow entries to skip service CIDR from egress table: %v", err)
 	}
-	for _, tableFlow := range prepareServiceHelperFlows(*config.serviceCIDR, config.localGateway.mac, config.localGateway.ofPort) {
+	for _, tableFlow := range prepareServiceHelperFlows() {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -288,7 +288,7 @@ func testUninstallPodFlows(t *testing.T, config *testConfig) {
 }
 
 func TestNetworkPolicyFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -557,7 +557,7 @@ func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gw
 			uint8(10),
 			[]*ofTestUtils.ExpectFlow{
 				{fmt.Sprintf("priority=200,ip,in_port=%d,dl_src=%s,nw_src=%s", podOFPort, podMAC.String(), podIP.String()),
-					"goto_table:30"},
+					"goto_table:29"},
 				{
 					fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", podOFPort, podIP.String(), podMAC.String()),
 					"goto_table:20"},
@@ -567,7 +567,7 @@ func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gw
 			uint8(70),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					fmt.Sprintf("priority=200,ip,dl_dst=%s,nw_dst=%s", vMAC.String(), podIP.String()),
+					fmt.Sprintf("priority=200,ip,reg0=0x80000/0x80000,nw_dst=%s", podIP.String()),
 					fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,dec_ttl,goto_table:80", gwMAC.String(), podMAC.String())},
 			},
 		},
@@ -595,14 +595,14 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			uint8(31),
 			[]*ofTestUtils.ExpectFlow{
 				{"priority=200,ct_state=-new+trk,ct_mark=0x20,ip",
-					fmt.Sprintf("load:0x%s->NXM_OF_ETH_DST[],goto_table:40", strings.Replace(gwMAC.String(), ":", "", -1))},
+					fmt.Sprintf("load:0x%s->NXM_OF_ETH_DST[],goto_table:42", strings.Replace(gwMAC.String(), ":", "", -1))},
 			},
 		},
 		{
 			uint8(10),
 			[]*ofTestUtils.ExpectFlow{
 				{fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", gwOFPort, gwIP, gwMAC), "goto_table:20"},
-				{fmt.Sprintf("priority=200,ip,in_port=%d", gwOFPort), "goto_table:30"},
+				{fmt.Sprintf("priority=200,ip,in_port=%d", gwOFPort), "goto_table:29"},
 			},
 		},
 		{
@@ -637,7 +637,7 @@ func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableF
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{
-				{fmt.Sprintf("priority=200,in_port=%d", tunnelPort), "load:0->NXM_NX_REG0[0..15],goto_table:30"},
+				{fmt.Sprintf("priority=200,in_port=%d", tunnelPort), "load:0->NXM_NX_REG0[0..15],load:0x1->NXM_NX_REG0[19],goto_table:30"},
 			},
 		},
 	}
@@ -663,13 +663,13 @@ func prepareNodeFlows(tunnelPort uint32, peerSubnet net.IPNet, peerGwIP, peerNod
 	}
 }
 
-func prepareServiceHelperFlows(serviceCIDR net.IPNet, gwMAC net.HardwareAddr, gwOFPort uint32) []expectTableFlows {
+func prepareServiceHelperFlows() []expectTableFlows {
 	return []expectTableFlows{
 		{
 			uint8(40),
 			[]*ofTestUtils.ExpectFlow{
-				{fmt.Sprintf("priority=200,ip,nw_dst=%s", serviceCIDR.String()),
-					fmt.Sprintf("set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105", gwMAC, gwOFPort),
+				{fmt.Sprint("priority=0"),
+					fmt.Sprint("load:0x1->NXM_NX_REG4[16..18]"),
 				},
 			},
 		},
@@ -696,20 +696,16 @@ func prepareDefaultFlows() []expectTableFlows {
 		{
 			uint8(30),
 			[]*ofTestUtils.ExpectFlow{
-				{"priority=200,ip", "ct(table=31,zone=65520)"},
+				{"priority=200,ip", "ct(table=31,zone=65520,nat)"},
 			},
 		},
 		{
 			uint8(31),
 			[]*ofTestUtils.ExpectFlow{
-				{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "goto_table:40"},
+				{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", "goto_table:42"},
 				{"priority=190,ct_state=+inv+trk,ip", "drop"},
-				{"priority=0", "goto_table:40"},
+				{"priority=0", "resubmit(,40),resubmit(,41)"},
 			},
-		},
-		{
-			uint8(40),
-			[]*ofTestUtils.ExpectFlow{{"priority=0", "goto_table:50"}},
 		},
 		{
 			uint8(50),
@@ -738,9 +734,9 @@ func prepareDefaultFlows() []expectTableFlows {
 		{
 			uint8(105),
 			[]*ofTestUtils.ExpectFlow{
-				{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=110,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
-				{"priority=190,ct_state=+new+trk,ip", "ct(commit,table=110,zone=65520)"},
-				{"priority=0", "goto_table:110"}},
+				{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", "ct(commit,table=106,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
+				{"priority=190,ct_state=+new+trk,ip", "ct(commit,table=106,zone=65520)"},
+				{"priority=0", "goto_table:106"}},
 		},
 		{
 			uint8(110),
@@ -797,11 +793,11 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 			[]*ofTestUtils.ExpectFlow{
 				{
 					"priority=210,ct_state=-new+trk,ct_mark=0x40,ip,reg0=0x4/0xffff",
-					"load:0xaabbccddeeff->NXM_OF_ETH_DST[],goto_table:40",
+					"load:0xaabbccddeeff->NXM_OF_ETH_DST[],load:0x1->NXM_NX_REG0[19],goto_table:42",
 				},
 				{
 					"priority=200,ct_state=-new+trk,ct_mark=0x40,ip",
-					"goto_table:40",
+					"goto_table:42",
 				},
 				{
 					fmt.Sprintf("priority=200,ip,in_port=%d", config1.UplinkOFPort),
@@ -814,10 +810,6 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 			[]*ofTestUtils.ExpectFlow{
 				{
 					"priority=200,ct_mark=0x20,ip,reg0=0x2/0xffff", "goto_table:80",
-				},
-				{
-					fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", localSubnet.String()),
-					"goto_table:80",
 				},
 				{
 					fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", nodeIP.String()),

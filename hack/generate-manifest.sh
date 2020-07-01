@@ -27,6 +27,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
         --cloud               Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
+        --proxy               Generate a manifest with Antrea proxy enabled
         --np                  Generate a manifest with Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs enabled
         --keep                Debug flag which will preserve the generated kustomization.yml
         --help, -h            Print this message and exit
@@ -49,6 +50,7 @@ function print_help {
 MODE="dev"
 KIND=false
 IPSEC=false
+PROXY=false
 NP=false
 KEEP=false
 ENCAP_MODE=""
@@ -77,6 +79,10 @@ case $key in
     ;;
     --ipsec)
     IPSEC=true
+    shift
+    ;;
+    --proxy)
+    PROXY=true
     shift
     ;;
     --np)
@@ -150,6 +156,10 @@ if $IPSEC; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableIPSecTunnel[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableIPSecTunnel: true/" antrea-agent.conf
     # change the tunnel type to GRE which works better with IPSec encryption than other types.
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
+fi
+
+if $PROXY; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: true/" antrea-agent.conf
 fi
 
 if $NP; then

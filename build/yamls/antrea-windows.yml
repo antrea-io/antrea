@@ -16,6 +16,13 @@ metadata:
 apiVersion: v1
 data:
   antrea-agent.conf: |
+    # FeatureGates is a map of feature names to bools that enable or disable experimental features.
+    featureGates:
+    # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
+    # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
+    # Service traffic.
+      AntreaProxy: true
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     #ovsBridge: br-int
@@ -62,7 +69,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-kc69htmck4
+  name: antrea-windows-config-8ktf86t8d5
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -150,7 +157,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-kc69htmck4
+          name: antrea-windows-config-8ktf86t8d5
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

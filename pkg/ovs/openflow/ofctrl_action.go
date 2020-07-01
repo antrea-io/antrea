@@ -108,7 +108,7 @@ func (a *ofCTAction) load(field *openflow13.MatchField, value uint64, rng *Range
 func (a *ofCTAction) MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction {
 	fromField, _ := openflow13.FindFieldHeaderByName(fromName, false)
 	toField, _ := openflow13.FindFieldHeaderByName(NxmFieldCtLabel, false)
-	a.move(fromField, toField, uint16(fromRng.length()), uint16(fromRng[0]), uint16(labelRng[0]))
+	a.move(fromField, toField, uint16(fromRng.Length()), uint16(fromRng[0]), uint16(labelRng[0]))
 	return a
 }
 
@@ -361,7 +361,7 @@ func (a *ofLearnAction) MatchEthernetProtocolIP() LearnAction {
 // currently being processed. It only accepts ProtocolTCP or ProtocolUDP,
 // otherwise this does nothing.
 func (a *ofLearnAction) MatchTransportDst(protocol Protocol) LearnAction {
-	if protocol != ProtocolTCP && protocol != ProtocolUDP {
+	if protocol != ProtocolTCP && protocol != ProtocolUDP && protocol != ProtocolSCTP {
 		return a
 	}
 	a.MatchEthernetProtocolIP()
@@ -385,6 +385,12 @@ func (a *ofLearnAction) MatchLearnedUDPDstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolUDP)
 }
 
+// MatchLearnedUDPDstPort specifies that the sctp_dst field in the learned flow
+// must match the sctp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedSCTPDstPort() LearnAction {
+	return a.MatchTransportDst(ProtocolSCTP)
+}
+
 // MatchLearnedSrcIP makes the learned flow to match the nw_src of current IP packet.
 func (a *ofLearnAction) MatchLearnedSrcIP() LearnAction {
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, nil)
@@ -402,7 +408,11 @@ func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction 
 	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
 	valBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(valBuf, data)
-	a.nxLearn.AddMatch(toField, uint16(rng.length()), nil, valBuf[4-rng.length()/8:])
+	offset := (rng.Length()-1)/8 + 1
+	if offset < 2 {
+		offset = 2
+	}
+	a.nxLearn.AddMatch(toField, uint16(rng.Length()), nil, valBuf[4-offset:])
 	return a
 }
 
@@ -411,7 +421,7 @@ func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction 
 func (a *ofLearnAction) LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction {
 	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", fromRegID), Start: uint16(fromRng[0])}
 	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", toRegID), Start: uint16(toRng[0])}
-	a.nxLearn.AddLoadAction(toField, uint16(toRng.length()), fromField, nil)
+	a.nxLearn.AddLoadAction(toField, uint16(toRng.Length()), fromField, nil)
 	return a
 }
 
@@ -420,7 +430,17 @@ func (a *ofLearnAction) LoadReg(regID int, data uint32, rng Range) LearnAction {
 	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
 	valBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(valBuf, data)
-	a.nxLearn.AddLoadAction(toField, uint16(rng.length()), nil, valBuf[4-rng.length()/8:])
+	offset := (rng.Length()-1)/8 + 1
+	if offset < 2 {
+		offset = 2
+	}
+	a.nxLearn.AddLoadAction(toField, uint16(rng.Length()), nil, valBuf[4-offset:])
+	return a
+}
+
+func (a *ofLearnAction) SetDstMAC(mac net.HardwareAddr) LearnAction {
+	toField := &ofctrl.LearnField{Name: "NXM_OF_ETH_DST"}
+	a.nxLearn.AddLoadAction(toField, 48, nil, mac)
 	return a
 }
 

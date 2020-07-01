@@ -148,9 +148,11 @@ rules:
   - ""
   resources:
   - pods
+  - endpoints
   - services
   verbs:
   - get
+  - watch
   - list
 - apiGroups:
   - clusterinformation.antrea.tanzu.vmware.com
@@ -345,7 +347,11 @@ apiVersion: v1
 data:
   antrea-agent.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
-    #featureGates:
+    featureGates:
+    # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
+    # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
+    # Service traffic.
+    #  AntreaProxy: false
 
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -440,7 +446,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-df75dft74m
+  name: antrea-config-66g79mckkh
   namespace: kube-system
 ---
 apiVersion: v1
@@ -545,7 +551,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-df75dft74m
+          name: antrea-config-66g79mckkh
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -759,7 +765,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-df75dft74m
+          name: antrea-config-66g79mckkh
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
