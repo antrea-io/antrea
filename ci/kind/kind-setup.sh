@@ -26,6 +26,7 @@ POD_CIDR="10.10.0.0/16"
 NUM_WORKERS=2
 SUBNETS=""
 ENCAP_MODE=""
+PROXY=false
 
 set -eo pipefail
 function echoerr {
@@ -43,6 +44,7 @@ where:
   modify-node: modify kind node with name NODE_NAME
   --pod-cidr: specifies pod cidr used in kind cluster, default is $POD_CIDR
   --encap-mode: inter-node pod traffic encap mode, default is encap
+  --proxy: enable Antrea proxy, default is false
   --antrea-cni: specifies install Antrea CNI in kind cluster, default is true.
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
   --images: specifies images loaded to kind cluster, default is $IMAGES
@@ -261,6 +263,9 @@ EOF
   if [[ $ANTREA_CNI == true ]]; then
     cmd=$(dirname $0)
     cmd+="/../../hack/generate-manifest.sh"
+    if [[ $PROXY == true ]]; then
+      cmd+=" --proxy"
+    fi
     echo "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
     eval "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
   fi
@@ -305,6 +310,10 @@ while [[ $# -gt 0 ]]
       ;;
     --encap-mode)
       ENCAP_MODE="$2"
+      shift 2
+      ;;
+    --proxy)
+      PROXY=true
       shift 2
       ;;
     --subnets)

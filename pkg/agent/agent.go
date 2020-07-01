@@ -63,6 +63,7 @@ type Initializer struct {
 	serviceCIDR     *net.IPNet // K8s Service ClusterIP CIDR
 	networkConfig   *config.NetworkConfig
 	nodeConfig      *config.NodeConfig
+	enableProxy     bool
 }
 
 func NewInitializer(
@@ -75,7 +76,8 @@ func NewInitializer(
 	hostGateway string,
 	mtu int,
 	serviceCIDR *net.IPNet,
-	networkConfig *config.NetworkConfig) *Initializer {
+	networkConfig *config.NetworkConfig,
+	enableProxy bool) *Initializer {
 	return &Initializer{
 		ovsBridgeClient: ovsBridgeClient,
 		client:          k8sClient,
@@ -87,6 +89,7 @@ func NewInitializer(
 		mtu:             mtu,
 		serviceCIDR:     serviceCIDR,
 		networkConfig:   networkConfig,
+		enableProxy:     enableProxy,
 	}
 }
 
@@ -114,7 +117,7 @@ func (i *Initializer) setupOVSBridge() error {
 	if err := i.setupDefaultTunnelInterface(config.DefaultTunPortName); err != nil {
 		return err
 	}
-	// Setup host gateway interface
+	// Set up host gateway interface
 	err := i.setupGatewayInterface()
 	if err != nil {
 		return err
@@ -251,7 +254,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	}
 	gatewayOFPort := uint32(gateway.OFPort)
 
-	// Setup all basic flows.
+	// Set up all basic flows.
 	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig.TrafficEncapMode, gatewayOFPort)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
@@ -264,7 +267,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		return err
 	}
 
-	// Setup flow entries for gateway interface, including classifier, skip spoof guard check,
+	// Set up flow entries for gateway interface, including classifier, skip spoof guard check,
 	// L3 forwarding and L2 forwarding
 	if err := i.ofClient.InstallGatewayFlows(gateway.IP, gateway.MAC, gatewayOFPort); err != nil {
 		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
@@ -273,21 +276,31 @@ func (i *Initializer) initOpenFlowPipeline() error {
 
 	// When IPSec encyption is enabled, no flow is needed for the default tunnel interface.
 	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
-		// Setup flow entries for the default tunnel port interface.
+		// Set up flow entries for the default tunnel port interface.
 		if err := i.ofClient.InstallDefaultTunnelFlows(config.DefaultTunOFPort); err != nil {
 			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
 			return err
 		}
 	}
 
-	// Setup flow entries to enable service connectivity. Upstream kube-proxy is leveraged to
-	// provide load-balancing, and the flows installed by this method ensure that traffic sent
-	// from local Pods to any Service address can be forwarded to the host gateway interface
-	// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
-	// backend Pods.
-	if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gateway.MAC, gatewayOFPort); err != nil {
-		klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
-		return err
+	if !i.enableProxy {
+		// Set up flow entries to enable Service connectivity. Upstream kube-proxy is leveraged to
+		// provide load-balancing, and the flows installed by this method ensure that traffic sent
+		// from local Pods to any Service address can be forwarded to the host gateway interface
+		// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
+		// backend Pods.
+		if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gateway.MAC, gatewayOFPort); err != nil {
+			klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
+			return err
+		}
+	} else {
+		// Set up flow entries to enable Service connectivity. The agent proxy handles
+		// ClusterIP Services while the upstream kube-proxy is leveraged to handle
+		// any other kinds of Services.
+		if err := i.ofClient.InstallClusterServiceFlows(); err != nil {
+			klog.Errorf("Failed to setup default OpenFlow entries for ClusterIP Services: %v", err)
+			return err
+		}
 	}
 
 	go func() {
