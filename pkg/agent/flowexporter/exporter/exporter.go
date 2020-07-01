@@ -44,6 +44,11 @@ var (
 		"octetTotalCount",
 		"packetDeltaCount",
 		"octetDeltaCount",
+	}
+	// Substring "reverse" is an indication to get reverse element of go-ipfix library.
+	// Specifically using GetReverseInfoElement, which is part of implementations of GetIANARegistryInfoElement and
+	// GetAntreaRegistryInfoElement.
+	IANAReverseInfoElements = []string{
 		"reverse_PacketTotalCount",
 		"reverse_OctetTotalCount",
 		"reverse_PacketDeltaCount",
@@ -151,7 +156,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 
 func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int, error) {
 	// Initialize this every time new template is added
-	exp.elementsList = make([]*ipfixentities.InfoElement, len(IANAInfoElements)+len(AntreaInfoElements))
+	exp.elementsList = make([]*ipfixentities.InfoElement, len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements))
 	// Add template header
 	_, err := templateRec.PrepareRecord()
 	if err != nil {
@@ -159,37 +164,37 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 	}
 
 	for i, ie := range IANAInfoElements {
-		var element *ipfixentities.InfoElement
-		var err error
-		if !strings.Contains(ie, "reverse") {
-			element, err = exp.process.GetIANARegistryInfoElement(ie, false)
-			if err != nil {
-				return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
-			}
-		} else {
-			split := strings.Split(ie, "_")
-			runeStr := []rune(split[1])
-			runeStr[0] = unicode.ToLower(runeStr[0])
-			element, err = exp.process.GetIANARegistryInfoElement(string(runeStr), true)
-			if err != nil {
-				return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
-			}
-		}
-		_, err = templateRec.AddInfoElement(element, nil)
+		element, err := exp.process.GetIANARegistryInfoElement(ie, false)
 		if err != nil {
-			// Add error interface to IPFIX library in future to avoid overloading of fmt.Errorf.
+			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
+		}
+		if _, err = templateRec.AddInfoElement(element, nil); err != nil {
 			return 0, fmt.Errorf("error when adding %s to template: %v", element.Name, err)
 		}
 		exp.elementsList[i] = element
 	}
-
+	for i, ie := range IANAReverseInfoElements {
+		split := strings.Split(ie, "_")
+		runeStr := []rune(split[1])
+		runeStr[0] = unicode.ToLower(runeStr[0])
+		element, err := exp.process.GetIANARegistryInfoElement(string(runeStr), true)
+		if err != nil {
+			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
+		}
+		if _, err = templateRec.AddInfoElement(element, nil); err != nil {
+			return 0, fmt.Errorf("error when adding %s to template: %v", element.Name, err)
+		}
+		exp.elementsList[i+len(IANAInfoElements)] = element
+	}
 	for i, ie := range AntreaInfoElements {
 		element, err := exp.process.GetAntreaRegistryInfoElement(ie, false)
 		if err != nil {
 			return 0, fmt.Errorf("information element %s is not present in Antrea registry", ie)
 		}
-		templateRec.AddInfoElement(element, nil)
-		exp.elementsList[i+len(IANAInfoElements)] = element
+		if _, err := templateRec.AddInfoElement(element, nil); err != nil {
+			return 0, fmt.Errorf("error when adding %s to template: %v", element.Name, err)
+		}
+		exp.elementsList[i+len(IANAInfoElements)+len(IANAReverseInfoElements)] = element
 	}
 
 	sentBytes, err := exp.process.AddRecordAndSendMsg(ipfixentities.Template, templateRec.GetRecord())
@@ -264,13 +269,12 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 			return fmt.Errorf("error while adding info element: %s to data record: %v", ie.Name, err)
 		}
 	}
-	klog.V(2).Infof("Flow data record created. Number of fields: %d, Bytes added: %d", dataRec.GetFieldCount(), dataRec.GetBuffer().Len())
 
 	sentBytes, err := exp.process.AddRecordAndSendMsg(ipfixentities.Data, dataRec.GetRecord())
 	if err != nil {
 		return fmt.Errorf("error in IPFIX exporting process when sending data record: %v", err)
 	}
-	klog.V(2).Infof("Flow record sent successfully. Bytes sent: %d", sentBytes)
+	klog.V(4).Infof("Flow record created and sent. Bytes sent: %d", sentBytes)
 
 	return nil
 }

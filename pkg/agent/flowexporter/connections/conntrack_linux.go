@@ -19,7 +19,6 @@ package connections
 import (
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 
@@ -57,6 +56,7 @@ if ctdump.datapathType == ovsconfig.OVSDatapathSystem {
 	// Link to issue: https://github.com/ti-mo/conntrack/issues/23
 	// Dump all flows in the conntrack table for now.
 	var conns []*flowexporter.Connection
+	var err error
 	if ctdump.datapathType == ovsconfig.OVSDatapathSystem {
 		conns, err = ctdump.connTrack.DumpFilter(conntrack.Filter{})
 		if err != nil {
@@ -128,7 +128,7 @@ type connTrackSystem struct {
 	netlinkConn *conntrack.Conn
 }
 
-func NewConnTrackInterfacer() *connTrackSystem {
+func NewConnTrackSystem() *connTrackSystem {
 	// Ensure net.netfilter.nf_conntrack_acct value to be 1. This will enable flow exporter to export stats of connections.
 	// Do not handle error and continue with creation of interfacer object as we can still dump flows with no stats.
 	// If log says permission error, please ensure net.netfilter.nf_conntrack_acct to be set to 1.
@@ -177,7 +177,11 @@ func (ctnl *connTrackSystem) DumpFilter(filter interface{}) ([]*flowexporter.Con
 	for i, conn := range conns {
 		antreaConns[i] = createAntreaConn(&conn)
 	}
+	conns = nil
+
 	klog.V(2).Infof("Finished dumping -- total no. of flows in conntrack: %d", len(antreaConns))
+
+	ctnl.netlinkConn.Close()
 	return antreaConns, nil
 }
 
