@@ -227,5 +227,3 @@ the HNS Network created by antrea-agent is removed, and the Open vSwitch
 Extension is disabled by default. In this case, the stale OVS bridge and ports
 should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1)
 can be used to clean the OVS bridge.
-
-2. NetworkPolicy for Service traffic is not supported in current version.
