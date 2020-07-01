@@ -34,7 +34,7 @@ const (
 	defaultHostGateway        = "antrea-gw0"
 	defaultHostProcPathPrefix = "/host"
 	defaultServiceCIDR        = "10.96.0.0/12"
-	defaultTunnelType         = ovsconfig.VXLANTunnel
+	defaultTunnelType         = ovsconfig.GeneveTunnel
 	defaultMTUGeneve          = 1450
 	defaultMTUVXLAN           = 1450
 	defaultMTUGRE             = 1462
