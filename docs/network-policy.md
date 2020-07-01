@@ -2,9 +2,10 @@
 
 ClusterNetworkPolicy is a specification of how workloads within a cluster
 communicate with each other and other external endpoints.
-The ClusterNetworkPolicy is supposed to aid cluster-admins to determine
+The ClusterNetworkPolicy is supposed to aid cluster admins to configure
 the security policy for the cluster, unlike K8s NetworkPolicy, which is
-aimed towards developers to secure their apps.
+aimed towards developers to secure their apps and affects Pods within the
+Namespace in which the K8s NetworkPolicy is created.
 
 ## The ClusterNetworkPolicy resource
 
@@ -65,8 +66,8 @@ labels "env=prod".
 **priority**: The `priority` field determines the relative priority of the policy
 among all ClusterNetworkPolicies in the given cluster. This field is mandatory.
 A lower priority value indicates higher precedence. Priority values can range
-from 1.0-10000.0.
-**Note**: Policies with same priorities will be evaluated
+from 1.0 to 10000.0.
+**Note**: Policies with the same priorities will be evaluated
 indeterministically. Users should therefore take care to use priorities to
 ensure the behavior they expect.
 
@@ -74,10 +75,10 @@ ensure the behavior they expect.
 set of ingress rules. Each rule, depending on the `action` field of the rule,
 allows or drops traffic which matches both the `from` and `ports` sections.
 The example policy contains a single rule, which allows matched traffic on a
-single port, from one of the two sources, first specified by the `podSelector`
-and second, specified by the combination of `podSelector` and
+single port, from one of two sources: the first specified by a `podSelector`
+and the second specified by a combination of a `podSelector` and a
 `namespaceSelector`.
-**Note**: The order in which the ingress rules are set matter. i.e. rules will be
+**Note**: The order in which the ingress rules are set matter, i.e. rules will be
 evaluated in the order in which they are written.
 
 **egress**: Each ClusterNetworkPolicy may consist of zero or more ordered set of
@@ -85,7 +86,7 @@ egress rules. Each rule, depending on the `action` field of the rule, allows
 or drops traffic which matches both the `to` and `ports` sections. The example
 policy contains a single rule, which drops matched traffic on a single port,
 to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
-**Note**: The order in which the egress rules are set matter. i.e. rules will be
+**Note**: The order in which the egress rules are set matter, i.e. rules will be
 evaluated in the order in which they are written.
 
 ## Rule evaluation based on priorities
@@ -107,26 +108,26 @@ Once a rule is matched, it is executed based on the action set.
 
 ## Behavior of `to` and `from` selectors
 
-There are four kinds of selectors that can be specified in an ingress from
-section or egress to section:
+There are four kinds of selectors that can be specified in an ingress `from`
+section or egress `to` section:
 
-**podSelector**: This selects particular Pods from all Namespaces as "sources",
-if set in "ingress" section, or as "destinations", if set in "egress" section.
+**podSelector**: This selects particular Pods from all Namespaces as `sources`,
+if set in `ingress` section, or as `destinations`, if set in `egress` section.
 
 **namespaceSelector**: This selects particular Namespaces for which all Pods are
-grouped as ingress "sources" or egress "destinations".
+grouped as `ingress` `sources` or `egress` `destinations`.
 
 **podSelector** and **namespaceSelector**:  A single to/from entry that specifies
 both namespaceSelector and podSelector selects particular Pods within
 particular Namespaces. 
 
-**ipBlock**: This selects particular IP CIDR ranges to allow as ingress sources
-or egress destinations. These should be cluster-external IPs, since Pod IPs are
+**ipBlock**: This selects particular IP CIDR ranges to allow as `ingress` `sources`
+or `egress` `destinations`. These should be cluster-external IPs, since Pod IPs are
 ephemeral and unpredictable.
 
 ## Key differences from K8s NetworkPolicy
 
-- ClusterNetworkPolicy is of cluster scope, hence a `podSelector` without any
+- ClusterNetworkPolicy is at the cluster scope, hence a `podSelector` without any
   `namespaceSelector` selects Pods from all Namespaces.
 - There is no automatic isolation of Pods on being selected in appliedTo.
 - Ingress/Egress rules in ClusterNetworkPolicy has an `action` field which
