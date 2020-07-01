@@ -27,6 +27,7 @@ config_antrea() {
   kubectl delete -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea.yml
   echo "=== Configuring Antrea Flow Exporter Address ==="
   sed -i -e "s/#flowCollectorAddr.*/flowCollectorAddr: \"${LOGSTASH_IP}:${LOGSTASH_PORT}:${LOGSTASH_PROTOCOL}\"/g" ${GIT_CHECKOUT_DIR}/build/yamls/antrea.yml
+  sed -i -e "s|#featureGates:|featureGates:\\n      FlowExporter: true|g" ${GIT_CHECKOUT_DIR}/build/yamls/antrea.yml
   echo "=== Restarting Antrea ==="
   kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea.yml
   sleep 20
