@@ -91,7 +91,7 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		existingConn.ReversePackets = conn.ReversePackets
 		// Reassign the flow to update the map
 		cs.connections[connKey] = *existingConn
-		klog.V(2).Infof("Antrea flow updated: %v", existingConn)
+		klog.V(4).Infof("Antrea flow updated: %v", existingConn)
 	} else {
 		var srcFound, dstFound bool
 		sIface, srcFound := cs.ifaceStore.GetInterfaceByIP(conn.TupleOrig.SourceAddress.String())
@@ -108,7 +108,7 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 			conn.DestinationPodName = dIface.ContainerInterfaceConfig.PodName
 			conn.DestinationPodNamespace = dIface.ContainerInterfaceConfig.PodNamespace
 		}
-		klog.V(2).Infof("New Antrea flow added: %v", conn)
+		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
 		cs.connections[connKey] = *conn
 	}
@@ -127,6 +127,10 @@ func (cs *connectionStore) IterateCxnMapWithCB(updateCallback flowexporter.FlowR
 
 	for k, v := range cs.connections {
 		cs.mutex.Unlock()
+		// Releasing lock as there are no concurrent deletes. There can be concurrent add or modify. We may not consider the
+		// newly added or modified field and send old connection data collected in last poll cycle.
+		// This has to be changed when flushing of connection data logic changes.
+		// Followed this go documentation (point#3 on iteration over map): https://golang.org/ref/spec#For_statements_with_range_clause
 		err := updateCallback(k, v)
 		if err != nil {
 			klog.Errorf("Update callback failed for flow with key: %v, conn: %v, k, v: %v", k, v, err)
@@ -150,14 +154,16 @@ func (cs *connectionStore) poll() (int, error) {
 	for _, conn := range filteredConns {
 		cs.addOrUpdateConn(conn)
 	}
+	connsLen := len(filteredConns)
+	filteredConns = nil
+
 	klog.V(2).Infof("Conntrack polling successful")
 
-	return len(filteredConns), nil
+	return connsLen, nil
 }
 
 // FlushConnectionStore after each IPFIX export of flow records.
 // Timed out conntrack connections will not be sent as IPFIX flow records.
-// TODO: Enhance/optimize this logic.
 func (cs *connectionStore) FlushConnectionStore() {
 	klog.Infof("Flushing connection map")
 

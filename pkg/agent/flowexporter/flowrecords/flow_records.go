@@ -50,7 +50,7 @@ func (fr *flowRecords) BuildFlowRecords() error {
 	if err != nil {
 		return fmt.Errorf("error in iterating cxn map: %v", err)
 	}
-	klog.V(2).Infof("Flow records that are built: %d", len(fr.recordsMap))
+	klog.V(2).Infof("No. of flow records built: %d", len(fr.recordsMap))
 	return nil
 }
 
@@ -68,8 +68,10 @@ func (fr *flowRecords) IterateFlowRecordsWithSendCB(sendCallback flowexporter.Fl
 		v.PrevReversePackets = v.Conn.ReversePackets
 		v.PrevReverseBytes = v.Conn.ReverseBytes
 		fr.recordsMap[k] = v
-		klog.V(2).Infof("Flow record sent successfully")
 	}
+	// Flush connection map once all flow records are sent.
+	// TODO: Optimize this logic by flushing individual connections based on their timeout values.
+	fr.connStoreBuilder.FlushConnectionStore()
 
 	return nil
 }
@@ -88,6 +90,5 @@ func (fr *flowRecords) addOrUpdateFlowRecord(key flowexporter.ConnectionKey, con
 		record.Conn = &conn
 	}
 	fr.recordsMap[key] = record
-	klog.V(2).Infof("Flow record added or updated: %v", record)
 	return nil
 }
