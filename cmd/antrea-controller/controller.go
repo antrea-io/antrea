@@ -112,6 +112,7 @@ func run(o *Options) error {
 	stopCh := signals.RegisterSignalHandlers()
 
 	informerFactory.Start(stopCh)
+
 	// Only start watching Security CRDs when ClusterNetworkPolicy is enabled.
 	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
 		crdInformerFactory.Start(stopCh)

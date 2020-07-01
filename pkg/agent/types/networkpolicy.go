@@ -16,6 +16,7 @@ package types
 
 import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 type AddressCategory uint8
@@ -45,4 +46,18 @@ type PolicyRule struct {
 	From      []Address
 	To        []Address
 	Service   []v1beta1.Service
+	Action    *secv1alpha1.RuleAction
+	Priority  *uint16
+}
+
+func (r *PolicyRule) IsAntreaNetworkPolicyRule() bool {
+	return r.Priority != nil
+}
+
+// Priority is a struct that is composed of CNP priority, rule priority and
+// tier/category priority in the future. It is used as the basic unit for
+// priority sorting.
+type Priority struct {
+	PolicyPriority float64
+	RulePriority   int32
 }

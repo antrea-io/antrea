@@ -17,6 +17,8 @@ package v1beta1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 // +genclient
@@ -160,6 +162,9 @@ type NetworkPolicy struct {
 	Rules []NetworkPolicyRule `json:"rules,omitempty" protobuf:"bytes,2,rep,name=rules"`
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
 	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,3,rep,name=appliedToGroups"`
+	// Priority represents the relative priority of this Network Policy as compared to
+	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+	Priority *float64 `json:"priority,omitempty" protobuf:"fixed64,4,opt,name=priority"`
 }
 
 // Direction defines traffic direction of NetworkPolicyRule.
@@ -182,6 +187,13 @@ type NetworkPolicyRule struct {
 	To NetworkPolicyPeer `json:"to,omitempty" protobuf:"bytes,3,opt,name=to"`
 	// Services is a list of services which should be matched.
 	Services []Service `json:"services,omitempty" protobuf:"bytes,4,rep,name=services"`
+	// Priority defines the priority of the Rule as compared to other rules in the
+	// NetworkPolicy.
+	Priority int32 `json:"priority,omitempty" protobuf:"varint,5,opt,name=priority"`
+	// Action specifies the action to be applied on the rule. i.e. Allow/Drop. An empty
+	// action “nil” defaults to Allow action, which would be the case for rules created for
+	// K8s Network Policy.
+	Action *secv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1.RuleAction"`
 }
 
 // Protocol defines network protocols supported for things like container ports.

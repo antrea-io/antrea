@@ -22,6 +22,7 @@ import (
 	unsafe "unsafe"
 
 	networking "github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
@@ -543,6 +544,7 @@ func autoConvert_v1beta1_NetworkPolicy_To_networking_NetworkPolicy(in *NetworkPo
 	out.ObjectMeta = in.ObjectMeta
 	out.Rules = *(*[]networking.NetworkPolicyRule)(unsafe.Pointer(&in.Rules))
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
+	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
 	return nil
 }
 
@@ -555,6 +557,7 @@ func autoConvert_networking_NetworkPolicy_To_v1beta1_NetworkPolicy(in *networkin
 	out.ObjectMeta = in.ObjectMeta
 	out.Rules = *(*[]NetworkPolicyRule)(unsafe.Pointer(&in.Rules))
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
+	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
 	return nil
 }
 
@@ -616,6 +619,8 @@ func autoConvert_v1beta1_NetworkPolicyRule_To_networking_NetworkPolicyRule(in *N
 		return err
 	}
 	out.Services = *(*[]networking.Service)(unsafe.Pointer(&in.Services))
+	out.Priority = in.Priority
+	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
 	return nil
 }
 
@@ -633,6 +638,8 @@ func autoConvert_networking_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(in *n
 		return err
 	}
 	out.Services = *(*[]Service)(unsafe.Pointer(&in.Services))
+	out.Priority = in.Priority
+	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
 	return nil
 }
 
