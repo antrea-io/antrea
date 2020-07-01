@@ -123,7 +123,7 @@ func (pa *priorityAssigner) syncPriorityZone(p types.Priority) (*uint16, map[uin
 		computedPriority := pa.getPriorityZoneStart(p) - uint16(offset)
 		oldOFPriority, updateExisting := pa.priorityMap[priority]
 		if updateExisting && computedPriority != oldOFPriority {
-			klog.V(2).Infof("Original priority %d needs to be reassigned %d now.", oldOFPriority, computedPriority)
+			klog.V(2).Infof("Original priority %d needs to be reassigned %d now", oldOFPriority, computedPriority)
 			priorityUpdates[oldOFPriority] = computedPriority
 		} else if !updateExisting {
 			// A new Priority has been added to priorityMap
@@ -152,6 +152,6 @@ func (pa *priorityAssigner) Release(priorityNum uint16) error {
 			return nil
 		}
 	}
-	klog.V(2).Infof("OF priority %v not stored in priorityMap, skip releasing priority.", priorityNum)
+	klog.V(2).Infof("OF priority %v not stored in priorityMap, skip releasing priority", priorityNum)
 	return nil
 }

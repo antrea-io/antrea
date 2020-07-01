@@ -32,7 +32,7 @@ import (
 // common for all tests.
 var (
 	allPods          []Pod
-	k8s              *Kubernetes
+	k8sUtils         *KubernetesUtils
 	allTestList      []*TestCase
 	pods, namespaces []string
 	podIPs           map[string]string
@@ -47,7 +47,7 @@ const (
 func failOnError(err error, t *testing.T) {
 	if err != nil {
 		log.Errorf("%+v", err)
-		k8s.Cleanup(namespaces)
+		k8sUtils.Cleanup(namespaces)
 		t.Fatalf("test failed: %v", err)
 	}
 }
@@ -81,13 +81,15 @@ func initialize(t *testing.T, data *TestData) {
 	}
 	err := enableCNP(data)
 	failOnError(err, t)
-	k8s, err = NewKubernetes(data)
+	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
-	ips, err := k8s.Bootstrap(namespaces, pods)
+	ips, err := k8sUtils.Bootstrap(namespaces, pods)
 	failOnError(err, t)
 	podIPs = *ips
 }
 
+// TODO: skip restarting controller and only run the test when feature is detected to be enabled in configmap
+// https://github.com/vmware-tanzu/antrea/issues/893
 func enableCNP(data *TestData) error {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
@@ -106,11 +108,10 @@ func enableCNP(data *TestData) error {
 	if err != nil {
 		return fmt.Errorf("error when restarting antrea-controller Pod: %v", err)
 	}
-	// TODO: restart agent pods as well if featureGate affects agent
 	return nil
 }
 
-func applyDefaultDenyToAllNamespaces(k8s *Kubernetes, namespaces []string) error {
+func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) error {
 	if err := k8s.CleanNetworkPolicies(namespaces); err != nil {
 		return err
 	}
@@ -127,21 +128,21 @@ func applyDefaultDenyToAllNamespaces(k8s *Kubernetes, namespaces []string) error
 	k8s.Validate(allPods, r, p80)
 	_, wrong, _ := r.Summary()
 	if wrong != 0 {
-		return fmt.Errorf("error when creating default deny k8s network policies")
+		return fmt.Errorf("error when creating default deny k8s NetworkPolicies")
 	}
 	return nil
 }
 
-func cleanupDefaultDenyNPs(k8s *Kubernetes, namespaces []string) error {
+func cleanupDefaultDenyNPs(k8s *KubernetesUtils, namespaces []string) error {
 	if err := k8s.CleanNetworkPolicies(namespaces); err != nil {
 		return err
 	}
-	time.Sleep(networkPolicyDelay)
+	time.Sleep(networkPolicyDelay * 2)
 	r := NewReachability(allPods, true)
 	k8s.Validate(allPods, r, p80)
 	_, wrong, _ := r.Summary()
 	if wrong != 0 {
-		return fmt.Errorf("error when cleaning default deny k8s network policies")
+		return fmt.Errorf("error when cleaning default deny k8s NetworkPolicies")
 	}
 	return nil
 }
@@ -462,12 +463,12 @@ func testCNPRulePrioirty(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// executeTests runs all the tests in testList and print results
+// executeTests runs all the tests in testList and prints results
 func executeTests(t *testing.T, testList []*TestCase) {
 	for _, testCase := range testList {
 		log.Infof("running test case %s", testCase.Name)
 		log.Debugf("cleaning-up previous policies and sleeping for %v", networkPolicyDelay)
-		err := k8s.CleanCNPs()
+		err := k8sUtils.CleanCNPs()
 		time.Sleep(networkPolicyDelay)
 		failOnError(err, t)
 		for _, step := range testCase.Steps {
@@ -476,7 +477,7 @@ func executeTests(t *testing.T, testList []*TestCase) {
 			for _, cnp := range step.CNPs {
 				if cnp != nil {
 					log.Debugf("creating CNP %v", cnp.Name)
-					_, err := k8s.CreateOrUpdateCNP(cnp)
+					_, err := k8sUtils.CreateOrUpdateCNP(cnp)
 					failOnError(err, t)
 				}
 			}
@@ -485,7 +486,7 @@ func executeTests(t *testing.T, testList []*TestCase) {
 				time.Sleep(networkPolicyDelay)
 			}
 			start := time.Now()
-			k8s.Validate(allPods, reachability, step.Port)
+			k8sUtils.Validate(allPods, reachability, step.Port)
 			step.Duration = time.Now().Sub(start)
 			reachability.PrintSummary(true, true, true)
 
@@ -536,16 +537,16 @@ func TestClusterNetworkPolicy(t *testing.T) {
 	initialize(t, data)
 
 	t.Run("TestGroupDefaultDENY", func(t *testing.T) {
-		// CNP testcases below require default deny k8s network policies to work
-		applyDefaultDenyToAllNamespaces(k8s, namespaces)
+		// CNP testcases below require default deny k8s NetworkPolicies to work
+		applyDefaultDenyToAllNamespaces(k8sUtils, namespaces)
 		t.Run("Case=CNPAllowXBtoA", func(t *testing.T) { testCNPAllowXBtoA(t) })
 		t.Run("Case=CNPAllowXBtoYA", func(t *testing.T) { testCNPAllowXBtoYA(t) })
 		t.Run("Case=CNPPrioirtyOverrideDefaultDeny", func(t *testing.T) { testCNPPriorityOverrideDefaultDeny(t) })
-		cleanupDefaultDenyNPs(k8s, namespaces)
+		cleanupDefaultDenyNPs(k8sUtils, namespaces)
 	})
 
 	t.Run("TestGroupNoK8sNP", func(t *testing.T) {
-		// CNP testcases below do not depend on underlying k8s network policies
+		// CNP testcases below do not depend on underlying k8s NetworkPolicies
 		t.Run("Case=CNPAllowNoDefaultIsolation", func(t *testing.T) { testCNPAllowNoDefaultIsolation(t) })
 		t.Run("Case=CNPDropEgress", func(t *testing.T) { testCNPDropEgress(t) })
 		t.Run("Case=CNPPrioirtyOverride", func(t *testing.T) { testCNPPriorityOverride(t) })
@@ -554,5 +555,5 @@ func TestClusterNetworkPolicy(t *testing.T) {
 	})
 
 	printResults()
-	k8s.Cleanup(namespaces)
+	k8sUtils.Cleanup(namespaces)
 }

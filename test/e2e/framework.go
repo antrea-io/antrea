@@ -413,10 +413,6 @@ func (data *TestData) createClient() error {
 	return nil
 }
 
-func (data *TestData) getClients() (kubernetes.Interface, secv1alpha1.SecurityV1alpha1Interface) {
-	return data.clientset, data.securityClient
-}
-
 // deleteAntrea deletes the Antrea DaemonSet; we use cascading deletion, which means all the Pods created
 // by Antrea will be deleted. After issuing the deletion request, we poll the K8s apiserver to ensure
 // that the DaemonSet does not exist any more. This function is a no-op if the Antrea DaemonSet does
