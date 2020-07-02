@@ -7,7 +7,7 @@ the security policy for the cluster, unlike K8s NetworkPolicy, which is
 aimed towards developers to secure their apps and affects Pods within the
 Namespace in which the K8s NetworkPolicy is created.
 Rules belonging to ClusterNetworkPolicies are evaluated before any rule
-belonging to K8s NetworkPolicy.
+belonging to a K8s NetworkPolicy.
 
 ## The ClusterNetworkPolicy resource
 
@@ -58,9 +58,9 @@ define a cluster-wide security policy.
 which the policy applies to. Pods can be selected cluster-wide using
 `podSelector`. If set with a `namespaceSelector`, all Pods from Namespaces
 selected by the namespaceSelector will be selected. Specific Pods from
-specific Namespaces can be selected by using a combination of
-`podSelector` and `namespaceSelector` in the same peer. IPBlock is not allowed
-to be set in the `appliedTo` field.
+specific Namespaces can be selected by providing both a `podSelector` and a
+`namespaceSelector` in the same `appliedTo` entry.
+IPBlock is not allowed to be set in the `appliedTo` field.
 In the example, the policy applies to Pods, which either match the labels
 "role=db" in all the Namespaces, or are from Namespaces which match the
 labels "env=prod".
