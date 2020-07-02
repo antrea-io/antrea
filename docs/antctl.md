@@ -224,7 +224,7 @@ antctl trace-packet -S ns1/pod1 -D ns2/srv2 -f "tcp,tcp_dst=80"
 # Trace the Service reply packet (assuming "ns2/pod2" is the Service backend Pod)
 antctl trace-packet -D ns1/pod1 -S ns2/pod2 -f "tcp,tcp_src=80"
 # Trace an IP packet from a Pod to gateway port
-antctl trace-packet -S ns1/pod1 -D gw0
+antctl trace-packet -S ns1/pod1 -D antrea-gw0
 # Trace a UDP packet from a Pod to an IP address
 antctl trace-packet -S ns1/pod1 -D 10.1.2.3 -f udp,udp_dst=1234
 # Trace a UDP packet from an IP address to a Pod

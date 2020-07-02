@@ -20,7 +20,7 @@ for network configuration. By default, all interfaces are managed by networkd
 because of the [configuration
 files](https://github.com/coreos/init/tree/master/systemd/network) that ship
 with CoreOS. Unfortunately, that includes the gateway interface created by
-Antrea (`gw0` by default). Most of the time, this is not an issue, but if
+Antrea (`antrea-gw0` by default). Most of the time, this is not an issue, but if
 networkd is restarted for any reason, it will cause the interface to lose its IP
 configuration, and all the routes associated with the interface will be
 deleted. To avoid this issue, we recommend that you create the following
@@ -29,7 +29,7 @@ configuration files:
 # /etc/systemd/network/90-antrea-ovs.network
 [Match]
 # use the correct name for the gateway if you changed the Antrea configuration
-Name=gw0 ovs-system
+Name=antrea-gw0 ovs-system
 Driver=openvswitch
 
 [Link]
@@ -89,8 +89,8 @@ experience connectivity issues, it may be because of Photon's default firewall
 rules, which are quite strict by
 [default](https://vmware.github.io/photon/assets/files/html/3.0/photon_admin/default-firewall-settings.html). The
 easiest workaround is to accept all traffic on the gateway interface created by
-Antrea (`gw0` by default), which enables traffic to flow between the Node and
+Antrea (`antrea-gw0` by default), which enables traffic to flow between the Node and
 the Pod network:
 ```
-iptables -A INPUT -i gw0 -j ACCEPT
+iptables -A INPUT -i antrea-gw0 -j ACCEPT
 ```

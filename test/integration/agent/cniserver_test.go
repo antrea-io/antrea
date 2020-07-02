@@ -717,7 +717,7 @@ func TestCNIServerChaining(t *testing.T) {
 	defer controller.Finish()
 	var server *cniserver.CNIServer
 	testContainerOFPort := int32(1234)
-	testPatchPortName := "gw0"
+	testPatchPortName := "antrea-gw0"
 	ctx, _ := context.WithCancel(context.Background())
 
 	tc := testCase{

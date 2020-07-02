@@ -64,7 +64,7 @@ const (
 )
 
 var (
-	// RtTblSelectorValue selects which route table to use to forward service traffic back to host gateway gw0.
+	// RtTblSelectorValue selects which route table to use to forward service traffic back to host gateway antrea-gw0.
 	RtTblSelectorValue = 1 << 11
 	rtTblSelectorMark  = fmt.Sprintf("%#x/%#x", RtTblSelectorValue, RtTblSelectorValue)
 )
@@ -76,7 +76,6 @@ var _ Interface = &Client{}
 type Client struct {
 	nodeConfig  *config.NodeConfig
 	encapMode   config.TrafficEncapModeType
-	hostGateway string
 	serviceCIDR *net.IPNet
 	ipt         *iptables.Client
 	// serviceRtTable contains Antrea service route table information.
@@ -99,7 +98,7 @@ func (s *serviceRtTableConfig) IsMainTable() bool {
 }
 
 // NewClient returns a route client.
-func NewClient(hostGateway string, serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType) (*Client, error) {
 	ipt, err := iptables.New()
 	if err != nil {
 		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
@@ -112,7 +111,6 @@ func NewClient(hostGateway string, serviceCIDR *net.IPNet, encapMode config.Traf
 	}
 
 	return &Client{
-		hostGateway:    hostGateway,
 		serviceCIDR:    serviceCIDR,
 		encapMode:      encapMode,
 		ipt:            ipt,
@@ -150,7 +148,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 	if err := disableICMPSendRedirects("all"); err != nil {
 		return err
 	}
-	if err := disableICMPSendRedirects(c.hostGateway); err != nil {
+	if err := disableICMPSendRedirects(nodeConfig.GatewayConfig.Name); err != nil {
 		return err
 	}
 
@@ -191,7 +189,7 @@ func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
 	writeLine(iptablesData, []string{
 		"-A", antreaMangleChain,
 		"-m", "comment", "--comment", `"Antrea: AWS, primary ENI"`,
-		"-i", c.hostGateway, "-j", "CONNMARK",
+		"-i", c.nodeConfig.GatewayConfig.Name, "-j", "CONNMARK",
 		"--restore-mark", "--nfmask", "0x80", "--ctmask", "0x80",
 	}...)
 }
@@ -225,17 +223,18 @@ func (c *Client) initIPTables() error {
 	// Write head lines anyway so the undesired rules can be deleted when noEncap -> encap.
 	writeLine(iptablesData, "*mangle")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaMangleChain))
+	hostGateway := c.nodeConfig.GatewayConfig.Name
 	if c.encapMode.SupportsNoEncap() {
 		writeLine(iptablesData, []string{
 			"-A", antreaMangleChain,
 			"-m", "comment", "--comment", `"Antrea: mark pod to service packets"`,
-			"-i", c.hostGateway, "-d", c.serviceCIDR.String(),
+			"-i", hostGateway, "-d", c.serviceCIDR.String(),
 			"-j", iptables.MarkTarget, "--set-xmark", rtTblSelectorMark,
 		}...)
 		writeLine(iptablesData, []string{
 			"-A", antreaMangleChain,
 			"-m", "comment", "--comment", `"Antrea: unmark post LB service packets"`,
-			"-i", c.hostGateway, "!", "-d", c.serviceCIDR.String(),
+			"-i", hostGateway, "!", "-d", c.serviceCIDR.String(),
 			"-j", iptables.MarkTarget, "--set-xmark", "0/0xffffffff",
 		}...)
 		// When Antrea is used to enforce NetworkPolicies in EKS, an additional iptables
@@ -251,13 +250,13 @@ func (c *Client) initIPTables() error {
 	writeLine(iptablesData, []string{
 		"-A", antreaForwardChain,
 		"-m", "comment", "--comment", `"Antrea: accept packets from local pods"`,
-		"-i", c.hostGateway,
+		"-i", hostGateway,
 		"-j", iptables.AcceptTarget,
 	}...)
 	writeLine(iptablesData, []string{
 		"-A", antreaForwardChain,
 		"-m", "comment", "--comment", `"Antrea: accept packets to local pods"`,
-		"-o", c.hostGateway,
+		"-o", hostGateway,
 		"-j", iptables.AcceptTarget,
 	}...)
 	writeLine(iptablesData, "COMMIT")
@@ -282,7 +281,7 @@ func (c *Client) initIPTables() error {
 		writeLine(iptablesData, []string{
 			"-A", antreaRawChain,
 			"-m", "comment", "--comment", `"Antrea: reentry pod traffic skip conntrack"`,
-			"-i", c.hostGateway, "-m", "mac", "--mac-source", openflow.ReentranceMAC.String(),
+			"-i", hostGateway, "-m", "mac", "--mac-source", openflow.ReentranceMAC.String(),
 			"-j", iptables.ConnTrackTarget, "--notrack",
 		}...)
 	}
@@ -432,7 +431,7 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 
 // listIPRoutes returns list of routes from peer and local CIDRs
 func (c *Client) listIPRoutes() (map[string][]*netlink.Route, error) {
-	// get all routes on gw0 from service table.
+	// get all routes on antrea-gw0 from service table.
 	filter := &netlink.Route{
 		Table:     c.serviceRtTable.Idx,
 		LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex}
@@ -450,7 +449,7 @@ func (c *Client) listIPRoutes() (map[string][]*netlink.Route, error) {
 	}
 
 	if !c.serviceRtTable.IsMainTable() {
-		// get all routes on gw0 from main table.
+		// get all routes on antrea-gw0 from main table.
 		filter.Table = 0
 		routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_OIF)
 		if err != nil {
@@ -463,7 +462,7 @@ func (c *Client) listIPRoutes() (map[string][]*netlink.Route, error) {
 			rtMap[rt.Dst.String()] = append(rtMap[rt.Dst.String()], &tmpRt)
 		}
 
-		// now get all routes gw0 on other interfaces from main table.
+		// now get all routes antrea-gw0 on other interfaces from main table.
 		routes, err = netlink.RouteListFiltered(netlink.FAMILY_V4, nil, 0)
 		if err != nil {
 			return nil, err
@@ -655,7 +654,7 @@ func (c *Client) setupPolicyOnlyMode() error {
 	if err := netlink.RouteReplace(route); err != nil {
 		return fmt.Errorf("failed to add default route to service table: %v", err)
 	}
-	// Add static neighbor to next hop so that no ARPING is ever required on gw0.
+	// Add static neighbor to next hop so that no ARPING is ever required on antrea-gw0.
 	nhMAC, _ := c.resolveDefaultRouteNHMAC()
 	neigh := &netlink.Neigh{
 		LinkIndex:    gwLink.Attrs().Index,

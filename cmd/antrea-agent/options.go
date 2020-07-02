@@ -31,9 +31,10 @@ import (
 
 const (
 	defaultOVSBridge          = "br-int"
-	defaultHostGateway        = "gw0"
+	defaultHostGateway        = "antrea-gw0"
 	defaultHostProcPathPrefix = "/host"
 	defaultServiceCIDR        = "10.96.0.0/12"
+	defaultTunnelType         = ovsconfig.VXLANTunnel
 	defaultMTUGeneve          = 1450
 	defaultMTUVXLAN           = 1450
 	defaultMTUGRE             = 1462
@@ -136,7 +137,7 @@ func (o *Options) setDefaults() {
 		o.config.HostGateway = defaultHostGateway
 	}
 	if o.config.TunnelType == "" {
-		o.config.TunnelType = ovsconfig.VXLANTunnel
+		o.config.TunnelType = defaultTunnelType
 	}
 	if o.config.HostProcPathPrefix == "" {
 		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
