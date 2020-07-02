@@ -44,7 +44,7 @@ function run_test {
 
   $YML_CMD --kind --encap-mode $mode $proxy | docker exec -i kind-control-plane dd of=/root/antrea.yml
   sleep 1
-  go test -v -timeout=20m github.com/vmware-tanzu/antrea/test/e2e -provider=kind
+  go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e -provider=kind
   $TESTBED_CMD destroy kind
 }
 

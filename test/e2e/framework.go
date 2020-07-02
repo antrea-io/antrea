@@ -39,6 +39,7 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/test/e2e/providers"
 )
 
@@ -94,6 +95,7 @@ type TestData struct {
 	kubeConfig       *restclient.Config
 	clientset        kubernetes.Interface
 	aggregatorClient aggregatorclientset.Interface
+	securityClient   secv1alpha1.SecurityV1alpha1Interface
 }
 
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
@@ -400,9 +402,14 @@ func (data *TestData) createClient() error {
 	if err != nil {
 		return fmt.Errorf("error when creating kubernetes aggregatorClient: %v", err)
 	}
+	securityClient, err := secv1alpha1.NewForConfig(kubeConfig)
+	if err != nil {
+		return fmt.Errorf("error when creating Antrea securityClient: %v", err)
+	}
 	data.kubeConfig = kubeConfig
 	data.clientset = clientset
 	data.aggregatorClient = aggregatorClient
+	data.securityClient = securityClient
 	return nil
 }
 
