@@ -19,7 +19,7 @@ kind load docker-image antrea/netpol:latest
 # pre-load the test container image on all the Nodes
 docker pull antrea/netpol-test
 kind load docker-image antrea/netpol-test
-$ROOT_DIR/hack/generate-manifest.sh --kind | kubectl apply -f -
+$ROOT_DIR/hack/generate-manifest.sh --kind --tun "vxlan" | kubectl apply -f -
 
 echo "===> Creating netpol ClusterRoleBinding, ServiceAccount and Job <==="
 
