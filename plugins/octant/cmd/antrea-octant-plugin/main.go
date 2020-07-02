@@ -39,6 +39,7 @@ var (
 const (
 	kubeConfig      = "KUBECONFIG"
 	title           = "Antrea Information"
+	overviewTitle   = "Overview"
 	controllerTitle = "Antrea Controller Info"
 	agentTitle      = "Antrea Agent Info"
 	versionCol      = "Version"
@@ -93,8 +94,13 @@ func main() {
 func handleNavigation(request *service.NavigationRequest) (navigation.Navigation, error) {
 	return navigation.Navigation{
 		Title: title,
-		Path:  request.GeneratePath("components"),
+		Path:  request.GeneratePath(),
 		Children: []navigation.Navigation{
+			{
+				Title:    overviewTitle,
+				Path:     request.GeneratePath("components/overview"),
+				IconName: "folder",
+			},
 			{
 				Title:    controllerTitle,
 				Path:     request.GeneratePath("components/controller"),
@@ -115,8 +121,8 @@ func initRoutes(router *service.Router) {
 	controllerCols := component.NewTableCols(versionCol, podCol, nodeCol, serviceCol, crdCol, heartbeatCol)
 	agentCols := component.NewTableCols(versionCol, podCol, nodeCol, subnetCol, bridgeCol, podNumCol, crdCol, heartbeatCol)
 
-	// Click on navigation bar named Antrea Information to display Antrea components (both Controller and Agent) information.
-	router.HandleFunc("/components", func(request service.Request) (component.ContentResponse, error) {
+	// Click on navigation child named Overview to display Antrea components (both Controller and Agent) information.
+	router.HandleFunc("/components/overview", func(request service.Request) (component.ContentResponse, error) {
 		controllerRows := getControllerRows()
 		agentRows := getAgentRows()
 		return component.ContentResponse{

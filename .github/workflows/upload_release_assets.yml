@@ -61,6 +61,51 @@ jobs:
         asset_path: ./assets/antctl-windows-x86_64.exe
         asset_name: antctl-windows-x86_64.exe
         asset_content_type: application/octet-stream
+    - name: Upload antrea-octant-plugin-darwin-x86_64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant-plugin-darwin-x86_64
+        asset_name: antrea-octant-plugin-darwin-x86_64
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant-plugin-linux-arm
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant-plugin-linux-arm
+        asset_name: antrea-octant-plugin-linux-arm
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant-plugin-linux-arm64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant-plugin-linux-arm64
+        asset_name: antrea-octant-plugin-linux-arm64
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant-plugin-linux-x86_64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant-plugin-linux-x86_64
+        asset_name: antrea-octant-plugin-linux-x86_64
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant-plugin-windows-x86_64.exe
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant-plugin-windows-x86_64.exe
+        asset_name: antrea-octant-plugin-windows-x86_64.exe
+        asset_content_type: application/octet-stream
     - name: Upload antrea.yml
       uses: actions/upload-release-asset@v1
       env:
