@@ -19,6 +19,9 @@ import (
 	"k8s.io/component-base/featuregate"
 )
 
+// When editing this file, make sure you edit the documentation as well to keep
+// it consistent: /docs/feature-gates.md
+
 const (
 	// Every feature gate should add constant here following this template:
 	//
