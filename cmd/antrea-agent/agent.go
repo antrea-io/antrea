@@ -29,6 +29,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
+	"github.com/vmware-tanzu/antrea/pkg/agent/controller/traceflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
@@ -36,6 +37,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
@@ -59,6 +61,8 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -128,6 +132,19 @@ func run(o *Options) error {
 		networkConfig,
 		nodeConfig)
 
+	var traceflowController *traceflow.Controller
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		traceflowController = traceflow.NewTraceflowController(
+			k8sClient,
+			crdClient,
+			traceflowInformer,
+			ofClient,
+			ovsBridgeClient,
+			ifaceStore,
+			networkConfig,
+			nodeConfig)
+	}
+
 	// podUpdates is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated Pods.
@@ -172,12 +189,20 @@ func run(o *Options) error {
 	go cniServer.Run(stopCh)
 
 	informerFactory.Start(stopCh)
+	// Only start watching CRDs when Traceflow is enabled.
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		crdInformerFactory.Start(stopCh)
+	}
 
 	go antreaClientProvider.Run(stopCh)
 
 	go nodeRouteController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		go traceflowController.Run(stopCh)
+	}
 
 	agentQuerier := querier.NewAgentQuerier(
 		nodeConfig,
@@ -205,6 +230,10 @@ func run(o *Options) error {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}
 	go apiServer.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		go ofClient.StartPacketInHandler(stopCh)
+	}
 
 	<-stopCh
 	klog.Info("Stopping Antrea agent")

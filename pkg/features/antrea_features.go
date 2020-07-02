@@ -35,6 +35,10 @@ const (
 	// It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
 	// Service traffic.
 	AntreaProxy featuregate.Feature = "AntreaProxy"
+
+	// alpha: v0.8
+	// Allows to trace path from a generated packet.
+	Traceflow featuregate.Feature = "Traceflow"
 )
 
 var (
@@ -51,6 +55,7 @@ var (
 	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		ClusterNetworkPolicy: {Default: false, PreRelease: featuregate.Alpha},
 		AntreaProxy:          {Default: false, PreRelease: featuregate.Alpha},
+		Traceflow:            {Default: false, PreRelease: featuregate.Alpha},
 	}
 )
 
