@@ -28,11 +28,11 @@ When a Pod is instantiated, the container runtime first calls the primary CNI to
 IP, route table, DNS etc, and then connects Pod to host network with a PtP device such as a 
 veth-pair. When Antrea is chained with this primary CNI, container runtime then calls
 Antrea Agent, and the Antrea Agent attaches Pod's PtP device to the OVS bridge, and moves the host
-route to the Pod to local host gateway(``gw0``) interface from the PtP device. This is
+route to the Pod to local host gateway(``antrea-gw0``) interface from the PtP device. This is
 illustrated by the diagram on the right.
 
 Antrea needs to satisfy that 
-1. All IP packets, sent on ``gw0`` in the host network, are received by the Pods exactly the same
+1. All IP packets, sent on ``antrea-gw0`` in the host network, are received by the Pods exactly the same
 as if the OVS bridge had not been inserted. 
 1. Similarly all IP packets, sent by Pods, are received by other Pods or the host network exactly
 the same as if OVS bridge had not been inserted.
@@ -43,7 +43,7 @@ of underlying CNI network, it simply needs to program the following OVS flows on
 1. A default ARP responder flow that answers any ARP request. Its sole purpose is so that a Pod's
 neighbor may be resolved, and packets may be sent by that Pod to that neighbor.
 1. IP packets are routed based on their destination IP if it matches any local Pod's IP.
-1. All other IP packets are routed to host network via ``gw0`` interface.
+1. All other IP packets are routed to host network via ``antrea-gw0`` interface.
 
 These flows together handle all Pod traffic patterns with exception of Pod-to-Service traffic
 that we will address next.
@@ -77,18 +77,18 @@ its reply's 5-tuples would be like
 
 ```
 request/service:   
--- Entering Host Network(via gw0):     SP_IP/SPort->VIP/VPort 
--- After LB(DNAT):                     SP_IP/SPort->DP_IP/TPort
--- After Route(to gw0):                SP_IP/SPort->DP_IP/TPort
+-- Entering Host Network(via antrea-gw0): SP_IP/SPort->VIP/VPort 
+-- After LB(DNAT):                        SP_IP/SPort->DP_IP/TPort
+-- After Route(to antrea-gw0):            SP_IP/SPort->DP_IP/TPort
 
 request/forwarding:
--- Entering Host Network(via gw0):     SP_IP/SPort->DP_IP/TPort
--- After route(to uplink):             SP_IP/SPort->DP_IP/TPort
+-- Entering Host Network(via antrea-gw0): SP_IP/SPort->DP_IP/TPort
+-- After route(to uplink):                SP_IP/SPort->DP_IP/TPort
 
 reply:
--- Entering Host Network(via uplink):  DP_IP/TPort -> SP_IP/SPort
--- After LB(DNAT):                     VIP/VPort->SP_IP/Sport
--- After route(to gw0):                VIP/VPort->SP_IP/Sport
+-- Entering Host Network(via uplink): DP_IP/TPort -> SP_IP/SPort
+-- After LB(DNAT):                    VIP/VPort->SP_IP/Sport
+-- After route(to antrea-gw0):        VIP/VPort->SP_IP/Sport
 ```
 
 #### Routing 
@@ -98,22 +98,22 @@ service traffic share the same ``main`` route table.) Antrea creates a customize
 ``antrea_service`` route table, it is used in conjunction with ip-rule and ip-tables to handle
 service traffic. Together they work as follows
 1. At Antrea initialization, an ip-tables rule is created in ``mangle table`` that marks IP packets
-with service IP as destination IP and are from ``gw0``.
+with service IP as destination IP and are from ``antrea-gw0``.
 1. At Antrea initialization, an ip-rule is added to select ``antrea_service`` route table as routing
 table if traffic is marked in 1).
 1. At Antrea initialization, a default route entry is added to ``antrea_service`` route table to
-forward all traffic to ``gw0``.
+forward all traffic to ``antrea-gw0``.
 
 The outcome may be something like this
 ```bash
-ip neigh | grep gw0
-169.254.253.1 dev gw0 lladdr 12:34:56:78:9a:bc PERMANENT
+ip neigh | grep antrea-gw0
+169.254.253.1 dev antrea-gw0 lladdr 12:34:56:78:9a:bc PERMANENT
 
 ip route show table 300 #tbl_idx=300 is antrea_service
-default via 169.254.253.1 dev gw0 onlink 
+default via 169.254.253.1 dev antrea-gw0 onlink 
 
-ip rule | grep gw0
-300:	from all fwmark 0x800/0x800 iif gw0 lookup 300 
+ip rule | grep antrea-gw0
+300:	from all fwmark 0x800/0x800 iif antrea-gw0 lookup 300 
 
 iptables -t mangle  -L ANTREA-MANGLE 
 Chain ANTREA-MANGLE (1 references)
@@ -127,7 +127,7 @@ load balancing, and to be steered back to OVS bridge for Pod NetworkPolicy proce
 
 #### Conntrack
 Note also that with re-entrance traffic, a service request, after being load balanced and routed
-back to OVS bridge via ``gw0``, has exactly the same 5-tuple as when it re-enters the host network
+back to OVS bridge via ``antrea-gw0``, has exactly the same 5-tuple as when it re-enters the host network
 for forwarding.
 
 When a service request with same 5-tuples re-enters the host network, it confuses Linux conntrack. 

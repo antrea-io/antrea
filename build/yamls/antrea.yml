@@ -530,7 +530,7 @@ data:
 
     # Name of the interface antrea-agent will create and use for host <--> pod communication.
     # Make sure it doesn't conflict with your existing interfaces.
-    #hostGateway: gw0
+    #hostGateway: antrea-gw0
 
     # Encapsulation mode for communication between Pods across Nodes, supported values:
     # - geneve (default)
@@ -616,7 +616,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-d42ht2g25g
+  name: antrea-config-5g4h62mc5t
   namespace: kube-system
 ---
 apiVersion: v1
@@ -721,7 +721,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-d42ht2g25g
+          name: antrea-config-5g4h62mc5t
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -935,7 +935,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-d42ht2g25g
+          name: antrea-config-5g4h62mc5t
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	DefaultTunPortName = "tun0"
 	// Invalid ofport_request number is in range 1 to 65,279. For ofport_request number not in the range, OVS
 	// ignore the it and automatically assign a port number.
 	// Here we use an invalid port number "0" to request for automatically port allocation.
@@ -35,12 +34,12 @@ const (
 )
 
 type GatewayConfig struct {
-	IP  net.IP
-	MAC net.HardwareAddr
+	// Name is the name of host gateway, e.g. antrea-gw0.
+	Name string
+	IP   net.IP
+	MAC  net.HardwareAddr
 	// LinkIndex is the link index of host gateway.
 	LinkIndex int
-	// Name is the name of host gateway, e.g. gw0.
-	Name string
 }
 
 func (g *GatewayConfig) String() string {
@@ -62,13 +61,17 @@ type NodeConfig struct {
 	Name string
 	// The name of the OpenVSwitch bridge antrea-agent uses.
 	OVSBridge string
+	// The name of the default tunnel interface. Defaults to "antrea-tun0", but can
+	// be overridden by the discovered tunnel interface name from the OVS bridge.
+	DefaultTunName string
 	// The CIDR block to allocate Pod IPs out of.
 	// It's nil for the networkPolicyOnly trafficEncapMode which doesn't do IPAM.
 	PodCIDR *net.IPNet
 	// The Node's IP used in Kubernetes. It has the network mask information.
 	NodeIPAddr *net.IPNet
-	// The config of the gateway network device, i.e. gw0 by default.
-	GatewayConfig   *GatewayConfig
+	// The config of the gateway interface on the OVS bridge.
+	GatewayConfig *GatewayConfig
+	// The config of the OVS bridge uplink interface. Only for Windows Node.
 	UplinkNetConfig *AdapterNetConfig
 }
 

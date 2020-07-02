@@ -220,7 +220,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 			klog.Errorf("Interface %s can no longer be found in the interface store", ifaceID)
 			continue
 		}
-		if interfaceConfig.InterfaceName == config.DefaultTunPortName {
+		if interfaceConfig.InterfaceName == c.nodeConfig.DefaultTunName {
 			continue
 		}
 		if err := c.ovsBridgeClient.DeletePort(interfaceConfig.PortUUID); err != nil {
@@ -328,7 +328,7 @@ func (c *Controller) processNextWorkItem() bool {
 // If we have not established connectivity to the Node yet:
 //   * we install the appropriate Linux route:
 // Destination     Gateway         Use Iface
-// peerPodCIDR     peerGatewayIP   localGatewayIface (e.g gw0)
+// peerPodCIDR     peerGatewayIP   localGatewayIface (e.g antrea-gw0)
 //   * we install the appropriate OpenFlow flows to ensure that all the traffic destined to
 //   peerPodCIDR goes through the correct L3 tunnel.
 // If the Node no longer exists (cannot be retrieved by name from nodeLister) we delete the route

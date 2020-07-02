@@ -44,7 +44,7 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-func NewClient(hostGateway string, serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType) (*Client, error) {
 	nr := netroute.New()
 	return &Client{
 		nr:          nr,
@@ -63,10 +63,10 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 	}
 	// Enable IP-Forwarding on the host gateway interface, thus the host networking stack can be used to forward the
 	// SNAT packet from local Pods. The SNAT packet is leaving the OVS pipeline with the Node's IP as the source IP,
-	// the external address as the destination IP, and the gw0's MAC as the dst MAC. Then it will be forwarded to the
-	// host network stack from the host gateway interface, and its dst MAC could be resolved to the right one. At last,
-	// the packet is sent back to OVS from the bridge Interface, and the OpenFlow entries will output it to the uplink
-	// interface directly.
+	// the external address as the destination IP, and the antrea-gw0's MAC as the dst MAC. Then it will be forwarded
+	// to the host network stack from the host gateway interface, and its dst MAC could be resolved to the right one.
+	// At last, the packet is sent back to OVS from the bridge Interface, and the OpenFlow entries will output it to
+	// the uplink interface directly.
 	if err := util.EnableIPForwarding(nodeConfig.GatewayConfig.Name); err != nil {
 		return err
 	}

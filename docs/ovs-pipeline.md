@@ -135,8 +135,8 @@ local Pod. This information is used by matches in subsequent tables.
 
 If you dump the flows for this table, you may see the following:
 ```
-1. table=0, priority=200,in_port=gw0 actions=load:0x1->NXM_NX_REG0[0..15],goto_table:10
-2. table=0, priority=200,in_port=tun0 actions=load:0->NXM_NX_REG0[0..15],goto_table:30
+1. table=0, priority=200,in_port=antrea-gw0 actions=load:0x1->NXM_NX_REG0[0..15],goto_table:10
+2. table=0, priority=200,in_port=antrea-tun0 actions=load:0->NXM_NX_REG0[0..15],goto_table:30
 3. table=0, priority=190,in_port="coredns5-8ec607" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
 4. table=0, priority=190,in_port="coredns5-9d9530" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
 5. table=0, priority=0 actions=drop
@@ -172,12 +172,12 @@ traffic can be received on the gateway port with a source IP belonging to a
 local Pod. We may add some fine-grained rules in the future to accommodate for
 this, but for now we just allow all IP traffic received from the gateway. We do
 have an ARP spoofing check for the gateway however, since there is no reason for
-the host to advertise a different MAC address on gw0.
+the host to advertise a different MAC address on antrea-gw0.
 
 If you dump the flows for this table, you may see the following:
 ```
-1. table=10, priority=200,ip,in_port=gw0 actions=goto_table:30
-2. table=10, priority=200,arp,in_port=gw0,arp_spa=10.10.0.1,arp_sha=e2:e5:a4:9b:1c:b1 actions=goto_table:20
+1. table=10, priority=200,ip,in_port=antrea-gw0 actions=goto_table:30
+2. table=10, priority=200,arp,in_port=antrea-gw0,arp_spa=10.10.0.1,arp_sha=e2:e5:a4:9b:1c:b1 actions=goto_table:20
 3. table=10, priority=200,ip,in_port="coredns5-8ec607",dl_src=12:9e:a6:47:d0:70,nw_src=10.10.0.2 actions=goto_table:30
 4. table=10, priority=200,ip,in_port="coredns5-9d9530",dl_src=ba:a8:13:ca:ed:cf,nw_src=10.10.0.3 actions=goto_table:30
 5. table=10, priority=200,arp,in_port="coredns5-8ec607",arp_spa=10.10.0.2,arp_sha=12:9e:a6:47:d0:70 actions=goto_table:20
@@ -214,9 +214,9 @@ Flow 1 is the "ARP responder" for the peer Node whose local Pod subnet is
 10.10.1.0/24. If we were to look at the routing table for the local Node, we
 would see the following "onlink" route:
 ```
-10.10.1.0/24 via 10.10.1.1 dev gw0 onlink
+10.10.1.0/24 via 10.10.1.1 dev antrea-gw0 onlink
 ```
-A similar route is installed on the gateway (gw0) interface every time the
+A similar route is installed on the gateway (antrea-gw0) interface every time the
 Antrea Node Route Controller is notified that a new Node has joined the
 cluster. The route must be marked as "onlink" since the kernel does not have a
 route to the peer gateway 10.10.1.1: we trick the kernel into believing that

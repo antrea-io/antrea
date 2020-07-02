@@ -52,7 +52,7 @@ const (
 	antreaConfigVolume   string = "antrea-config"
 	antreaDaemonSet      string = "antrea-agent"
 	antreaDeployment     string = "antrea-controller"
-	antreaDefaultGW      string = "gw0"
+	antreaDefaultGW      string = "antrea-gw0"
 	testNamespace        string = "antrea-test"
 	busyboxContainerName string = "busybox"
 	ovsContainerName     string = "antrea-ovs"
