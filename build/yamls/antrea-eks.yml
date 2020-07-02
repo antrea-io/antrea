@@ -591,6 +591,10 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
 
+    # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
+    # to define security policies which apply to the entire cluster.
+    # ClusterNetworkPolicy: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -612,7 +616,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-54t8c74d8k
+  name: antrea-config-mc5ccdc4g2
   namespace: kube-system
 ---
 apiVersion: v1
@@ -717,7 +721,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-54t8c74d8k
+          name: antrea-config-mc5ccdc4g2
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -933,7 +937,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-54t8c74d8k
+          name: antrea-config-mc5ccdc4g2
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
