@@ -96,11 +96,8 @@ func enableCNP(data *TestData) error {
 		return fmt.Errorf("failed to get ConfigMap: %v", err)
 	}
 	antreaControllerConf, _ := configMap.Data["antrea-controller.conf"]
-	antreaAgentConf, _ := configMap.Data["antrea-agent.conf"]
-	antreaControllerConf = strings.Replace(antreaControllerConf, "#featureGates:", "featureGates:\n   ClusterNetworkPolicy: true", 1)
-	antreaAgentConf = strings.Replace(antreaAgentConf, "#featureGates:", "featureGates:\n   ClusterNetworkPolicy: true", 1)
+	antreaControllerConf = strings.Replace(antreaControllerConf, "# ClusterNetworkPolicy: false", "  ClusterNetworkPolicy: true", 1)
 	configMap.Data["antrea-controller.conf"] = antreaControllerConf
-	configMap.Data["antrea-agent.conf"] = antreaAgentConf
 	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
 	}
