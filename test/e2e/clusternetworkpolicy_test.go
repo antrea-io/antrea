@@ -15,7 +15,6 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -23,7 +22,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	. "github.com/vmware-tanzu/antrea/test/e2e/utils"
@@ -79,8 +77,9 @@ func initialize(t *testing.T, data *TestData) {
 			allPods = append(allPods, NewPod(ns, podName))
 		}
 	}
-	err := enableCNP(data)
-	failOnError(err, t)
+	skipIfCNPDisabled(t, data)
+	var err error
+	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
 	ips, err := k8sUtils.Bootstrap(namespaces, pods)
@@ -88,24 +87,23 @@ func initialize(t *testing.T, data *TestData) {
 	podIPs = *ips
 }
 
-// TODO: skip restarting controller and only run the test when feature is detected to be enabled in configmap
-// https://github.com/vmware-tanzu/antrea/issues/893
-func enableCNP(data *TestData) error {
+func isCNPEnabled(data *TestData) (bool, error) {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
-		return fmt.Errorf("failed to get ConfigMap: %v", err)
+		return false, fmt.Errorf("failed to get ConfigMap: %v", err)
 	}
 	antreaControllerConf, _ := configMap.Data["antrea-controller.conf"]
-	antreaControllerConf = strings.Replace(antreaControllerConf, "# ClusterNetworkPolicy: false", "  ClusterNetworkPolicy: true", 1)
-	configMap.Data["antrea-controller.conf"] = antreaControllerConf
-	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
-	}
-	_, err = data.restartAntreaControllerPod(defaultTimeout)
+	return strings.Contains(antreaControllerConf, "ClusterNetworkPolicy: true"), nil
+}
+
+func skipIfCNPDisabled(tb testing.TB, data *TestData) {
+	enabled, err := isCNPEnabled(data)
 	if err != nil {
-		return fmt.Errorf("error when restarting antrea-controller Pod: %v", err)
+		tb.Fatalf("Cannot determine if CNP enabled: %v", err)
 	}
-	return nil
+	if !enabled {
+		tb.Skipf("Skipping test as it required CNP to be enabled")
+	}
 }
 
 func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) error {
