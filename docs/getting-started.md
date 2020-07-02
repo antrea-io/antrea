@@ -41,6 +41,10 @@ In case a node does not have a supported OVS module installed,
 you can install it following the instructions at:
 [Installing Open vSwitch](https://docs.openvswitch.org/en/latest/intro/install).
 
+Some experimental features disabled by default may have additional requirements,
+please refer to the [Feature Gates documentation](feature-gates.md) to determine
+whether it applies to you.
+
 Antrea will work out-of-the-box on most popular Operating Systems. Known issues
 encountered when running Antrea on specific OSes are documented
 [here](os-issues.md).
@@ -62,6 +66,10 @@ kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/bu
 
 If you want to add Windows Nodes to your cluster, please refer to the
 installation instructions in [windows.md](/docs/windows.md).
+
+Antrea supports some experimental features that can be enabled or disabled,
+please refer to the [Feature Gates documentation](feature-gates.md) for more
+information.
 
 ### Deploying Antrea on a Cluster with Existing CNI
 
