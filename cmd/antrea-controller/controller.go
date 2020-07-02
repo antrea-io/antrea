@@ -42,6 +42,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/traceflow"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/version"
@@ -117,6 +118,8 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
+
+	log.StartLogFileNumberMonitor(stopCh)
 
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
