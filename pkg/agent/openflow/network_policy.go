@@ -734,7 +734,7 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 	if nClause > 1 {
 		// Install action flows.
 		var actionFlows []binding.Flow
-		if rule.Action != nil && *rule.Action == secv1alpha1.RuleActionDrop {
+		if rule.IsAntreaNetworkPolicyRule() && *rule.Action == secv1alpha1.RuleActionDrop {
 			actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleID, ruleTable.GetID(), rule.Priority))
 		} else {
 			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority))

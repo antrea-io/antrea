@@ -27,6 +27,7 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/j-keck/arping v1.0.0
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
+	github.com/pkg/errors v0.8.1
 	github.com/prometheus/common v0.4.1
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0

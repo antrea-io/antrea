@@ -386,11 +386,11 @@ func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v
 // match the Namespace's labels.
 func (n *NetworkPolicyController) filterAddressGroupsForNamespace(namespace *v1.Namespace) sets.String {
 	matchingKeys := sets.String{}
-	// Only cluster scoped groups can possibly select this Namespace.
+	// Only cluster scoped groups or AddressGroups created by CNP can possibly select this Namespace.
 	addressGroups, _ := n.addressGroupStore.GetByIndex(cache.NamespaceIndex, "")
 	for _, group := range addressGroups {
 		addrGroup := group.(*antreatypes.AddressGroup)
-		// Cluster scoped AddressGroup will not have NamespaceSelector.
+		// AddressGroup created by CNP might not have NamespaceSelector.
 		if addrGroup.Selector.NamespaceSelector != nil && addrGroup.Selector.NamespaceSelector.Matches(labels.Set(namespace.Labels)) {
 			matchingKeys.Insert(addrGroup.Name)
 			klog.V(2).Infof("Namespace %s matched AddressGroup %s", namespace.Name, addrGroup.Name)
