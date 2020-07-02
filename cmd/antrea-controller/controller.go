@@ -119,11 +119,7 @@ func run(o *Options) error {
 	stopCh := signals.RegisterSignalHandlers()
 
 	informerFactory.Start(stopCh)
-
-	// Only start watching CRDs when ClusterNetworkPolicy or Traceflow is enabled.
-	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) || features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		crdInformerFactory.Start(stopCh)
-	}
+	crdInformerFactory.Start(stopCh)
 
 	go controllerMonitor.Run(stopCh)
 

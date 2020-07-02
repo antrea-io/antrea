@@ -189,10 +189,7 @@ func run(o *Options) error {
 	go cniServer.Run(stopCh)
 
 	informerFactory.Start(stopCh)
-	// Only start watching CRDs when Traceflow is enabled.
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		crdInformerFactory.Start(stopCh)
-	}
+	crdInformerFactory.Start(stopCh)
 
 	go antreaClientProvider.Run(stopCh)
 

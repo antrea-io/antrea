@@ -185,9 +185,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		networkPolicyInformer:      networkPolicyInformer,
 		networkPolicyLister:        networkPolicyInformer.Lister(),
 		networkPolicyListerSynced:  networkPolicyInformer.Informer().HasSynced,
-		cnpInformer:                cnpInformer,
-		cnpLister:                  cnpInformer.Lister(),
-		cnpListerSynced:            cnpInformer.Informer().HasSynced,
 		addressGroupStore:          addressGroupStore,
 		appliedToGroupStore:        appliedToGroupStore,
 		internalNetworkPolicyStore: internalNetworkPolicyStore,
@@ -222,15 +219,20 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		},
 		resyncPeriod,
 	)
-	// Add handlers for ClusterNetworkPolicy events.
-	cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    n.addCNP,
-			UpdateFunc: n.updateCNP,
-			DeleteFunc: n.deleteCNP,
-		},
-		resyncPeriod,
-	)
+	// Register Informer and add handlers for ClusterNetworkPolicy events only if the feature is enabled.
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		n.cnpInformer = cnpInformer
+		n.cnpLister = cnpInformer.Lister()
+		n.cnpListerSynced = cnpInformer.Informer().HasSynced
+		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addCNP,
+				UpdateFunc: n.updateCNP,
+				DeleteFunc: n.deleteCNP,
+			},
+			resyncPeriod,
+		)
+	}
 	return n
 }
 
