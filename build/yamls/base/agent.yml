@@ -69,7 +69,7 @@ spec:
               cpu: "200m"
           command: ["antrea-agent"]
           # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).
-          args: ["--config", "/etc/antrea/antrea-agent.conf", "--logtostderr=false", "--log_dir", "/var/log/antrea", "--alsologtostderr"]
+          args: ["--config", "/etc/antrea/antrea-agent.conf", "--logtostderr=false", "--log_dir=/var/log/antrea", "--alsologtostderr", "--log_file_max_size=100", "--log_file_max_num=4"]
           env:
             # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME

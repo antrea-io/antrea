@@ -40,6 +40,7 @@ import (
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -185,6 +186,8 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
+
+	log.StartLogFileNumberMonitor(stopCh)
 
 	go cniServer.Run(stopCh)
 
