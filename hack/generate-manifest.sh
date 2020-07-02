@@ -30,7 +30,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --proxy                       Generate a manifest with Antrea proxy enabled
         --np                          Generate a manifest with Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs enabled
         --keep                        Debug flag which will preserve the generated kustomization.yml
-	--tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
+        --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
