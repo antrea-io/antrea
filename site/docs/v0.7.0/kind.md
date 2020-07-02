@@ -7,11 +7,30 @@ Toolbox](https://docs.docker.com/docker-for-mac/docker-toolbox/).
 
 ## Create a Kind cluster and deploy Antrea in a few seconds
 
-### Create a Kind cluster
+### Quick two Node Kind cluster setup
+
+To create a two worker Node cluster with Antrea installed using scripts, do
+
+```bash
+./ci/kind/kind-setup.sh create CLUSTER_NAME
+```
+kind-setup.sh allows users to specify the number of worker Nodes, the docker
+bridge networks/subnets connected to worker Nodes, and some docker images to be
+pre-loaded in each Node. For more information on usage, run:
+
+ ```bash
+./ci/kind/kind-setup.sh help
+```
+
+Above is the short cut to a Kind setup with Antrea. Read further in order to
+setup a Kind cluster manually.
+
+### Create a Kind cluster manually
 
 The only requirement is to use a Kind configuration file which disables the
 Kubernetes default CNI (`kubenet`). For example, your configuration file may
 look like this:
+
 ```yaml
 kind: Cluster
 apiVersion: kind.sigs.k8s.io/v1alpha3
@@ -26,6 +45,7 @@ nodes:
 
 Once you have created your configuration file (let's call it `kind-config.yml`),
 create your cluster with:
+
 ```bash
 kind create cluster --config kind-config.yml
 ```
@@ -48,6 +68,7 @@ kind load docker-image antrea/antrea-ubuntu:latest
 
 After a few seconds you should be able to observe the following when running
 `kubectl get -n kube-system pods -l app=antrea`:
+
 ```bash
 NAME                                 READY   STATUS    RESTARTS   AGE
 antrea-agent-dgsfs                   2/2     Running   0          8m56s
@@ -55,6 +76,11 @@ antrea-agent-nzsmx                   2/2     Running   0          8m56s
 antrea-agent-zsztq                   2/2     Running   0          8m56s
 antrea-controller-775f4d79f8-6tksp   1/1     Running   0          8m56s
 ```
+
+## Run the Antrea e2e tests
+
+To run the Antrea e2e test suite on your Kind cluster, please refer to [this
+document](/test/e2e#running-the-e2e-tests-on-a-kind-cluster).
 
 ## FAQ
 
@@ -67,6 +93,7 @@ containers to run Kubernetes Nodes), it is not possible to use the kernel
 datapath type for Kind clusters. Instead, we use OVS in [userspace
 mode](http://docs.openvswitch.org/en/latest/intro/install/userspace/), which
 requires some changes to the way Antrea is deployed. Most notably:
+
  * the tun device driver needs to be mounted in the antrea-ovs container
  * the Antrea agent's ConfigMap needs to be updated so that the userspace
    (`netdev`) OVS datapath type is used
@@ -82,7 +109,8 @@ requires some changes to the way Antrea is deployed. Most notably:
 The script is required for Antrea to work properly in a Kind cluster. It takes
 care of disabling TX hardware checksum offload for the veth interface (in the
 host's network namespace) of each Kind Node. This is required when using OVS in
-userspace mode. Refer to this [Antrea Github issue #14](https://github.com/vmware-tanzu/antrea/issues/14) for more information. For
+userspace mode. Refer to this [Antrea Github issue
+\#14](https://github.com/vmware-tanzu/antrea/issues/14) for more information. For
 Linux hosts, the script is equivalent to running `ethtool` directly on the Linux
 host to disable TX checksum offload on each Node's veth interface. On macOS, the
 script is equivalent to running `ethtool` in the Linux

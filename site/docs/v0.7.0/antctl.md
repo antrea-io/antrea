@@ -2,10 +2,11 @@
 
 Antctl is the command-line tool for Antrea. At the moment, antctl supports
 running in two different modes:
- * "controller mode": when run out-of-cluster or from within the Antrea
+
+ * "**controller mode**": when run out-of-cluster or from within the Antrea
  Controller Pod, antctl can connect to the Antrea Controller and query
  information from it (e.g. the set of computed NetworkPolicies).
- * "agent mode": when run from within an Antrea Agent Pod, antctl can connect to
+ * "**agent mode**": when run from within an Antrea Agent Pod, antctl can connect to
  the Antrea Agent and query information local to that Agent (e.g. the set of
  computed NetworkPolicies received by that Agent from the Antrea Controller, as
  opposed to the entire set of computed policies).
@@ -17,7 +18,7 @@ The antctl binary is included in the Antrea Docker image
 to connect to the Antrea Agent. Simply exec into the antrea-agent container for
 the appropriate antrea-agent Pod and run `antctl`:
 
-```bash
+```shell
 kubectl exec -it <antrea-agent Pod name> -n kube-system -c antrea-agent bash
 > antctl help
 ```
@@ -29,8 +30,8 @@ appropriate one for your machine. For example:
 
 On Mac & Linux:
 
-```bash
-curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/v0.7.0/antctl-$(uname)-x86_64"
+```shell
+curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/{{ site.latest }}/antctl-$(uname)-x86_64"
 chmod +x ./antctl
 mv ./antctl /some-dir-in-your-PATH/antctl
 antctl version
@@ -41,7 +42,7 @@ For Linux, we also publish binaries for Arm-based systems.
 On Windows, using PowerShell:
 
 ```powershell
-Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/v0.7.0/antctl-windows-x86_64.exe -Outfile antctl.exe
+Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/{{ site.latest }}/antctl-windows-x86_64.exe -Outfile antctl.exe
 Move-Item .\antctl.exe c:\some-dir-in-your-PATH\antctl.exe
 antctl version
 ```
@@ -66,7 +67,7 @@ troubleshooting the Antrea system.
 `get agentinfo` (or `get ai`) print the runtime information of
 `antrea-controller` and `antrea-agent` respectively.
 
-```bash
+```shell
 antctl get controllerinfo
 antctl get agentinfo
 ```
@@ -88,7 +89,7 @@ Using the `json` or `yaml` antctl output format can print more information of
 NetworkPolicy, AppliedToGroup, and AddressGroup, than using the default `table`
 output format.
 
-```bash
+```shell
 antctl get networkpolicy [name] [-n namespace] [-o yaml]
 antctl get appliedtogroup [name] [-o yaml]
 antctl get addressgroup [name] [-o yaml]
@@ -97,16 +98,16 @@ antctl get addressgroup [name] [-o yaml]
 Antrea Agent additionally supports printing NetworkPolicies applied to a
 specified local Pod using this `antctl` command:
 
-```bash
+```shell
 antctl get networkpolicy -p pod -n namespace
 ```
 
 ### Dumping Pod network interface information
+
 `antctl` agent command `get podinterface` (or `get pi`) can dump network
 interface information of all local Pods, or a specified local Pod, or local Pods
 in the specified Namespace, or local Pods matching the specified Pod name.
-
-```bash
+```
 antctl get podinterface [name] [-n namespace]
 ```
 
@@ -116,8 +117,7 @@ Starting from version 0.6.0, Antrea Agent supports dumping Antrea OVS flows. The
 `antctl` `get ovsflows` (or `get of`) command can dump all OVS flows, flows
 added for a specified Pod, or flows added to realize a specified NetworkPolicy,
 or flows in a specified OVS flow table.
-
-```bash
+```
 antctl get ovsflows
 antctl get ovsflows -p pod -n namespace
 antctl get ovsflows --networkpolicy networkpolicy -n namespace
@@ -130,7 +130,7 @@ about Antrea OVS pipeline and flows, please refer to the [OVS pipeline doc](/doc
 
 Example outputs of dumping Pod and NetworkPolicy OVS flows:
 
-```bash
+```shell
 # Dump OVS flows of Pod "coredns-6955765f44-zcbwj"
 $ antctl get of -p coredns-6955765f44-zcbwj -n kube-system
 FLOW
@@ -158,7 +158,6 @@ table=100, n_packets=0, n_bytes=0, priority=200,ip,reg1=0x5 actions=drop
 ```
 
 ### OVS packet tracing
-
 Starting from version 0.7.0, Antrea Agent supports tracing the OVS flows that a
 specified packet traverses, leveraging the [OVS packet tracing tool](http://docs.openvswitch.org/en/latest/topics/tracing).
 
@@ -166,7 +165,7 @@ specified packet traverses, leveraging the [OVS packet tracing tool](http://docs
 `antctl help trace-packet` shows the usage of the command. This section lists a
 few trace-packet command examples.
 
-```bash
+```shell
 # Trace an IP packet between two Pods
 antctl trace-packet -S ns1/pod1 -D ns2/pod2
 # Trace a Service request from a local Pod
@@ -186,7 +185,7 @@ antctl trace-packet -p ns1/pod1 -f arp,arp_spa=10.1.2.3,arp_sha=00:11:22:33:44:5
 Example outputs of tracing a UDP (DNS request) packet from a remote Pod to a
 local (coredns) Pod:
 
-```bash
+```shell
 $ antctl trace-packet -S default/web-client -D kube-system/coredns-6955765f44-zcbwj -f udp,udp_dst=53
 result: |
   Flow: udp,in_port=1,vlan_tci=0x0000,dl_src=aa:bb:cc:dd:ee:ff,dl_dst=aa:bb:cc:dd:ee:ff,nw_src=172.100.2.11,nw_dst=172.100.1.7,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=53
