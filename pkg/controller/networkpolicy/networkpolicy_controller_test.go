@@ -60,9 +60,10 @@ type networkPolicyController struct {
 	crdInformerFactory         crdinformers.SharedInformerFactory
 }
 
+// objects is an initial set of K8s objects that is exposed through the client.
 func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyController) {
 	client := newClientset(objects...)
-	crdClient := fakeversioned.NewSimpleClientset(objects...)
+	crdClient := fakeversioned.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	appliedToGroupStore := store.NewAppliedToGroupStore()
