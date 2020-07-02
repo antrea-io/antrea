@@ -16,7 +16,7 @@
 
 # This script generates all the assets required for an Antrea Github release to
 # the provided directory.
-# Usage: VERSION=v1.0.0 ./prepare-artifacts.sh <output dir>
+# Usage: VERSION=v1.0.0 ./prepare-assets.sh <output dir>
 
 set -eo pipefail
 
@@ -37,7 +37,10 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 pushd $THIS_DIR/../.. > /dev/null
 
-ANTCTL_BUILDS=(
+mkdir -p "$1"
+OUTPUT_DIR=$(cd "$1" && pwd)
+
+ANTREA_BUILDS=(
     "linux amd64 linux-x86_64"
     "linux arm64 linux-arm64"
     "linux arm linux-arm"
@@ -45,27 +48,29 @@ ANTCTL_BUILDS=(
     "darwin amd64 darwin-x86_64"
 )
 
-for build in "${ANTCTL_BUILDS[@]}"; do
+for build in "${ANTREA_BUILDS[@]}"; do
     args=($build)
     os="${args[0]}"
     arch="${args[1]}"
     suffix="${args[2]}"
 
-    GOOS=$os GOARCH=$arch ANTCTL_BINARY_NAME="antctl-$suffix" BINDIR=$1/ make antctl-release
+    GOOS=$os GOARCH=$arch ANTCTL_BINARY_NAME="antctl-$suffix" BINDIR="$OUTPUT_DIR"/ make antctl-release
+    cd ./plugins/octant && GOOS=$os GOARCH=$arch ANTREA_OCTANT_PLUGIN_BINARY_NAME="antrea-octant-plugin-$suffix" \
+    BINDIR="$OUTPUT_DIR" make antrea-octant-plugin-release && cd ../..
 done
 
 export IMG_TAG=$VERSION
 
 export IMG_NAME=antrea/antrea-ubuntu
-./hack/generate-manifest.sh --mode release > $1/antrea.yml
-./hack/generate-manifest.sh --mode release --ipsec > $1/antrea-ipsec.yml
-./hack/generate-manifest.sh --mode release --encap-mode networkPolicyOnly > $1/antrea-eks.yml
-./hack/generate-manifest.sh --mode release --cloud GKE --encap-mode noEncap > $1/antrea-gke.yml
+./hack/generate-manifest.sh --mode release > "$OUTPUT_DIR"/antrea.yml
+./hack/generate-manifest.sh --mode release --ipsec > "$OUTPUT_DIR"/antrea-ipsec.yml
+./hack/generate-manifest.sh --mode release --encap-mode networkPolicyOnly > "$OUTPUT_DIR"/antrea-eks.yml
+./hack/generate-manifest.sh --mode release --cloud GKE --encap-mode noEncap > "$OUTPUT_DIR"/antrea-gke.yml
 
 export IMG_NAME=antrea/octant-antrea-ubuntu
-./hack/generate-manifest-octant.sh --mode release > $1/antrea-octant.yml
+./hack/generate-manifest-octant.sh --mode release > "$OUTPUT_DIR"/antrea-octant.yml
 
 export IMG_NAME=antrea/antrea-windows
-./hack/generate-manifest-windows.sh --mode release > $1/antrea-windows.yml
+./hack/generate-manifest-windows.sh --mode release > "$OUTPUT_DIR"/antrea-windows.yml
 
-ls $1 | cat
+ls "$OUTPUT_DIR" | cat
