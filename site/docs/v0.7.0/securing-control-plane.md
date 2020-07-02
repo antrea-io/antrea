@@ -6,12 +6,13 @@ You can also provide your own certificates. This page explains the certificates
 that Antrea requires and how to configure and rotate them for Antrea.
 
 ## Table of Contents
-  - [What certificates are required by Antrea](#what-certificates-are-required-by-antrea)
-  - [How certificates are used by Antrea](#how-certificates-are-used-by-antrea)
-  - [Providing your own certificates](#providing-your-own-certificates)
-    - [Using kubectl](#using-kubectl)
-    - [Using cert-manager](#using-cert-manager)
-  - [Certificate rotation](#certificate-rotation)
+
+- [What certificates are required by Antrea](#what-certificates-are-required-by-antrea)
+- [How certificates are used by Antrea](#how-certificates-are-used-by-antrea)
+- [Providing your own certificates](#providing-your-own-certificates)
+  - [Using kubectl](#using-kubectl)
+  - [Using cert-manager](#using-cert-manager)
+- [Certificate rotation](#certificate-rotation)
 
 ## What certificates are required by Antrea
 
@@ -78,6 +79,7 @@ should replace it with the actual one of your Kubernetes cluster.**
 
 You can then create the `kube-system/antrea-controller-tls` Secret with the
 certificate key pair and the CA certificate in the following form:
+
 ```yaml
 apiVersion: v1
 kind: Secret

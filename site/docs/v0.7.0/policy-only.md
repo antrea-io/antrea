@@ -10,7 +10,7 @@ Antrea is designed to work as NetworkPolicy plug-in to work together with a rout
 For as long as a CNI implementation fits into this model, Antrea may be inserted to enforce
 NetworkPolicy in that CNI's environment using Open VSwitch(OVS).
 
-!["Antrea Switched CNI"](assets/policy-only-cni.svg)
+<img src="/docs/assets/policy-only-cni.svg" width="600" alt="Antrea Switched CNI">
 
 The above diagram depicts a routed CNI network topology on the left, and what it looks like 
 after Antrea inserts the OVS bridge into the data path.
@@ -94,8 +94,8 @@ reply:
 #### Routing 
 Note that the request with destination IP DP_IP needs to be routed differently in LB and 
 forwarding cases.(This differs from encap traffic where all traffic flows including post LB
-service traffic share the same ``main`` route table.) Antrea creates a customized
-``antrea_service`` route table, it is used in conjunction with ip-rule and ip-tables to handle
+service traffic share the same `main` route table.) Antrea creates a customized
+``antrea_service` `route table, it is used in conjunction with ip-rule and ip-tables to handle
 service traffic. Together they work as follows
 1. At Antrea initialization, an ip-tables rule is created in ``mangle table`` that marks IP packets
 with service IP as destination IP and are from ``gw0``.
@@ -140,10 +140,10 @@ recognized, and therefore dropped by the source Pod.
    
 Antrea uses the following mechanisms to handle Pod-to-Service traffic re-entrance to the host
 network, and bypasses conntrack in host network.
+
 1. In OVS bridge, adds flow that marks any re-entrance traffic with a special source MAC.
 1. In OVS bridge, adds flow that causes any re-entrance traffic to bypasses conntrack in OVS zone.
-1. In the host network' ip-tables, adds a rule in ``raw`` table that if matching the special
-source MAC in 1), bypass conntrack in host zone.
+1. In the host network' ip-tables, adds a rule in ``raw`` table that if matching the special source MAC in 1), bypass conntrack in host zone.
 
 #### NetworkPolicy Considerations
 Note that when a traffic flow is re-entrance, the original reply packets do not make it into OVS,

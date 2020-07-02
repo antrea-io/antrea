@@ -8,16 +8,14 @@ the kubeconfig file of that cluster.
 To deploy a released version of Antrea, pick a version from the
 [list of releases](https://github.com/vmware-tanzu/antrea/releases).
 Note that EKS support was added in release 0.5.0, which means you can not
-pick a release older than 0.5.0. For any given release `<TAG>` (e.g. `v0.7.0`),
+pick a release older than 0.5.0. For any given release `<TAG>` (e.g. `{{ site.latest }}`),
 get the Antrea EKS deployment yaml at:
-
 ```
-https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-eks.yml
+https://github.com/vmware-tanzu/antrea/releases/download/tag/antrea-eks.yml
 ```
 
 To deploy the latest version of Antrea (built from the master branch) to EKS, get the Antrea EKS
 deployment yaml at:
-
 ```
 https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-eks.yml
 ```
@@ -29,7 +27,6 @@ Based on EKS worker Node MTU size and Kubernetes service cluster IP range, adjus
 ```bash
 kubectl apply -f antrea-eks.yaml 
 ```
-
 Now Antrea should be plugged into the EKS CNI and is ready to enforce NetworkPolicy.
 
 ### Caveats
