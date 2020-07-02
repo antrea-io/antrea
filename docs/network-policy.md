@@ -9,6 +9,18 @@ Namespace in which the K8s NetworkPolicy is created.
 Rules belonging to ClusterNetworkPolicies are evaluated before any rule
 belonging to a K8s NetworkPolicy.
 
+**Note**: ClusterNetworkPolicy is currently in "Alpha" stage. In order to
+enable them, edit the Controller configuration in the `antrea` ConfigMap
+as follows:
+```yaml
+   antrea-controller.conf: |
+     featureGates:
+       # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy
+       # for cluster admins to define security policies which apply to the
+       # entire cluster.
+       ClusterNetworkPolicy: true
+```
+
 ## The ClusterNetworkPolicy resource
 
 An example ClusterNetworkPolicy might look like this:
@@ -115,18 +127,18 @@ Hence, CNP take precedence over K8s NP.
 There are four kinds of selectors that can be specified in an ingress `from`
 section or egress `to` section:
 
-**podSelector**: This selects particular Pods from all Namespaces as `sources`,
-if set in `ingress` section, or as `destinations`, if set in `egress` section.
+**podSelector**: This selects particular Pods from all Namespaces as "sources",
+if set in `ingress` section, or as "destinations", if set in `egress` section.
 
 **namespaceSelector**: This selects particular Namespaces for which all Pods are
-grouped as `ingress` `sources` or `egress` `destinations`.
+grouped as `ingress` "sources" or `egress` "destinations".
 
 **podSelector** and **namespaceSelector**:  A single to/from entry that specifies
 both namespaceSelector and podSelector selects particular Pods within
 particular Namespaces. 
 
-**ipBlock**: This selects particular IP CIDR ranges to allow as `ingress` `sources`
-or `egress` `destinations`. These should be cluster-external IPs, since Pod IPs are
+**ipBlock**: This selects particular IP CIDR ranges to allow as `ingress` "sources"
+or `egress` "destinations". These should be cluster-external IPs, since Pod IPs are
 ephemeral and unpredictable.
 
 ## Key differences from K8s NetworkPolicy
