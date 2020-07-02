@@ -6,6 +6,8 @@ The ClusterNetworkPolicy is supposed to aid cluster admins to configure
 the security policy for the cluster, unlike K8s NetworkPolicy, which is
 aimed towards developers to secure their apps and affects Pods within the
 Namespace in which the K8s NetworkPolicy is created.
+Rules belonging to ClusterNetworkPolicies are evaluated before any rule
+belonging to K8s NetworkPolicy.
 
 ## The ClusterNetworkPolicy resource
 
@@ -104,7 +106,9 @@ This translates to the following order:
 - Ingress rules: ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
 - Egress rules: er1.1 -> er1.2 -> er2.1 -> er2.2
 
-Once a rule is matched, it is executed based on the action set.
+Once a rule is matched, it is executed based on the action set. If none of the
+CNP rules match, the packet is then evaluated for rules created for K8s NP.
+Hence, CNP take precedence over K8s NP.
 
 ## Behavior of `to` and `from` selectors
 
