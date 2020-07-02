@@ -37,6 +37,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
@@ -276,6 +277,14 @@ func (i *Initializer) initOpenFlowPipeline() error {
 
 	// When IPSec encyption is enabled, no flow is needed for the default tunnel interface.
 	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
+		if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+			// Set up Traceflow TLV map. This command is Nicira extensions to OpenFlow and require Open
+			// vSwitch 2.5 or later.
+			if err := i.ofClient.InitialTLVMap(); err != nil {
+				klog.Errorf("Error during Openflow TLV map initialization: %v", err)
+				return err
+			}
+		}
 		// Set up flow entries for the default tunnel port interface.
 		if err := i.ofClient.InstallDefaultTunnelFlows(config.DefaultTunOFPort); err != nil {
 			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)

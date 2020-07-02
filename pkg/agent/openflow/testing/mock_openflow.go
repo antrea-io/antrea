@@ -20,6 +20,7 @@
 package testing
 
 import (
+	ofctrl "github.com/contiv/ofnet/ofctrl"
 	gomock "github.com/golang/mock/gomock"
 	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
@@ -150,6 +151,21 @@ func (mr *MockClientMockRecorder) GetPodFlowKeys(arg0 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPodFlowKeys", reflect.TypeOf((*MockClient)(nil).GetPodFlowKeys), arg0)
 }
 
+// GetPolicyFromConjunction mocks base method
+func (m *MockClient) GetPolicyFromConjunction(arg0 uint32) (string, string) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPolicyFromConjunction", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(string)
+	return ret0, ret1
+}
+
+// GetPolicyFromConjunction indicates an expected call of GetPolicyFromConjunction
+func (mr *MockClientMockRecorder) GetPolicyFromConjunction(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPolicyFromConjunction", reflect.TypeOf((*MockClient)(nil).GetPolicyFromConjunction), arg0)
+}
+
 // GetTunnelVirtualMAC mocks base method
 func (m *MockClient) GetTunnelVirtualMAC() net.HardwareAddr {
 	m.ctrl.T.Helper()
@@ -162,6 +178,20 @@ func (m *MockClient) GetTunnelVirtualMAC() net.HardwareAddr {
 func (mr *MockClientMockRecorder) GetTunnelVirtualMAC() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTunnelVirtualMAC", reflect.TypeOf((*MockClient)(nil).GetTunnelVirtualMAC))
+}
+
+// InitialTLVMap mocks base method
+func (m *MockClient) InitialTLVMap() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InitialTLVMap")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InitialTLVMap indicates an expected call of InitialTLVMap
+func (mr *MockClientMockRecorder) InitialTLVMap() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitialTLVMap", reflect.TypeOf((*MockClient)(nil).InitialTLVMap))
 }
 
 // Initialize mocks base method
@@ -347,6 +377,20 @@ func (mr *MockClientMockRecorder) InstallServiceGroup(arg0, arg1, arg2 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceGroup", reflect.TypeOf((*MockClient)(nil).InstallServiceGroup), arg0, arg1, arg2)
 }
 
+// InstallTraceflowFlows mocks base method
+func (m *MockClient) InstallTraceflowFlows(arg0 byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallTraceflowFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallTraceflowFlows indicates an expected call of InstallTraceflowFlows
+func (mr *MockClientMockRecorder) InstallTraceflowFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTraceflowFlows", reflect.TypeOf((*MockClient)(nil).InstallTraceflowFlows), arg0)
+}
+
 // IsConnected mocks base method
 func (m *MockClient) IsConnected() bool {
 	m.ctrl.T.Helper()
@@ -375,6 +419,18 @@ func (mr *MockClientMockRecorder) ReassignFlowPriorities(arg0 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignFlowPriorities", reflect.TypeOf((*MockClient)(nil).ReassignFlowPriorities), arg0)
 }
 
+// RegisterPacketInHandler mocks base method
+func (m *MockClient) RegisterPacketInHandler(arg0 string, arg1 interface{}) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RegisterPacketInHandler", arg0, arg1)
+}
+
+// RegisterPacketInHandler indicates an expected call of RegisterPacketInHandler
+func (mr *MockClientMockRecorder) RegisterPacketInHandler(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPacketInHandler", reflect.TypeOf((*MockClient)(nil).RegisterPacketInHandler), arg0, arg1)
+}
+
 // ReplayFlows mocks base method
 func (m *MockClient) ReplayFlows() {
 	m.ctrl.T.Helper()
@@ -385,6 +441,46 @@ func (m *MockClient) ReplayFlows() {
 func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplayFlows", reflect.TypeOf((*MockClient)(nil).ReplayFlows))
+}
+
+// SendTraceflowPacket mocks base method
+func (m *MockClient) SendTraceflowPacket(arg0 byte, arg1, arg2, arg3, arg4 string, arg5, arg6 byte, arg7, arg8, arg9 uint16, arg10 byte, arg11, arg12 uint16, arg13, arg14 byte, arg15, arg16 uint16, arg17 uint32, arg18 int32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendTraceflowPacket", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendTraceflowPacket indicates an expected call of SendTraceflowPacket
+func (mr *MockClientMockRecorder) SendTraceflowPacket(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTraceflowPacket", reflect.TypeOf((*MockClient)(nil).SendTraceflowPacket), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18)
+}
+
+// StartPacketInHandler mocks base method
+func (m *MockClient) StartPacketInHandler(arg0 <-chan struct{}) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "StartPacketInHandler", arg0)
+}
+
+// StartPacketInHandler indicates an expected call of StartPacketInHandler
+func (mr *MockClientMockRecorder) StartPacketInHandler(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPacketInHandler", reflect.TypeOf((*MockClient)(nil).StartPacketInHandler), arg0)
+}
+
+// SubscribePacketIn mocks base method
+func (m *MockClient) SubscribePacketIn(arg0 byte, arg1 chan *ofctrl.PacketIn) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubscribePacketIn", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SubscribePacketIn indicates an expected call of SubscribePacketIn
+func (mr *MockClientMockRecorder) SubscribePacketIn(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribePacketIn", reflect.TypeOf((*MockClient)(nil).SubscribePacketIn), arg0, arg1)
 }
 
 // UninstallEndpointFlows mocks base method
