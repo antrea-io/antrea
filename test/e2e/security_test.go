@@ -213,7 +213,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	// antrea-agents reconnect every 5 seconds, we expect their connections are restored in a few seconds.
 	if err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 		cmds := []string{"antctl", "get", "controllerinfo", "-o", "json"}
-		stdout, _, err := runAntctl(antreaController.Name, cmds, data, t)
+		stdout, _, err := runAntctl(antreaController.Name, cmds, data)
 		var controllerInfo v1beta1.AntreaControllerInfo
 		err = json.Unmarshal([]byte(stdout), &controllerInfo)
 		if err != nil {
