@@ -38,7 +38,7 @@ func antctlOutput(stdout, stderr string, tb testing.TB) {
 }
 
 // runAntctl runs antctl commands on antrea Pods, the controller, or agents.
-func runAntctl(podName string, cmds []string, data *TestData, tb testing.TB) (string, string, error) {
+func runAntctl(podName string, cmds []string, data *TestData) (string, string, error) {
 	var containerName string
 	if strings.Contains(podName, "agent") {
 		containerName = "antrea-agent"
@@ -64,7 +64,7 @@ func TestAntctlAgentLocalAccess(t *testing.T) {
 		args := append([]string{"antctl", "-v"}, c...)
 		cmd := strings.Join(args, " ")
 		t.Run(cmd, func(t *testing.T) {
-			stdout, stderr, err := runAntctl(podName, args, data, t)
+			stdout, stderr, err := runAntctl(podName, args, data)
 			antctlOutput(stdout, stderr, t)
 			if err != nil {
 				t.Fatalf("Error when running `antctl %s` from %s: %v", c, podName, err)
@@ -147,7 +147,7 @@ func TestAntctlVerboseMode(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Running commnad `%s` on pod %s", tc.commands, podName)
-			stdout, stderr, err := runAntctl(podName, tc.commands, data, t)
+			stdout, stderr, err := runAntctl(podName, tc.commands, data)
 			antctlOutput(stdout, stderr, t)
 			assert.Nil(t, err)
 			if !tc.hasStderr {

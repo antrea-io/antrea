@@ -83,7 +83,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
 
 	cmds := []string{"antctl", "get", "podinterface", podName, "-n", testNamespace, "-o", "json"}
-	stdout, _, err := runAntctl(antreaPodName, cmds, data, t)
+	stdout, _, err := runAntctl(antreaPodName, cmds, data)
 	var podInterfaces []podinterface.Response
 	if err := json.Unmarshal([]byte(stdout), &podInterfaces); err != nil {
 		t.Fatalf("Error when querying the pod interface: %v", err)
