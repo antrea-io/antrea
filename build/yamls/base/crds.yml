@@ -93,6 +93,12 @@ spec:
       - cnp
   # Prune any unknown fields
   preserveUnknownFields: false
+  additionalPrinterColumns:
+  - name: Priority
+    type: number
+    format: float
+    description: The Priority of this ClusterNetworkPolicy relative to other policies.
+    JSONPath: .spec.priority
   validation:
     openAPIV3Schema:
       type: object
