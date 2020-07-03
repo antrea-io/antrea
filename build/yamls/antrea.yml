@@ -51,6 +51,9 @@ spec:
     format: float
     name: Priority
     type: number
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
   group: security.antrea.tanzu.vmware.com
   names:
     kind: ClusterNetworkPolicy
