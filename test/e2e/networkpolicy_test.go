@@ -332,7 +332,7 @@ func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name stri
 func waitForAgentCondition(t *testing.T, data *TestData, podName string, conditionType v1beta1.AgentConditionType, expectedStatus corev1.ConditionStatus) {
 	if err := wait.Poll(1*time.Second, defaultTimeout, func() (bool, error) {
 		cmds := []string{"antctl", "get", "agentinfo", "-o", "json"}
-		stdout, _, err := runAntctl(podName, cmds, data, t)
+		stdout, _, err := runAntctl(podName, cmds, data)
 		var agentInfo agentinfo.AntreaAgentInfoResponse
 		err = json.Unmarshal([]byte(stdout), &agentInfo)
 		if err != nil {
