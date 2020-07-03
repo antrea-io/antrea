@@ -45,6 +45,15 @@ metadata:
     app: antrea
   name: clusternetworkpolicies.security.antrea.tanzu.vmware.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.priority
+    description: The Priority of this ClusterNetworkPolicy relative to other policies.
+    format: float
+    name: Priority
+    type: number
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
   group: security.antrea.tanzu.vmware.com
   names:
     kind: ClusterNetworkPolicy
