@@ -23,8 +23,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/component-base/metrics/legacyregistry"
+	"k8s.io/component-base/metrics/testutil"
 
 	config1 "github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	ofClient "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -84,6 +87,9 @@ type testConfig struct {
 }
 
 func TestConnectivityFlows(t *testing.T) {
+	// Initialize ovs metrics (prometheus) to test them
+	metrics.InitializeOVSMetrics()
+
 	c = ofClient.NewClient(br, bridgeMgmtAddr, true)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
@@ -220,6 +226,7 @@ func testInitialize(t *testing.T, config *testConfig) {
 	for _, tableFlow := range prepareDefaultFlows() {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
+	checkOVSFlowMetrics(t, false)
 }
 
 func testInstallTunnelFlows(t *testing.T, config *testConfig) {
@@ -295,6 +302,9 @@ func testUninstallPodFlows(t *testing.T, config *testConfig) {
 }
 
 func TestNetworkPolicyFlows(t *testing.T) {
+	// Initialize ovs metrics (prometheus) to test them
+	metrics.InitializeOVSMetrics()
+
 	c = ofClient.NewClient(br, bridgeMgmtAddr, true)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
@@ -376,6 +386,8 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		t.Errorf("Failed to install conjunctive match flow")
 	}
 	require.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow3), "Failed to install service flow")
+	checkOVSFlowMetrics(t, true)
+
 	_, err = c.UninstallPolicyRuleFlows(ruleID2)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList2, true)
@@ -384,6 +396,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	require.Nil(t, err, "Failed to DeletePolicyRuleService")
 	checkConjunctionFlows(t, ingressRuleTable, ingressDefaultTable, contrackCommitTable, priorityNormal, ruleID, rule, assert.False)
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList, false)
+	checkOVSFlowMetrics(t, false)
 }
 
 func checkDefaultDropFlows(t *testing.T, table uint8, priority int, addrType types.AddressType, addresses []types.Address, add bool) {
@@ -508,6 +521,60 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 				fmt.Sprintf("Cached table status in %d is incorrect, expect: %d, actual %d", tableStatus.ID, tableStatus.FlowCount, len(flowList)))
 		}
 	}
+}
+
+func checkOVSFlowMetrics(t *testing.T, installPolicyRules bool) {
+	expectedStr := `
+	# HELP antrea_agent_ovs_total_flow_count [STABLE] Total flow count of all OVS flow tables.
+	# TYPE antrea_agent_ovs_total_flow_count gauge
+	antrea_agent_ovs_total_flow_count @@
+	`
+	if installPolicyRules {
+		// Change the number of flows if the test changes or the mechanism to add ovs flows for each network policy rule changes
+		expectedStr = strings.ReplaceAll(expectedStr, "@@", "44")
+	} else {
+		// Change the number of flows if Initialize method under Client interface changes the number of flows added.
+		expectedStr = strings.ReplaceAll(expectedStr, "@@", "31")
+	}
+	assert.Equal(t, nil, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedStr), "antrea_agent_ovs_total_flow_count"))
+
+	// Following is the break-up of flow count for individual flow tables.
+	expectedStr = `
+	# HELP antrea_agent_ovs_flow_count [STABLE] Flow count for each OVS flow table. The TableID is used as a label.
+	# TYPE antrea_agent_ovs_flow_count gauge
+	antrea_agent_ovs_flow_count{table_id="0"} 1
+	antrea_agent_ovs_flow_count{table_id="10"} 1
+	antrea_agent_ovs_flow_count{table_id="100"} $$
+	antrea_agent_ovs_flow_count{table_id="105"} 4
+	antrea_agent_ovs_flow_count{table_id="106"} 1
+	antrea_agent_ovs_flow_count{table_id="110"} 2
+	antrea_agent_ovs_flow_count{table_id="20"} 2
+	antrea_agent_ovs_flow_count{table_id="29"} 1
+	antrea_agent_ovs_flow_count{table_id="30"} 1
+	antrea_agent_ovs_flow_count{table_id="31"} 4
+	antrea_agent_ovs_flow_count{table_id="40"} 0
+	antrea_agent_ovs_flow_count{table_id="41"} 1
+	antrea_agent_ovs_flow_count{table_id="42"} 1
+	antrea_agent_ovs_flow_count{table_id="45"} 2
+	antrea_agent_ovs_flow_count{table_id="50"} 2
+	antrea_agent_ovs_flow_count{table_id="60"} 1
+	antrea_agent_ovs_flow_count{table_id="70"} 1
+	antrea_agent_ovs_flow_count{table_id="80"} 1
+	antrea_agent_ovs_flow_count{table_id="85"} 2
+	antrea_agent_ovs_flow_count{table_id="90"} @@
+	`
+	if installPolicyRules {
+		// Change the number of flows in ingressRuleTable if the test changes or the mechanism to add ovs flows for each network policy rule changes
+		expectedStr = strings.ReplaceAll(expectedStr, "@@", "12")
+		// Change the number of flows in ingressDefaultTable if the test changes or the mechanism to add ovs flows for each network policy rule changes
+		expectedStr = strings.ReplaceAll(expectedStr, "$$", "4")
+	} else {
+		// Change the number of flows if Initialize method under Client interface changes the number of flows added in ingressRuleTable and ingressDefaultTable.
+		expectedStr = strings.ReplaceAll(expectedStr, "@@", "2")
+		expectedStr = strings.ReplaceAll(expectedStr, "$$", "1")
+	}
+	assert.Equal(t, nil, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedStr), "antrea_agent_ovs_flow_count"))
+
 }
 
 func testInstallGatewayFlows(t *testing.T, config *testConfig) {
