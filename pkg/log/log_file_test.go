@@ -30,6 +30,8 @@ import (
 	"k8s.io/klog"
 )
 
+const oneMB = 1 * 1024 * 1024
+
 var (
 	testFlags          = initFlags()
 	klogDefaultMaxSize = klog.MaxSize
@@ -46,7 +48,7 @@ func restoreFlagDefaultValues() {
 	testFlags.Set(logToStdErrFlag, "true")
 	testFlags.Set(logFileFlag, "")
 	testFlags.Set(logDirFlag, "")
-	testFlags.Set(maxSizeFlag, fmt.Sprintf("%d", klogDefaultMaxSize/1024/1024))
+	testFlags.Set(maxSizeFlag, fmt.Sprintf("%d", klogDefaultMaxSize/oneMB))
 	testFlags.Set(maxNumFlag, "0")
 
 	klog.MaxSize = klogDefaultMaxSize
@@ -128,7 +130,7 @@ func TestKlogFileLimits(t *testing.T) {
 			} else {
 				continue
 			}
-			assert.True(t, file.Size() <= 1*1024*1024, "log file size check: "+file.Name())
+			assert.LessOrEqualf(t, file.Size(), int64(oneMB), "log file size check: %s", file.Name())
 			t.Logf("Log file %s, size %d", file.Name(), file.Size())
 		}
 		infoLogFileNum = len(infoLogFiles)
@@ -136,8 +138,8 @@ func TestKlogFileLimits(t *testing.T) {
 	}
 
 	validateFn()
-	assert.True(t, infoLogFileNum > testMaxNum, "info log file number before checking")
-	assert.True(t, warningLogFileNum > testMaxNum, "warning log file number before checking")
+	assert.Greater(t, infoLogFileNum, testMaxNum, "info log file number before checking")
+	assert.Greater(t, warningLogFileNum, testMaxNum, "warning log file number before checking")
 	t.Logf("INFO log file number: %d, WARNING log file number: %d", infoLogFileNum, warningLogFileNum)
 	// Call checkLogFiles() to delete extra files.
 	checkLogFiles()
@@ -178,7 +180,7 @@ func TestFlags(t *testing.T) {
 		{
 			name:    "tmp dir",
 			args:    []string{"--logtostderr=false", "--log_file_max_size=1", "--log_file_max_num=2"},
-			maxSize: 1 * 1024 * 1024,
+			maxSize: oneMB,
 			maxNum:  2,
 			logDir:  os.TempDir(),
 		},

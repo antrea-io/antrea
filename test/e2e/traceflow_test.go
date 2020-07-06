@@ -251,7 +251,7 @@ func (data *TestData) enableTraceflow(t *testing.T) error {
 	if err != nil {
 		return fmt.Errorf("error when restarting antrea-controller Pod: %v", err)
 	}
-	_, err = data.restartAntreaAgentPod(defaultTimeout)
+	err = data.restartAntreaAgentPods(defaultTimeout)
 	if err != nil {
 		return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
 	}

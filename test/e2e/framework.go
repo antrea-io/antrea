@@ -780,9 +780,9 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*v1.Pod
 	return newPod, nil
 }
 
-// restartAntreaAgentPod deletes the antrea-agent Pod to force it to be re-scheduled. It then waits
-// for the new Pod to become available, and returns it.
-func (data *TestData) restartAntreaAgentPod(timeout time.Duration) ([]*v1.Pod, error) {
+// restartAntreaAgentPods deletes all the antrea-agent Pods to force them to be re-scheduled. It
+// then waits for the new Pods to become available.
+func (data *TestData) restartAntreaAgentPods(timeout time.Duration) error {
 	var gracePeriodSeconds int64 = 1
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
@@ -791,31 +791,10 @@ func (data *TestData) restartAntreaAgentPod(timeout time.Duration) ([]*v1.Pod, e
 		LabelSelector: "app=antrea,component=antrea-agent",
 	}
 	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
-		return nil, fmt.Errorf("error when deleting antrea-agent Pod: %v", err)
+		return fmt.Errorf("error when deleting antrea-agent Pods: %v", err)
 	}
 
-	var newPods []*v1.Pod
-	// wait for new antrea-agent Pod
-	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		pods, err := data.clientset.CoreV1().Pods("kube-system").List(context.TODO(), listOptions)
-		if err != nil {
-			return false, fmt.Errorf("failed to list antrea-agent Pods: %v", err)
-		}
-		if len(pods.Items) != clusterInfo.numNodes {
-			return false, nil
-		}
-		for i := 0; i < clusterInfo.numNodes; i++ {
-			pod := pods.Items[i]
-			if pod.Status.Phase != v1.PodRunning || pod.DeletionTimestamp != nil {
-				return false, nil
-			}
-			newPods = append(newPods, &pod)
-		}
-		return true, nil
-	}); err != nil {
-		return nil, err
-	}
-	return newPods, nil
+	return data.waitForAntreaDaemonSetPods(timeout)
 }
 
 // validatePodIP checks that the provided IP address is in the Pod Network CIDR for the cluster.
