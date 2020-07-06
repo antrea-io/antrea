@@ -1,8 +1,8 @@
 # Antrea Feature Gates
 
-This page contains an overview of the various feature gates an administrator can
-specify for Antrea components. We follow the same convention as the [Kubernetes
-feature
+This page contains an overview of the various features an administrator can turn
+on or off for Antrea components. We follow the same convention as the
+[Kubernetes feature
 gates](https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/).
 
 In particular:
@@ -12,9 +12,9 @@ In particular:
  by editing the appropriate `.conf` entry in the Antrea manifest.
  * a feature in the GA stage will be enabled by default and cannot be disabled.
 
-Some feature gates are specific to the Agent, others are specific to the
-Controller, and some apply to both and should be enabled / disabled consistently
-in both `.conf` entries.
+Some features are specific to the Agent, others are specific to the Controller,
+and some apply to both and should be enabled / disabled consistently in both
+`.conf` entries.
 
 To enable / disable a feature, edit the Antrea manifest appropriately. For
 example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
@@ -29,7 +29,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
       AntreaProxy: true
 ```
 
-## Stages for all Feature Gates
+## List of Available Features
 
 | Feature Name            | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
 | ----------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | ----- |
@@ -37,7 +37,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `ClusterNetworkPolicy`  | Controller         | `false` | Alpha | v0.8.0        | N/A          | N/A        | No                 |       |
 | `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                |       |
 
-## Description and Requirements of Feature Gates
+## Description and Requirements of Features
 
 ### AntreaProxy
 
