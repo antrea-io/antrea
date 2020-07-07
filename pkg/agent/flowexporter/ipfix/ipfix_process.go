@@ -29,9 +29,9 @@ type IPFIXExportingProcess interface {
 	LoadRegistries()
 	GetIANARegistryInfoElement(name string, isReverse bool) (*ipfixentities.InfoElement, error)
 	GetAntreaRegistryInfoElement(name string, isReverse bool) (*ipfixentities.InfoElement, error)
-	AddTemplate() uint16
+	NewTemplateID() uint16
 	AddRecordAndSendMsg(setType ipfixentities.ContentType, record ipfixentities.Record) (int, error)
-	CloseConnToCollector() error
+	CloseConnToCollector()
 }
 
 type ipfixExportingProcess struct {
@@ -40,8 +40,8 @@ type ipfixExportingProcess struct {
 	antreaReg ipfixregistry.Registry
 }
 
-func NewIPFIXExportingProcess(collector net.Addr, obsID uint32) (*ipfixExportingProcess, error) {
-	expProcess, err := ipfixexport.InitExportingProcess(collector, obsID)
+func NewIPFIXExportingProcess(collector net.Addr, obsID uint32, tempRefTimeout uint32) (*ipfixExportingProcess, error) {
+	expProcess, err := ipfixexport.InitExportingProcess(collector, obsID, tempRefTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("error while initializing IPFIX exporting process: %v", err)
 	}
@@ -56,9 +56,9 @@ func (exp *ipfixExportingProcess) AddRecordAndSendMsg(setType ipfixentities.Cont
 	return sentBytes, err
 }
 
-func (exp *ipfixExportingProcess) CloseConnToCollector() error {
-	err := exp.ExportingProcess.CloseConnToCollector()
-	return err
+func (exp *ipfixExportingProcess) CloseConnToCollector() {
+	exp.ExportingProcess.CloseConnToCollector()
+	return
 }
 
 func (exp *ipfixExportingProcess) LoadRegistries() {
@@ -91,6 +91,6 @@ func (exp *ipfixExportingProcess) GetAntreaRegistryInfoElement(name string, isRe
 	return ie, err
 }
 
-func (exp *ipfixExportingProcess) AddTemplate() uint16 {
-	return exp.ExportingProcess.AddTemplate()
+func (exp *ipfixExportingProcess) NewTemplateID() uint16 {
+	return exp.ExportingProcess.NewTemplateID()
 }

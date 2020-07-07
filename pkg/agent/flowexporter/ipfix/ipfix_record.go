@@ -27,6 +27,7 @@ type IPFIXRecord interface {
 	PrepareRecord() (uint16, error)
 	AddInfoElement(element *ipfixentities.InfoElement, val interface{}) (uint16, error)
 	GetBuffer() *bytes.Buffer
+	GetTemplateElements() []*ipfixentities.InfoElement
 	GetFieldCount() uint16
 }
 
@@ -69,6 +70,10 @@ func (dr *ipfixDataRecord) GetFieldCount() uint16 {
 	return dr.dataRecord.GetFieldCount()
 }
 
+func (dr *ipfixDataRecord) GetTemplateElements() []*ipfixentities.InfoElement {
+	return nil
+}
+
 func (tr *ipfixTemplateRecord) GetRecord() ipfixentities.Record {
 	return tr.templateRecord
 }
@@ -89,4 +94,8 @@ func (tr *ipfixTemplateRecord) GetBuffer() *bytes.Buffer {
 
 func (tr *ipfixTemplateRecord) GetFieldCount() uint16 {
 	return tr.templateRecord.GetFieldCount()
+}
+
+func (tr *ipfixTemplateRecord) GetTemplateElements() []*ipfixentities.InfoElement {
+	return tr.templateRecord.GetTemplateElements()
 }

@@ -100,7 +100,7 @@ func TestProxyHairpin(t *testing.T) {
 	skipIfProxyDisabled(t, data)
 
 	nodeName := nodeName(1)
-	err = data.createPodOnNode("busybox", nodeName, "busybox", []string{"nc", "-lk", "-p", "80"}, nil, nil, []corev1.ContainerPort{{ContainerPort: 80, Protocol: corev1.ProtocolTCP}})
+	err = data.createPodOnNode("busybox", nodeName, "busybox", []string{"nc", "-lk", "-p", "80"}, nil, nil, []corev1.ContainerPort{{ContainerPort: 80, Protocol: corev1.ProtocolTCP}}, false)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, "busybox", testNamespace))
 	svc, err := data.createService("busybox", 80, 80, map[string]string{"antrea-e2e": "busybox"}, false, corev1.ServiceTypeClusterIP)

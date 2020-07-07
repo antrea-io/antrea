@@ -36,7 +36,7 @@ import (
 // DumpFlows opens netlink connection and dumps all the flows in Antrea ZoneID
 // of conntrack table, i.e., corresponding to Antrea OVS bridge.
 func (ctdump *connTrackDumper) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error) {
-if ctdump.datapathType == ovsconfig.OVSDatapathSystem {
+	if ctdump.datapathType == ovsconfig.OVSDatapathSystem {
 		// Get connection to netlink socket
 		err := ctdump.connTrack.GetConnTrack(nil)
 		if err != nil {
