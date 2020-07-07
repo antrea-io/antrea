@@ -212,12 +212,6 @@ func (c *Controller) syncTraceflow(traceflowName string) (retry bool, err error)
 }
 
 func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) (*opsv1alpha1.Traceflow, error) {
-	// Validate if the traceflow request meets requirement.
-	if err := validate(tf); err != nil {
-		c.errorTraceflowCRD(tf, err.Error())
-		return nil, err
-	}
-
 	// Allocate data plane tag.
 	tag, err := c.allocateTag(tf)
 	if err != nil {
@@ -274,20 +268,6 @@ func (c *Controller) errorTraceflowCRD(tf *opsv1alpha1.Traceflow, reason string)
 	patchData := Traceflow{Status: opsv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
 	payloads, _ := json.Marshal(patchData)
 	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{})
-}
-
-// TODO: more restrictive validation in this function and CRD definition
-func validate(tf *opsv1alpha1.Traceflow) error {
-	if len(tf.Spec.Destination.Service) != 0 {
-		return errors.New("destination service is not supported")
-	}
-	if len(tf.Spec.Destination.Pod) != 0 && len(tf.Spec.Destination.IP) != 0 {
-		return errors.New("destination pod and IP cannot be both set")
-	}
-	if len(tf.Spec.Destination.Pod) == 0 && len(tf.Spec.Destination.IP) == 0 {
-		return errors.New("destination pod and IP cannot be both not set")
-	}
-	return nil
 }
 
 func (c *Controller) occupyTag(tf *opsv1alpha1.Traceflow) error {
