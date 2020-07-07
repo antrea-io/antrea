@@ -57,15 +57,17 @@ var (
 	AntreaInfoElements = []string{
 		"sourcePodName",
 		"sourcePodNamespace",
+		"sourceNodeName",
 		"destinationPodName",
 		"destinationPodNamespace",
+		"destinationNodeName",
 	}
 )
 
 var _ FlowExporter = new(flowExporter)
 
 type FlowExporter interface {
-	Run(stopCh <-chan struct{})
+	Run(stopCh <-chan struct{}, pollDone <-chan bool)
 }
 
 type flowExporter struct {
@@ -93,7 +95,14 @@ func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expIn
 		return nil, fmt.Errorf("cannot generate obsID for IPFIX ipfixexport: %v", err)
 	}
 
-	expProcess, err := ipfix.NewIPFIXExportingProcess(collector, obsID)
+	var expProcess ipfix.IPFIXExportingProcess
+	if collector.Network() == "tcp" {
+		// TCP transport do not need any tempRefTimeout, so sending 0.
+		expProcess, err = ipfix.NewIPFIXExportingProcess(collector, obsID, 0)
+	} else {
+		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
+		expProcess, err = ipfix.NewIPFIXExportingProcess(collector, obsID, 1800)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("error while initializing IPFIX exporting expProcess: %v", err)
 	}
@@ -107,8 +116,8 @@ func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expIn
 		0,
 	}
 
-	flowExp.templateID = flowExp.process.AddTemplate()
-	templateRec := ipfix.NewIPFIXTemplateRecord(uint16(len(IANAInfoElements)+len(AntreaInfoElements)), flowExp.templateID)
+	flowExp.templateID = flowExp.process.NewTemplateID()
+	templateRec := ipfix.NewIPFIXTemplateRecord(uint16(len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements)), flowExp.templateID)
 
 	sentBytes, err := flowExp.sendTemplateRecord(templateRec)
 	if err != nil {
@@ -119,7 +128,7 @@ func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expIn
 	return flowExp, nil
 }
 
-func (exp *flowExporter) Run(stopCh <-chan struct{}) {
+func (exp *flowExporter) Run(stopCh <-chan struct{}, pollDone <-chan bool) {
 	klog.Infof("Start exporting IPFIX flow records")
 	ticker := time.NewTicker(exp.exportInterval)
 	defer ticker.Stop()
@@ -130,6 +139,11 @@ func (exp *flowExporter) Run(stopCh <-chan struct{}) {
 			exp.process.CloseConnToCollector()
 			break
 		case <-ticker.C:
+			// Waiting for pollDone channel is necessary because IPFIX collector computes throughput based on
+			// flow records received interval, therefore we need to wait for poll go routine (ConnectionStore.Run).
+			// pollDone provides this synchronization. Note that export interval is multiple of poll interval, and poll
+			// interval is at least one second long.
+			<-pollDone
 			err := exp.flowRecords.BuildFlowRecords()
 			if err != nil {
 				klog.Errorf("Error when building flow records: %v", err)
@@ -155,15 +169,13 @@ func (exp *flowExporter) sendFlowRecords() error {
 }
 
 func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int, error) {
-	// Initialize this every time new template is added
-	exp.elementsList = make([]*ipfixentities.InfoElement, len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements))
 	// Add template header
 	_, err := templateRec.PrepareRecord()
 	if err != nil {
 		return 0, fmt.Errorf("error when writing template header: %v", err)
 	}
 
-	for i, ie := range IANAInfoElements {
+	for _, ie := range IANAInfoElements {
 		element, err := exp.process.GetIANARegistryInfoElement(ie, false)
 		if err != nil {
 			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
@@ -171,9 +183,8 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 		if _, err = templateRec.AddInfoElement(element, nil); err != nil {
 			return 0, fmt.Errorf("error when adding %s to template: %v", element.Name, err)
 		}
-		exp.elementsList[i] = element
 	}
-	for i, ie := range IANAReverseInfoElements {
+	for _, ie := range IANAReverseInfoElements {
 		split := strings.Split(ie, "_")
 		runeStr := []rune(split[1])
 		runeStr[0] = unicode.ToLower(runeStr[0])
@@ -184,9 +195,8 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 		if _, err = templateRec.AddInfoElement(element, nil); err != nil {
 			return 0, fmt.Errorf("error when adding %s to template: %v", element.Name, err)
 		}
-		exp.elementsList[i+len(IANAInfoElements)] = element
 	}
-	for i, ie := range AntreaInfoElements {
+	for _, ie := range AntreaInfoElements {
 		element, err := exp.process.GetAntreaRegistryInfoElement(ie, false)
 		if err != nil {
 			return 0, fmt.Errorf("information element %s is not present in Antrea registry", ie)
@@ -194,7 +204,6 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 		if _, err := templateRec.AddInfoElement(element, nil); err != nil {
 			return 0, fmt.Errorf("error when adding %s to template: %v", element.Name, err)
 		}
-		exp.elementsList[i+len(IANAInfoElements)+len(IANAReverseInfoElements)] = element
 	}
 
 	sentBytes, err := exp.process.AddRecordAndSendMsg(ipfixentities.Template, templateRec.GetRecord())
@@ -202,10 +211,14 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 		return 0, fmt.Errorf("error in IPFIX exporting process when sending template record: %v", err)
 	}
 
+	// Get all elements from template record.
+	exp.elementsList = templateRec.GetTemplateElements()
+
 	return sentBytes, nil
 }
 
 func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowexporter.FlowRecord) error {
+	nodeName, _ := env.GetNodeName()
 	// Iterate over all infoElements in the list
 	for _, ie := range exp.elementsList {
 		var err error
@@ -260,10 +273,24 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 			_, err = dataRec.AddInfoElement(ie, record.Conn.SourcePodNamespace)
 		case "sourcePodName":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.SourcePodName)
+		case "sourceNodeName":
+			// Add nodeName for only local pods whose pod names are resolved.
+			if record.Conn.SourcePodName != "" {
+				_, err = dataRec.AddInfoElement(ie, nodeName)
+			} else {
+				_, err = dataRec.AddInfoElement(ie, "")
+			}
 		case "destinationPodNamespace":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationPodNamespace)
 		case "destinationPodName":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationPodName)
+		case "destinationNodeName":
+			// Add nodeName for only local pods whose pod names are resolved.
+			if record.Conn.DestinationPodName != "" {
+				_, err = dataRec.AddInfoElement(ie, nodeName)
+			} else {
+				_, err = dataRec.AddInfoElement(ie, "")
+			}
 		}
 		if err != nil {
 			return fmt.Errorf("error while adding info element: %s to data record: %v", ie.Name, err)
