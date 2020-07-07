@@ -175,7 +175,13 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 		Action:    &defaultAction,
 	}
 
-	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
+	ofPolicyRule := types.OFPolicyRule{
+		OfID:        ruleID,
+		OfRule:      rule,
+		NpName:      "np1",
+		NpNamespace: "ns1",
+	}
+	err = c.InstallPolicyRuleFlows(ofPolicyRule)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 
 	err = c.AddPolicyRuleAddress(ruleID, types.SrcAddress, prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"}), nil)
@@ -335,8 +341,13 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		Service:   []v1beta1.Service{npPort1},
 		Action:    &defaultAction,
 	}
-
-	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
+	ofPolicyRule := types.OFPolicyRule{
+		OfID:        ruleID,
+		OfRule:      rule,
+		NpName:      "np1",
+		NpNamespace: "ns1",
+	}
+	err = c.InstallPolicyRuleFlows(ofPolicyRule)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 	checkConjunctionFlows(t, ingressRuleTable, ingressDefaultTable, contrackCommitTable, priorityNormal, ruleID, rule, assert.True)
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList, true)
@@ -371,7 +382,13 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		Service:   []v1beta1.Service{npPort2},
 		Action:    &defaultAction,
 	}
-	err = c.InstallPolicyRuleFlows(ruleID2, rule2, "np1", "ns1")
+	ofPolicyRule2 := types.OFPolicyRule{
+		OfID:        ruleID2,
+		OfRule:      rule2,
+		NpName:      "np1",
+		NpNamespace: "ns1",
+	}
+	err = c.InstallPolicyRuleFlows(ofPolicyRule2)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 
 	// Dump flows

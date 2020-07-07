@@ -336,6 +336,9 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// TODO: introduce a deterministic mechanism through which the different entities
 		// responsible for installing flows can notify the agent that this deletion
 		// operation can take place.
+		// TODO: As a deterministic mechanism, a waitGroup can be created here and notified when
+		//  restartFullSyncWaitGroup in agent networkpolicy controller is unblocked. This would signal
+		//  NP flows have been synced once. Other mechanisms are needed for node flows fullSync check though.
 		time.Sleep(10 * time.Second)
 		klog.Info("Deleting stale flows from previous round if any")
 		if err := i.ofClient.DeleteStaleFlows(); err != nil {

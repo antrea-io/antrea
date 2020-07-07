@@ -61,3 +61,11 @@ type Priority struct {
 	PolicyPriority float64
 	RulePriority   int32
 }
+
+// OFPolicyRule groups all configurations that the openflow module needs to install flow for PolicyRule.
+type OFPolicyRule struct {
+	OfID        uint32
+	OfRule      *PolicyRule
+	NpName      string
+	NpNamespace string
+}

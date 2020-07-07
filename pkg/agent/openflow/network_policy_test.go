@@ -168,7 +168,13 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	require.Nil(t, err)
 
 	assert.Equal(t, 0, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
-	err = c.InstallPolicyRuleFlows(ruleID2, rule2, "np1", "ns1")
+	ofPolicyRule2 := types.OFPolicyRule{
+		OfID:        ruleID2,
+		OfRule:      rule2,
+		NpName:      "np1",
+		NpNamespace: "ns1",
+	}
+	err = c.InstallPolicyRuleFlows(ofPolicyRule2)
 	require.Nil(t, err)
 	checkConjunctionConfig(t, ruleID2, 1, 2, 1, 0)
 	assert.Equal(t, 6, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
@@ -203,7 +209,13 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	err = c.applyConjunctiveMatchFlows(ctxChanges3)
 	require.Nil(t, err)
 
-	err = c.InstallPolicyRuleFlows(ruleID3, rule3, "np1", "ns1")
+	ofPolicyRule3 := types.OFPolicyRule{
+		OfID:        ruleID3,
+		OfRule:      rule3,
+		NpName:      "np1",
+		NpNamespace: "ns1",
+	}
+	err = c.InstallPolicyRuleFlows(ofPolicyRule3)
 	require.Nil(t, err, "Failed to invoke InstallPolicyRuleFlows")
 	checkConjunctionConfig(t, ruleID3, 1, 2, 1, 2)
 	assert.Equal(t, 14, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
