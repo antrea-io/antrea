@@ -208,8 +208,14 @@ func (o *Options) validateFlowExporterConfig() error {
 				if err != nil {
 					return fmt.Errorf("export interval is not provided in right format: %v", err)
 				}
+				if o.pollingInterval < time.Second {
+					return fmt.Errorf("poll interval should be minimum of one second")
+				}
 				if o.pollingInterval > o.exportInterval {
 					return fmt.Errorf("poll interval should be less than or equal to export interval")
+				}
+				if o.exportInterval%o.pollingInterval != 0 {
+					return fmt.Errorf("export interval should be a multiple of poll interval")
 				}
 			}
 		}

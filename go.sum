@@ -356,8 +356,8 @@ github.com/spf13/pflag v1.0.3/go.mod h1:DYY7MBk1bdzusC3SYhjObp+wFpr4gzcvqqNjLnIn
 github.com/spf13/pflag v1.0.5 h1:iy+VFUOCP1a+8yFto/drg2CJ5u0yRoB7fZw3DKv/JXA=
 github.com/spf13/pflag v1.0.5/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/spf13/viper v1.3.2/go.mod h1:ZiWeW+zYFKm7srdB9IoDzzZXaJaI5eL9QjNiN/DMA2s=
-github.com/srikartati/go-ipfixlib v0.0.0-20200624191537-df05a1e72f7c h1:/yq/4iWgtsFZPe685ytq2OWtDNKWPT2MpDDUdP1oYdM=
-github.com/srikartati/go-ipfixlib v0.0.0-20200624191537-df05a1e72f7c/go.mod h1:kMk7mBXI7S5sFxbQSx+FOBbNogjsF8GNqCkYvM7LHLY=
+github.com/srikartati/go-ipfixlib v0.0.0-20200701221601-953047e9896c h1:q4GI08OoU/6n9GHsSIg8QEqNo9HAVfyR7IbAOqj1nDA=
+github.com/srikartati/go-ipfixlib v0.0.0-20200701221601-953047e9896c/go.mod h1:kMk7mBXI7S5sFxbQSx+FOBbNogjsF8GNqCkYvM7LHLY=
 github.com/streamrail/concurrent-map v0.0.0-20160803124810-238fe79560e1/go.mod h1:yqDD2twFAqxvvH5gtpwwgLsj5L1kbNwtoPoDOwBzXcs=
 github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 h1:XklXvOrWxWCDX2n4vdEQWkjuIP820XD6C4kF0O0FzH4=
 github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6/go.mod h1:yqDD2twFAqxvvH5gtpwwgLsj5L1kbNwtoPoDOwBzXcs=

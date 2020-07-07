@@ -15,7 +15,6 @@
 package connections
 
 import (
-	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -28,45 +27,63 @@ import (
 var _ ConnectionStore = new(connectionStore)
 
 type ConnectionStore interface {
-	Run(stopCh <-chan struct{})
+	Run(stopCh <-chan struct{}, pollDone chan bool)
 	IterateCxnMapWithCB(updateCallback flowexporter.FlowRecordUpdate) error
 	FlushConnectionStore()
 }
 
 type connectionStore struct {
-	connections  map[flowexporter.ConnectionKey]flowexporter.Connection // Add 5-tuple as string array
-	connDumper   ConnTrackDumper
-	ifaceStore   interfacestore.InterfaceStore
-	pollInterval time.Duration
-	mutex        sync.Mutex
+	// pollDone channel is used for synchronization of poll(ConnectionStore.Run) and export(FlowExporter.Run) go routines.
+	// Therefore, there is no requirement of lock to make connections map thread safe.
+	connections    map[flowexporter.ConnectionKey]flowexporter.Connection // Add 5-tuple as string array
+	connDumper     ConnTrackDumper
+	ifaceStore     interfacestore.InterfaceStore
+	pollInterval   time.Duration
+	exportInterval time.Duration
 }
 
-func NewConnectionStore(ctDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, interval time.Duration) *connectionStore {
+func NewConnectionStore(ctDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, pollInterval time.Duration, exportInterval time.Duration) *connectionStore {
 	return &connectionStore{
-		connections:  make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		connDumper:   ctDumper,
-		ifaceStore:   ifaceStore,
-		pollInterval: interval,
+		connections:    make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		connDumper:     ctDumper,
+		ifaceStore:     ifaceStore,
+		pollInterval:   pollInterval,
+		exportInterval: exportInterval,
 	}
 }
 
 // Run polls the connTrackDumper module periodically to get connections. These connections are used
 // to build connection store.
-func (cs *connectionStore) Run(stopCh <-chan struct{}) {
+func (cs *connectionStore) Run(stopCh <-chan struct{}, pollDone chan bool) {
 	klog.Infof("Starting conntrack polling")
 
-	ticker := time.NewTicker(cs.pollInterval)
-	defer ticker.Stop()
+	pollTicker := time.NewTicker(cs.pollInterval)
+	defer pollTicker.Stop()
+	exportTrigger := uint(cs.exportInterval / cs.pollInterval)
+	exportCounter := uint(0)
+
 	for {
 		select {
 		case <-stopCh:
 			break
-		case <-ticker.C:
+		case <-pollTicker.C:
+			if exportCounter == 0 {
+				exportCounter = exportTrigger
+				// Flush connection map once all flow records are sent.
+				// TODO: Optimize this logic by flushing individual connections based on the individual timeout values.
+				cs.FlushConnectionStore()
+			}
 			_, err := cs.poll()
 			if err != nil {
 				// Not failing here as errors can be transient and could be resolved in future poll cycles.
 				// TODO: Come up with a backoff/retry mechanism by increasing poll interval and adding retry timeout
 				klog.Errorf("Error during conntrack poll cycle: %v", err)
+			}
+			exportCounter = exportCounter - 1
+			if exportCounter == 0 {
+				// We need synchronization between ConnectionStore.Run and FlowExporter.Run go routines. pollDone channel provides that synchronization.
+				// More details in exporter/exporter.go.
+				pollDone <- true
 			}
 		}
 	}
@@ -79,8 +96,6 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 
 	existingConn, exists := cs.getConnByKey(connKey)
 
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
 	if exists {
 		// Update the necessary fields that are used in generating flow records.
 		// Can same 5-tuple flow get deleted and added to conntrack table? If so use ID.
@@ -115,28 +130,18 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 }
 
 func (cs *connectionStore) getConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
 	conn, found := cs.connections[flowTuple]
 	return &conn, found
 }
 
 func (cs *connectionStore) IterateCxnMapWithCB(updateCallback flowexporter.FlowRecordUpdate) error {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
-
 	for k, v := range cs.connections {
-		cs.mutex.Unlock()
-		// Releasing lock as there are no concurrent deletes. There can be concurrent add or modify. We may not consider the
-		// newly added or modified field and send old connection data collected in last poll cycle.
-		// This has to be changed when flushing of connection data logic changes.
-		// Followed this go documentation (point#3 on iteration over map): https://golang.org/ref/spec#For_statements_with_range_clause
+		klog.V(4).Infof("After: iterating flow with key: %v, conn: %v", k, v)
 		err := updateCallback(k, v)
 		if err != nil {
 			klog.Errorf("Update callback failed for flow with key: %v, conn: %v, k, v: %v", k, v, err)
 			return err
 		}
-		cs.mutex.Lock()
 	}
 	return nil
 }
@@ -167,8 +172,6 @@ func (cs *connectionStore) poll() (int, error) {
 func (cs *connectionStore) FlushConnectionStore() {
 	klog.Infof("Flushing connection map")
 
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
 	for conn := range cs.connections {
 		delete(cs.connections, conn)
 	}

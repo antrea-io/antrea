@@ -56,22 +56,25 @@ func (fr *flowRecords) BuildFlowRecords() error {
 
 func (fr *flowRecords) IterateFlowRecordsWithSendCB(sendCallback flowexporter.FlowRecordSend, templateID uint16) error {
 	for k, v := range fr.recordsMap {
-		dataRec := ipfix.NewIPFIXDataRecord(templateID)
-		err := sendCallback(dataRec, v)
-		if err != nil {
-			klog.Errorf("flow record update and send failed for flow with key: %v, cxn: %v", k, v)
-			return err
+		if v.IsActive == true {
+			dataRec := ipfix.NewIPFIXDataRecord(templateID)
+			err := sendCallback(dataRec, v)
+			if err != nil {
+				klog.Errorf("flow record update and send failed for flow with key: %v, cxn: %v", k, v)
+				return err
+			}
+			// Update the flow record after it is sent successfully
+			v.PrevPackets = v.Conn.OriginalPackets
+			v.PrevBytes = v.Conn.OriginalBytes
+			v.PrevReversePackets = v.Conn.ReversePackets
+			v.PrevReverseBytes = v.Conn.ReverseBytes
+			v.IsActive = false
+			fr.recordsMap[k] = v
+		} else {
+			// Delete flow record as the corresponding connection is not present in conntrack table.
+			delete(fr.recordsMap, k)
 		}
-		// Update the flow record after it is sent successfully
-		v.PrevPackets = v.Conn.OriginalPackets
-		v.PrevBytes = v.Conn.OriginalBytes
-		v.PrevReversePackets = v.Conn.ReversePackets
-		v.PrevReverseBytes = v.Conn.ReverseBytes
-		fr.recordsMap[k] = v
 	}
-	// Flush connection map once all flow records are sent.
-	// TODO: Optimize this logic by flushing individual connections based on their timeout values.
-	fr.connStoreBuilder.FlushConnectionStore()
 
 	return nil
 }
@@ -85,9 +88,11 @@ func (fr *flowRecords) addOrUpdateFlowRecord(key flowexporter.ConnectionKey, con
 			0,
 			0,
 			0,
+			true,
 		}
 	} else {
 		record.Conn = &conn
+		record.IsActive = true
 	}
 	fr.recordsMap[key] = record
 	return nil

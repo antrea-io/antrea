@@ -242,7 +242,7 @@ func (data *TestData) createTestNamespace() error {
 // deleteNamespace deletes the provided namespace and waits for deletion to actually complete.
 func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) error {
 	var gracePeriodSeconds int64 = 0
-	var propagationPolicy metav1.DeletionPropagation = metav1.DeletePropagationForeground
+	var propagationPolicy = metav1.DeletePropagationForeground
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
@@ -304,6 +304,7 @@ func (data *TestData) deployAntreaIPSec() error {
 
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
 func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
+	// May be better to change this from configmap rather than directly changing antrea manifest?
 	// This is to add ipfixCollector address and pollAndExportInterval config params to antrea agent configmap
 	cmd := fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#flowCollectorAddr: \"\"|flowCollectorAddr: \"%s\"|g' %s", ipfixCollector, antreaYML)
 	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), cmd)
@@ -317,7 +318,7 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
 	}
 	// Turn on FlowExporter feature in featureGates
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#featureGates:|featureGates:\\n      FlowExporter: true|g' %s", antreaYML)
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#  FlowExporter: false|  FlowExporter: true|g' %s", antreaYML)
 	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
@@ -344,7 +345,7 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
 	}
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|featureGates:\\n      FlowExporter: true|#featureGates:|g' %s", antreaYML)
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|  FlowExporter: true|#  FlowExporter: false|g' %s", antreaYML)
 	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
@@ -482,7 +483,7 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 	var gracePeriodSeconds int64 = 5
 	// Foreground deletion policy ensures that by the time the DaemonSet is deleted, there are
 	// no Antrea Pods left.
-	var propagationPolicy metav1.DeletionPropagation = metav1.DeletePropagationForeground
+	var propagationPolicy = metav1.DeletePropagationForeground
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,

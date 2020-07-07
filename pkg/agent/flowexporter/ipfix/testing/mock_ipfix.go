@@ -64,26 +64,10 @@ func (mr *MockIPFIXExportingProcessMockRecorder) AddRecordAndSendMsg(arg0, arg1 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRecordAndSendMsg", reflect.TypeOf((*MockIPFIXExportingProcess)(nil).AddRecordAndSendMsg), arg0, arg1)
 }
 
-// AddTemplate mocks base method
-func (m *MockIPFIXExportingProcess) AddTemplate() uint16 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddTemplate")
-	ret0, _ := ret[0].(uint16)
-	return ret0
-}
-
-// AddTemplate indicates an expected call of AddTemplate
-func (mr *MockIPFIXExportingProcessMockRecorder) AddTemplate() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTemplate", reflect.TypeOf((*MockIPFIXExportingProcess)(nil).AddTemplate))
-}
-
 // CloseConnToCollector mocks base method
-func (m *MockIPFIXExportingProcess) CloseConnToCollector() error {
+func (m *MockIPFIXExportingProcess) CloseConnToCollector() {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CloseConnToCollector")
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "CloseConnToCollector")
 }
 
 // CloseConnToCollector indicates an expected call of CloseConnToCollector
@@ -132,6 +116,20 @@ func (m *MockIPFIXExportingProcess) LoadRegistries() {
 func (mr *MockIPFIXExportingProcessMockRecorder) LoadRegistries() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRegistries", reflect.TypeOf((*MockIPFIXExportingProcess)(nil).LoadRegistries))
+}
+
+// NewTemplateID mocks base method
+func (m *MockIPFIXExportingProcess) NewTemplateID() uint16 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewTemplateID")
+	ret0, _ := ret[0].(uint16)
+	return ret0
+}
+
+// NewTemplateID indicates an expected call of NewTemplateID
+func (mr *MockIPFIXExportingProcessMockRecorder) NewTemplateID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewTemplateID", reflect.TypeOf((*MockIPFIXExportingProcess)(nil).NewTemplateID))
 }
 
 // MockIPFIXRecord is a mock of IPFIXRecord interface
@@ -212,6 +210,20 @@ func (m *MockIPFIXRecord) GetRecord() entities.Record {
 func (mr *MockIPFIXRecordMockRecorder) GetRecord() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRecord", reflect.TypeOf((*MockIPFIXRecord)(nil).GetRecord))
+}
+
+// GetTemplateElements mocks base method
+func (m *MockIPFIXRecord) GetTemplateElements() []*entities.InfoElement {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTemplateElements")
+	ret0, _ := ret[0].([]*entities.InfoElement)
+	return ret0
+}
+
+// GetTemplateElements indicates an expected call of GetTemplateElements
+func (mr *MockIPFIXRecordMockRecorder) GetTemplateElements() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplateElements", reflect.TypeOf((*MockIPFIXRecord)(nil).GetTemplateElements))
 }
 
 // PrepareRecord mocks base method

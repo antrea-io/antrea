@@ -59,7 +59,7 @@ func TestFlowExporter(t *testing.T) {
 	bandwidth := strings.TrimSpace(stdout)
 
 	// Adding some delay to make sure all the data records corresponding to iperf flow are received.
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 
 	rc, collectorOutput, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl logs ipfix-collector -n antrea-test"))
 	if err != nil || rc != 0 {
@@ -131,5 +131,5 @@ func TestFlowExporter(t *testing.T) {
 	assert.Equal(t, templateRecords, clusterInfo.numNodes, "Each agent should send out template record")
 	// Single iperf resulting in two connections with separate ports. Suspecting second flow to be control flow to exchange
 	// stats info. As 5s is export interval and iperf traffic runs for 10s, we expect 4 records.
-	assert.Equal(t, dataRecordsIntraNode, 4, "Iperf flow should have expected number of flow records")
+	assert.GreaterOrEqual(t, dataRecordsIntraNode, 4, "Iperf flow should have expected number of flow records")
 }

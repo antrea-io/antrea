@@ -40,9 +40,9 @@ type Connection struct {
 	StartTime time.Time
 	// For invalid and closed connections: StopTime is the time when connection was updated last.
 	// For established connections: StopTime is latest time when it was polled.
-	StopTime                       time.Time
-	Zone                           uint16
-	StatusFlag                     uint32
+	StopTime   time.Time
+	Zone       uint16
+	StatusFlag uint32
 	// TODO: Have a separate field for protocol. No need to keep it in Tuple.
 	TupleOrig, TupleReply          Tuple
 	OriginalPackets, OriginalBytes uint64
@@ -60,4 +60,5 @@ type FlowRecord struct {
 	PrevBytes          uint64
 	PrevReversePackets uint64
 	PrevReverseBytes   uint64
+	IsActive           bool
 }
