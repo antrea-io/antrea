@@ -103,6 +103,9 @@ func (o *Options) validate(args []string) error {
 	if encapMode.SupportsNoEncap() && o.config.EnableIPSecTunnel {
 		return fmt.Errorf("IPSec tunnel may only be enabled on %s mode", config.TrafficEncapModeEncap)
 	}
+	if o.config.OVSDatapathType == ovsconfig.OVSDatapathNetdev && features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		return fmt.Errorf("FlowExporter feature is not supported for OVS datapath type %s", o.config.OVSDatapathType)
+	}
 	return nil
 }
 

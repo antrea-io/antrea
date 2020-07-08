@@ -37,6 +37,9 @@ const (
 	// Only container interfaces will be indexed.
 	// One Pod may get more than one interface.
 	podIndex = "pod"
+	// interfaceIPIndex is the index built with InterfaceConfig.IP
+	// Only the interfaces with IP get indexed.
+	interfaceIPIndex = "ip"
 )
 
 // Local cache for interfaces created on node, including container, host gateway, and tunnel
@@ -94,6 +97,7 @@ func (c *interfaceCache) AddInterface(interfaceConfig *InterfaceConfig) {
 	c.Lock()
 	defer c.Unlock()
 	c.cache.Add(interfaceConfig)
+
 	if interfaceConfig.Type == ContainerInterface {
 		metrics.PodCount.Inc()
 	}
@@ -104,6 +108,7 @@ func (c *interfaceCache) DeleteInterface(interfaceConfig *InterfaceConfig) {
 	c.Lock()
 	defer c.Unlock()
 	c.cache.Delete(interfaceConfig)
+
 	if interfaceConfig.Type == ContainerInterface {
 		metrics.PodCount.Dec()
 	}
@@ -126,6 +131,17 @@ func (c *interfaceCache) GetInterfaceByName(interfaceName string) (*InterfaceCon
 	c.RLock()
 	defer c.RUnlock()
 	interfaceConfigs, _ := c.cache.ByIndex(interfaceNameIndex, interfaceName)
+	if len(interfaceConfigs) == 0 {
+		return nil, false
+	}
+	return interfaceConfigs[0].(*InterfaceConfig), true
+}
+
+// GetInterfaceByIP retrieves interface from local cache given the interface IP.
+func (c *interfaceCache) GetInterfaceByIP(interfaceIP string) (*InterfaceConfig, bool) {
+	c.RLock()
+	defer c.RUnlock()
+	interfaceConfigs, _ := c.cache.ByIndex(interfaceIPIndex, interfaceIP)
 	if len(interfaceConfigs) == 0 {
 		return nil, false
 	}
@@ -227,6 +243,15 @@ func podIndexFunc(obj interface{}) ([]string, error) {
 	return []string{k8s.NamespacedName(interfaceConfig.PodNamespace, interfaceConfig.PodName)}, nil
 }
 
+func interfaceIPIndexFunc(obj interface{}) ([]string, error) {
+	interfaceConfig := obj.(*InterfaceConfig)
+	if interfaceConfig.IP == nil {
+		// If interfaceConfig IP is not set, we return empty key.
+		return []string{}, nil
+	}
+	return []string{interfaceConfig.IP.String()}, nil
+}
+
 func NewInterfaceStore() InterfaceStore {
 	return &interfaceCache{
 		cache: cache.NewIndexer(getInterfaceKey, cache.Indexers{
@@ -234,6 +259,7 @@ func NewInterfaceStore() InterfaceStore {
 			interfaceTypeIndex: interfaceTypeIndexFunc,
 			containerIDIndex:   containerIDIndexFunc,
 			podIndex:           podIndexFunc,
+			interfaceIPIndex:   interfaceIPIndexFunc,
 		}),
 	}
 }

@@ -38,11 +38,12 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 // indirect
 	github.com/stretchr/testify v1.4.0
+	github.com/ti-mo/conntrack v0.3.0
 	github.com/vishvananda/netlink v1.1.0
 	golang.org/x/crypto v0.0.0-20200220183623-bac4c82f6975
 	golang.org/x/exp v0.0.0-20190312203227-4b39c73a6495
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys v0.0.0-20200113162924-86b910548bc1
+	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	google.golang.org/grpc v1.26.0
 	gopkg.in/yaml.v2 v2.2.8

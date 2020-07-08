@@ -160,7 +160,7 @@ const (
 	// the selection result needs to be cached.
 	marksRegServiceNeedLearn uint32 = 0b011
 
-	ctZone = 0xfff0
+	CtZone = 0xfff0
 
 	portFoundMark    = 0b1
 	snatRequiredMark = 0b1
@@ -384,7 +384,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Done(),
 			// Enable NAT.
 			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-				Action().CT(false, connectionTrackTable.GetNext(), ctZone).NAT().CTDone().
+				Action().CT(false, connectionTrackTable.GetNext(), CtZone).NAT().CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
 			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
@@ -398,7 +398,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 	} else {
 		flows = append(flows,
 			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-				Action().CT(false, connectionTrackTable.GetNext(), ctZone).CTDone().
+				Action().CT(false, connectionTrackTable.GetNext(), CtZone).CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
 		)
@@ -419,12 +419,12 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 		connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
-			Action().CT(true, connectionTrackCommitTable.GetNext(), ctZone).LoadToMark(gatewayCTMark).CTDone().
+			Action().CT(true, connectionTrackCommitTable.GetNext(), CtZone).LoadToMark(gatewayCTMark).CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
-			Action().CT(true, connectionTrackCommitTable.GetNext(), ctZone).CTDone().
+			Action().CT(true, connectionTrackCommitTable.GetNext(), CtZone).CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	)
@@ -980,7 +980,7 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 		// Enforce IP packet into the conntrack zone with SNAT. If the connection is SNATed, the reply packet should use
 		// Pod IP as the destination, and then is forwarded to conntrackStateTable.
 		c.pipeline[conntrackTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			Action().CT(false, conntrackStateTable, ctZone).NAT().CTDone().
+			Action().CT(false, conntrackStateTable, CtZone).NAT().CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Rewrite dMAC with the global vMAC if the packet is a reply to the Pod from the external address.
@@ -1016,7 +1016,7 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 			MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
 			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
-			Action().CT(true, l2ForwardingOutTable, ctZone).
+			Action().CT(true, l2ForwardingOutTable, CtZone).
 			SNAT(snatIPRange, nil).
 			LoadToMark(snatCTMark).CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1140,7 +1140,7 @@ func (c *client) endpointDNATFlow(endpointIP net.IP, endpointPort uint16, protoc
 		MatchProtocol(protocol).
 		MatchReg(int(endpointIPReg), ipVal).
 		MatchRegRange(int(endpointPortReg), unionVal, binding.Range{0, 18}).
-		Action().CT(true, EgressRuleTable, ctZone).
+		Action().CT(true, EgressRuleTable, CtZone).
 		DNAT(
 			&binding.IPRange{StartIP: endpointIP, EndIP: endpointIP},
 			&binding.PortRange{StartPort: endpointPort, EndPort: endpointPort},
