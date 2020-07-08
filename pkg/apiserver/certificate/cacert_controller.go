@@ -39,9 +39,6 @@ const (
 )
 
 var (
-	// Use the Antrea Pod Namespace for the CA cert ConfigMap.
-	caConfigMapNamespace = GetCAConfigMapNamespace()
-
 	// apiServiceNames contains all the APIServices backed by antrea-controller.
 	apiServiceNames = []string{
 		"v1beta1.networking.antrea.tanzu.vmware.com",
@@ -130,6 +127,8 @@ func (c *CACertController) syncAPIServices(caCert []byte) error {
 // syncConfigMap updates the ConfigMap that holds the CA bundle, which will be read by API clients, e.g. antrea-agent.
 func (c *CACertController) syncConfigMap(caCert []byte) error {
 	klog.Info("Syncing CA certificate with ConfigMap")
+	// Use the Antrea Pod Namespace for the CA cert ConfigMap.
+	caConfigMapNamespace := GetCAConfigMapNamespace()
 	caConfigMap, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), CAConfigMapName, v1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting ConfigMap %s: %v", CAConfigMapName, err)
