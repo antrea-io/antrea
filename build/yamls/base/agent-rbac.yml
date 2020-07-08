@@ -96,6 +96,8 @@ rules:
       - list
       - update
       - patch
+      - create
+      - delete
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1

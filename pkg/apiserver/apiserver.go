@@ -112,17 +112,7 @@ func (c *Config) Complete(informers informers.SharedInformerFactory) completedCo
 	return completedConfig{c.genericConfig.Complete(informers), &c.extraConfig}
 }
 
-func (c completedConfig) New() (*APIServer, error) {
-	genericServer, err := c.genericConfig.New("antrea-apiserver", genericapiserver.NewEmptyDelegate())
-	if err != nil {
-		return nil, err
-	}
-
-	s := &APIServer{
-		GenericAPIServer: genericServer,
-		caCertController: c.extraConfig.caCertController,
-	}
-
+func installAPIGroup(s *APIServer, c completedConfig) error {
 	networkingGroup := genericapiserver.NewDefaultAPIGroupInfo(networking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	networkingStorage := map[string]rest.Storage{}
 	networkingStorage["addressgroups"] = addressgroup.NewREST(c.extraConfig.addressGroupStore)
@@ -141,9 +131,25 @@ func (c completedConfig) New() (*APIServer, error) {
 	groups := []*genericapiserver.APIGroupInfo{&networkingGroup, &systemGroup}
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
-			return nil, err
+			return err
 		}
 	}
+	return nil
+}
 
+func (c completedConfig) New() (*APIServer, error) {
+	genericServer, err := c.genericConfig.New("antrea-apiserver", genericapiserver.NewEmptyDelegate())
+	if err != nil {
+		return nil, err
+	}
+
+	s := &APIServer{
+		GenericAPIServer: genericServer,
+		caCertController: c.extraConfig.caCertController,
+	}
+
+	if err := installAPIGroup(s, c); err != nil {
+		return nil, err
+	}
 	return s, nil
 }

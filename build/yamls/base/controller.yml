@@ -132,3 +132,4 @@ spec:
           hostPath:
             path: /var/log/antrea
             type: DirectoryOrCreate
+
