@@ -109,26 +109,15 @@ type connTrackSystem struct {
 }
 
 func NewConnTrackInterfacer() *connTrackSystem {
-	// Check value of setting net.netfilter.nf_conntrack_acct. Set to value 1, if it is not set.
-	connTrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
-	if err != nil {
-		// Continue with creation of interfacer object as we can dump flows with no stats and that information can still be useful.
-		// If permission error, please provide access to net.netfilter.nf_conntrack_acct. This will enable flow exporter to export stats and timestamps of connections.
-		klog.Errorf("Error when getting net.netfilter.nf_conntrack_acct: %v", err)
-	} else {
-		if connTrackAcct == 0 {
-			err = sysctl.SetSysctlNet("netfilter/nf_conntrack_acct", 1)
-			if err != nil {
-				// If permission error, please provide access to net.netfilter.nf_conntrack_acct.
-				klog.Errorf("Error when setting net.netfilter.nf_conntrack_acct: %v", err)
-			}
-			// Set the conntrack timestamp setting to get timestamps of connections
-			err = sysctl.SetSysctlNet("netfilter/nf_conntrack_timestamp", 1)
-			if err != nil {
-				klog.Errorf("Error when setting net.netfilter.nf_conntrack_timestamp: %v", err)
-			}
-		}
-	}
+	// Ensure net.netfilter.nf_conntrack_acct value to be 1. This will enable flow exporter to export stats of connections.
+	// Do not handle error and continue with creation of interfacer object as we can still dump flows with no stats.
+	// If log says permission error, please ensure net.netfilter.nf_conntrack_acct to be set to 1.
+	sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_acct", 1)
+	// Ensure net.netfilter.nf_conntrack_timestamp value to be 1. This will enable flow exporter to export timestamps of connections.
+	// Do not handle error and continue with creation of interfacer object as we can still dump flows with no timestamps.
+	// If log says permission error, please ensure net.netfilter.nf_conntrack_timestamp to be set to 1.
+	sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_timestamp", 1)
+
 	return &connTrackSystem{}
 }
 

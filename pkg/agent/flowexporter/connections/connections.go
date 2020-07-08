@@ -47,7 +47,7 @@ func NewConnectionStore(ctDumper ConnTrackDumper, ifaceStore interfacestore.Inte
 }
 
 // Run polls the connTrackDumper module periodically to get connections. These connections are used
-// to build connection store. If there is an error in poll cycle, we break the loop and exit the routine.
+// to build connection store.
 func (cs *connectionStore) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting conntrack polling")
 

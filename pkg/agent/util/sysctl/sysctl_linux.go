@@ -21,6 +21,8 @@ import (
 	"path"
 	"strconv"
 	"strings"
+
+	"k8s.io/klog"
 )
 
 const (
@@ -43,4 +45,21 @@ func GetSysctlNet(sysctl string) (int, error) {
 // SetSysctlNet modifies the specified sysctl nt.* settings to the new value
 func SetSysctlNet(sysctl string, newVal int) error {
 	return ioutil.WriteFile(path.Join(sysctlNet, sysctl), []byte(strconv.Itoa(newVal)), 0640)
+}
+
+func EnsureSysctlNetValue(sysctl string, value int) error {
+	val, err := GetSysctlNet(sysctl)
+	if err != nil {
+		// If permission error, please provide access to sysctl setting_
+		klog.Errorf("Error when getting %s: %v", sysctl, err)
+		return err
+	} else if val != value {
+		err = SetSysctlNet(sysctl, value)
+		if err != nil {
+			// If permission error, please provide access to sysctl setting
+			klog.Errorf("Error when setting %s: %v", sysctl, err)
+			return err
+		}
+	}
+	return nil
 }
