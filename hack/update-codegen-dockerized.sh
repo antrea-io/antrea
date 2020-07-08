@@ -92,6 +92,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/querier AgentQuerier"
   "pkg/controller/querier ControllerQuerier"
   "pkg/querier AgentNetworkPolicyInfoQuerier"
+  "pkg/agent/flowexporter/connections ConnTrackDumper,ConnTrackInterfacer"
 )
 
 # Command mockgen does not automatically replace variable YEAR with current year

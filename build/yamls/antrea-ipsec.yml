@@ -525,6 +525,8 @@ data:
     #  AntreaProxy: false
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
+    # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
+    #  FlowExporter: false
 
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -625,7 +627,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-tkd7g2g7d4
+  name: antrea-config-ch9mhb526k
   namespace: kube-system
 ---
 apiVersion: v1
@@ -740,7 +742,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-tkd7g2g7d4
+          name: antrea-config-ch9mhb526k
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -990,7 +992,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-tkd7g2g7d4
+          name: antrea-config-ch9mhb526k
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
