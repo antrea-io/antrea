@@ -21,11 +21,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 )
 
 const traceflowTimeout = 40 * time.Second
@@ -133,7 +134,8 @@ func TestTraceflow(t *testing.T) {
 	// 1. Allow all egress traffic.
 	// 2. Deny ingress traffic on pod with label antrea-e2e = node1Pods[1]. So flow node1Pods[0] -> node1Pods[1] will be dropped.
 	var allowAllEgress *networkingv1.NetworkPolicy
-	if allowAllEgress, err = data.createNPAllowAllEgress("test-networkpolicy-allow-all-egress"); err != nil {
+	allowAllEgressName := "test-networkpolicy-allow-all-egress"
+	if allowAllEgress, err = data.createNPAllowAllEgress(allowAllEgressName); err != nil {
 		t.Fatalf("Error when creating network policy: %v", err)
 	}
 	defer func() {
@@ -143,7 +145,8 @@ func TestTraceflow(t *testing.T) {
 	}()
 
 	var denyAllIngress *networkingv1.NetworkPolicy
-	if denyAllIngress, err = data.createNPDenyAllIngress("antrea-e2e", node1Pods[1], "test-networkpolicy-deny-ingress"); err != nil {
+	denyAllIngressName := "test-networkpolicy-deny-ingress"
+	if denyAllIngress, err = data.createNPDenyAllIngress("antrea-e2e", node1Pods[1], denyAllIngressName); err != nil {
 		t.Fatalf("Error when creating network policy: %v", err)
 	}
 	defer func() {
@@ -151,6 +154,14 @@ func TestTraceflow(t *testing.T) {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	}()
+
+	antreaPod, err := data.getAntreaPodOnNode(node1)
+	if err = data.waitForNetworkpolicyRealized(antreaPod, allowAllEgressName); err != nil {
+		t.Error(err)
+	}
+	if err = data.waitForNetworkpolicyRealized(antreaPod, denyAllIngressName); err != nil {
+		t.Error(err)
+	}
 
 	// Create 2 traceflows:
 	// 1. node1Pods[0] -> node1Pods[1], intra node1.
@@ -319,4 +330,23 @@ func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.Network
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 	}
 	return data.createNetworkPolicy(name, spec)
+}
+
+// waitForNetworkpolicyRealized waits for the NetworkPolicy to be realized by the antrea-agent Pod.
+func (data *TestData) waitForNetworkpolicyRealized(pod string, networkpolicy string) error {
+	if err := wait.Poll(200*time.Millisecond, 5*time.Second, func() (bool, error) {
+		cmds := []string{"antctl", "get", "networkpolicy", networkpolicy, "-n", testNamespace}
+		if _, stderr, err := runAntctl(pod, cmds, data); err != nil {
+			if strings.Contains(stderr, "server could not find the requested resource") {
+				return false, nil
+			}
+			return false, err
+		}
+		return true, nil
+	}); err == wait.ErrWaitTimeout {
+		return fmt.Errorf("NetworkPolicy %s isn't realized in time", networkpolicy)
+	} else if err != nil {
+		return fmt.Errorf("Error when executing antctl get NetworkPolicy: %v", err)
+	}
+	return nil
 }
