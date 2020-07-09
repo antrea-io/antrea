@@ -11,6 +11,15 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.8.2 - 2020-07-13
+
+### Fixed
+
+- Fix Agent logic in charge of sending Gratuitous ARP messages when networking is configured for a Pod: the previous code was not thread-safe and causing file descriptor leaks for concurrent CNI ADD requests. ([#933](https://github.com/vmware-tanzu/antrea/pull/933), [@tnqn])
+- Clean up some internal state in the Agent's NetworkPolicy implementation when a rule is updated. ([#929](https://github.com/vmware-tanzu/antrea/pull/929), [@jianjuns])
+
+## 0.8.1 - 2020-07-09
+
 ## 0.8.0 - 2020-07-02
 
 ### Added
