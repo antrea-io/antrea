@@ -176,6 +176,8 @@ spec:
     singular: traceflow
   preserveUnknownFields: false
   scope: Cluster
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       properties:
@@ -189,7 +191,7 @@ spec:
               - required:
                 - ip
               properties:
-                ip:
+                IP:
                   format: ipv4
                   type: string
                 namespace:
@@ -251,6 +253,49 @@ spec:
           required:
           - source
           - destination
+          type: object
+        status:
+          properties:
+            dataplaneTag:
+              type: integer
+            phase:
+              type: string
+            reason:
+              type: string
+            results:
+              items:
+                properties:
+                  node:
+                    type: string
+                  observations:
+                    properties:
+                      action:
+                        type: string
+                      component:
+                        type: string
+                      componentInfo:
+                        type: string
+                      dstMAC:
+                        type: string
+                      networkPolicy:
+                        type: string
+                      pod:
+                        type: string
+                      translatedDstIP:
+                        type: string
+                      translatedSrcIP:
+                        type: string
+                      ttl:
+                        type: integer
+                      tunnelDstIP:
+                        type: string
+                    type: object
+                  role:
+                    type: string
+                  timestamp:
+                    type: integer
+                type: object
+              type: array
           type: object
       required:
       - spec
