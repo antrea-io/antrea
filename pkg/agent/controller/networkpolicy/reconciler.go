@@ -417,6 +417,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 			return err
 		}
 		delete(lastRealized.ofIDs, svcHash)
+		delete(lastRealized.podOFPorts, svcHash)
 	}
 	lastRealized.CompletedRule = newRule
 	return nil
@@ -508,6 +509,7 @@ func (r *reconciler) Forget(ruleID string) error {
 			return err
 		}
 		delete(lastRealized.ofIDs, svcHash)
+		delete(lastRealized.podOFPorts, svcHash)
 	}
 
 	r.lastRealizeds.Delete(ruleID)
