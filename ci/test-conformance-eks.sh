@@ -24,6 +24,7 @@ REGION="us-east-2"
 K8S_VERSION="1.15"
 AWS_NODE_TYPE="t3.medium"
 SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
+SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_rsa"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
@@ -32,7 +33,7 @@ TEST_FAILURE=false
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] \
-                  [--setup-only] [--cleanup-only]
+                  [--ssh-private-key <SSHPrivateKey] [--setup-only] [--cleanup-only]
 
 Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy).
 
@@ -79,6 +80,10 @@ case $key in
     SSH_KEY_PATH="$2"
     shift 2
     ;;
+    --ssh-private-key)
+    SSH_PRIVATE_KEY_PATH="$2"
+    shift 2
+    ;;
     --kubeconfig)
     KUBECONFIG_PATH="$2"
     shift 2
@@ -108,19 +113,11 @@ case $key in
 esac
 done
 
-if [[ -z ${CLUSTER+x} ]]; then
-    if [[ -z ${JOB_NAME+x} ]]; then
-        echoerr "Use --cluster-name to set the name of the EKS cluster"
-        exit 1
-    fi
-    CLUSTER="${JOB_NAME}-${BUILD_NUMBER}"
-fi
-
 function setup_eks() {
 
     echo "=== This cluster to be created is named: ${CLUSTER} ==="
-    echo "CLUSTERNAME=${CLUSTER}" > ci_properties.txt
-
+    # Save the cluster information for cleanup on Jenkins environment
+    echo "CLUSTERNAME=${CLUSTER}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
     echo "=== Using the following awscli version ==="
     aws --version
 
@@ -181,12 +178,13 @@ function deliver_antrea_to_eks() {
 
     set +e
     worker_node_ip_1=$(kubectl get nodes -o wide | sed -n '2 p' | awk '{print $7}')
-    node_mtu=$(ssh -o StrictHostKeyChecking=no -l "ec2-user" $worker_node_ip_1 \
+    node_mtu=$(ssh -i $SSH_PRIVATE_KEY_PATH -o StrictHostKeyChecking=no -l "ec2-user" $worker_node_ip_1 \
       'export PATH=$PATH:/usr/sbin; ip a | grep -E eth0.*mtu | cut -d " " -f5')
-
-    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
-        GIT_CHECKOUT_DIR=..
+    if [[ -z ${node_mtu} ]]; then
+         echo "Cannot determine node MTU!"
+         exit 1
     fi
+
     sed -i "s|#defaultMTU: 1450|defaultMTU: ${node_mtu}|g"  ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
     sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: ${k8s_svc_cidr}|g"  ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
     echo "defaultMTU set as ${node_mtu}"
@@ -204,15 +202,12 @@ function deliver_antrea_to_eks() {
 function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
 
-    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
-        GIT_CHECKOUT_DIR=..
-    fi
     # Skip NodePort related cases for EKS since by default eksctl does not create security groups for nodeport service
     # access through node external IP. See https://github.com/vmware-tanzu/antrea/issues/690
     skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
-     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-conformance-skip ${skip_regex} > eks-test.log
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-conformance-skip ${skip_regex} > ${GIT_CHECKOUT_DIR}/eks-test.log
 
-    if grep -Fxq "Failed tests:" eks-test.log
+    if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/eks-test.log
     then
         echo "Failed cases exist."
         TEST_FAILURE=true
@@ -233,7 +228,7 @@ function run_conformance() {
 }
 
 function cleanup_cluster() {
-    echo '=== Cleaning up EKS cluster ${cluster} ==='
+    echo '=== Cleaning up EKS cluster ${CLUSTER} ==='
     retry=5
     while [[ "${retry}" -gt 0 ]]; do
        eksctl delete cluster --name ${CLUSTER} --region $REGION
@@ -253,6 +248,7 @@ function cleanup_cluster() {
 
 # ensures that the script can be run from anywhere
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+GIT_CHECKOUT_DIR=${THIS_DIR}/..
 pushd "$THIS_DIR" > /dev/null
 
 if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then

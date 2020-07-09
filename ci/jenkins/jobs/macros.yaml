@@ -150,7 +150,7 @@
          #!/bin/bash
          set -ex
          source /home/ubuntu/.bashrc
-         ./ci/test-conformance-gke.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
+         ./ci/test-conformance-gke.sh --gcloud-path "${GCLOUD_PATH}" --cluster-name "${CLUSTERNAME}" --cleanup-only
 
 - builder:
     name: builder-workload-cluster-gc
