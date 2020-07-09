@@ -22,15 +22,19 @@
             mkdir -p ${CLUSTER_LOG_DIR}/capi
             kubectl get -n capi-system pods -o name | awk '{print $1}' | while read capi_pod; do
               capi_pod_name=$(echo ${capi_pod} | cut -d'/' -f 2)
-              kubectl logs ${capi_pod_name} -c manager -n capi-system --tail=400 > ${CLUSTER_LOG_DIR}/capi/${capi_pod_name}
+              kubectl logs ${capi_pod_name} -c manager -n capi-system > ${CLUSTER_LOG_DIR}/capi/${capi_pod_name}
             done
 
             echo "=== Saving capv logs ==="
             mkdir -p ${CLUSTER_LOG_DIR}/capv
             kubectl get -n capv-system pods -o name | awk '{print $1}' | while read capv_pod; do
               capv_pod_name=$(echo ${capv_pod} | cut -d'/' -f 2)
-              kubectl logs ${capv_pod_name} -c manager -n capv-system --tail=400 > ${CLUSTER_LOG_DIR}/capv/${capv_pod_name}
+              kubectl logs ${capv_pod_name} -c manager -n capv-system > ${CLUSTER_LOG_DIR}/capv/${capv_pod_name}
             done
+
+            echo "=== Saving cluster_api.yaml ==="
+            mkdir -p ${CLUSTER_LOG_DIR}/cluster_api
+            kubectl get cluster-api -A -o yaml > ${CLUSTER_LOG_DIR}/cluster_api/cluster_api.yaml
           }
 
           set -e
