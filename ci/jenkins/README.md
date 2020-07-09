@@ -55,7 +55,7 @@ should be deleted. This ensures that all tests are run on a clean testbed.
     
   |  K8s version   |     Node OS     | VPC Native Mode (on by default) |  Status  | 
   | :------------: | :-------------: | :-----------------------------: |:-------: |
-  | 1.15.11-gke.11 |     Ubuntu      |  On                             |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-native)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-native/)|
+  | 1.15.12-gke.3  |     Ubuntu      |  On                             |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-native)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-native/)|
   
 
 If you need to run the K8s community tests locally, you may use the
