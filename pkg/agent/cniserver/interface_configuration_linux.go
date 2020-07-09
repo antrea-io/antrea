@@ -26,11 +26,11 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/arping"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ethtool"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -42,41 +42,6 @@ type ifConfigurator struct {
 
 func newInterfaceConfigurator(ovsDatapathType string) (*ifConfigurator, error) {
 	return &ifConfigurator{ovsDatapathType: ovsDatapathType}, nil
-}
-
-// setupInterfaces creates a veth pair: containerIface is in the container
-// network namespace and hostIface is in the host network namespace.
-func (ic *ifConfigurator) setupInterfaces(
-	hostIfaceName, containerIfaceName string,
-	netns ns.NetNS,
-	mtu int) (hostIface *current.Interface, containerIface *current.Interface, err error) {
-	hostIface = &current.Interface{}
-	containerIface = &current.Interface{}
-
-	if err := netns.Do(func(hostNS ns.NetNS) error {
-		hostVeth, containerVeth, err := ip.SetupVethWithName(containerIfaceName, hostIfaceName, mtu, hostNS)
-		if err != nil {
-			return err
-		}
-		klog.V(2).Infof("Setup interfaces host: %s, container %s", hostVeth.Name, containerVeth.Name)
-		containerIface.Name = containerVeth.Name
-		containerIface.Mac = containerVeth.HardwareAddr.String()
-		containerIface.Sandbox = netns.Path()
-		hostIface.Name = hostVeth.Name
-		hostIface.Mac = hostVeth.HardwareAddr.String()
-		// OVS netdev datapath doesn't support TX checksum offloading, i.e. if packet
-		// arrives with bad/no checksum it will be sent to the output port with same bad/no checksum.
-		if ic.ovsDatapathType == ovsconfig.OVSDatapathNetdev {
-			if err := ethtool.EthtoolTXHWCsumOff(containerVeth.Name); err != nil {
-				return fmt.Errorf("error when disabling TX checksum offload on container veth: %v", err)
-			}
-		}
-		return nil
-	}); err != nil {
-		return nil, nil, err
-	}
-
-	return hostIface, containerIface, nil
 }
 
 // advertiseContainerAddr sends 3 GARP packets in another goroutine with 50ms interval. It's because Openflow entries are
@@ -109,7 +74,9 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 		for {
 			// Send gratuitous ARP to network in case of stale mappings for this IP address
 			// (e.g. if a previous - deleted - Pod was using the same IP).
-			arping.GratuitousArpOverIface(targetIP, *iface)
+			if err := arping.GratuitousARPOverIface(targetIP, iface); err != nil {
+				klog.Warningf("Failed to send gratuitous ARP #%d: %v", count, err)
+			}
 			count++
 			if count == 3 {
 				break
@@ -121,6 +88,8 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 	return nil
 }
 
+// configureContainerLink creates a veth pair: one in the container netns and one in the host netns, and configures IP
+// address and routes to the container veth.
 func (ic *ifConfigurator) configureContainerLink(
 	podName string,
 	podNamespace string,
@@ -130,25 +99,35 @@ func (ic *ifConfigurator) configureContainerLink(
 	mtu int,
 	result *current.Result,
 ) error {
-	netns, err := ns.GetNS(containerNetNS)
-	if err != nil {
-		return fmt.Errorf("failed to open netns %s: %v", containerNetNS, err)
-	}
-	defer netns.Close()
-	// Create veth pair and link up
 	hostIfaceName := util.GenerateContainerInterfaceName(podName, podNamespace, containerID)
-	hostIface, containerIface, err := ic.setupInterfaces(hostIfaceName, containerIfaceName, netns, mtu)
-	if err != nil {
-		return fmt.Errorf("failed to create veth devices for container %s: %v", containerID, err)
-	}
 
+	hostIface := &current.Interface{Name: hostIfaceName}
+	containerIface := &current.Interface{Name: containerIfaceName, Sandbox: containerNetNS}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
+	if err := ns.WithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
+		klog.V(2).Infof("Creating veth devices (%s, %s) for container %s", containerIfaceName, hostIfaceName, containerID)
+		hostVeth, containerVeth, err := ip.SetupVethWithName(containerIfaceName, hostIfaceName, mtu, hostNS)
+		if err != nil {
+			return fmt.Errorf("failed to create veth devices for container %s: %v", containerID, err)
+		}
+		containerIface.Mac = containerVeth.HardwareAddr.String()
+		hostIface.Mac = hostVeth.HardwareAddr.String()
+		// OVS netdev datapath doesn't support TX checksum offloading, i.e. if packet
+		// arrives with bad/no checksum it will be sent to the output port with same bad/no checksum.
+		if ic.ovsDatapathType == ovsconfig.OVSDatapathNetdev {
+			if err := ethtool.EthtoolTXHWCsumOff(containerVeth.Name); err != nil {
+				return fmt.Errorf("error when disabling TX checksum offload on container veth: %v", err)
+			}
+		}
 
-	klog.V(2).Infof("Configuring IP address for container %s", containerID)
-	if err := netns.Do(func(_ ns.NetNS) error {
-		return ipam.ConfigureIface(containerIface.Name, result)
+		klog.V(2).Infof("Configuring IP address for container %s", containerID)
+		// result.Interfaces must be set before this.
+		if err := ipam.ConfigureIface(containerIface.Name, result); err != nil {
+			return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
+		}
+		return nil
 	}); err != nil {
-		return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
+		return err
 	}
 	return nil
 }

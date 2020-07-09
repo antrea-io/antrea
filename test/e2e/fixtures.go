@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -223,9 +224,15 @@ func createTestBusyboxPods(tb testing.TB, data *TestData, num int, nodeName stri
 	podNames []string, podIPs []string, cleanupFn func(),
 ) {
 	cleanupFn = func() {
+		var wg sync.WaitGroup
 		for _, podName := range podNames {
-			deletePodWrapper(tb, data, podName)
+			wg.Add(1)
+			go func(name string) {
+				deletePodWrapper(tb, data, name)
+				wg.Done()
+			}(podName)
 		}
+		wg.Wait()
 	}
 
 	type podData struct {
