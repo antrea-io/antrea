@@ -95,7 +95,7 @@ spec:
                 ipHeader:
                   type: object
                   properties:
-                    srcIp:
+                    srcIP:
                       type: string
                       format: ipv4
                     protocol:

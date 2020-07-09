@@ -205,7 +205,7 @@ spec:
                       type: integer
                     protocol:
                       type: integer
-                    srcIp:
+                    srcIP:
                       format: ipv4
                       type: string
                     ttl:
