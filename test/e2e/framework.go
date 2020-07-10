@@ -17,6 +17,7 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -29,6 +30,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -811,7 +813,8 @@ func validatePodIP(podNetworkCIDR, podIP string) (bool, error) {
 }
 
 // createService creates a service with port and targetPort.
-func (data *TestData) createService(serviceName string, port, targetPort int, selector map[string]string, affinity bool) (*v1.Service, error) {
+func (data *TestData) createService(serviceName string, port, targetPort int, selector map[string]string, affinity bool,
+	serviceType v1.ServiceType) (*v1.Service, error) {
 	affinityType := v1.ServiceAffinityNone
 	if affinity {
 		affinityType = v1.ServiceAffinityClientIP
@@ -831,15 +834,34 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 				Port:       int32(port),
 				TargetPort: intstr.FromInt(targetPort),
 			}},
+			Type:     serviceType,
 			Selector: selector,
 		},
 	}
 	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }
 
-// createNginxService create a nginx service with the given name.
-func (data *TestData) createNginxService(affinity bool) (*v1.Service, error) {
-	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity)
+// createNginxClusterIPService create a nginx service with the given name.
+func (data *TestData) createNginxClusterIPService(affinity bool) (*v1.Service, error) {
+	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, v1.ServiceTypeClusterIP)
+}
+
+func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string) (*v1.Service, error) {
+	svc, err := data.createService("nginx-loadbalancer", 80, 80, map[string]string{"app": "nginx"}, affinity, v1.ServiceTypeLoadBalancer)
+	if err != nil {
+		return svc, err
+	}
+	ingress := make([]v1.LoadBalancerIngress, len(ingressIPs))
+	for idx, ingressIP := range ingressIPs {
+		ingress[idx].IP = ingressIP
+	}
+	updatedSvc := svc.DeepCopy()
+	updatedSvc.Status.LoadBalancer.Ingress = ingress
+	patchData, err := json.Marshal(updatedSvc)
+	if err != nil {
+		return svc, err
+	}
+	return data.clientset.CoreV1().Services(svc.Namespace).Patch(context.TODO(), svc.Name, types.MergePatchType, patchData, metav1.PatchOptions{}, "status")
 }
 
 // deleteService deletes the service.
