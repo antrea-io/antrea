@@ -91,7 +91,7 @@ func InitializePrometheusMetrics() {
 	gaugeHost.Set(1)
 
 	InitializePodMetrics()
-	initializeNetworkPolicyMetrics()
+	InitializeNetworkPolicyMetrics()
 	InitializeOVSMetrics()
 }
 
@@ -101,7 +101,7 @@ func InitializePodMetrics() {
 	}
 }
 
-func initializeNetworkPolicyMetrics() {
+func InitializeNetworkPolicyMetrics() {
 	if err := legacyregistry.Register(EgressNetworkPolicyRuleCount); err != nil {
 		klog.Error("Failed to register antrea_agent_egress_networkpolicy_rule_count with Prometheus")
 	}
