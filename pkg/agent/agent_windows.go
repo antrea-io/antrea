@@ -26,6 +26,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
 // setupExternalConnectivity installs OpenFlow entries to SNAT Pod traffic using Node IP, and then Pod could communicate
@@ -140,6 +141,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	uplinkInterface := interfacestore.NewUplinkInterface(uplink)
 	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUId, config.UplinkOFPort}
 	i.ifaceStore.AddInterface(uplinkInterface)
+	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 
 	// Move network configuration of uplink interface to OVS bridge local interface.
 	// - The net configuration of uplink will be restored by OS if the attached HNS network is deleted.
@@ -162,6 +164,12 @@ func (i *Initializer) prepareOVSBridge() error {
 		if err = util.SetAdapterDNSServers(brName, uplinkNetConfig.DNSServers); err != nil {
 			return err
 		}
+	}
+	// Set the uplink with "no-flood" config, so that the IP of local Pods and "antrea-gw0" will not be leaked to the
+	// underlay network by the "normal" flow entry.
+	if err := ovsCtlClient.SetPortNoFlood(config.UplinkOFPort); err != nil {
+		klog.Errorf("Failed to set the uplink port with no-flood config: %v", err)
+		return err
 	}
 	return nil
 }
