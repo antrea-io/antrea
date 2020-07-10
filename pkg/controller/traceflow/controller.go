@@ -256,7 +256,7 @@ func (c *Controller) runningTraceflowCRD(tf *opsv1alpha1.Traceflow, dataPlaneTag
 	}
 	patchData := Traceflow{Status: opsv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, DataplaneTag: dataPlaneTag}}
 	payloads, _ := json.Marshal(patchData)
-	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{})
+	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{}, "status")
 }
 
 func (c *Controller) errorTraceflowCRD(tf *opsv1alpha1.Traceflow, reason string) (*opsv1alpha1.Traceflow, error) {
@@ -267,7 +267,7 @@ func (c *Controller) errorTraceflowCRD(tf *opsv1alpha1.Traceflow, reason string)
 	}
 	patchData := Traceflow{Status: opsv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
 	payloads, _ := json.Marshal(patchData)
-	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{})
+	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{}, "status")
 }
 
 func (c *Controller) occupyTag(tf *opsv1alpha1.Traceflow) error {
