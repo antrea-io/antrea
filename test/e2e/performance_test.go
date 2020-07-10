@@ -40,6 +40,7 @@ const (
 	nginxImage                             = "nginx"
 	perftoolContainerName                  = "perftool"
 	nginxContainerName                     = "nginx"
+	qperfPort                              = 19765
 )
 
 var (
@@ -324,4 +325,79 @@ func withPerfTestSetup(fn func(data *TestData), b *testing.B) {
 	}
 
 	fn(data)
+}
+
+// TestBenchmarkNetworkIntraNode measures the bandwidth and latency performance between Pods on same node.
+func TestBenchmarkNetworkIntraNode(t *testing.T) {
+	skipIfNotBenchmarkTest(t)
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil); err != nil {
+		t.Fatalf("Error when creating the perftest client Pod: %v", err)
+	}
+	if err := data.podWaitForRunning(defaultTimeout, "perftest-a", testNamespace); err != nil {
+		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
+	}
+	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: qperfPort}}); err != nil {
+		t.Fatalf("Error when creating the perftest server Pod: %v", err)
+	}
+	podBIP, err := data.podWaitForIP(defaultTimeout, "perftest-b", testNamespace)
+	if err != nil {
+		t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
+	}
+	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", fmt.Sprintf("qperf %s tcp_bw tcp_lat -t 2", podBIP)})
+	if err != nil {
+		t.Fatalf("Error when running qperf client: %v", err)
+	}
+	stdout = strings.TrimSpace(stdout)
+	t.Logf("Report:\n%s", stdout)
+}
+
+func benchmarkNetworkService(t *testing.T, endpointNode, clientNode string) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	svc, err := data.createService("perftest-b", qperfPort, qperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false)
+	if err != nil {
+		t.Fatalf("Error when creating perftest service: %v", err)
+	}
+	if err := data.createPodOnNode("perftest-a", clientNode, perftoolImage, nil, nil, nil, nil); err != nil {
+		t.Fatalf("Error when creating the perftest client Pod: %v", err)
+	}
+	if err := data.podWaitForRunning(defaultTimeout, "perftest-a", testNamespace); err != nil {
+		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
+	}
+	if err := data.createPodOnNode("perftest-b", endpointNode, perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: qperfPort}}); err != nil {
+		t.Fatalf("Error when creating the perftest server Pod: %v", err)
+	}
+	if err := data.podWaitForRunning(defaultTimeout, "perftest-b", testNamespace); err != nil {
+		t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
+	}
+	stdout, stderr, err := data.runCommandFromPod(testNamespace, "perftest-a", perftoolContainerName, []string{"bash", "-c", fmt.Sprintf("qperf %s tcp_bw tcp_lat -t 2", svc.Spec.ClusterIP)})
+	if err != nil {
+		t.Fatalf("Error when running qperf client: %v, stderr: %s", err, stderr)
+	}
+	stdout = strings.TrimSpace(stdout)
+	t.Logf("Report:\n%s", stdout)
+}
+
+// TestBenchmarkNetworkServiceLocalAccess measures the bandwidth and latency performance of service
+// traffic between a Pod and an Endpoint on same Node.
+func TestBenchmarkNetworkServiceLocalAccess(t *testing.T) {
+	skipIfNotBenchmarkTest(t)
+	benchmarkNetworkService(t, masterNodeName(), masterNodeName())
+}
+
+// TestBenchmarkNetworkServiceRemoteAccess measures the bandwidth and latency performance of service
+// traffic between a Pod and an Endpoint on different Node.
+func TestBenchmarkNetworkServiceRemoteAccess(t *testing.T) {
+	skipIfNotBenchmarkTest(t)
+	skipIfNumNodesLessThan(t, 2)
+	benchmarkNetworkService(t, masterNodeName(), workerNodeName(1))
 }
