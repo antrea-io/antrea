@@ -32,7 +32,8 @@ func (si *ServiceInfo) Equal(bSvcInfo *ServiceInfo) bool {
 	return si.SessionAffinityType() == bSvcInfo.SessionAffinityType() &&
 		si.StickyMaxAgeSeconds() == bSvcInfo.StickyMaxAgeSeconds() &&
 		si.OFProtocol == bSvcInfo.OFProtocol &&
-		si.Port() == bSvcInfo.Port()
+		si.Port() == bSvcInfo.Port() &&
+		len(si.LoadBalancerIPStrings()) == len(bSvcInfo.LoadBalancerIPStrings())
 }
 
 // NewServiceInfo returns a new k8sproxy.ServicePort which abstracts a serviceInfo.

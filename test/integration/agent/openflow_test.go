@@ -829,12 +829,17 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					fmt.Sprintf("priority=200,ip,in_port=%d", config1.UplinkOFPort),
-					"load:0x4->NXM_NX_REG0[0..15],goto_table:30",
-				},
-				{
 					fmt.Sprintf("priority=210,ip,in_port=LOCAL,nw_dst=%s", localSubnet.String()),
 					"load:0x1->NXM_NX_REG0[19],goto_table:30",
+				},
+			},
+		},
+		{
+			uint8(5),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					fmt.Sprintf("priority=200,ip"),
+					"load:0x4->NXM_NX_REG0[0..15],goto_table:30",
 				},
 			},
 		},

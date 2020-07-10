@@ -35,6 +35,7 @@ import (
 const (
 	// Flow table id index
 	ClassifierTable       binding.TableIDType = 0
+	uplinkTable           binding.TableIDType = 5
 	spoofGuardTable       binding.TableIDType = 10
 	arpResponderTable     binding.TableIDType = 20
 	serviceHairpinTable   binding.TableIDType = 29
@@ -80,6 +81,7 @@ var (
 		Name   string
 	}{
 		{ClassifierTable, "Classification"},
+		{uplinkTable, "Uplink"},
 		{spoofGuardTable, "SpoofGuard"},
 		{arpResponderTable, "ARPResponder"},
 		{serviceHairpinTable, "ServiceHairpin"},
@@ -346,13 +348,17 @@ func (c *client) podClassifierFlow(podOFPort uint32, category cookie.Category) b
 // hostBridgeUplinkFlows generates the flows that forward traffic between bridge local port and uplink port to support
 // host communicate with outside. These flows are only needed on windows platform.
 func (c *client) hostBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32, category cookie.Category) (flows []binding.Flow) {
-	classifierTable := c.pipeline[ClassifierTable]
 	flows = []binding.Flow{
-		classifierTable.BuildFlow(priorityLow).MatchInPort(uplinkPort).
+		c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
+			MatchInPort(uplinkPort).
+			Action().GotoTable(uplinkTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		c.pipeline[uplinkTable].BuildFlow(priorityMiss).
 			Action().Output(int(bridgeLocalPort)).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
-		classifierTable.BuildFlow(priorityNormal).MatchInPort(bridgeLocalPort).
+		c.pipeline[ClassifierTable].BuildFlow(priorityNormal).MatchInPort(bridgeLocalPort).
 			Action().Output(int(uplinkPort)).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
@@ -960,9 +966,8 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 	}
 	flows := []binding.Flow{
 		// Forward the packet to conntrackTable if it enters the OVS pipeline from the uplink interface.
-		c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
+		c.pipeline[uplinkTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
-			MatchInPort(uplinkOfport).
 			Action().LoadRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
 			Action().GotoTable(conntrackTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1073,6 +1078,25 @@ func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputP
 			Done(),
 	}
 	return flows
+}
+
+// loadBalancerServiceFromOutsideFlow generates the flow to forward LoadBalancer service traffic from outside node
+// to gateway. kube-proxy will then handle the traffic.
+func (c *client) loadBalancerServiceFromOutsideFlow(uplinkPort uint32, gwPort uint32, svcIP net.IP, svcPort uint16, protocol binding.Protocol) binding.Flow {
+	flowBuilder := c.pipeline[uplinkTable].BuildFlow(priorityHigh)
+	if protocol == binding.ProtocolTCP {
+		flowBuilder = flowBuilder.MatchTCPDstPort(svcPort)
+	} else if protocol == binding.ProtocolUDP {
+		flowBuilder = flowBuilder.MatchUDPDstPort(svcPort)
+	} else if protocol == binding.ProtocolSCTP {
+		flowBuilder = flowBuilder.MatchSCTPDstPort(svcPort)
+	}
+	return flowBuilder.
+		MatchInPort(uplinkPort).
+		MatchDstIP(svcIP).
+		Action().Output(int(gwPort)).
+		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+		Done()
 }
 
 // serviceLearnFlow generates the flow with learn action which adds new flows in
@@ -1215,6 +1239,7 @@ func generatePipeline(bridge binding.Bridge, enableProxy bool) map[binding.Table
 	if enableProxy {
 		return map[binding.TableIDType]binding.Table{
 			ClassifierTable:       bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
+			uplinkTable:           bridge.CreateTable(uplinkTable, spoofGuardTable, binding.TableMissActionNone),
 			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop),
 			arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
 			serviceHairpinTable:   bridge.CreateTable(serviceHairpinTable, conntrackTable, binding.TableMissActionNext),

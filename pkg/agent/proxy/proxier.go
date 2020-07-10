@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	"net"
 	"sync"
 	"time"
 
@@ -79,6 +80,14 @@ func (p *Proxier) removeStaleServices() {
 		if err := p.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
+		}
+		for _, ingress := range svcInfo.LoadBalancerIPStrings() {
+			if ingress != "" {
+				if err := p.ofClient.UninstallServiceFlows(net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
+					klog.Errorf("Error when installing Service flows: %v", err)
+					continue
+				}
+			}
 		}
 		for _, endpoint := range p.endpointsMap[svcPortName] {
 			if err := p.ofClient.UninstallEndpointFlows(svcInfo.OFProtocol, endpoint); err != nil {
@@ -163,6 +172,17 @@ func (p *Proxier) installServices() {
 		if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
 			klog.Errorf("Error when installing Service flows: %v", err)
 			continue
+		}
+		// Install OpenFlow entries for the ingress IPs of LoadBalancer Service.
+		// The LoadBalancer Service should can be accessed from Pod, Node and
+		// external host.
+		for _, ingress := range svcInfo.LoadBalancerIPStrings() {
+			if ingress != "" {
+				if err := p.installLoadBalancerServiceFlows(groupID, net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
+					klog.Errorf("Error when installing LoadBalancer Service flows: %v", err)
+					continue
+				}
+			}
 		}
 		p.serviceInstalledMap[svcPortName] = svcPort
 	}
