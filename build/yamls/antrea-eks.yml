@@ -244,6 +244,13 @@ spec:
     format: float
     name: Priority
     type: number
+  name: tiers.security.antrea.tanzu.vmware.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.priority
+    description: The Priority of this Tier relative to other Tiers.
+    name: Priority
+    type: integer
   - JSONPath: .metadata.creationTimestamp
     name: Age
     type: date
@@ -256,6 +263,13 @@ spec:
     singular: networkpolicy
   preserveUnknownFields: false
   scope: Namespaced
+    kind: Tier
+    plural: tiers
+    shortNames:
+    - tr
+    singular: tier
+  preserveUnknownFields: false
+  scope: Cluster
   validation:
     openAPIV3Schema:
       properties:
@@ -360,6 +374,13 @@ spec:
               type: string
           required:
           - appliedTo
+            description:
+              type: string
+            priority:
+              maximum: 1000
+              minimum: 1
+              type: integer
+          required:
           - priority
           type: object
       type: object
