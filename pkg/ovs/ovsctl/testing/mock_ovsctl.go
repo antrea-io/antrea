@@ -136,6 +136,20 @@ func (mr *MockOVSCtlClientMockRecorder) RunOfctlCmd(arg0 interface{}, arg1 ...in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunOfctlCmd", reflect.TypeOf((*MockOVSCtlClient)(nil).RunOfctlCmd), varargs...)
 }
 
+// SetPortNoFlood mocks base method
+func (m *MockOVSCtlClient) SetPortNoFlood(arg0 int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPortNoFlood", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetPortNoFlood indicates an expected call of SetPortNoFlood
+func (mr *MockOVSCtlClientMockRecorder) SetPortNoFlood(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPortNoFlood", reflect.TypeOf((*MockOVSCtlClient)(nil).SetPortNoFlood), arg0)
+}
+
 // Trace mocks base method
 func (m *MockOVSCtlClient) Trace(arg0 *ovsctl.TracingRequest) (string, error) {
 	m.ctrl.T.Helper()

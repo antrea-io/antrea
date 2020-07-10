@@ -43,6 +43,8 @@ type OVSCtlClient interface {
 	DumpGroups(args ...string) ([][]string, error)
 	// RunOfctlCmd executes "ovs-ofctl" command and returns the outputs.
 	RunOfctlCmd(cmd string, args ...string) ([]byte, error)
+	// SetPortNoFlood sets the given port with config "no-flood". This configuration must work with OpenFlow10.
+	SetPortNoFlood(ofport int) error
 	// Trace executes "ovs-appctl ofproto/trace" to perform OVS packet tracing.
 	Trace(req *TracingRequest) (string, error)
 }
