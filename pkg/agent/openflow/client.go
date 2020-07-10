@@ -114,6 +114,11 @@ type Client interface {
 	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error
 	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
 	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
+	// InstallLoadBalancerServiceFromOutsideFlows installs flows for LoadBalancer Service traffic from outside node.
+	// The traffic is received from uplink port and will be forwarded to gateway by the installed flows. And then
+	// kube-proxy will handle the traffic.
+	// This function is only used for Windows platform.
+	InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
@@ -420,6 +425,15 @@ func (c *client) UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol bi
 	defer c.replayMutex.RUnlock()
 	cacheKey := fmt.Sprintf("Service:%s:%d:%s", svcIP, svcPort, protocol)
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
+}
+
+func (c *client) InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	var flows []binding.Flow
+	flows = append(flows, c.loadBalancerServiceFromOutsideFlow(config.UplinkOFPort, config.HostGatewayOFPort, svcIP, svcPort, protocol))
+	cacheKey := fmt.Sprintf("LoadBalancerService:%s:%d:%s", svcIP, svcPort, protocol)
+	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
 }
 
 func (c *client) InstallClusterServiceFlows() error {
