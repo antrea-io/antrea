@@ -236,7 +236,7 @@ func (c *Controller) checkTraceflowStatus(tf *opsv1alpha1.Traceflow) (retry bool
 	}
 	if sender && receiver {
 		tf.Status.Phase = opsv1alpha1.Succeeded
-		_, err = c.client.OpsV1alpha1().Traceflows().Update(context.TODO(), tf, v1.UpdateOptions{})
+		_, err = c.client.OpsV1alpha1().Traceflows().UpdateStatus(context.TODO(), tf, v1.UpdateOptions{})
 		return
 	}
 	if time.Now().UTC().Sub(tf.CreationTimestamp.UTC()).Seconds() > timeout {
