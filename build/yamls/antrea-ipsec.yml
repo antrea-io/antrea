@@ -268,28 +268,30 @@ spec:
                   node:
                     type: string
                   observations:
-                    properties:
-                      action:
-                        type: string
-                      component:
-                        type: string
-                      componentInfo:
-                        type: string
-                      dstMAC:
-                        type: string
-                      networkPolicy:
-                        type: string
-                      pod:
-                        type: string
-                      translatedDstIP:
-                        type: string
-                      translatedSrcIP:
-                        type: string
-                      ttl:
-                        type: integer
-                      tunnelDstIP:
-                        type: string
-                    type: object
+                    items:
+                      properties:
+                        action:
+                          type: string
+                        component:
+                          type: string
+                        componentInfo:
+                          type: string
+                        dstMAC:
+                          type: string
+                        networkPolicy:
+                          type: string
+                        pod:
+                          type: string
+                        translatedDstIP:
+                          type: string
+                        translatedSrcIP:
+                          type: string
+                        ttl:
+                          type: integer
+                        tunnelDstIP:
+                          type: string
+                      type: object
+                    type: array
                   role:
                     type: string
                   timestamp:

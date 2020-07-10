@@ -151,28 +151,30 @@ spec:
                   timestamp:
                     type: integer
                   observations:
-                    type: object
-                    properties:
-                      component:
-                        type: string
-                      componentInfo:
-                        type: string
-                      action:
-                        type: string
-                      pod:
-                        type: string
-                      dstMAC:
-                        type: string
-                      networkPolicy:
-                        type: string
-                      ttl:
-                        type: integer
-                      translatedSrcIP:
-                        type: string
-                      translatedDstIP:
-                        type: string
-                      tunnelDstIP:
-                        type: string
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        component:
+                          type: string
+                        componentInfo:
+                          type: string
+                        action:
+                          type: string
+                        pod:
+                          type: string
+                        dstMAC:
+                          type: string
+                        networkPolicy:
+                          type: string
+                        ttl:
+                          type: integer
+                        translatedSrcIP:
+                          type: string
+                        translatedDstIP:
+                          type: string
+                        tunnelDstIP:
+                          type: string
   subresources:
     status: {} 
 ---
