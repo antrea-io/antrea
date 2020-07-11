@@ -14,7 +14,7 @@ of networking and security features and services on top of Open vSwitch.
 
 Some information in this document and in particular when it comes to the Antrea
 Agent is specific to running Antrea on Linux Nodes. For information about how
-Antrea is run on Windows Nodes, please refer to [windows-design.md](/docs/windows-design.md).
+Antrea is run on Windows Nodes, please refer to [windows-design.md](windows-design.md).
 
 ## Components
 
@@ -94,7 +94,7 @@ Antrea Agent exposes a gRPC service (`Cni` service) which is invoked by the
 the Node, after getting the CNI `ADD` call from `antrea-cni`, the Agent creates
 the Pod's network interface, allocates an IP address, connects the interface to
 the OVS bridge and installs the necessary flows in OVS. To learn more about the
-OVS flows check out the [OVS pipeline doc](/docs/ovs-pipeline.md).
+OVS flows check out the [OVS pipeline doc](ovs-pipeline.md).
 
 Antrea Agent includes two Kubernetes controllers:
 - The Node controller watches the Kubernetes API server for new Nodes, and
@@ -296,14 +296,14 @@ that routes Pod traffic directly to the destination Node without going through
 the extra hop of the Node network router. Antrea Agent also creates the iptables
 (MASQUERADE) rule for SNAT of Pod-to-external traffic.
 
-[Antrea supports GKE](/docs/gke-installation.md) with `NoEncap` mode.
+[Antrea supports GKE](gke-installation.md) with `NoEncap` mode.
 
 * ***NetworkPolicyOnly*** Inter-Node Pod traffic is neither tunneled nor routed
 by Antrea. Antrea just implements NetworkPolicies for Pod traffic, but relies on
 another cloud CNI and cloud network to implement Pod IPAM and cross-Node traffic
-forwarding. Refer to the [NetworkPolicyOnly mode design doc](docs/policy-only.md)
+forwarding. Refer to the [NetworkPolicyOnly mode design doc](policy-only.md)
 for more information.
 
-[Antrea for AKS Engine](https://github.com/Azure/aks-engine/blob/master/docs/topics/features.md#feat-antrea)
-and [Antrea EKS support](/docs/eks-installation.md) work in `NetworkPolicyOnly`
-mode.
+[Antrea for AKS
+Engine](https://github.com/Azure/aks-engine/blob/master/docs/topics/features.md#feat-antrea)
+and [Antrea EKS support](eks-installation.md) work in `NetworkPolicyOnly` mode.
