@@ -81,7 +81,7 @@ type Destination struct {
 	// Service is the destination service, exclusive with destination pod.
 	Service string `json:"service,omitempty"`
 	// IP is the destination IP.
-	IP string `json:"IP,omitempty"`
+	IP string `json:"ip,omitempty"`
 }
 
 // IPHeader describes spec of an IPv4 header. IPv6 not supported yet.

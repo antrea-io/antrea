@@ -83,7 +83,7 @@ spec:
                   type: string
                 namespace:
                   type: string
-                IP:
+                ip:
                   type: string
                   format: ipv4
               oneOf:

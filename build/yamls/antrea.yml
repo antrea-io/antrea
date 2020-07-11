@@ -191,7 +191,7 @@ spec:
               - required:
                 - ip
               properties:
-                IP:
+                ip:
                   format: ipv4
                   type: string
                 namespace:
