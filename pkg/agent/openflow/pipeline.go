@@ -968,12 +968,13 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Forward the packet to conntrackTable if it enters the OVS pipeline from the bridge interface and is sent to
-		// local Pods.
+		// local Pods. Set the packet with MAC rewrite mark, so that the dstMAC will be re-written with real MAC in
+		// the L3Routing table, and it could be forwarded to the valid OVS interface.
 		c.pipeline[ClassifierTable].BuildFlow(priorityHigh).
 			MatchProtocol(binding.ProtocolIP).
 			MatchInPort(bridgeLocalPort).
 			MatchDstIPNet(localSubnet).
-			Action().SetDstMAC(globalVirtualMAC).
+			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 			Action().GotoTable(conntrackTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
