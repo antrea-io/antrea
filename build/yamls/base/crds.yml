@@ -104,6 +104,8 @@ spec:
               properties:
                 pod:
                   type: string
+                service:
+                  type: string
                 namespace:
                   type: string
                 ip:
@@ -111,6 +113,7 @@ spec:
                   format: ipv4
               oneOf:
                 - required: ["pod", "namespace"]
+                - required: ["service", "namespace"]
                 - required: ["ip"]
             packet:
               type: object

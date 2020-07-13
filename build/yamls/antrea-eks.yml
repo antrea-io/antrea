@@ -224,6 +224,9 @@ spec:
                 - pod
                 - namespace
               - required:
+                - service
+                - namespace
+              - required:
                 - ip
               properties:
                 ip:
@@ -232,6 +235,8 @@ spec:
                 namespace:
                   type: string
                 pod:
+                  type: string
+                service:
                   type: string
               type: object
             packet:

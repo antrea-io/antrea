@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -57,6 +58,12 @@ func TestTraceflow(t *testing.T) {
 	node2Pods, node2IPs, node2CleanupFn := createTestBusyboxPods(t, data, 1, node2)
 	defer node1CleanupFn()
 	defer node2CleanupFn()
+
+	require.NoError(t, data.createNginxPod("nginx", node2))
+	nginxIP, err := data.podWaitForIP(defaultTimeout, "nginx", testNamespace)
+	require.NoError(t, err)
+	svc, err := data.createNginxClusterIPService(false)
+	require.NoError(t, err)
 
 	// Setup 2 NetworkPolicies:
 	// 1. Allow all egress traffic.
@@ -96,6 +103,7 @@ func TestTraceflow(t *testing.T) {
 	// 2. node1Pods[0] -> node2Pods[0], inter node1 and node2.
 	// 3. node1Pods[0] -> node1IPs[1], intra node1.
 	// 4. node1Pods[0] -> node2IPs[0], inter node1 and node2.
+	// 5. node1Pods[0] -> service, inter node1 and node2.
 	testcases := []testcase{
 		{
 			name: "intraNodeTraceflow",
@@ -320,13 +328,84 @@ func TestTraceflow(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "serviceTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", testNamespace, node1Pods[0], svc.Name)),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Service:   svc.Name,
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 6,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:       v1alpha1.LB,
+							Pod:             fmt.Sprintf("%s/%s", testNamespace, "nginx"),
+							TranslatedDstIP: nginxIP,
+							Action:          v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Forwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.Received,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	t.Run("traceflowGroupTest", func(t *testing.T) {
 		for _, tc := range testcases {
 			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
-				t.Parallel()
 				if _, err := data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
 					t.Fatalf("Error when creating traceflow: %v", err)
 				}
@@ -404,6 +483,7 @@ func (data *TestData) enableTraceflow(t *testing.T) error {
 	configMap.Data["antrea-controller.conf"] = antreaControllerConf
 	antreaAgentConf, _ := configMap.Data["antrea-agent.conf"]
 	antreaAgentConf = strings.Replace(antreaAgentConf, "#  Traceflow: false", " Traceflow: true", 1)
+	antreaAgentConf = strings.Replace(antreaAgentConf, "#  AntreaProxy: false", " AntreaProxy: true", 1)
 	antreaAgentConf = strings.Replace(antreaAgentConf, "#tunnelType: geneve", "tunnelType: geneve", 1)
 	configMap.Data["antrea-agent.conf"] = antreaAgentConf
 
@@ -435,6 +515,8 @@ func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResul
 	for i := 0; i < len(exObs); i++ {
 		if exObs[i].Component != acObs[i].Component ||
 			exObs[i].ComponentInfo != acObs[i].ComponentInfo ||
+			exObs[i].Pod != acObs[i].Pod ||
+			exObs[i].TranslatedDstIP != acObs[i].TranslatedDstIP ||
 			exObs[i].Action != acObs[i].Action {
 			return fmt.Errorf("Observations should be %v, but got %v", exObs, acObs)
 		}
