@@ -423,13 +423,13 @@ func prepareClient(ctrl *gomock.Controller) *client {
 	)
 	bridge := mocks.NewMockBridge(ctrl)
 	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	outTable = createMockTable(ctrl, EgressRuleTable, egressDefaultTable, binding.TableMissActionNext)
-	outDropTable = createMockTable(ctrl, egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext)
+	outTable = createMockTable(ctrl, EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext)
+	outDropTable = createMockTable(ctrl, EgressDefaultTable, l3ForwardingTable, binding.TableMissActionNext)
 	outAllowTable = createMockTable(ctrl, l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext)
 	c = &client{
 		pipeline: map[binding.TableIDType]binding.Table{
 			EgressRuleTable:    outTable,
-			egressDefaultTable: outDropTable,
+			EgressDefaultTable: outDropTable,
 			l3ForwardingTable:  outAllowTable,
 		},
 		policyCache:              policyCache,

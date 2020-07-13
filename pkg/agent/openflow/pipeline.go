@@ -46,15 +46,15 @@ const (
 	endpointDNATTable     binding.TableIDType = 42
 	cnpEgressRuleTable    binding.TableIDType = 45
 	EgressRuleTable       binding.TableIDType = 50
-	egressDefaultTable    binding.TableIDType = 60
+	EgressDefaultTable    binding.TableIDType = 60
 	l3ForwardingTable     binding.TableIDType = 70
 	l2ForwardingCalcTable binding.TableIDType = 80
 	cnpIngressRuleTable   binding.TableIDType = 85
 	IngressRuleTable      binding.TableIDType = 90
-	ingressDefaultTable   binding.TableIDType = 100
+	IngressDefaultTable   binding.TableIDType = 100
 	conntrackCommitTable  binding.TableIDType = 105
 	hairpinSNATTable      binding.TableIDType = 106
-	l2ForwardingOutTable  binding.TableIDType = 110
+	L2ForwardingOutTable  binding.TableIDType = 110
 
 	// Flow priority level
 	priorityHigh   = uint16(210)
@@ -91,15 +91,15 @@ var (
 		{endpointDNATTable, "EndpointDNAT"},
 		{cnpEgressRuleTable, "CNPEgressRule"},
 		{EgressRuleTable, "EgressRule"},
-		{egressDefaultTable, "EgressDefaultRule"},
+		{EgressDefaultTable, "EgressDefaultRule"},
 		{l3ForwardingTable, "l3Forwarding"},
 		{l2ForwardingCalcTable, "L2Forwarding"},
 		{cnpIngressRuleTable, "CNPIngressRule"},
 		{IngressRuleTable, "IngressRule"},
-		{ingressDefaultTable, "IngressDefaultRule"},
+		{IngressDefaultTable, "IngressDefaultRule"},
 		{conntrackCommitTable, "ConntrackCommit"},
 		{hairpinSNATTable, "HairpinSNATTable"},
-		{l2ForwardingOutTable, "Output"},
+		{L2ForwardingOutTable, "Output"},
 	}
 )
 
@@ -497,7 +497,7 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, categ
 
 // l2ForwardOutputFlow generates the flow that outputs packets to OVS port after L2 forwarding calculation.
 func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
-	return c.pipeline[l2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -509,7 +509,7 @@ func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
 func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cookie.Category) binding.Flow {
 	regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
 	tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
-	return c.pipeline[l2ForwardingOutTable].BuildFlow(priorityNormal+2).
+	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
 		MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
 		SetHardTimeout(300).
 		MatchProtocol(binding.ProtocolIP).
@@ -524,7 +524,7 @@ func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cooki
 // l2ForwardOutputReentInPortFlow generates the flow that forwards re-entrance peer Node traffic via antrea-gw0.
 // This flow supersedes default output flow because ovs by default auto-skips packets with output = input port.
 func (c *client) l2ForwardOutputReentInPortFlow(gwPort uint32, category cookie.Category) binding.Flow {
-	return c.pipeline[l2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		MatchInPort(gwPort).MatchReg(int(portCacheReg), gwPort).
 		Action().SetSrcMAC(ReentranceMAC).
@@ -536,7 +536,7 @@ func (c *client) l2ForwardOutputReentInPortFlow(gwPort uint32, category cookie.C
 // l2ForwardOutputServiceHairpinFlow uses in_port action for Service
 // hairpin packets to avoid packets from being dropped by OVS.
 func (c *client) l2ForwardOutputServiceHairpinFlow() binding.Flow {
-	return c.pipeline[l2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
 		Action().OutputInPort().
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
@@ -836,7 +836,7 @@ func (c *client) establishedConnectionFlows(category cookie.Category) (flows []b
 	// egressDropTable checks the source address of packets, and drops packets sent from the AppliedToGroup but not
 	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
 	// egressRuleTable or the egressDropTable.
-	egressDropTable := c.pipeline[egressDefaultTable]
+	egressDropTable := c.pipeline[EgressDefaultTable]
 	egressEstFlow := c.pipeline[EgressRuleTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchCTStateNew(false).MatchCTStateEst(true).
 		Action().GotoTable(egressDropTable.GetNext()).
@@ -850,7 +850,7 @@ func (c *client) establishedConnectionFlows(category cookie.Category) (flows []b
 	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
 	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
 	// ingressRuleTable or ingressDropTable.
-	ingressDropTable := c.pipeline[ingressDefaultTable]
+	ingressDropTable := c.pipeline[IngressDefaultTable]
 	ingressEstFlow := c.pipeline[IngressRuleTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 		MatchCTStateNew(false).MatchCTStateEst(true).
 		Action().GotoTable(ingressDropTable.GetNext()).
@@ -1016,7 +1016,7 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 			MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
 			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
-			Action().CT(true, l2ForwardingOutTable, CtZone).
+			Action().CT(true, L2ForwardingOutTable, CtZone).
 			SNAT(snatIPRange, nil).
 			LoadToMark(snatCTMark).CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1064,7 +1064,7 @@ func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputP
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Output the SNATed packet to the specified port.
-		c.pipeline[l2ForwardingOutTable].BuildFlow(priorityNormal).
+		c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
 			Action().Output(outputPort).
@@ -1160,7 +1160,7 @@ func (c *client) hairpinSNATFlow(endpointIP net.IP) binding.Flow {
 		MatchSrcIP(endpointIP).
 		Action().SetSrcIP(hairpinIP).
 		Action().LoadRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
-		Action().GotoTable(l2ForwardingOutTable).
+		Action().GotoTable(L2ForwardingOutTable).
 		Done()
 }
 
@@ -1223,16 +1223,16 @@ func generatePipeline(bridge binding.Bridge, enableProxy bool) map[binding.Table
 			serviceLBTable:        bridge.CreateTable(serviceLBTable, endpointDNATTable, binding.TableMissActionNext),
 			endpointDNATTable:     bridge.CreateTable(endpointDNATTable, cnpEgressRuleTable, binding.TableMissActionNext),
 			cnpEgressRuleTable:    bridge.CreateTable(cnpEgressRuleTable, EgressRuleTable, binding.TableMissActionNext),
-			EgressRuleTable:       bridge.CreateTable(EgressRuleTable, egressDefaultTable, binding.TableMissActionNext),
-			egressDefaultTable:    bridge.CreateTable(egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
+			EgressRuleTable:       bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
+			EgressDefaultTable:    bridge.CreateTable(EgressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
 			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
 			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, cnpIngressRuleTable, binding.TableMissActionNext),
 			cnpIngressRuleTable:   bridge.CreateTable(cnpIngressRuleTable, IngressRuleTable, binding.TableMissActionNext),
-			IngressRuleTable:      bridge.CreateTable(IngressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
-			ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
+			IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
+			IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
 			conntrackCommitTable:  bridge.CreateTable(conntrackCommitTable, hairpinSNATTable, binding.TableMissActionNext),
-			hairpinSNATTable:      bridge.CreateTable(hairpinSNATTable, l2ForwardingOutTable, binding.TableMissActionNext),
-			l2ForwardingOutTable:  bridge.CreateTable(l2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
+			hairpinSNATTable:      bridge.CreateTable(hairpinSNATTable, L2ForwardingOutTable, binding.TableMissActionNext),
+			L2ForwardingOutTable:  bridge.CreateTable(L2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 		}
 	}
 	return map[binding.TableIDType]binding.Table{
@@ -1243,15 +1243,15 @@ func generatePipeline(bridge binding.Bridge, enableProxy bool) map[binding.Table
 		conntrackStateTable:   bridge.CreateTable(conntrackStateTable, dnatTable, binding.TableMissActionNext),
 		dnatTable:             bridge.CreateTable(dnatTable, cnpEgressRuleTable, binding.TableMissActionNext),
 		cnpEgressRuleTable:    bridge.CreateTable(cnpEgressRuleTable, EgressRuleTable, binding.TableMissActionNext),
-		EgressRuleTable:       bridge.CreateTable(EgressRuleTable, egressDefaultTable, binding.TableMissActionNext),
-		egressDefaultTable:    bridge.CreateTable(egressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
+		EgressRuleTable:       bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
+		EgressDefaultTable:    bridge.CreateTable(EgressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
 		l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
 		l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, cnpIngressRuleTable, binding.TableMissActionNext),
 		cnpIngressRuleTable:   bridge.CreateTable(cnpIngressRuleTable, IngressRuleTable, binding.TableMissActionNext),
-		IngressRuleTable:      bridge.CreateTable(IngressRuleTable, ingressDefaultTable, binding.TableMissActionNext),
-		ingressDefaultTable:   bridge.CreateTable(ingressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
-		conntrackCommitTable:  bridge.CreateTable(conntrackCommitTable, l2ForwardingOutTable, binding.TableMissActionNext),
-		l2ForwardingOutTable:  bridge.CreateTable(l2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
+		IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
+		IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
+		conntrackCommitTable:  bridge.CreateTable(conntrackCommitTable, L2ForwardingOutTable, binding.TableMissActionNext),
+		L2ForwardingOutTable:  bridge.CreateTable(L2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 	}
 }
 
