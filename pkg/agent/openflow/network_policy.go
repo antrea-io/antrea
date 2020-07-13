@@ -834,7 +834,7 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 		} else {
 			ruleTable = clnt.pipeline[EgressRuleTable]
 		}
-		dropTable = clnt.pipeline[egressDefaultTable]
+		dropTable = clnt.pipeline[EgressDefaultTable]
 		isEgressRule = true
 	default:
 		if rule.IsAntreaNetworkPolicyRule() {
@@ -842,7 +842,7 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 		} else {
 			ruleTable = clnt.pipeline[IngressRuleTable]
 		}
-		dropTable = clnt.pipeline[ingressDefaultTable]
+		dropTable = clnt.pipeline[IngressDefaultTable]
 	}
 
 	var fromID, toID, serviceID, nClause uint8

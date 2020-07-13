@@ -135,7 +135,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	}
 
 	// Get drop table.
-	if tableID == 60 || tableID == 100 {
+	if tableID == uint8(openflow.EgressDefaultTable) || tableID == uint8(openflow.IngressDefaultTable) {
 		ob := new(opsv1alpha1.Observation)
 		ob.Action = opsv1alpha1.Dropped
 		ob.Component = opsv1alpha1.NetworkPolicy
@@ -144,7 +144,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	}
 
 	// Get output table.
-	if tableID == 110 {
+	if tableID == uint8(openflow.L2ForwardingOutTable) {
 		ob := new(opsv1alpha1.Observation)
 		tunnelDstIP := ""
 		if match = getMatchTunnelDstField(matchers); match != nil {
