@@ -50,6 +50,7 @@ func proxyEnabled(data *TestData) (bool, error) {
 	return strings.Contains(table31Output, key), err
 }
 
+// TestProxyServiceSessionAffinity checks if the learned flow can be created and the traffic can pass.
 func TestProxyServiceSessionAffinity(t *testing.T) {
 	skipIfProviderIs(t, "kind", "#881 Does not work in Kind, needs to be investigated.")
 	data, err := setupTest(t)
@@ -90,6 +91,7 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 	}
 }
 
+// TestProxyServiceSessionAffinity checks if service hairpin traffic can pass.
 func TestProxyHairpin(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
@@ -109,6 +111,7 @@ func TestProxyHairpin(t *testing.T) {
 	require.NoError(t, err, fmt.Sprintf("stdout: %s\n, stderr: %s", stdout, stderr))
 }
 
+// TestProxyServiceSessionAffinity checks if endpoints related flows can be created and deleted as expected.
 func TestProxyEndpointLifeCycle(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
@@ -146,6 +149,7 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 	}
 }
 
+// TestProxyServiceSessionAffinity checks if service related flows can be created, deleted and re-created as expected.
 func TestProxyServiceLifeCycle(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {

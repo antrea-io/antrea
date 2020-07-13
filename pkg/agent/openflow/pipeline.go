@@ -169,7 +169,6 @@ const (
 	hairpinMark      = 0b1
 	macRewriteMark   = 0b1
 
-	gatewayCTMark = 0x20
 	snatCTMark    = 0x40
 	serviceCTMark = 0x21
 )
@@ -410,22 +409,9 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 		)
 	}
 	return append(flows,
-		connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-			MatchCTMark(gatewayCTMark).
-			MatchCTStateNew(false).MatchCTStateTrk(true).
-			Action().GotoTable(connectionTrackStateTable.GetNext()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
 		connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 			MatchCTStateInv(true).MatchCTStateTrk(true).
 			Action().Drop().
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-			MatchCTStateNew(true).MatchCTStateTrk(true).
-			Action().CT(true, connectionTrackCommitTable.GetNext(), CtZone).LoadToMark(gatewayCTMark).CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
@@ -459,19 +445,6 @@ func (c *client) reEntranceBypassCTFlow(gwPort, reentPort uint32, category cooki
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		MatchInPort(gwPort).MatchReg(int(portCacheReg), reentPort).
 		Action().GotoTable(conntrackCommitTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
-}
-
-// ctRewriteDstMACFlow rewrites the destination MAC with local host gateway MAC if the packets has set ct_mark but not sent from the host gateway.
-func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
-	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	macData, _ := strconv.ParseUint(strings.Replace(gatewayMAC.String(), ":", "", -1), 16, 64)
-	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchCTMark(gatewayCTMark).
-		MatchCTStateNew(false).MatchCTStateTrk(true).
-		Action().LoadRange(binding.NxmFieldDstMAC, macData, binding.Range{0, 47}).
-		Action().GotoTable(connectionTrackStateTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -546,18 +519,6 @@ func (c *client) l2ForwardOutputServiceHairpinFlow() binding.Flow {
 		MatchRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
 		Action().OutputInPort().
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-		Done()
-}
-
-// l3BypassMACRewriteFlow bypasses remaining l3forwarding flows if the MAC is set via ctRewriteDstMACFlow in
-// conntrackState stage.
-func (c *client) l3BypassMACRewriteFlow(gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
-	l3FwdTable := c.pipeline[l3ForwardingTable]
-	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchCTMark(gatewayCTMark).
-		MatchDstMAC(gatewayMAC).
-		Action().GotoTable(l3FwdTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
 
@@ -1033,14 +994,6 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 
 func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputPort int, category cookie.Category) []binding.Flow {
 	flows := []binding.Flow{
-		// Forward the packet to L2ForwardingCalc table if it is communicating to a Service.
-		c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
-			MatchCTMark(gatewayCTMark).
-			Action().GotoTable(l2ForwardingCalcTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
 		// Forward the packet to L2ForwardingCalc table if it is sent to the Node IP(not to the host gateway). Since
 		// the packet is using the host gateway's MAC as dst MAC, it will be sent out from "antrea-gw0". This flow
 		// entry is to avoid SNAT on such packet, otherwise the source and destination IP are the same.

@@ -465,7 +465,6 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 		c.gatewayClassifierFlow(gatewayOFPort, cookie.Default),
 		c.gatewayIPSpoofGuardFlow(gatewayOFPort, cookie.Default),
 		c.gatewayARPSpoofGuardFlow(gatewayOFPort, gatewayAddr, gatewayMAC, cookie.Default),
-		c.ctRewriteDstMACFlow(gatewayMAC, cookie.Default),
 		c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default),
 		c.localProbeFlow(gatewayAddr, cookie.Default),
 	}
@@ -642,7 +641,6 @@ func (c *client) DeleteStaleFlows() error {
 func (c *client) setupPolicyOnlyFlows() error {
 	flows := []binding.Flow{
 		// Bypasses remaining l3forwarding flows if the MAC is set via ctRewriteDstMACFlow.
-		c.l3BypassMACRewriteFlow(c.nodeConfig.GatewayConfig.MAC, cookie.Default),
 		// Rewrites MAC to gw port if the packet received is unmatched by local Pod flows.
 		c.l3ToGWFlow(c.nodeConfig.GatewayConfig.MAC, cookie.Default),
 		// Replies any ARP request with the same global virtual MAC.

@@ -180,7 +180,6 @@ spec:
         name: host
       - hostPath:
           path: \\.\pipe\rancher_wins
-          type: null
         name: wins
   updateStrategy:
     type: RollingUpdate
