@@ -130,7 +130,7 @@ func (c *Controller) addTraceflow(obj interface{}) {
 	c.enqueueTraceflow(tf)
 }
 
-func (c *Controller) updateTraceflow(oldObj, curObj interface{}) {
+func (c *Controller) updateTraceflow(_, curObj interface{}) {
 	tf := curObj.(*opsv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s UPDATE event", tf.Name)
 	c.enqueueTraceflow(tf)

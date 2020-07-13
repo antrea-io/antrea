@@ -212,10 +212,10 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 	}
 	b.pktOut.IPHeader.Id = uint16(rand.Uint32())
 	// Set IP version in the IP Header.
-	if b.pktOut.IPHeader.NWSrc.To16() != nil {
-		b.pktOut.IPHeader.Version = 0x6
-	} else {
+	if b.pktOut.IPHeader.NWSrc.To4() != nil {
 		b.pktOut.IPHeader.Version = 0x4
+	} else {
+		b.pktOut.IPHeader.Version = 0x6
 	}
 	return b.pktOut
 }
