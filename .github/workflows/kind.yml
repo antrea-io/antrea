@@ -54,8 +54,8 @@ jobs:
       run: |
         ./ci/kind/test-e2e-kind.sh --encap-mode encap
 
-  test-e2e-encap-proxy:
-    name: E2e tests on a Kind cluster on Linux with proxy enabled
+  test-e2e-encap-all-alpha-agent:
+    name: E2e tests on a Kind cluster on Linux with all alpha features enabled on agent
     needs: build-antrea-image
     runs-on: [ubuntu-18.04]
     steps:
@@ -83,7 +83,7 @@ jobs:
         sudo mv kind /usr/local/bin
     - name: Run e2e tests
       run: |
-        ./ci/kind/test-e2e-kind.sh --encap-mode encap --proxy
+        ./ci/kind/test-e2e-kind.sh --encap-mode encap --all-alpha-agent
 
   test-e2e-noencap:
     name: E2e tests on a Kind cluster on Linux (noEncap)
@@ -116,8 +116,8 @@ jobs:
       run: |
         ./ci/kind/test-e2e-kind.sh --encap-mode noEncap
 
-  test-e2e-noencap-proxy:
-    name: E2e tests on a Kind cluster on Linux (noEncap) with proxy enabled
+  test-e2e-noencap-all-alpha-agent:
+    name: E2e tests on a Kind cluster on Linux (noEncap) with all alpha features enabled on agent
     needs: build-antrea-image
     runs-on: [ubuntu-18.04]
     steps:
@@ -145,7 +145,7 @@ jobs:
         sudo mv kind /usr/local/bin
     - name: Run e2e tests
       run: |
-        ./ci/kind/test-e2e-kind.sh --encap-mode noEncap --proxy
+        ./ci/kind/test-e2e-kind.sh --encap-mode noEncap --all-alpha-agent
 
   test-e2e-hybrid:
     name: E2e tests on a Kind cluster on Linux (hybrid)
@@ -178,8 +178,8 @@ jobs:
       run: |
         ./ci/kind/test-e2e-kind.sh --encap-mode hybrid
 
-  test-e2e-hybrid-proxy:
-    name: E2e tests on a Kind cluster on Linux (hybrid) with proxy enabled
+  test-e2e-hybrid-all-alpha-agent:
+    name: E2e tests on a Kind cluster on Linux (hybrid) with all alpha features enabled on agent
     needs: build-antrea-image
     runs-on: [ubuntu-18.04]
     steps:
@@ -207,7 +207,7 @@ jobs:
         sudo mv kind /usr/local/bin
     - name: Run e2e tests
       run: |
-        ./ci/kind/test-e2e-kind.sh --encap-mode hybrid --proxy
+        ./ci/kind/test-e2e-kind.sh --encap-mode hybrid --all-alpha-agent
 
   test-e2e-encap-np:
     name: E2e tests on a Kind cluster on Linux with Antrea NetworkPolicies enabled

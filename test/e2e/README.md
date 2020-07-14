@@ -132,7 +132,14 @@ also need to copy the Antrea manifest to the master Docker container:
 ./hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
 go test -v github.com/vmware-tanzu/antrea/test/e2e -provider=kind
 ```
+### Running e2e tests specific to an alpha feature on Agent
+[Alpha feature list](/docs/feature-gates.md) provides the details of the features supported in Antrea.
+If you would like run a feature specific e2e test, you may use following commands:
 
+```bash
+./hack/generate-manifest.sh --kind --all-alpha-agent | docker exec -i kind-control-plane dd of=/root/antrea.yml
+go test -v github.com/vmware-tanzu/antrea/test/e2e -provider=kind -run <Alpha feature specific test name e.g., TestProxyEndpointLifeCycle>
+```
 ## Running the performance test
 To run all benchmarks, without the standard e2e tests:
 ```bash

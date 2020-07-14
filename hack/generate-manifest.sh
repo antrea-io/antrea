@@ -27,7 +27,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --kind                        Generate a manifest appropriate for running Antrea in a Kind cluster
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
-        --proxy                       Generate a manifest with Antrea proxy enabled
+        --all-alpha-agent             Generate a manifest with all alpha features enabled on Antrea Agent
         --np                          Generate a manifest with Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs enabled
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
@@ -51,7 +51,7 @@ function print_help {
 MODE="dev"
 KIND=false
 IPSEC=false
-PROXY=false
+ALPHA_AGENT=false
 NP=false
 KEEP=false
 ENCAP_MODE=""
@@ -83,8 +83,8 @@ case $key in
     IPSEC=true
     shift
     ;;
-    --proxy)
-    PROXY=true
+    --all-alpha-agent)
+    ALPHA_AGENT=true
     shift
     ;;
     --np)
@@ -170,8 +170,8 @@ if $IPSEC; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
 fi
 
-if $PROXY; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: true/" antrea-agent.conf
+if $ALPHA_AGENT; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AllAlpha[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AllAlpha: true/" antrea-agent.conf
 fi
 
 if $NP; then

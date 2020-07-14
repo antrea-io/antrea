@@ -519,6 +519,9 @@ data:
   antrea-agent.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
+    # Enable all alpha features in feature gate map.
+    # See https://github.com/vmware-tanzu/antrea/blob/master/docs/feature-gates.md for list of alpha features.
+    #  AllAlpha: false
     # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic.
@@ -627,7 +630,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-5tkdbb96c6
+  name: antrea-config-tdg6654bt4
   namespace: kube-system
 ---
 apiVersion: v1
@@ -742,7 +745,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-5tkdbb96c6
+          name: antrea-config-tdg6654bt4
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -992,7 +995,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-5tkdbb96c6
+          name: antrea-config-tdg6654bt4
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

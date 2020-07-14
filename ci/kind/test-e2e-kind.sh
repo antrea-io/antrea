@@ -22,9 +22,9 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--encap-mode <mode>] [--proxy] [--np] [--help|-h]
+_usage="Usage: $0 [--encap-mode <mode>] [--all-alpha-agent] [--np] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
-        --proxy                       Enables Antrea proxy.
+	--all-alpha-agent             Enables all alpha features on Antrea Agent in feature gate map.
         --np                          Enables Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs.
         --help, -h                    Print this message and exit
 "
@@ -47,21 +47,21 @@ function quit {
 trap "quit" INT EXIT
 
 mode=""
-proxy=false
+alpha_agent=false
 np=false
 while [[ $# -gt 0 ]]
 do
 key="$1"
 
 case $key in
-    --proxy)
-    proxy=true
-    shift
-    ;;
     --np)
     np=true
     shift
     ;;
+    --all-alpha-agent)
+    alpha_agent=true
+    shift
+    ;;    
     --encap-mode)
     mode="$2"
     shift 2
@@ -78,12 +78,12 @@ esac
 done
 
 manifest_args=""
-if $proxy; then
-    manifest_args="$manifest_args --proxy"
-fi
 if $np; then
     # See https://github.com/vmware-tanzu/antrea/issues/897
     manifest_args="$manifest_args --np --tun vxlan"
+fi
+if $alpha_agent; then
+    manifest_args="$manifest_args --all-alpha-agent"
 fi
 
 function run_test {
