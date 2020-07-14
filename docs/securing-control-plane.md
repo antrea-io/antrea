@@ -42,7 +42,7 @@ the `antrea-ca` ConfigMap.
 
 ## Providing your own certificates
 
-Since Antrea v0.7.0, you can provide your own certificates to Antrea. To do so,
+Since Antrea v0.8.2, you can provide your own certificates to Antrea. To do so,
 you must set the `selfSignedCert` field of `antrea-controller.conf` to `false`,
 so that the antrea-controller will read the certificate key pair from the
 `antrea-controller-tls` Secret. The example manifests and descriptions below
@@ -150,7 +150,7 @@ to the antrea-controller Pod if the Pod starts before the Secret is created.**
 
 ## Certificate rotation
 
-Antrea v0.7.0 and higher supports certificate rotation. It can be achieved by
+Antrea v0.8.2 and higher supports certificate rotation. It can be achieved by
 simply updating the `antrea-controller-tls` Secret. The
 antrea-controller will react to the change, updating its serving certificate and
 re-distributing the latest CA certificate (if applicable).

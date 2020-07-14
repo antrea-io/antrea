@@ -61,7 +61,7 @@ environment. It may be due to the network policies or other security rules
 configured on your hosts.
 3. To deploy a released version of the plugin, you can download
 `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-octant.yml`,
-where `<TAG>` (e.g. `v0.7.0`) is the desired version (should match the version
+where `<TAG>` (e.g. `v0.8.2`) is the desired version (should match the version
 of Antrea you are using). After making the necessary edits, you can apply the
 yaml with `kubectl`.
 

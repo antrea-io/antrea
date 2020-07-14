@@ -8,7 +8,7 @@ the kubeconfig file of that cluster.
 To deploy a released version of Antrea, pick a version from the
 [list of releases](https://github.com/vmware-tanzu/antrea/releases).
 Note that EKS support was added in release 0.5.0, which means you can not
-pick a release older than 0.5.0. For any given release `<TAG>` (e.g. `v0.7.0`),
+pick a release older than 0.5.0. For any given release `<TAG>` (e.g. `v0.8.2`),
 get the Antrea EKS deployment yaml at:
 
 ```

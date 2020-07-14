@@ -90,6 +90,7 @@ plugins:
 include:
   - CONTRIBUTING.md
   - README.md
+  - CODE_OF_CONDUCT.md
 
 # Exclude these files from your production _site
 exclude:
