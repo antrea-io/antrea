@@ -177,7 +177,7 @@
 
           rm -f COMMENT_EXIST
           rm -f body.json
-          echo "{{\"body\": \"Thanks for your PR.\\\nUnit tests and code linters are run automatically every time the PR is updated.\\\nE2e, conformance and network policy tests can only be triggered by a member of the vmware-tanzu organization. Regular contributors to the project should join the org.\\\n\\\nThe following commands are available:\\\n* \`/test-e2e\`: to trigger e2e tests.\\\n* \`/skip-e2e\`: to skip e2e tests.\\\n* \`/test-conformance\`: to trigger conformance tests.\\\n* \`/skip-conformance\`: to skip conformance tests.\\\n* \`/test-whole-conformance\`: to trigger all conformance tests on linux.\\\n* \`/skip-whole-conformance\`: to skip all conformance tests on linux.\\\n* \`/test-networkpolicy\`: to trigger networkpolicy tests.\\\n* \`/skip-networkpolicy\`: to skip networkpolicy tests.\\\n* \`/test-windows-conformance\`: to trigger windows conformance tests.\\\n* \`/skip-windows-conformance\`: to skip windows conformance tests.\\\n* \`/test-all\`: to trigger all tests (except whole conformance).\\\n* \`/skip-all\`: to skip all tests (except whole conformance).\\\n\\\nThese commands can only be run by members of the vmware-tanzu organization.\"}}" > body.json
+          echo "{{\"body\": \"Thanks for your PR.\\\nUnit tests and code linters are run automatically every time the PR is updated.\\\nE2e, conformance and network policy tests can only be triggered by a member of the vmware-tanzu organization. Regular contributors to the project should join the org.\\\n\\\nThe following commands are available:\\\n* \`/test-e2e\`: to trigger e2e tests.\\\n* \`/skip-e2e\`: to skip e2e tests.\\\n* \`/test-conformance\`: to trigger conformance tests.\\\n* \`/skip-conformance\`: to skip conformance tests.\\\n* \`/test-whole-conformance\`: to trigger all conformance tests on linux.\\\n* \`/skip-whole-conformance\`: to skip all conformance tests on linux.\\\n* \`/test-networkpolicy\`: to trigger networkpolicy tests.\\\n* \`/skip-networkpolicy\`: to skip networkpolicy tests.\\\n* \`/test-windows-conformance\`: to trigger windows conformance tests.\\\n* \`/skip-windows-conformance\`: to skip windows conformance tests.\\\n* \`/test-windows-networkpolicy\`: to trigger windows networkpolicy tests.\\\n* \`/skip-windows-networkpolicy\`: to skip windows networkpolicy tests.\\\n* \`/test-all\`: to trigger all tests (except whole conformance).\\\n* \`/skip-all\`: to skip all tests (except whole conformance).\\\n\\\nThese commands can only be run by members of the vmware-tanzu organization.\"}}" > body.json
 
           B="$(cat body.json | jq .body)"
 
@@ -300,7 +300,7 @@
 
           set +e
           mkdir -p `pwd`/antrea-test-logs
-          go test -v -timeout=20m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --prometheus
+          go test -v -timeout=50m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --prometheus
 
           test_rc=$?
           set -e
