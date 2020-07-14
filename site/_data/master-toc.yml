@@ -11,6 +11,10 @@ toc:
         url: /manual-installation
       - page: Configuration
         url: /configuration
+      - page: Contributing
+        url: /contributing
+      - page: Code of Conduct
+        url: /code_of_conduct
   - title: Cloud Deployment
     subfolderitems:
       - page: Cloud Overview
