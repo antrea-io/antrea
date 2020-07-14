@@ -86,7 +86,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/interfacestore InterfaceStore"
   "pkg/agent/openflow Client,OFEntryOperations"
   "pkg/agent/route Interface"
-  "pkg/ovs/openflow Bridge,Table,Flow,Action,FlowBuilder"
+  "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder"
   "pkg/ovs/ovsconfig OVSBridgeClient"
   "pkg/ovs/ovsctl OVSCtlClient"
   "pkg/agent/querier AgentQuerier"

@@ -433,6 +433,20 @@ func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
 }
 
+// NetworkPolicyMetrics mocks base method
+func (m *MockClient) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NetworkPolicyMetrics")
+	ret0, _ := ret[0].(map[uint32]*types.RuleMetric)
+	return ret0
+}
+
+// NetworkPolicyMetrics indicates an expected call of NetworkPolicyMetrics
+func (mr *MockClientMockRecorder) NetworkPolicyMetrics() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetworkPolicyMetrics", reflect.TypeOf((*MockClient)(nil).NetworkPolicyMetrics))
+}
+
 // ReassignFlowPriorities mocks base method
 func (m *MockClient) ReassignFlowPriorities(arg0 map[uint16]uint16, arg1 openflow.TableIDType) error {
 	m.ctrl.T.Helper()

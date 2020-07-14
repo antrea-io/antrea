@@ -504,7 +504,12 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 
 	conjunctionActionMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip", priority-10, ruleID)
 	conjReg := 6
-	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("load:0x%x->NXM_NX_REG%d[],goto_table:%d", ruleID, conjReg, allowTable)}
+	nextTable := ofClient.IngressMetricTable
+	if ruleTable == uint8(ofClient.EgressRuleTable) {
+		nextTable = ofClient.EgressMetricTable
+	}
+
+	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("load:0x%x->NXM_NX_REG%d[],ct(commit,table=%d,zone=65520,exec(load:0x%x->NXM_NX_CT_LABEL[0..31])", ruleID, conjReg, nextTable, ruleID)}
 	testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to update conjunction action flow")
 
 	for _, addr := range rule.From {
@@ -802,6 +807,10 @@ func prepareDefaultFlows() []expectTableFlows {
 		},
 		{
 			uint8(60),
+			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:61"}},
+		},
+		{
+			uint8(61),
 			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:70"}},
 		},
 		{
@@ -818,6 +827,10 @@ func prepareDefaultFlows() []expectTableFlows {
 		},
 		{
 			uint8(100),
+			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:101"}},
+		},
+		{
+			uint8(101),
 			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:105"}},
 		},
 		{

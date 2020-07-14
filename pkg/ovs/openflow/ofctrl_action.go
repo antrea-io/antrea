@@ -104,7 +104,7 @@ func (a *ofCTAction) load(field *openflow13.MatchField, value uint64, rng *Range
 	a.actions = append(a.actions, action)
 }
 
-// MoveToLabel is an action to move data into ct_mark.
+// MoveToLabel is an action to move data into ct_label.
 func (a *ofCTAction) MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction {
 	fromField, _ := openflow13.FindFieldHeaderByName(fromName, false)
 	toField, _ := openflow13.FindFieldHeaderByName(NxmFieldCtLabel, false)

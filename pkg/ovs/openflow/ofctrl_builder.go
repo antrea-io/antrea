@@ -1,3 +1,17 @@
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package openflow
 
 import (
@@ -181,6 +195,41 @@ func (b *ofFlowBuilder) MatchCTMarkMask(mask uint32) FlowBuilder {
 			}
 		}
 	}
+	return b
+}
+
+func ctLabelRange(high, low uint64, rng Range, match *ofctrl.FlowMatch) {
+	// [127..64] [63..0]
+	//   high     low
+	match.CtLabelHi = high
+	match.CtLabelLo = low
+	match.CtLabelHiMask = 0xffff_ffff_ffff_ffff
+	match.CtLabelLoMask = 0xffff_ffff_ffff_ffff
+	if rng[0] == rng[1] {
+		if rng[0] < 64 {
+			match.CtLabelLoMask = 1 << rng[0]
+			match.CtLabelHiMask = 0
+		} else {
+			match.CtLabelHiMask = 1 << (rng[0] - 64)
+			match.CtLabelLoMask = 0
+		}
+	} else if rng[0] < 64 && rng[1] >= 64 {
+		match.CtLabelLoMask <<= rng[0]
+		match.CtLabelHiMask >>= 127 - rng[1]
+	} else if rng[1] < 64 {
+		match.CtLabelLoMask &= 0xffff_ffff_ffff_ffff << rng[0]
+		match.CtLabelLoMask &= 0xffff_ffff_ffff_ffff >> (63 - rng[1])
+		match.CtLabelHiMask = 0
+	} else if rng[0] >= 64 {
+		match.CtLabelHiMask &= 0xffff_ffff_ffff_ffff << (rng[0] - 64)
+		match.CtLabelHiMask &= 0xffff_ffff_ffff_ffff >> (127 - rng[1])
+		match.CtLabelLoMask = 0
+	}
+}
+
+func (b *ofFlowBuilder) MatchCTLabelRange(high, low uint64, bitRange Range) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("ct_label[%d..%d]=0x%x%x", bitRange[0], bitRange[1], high, low))
+	ctLabelRange(high, low, bitRange, &b.ofFlow.Match)
 	return b
 }
 
