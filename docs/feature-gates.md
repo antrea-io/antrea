@@ -19,6 +19,7 @@ and some apply to both and should be enabled / disabled consistently in both
 To enable / disable a feature, edit the Antrea manifest appropriately. For
 example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 `antrea` ConfigMap as follows:
+
 ```yaml
   antrea-agent.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
