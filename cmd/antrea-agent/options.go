@@ -35,14 +35,6 @@ const (
 	defaultHostProcPathPrefix = "/host"
 	defaultServiceCIDR        = "10.96.0.0/12"
 	defaultTunnelType         = ovsconfig.GeneveTunnel
-	defaultMTUGeneve          = 1450
-	defaultMTUVXLAN           = 1450
-	defaultMTUGRE             = 1462
-	defaultMTUSTT             = 1500
-	defaultMTU                = 1500
-	// IPsec ESP can add a maximum of 38 bytes to the packet including the ESP
-	// header and trailer.
-	ipsecESPOverhead = 38
 )
 
 type Options struct {
@@ -151,26 +143,6 @@ func (o *Options) setDefaults() {
 	if o.config.TrafficEncapMode == "" {
 		o.config.TrafficEncapMode = config.TrafficEncapModeEncap.String()
 	}
-
-	if o.config.DefaultMTU == 0 {
-		ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
-		if ok && !encapMode.SupportsEncap() {
-			o.config.DefaultMTU = defaultMTU
-		} else if o.config.TunnelType == ovsconfig.VXLANTunnel {
-			o.config.DefaultMTU = defaultMTUVXLAN
-		} else if o.config.TunnelType == ovsconfig.GeneveTunnel {
-			o.config.DefaultMTU = defaultMTUGeneve
-		} else if o.config.TunnelType == ovsconfig.GRETunnel {
-			o.config.DefaultMTU = defaultMTUGRE
-		} else if o.config.TunnelType == ovsconfig.STTTunnel {
-			o.config.DefaultMTU = defaultMTUSTT
-		}
-
-		if o.config.EnableIPSecTunnel {
-			o.config.DefaultMTU -= ipsecESPOverhead
-		}
-	}
-
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}

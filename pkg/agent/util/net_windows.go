@@ -202,29 +202,6 @@ func EnableHNSNetworkExtension(hnsNetID string, vSwitchExtension string) error {
 	return nil
 }
 
-// GetIPNetDeviceFromIP returns a local IP/mask and associated device from IP.
-func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, *net.Interface, error) {
-	linkList, err := net.Interfaces()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for _, link := range linkList {
-		addrList, err := link.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, addr := range addrList {
-			if ipNet, ok := addr.(*net.IPNet); ok {
-				if ipNet.IP.Equal(localIP) {
-					return ipNet, &link, nil
-				}
-			}
-		}
-	}
-	return nil, nil, fmt.Errorf("unable to find local IP and device")
-}
-
 func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	// Set host gateway interface up.
 	if err := EnableHostInterface(name); err != nil {

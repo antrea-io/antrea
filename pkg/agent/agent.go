@@ -61,8 +61,8 @@ type Initializer struct {
 	routeClient     route.Interface
 	ifaceStore      interfacestore.InterfaceStore
 	ovsBridge       string
-	hostGateway     string     // name of gateway port on the OVS bridge
-	mtu             int        // Pod network interface MTU
+	hostGateway     string // name of gateway port on the OVS bridge
+	mtu             int
 	serviceCIDR     *net.IPNet // K8s Service ClusterIP CIDR
 	networkConfig   *config.NetworkConfig
 	nodeConfig      *config.NodeConfig
@@ -412,9 +412,9 @@ func (i *Initializer) setupGatewayInterface() error {
 	// Idempotent operation to set the gateway's MTU: we perform this operation regardless of
 	// whether or not the gateway interface already exists, as the desired MTU may change across
 	// restarts.
-	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.mtu)
+	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.nodeConfig.NodeMTU)
 
-	i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.mtu)
+	i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.nodeConfig.NodeMTU)
 	if err := i.configureGatewayInterface(gatewayIface); err != nil {
 		return err
 	}
@@ -543,16 +543,23 @@ func (i *Initializer) initNodeLocalConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to obtain local IP address from k8s: %w", err)
 	}
-	localAddr, _, err := util.GetIPNetDeviceFromIP(ipAddr)
+	localAddr, localIntf, err := util.GetIPNetDeviceFromIP(ipAddr)
 	if err != nil {
 		return fmt.Errorf("failed to get local IPNet:  %v", err)
 	}
+
+	mtu, err := i.getNodeMTU(localIntf)
+	if err != nil {
+		return err
+	}
+	klog.Infof("Setting Node MTU=%d", mtu)
 
 	i.nodeConfig = &config.NodeConfig{
 		Name:            nodeName,
 		OVSBridge:       i.ovsBridge,
 		DefaultTunName:  defaultTunInterfaceName,
 		NodeIPAddr:      localAddr,
+		NodeMTU:         mtu,
 		UplinkNetConfig: new(config.AdapterNetConfig)}
 
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
@@ -640,4 +647,28 @@ func getRoundInfo(bridgeClient ovsconfig.OVSBridgeClient) types.RoundInfo {
 	roundInfo.RoundNum = num
 
 	return roundInfo
+}
+
+func (i *Initializer) getNodeMTU(localIntf *net.Interface) (int, error) {
+	if i.mtu != 0 {
+		return i.mtu, nil
+	}
+	mtu := localIntf.MTU
+	// Make sure mtu is set on the interface.
+	if mtu <= 0 {
+		return 0, fmt.Errorf("Failed to fetch Node MTU : %v", mtu)
+	}
+	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
+		if i.networkConfig.TunnelType == ovsconfig.VXLANTunnel {
+			mtu -= config.VXLANOverhead
+		} else if i.networkConfig.TunnelType == ovsconfig.GeneveTunnel {
+			mtu -= config.GeneveOverhead
+		} else if i.networkConfig.TunnelType == ovsconfig.GRETunnel {
+			mtu -= config.GREOverhead
+		}
+	}
+	if i.networkConfig.EnableIPSecTunnel {
+		mtu -= config.IpsecESPOverhead
+	}
+	return mtu, nil
 }

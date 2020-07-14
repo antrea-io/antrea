@@ -20,9 +20,8 @@ deployment yaml at:
 https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-eks.yml
 ```
 
-Based on EKS worker Node MTU size and Kubernetes service cluster IP range, adjust
-``defaultMTU`` and ``serviceCIDR`` values of antrea-agent.conf in antrea-eks.yml
- accordingly, and apply antrea-eks.yml to the EKS cluster.
+Based on Kubernetes service cluster IP range, adjust ``serviceCIDR`` values of antrea-agent.conf
+in antrea-eks.yml accordingly, and apply antrea-eks.yml to the EKS cluster.
 
 ```bash
 kubectl apply -f antrea-eks.yaml 

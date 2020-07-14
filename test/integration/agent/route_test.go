@@ -46,11 +46,12 @@ func ExecOutputTrim(cmd string) (string, error) {
 
 var (
 	_, podCIDR, _       = net.ParseCIDR("10.10.10.0/24")
-	nodeIP, nodeLink, _ = util.GetIPNetDeviceFromIP(func() net.IP {
+	nodeIP, nodeIntf, _ = util.GetIPNetDeviceFromIP(func() net.IP {
 		conn, _ := net.Dial("udp", "8.8.8.8:80")
 		defer conn.Close()
 		return conn.LocalAddr().(*net.UDPAddr).IP
 	}())
+	nodeLink, _       = netlink.LinkByName(nodeIntf.Name)
 	localPeerIP       = ip.NextIP(nodeIP.IP)
 	remotePeerIP      = net.ParseIP("50.50.50.1")
 	_, serviceCIDR, _ = net.ParseCIDR("200.200.0.0/16")
