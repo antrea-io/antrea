@@ -242,13 +242,19 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 		case "octetTotalCount":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.OriginalBytes)
 		case "packetDeltaCount":
-			deltaPkts := int(record.Conn.OriginalPackets) - int(record.PrevPackets)
+			deltaPkts := 0
+			if record.PrevPackets != 0 {
+				deltaPkts = int(record.Conn.OriginalPackets) - int(record.PrevPackets)
+			}
 			if deltaPkts < 0 {
 				klog.Warningf("Delta packets is not expected to be negative: %d", deltaPkts)
 			}
 			_, err = dataRec.AddInfoElement(ie, uint64(deltaPkts))
 		case "octetDeltaCount":
-			deltaBytes := int(record.Conn.OriginalBytes) - int(record.PrevBytes)
+			deltaBytes := 0
+			if record.PrevBytes != 0 {
+				deltaBytes = int(record.Conn.OriginalBytes) - int(record.PrevBytes)
+			}
 			if deltaBytes < 0 {
 				klog.Warningf("Delta bytes is not expected to be negative: %d", deltaBytes)
 			}
@@ -258,13 +264,19 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 		case "reverse_OctetTotalCount":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.ReverseBytes)
 		case "reverse_PacketDeltaCount":
-			deltaPkts := int(record.Conn.ReversePackets) - int(record.PrevReversePackets)
+			deltaPkts := 0
+			if record.PrevReversePackets != 0 {
+				deltaPkts = int(record.Conn.ReversePackets) - int(record.PrevReversePackets)
+			}
 			if deltaPkts < 0 {
 				klog.Warningf("Delta packets is not expected to be negative: %d", deltaPkts)
 			}
 			_, err = dataRec.AddInfoElement(ie, uint64(deltaPkts))
 		case "reverse_OctetDeltaCount":
-			deltaBytes := int(record.Conn.ReverseBytes) - int(record.PrevReverseBytes)
+			deltaBytes := 0
+			if record.PrevReverseBytes != 0 {
+				deltaBytes = int(record.Conn.ReverseBytes) - int(record.PrevReverseBytes)
+			}
 			if deltaBytes < 0 {
 				klog.Warningf("Delta bytes is not expected to be negative: %d", deltaBytes)
 			}
