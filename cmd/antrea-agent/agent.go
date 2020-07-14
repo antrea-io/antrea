@@ -163,7 +163,6 @@ func run(o *Options) error {
 	cniServer := cniserver.New(
 		o.config.CNISocket,
 		o.config.HostProcPathPrefix,
-		o.config.DefaultMTU,
 		nodeConfig,
 		k8sClient,
 		podUpdates,

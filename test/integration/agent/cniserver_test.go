@@ -537,9 +537,9 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := interfacestore.NewInterfaceStore()
+	testNodeConfig.NodeMTU = 1450
 	tester.server = cniserver.New(testSock,
 		"",
-		1450,
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
 		make(chan v1beta1.PodReference, 100),
@@ -679,7 +679,6 @@ func setupChainTest(
 		routeMock = routetest.NewMockInterface(controller)
 		server = cniserver.New(testSock,
 			"",
-			1500,
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
 			make(chan v1beta1.PodReference, 100),
@@ -803,6 +802,7 @@ func init() {
 	gwMAC, _ = net.ParseMAC("11:11:11:11:11:11")
 	nodeGateway := &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: ""}
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
+	nodeMTU := 1500
 
-	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: nodeGateway}
+	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, NodeMTU: nodeMTU, GatewayConfig: nodeGateway}
 }

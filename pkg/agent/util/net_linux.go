@@ -25,31 +25,8 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
-	"golang.org/x/sys/unix"
 	"k8s.io/klog"
 )
-
-// GetIPNetDeviceFromIP returns a local IP/mask and associated device from IP.
-func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, netlink.Link, error) {
-	linkList, err := netlink.LinkList()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for _, link := range linkList {
-		addrList, err := netlink.AddrList(link, unix.AF_INET)
-		if err != nil {
-			klog.Errorf("Failed to get addr list for device %s", link)
-			continue
-		}
-		for _, addr := range addrList {
-			if addr.IP.Equal(localIP) {
-				return addr.IPNet, link, nil
-			}
-		}
-	}
-	return nil, nil, fmt.Errorf("unable to find local IP and device")
-}
 
 // GetNetLink returns dev link from name.
 func GetNetLink(dev string) netlink.Link {

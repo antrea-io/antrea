@@ -51,9 +51,9 @@ Use `antrea-agent -h` to see complete options.
 # for the GRE tunnel type.
 #enableIPSecTunnel: false
 
-# Default MTU to use for the host gateway interface and the network interface of
-# each Pod. If omitted, antrea-agent will default this value to 1450 to accommodate
-# for tunnel encapsulate overhead.
+# Default MTU to use for the host gateway interface and the network interface of each Pod.
+# If omitted, antrea-agent will discover the MTU of the Node's primary interface and
+# also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
 #defaultMTU: 1450
 
 # CIDR Range for services in cluster. It's required to support egress network policy, should

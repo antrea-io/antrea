@@ -33,6 +33,15 @@ const (
 	BridgeOFPort = 0xfffffffe
 )
 
+const (
+	VXLANOverhead  = 50
+	GeneveOverhead = 50
+	GREOverhead    = 38
+	// IPsec ESP can add a maximum of 38 bytes to the packet including the ESP
+	// header and trailer.
+	IpsecESPOverhead = 38
+)
+
 type GatewayConfig struct {
 	// Name is the name of host gateway, e.g. antrea-gw0.
 	Name string
@@ -69,6 +78,10 @@ type NodeConfig struct {
 	PodCIDR *net.IPNet
 	// The Node's IP used in Kubernetes. It has the network mask information.
 	NodeIPAddr *net.IPNet
+	// Set either via defaultMTU config in antrea.yaml or auto discovered.
+	// Auto discovery will use MTU value of the Node's primary interface.
+	// For Encap and Hybrid mode, Node MTU will be adjusted to account for encap header.
+	NodeMTU int
 	// The config of the gateway interface on the OVS bridge.
 	GatewayConfig *GatewayConfig
 	// The config of the OVS bridge uplink interface. Only for Windows Node.

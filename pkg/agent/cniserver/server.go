@@ -93,7 +93,6 @@ type CNIServer struct {
 	serverVersion        string
 	nodeConfig           *config.NodeConfig
 	hostProcPathPrefix   string
-	defaultMTU           int
 	kubeClient           clientset.Interface
 	containerAccess      *containerAccessArbitrator
 	podConfigurator      *podConfigurator
@@ -182,7 +181,7 @@ func (s *CNIServer) loadNetworkConfig(request *cnipb.CniCmdRequest) (*CNIConfig,
 		s.updateLocalIPAMSubnet(cniConfig)
 	}
 	if cniConfig.MTU == 0 {
-		cniConfig.MTU = s.defaultMTU
+		cniConfig.MTU = s.nodeConfig.NodeMTU
 	}
 	klog.Infof("Load network configurations: %v", cniConfig)
 	return cniConfig, nil
@@ -496,7 +495,6 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 
 func New(
 	cniSocket, hostProcPathPrefix string,
-	defaultMTU int,
 	nodeConfig *config.NodeConfig,
 	kubeClient clientset.Interface,
 	podUpdates chan<- v1beta1.PodReference,
@@ -509,7 +507,6 @@ func New(
 		serverVersion:        cni.AntreaCNIVersion,
 		nodeConfig:           nodeConfig,
 		hostProcPathPrefix:   hostProcPathPrefix,
-		defaultMTU:           defaultMTU,
 		kubeClient:           kubeClient,
 		containerAccess:      newContainerAccessArbitrator(),
 		podUpdates:           podUpdates,
