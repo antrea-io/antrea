@@ -29,6 +29,7 @@ should be deleted. This ensures that all tests are run on a clean testbed.
   "sig-api-machinery", "sig-apps", "sig-node", "Privileged", "should be able to change the type from", "[sig-network]
   Services should be able to create a functioning NodePort service [Conformance]", "Service endpoints latency should not
   be very high".
+* windows network policy: community tests on Windows cluster, focusing on "Feature:NetworkPolicy".
 * [whole-conformance [daily]](https://jenkins.antrea-ci.rocks/job/antrea-whole-conformance-for-pull-request/):
   community tests using sonobuoy, with certified-conformance mode.
 * [daily-whole-conformance](https://jenkins.antrea-ci.rocks/job/antrea-daily-whole-conformance-for-period/):
