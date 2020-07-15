@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -272,14 +273,13 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	// Calculate destination MAC/IP.
 	dstMAC := ""
 	dstIP := tf.Spec.Destination.IP
-	isInterNode := true
+	dstNodeIP := ""
 	// TODO: Find MAC by dstIP
 	if dstIP == "" {
 		dstPodInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Destination.Pod, tf.Spec.Destination.Namespace)
 		if len(dstPodInterfaces) > 0 {
 			dstMAC = dstPodInterfaces[0].MAC.String()
 			dstIP = dstPodInterfaces[0].IP.String()
-			isInterNode = false
 		} else {
 			dstPod, err := c.kubeClient.CoreV1().Pods(tf.Spec.Destination.Namespace).Get(context.TODO(), tf.Spec.Destination.Pod, v1.GetOptions{})
 			if err != nil {
@@ -287,15 +287,18 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 			}
 			// dstMAC is "" here, will be set to Gateway MAC in ofClient.SendTraceflowPacket
 			dstIP = dstPod.Status.PodIP
+			dstNodeIP = dstPod.Status.HostIP
 		}
 	}
-	if isInterNode {
-		if c.networkConfig.TunnelType != ovsconfig.GeneveTunnel {
-			// Inter-node traceflow is only available in Geneve tunnel.
-			return errors.New(fmt.Sprintf("inter-node traceflow is only available in Geneve tunnel, current mode: %s", c.networkConfig.TunnelType))
-		} else {
+	if dstNodeIP != "" {
+		peerIP := net.ParseIP(dstNodeIP)
+		if c.networkConfig.TunnelType == ovsconfig.GeneveTunnel && peerIP != nil && c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(peerIP, c.nodeConfig.NodeIPAddr) {
 			// Wait a small period for other Nodes.
 			time.Sleep(time.Duration(injectPacketDelay) * time.Second)
+		} else {
+			// Inter-node traceflow is only available when the packet is encapsulated in Geneve tunnel.
+			return errors.New(fmt.Sprintf("inter-node traceflow is not available in current configuration, TunnelType: %s, EncapMode: %s, localIP: %s, peerIP: %s",
+				c.networkConfig.TunnelType, c.networkConfig.TrafficEncapMode.String(), c.nodeConfig.NodeIPAddr.String(), dstNodeIP))
 		}
 	}
 
