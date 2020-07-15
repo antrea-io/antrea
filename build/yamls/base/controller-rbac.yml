@@ -97,6 +97,7 @@ rules:
     resources:
       - clusternetworkpolicies
       - networkpolicies
+      - tiers
     verbs:
       - get
       - watch
