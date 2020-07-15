@@ -22,7 +22,7 @@ package testing
 import (
 	bytes "bytes"
 	gomock "github.com/golang/mock/gomock"
-	entities "github.com/srikartati/go-ipfixlib/pkg/entities"
+	entities "github.com/vmware/go-ipfix/pkg/entities"
 	reflect "reflect"
 )
 

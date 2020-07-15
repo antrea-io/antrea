@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"net"
 
-	ipfixentities "github.com/srikartati/go-ipfixlib/pkg/entities"
-	ipfixexport "github.com/srikartati/go-ipfixlib/pkg/exporter"
-	ipfixregistry "github.com/srikartati/go-ipfixlib/pkg/registry"
+	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	ipfixexport "github.com/vmware/go-ipfix/pkg/exporter"
+	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 )
 
 var _ IPFIXExportingProcess = new(ipfixExportingProcess)
