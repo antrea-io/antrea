@@ -242,9 +242,10 @@ spec:
           properties:
             priority:
               type: integer
-              # Ensure that Spec.Priority field is between 1 and 1000
+              # Ensure that Spec.Priority field is between 1 and 5
+              # Relax this condition once we support more Tiers.
               minimum: 1
-              maximum: 1000
+              maximum: 5
             description:
               type: string
 ---

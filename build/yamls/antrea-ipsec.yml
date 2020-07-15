@@ -377,7 +377,7 @@ spec:
             description:
               type: string
             priority:
-              maximum: 1000
+              maximum: 5
               minimum: 1
               type: integer
           required:

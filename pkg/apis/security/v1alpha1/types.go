@@ -215,6 +215,7 @@ type Tier struct {
 // TierSpec defines the desired state for Tier.
 type TierSpec struct {
 	// Priority specfies the order of the Tier relative to other Tiers.
+	// Currently supporting only 5 Tiers. i.e. 1-5 range for Priority.
 	Priority int32 `json:"priority"`
 	// Description is an optional field to add more information regarding
 	// the purpose of this Tier.
