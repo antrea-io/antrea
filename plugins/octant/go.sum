@@ -441,7 +441,6 @@ github.com/spf13/pflag v1.0.5/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An
 github.com/spf13/viper v1.3.2/go.mod h1:ZiWeW+zYFKm7srdB9IoDzzZXaJaI5eL9QjNiN/DMA2s=
 github.com/spf13/viper v1.4.0 h1:yXHLWeravcrgGyFSyCgdYpXQ9dR9c/WED3pg1RhxqEU=
 github.com/spf13/viper v1.4.0/go.mod h1:PTJ7Z/lr49W6bUbkmS1V3by4uWynFiR9p7+dSq/yZzE=
-github.com/srikartati/go-ipfixlib v0.0.0-20200701221601-953047e9896c/go.mod h1:kMk7mBXI7S5sFxbQSx+FOBbNogjsF8GNqCkYvM7LHLY=
 github.com/streamrail/concurrent-map v0.0.0-20160803124810-238fe79560e1/go.mod h1:yqDD2twFAqxvvH5gtpwwgLsj5L1kbNwtoPoDOwBzXcs=
 github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6/go.mod h1:yqDD2twFAqxvvH5gtpwwgLsj5L1kbNwtoPoDOwBzXcs=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
@@ -470,6 +469,7 @@ github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc/go.mod h1:ZjcWmF
 github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df/go.mod h1:JP3t17pCcGlemwknint6hfoeCVQrEMVwxRLRjXpq+BU=
 github.com/vmware-tanzu/octant v0.13.1 h1:hz4JDnAA7xDkFjF4VEbt5SrSRrG26FCxKXXBGapf6Nc=
 github.com/vmware-tanzu/octant v0.13.1/go.mod h1:4q+wrV4tmUwAdMjvYOujSTtZbE4+zm0n5mb7FjvN0I0=
+github.com/vmware/go-ipfix v0.0.0-20200715175325-6ade358dcb5f/go.mod h1:8suqePBGCX20vEh/4/ekuRjX4BsZ2zYWcD22NpAWHVU=
 github.com/wenyingd/ofnet v0.0.0-20200601065543-2c7a62482f16/go.mod h1:+g6SfqhTVqeGEmUJ0l4WtCgsL4dflTUJE4k+TPCKqXo=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=

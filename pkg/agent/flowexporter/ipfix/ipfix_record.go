@@ -16,7 +16,7 @@ package ipfix
 
 import (
 	"bytes"
-	ipfixentities "github.com/srikartati/go-ipfixlib/pkg/entities"
+	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 )
 
 var _ IPFIXRecord = new(ipfixDataRecord)
