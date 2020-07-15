@@ -70,6 +70,7 @@ func run(o *Options) error {
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	cnpInformer := crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
+	tierInformer := crdInformerFactory.Security().V1alpha1().Tiers()
 	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
 
 	// Create Antrea object storage.
@@ -83,6 +84,7 @@ func run(o *Options) error {
 		namespaceInformer,
 		networkPolicyInformer,
 		cnpInformer,
+		tierInformer,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore)

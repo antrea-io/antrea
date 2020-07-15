@@ -165,6 +165,9 @@ type NetworkPolicy struct {
 	// Priority represents the relative priority of this Network Policy as compared to
 	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
 	Priority *float64 `json:"priority,omitempty" protobuf:"fixed64,4,opt,name=priority"`
+	// TierPriority represents the priority of the Tier associated with this Network
+        // Policy.
+        TierPriority *uint8 `json:"priority,omitempty"`
 }
 
 // Direction defines traffic direction of NetworkPolicyRule.

@@ -132,6 +132,13 @@ type NetworkPolicyController struct {
 	// cnpListerSynced is a function which returns true if the ClusterNetworkPolicies shared informer has been synced at least once.
 	cnpListerSynced cache.InformerSynced
 
+	tierInformer secinformers.TierInformer
+	// tierLister is able to list/get Tiers and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	tierLister seclisters.TierLister
+	// tierListerSynced is a function which returns true if the Tiers shared informer has been synced at least once.
+        tierListerSynced cache.InformerSynced
+
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
 	// appliedToGroupStore is the storage where the populated AppliedTo Groups are stored.
@@ -170,6 +177,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	namespaceInformer coreinformers.NamespaceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	cnpInformer secinformers.ClusterNetworkPolicyInformer,
+	tierInformer secinformers.TierInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface) *NetworkPolicyController {
@@ -232,6 +240,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			},
 			resyncPeriod,
 		)
+		n.tierInformer = tierInformer
+		n.tierLister = tierInformer.Lister()
+		n.tierListerSynced = tierInformer.Informer().HasSynced
 	}
 	return n
 }
@@ -961,7 +972,7 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	}
 	// Only wait for CNPListerSynced when ClusterNetworkPolicy feature gate is enabled.
 	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
-		if !cache.WaitForCacheSync(stopCh, n.cnpListerSynced) {
+		if !cache.WaitForCacheSync(stopCh, n.cnpListerSynced, n.tierListerSynced) {
 			klog.Error("Unable to sync CNP caches for NetworkPolicy controller")
 			return
 		}

@@ -31,6 +31,9 @@ var (
 	matchAllPodsPeerCrd = secv1alpha1.NetworkPolicyPeer{
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
+
+	// initialTierPriority assigns the lowest priority value for the Tier.
+	initialTierPriority = uint8(255)
 )
 
 // addCNP receives ClusterNetworkPolicy ADD events and creates resources
@@ -194,6 +197,20 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 	return &networking.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
 }
 
+// getTierPriority returns the Priority associated with the Tier object. If
+// tier name is empty, the policy is associated with the lowest Tier i.e.
+// initial-tier(255).
+func (n *NetworkPolicyController) getTierPriority(tName string) uint8 {
+	if tName == "" {
+		// Empty Tier name should move the CNP to the initialTier.
+		return initialTierPriority
+	}
+	// Retrieve corresponding Tier and return its priority.
+	tObj, _ := n.tierLister.Get(tName)
+	klog.V(2).Infof("Found Tier %s with Priority %d", tName, tObj.Spec.Priority)
+	return tObj.Spec.Priority
+}
+
 // createAddressGroupForCRD creates an AddressGroup object corresponding to a
 // secv1alpha1.NetworkPolicyPeer object in Cluster NetworkPolicyRule. This
 // function simply creates the object without actually populating the
@@ -253,6 +270,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			Priority:  int32(idx),
 		})
 	}
+	tierPriority := n.getTierPriority(cnp.Spec.Tier)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
 		Name:            cnp.Name,
 		Namespace:       "",
@@ -260,6 +278,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 		AppliedToGroups: appliedToGroupNames,
 		Rules:           rules,
 		Priority:        &cnp.Spec.Priority,
+		TierPriority:	&tierPriority,
 	}
 	return internalNetworkPolicy
 }
