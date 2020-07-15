@@ -62,6 +62,7 @@ page_gen:
 collections:
   - contributors
   - features
+  - presentations
 
 versioning: false
 latest: master
