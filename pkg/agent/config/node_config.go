@@ -62,6 +62,7 @@ type AdapterNetConfig struct {
 	IP         *net.IPNet
 	Gateway    string
 	DNSServers string
+	Routes     []interface{}
 }
 
 // Local Node configurations retrieved from K8s API or host networking state.

@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/Microsoft/hcsshim"
+	"github.com/rakelkar/gonetsh/netroute"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
@@ -73,6 +74,12 @@ func (i *Initializer) prepareHostNetwork() error {
 		return err
 	}
 	i.nodeConfig.UplinkNetConfig.DNSServers = dnsServers
+	// Save routes which are configured on the uplink interface.
+	// The routes on the host will be lost when moving the network configuration of the uplink interface
+	// to the OVS bridge local interface. The saved routes will be restored on host after that.
+	if err = i.saveHostRoutes(); err != nil {
+		return err
+	}
 	// Create HNS network.
 	return util.PrepareHNSNetwork(i.nodeConfig.PodCIDR, i.nodeConfig.NodeIPAddr, adapter)
 }
@@ -160,6 +167,11 @@ func (i *Initializer) prepareOVSBridge() error {
 	if err = util.ConfigureInterfaceAddressWithDefaultGateway(brName, uplinkNetConfig.IP, uplinkNetConfig.Gateway); err != nil {
 		return err
 	}
+	// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
+	if err = i.restoreHostRoutes(); err != nil {
+		return err
+	}
+
 	if uplinkNetConfig.DNSServers != "" {
 		if err = util.SetAdapterDNSServers(brName, uplinkNetConfig.DNSServers); err != nil {
 			return err
@@ -186,4 +198,57 @@ func (i *Initializer) initHostNetworkFlows() error {
 // getTunnelLocalIP returns local_ip of tunnel port
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return i.nodeConfig.NodeIPAddr.IP
+}
+
+// saveHostRoutes saves routes which are configured on uplink interface before
+// the interface the configured as the uplink of antrea HNS network.
+// The routes will be restored on OVS bridge interface after the IP configuration
+// is moved to the OVS bridge.
+func (i *Initializer) saveHostRoutes() error {
+	nr := netroute.New()
+	defer nr.Exit()
+	routes, err := nr.GetNetRoutesAll()
+	if err != nil {
+		return err
+	}
+	for _, route := range routes {
+		if route.LinkIndex != i.nodeConfig.UplinkNetConfig.Index {
+			continue
+		}
+		if route.GatewayAddress.String() != i.nodeConfig.UplinkNetConfig.Gateway {
+			continue
+		}
+		// Skip IPv6 routes before we support IPv6 stack.
+		if route.DestinationSubnet.IP.To4() == nil {
+			continue
+		}
+		// Skip default route. The default route will be added automatically when
+		// configuring IP address on OVS bridge interface.
+		if route.DestinationSubnet.IP.IsUnspecified() {
+			continue
+		}
+		klog.V(4).Infof("Got host route: %v", route)
+		i.nodeConfig.UplinkNetConfig.Routes = append(i.nodeConfig.UplinkNetConfig.Routes, route)
+	}
+	return nil
+}
+
+// restoreHostRoutes restores the host routes which are lost when moving the IP
+// configuration of uplink interface to the OVS bridge interface during
+// the antrea network initialize stage.
+// The backup routes are restored after the IP configuration change.
+func (i *Initializer) restoreHostRoutes() error {
+	nr := netroute.New()
+	defer nr.Exit()
+	brInterface, err := net.InterfaceByName(i.ovsBridge)
+	if err != nil {
+		return nil
+	}
+	for _, route := range i.nodeConfig.UplinkNetConfig.Routes {
+		rt := route.(netroute.Route)
+		if err := nr.NewNetRoute(brInterface.Index, rt.DestinationSubnet, rt.GatewayAddress); err != nil {
+			return err
+		}
+	}
+	return nil
 }
