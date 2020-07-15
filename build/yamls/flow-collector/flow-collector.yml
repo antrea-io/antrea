@@ -96,17 +96,19 @@ spec:
           ports:
             - containerPort: 9200
               name: http
+            - containerPort: 9300
+              name: transport
           livenessProbe:
             tcpSocket:
               port: transport
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /_cluster/health
               port: http
-            initialDelaySeconds: 60
-            timeoutSeconds: 5
+            initialDelaySeconds: 90
+            timeoutSeconds: 20
           volumeMounts:
             - name: es-data
               mountPath: /data

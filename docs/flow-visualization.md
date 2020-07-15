@@ -41,10 +41,8 @@ and get
 everything up-and-running, run:
 ```shell
 kubectl create namespace antrea-flow-collector
-kubectl create configmap logstash-configmap -n antrea-flow-collector
---from-file=build/yamls/flow-collector/logstash/
-kubectl apply -f build/yamls/flow-collector/flow-collector.yml -n
-antrea-flow-collector
+kubectl create configmap logstash-configmap -n antrea-flow-collector --from-file=build/yamls/flow-collector/logstash/
+kubectl apply -f build/yamls/flow-collector/flow-collector.yml -n antrea-flow-collector
 ```
 Kibana dashboard is exposed as a Nodeport, which can be accessed via
 `http://[NodeIP]: 30007`
