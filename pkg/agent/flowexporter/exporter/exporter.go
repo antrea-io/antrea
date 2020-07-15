@@ -24,7 +24,7 @@ import (
 	"time"
 	"unicode"
 
-	ipfixentities "github.com/srikartati/go-ipfixlib/pkg/entities"
+	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
