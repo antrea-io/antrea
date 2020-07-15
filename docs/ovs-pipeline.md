@@ -169,9 +169,9 @@ label `app: dns`. Similar to K8s NetworkPolicy, Antrea will only install OVS
 flows for this CNP on Nodes for which some of the Pods are the target of the
 policy. Thus, we have scheduled three Pods (appServer, appDns, appNotClient)
 on the same Node and they have the following IP addresses:
-- appServer: 10.0.1.6
-- appNotClient: 10.0.1.7
-- appDns: 10.0.1.8
+- appServer: 10.10.1.6
+- appNotClient: 10.10.1.7
+- appDns: 10.10.1.8
 
 ## Tables
 
@@ -386,8 +386,8 @@ If you dump the flows for this table, you should see something like this:
 ```
 1. table=45, priority=64990,ct_state=-new+est,ip actions=resubmit(,70)
 2. table=45, priority=11800,conj_id=2,ip actions=load:0x2->NXM_NX_REG6[],resubmit(,70)
-3. table=45, priority=11800,ip,nw_src=10.0.1.6 actions=conjunction(2,1/3)
-4. table=45, priority=11800,ip,nw_dst=10.0.1.8 actions=conjunction(2,2/3)
+3. table=45, priority=11800,ip,nw_src=10.10.1.6 actions=conjunction(2,1/3)
+4. table=45, priority=11800,ip,nw_dst=10.10.1.8 actions=conjunction(2,2/3)
 5. table=45, priority=11800,udp,tp_dst=53 actions=conjunction(2,3/3)
 6. table=45, priority=0 actions=resubmit(,50)
 ```
@@ -395,7 +395,7 @@ If you dump the flows for this table, you should see something like this:
 Similar to K8s NetworkPolicy implementation, CnpEgressRuleTable also relies on
 the OVS built-in `conjunction` action to implement policies efficiently.
 The above example flows read as follow: if the source IP address is in set
-{10.0.1.6}, and the destination IP address is in the set {10.0.1.8}, and the
+{10.10.1.6}, and the destination IP address is in the set {10.10.1.8}, and the
 destination TCP port is in the set {53}, then use the `conjunction` action with
 id 2, which goes to [L3ForwardingTable]. Otherwise, go to [EgressRuleTable].
 
@@ -584,7 +584,7 @@ If you dump the flows for this table, you should see something like this:
 ```
 1. table=85, priority=64990,ct_state=-new+est,ip actions=resubmit(,105)
 2. table=85, priority=11800,conj_id=1,ip actions=drop
-3. table=85, priority=11800,ip,nw_src=10.0.0.7 actions=conjunction(1,1/3)
+3. table=85, priority=11800,ip,nw_src=10.10.1.7 actions=conjunction(1,1/3)
 4. table=85, priority=11800,ip,reg1=0x19c actions=conjunction(1,2/3)
 5. table=85, priority=11800,tcp,tp_dst=80 actions=conjunction(1,3/3)
 6. table=85, priority=0 actions=resubmit(,90)
@@ -595,8 +595,8 @@ established connections packets go straight to [L2ForwardingOutTable],
 with no other match required.
 
 The rest of the flows read as follows: if the source IP address is in set
-{10.0.0.7}, and the destination OF port is in the set {412} (which
-correspond to IP addresses {10.0.0.6}), and the destination TCP port
+{10.10.1.7}, and the destination OF port is in the set {412} (which
+correspond to IP addresses {10.10.1.6}), and the destination TCP port
 is in the set {80}, then use `conjunction` action with id 1, which drops the
 packet. Otherwise, go to [IngressRuleTable]. One notable difference is how we
 use OF ports to identify the destination of the traffic, while we use IP
