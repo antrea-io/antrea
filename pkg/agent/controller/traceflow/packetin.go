@@ -49,7 +49,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 			return err
 		}
 		tf.Status.Results = append(tf.Status.Results, *nodeResult)
-		tf, err = c.traceflowClient.OpsV1alpha1().Traceflows().Update(context.TODO(), tf, v1.UpdateOptions{})
+		tf, err = c.traceflowClient.OpsV1alpha1().Traceflows().UpdateStatus(context.TODO(), tf, v1.UpdateOptions{})
 		if err != nil {
 			klog.Warningf("Update traceflow failed: %+v", err)
 			return err

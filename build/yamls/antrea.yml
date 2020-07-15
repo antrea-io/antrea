@@ -174,12 +174,72 @@ spec:
     shortNames:
     - tf
     singular: traceflow
+  preserveUnknownFields: false
   scope: Cluster
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       properties:
         spec:
           properties:
+            destination:
+              oneOf:
+              - required:
+                - pod
+                - namespace
+              - required:
+                - ip
+              properties:
+                ip:
+                  format: ipv4
+                  type: string
+                namespace:
+                  type: string
+                pod:
+                  type: string
+              type: object
+            packet:
+              properties:
+                ipHeader:
+                  properties:
+                    flags:
+                      type: integer
+                    protocol:
+                      type: integer
+                    srcIP:
+                      format: ipv4
+                      type: string
+                    ttl:
+                      type: integer
+                  type: object
+                transportHeader:
+                  properties:
+                    icmp:
+                      properties:
+                        id:
+                          type: integer
+                        sequence:
+                          type: integer
+                      type: object
+                    tcp:
+                      properties:
+                        dstPort:
+                          type: integer
+                        flags:
+                          type: integer
+                        srcPort:
+                          type: integer
+                      type: object
+                    udp:
+                      properties:
+                        dstPort:
+                          type: integer
+                        srcPort:
+                          type: integer
+                      type: object
+                  type: object
+              type: object
             source:
               properties:
                 namespace:
@@ -192,6 +252,52 @@ spec:
               type: object
           required:
           - source
+          - destination
+          type: object
+        status:
+          properties:
+            dataplaneTag:
+              type: integer
+            phase:
+              type: string
+            reason:
+              type: string
+            results:
+              items:
+                properties:
+                  node:
+                    type: string
+                  observations:
+                    items:
+                      properties:
+                        action:
+                          type: string
+                        component:
+                          type: string
+                        componentInfo:
+                          type: string
+                        dstMAC:
+                          type: string
+                        networkPolicy:
+                          type: string
+                        pod:
+                          type: string
+                        translatedDstIP:
+                          type: string
+                        translatedSrcIP:
+                          type: string
+                        ttl:
+                          type: integer
+                        tunnelDstIP:
+                          type: string
+                      type: object
+                    type: array
+                  role:
+                    type: string
+                  timestamp:
+                    type: integer
+                type: object
+              type: array
           type: object
       required:
       - spec
@@ -352,6 +458,7 @@ rules:
   - ops.antrea.tanzu.vmware.com
   resources:
   - traceflows
+  - traceflows/status
   verbs:
   - get
   - watch
@@ -453,6 +560,7 @@ rules:
   - ops.antrea.tanzu.vmware.com
   resources:
   - traceflows
+  - traceflows/status
   verbs:
   - get
   - watch
