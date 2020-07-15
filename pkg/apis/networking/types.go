@@ -160,7 +160,7 @@ type NetworkPolicy struct {
 	Priority *float64
 	// TierPriority represents the priority of the Tier associated with this Network
 	// Policy.
-	TierPriority *uint8
+	TierPriority *uint32
 }
 
 // Direction defines traffic direction of NetworkPolicyRule.

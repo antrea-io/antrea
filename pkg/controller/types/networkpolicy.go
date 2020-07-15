@@ -100,4 +100,7 @@ type NetworkPolicy struct {
 	Rules []networking.NetworkPolicyRule
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
 	AppliedToGroups []string
+	// TierPriority represents the priority of the Tier associated with this Network
+	// Policy.
+	TierPriority *uint32
 }

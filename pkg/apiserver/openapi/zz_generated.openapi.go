@@ -1437,6 +1437,13 @@ func schema_pkg_apis_networking_v1beta1_NetworkPolicy(ref common.ReferenceCallba
 							Format:      "double",
 						},
 					},
+					"tierPriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TierPriority represents the priority of the Tier associated with this Network Policy.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 				},
 			},
 		},
