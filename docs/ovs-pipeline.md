@@ -402,12 +402,13 @@ id 2, which goes to [L3ForwardingTable]. Otherwise, go to [EgressRuleTable].
 If the `conjunction` action is matched, packets are "allowed" or "dropped"
 based on the `action` field of the CNP rule. If allowed, they are forwarded
 directly to [L3ForwardingTable]. Other packets go to [EgressRuleTable] to be
-evaluated for K8s NetworkPolicy egress rules. If a connection is established,
-its packets go straight to [L3ForwardingTable], with no other match required
-(see flow 1 above, which has the highest priority). In particular, this ensures
-that reply traffic is never dropped because of a CNP rule. However, this also
-means that ongoing connections are not affected if the Cluster NetworkPolicies
-are updated.
+evaluated for K8s NetworkPolicy egress rules. After a connection is
+established, its following packets go straight to [L3ForwardingTable], with no
+other match required (see flow 1 above, which has the highest priority),
+ensuring efficiency as packets from same connections are not matched twice. In
+particular, this ensures that reply traffic is never dropped because of a CNP
+rule. However, this also means that ongoing connections are not affected if the
+Cluster NetworkPolicies are updated.
 
 Unlike the default of K8s NetworkPolicies, ClusterNetworkPolicy has no such
 default rules. Hence, they are evaluated as-is, and there is no need for a
