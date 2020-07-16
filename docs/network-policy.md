@@ -12,6 +12,7 @@ belonging to a K8s NetworkPolicy.
 **Note**: ClusterNetworkPolicy is currently in "Alpha" stage. In order to
 enable them, edit the Controller configuration in the `antrea` ConfigMap
 as follows:
+
 ```yaml
    antrea-controller.conf: |
      featureGates:
@@ -24,6 +25,7 @@ as follows:
 ## The ClusterNetworkPolicy resource
 
 An example ClusterNetworkPolicy might look like this:
+
 ```
 apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
 kind: ClusterNetworkPolicy
