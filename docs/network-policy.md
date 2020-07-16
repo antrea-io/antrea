@@ -94,6 +94,7 @@ ConfigMap as follows:
 ### The ClusterNetworkPolicy resource
 
 An example ClusterNetworkPolicy might look like this:
+
 ```
 apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
 kind: ClusterNetworkPolicy
