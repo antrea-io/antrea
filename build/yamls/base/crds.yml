@@ -52,6 +52,29 @@ spec:
     kind: Traceflow
     shortNames:
       - tf
+  additionalPrinterColumns:
+  - JSONPath: .status.phase
+    description: The phase of the Traceflow.
+    name: Phase
+    type: string
+  - JSONPath: .spec.source.pod
+    description: The name of the source Pod.
+    name: Source-Pod
+    type: string
+    priority: 10
+  - JSONPath: .spec.destination.pod
+    description: The name of the destination Pod.
+    name: Destination-Pod
+    type: string
+    priority: 10
+  - JSONPath: .spec.destination.ip
+    description: The IP address of the destination.
+    name: Destination-IP
+    type: string
+    priority: 10
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
   # Prune any unknown fields
   preserveUnknownFields: false
   validation:

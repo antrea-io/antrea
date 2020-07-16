@@ -167,6 +167,29 @@ metadata:
     app: antrea
   name: traceflows.ops.antrea.tanzu.vmware.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.phase
+    description: The phase of the Traceflow.
+    name: Phase
+    type: string
+  - JSONPath: .spec.source.pod
+    description: The name of the source Pod.
+    name: Source-Pod
+    priority: 10
+    type: string
+  - JSONPath: .spec.destination.pod
+    description: The name of the destination Pod.
+    name: Destination-Pod
+    priority: 10
+    type: string
+  - JSONPath: .spec.destination.ip
+    description: The IP address of the destination.
+    name: Destination-IP
+    priority: 10
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
   group: ops.antrea.tanzu.vmware.com
   names:
     kind: Traceflow
