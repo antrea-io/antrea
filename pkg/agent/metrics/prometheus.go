@@ -72,10 +72,6 @@ var (
 func InitializePrometheusMetrics() {
 	klog.Info("Initializing prometheus metrics")
 
-	if err := legacyregistry.Register(PodCount); err != nil {
-		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
-	}
-
 	nodeName, err := env.GetNodeName()
 	if err != nil {
 		klog.Errorf("Failed to retrieve agent K8S node name: %v", err)
@@ -94,6 +90,18 @@ func InitializePrometheusMetrics() {
 	// and will not measure anything unless the collector is first registered.
 	gaugeHost.Set(1)
 
+	InitializePodMetrics()
+	InitializeNetworkPolicyMetrics()
+	InitializeOVSMetrics()
+}
+
+func InitializePodMetrics() {
+	if err := legacyregistry.Register(PodCount); err != nil {
+		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
+	}
+}
+
+func InitializeNetworkPolicyMetrics() {
 	if err := legacyregistry.Register(EgressNetworkPolicyRuleCount); err != nil {
 		klog.Error("Failed to register antrea_agent_egress_networkpolicy_rule_count with Prometheus")
 	}
@@ -105,7 +113,9 @@ func InitializePrometheusMetrics() {
 	if err := legacyregistry.Register(NetworkPolicyCount); err != nil {
 		klog.Error("Failed to register antrea_agent_networkpolicy_count with Prometheus")
 	}
+}
 
+func InitializeOVSMetrics() {
 	if err := legacyregistry.Register(OVSTotalFlowCount); err != nil {
 		klog.Error("Failed to register antrea_agent_ovs_total_flow_count with Prometheus")
 	}
