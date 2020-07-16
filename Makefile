@@ -105,7 +105,7 @@ docker-test-unit: $(DOCKER_CACHE)
 .PHONY: docker-test-integration
 docker-test-integration:
 	@echo "===> Building Antrea Integration Test Docker image <==="
-	@docker build -t antrea/test -f build/images/test/Dockerfile .
+	@docker build --pull -t antrea/test -f build/images/test/Dockerfile .
 	@docker run --privileged --rm \
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
