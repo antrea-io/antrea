@@ -22,6 +22,8 @@ jobs:
         docker pull antrea/openvswitch:$OVS_VERSION || true
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         ./build_and_push.sh
+        cd ../base/
+        ./build_and_push.sh
   skip:
     if: github.repository != 'vmware-tanzu/antrea'
     runs-on: [ubuntu-18.04]
