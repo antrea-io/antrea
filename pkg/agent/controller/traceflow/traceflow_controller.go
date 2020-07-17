@@ -41,6 +41,9 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
+type icmpType uint8
+type icmpCode uint8
+
 const (
 	controllerName = "AntreaAgentTraceflowController"
 	// Set resyncPeriod to 0 to disable resyncing.
@@ -53,6 +56,9 @@ const (
 	// Seconds delay before injecting packet into OVS. The time of different nodes may not be completely
 	// synchronized, which requires a delay before inject packet.
 	injectPacketDelay = 5
+	// ICMP Echo Request type and code.
+	icmpEchoRequestType icmpType = 8
+	icmpEchoRequestCode icmpCode = 0
 )
 
 // Controller is responsible for setting up Openflow entries and injecting traceflow packet into
@@ -341,8 +347,8 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		TCPFlags,
 		UDPSrcPort,
 		UDPDstPort,
-		0,
-		0,
+		uint8(icmpEchoRequestType),
+		uint8(icmpEchoRequestCode),
 		ICMPID,
 		ICMPSequence,
 		uint32(podInterfaces[0].OFPort),
