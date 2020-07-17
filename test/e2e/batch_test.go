@@ -38,7 +38,7 @@ func TestBatchCreatePods(t *testing.T) {
 
 	getFDs := func() string {
 		// In case that antrea-agent is not running as Pid 1 in future.
-		cmds := []string{"pidof", "antrea-agent"}
+		cmds := []string{"pgrep", "-o", "antrea-agent"}
 		pid, _, err := data.runCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
 		assert.NoError(t, err)
 
