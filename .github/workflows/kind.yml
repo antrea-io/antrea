@@ -4,10 +4,12 @@ on:
     branches:
     - master
     - release-*
+    - ipv6
   push:
     branches:
     - master
     - release-*
+    - ipv6
 jobs:
   build-antrea-image:
     name: Build Antrea image to be used for Kind e2e tests
