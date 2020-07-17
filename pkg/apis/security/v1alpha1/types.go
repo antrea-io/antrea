@@ -35,6 +35,12 @@ type NetworkPolicy struct {
 
 // NetworkPolicySpec defines the desired state for NetworkPolicy.
 type NetworkPolicySpec struct {
+	// Tier specifies the tier to which this NetworkPolicy belongs to.
+	// The NetworkPolicy order will be determined based on the combination of the
+	// Tier's Priority and the NetworkPolicy's own Priority. If not specified,
+	// this policy will be created in the Application Tier right above the K8s
+	// NetworkPolicy which resides at the bottom.
+	Tier string `json:"tier,omitempty"`
 	// Priority specfies the order of the NetworkPolicy relative to other
 	// NetworkPolicies.
 	Priority float64 `json:"priority"`
@@ -159,6 +165,12 @@ type ClusterNetworkPolicy struct {
 
 // ClusterNetworkPolicySpec defines the desired state for ClusterNetworkPolicy.
 type ClusterNetworkPolicySpec struct {
+	// Tier specifies the tier to which this ClusterNetworkPolicy belongs to.
+	// The ClusterNetworkPolicy order will be determined based on the
+	// combination of the Tier's Priority and the ClusterNetworkPolicy's own
+	// Priority. If not specified, this policy will be created in the Application
+	// Tier right above the K8s NetworkPolicy which resides at the bottom.
+	Tier string `json:"tier,omitempty"`
 	// Priority specfies the order of the ClusterNetworkPolicy relative to
 	// other ClusterNetworkPolicies.
 	Priority float64 `json:"priority"`

@@ -232,6 +232,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 
 func TestProcessClusterNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
+	appTier := antreatypes.TierApplication
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := networking.ProtocolTCP
 	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
@@ -289,10 +290,11 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "cnpA",
-				Namespace: "",
-				Priority:  &p10,
+				UID:          "uidA",
+				Name:         "cnpA",
+				Namespace:    "",
+				Priority:     &p10,
+				TierPriority: &appTier,
 				Rules: []networking.NetworkPolicyRule{
 					{
 						Direction: networking.DirectionIn,
@@ -368,10 +370,11 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "cnpA",
-				Namespace: "",
-				Priority:  &p10,
+				UID:          "uidA",
+				Name:         "cnpA",
+				Namespace:    "",
+				Priority:     &p10,
+				TierPriority: &appTier,
 				Rules: []networking.NetworkPolicyRule{
 					{
 						Direction: networking.DirectionIn,
@@ -429,6 +432,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 
 func TestAddCNP(t *testing.T) {
 	p10 := float64(10)
+	appTier := antreatypes.TierApplication
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := networking.ProtocolTCP
 	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
@@ -490,10 +494,11 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidE",
-				Name:      "npE",
-				Namespace: "",
-				Priority:  &p10,
+				UID:          "uidE",
+				Name:         "npE",
+				Namespace:    "",
+				Priority:     &p10,
+				TierPriority: &appTier,
 				Rules: []networking.NetworkPolicyRule{
 					{
 						Direction: networking.DirectionIn,
@@ -569,10 +574,11 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidF",
-				Name:      "npF",
-				Namespace: "",
-				Priority:  &p10,
+				UID:          "uidF",
+				Name:         "npF",
+				Namespace:    "",
+				Priority:     &p10,
+				TierPriority: &appTier,
 				Rules: []networking.NetworkPolicyRule{
 					{
 						Direction: networking.DirectionIn,
