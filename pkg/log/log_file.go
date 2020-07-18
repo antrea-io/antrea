@@ -17,16 +17,19 @@
 package log
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
 
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog"
+	klogv1 "k8s.io/klog"
+	klogv2 "k8s.io/klog/v2"
 )
 
 const (
@@ -40,6 +43,11 @@ const (
 	logFileCheckInterval = time.Minute * 10
 	// Allowed maximum value for the maximum file size limit.
 	maxMaxSizeMB = 1024 * 100
+
+	// outputCallDepth is the stack depth where we can find the origin of this call
+	outputCallDepth = 6
+	// defaultPrefixLength log prefix that we have to strip out
+	defaultPrefixLength = 53
 )
 
 var (
@@ -50,25 +58,46 @@ var (
 	executableName = filepath.Base(os.Args[0])
 )
 
+// klogWriter is used in SetOutputBySeverity call below to redirect
+// any calls to klogv1 to end up in klogv2
+type klogWriter struct{}
+
+func (kw klogWriter) Write(p []byte) (n int, err error) {
+	if len(p) < defaultPrefixLength {
+		klogv2.InfoDepth(outputCallDepth, string(p))
+		return len(p), nil
+	}
+	if p[0] == 'I' {
+		klogv2.InfoDepth(outputCallDepth, string(p[defaultPrefixLength:]))
+	} else if p[0] == 'W' {
+		klogv2.WarningDepth(outputCallDepth, string(p[defaultPrefixLength:]))
+	} else if p[0] == 'E' {
+		klogv2.ErrorDepth(outputCallDepth, string(p[defaultPrefixLength:]))
+	} else if p[0] == 'F' {
+		klogv2.FatalDepth(outputCallDepth, string(p[defaultPrefixLength:]))
+	} else {
+		klogv2.InfoDepth(outputCallDepth, string(p[defaultPrefixLength:]))
+	}
+	return len(p), nil
+}
+
 func AddFlags(fs *pflag.FlagSet) {
 	fs.Uint16Var(&maxNumArg, maxNumFlag, maxNumArg, "Maximum number of log files per severity level to be kept. Value 0 means unlimited.")
 }
 
 // InitLogFileLimits initializes log file maximum size and maximum number limits based on the
 // command line flags.
+// Also sets up klogv2 flags
 func InitLogFileLimits(fs *pflag.FlagSet) {
 	var err error
 	var logToStdErr bool
 	var logFile string
 	var maxSize uint64
+	var klogFlags flag.FlagSet
 
 	logToStdErr, err = fs.GetBool(logToStdErrFlag)
 	if err != nil {
 		// Should not happen. Return for safety.
-		return
-	}
-	if logToStdErr {
-		// Logging to files is not enabled.
 		return
 	}
 
@@ -76,40 +105,58 @@ func InitLogFileLimits(fs *pflag.FlagSet) {
 	if err != nil {
 		return
 	}
-	if logFile != "" {
-		// Log to a single file. klog will take care of the max size limit.
-		return
-	}
 
-	// Max log file size in MB.
 	maxSize, err = fs.GetUint64(maxSizeFlag)
 	if err != nil {
 		return
 	}
+
+	logDir, err = fs.GetString(logDirFlag)
+	if err != nil {
+		return
+	}
+
+	// Set up flags for klog v2. This is needed as "k8s.io/component-base/logs"
+	// uses v1, so a version of the flags connected to klogv2 is needed.
+	klogv2.InitFlags(&klogFlags)
+	klogFlags.Set(logToStdErrFlag, strconv.FormatBool(logToStdErr))
+	klogFlags.Set(logFileFlag, logFile)
+	klogFlags.Set(maxSizeFlag, strconv.FormatUint(maxSize, 10))
+	klogFlags.Set(logDirFlag, logDir)
+	klogv1Redirect()
+
+	if logToStdErr {
+		// Logging to files is not enabled.
+		return
+	}
+
+	if logFile != "" {
+		klogFlags.Set(logFileFlag, logFile)
+		// Log to a single file. klog will take care of the max size limit.
+		return
+	}
+
 	if maxSize > maxMaxSizeMB {
-		klog.Errorf("The specified log file max size %d is too big (maximum: %d), ignored", maxSize, maxMaxSizeMB)
+		klogv2.Errorf("The specified log file max size %d is too big (maximum: %d), ignored", maxSize, maxMaxSizeMB)
 	} else {
 		maxSize = maxSize * 1024 * 1024
 
-		// klog does not respect the max file size specified by --log_file_max_size
+		// klogv2 does not respect the max file size specified by --log_file_max_size
 		// when --log_file is not used. Here as a workaround, we directly set the
-		// specified max size to klog.MaxSize.
-		if klog.MaxSize != maxSize {
-			klog.MaxSize = maxSize
-			klog.Infof("Set log file max size to %d", maxSize)
+		// specified max size to klogv2.MaxSize.
+		if klogv2.MaxSize != maxSize {
+			klogv2.MaxSize = maxSize
+			klogv2.Infof("Set log file max size to %d", maxSize)
 		}
 	}
 
 	if maxNumArg > 0 {
-		logDir, err = fs.GetString(logDirFlag)
-		if err != nil {
-			return
-		}
 
 		logFileMaxNum = maxNumArg
 		if logDir == "" {
 			// Log to the tmp dir.
 			logDir = os.TempDir()
+			klogFlags.Set(logDirFlag, logDir)
 		}
 	}
 }
@@ -124,21 +171,32 @@ func StartLogFileNumberMonitor(stopCh <-chan struct{}) {
 	}
 
 	go func() {
-		klog.Infof("Starting log file monitoring. Maximum log file number is %d", logFileMaxNum)
+		klogv2.Infof("Starting log file monitoring. Maximum log file number is %d", logFileMaxNum)
 		wait.Until(checkLogFiles, logFileCheckInterval, stopCh)
 	}()
+}
+
+// klogv1Redirect redirects klogv1 to klogv2.
+// Pulled from: https://github.com/kubernetes/klog/blob/master/examples/coexist_klog_v1_and_v2/coexist_klog_v1_and_v2.go
+// TODO: remove function once proxy is updated to use v2.
+func klogv1Redirect() {
+	var klogv1Flags flag.FlagSet
+	klogv1.InitFlags(&klogv1Flags)
+	klogv1Flags.Set("logtostderr", "false")
+	klogv1Flags.Set("stderrthreshold", "FATAL")
+	klogv1.SetOutputBySeverity("INFO", klogWriter{})
 }
 
 func checkLogFiles() {
 	f, err := os.Open(logDir)
 	if err != nil {
-		klog.Errorf("Failed to open log directory %s: %v", logDir, err)
+		klogv2.Errorf("Failed to open log directory %s: %v", logDir, err)
 		return
 	}
 	allFiles, err := f.Readdir(-1)
 	f.Close()
 	if err != nil {
-		klog.Errorf("Failed to read log directory %s: %v", logDir, err)
+		klogv2.Errorf("Failed to read log directory %s: %v", logDir, err)
 		return
 	}
 
@@ -179,9 +237,9 @@ func checkLogFiles() {
 		for _, file := range files[maxNum:] {
 			err := os.Remove(logDir + "/" + file.Name())
 			if err != nil {
-				klog.Errorf("Failed to delete log file %s: %v", file.Name(), err)
+				klogv2.Errorf("Failed to delete log file %s: %v", file.Name(), err)
 			} else {
-				klog.Infof("Deleted log file %s", file.Name())
+				klogv2.Infof("Deleted log file %s", file.Name())
 			}
 		}
 	}
