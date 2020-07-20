@@ -18,19 +18,26 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
 
-func skipIfProviderIs(t *testing.T, name string, reason string) {
-	if testOptions.providerName == name {
-		t.Skipf("Skipping test for the '%s' provider: %s", name, reason)
+func skipIfNotBenchmarkTest(tb testing.TB) {
+	if !testOptions.withBench {
+		tb.Skipf("Skipping benchmark test: %s", tb.Name())
 	}
 }
 
-func skipIfNumNodesLessThan(t *testing.T, required int) {
+func skipIfProviderIs(tb testing.TB, name string, reason string) {
+	if testOptions.providerName == name {
+		tb.Skipf("Skipping test for the '%s' provider: %s", name, reason)
+	}
+}
+
+func skipIfNumNodesLessThan(tb testing.TB, required int) {
 	if clusterInfo.numNodes < required {
-		t.Skipf("Skipping test as it requires %d different Nodes but cluster only has %d", required, clusterInfo.numNodes)
+		tb.Skipf("Skipping test as it requires %d different Nodes but cluster only has %d", required, clusterInfo.numNodes)
 	}
 }
 
@@ -217,9 +224,15 @@ func createTestBusyboxPods(tb testing.TB, data *TestData, num int, nodeName stri
 	podNames []string, podIPs []string, cleanupFn func(),
 ) {
 	cleanupFn = func() {
+		var wg sync.WaitGroup
 		for _, podName := range podNames {
-			deletePodWrapper(tb, data, podName)
+			wg.Add(1)
+			go func(name string) {
+				deletePodWrapper(tb, data, name)
+				wg.Done()
+			}(podName)
 		}
+		wg.Wait()
 	}
 
 	type podData struct {

@@ -12,18 +12,22 @@ in a high-performance and efficient manner. Thanks to the "programmable"
 characteristic of Open vSwitch, Antrea is able to implement an extensive set
 of networking and security features and services on top of Open vSwitch.
 
+Some information in this document and in particular when it comes to the Antrea
+Agent is specific to running Antrea on Linux Nodes. For information about how
+Antrea is run on Windows Nodes, please refer to [windows-design.md](windows-design.md).
+
 ## Components
 
 In a Kubernetes cluster, Antrea creates a Deployment that runs Antrea
 Controller, and a DaemonSet that includes two containers to run Antrea Agent
-and OVS daemons respectively, on every Node. The DaemonSet also includes an init
-container that installs the CNI plugin - `antrea-cni` - on the Node and ensures
-that the OVS kernel module is loaded. All Antrea Controller, Agent, OVS daemons,
-and `antrea-cni` bits are included in a single Docker image. Antrea also has a
-command-line tool called `antctl`, and an [Octant](https://github.com/vmware-tanzu/octant)
-UI plugin.
+and OVS daemons respectively, on every Node. The DaemonSet also includes an
+init container that installs the CNI plugin - `antrea-cni` - on the Node and
+ensures that the OVS kernel module is loaded and it is chained with the portmap
+CNI plugin. All Antrea Controller, Agent, OVS daemons, and `antrea-cni` bits
+are included in a single Docker image. Antrea also has a command-line tool
+called `antctl`, and an [Octant](https://github.com/vmware-tanzu/octant) UI plugin.
 
-<img src="/docs/assets/arch.svg.png" width="600" alt="Antrea Architecture Overview">
+![Antrea Architecture Overview](assets/arch.svg.png)
 
 ### Antrea Controller
 
@@ -89,11 +93,12 @@ Antrea Agent exposes a gRPC service (`Cni` service) which is invoked by the
 `antrea-cni` binary to perform CNI operations. For each new Pod to be created on
 the Node, after getting the CNI `ADD` call from `antrea-cni`, the Agent creates
 the Pod's network interface, allocates an IP address, connects the interface to
-the OVS bridge and installs the necessary flows in OVS.
+the OVS bridge and installs the necessary flows in OVS. To learn more about the
+OVS flows check out the [OVS pipeline doc](ovs-pipeline.md).
 
 Antrea Agent includes two Kubernetes controllers:
 - The Node controller watches the Kubernetes API server for new Nodes, and
-creates an OVS (VXLAN / Geneve / GRE / STT) tunnel to each remote Node.
+creates an OVS (Geneve / VXLAN / GRE / STT) tunnel to each remote Node.
 - The NetworkPolicy controller watches the computed NetworkPolicies from the
 Antrea Controller API, and installs OVS flows to implement the NetworkPolicies
 for the local Pods.
@@ -144,18 +149,18 @@ their health and runtime information.
 On every Node, Antrea Agent creates an OVS bridge (named `br-int` by default),
 and creates a veth pair for each Pod, with one end being in the Pod's network
 namespace and the other connected to the OVS bridge. On the OVS bridge, Antrea
-Agent also creates an internal port - `gw0` by default - to be the gateway of
-the Node's subnet, and a tunnel port `tun0` which is for creating overlay
+Agent also creates an internal port - `antrea-gw0` by default - to be the gateway of
+the Node's subnet, and a tunnel port `antrea-tun0` which is for creating overlay
 tunnels to other Nodes.
 
-<img src="/docs/assets/node.svg.png" width="300" alt="Antrea Node Network">
+![Antrea Node Network](assets/node.svg.png)
 
 Each Node is assigned a single subnet, and all Pods on the Node get an IP from
 the subnet. Antrea leverages Kubernetes' `NodeIPAMController` for the Node
 subnet allocation, which sets the `podCIDR` field of the Kubernetes Node spec
 to the allocated subnet. Antrea Agent retrieves the subnets of Nodes from the
 `podCIDR` field. It reserves the first IP of the local Node's subnet to be the
-gateway IP and assigns it to the `gw0` port, and invokes the
+gateway IP and assigns it to the `antrea-gw0` port, and invokes the
 [host-local IPAM plugin](https://github.com/containernetworking/plugins/tree/master/plugins/ipam/host-local)
 to allocate IPs from the subnet to all local Pods. A local Pod is assigned an IP
 when the CNI ADD command is received for that Pod.
@@ -166,18 +171,18 @@ IP against each Node's subnet.
 
 ### Traffic walk
 
-<img src="/docs/assets/traffic_walk.svg.png" width="600" alt="Antrea Traffic Walk">
+![Antrea Traffic Walk](assets/traffic_walk.svg.png)
 
 * ***Intra-node traffic*** Packets between two local Pods will be forwarded by
 the OVS bridge directly.
 
 * ***Inter-node traffic*** Packets to a Pod on another Node will be first
-forwarded to the `tun0` port, encapsulated, and sent to the destination Node
-through the tunnel; then they will be decapsulated, injected through the `tun0`
+forwarded to the `antrea-tun0` port, encapsulated, and sent to the destination Node
+through the tunnel; then they will be decapsulated, injected through the `antrea-tun0`
 port to the OVS bridge, and finally forwarded to the destination Pod.
 
 * ***Pod to external traffic*** Packets sent to an external IP or the Nodes'
-network will be forwarded to the `gw0` port (as it is the gateway of the local
+network will be forwarded to the `antrea-gw0` port (as it is the gateway of the local
 Pod subnet), and will be routed (based on routes configured on the Node) to the
 appropriate network interface of the Node (e.g. a physical network interface for
 a baremetal Node) and sent out to the Node network from there. Antrea Agent
@@ -186,11 +191,11 @@ so their source IP will be rewritten to the Node's IP before going out.
 
 ### ClusterIP Service
 
-<img src="/docs/assets/service_walk.svg.png" width="600" alt="Antrea Service Traffic Walk">
+![Antrea Service Traffic Walk](assets/service_walk.svg.png)
 
 At the moment, Antrea leverages `kube-proxy` to serve traffic for ClusterIP and
 NodePort type Services. The packets from a Pod to a Service's ClusterIP will be
-forwarded through the `gw0` port, then `kube-proxy` will select one Service
+forwarded through the `antrea-gw0` port, then `kube-proxy` will select one Service
 backend Pod to be the connection's destination and DNAT the packets to the Pod's
 IP and port. If the destination Pod is on the local Node the packets will be
 forwarded to the Pod directly; if it is on another Node the packets will be sent
@@ -239,3 +244,66 @@ NetworkPolicy implementation.
 
 As described earlier, Antrea Controller leverages the Kubernetes apiserver
 library to build the API and communication channel to Agents.
+
+### IPsec encryption
+
+Antrea supports encrypting GRE tunnel traffic with IPsec ESP. The IPsec
+implementation leverages [OVS IPsec](http://docs.openvswitch.org/en/latest/tutorials/ipsec)
+and leverages [strongSwan](https://www.strongswan.org) as the IKE daemon.
+
+To enable IPsec, an extra container -`antrea-ovs-ipsec` - must be added to the
+Antrea Agent DaemonSet, which runs the `ovs-monitor-ipsec` and strongSwan
+daemons. Antrea now supports only using pre-shared key (PSK) for IKE
+authentication, and the PSK string must be passed to Antrea Agent using an
+environment variable - `ANTREA_IPSEC_PSK`. The PSK string can be specified in
+the [Antrea IPsec deployment yaml](/build/yamls/antrea-ipsec.yml), which creates
+a Kubernetes Secret to save the PSK value and populates it to the
+`ANTREA_IPSEC_PSK` environment variable of the Antrea Agent container.
+
+When IPsec is enabled, Antrea Agent will create a separate GRE tunnel port on
+the OVS bridge for each remote Node, and write the PSK string and the remote Node
+IP address to two OVS interface options of the tunnel interface. Then
+`ovs-monitor-ipsec` can detect the tunnel and create IPsec Security Policies
+with PSK for the remote Node, and strongSwan can create the IPsec Security
+Associations based on the Security Policies. These additional tunnel ports are
+not used to send traffic to a remote Node - the tunnel traffic is still output
+to the default tunnel port (`antrea-tun0`) with OVS flow based tunneling. However, the
+traffic from a remote Node will be received from the Node's IPsec tunnel port.
+
+### Hybrid, NoEncap, NetworkPolicyOnly TrafficEncapMode
+Besides the default `Encap` mode, which always creates overlay tunnels among
+Nodes and encapsulates inter-Node Pod traffic, Antrea also supports other
+TrafficEncapModes including `Hybrid`, `NoEncap`, `NetworkPolicyOnly` modes. This
+section introduces these modes.
+
+* ***Hybrid*** When two Nodes are in two different subnets, Pod traffic between
+the two Nodes is encapsulated; when the two Nodes are in the same subnet, Pod
+traffic between them is not encapsulated, instead the traffic is routed from one
+Node to another. Antrea Agent adds routes on the Node to enable the routing
+within the same Node subnet. For every remote Node in the same subnet as the
+local Node, Agent adds a static route entry that uses the remote Node IP as the
+next hop of its Pod subnet.
+
+`Hybrid` mode requires the Node network to allow packets with Pod IPs to be sent
+out from the Nodes' NICs.
+
+* ***NoEncap*** Pod traffic is never encapsulated. Antrea just assumes the Node
+network can handle routing of Pod traffic across Nodes. Typically this is
+achieved by the Kubernetes Cloud Provider implementation which adds routes for
+Pod subnets to the Node network routers. Antrea Agent still creates static
+routes on each Node for remote Nodes in the same subnet, which is an optimization
+that routes Pod traffic directly to the destination Node without going through
+the extra hop of the Node network router. Antrea Agent also creates the iptables
+(MASQUERADE) rule for SNAT of Pod-to-external traffic.
+
+[Antrea supports GKE](gke-installation.md) with `NoEncap` mode.
+
+* ***NetworkPolicyOnly*** Inter-Node Pod traffic is neither tunneled nor routed
+by Antrea. Antrea just implements NetworkPolicies for Pod traffic, but relies on
+another cloud CNI and cloud network to implement Pod IPAM and cross-Node traffic
+forwarding. Refer to the [NetworkPolicyOnly mode design doc](policy-only.md)
+for more information.
+
+[Antrea for AKS
+Engine](https://github.com/Azure/aks-engine/blob/master/docs/topics/features.md#feat-antrea)
+and [Antrea EKS support](eks-installation.md) work in `NetworkPolicyOnly` mode.

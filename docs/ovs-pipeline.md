@@ -9,7 +9,7 @@
   the tunnel to the new Node). When a Node is deleted, it performs the necessary
   clean-ups.
 * *peer Node*: this is how we refer to other Nodes in the cluster, to which the
-  local Node is connected through a VXLAN or Geneve tunnel.
+  local Node is connected through a Geneve, VXLAN, GRE, or STT tunnel.
 * *Global Virtual MAC*: a virtual MAC address which is used as the destination
   MAC for all tunnelled traffic across all Nodes. This simplifies networking by
   enabling all Nodes to use this MAC address instead of the actual MAC address
@@ -123,6 +123,58 @@ are the target of the policy, we have scheduled 2 `nginx` Pods on the same
 Node. They received IP addresses 10.10.1.2 and 10.10.1.3 from the Antrea CNI, so
 you will see these addresses show up in the OVS flows.
 
+## Antrea Network Policy CRD Implementation
+
+In addition to the above tables created for K8s NetworkPolicy, Antrea creates
+additional dedicated tables to support the [ClusterNetworkPolicy](network-policy.md) CRD
+([CnpEgressRuleTable] and [CnpIngressRuleTable]]).
+
+Consider the following ClusterNetworkPolicy as an example for the remainder of
+this document.
+
+```yaml
+apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: cnp0
+spec:
+  priority: 10
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          app: server
+  ingress:
+    - action: Drop
+      from:
+        - podSelector:
+            matchLabels:
+              app: notClient
+      ports:
+        - protocol: TCP
+          port: 80
+  egress:
+    - action: Allow
+      to:
+        - podSelector:
+            matchLabels:
+              app: dns
+      ports:
+        - protocol: UDP
+          port: 53
+```
+
+This CNP is applied to all Pods with the `app: server` label in all
+Namespaces. For these Pods, it drops TCP traffic on port 80 from all
+Pods which have the `app: notClient` label. In addition to the ingress rules,
+this policy also allows egress UDP traffic on port 53 to all Pods with the
+label `app: dns`. Similar to K8s NetworkPolicy, Antrea will only install OVS
+flows for this CNP on Nodes for which some of the Pods are the target of the
+policy. Thus, we have scheduled three Pods (appServer, appDns, appNotClient)
+on the same Node and they have the following IP addresses:
+- appServer: 10.10.1.6
+- appNotClient: 10.10.1.7
+- appDns: 10.10.1.8
+
 ## Tables
 
 ![OVS pipeline](assets/ovs-pipeline.svg)
@@ -138,16 +190,16 @@ local Pod. This information is used by matches in subsequent tables.
 If you dump the flows for this table, you may see the following:
 
 ```
-1. table=0, priority=200,in_port=gw0 actions=load:0x1->NXM_NX_REG0[0..15],goto_table:10
-2. table=0, priority=200,in_port=tun0 actions=load:0->NXM_NX_REG0[0..15],goto_table:30
+1. table=0, priority=200,in_port=antrea-gw0 actions=load:0x1->NXM_NX_REG0[0..15],goto_table:10
+2. table=0, priority=200,in_port=antrea-tun0 actions=load:0->NXM_NX_REG0[0..15],goto_table:30
 3. table=0, priority=190,in_port="coredns5-8ec607" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
 4. table=0, priority=190,in_port="coredns5-9d9530" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
 5. table=0, priority=0 actions=drop
 ```
 
 Flow 1 is for traffic coming in on the local gateway. Flow 2 is for traffic
-coming in through a VXLAN or Geneve tunnel (i.e. from another Node). The next
-two flows (3 and 4) are for local Pods (in this case Pods from the coredns
+coming in through an overlay tunnel (i.e. from another Node). The next two
+flows (3 and 4) are for local Pods (in this case Pods from the coredns
 deployment).
 
 Local traffic then goes to [SpoofGuardTable], while tunnel traffic
@@ -175,13 +227,13 @@ traffic can be received on the gateway port with a source IP belonging to a
 local Pod. We may add some fine-grained rules in the future to accommodate for
 this, but for now we just allow all IP traffic received from the gateway. We do
 have an ARP spoofing check for the gateway however, since there is no reason for
-the host to advertise a different MAC address on gw0.
+the host to advertise a different MAC address on antrea-gw0.
 
 If you dump the flows for this table, you may see the following:
 
 ```
-1. table=10, priority=200,ip,in_port=gw0 actions=goto_table:30
-2. table=10, priority=200,arp,in_port=gw0,arp_spa=10.10.0.1,arp_sha=e2:e5:a4:9b:1c:b1 actions=goto_table:20
+1. table=10, priority=200,ip,in_port=antrea-gw0 actions=goto_table:30
+2. table=10, priority=200,arp,in_port=antrea-gw0,arp_spa=10.10.0.1,arp_sha=e2:e5:a4:9b:1c:b1 actions=goto_table:20
 3. table=10, priority=200,ip,in_port="coredns5-8ec607",dl_src=12:9e:a6:47:d0:70,nw_src=10.10.0.2 actions=goto_table:30
 4. table=10, priority=200,ip,in_port="coredns5-9d9530",dl_src=ba:a8:13:ca:ed:cf,nw_src=10.10.0.3 actions=goto_table:30
 5. table=10, priority=200,arp,in_port="coredns5-8ec607",arp_spa=10.10.0.2,arp_sha=12:9e:a6:47:d0:70 actions=goto_table:20
@@ -220,10 +272,9 @@ Flow 1 is the "ARP responder" for the peer Node whose local Pod subnet is
 would see the following "onlink" route:
 
 ```
-10.10.1.0/24 via 10.10.1.1 dev gw0 onlink
+10.10.1.0/24 via 10.10.1.1 dev antrea-gw0 onlink
 ```
-
-A similar route is installed on the gateway (gw0) interface every time the
+A similar route is installed on the gateway (antrea-gw0) interface every time the
 Antrea Node Route Controller is notified that a new Node has joined the
 cluster. The route must be marked as "onlink" since the kernel does not have a
 route to the peer gateway 10.10.1.1: we trick the kernel into believing that
@@ -333,6 +384,44 @@ traffic to the next table, [EgressRuleTable].
 In the future this table may support an additional mode of operations, in which
 it will implement kube-proxy functionality and take care of performing
 load-balancing / DNAT on traffic destined to services.
+
+### CnpEgressRuleTable (45)
+
+For this table, you will need to keep mind the CNP [specification](#antrea-network-policy-crd-implementation)
+that we are using.
+
+This table is used to implement the egress rules across all ClusterNetworkPolicies.
+If you dump the flows for this table, you should see something like this:
+```
+1. table=45, priority=64990,ct_state=-new+est,ip actions=resubmit(,70)
+2. table=45, priority=11800,conj_id=2,ip actions=load:0x2->NXM_NX_REG6[],resubmit(,70)
+3. table=45, priority=11800,ip,nw_src=10.10.1.6 actions=conjunction(2,1/3)
+4. table=45, priority=11800,ip,nw_dst=10.10.1.8 actions=conjunction(2,2/3)
+5. table=45, priority=11800,udp,tp_dst=53 actions=conjunction(2,3/3)
+6. table=45, priority=0 actions=resubmit(,50)
+```
+
+Similar to K8s NetworkPolicy implementation, CnpEgressRuleTable also relies on
+the OVS built-in `conjunction` action to implement policies efficiently.
+The above example flows read as follow: if the source IP address is in set
+{10.10.1.6}, and the destination IP address is in the set {10.10.1.8}, and the
+destination TCP port is in the set {53}, then use the `conjunction` action with
+id 2, which goes to [L3ForwardingTable]. Otherwise, go to [EgressRuleTable].
+
+If the `conjunction` action is matched, packets are "allowed" or "dropped"
+based on the `action` field of the CNP rule. If allowed, they are forwarded
+directly to [L3ForwardingTable]. Other packets go to [EgressRuleTable] to be
+evaluated for K8s NetworkPolicy egress rules. After a connection is
+established, its following packets go straight to [L3ForwardingTable], with no
+other match required (see flow 1 above, which has the highest priority),
+ensuring efficiency as packets from same connections are not matched twice. In
+particular, this ensures that reply traffic is never dropped because of a CNP
+rule. However, this also means that ongoing connections are not affected if the
+Cluster NetworkPolicies are updated.
+
+Unlike the default of K8s NetworkPolicies, ClusterNetworkPolicy has no such
+default rules. Hence, they are evaluated as-is, and there is no need for a
+CnpEgressDefaultTable.
 
 ### EgressRuleTable (50)
 
@@ -500,6 +589,42 @@ non-ARP and non-IP (assuming any can be received by the switch) is actually
 dropped much earlier in the pipeline ([SpoofGuardTable]). In the future, we may
 need to support more cases for L2 multicast / broadcast traffic.
 
+### CnpIngressRuleTable (85)
+
+This table is very similar to [CnpEgressRuleTable], but implements the ingress
+rules of the CNP. Again for this table, you will need to keep mind the CNP
+[specification](#antrea-network-policy-crd-implementation) that we are using.
+
+If you dump the flows for this table, you should see something like this:
+```
+1. table=85, priority=64990,ct_state=-new+est,ip actions=resubmit(,105)
+2. table=85, priority=11800,conj_id=1,ip actions=drop
+3. table=85, priority=11800,ip,nw_src=10.10.1.7 actions=conjunction(1,1/3)
+4. table=85, priority=11800,ip,reg1=0x19c actions=conjunction(1,2/3)
+5. table=85, priority=11800,tcp,tp_dst=80 actions=conjunction(1,3/3)
+6. table=85, priority=0 actions=resubmit(,90)
+```
+
+As for [CnpEgressRuleTable], flow 1 (highest priority) ensures that for
+established connections packets go straight to [L2ForwardingOutTable],
+with no other match required.
+
+The rest of the flows read as follows: if the source IP address is in set
+{10.10.1.7}, and the destination OF port is in the set {412} (which
+correspond to IP addresses {10.10.1.6}), and the destination TCP port
+is in the set {80}, then use `conjunction` action with id 1, which drops the
+packet. Otherwise, go to [IngressRuleTable]. One notable difference is how we
+use OF ports to identify the destination of the traffic, while we use IP
+addresses in [CnpEgressRuleTable] to identify the source of the traffic. We do
+this as an increased security measure in case a local Pod is misbehaving and
+trying to access another local Pod using the correct destination MAC address
+but a different destination IP address to bypass an egress CNP rule. This is
+also why the CNP ingress rules are enforced after the egress port has been
+determined.
+
+As seen in [CnpEgressRuleTable], the default action is to evaluate K8s Network
+Policy [IngressRuleTable] and a CnpIngressDefaultTable does not exist.
+
 ### IngressRuleTable (90)
 
 This table is very similar to [EgressRuleTable], but implements ingress rules
@@ -611,10 +736,12 @@ resolved by the "dmac" table, [L2ForwardingCalcTable]). IP packets for which
 [ConntrackTable]: #conntracktable-30
 [ConntrackStateTable]: #conntrackstatetable-31
 [DNATTable]: #dnattable-40
+[CnpEgressRuleTable]: #cnpegressruletable-45
 [EgressRuleTable]: #egressruletable-50
 [EgressDefaultTable]: #egressdefaulttable-60
 [L3ForwardingTable]: #l3forwardingtable-70
 [L2ForwardingCalcTable]: #l2forwardingcalctable-80
+[CnpIngressRuleTable]: #cnpingressruletable-85
 [IngressRuleTable]: #ingressruletable-90
 [IngressDefaultTable]: #ingressdefaulttable-100
 [ConntrackCommitTable]: #conntrackcommittable-105

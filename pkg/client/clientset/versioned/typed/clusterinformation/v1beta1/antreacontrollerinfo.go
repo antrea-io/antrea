@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package v1beta1
 
 import (
+	"context"
 	"time"
 
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
@@ -35,14 +36,14 @@ type AntreaControllerInfosGetter interface {
 
 // AntreaControllerInfoInterface has methods to work with AntreaControllerInfo resources.
 type AntreaControllerInfoInterface interface {
-	Create(*v1beta1.AntreaControllerInfo) (*v1beta1.AntreaControllerInfo, error)
-	Update(*v1beta1.AntreaControllerInfo) (*v1beta1.AntreaControllerInfo, error)
-	Delete(name string, options *v1.DeleteOptions) error
-	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
-	Get(name string, options v1.GetOptions) (*v1beta1.AntreaControllerInfo, error)
-	List(opts v1.ListOptions) (*v1beta1.AntreaControllerInfoList, error)
-	Watch(opts v1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1beta1.AntreaControllerInfo, err error)
+	Create(ctx context.Context, antreaControllerInfo *v1beta1.AntreaControllerInfo, opts v1.CreateOptions) (*v1beta1.AntreaControllerInfo, error)
+	Update(ctx context.Context, antreaControllerInfo *v1beta1.AntreaControllerInfo, opts v1.UpdateOptions) (*v1beta1.AntreaControllerInfo, error)
+	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.AntreaControllerInfo, error)
+	List(ctx context.Context, opts v1.ListOptions) (*v1beta1.AntreaControllerInfoList, error)
+	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.AntreaControllerInfo, err error)
 	AntreaControllerInfoExpansion
 }
 
@@ -59,19 +60,19 @@ func newAntreaControllerInfos(c *ClusterinformationV1beta1Client) *antreaControl
 }
 
 // Get takes name of the antreaControllerInfo, and returns the corresponding antreaControllerInfo object, and an error if there is any.
-func (c *antreaControllerInfos) Get(name string, options v1.GetOptions) (result *v1beta1.AntreaControllerInfo, err error) {
+func (c *antreaControllerInfos) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.AntreaControllerInfo, err error) {
 	result = &v1beta1.AntreaControllerInfo{}
 	err = c.client.Get().
 		Resource("antreacontrollerinfos").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // List takes label and field selectors, and returns the list of AntreaControllerInfos that match those selectors.
-func (c *antreaControllerInfos) List(opts v1.ListOptions) (result *v1beta1.AntreaControllerInfoList, err error) {
+func (c *antreaControllerInfos) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.AntreaControllerInfoList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -81,13 +82,13 @@ func (c *antreaControllerInfos) List(opts v1.ListOptions) (result *v1beta1.Antre
 		Resource("antreacontrollerinfos").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Watch returns a watch.Interface that watches the requested antreaControllerInfos.
-func (c *antreaControllerInfos) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *antreaControllerInfos) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -97,66 +98,69 @@ func (c *antreaControllerInfos) Watch(opts v1.ListOptions) (watch.Interface, err
 		Resource("antreacontrollerinfos").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(ctx)
 }
 
 // Create takes the representation of a antreaControllerInfo and creates it.  Returns the server's representation of the antreaControllerInfo, and an error, if there is any.
-func (c *antreaControllerInfos) Create(antreaControllerInfo *v1beta1.AntreaControllerInfo) (result *v1beta1.AntreaControllerInfo, err error) {
+func (c *antreaControllerInfos) Create(ctx context.Context, antreaControllerInfo *v1beta1.AntreaControllerInfo, opts v1.CreateOptions) (result *v1beta1.AntreaControllerInfo, err error) {
 	result = &v1beta1.AntreaControllerInfo{}
 	err = c.client.Post().
 		Resource("antreacontrollerinfos").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(antreaControllerInfo).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Update takes the representation of a antreaControllerInfo and updates it. Returns the server's representation of the antreaControllerInfo, and an error, if there is any.
-func (c *antreaControllerInfos) Update(antreaControllerInfo *v1beta1.AntreaControllerInfo) (result *v1beta1.AntreaControllerInfo, err error) {
+func (c *antreaControllerInfos) Update(ctx context.Context, antreaControllerInfo *v1beta1.AntreaControllerInfo, opts v1.UpdateOptions) (result *v1beta1.AntreaControllerInfo, err error) {
 	result = &v1beta1.AntreaControllerInfo{}
 	err = c.client.Put().
 		Resource("antreacontrollerinfos").
 		Name(antreaControllerInfo.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(antreaControllerInfo).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Delete takes name of the antreaControllerInfo and deletes it. Returns an error if one occurs.
-func (c *antreaControllerInfos) Delete(name string, options *v1.DeleteOptions) error {
+func (c *antreaControllerInfos) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Resource("antreacontrollerinfos").
 		Name(name).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *antreaControllerInfos) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+func (c *antreaControllerInfos) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	var timeout time.Duration
-	if listOptions.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	if listOpts.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
 		Resource("antreacontrollerinfos").
-		VersionedParams(&listOptions, scheme.ParameterCodec).
+		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // Patch applies the patch and returns the patched antreaControllerInfo.
-func (c *antreaControllerInfos) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1beta1.AntreaControllerInfo, err error) {
+func (c *antreaControllerInfos) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.AntreaControllerInfo, err error) {
 	result = &v1beta1.AntreaControllerInfo{}
 	err = c.client.Patch(pt).
 		Resource("antreacontrollerinfos").
-		SubResource(subresources...).
 		Name(name).
+		SubResource(subresources...).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(data).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }

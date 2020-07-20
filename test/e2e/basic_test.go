@@ -26,9 +26,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 )
 
 // TestDeploy is a "no-op" test that simply performs setup and teardown.
@@ -75,15 +75,25 @@ func TestPodAssignIP(t *testing.T) {
 }
 
 func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName string) {
-	ifName := util.GenerateContainerInterfaceName(podName, testNamespace)
-	t.Logf("Host interface name for Pod is '%s'", ifName)
-
 	var antreaPodName string
 	var err error
 	if antreaPodName, err = data.getAntreaPodOnNode(nodeName); err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
+
+	cmds := []string{"antctl", "get", "podinterface", podName, "-n", testNamespace, "-o", "json"}
+	stdout, _, err := runAntctl(antreaPodName, cmds, data)
+	var podInterfaces []podinterface.Response
+	if err := json.Unmarshal([]byte(stdout), &podInterfaces); err != nil {
+		t.Fatalf("Error when querying the pod interface: %v", err)
+	}
+	if len(podInterfaces) != 1 {
+		t.Fatalf("Expected 1 pod interface, got %d", len(podInterfaces))
+	}
+	ifName := podInterfaces[0].InterfaceName
+	podIP := podInterfaces[0].IP
+	t.Logf("Host interface name for Pod is '%s'", ifName)
 
 	doesInterfaceExist := func() bool {
 		cmd := fmt.Sprintf("ip link show %s", ifName)
@@ -103,12 +113,25 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		return exists
 	}
 
+	doesIPAllocationExist := func() bool {
+		cmd := fmt.Sprintf("test -f /var/run/antrea/cni/networks/antrea/%s", podIP)
+		if rc, _, _, err := RunCommandOnNode(nodeName, cmd); err != nil {
+			t.Fatalf("Error when running ip command on Node '%s': %v", nodeName, err)
+		} else {
+			return rc == 0
+		}
+		return false
+	}
+
 	t.Logf("Checking that the veth interface and the OVS port exist")
 	if !doesInterfaceExist() {
 		t.Errorf("Interface '%s' does not exist on Node '%s'", ifName, nodeName)
 	}
 	if !doesOVSPortExist() {
 		t.Errorf("OVS port '%s' does not exist on Node '%s'", ifName, nodeName)
+	}
+	if !doesIPAllocationExist() {
+		t.Errorf("IP allocation '%s' does not exist on Node '%s'", podIP, nodeName)
 	}
 
 	t.Logf("Deleting Pod '%s'", podName)
@@ -122,6 +145,9 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	}
 	if doesOVSPortExist() {
 		t.Errorf("OVS port '%s' still exists on Node '%s' after Pod deletion", ifName, nodeName)
+	}
+	if doesIPAllocationExist() {
+		t.Errorf("IP allocation '%s' still exists on Node '%s'", podIP, nodeName)
 	}
 }
 
@@ -262,6 +288,10 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		return antreaPodName
 	}
 
+	antreaGWName, err := data.GetGatewayInterfaceName(antreaNamespace)
+	if err != nil {
+		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
+	}
 	getGatewayRoutes := func() (routes []Route, err error) {
 		cmd := fmt.Sprintf("ip route list dev %s", antreaGWName)
 		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)
@@ -592,4 +622,55 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 	}); err != nil {
 		t.Errorf("Flow was still present after timeout")
 	}
+}
+
+// TestGratuitousARP verifies that we receive 3 GARP packets after a Pod is up.
+// There might be ARP packets other than GARP sent if there is any unintentional
+// traffic. So we just check the number of ARP packets is greater than 3.
+func TestGratuitousARP(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	podName := randName("test-pod-")
+	nodeName := workerNodeName(1)
+
+	t.Logf("Creating Pod '%s' on '%s'", podName, nodeName)
+	if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
+		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
+	}
+	defer deletePodWrapper(t, data, podName)
+
+	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	if err != nil {
+		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
+	}
+
+	podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace)
+	if err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
+	}
+
+	// Sending GARP is an asynchronous operation. The last GARP is supposed to
+	// be sent 100ms after processing CNI ADD request.
+	time.Sleep(100 * time.Millisecond)
+
+	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=10,arp,arp_spa=%s", podIP)}
+	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+	if err != nil {
+		t.Fatalf("Error when querying openflow: %v", err)
+	}
+
+	re := regexp.MustCompile(`n_packets=([0-9]+)`)
+	matches := re.FindStringSubmatch(stdout)
+	if len(matches) == 0 {
+		t.Fatalf("cannot retrieve n_packets, unexpected output: %s", stdout)
+	}
+	arpPackets, _ := strconv.ParseUint(matches[1], 10, 32)
+	if arpPackets < 3 {
+		t.Errorf("Expected at least 3 ARP packets, got %d", arpPackets)
+	}
+	t.Logf("Got %d ARP packets after Pod was up", arpPackets)
 }

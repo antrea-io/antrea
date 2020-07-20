@@ -1,7 +1,7 @@
 # IPsec Encryption of Tunnel Traffic with Antrea
 
 Antrea supports encrypting tunnel traffic across Nodes with IPsec ESP. At this
-moment, IPsec encyption works only for GRE tunnel (but not VXLAN, Geneve, and
+moment, IPsec encyption works only for GRE tunnel (but not Geneve, VXLAN, and
 STT tunnel types).
 
 ## Prerequisites
@@ -17,7 +17,7 @@ You can simply apply the [Antrea IPsec deployment yaml](/build/yamls/antrea-ipse
 to deploy Antrea with IPsec encyption enabled. To deploy a released version of
 Antrea, pick a version from the [list of releases](https://github.com/vmware-tanzu/antrea/releases).
 Note that IPsec support was added in release 0.3.0, which means you can not
-pick a release older than 0.3.0. For any given release `<TAG>` (e.g. `v0.7.0`),
+pick a release older than 0.3.0. For any given release `<TAG>` (e.g. `v0.8.2`),
 get the Antrea IPsec deployment yaml at:
 
 ```

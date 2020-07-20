@@ -1,6 +1,8 @@
 package support
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -10,7 +12,15 @@ import (
 
 	"github.com/spf13/afero"
 	"k8s.io/utils/exec"
+
+	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
+	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	controllerquerier "github.com/vmware-tanzu/antrea/pkg/controller/querier"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
+
+const antreaLinuxWellKnownLogDir = "/var/log/antrea"
 
 // AgentDumper is the interface for dumping runtime information of the agent. Its
 // functions should only work in an agent Pod or a Windows Node which has an agent
@@ -106,6 +116,7 @@ func fileCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string)
 type controllerDumper struct {
 	fs       afero.Fs
 	executor exec.Interface
+	cq       controllerquerier.ControllerQuerier
 }
 
 func (d *controllerDumper) DumpControllerInfo(basedir string) error {
@@ -117,12 +128,84 @@ func (d *controllerDumper) DumpNetworkPolicyResources(basedir string) error {
 }
 
 func (d *controllerDumper) DumpLog(basedir string) error {
-	return fileCopy(d.fs, path.Join(basedir, "logs", "controller"), "/var/log/antrea", "antrea-controller")
+	logDirFlag := flag.CommandLine.Lookup("log_dir")
+	var logDir string
+	if logDirFlag == nil {
+		logDir = antreaLinuxWellKnownLogDir
+	} else if len(logDirFlag.Value.String()) == 0 {
+		logDir = logDirFlag.DefValue
+	} else {
+		logDir = logDirFlag.Value.String()
+	}
+	return fileCopy(d.fs, path.Join(basedir, "logs", "controller"), logDir, "antrea-controller")
 }
 
 func NewControllerDumper(fs afero.Fs, executor exec.Interface) ControllerDumper {
 	return &controllerDumper{
 		fs:       fs,
 		executor: executor,
+	}
+}
+
+type agentDumper struct {
+	fs           afero.Fs
+	executor     exec.Interface
+	ovsCtlClient ovsctl.OVSCtlClient
+	aq           agentquerier.AgentQuerier
+	npq          querier.AgentNetworkPolicyInfoQuerier
+}
+
+func (d *agentDumper) DumpAgentInfo(basedir string) error {
+	ci := new(clusterinformationv1beta1.AntreaAgentInfo)
+	d.aq.GetAgentInfo(ci, false)
+	f, err := d.fs.Create(filepath.Join(basedir, "agentinfo"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	encoder := json.NewEncoder(f)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(ci)
+}
+
+func (d *agentDumper) DumpNetworkPolicyResources(basedir string) error {
+	dump := func(o interface{}, name string) error {
+		f, err := d.fs.Create(filepath.Join(basedir, "agentinfo"))
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		encoder := json.NewEncoder(f)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(o)
+	}
+	if err := dump(d.npq.GetAddressGroups(), "addressgroups"); err != nil {
+		return err
+	}
+	if err := dump(d.npq.GetNetworkPolicies(""), "networkpolicies"); err != nil {
+		return err
+	}
+	return dump(d.npq.GetAppliedToGroups(), "appliedtogroups")
+}
+
+func (d *agentDumper) DumpFlows(basedir string) error {
+	flows, err := d.ovsCtlClient.DumpFlows()
+	if err != nil {
+		return fmt.Errorf("error when dumping flows: %w", err)
+	}
+	err = afero.WriteFile(d.fs, filepath.Join(basedir, "flows"), []byte(strings.Join(flows, "\n")), 0644)
+	if err != nil {
+		return fmt.Errorf("error when creating flows output file: %w", err)
+	}
+	return nil
+}
+
+func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier) AgentDumper {
+	return &agentDumper{
+		fs:           fs,
+		executor:     executor,
+		ovsCtlClient: ovsCtlClient,
+		aq:           aq,
+		npq:          npq,
 	}
 }

@@ -86,12 +86,12 @@ func getTableFlows(aq querier.AgentQuerier, table string) ([]Response, error) {
 }
 
 func getPodFlows(aq querier.AgentQuerier, podName, namespace string) ([]Response, error) {
-	intf, ok := aq.GetInterfaceStore().GetContainerInterface(podName, namespace)
-	if !ok {
+	interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(podName, namespace)
+	if len(interfaces) == 0 {
 		return nil, nil
 	}
 
-	flowKeys := aq.GetOpenflowClient().GetPodFlowKeys(intf.InterfaceName)
+	flowKeys := aq.GetOpenflowClient().GetPodFlowKeys(interfaces[0].InterfaceName)
 	return dumpMatchedFlows(aq, flowKeys)
 
 }

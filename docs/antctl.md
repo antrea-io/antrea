@@ -10,6 +10,19 @@ running in two different modes:
  computed NetworkPolicies received by that Agent from the Antrea Controller, as
  opposed to the entire set of computed policies).
 
+## Table of Contents
+
+- [Antctl](#antctl)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Usage](#usage)
+    - [Collecting support information](#collecting-support-information)
+    - [`controllerinfo` and `agentinfo` commands](#controllerinfo-and-agentinfo-commands)
+    - [NetworkPolicy commands](#networkpolicy-commands)
+    - [Dumping Pod network interface information](#dumping-pod-network-interface-information)
+    - [Dumping OVS flows](#dumping-ovs-flows)
+    - [OVS packet tracing](#ovs-packet-tracing)
+
 ## Installation
 
 The antctl binary is included in the Antrea Docker image
@@ -30,7 +43,7 @@ appropriate one for your machine. For example:
 On Mac & Linux:
 
 ```bash
-curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/v0.7.0/antctl-$(uname)-x86_64"
+curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/v0.8.2/antctl-$(uname)-x86_64"
 chmod +x ./antctl
 mv ./antctl /some-dir-in-your-PATH/antctl
 antctl version
@@ -41,7 +54,7 @@ For Linux, we also publish binaries for Arm-based systems.
 On Windows, using PowerShell:
 
 ```powershell
-Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/v0.7.0/antctl-windows-x86_64.exe -Outfile antctl.exe
+Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/v0.8.2/antctl-windows-x86_64.exe -Outfile antctl.exe
 Move-Item .\antctl.exe c:\some-dir-in-your-PATH\antctl.exe
 antctl version
 ```
@@ -59,6 +72,44 @@ one by setting the `KUBECONFIG` environment variable or with `--kubeconfig`
 
 The following sub-sections introduce a few commands which are useful for
 troubleshooting the Antrea system.
+
+### Collecting support information
+
+Starting with version 0.7.0, Antrea supports the `antctl supportbundle` command,
+which can collect information from the cluster, the Antrea Controller and all
+Antrea agents. This information is useful when trying to troubleshoot issues in
+Kubernetes clusters using Antrea. In particular, when running the command
+out-of-cluster, all the information can be collected under one single directory,
+which you can upload and share when reporting issues on Github. Simply run the
+command as follows:
+
+```bash
+antctl supportbundle [-d <TARGET_DIR>]
+```
+
+If you omit to provide a directory, antctl will create one in the current
+working directory, using the current timestamp as a suffix. The command also
+provides additional flags to filter the results: run `antctl supportbundle
+--help` for the full list.
+
+The collected support bundle will include the following (more information may be
+included over time):
+ * cluster information: description of the different K8s resources in the
+   cluster (Nodes, Deployments, etc.).
+ * Antrea Controller information: all the available logs (contents will vary
+   based on the verbosity selected when running the controller) and state stored
+   at the controller (e.g. computed NetworkPolicy objects).
+ * Antrea Agent information: all the available logs from the agent and the OVS
+   daemons, network configuration of the Node (e.g. routes, iptables rules, OVS
+   flows) and state stored at the agent (e.g. computed NetworkPolicy objects
+   received from the controller).
+
+**Be aware that the generated support bundle includes a lot of information,
+  including logs, so please review the contents of the directory before sharing
+  it on Github and ensure that you do not share anything sensitive.**
+
+The `antctl supportbundle` command can also be run inside a Controller or Agent
+Pod, in which case only local information will be collected.
 
 ### `controllerinfo` and `agentinfo` commands
 
@@ -102,6 +153,7 @@ antctl get networkpolicy -p pod -n namespace
 ```
 
 ### Dumping Pod network interface information
+
 `antctl` agent command `get podinterface` (or `get pi`) can dump network
 interface information of all local Pods, or a specified local Pod, or local Pods
 in the specified Namespace, or local Pods matching the specified Pod name.
@@ -174,7 +226,7 @@ antctl trace-packet -S ns1/pod1 -D ns2/srv2 -f "tcp,tcp_dst=80"
 # Trace the Service reply packet (assuming "ns2/pod2" is the Service backend Pod)
 antctl trace-packet -D ns1/pod1 -S ns2/pod2 -f "tcp,tcp_src=80"
 # Trace an IP packet from a Pod to gateway port
-antctl trace-packet -S ns1/pod1 -D gw0
+antctl trace-packet -S ns1/pod1 -D antrea-gw0
 # Trace a UDP packet from a Pod to an IP address
 antctl trace-packet -S ns1/pod1 -D 10.1.2.3 -f udp,udp_dst=1234
 # Trace a UDP packet from an IP address to a Pod

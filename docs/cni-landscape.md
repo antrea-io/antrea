@@ -1,6 +1,6 @@
 # CNI Landscape
 
-✓ yes     ✗ no     ◇ planned       --- group heading
+✓ yes     ✗ no     ◇ planned       --- group heading
 
 |                                              | Antrea                       | NSX-T/NCP                  | Calico                      | Flannel    | Canal      | Cilium        | OVN                     | Weave Net  | Kube-Router | Romana | Contiv | Docker Swarm | Midokura | Nuage | OpenContrail |
 | -------------------------------------------- | ---------------------------- | -------------------------- | --------------------------- | ---------- | ---------- | ------------- | ----------------------- | ---------- | ----------- | ------ | ------ | ------------ | -------- | ----- | ------------ |

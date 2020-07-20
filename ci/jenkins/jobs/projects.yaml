@@ -7,6 +7,7 @@
     jobs:
       - '{name}-{test_name}-for-period':
           test_name: job-updater
+          node: 'antrea-test-node'
           description: 'This is for updating all antrea jobs.'
           builders:
             - builder-job-updater
@@ -16,24 +17,34 @@
           - ci/jenkins/jobs/.*
           cron: 'H/15 * * * *'
           ignore_post_commit_hooks: false
+          publishers: []
+      - '{name}-{test_name}-for-period':
+          test_name: daily-whole-conformance
+          node: 'antrea-test-node'
+          description: 'This is for testing all conformance daily.'
+          builders:
+            - builder-workload-cluster-setup
+            - builder-prepare-antrea
+            - builder-conformance:
+                mode_regex: 'certified-conformance'
+                focus_regex: ''
+                skip_regex: ''
+            - builder-workload-cluster-cleanup
+          branches:
+          - '*/master'
+          included_regions: []
+          cron: 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers:
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
       - '{name}-{test_name}-for-gc':
           test_name: workload-cluster
+          node: 'antrea-test-node'
           description: 'This is for deleting useless workload clusters.'
           builders:
             - builder-workload-cluster-gc
           timed: 'H * * * *'
-      - '{name}-{test_name}-for-testbed':
-          test_name: cleanup
-          node: null
-          description: 'This is for deleting workload clusters.'
-          builders:
-            - builder-workload-cluster-cleanup
-          parameters:
-            - string:
-                default: ''
-                description: 'The cluster name of the last finished build.'
-                name: CLUSTERNAME
-                trim: 'true'
       - '{name}-{test_name}-for-pull-request':
           test_name: list-tests
           node: null
@@ -64,7 +75,7 @@
           publishers: []
       - '{name}-{test_name}-job-validator':
           test_name: jenkins-job-validator
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is for validating jenkins jobs code.'
           builders:
             - builder-job-validator
@@ -111,12 +122,13 @@
           publishers: []
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
           builders:
             - builder-workload-cluster-setup
             - builder-prepare-antrea
             - builder-e2e
+            - builder-workload-cluster-cleanup
           trigger_phrase: .*/test-(e2e|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -131,7 +143,11 @@
           error_status: Failed. Add comment /test-e2e to re-trigger.
           triggered_status: null
           started_status: null
-          wrappers: []
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 80
+              type: absolute
           publishers:
           - archive:
               allow-empty: true
@@ -140,10 +156,6 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-          - trigger-parameterized-builds:
-            - project:
-              - antrea-cleanup-for-testbed
-              property-file: 'ci_properties.txt'
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e-skip
           node: null
@@ -189,14 +201,16 @@
           publishers: []
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
           builders:
             - builder-workload-cluster-setup
             - builder-prepare-antrea
             - builder-conformance:
+                mode_regex: ''
                 focus_regex: '\[Conformance\]'
                 skip_regex: '\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]'
+            - builder-workload-cluster-cleanup
           trigger_phrase: .*/test-(conformance|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -211,7 +225,11 @@
           error_status: Failed. Add comment /test-conformance to re-trigger.
           triggered_status: null
           started_status: null
-          wrappers: []
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 80
+              type: absolute
           publishers:
           - archive:
               allow-empty: true
@@ -220,10 +238,6 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-          - trigger-parameterized-builds:
-            - project:
-              - antrea-cleanup-for-testbed
-              property-file: 'ci_properties.txt'
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance-skip
           node: null
@@ -237,6 +251,66 @@
           trigger_permit_all: false
           trigger_phrase: .*/skip-(conformance|all).*
           status_context: jenkins-conformance
+          status_url: --none--
+          success_status: Skipped test. Mark as succeeded.
+          failure_status: Skipped test. Mark as succeeded.
+          error_status: Skipped test. Mark as succeeded.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: whole-conformance
+          node: 'antrea-test-node'
+          description: 'This is the {test_name} test for {name}.'
+          builders:
+            - builder-workload-cluster-setup
+            - builder-prepare-antrea
+            - builder-conformance:
+                mode_regex: 'certified-conformance'
+                focus_regex: ''
+                skip_regex: ''
+            - builder-workload-cluster-cleanup
+          trigger_phrase: .*/test-(whole-conformance).*
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          status_context: jenkins-whole-conformance
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-whole-conformance to re-trigger.
+          error_status: Failed. Add comment /test-whole-conformance to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 150
+              type: absolute
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+          test_name: whole-conformance-skip
+          node: null
+          description: 'This is for marking PR as passed.'
+          builders: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: .*/skip-(whole-conformance).*
+          status_context: jenkins-whole-conformance
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
           failure_status: Skipped test. Mark as succeeded.
@@ -269,14 +343,16 @@
           publishers: []
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
           builders:
             - builder-workload-cluster-setup
             - builder-prepare-antrea
             - builder-conformance:
+                mode_regex: ''
                 focus_regex: '\[Feature:NetworkPolicy\]'
                 skip_regex: 'SKIP_NO_TESTCASE'
+            - builder-workload-cluster-cleanup
           trigger_phrase: .*/test-(networkpolicy|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -291,7 +367,11 @@
           error_status: Failed. Add comment /test-networkpolicy to re-trigger.
           triggered_status: null
           started_status: null
-          wrappers: []
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 80
+              type: absolute
           publishers:
           - archive:
               allow-empty: true
@@ -300,10 +380,6 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-          - trigger-parameterized-builds:
-            - project:
-              - antrea-cleanup-for-testbed
-              property-file: 'ci_properties.txt'
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy-skip
           node: null
@@ -334,7 +410,8 @@
           - shell: |-
               #!/bin/bash
               source /home/ubuntu/.bashrc
-              sudo ./ci/test-conformance-eks.sh --setup-only
+              sudo ./ci/test-conformance-eks.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
+                --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} --setup-only
           triggers:
           - timed: H H */2 * *
           publishers:
@@ -388,8 +465,10 @@
               #!/bin/bash
               source /home/ubuntu/.bashrc
               # gcloud auth login requires verification code from url
-              gcloud auth activate-service-account --key-file=/home/ubuntu/gke/Antrea-c2ba1dfc7b0d.json
-              sudo ./ci/test-conformance-gke.sh --svc-account antrea-gcp@antrea.iam.gserviceaccount.com --setup-only
+              ${{GCLOUD_PATH}} auth activate-service-account --key-file=${{GCLOUD_KEY_PATH}}
+              sudo ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
+                --k8s-version 1.15.12-gke.3 --svc-account antrea-gcp@antrea.iam.gserviceaccount.com
+                --gcloud-path ${{GCLOUD_PATH}} --setup-only
           triggers:
           - timed: H H */2 * *
           publishers:

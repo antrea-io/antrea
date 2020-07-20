@@ -57,6 +57,10 @@ curl https://github.com/openvswitch/ovs/commit/79eadafeb1b47a3871cb792aa972f6e4d
 curl https://github.com/openvswitch/ovs/commit/7cc77b301f80a63cd4893198d82be0eef303f731.patch | \
     git apply
 
+# This patch (post 2.13.0) ensures that ct_nw_src/ct_nw_dst supports IP Mask.
+curl https://github.com/openvswitch/ovs/commit/1740aaf49dad6f533705dc3dce8d955a1840052a.patch | \
+    git apply
+
 if version_get "$OVS_VERSION" "2.13.0"; then
     # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
     # does not seem to be in the Python path in Ubuntu 18.04. There may be a better way to do this,

@@ -61,7 +61,7 @@ environment. It may be due to the network policies or other security rules
 configured on your hosts.
 3. To deploy a released version of the plugin, you can download
 `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-octant.yml`,
-where `<TAG>` (e.g. `v0.7.0`) is the desired version (should match the version
+where `<TAG>` (e.g. `v0.8.2`) is the desired version (should match the version
 of Antrea you are using). After making the necessary edits, you can apply the
 yaml with `kubectl`.
 
@@ -72,21 +72,18 @@ detailed installation instructions.
 
 You can follow the steps listed below to install octant and antrea-octant-plugin on linux.
 
-1. Get and install Octant v0.10.2.
+1. Get and install Octant v0.13.1.
 
-    Depending on your linux operating system, to install Octant v0.10.2, you can
-    use either
-    
+    Depending on your linux operating system, to install Octant v0.13.1, you can use either
     ```bash
-    wget https://github.com/vmware-tanzu/octant/releases/download/v0.10.2/octant_0.10.2_Linux-64bit.deb
-    dpkg -i octant_0.10.2_Linux-64bit.deb
+    wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.deb
+    dpkg -i octant_0.13.1_Linux-64bit.deb
     ```
 
     or
-
     ```bash
-    wget https://github.com/vmware-tanzu/octant/releases/download/v0.10.2/octant_0.10.2_Linux-64bit.rpm
-    rpm -i octant_0.10.2_Linux-64bit.rpm
+    wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.rpm
+    rpm -i octant_0.13.1_Linux-64bit.rpm
     ```
 
 2. Export your kubeconfig path (file location depends on your setup) to environment variable $KUBECONFIG.
@@ -95,24 +92,38 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
     export KUBECONFIG=/etc/kubernetes/admin.conf
     ```
 
-3. Build antrea-octant-plugin.
+3. Get corresponding antrea-octant-plugin binary from [Release Assets](https://github.com/vmware-tanzu/antrea/releases)
+based on your environment and move the binary to OCTANT_PLUGIN_PATH.
+
+    For example, you can get antrea-octant-plugin-linux-x86_64 if it matches your operating system and architecture.
 
     ```bash
-    make antrea-octant-plugin
-    ```
-
-4. Move antrea-octant-plugin to OCTANT_PLUGIN_PATH.
-
-    ```bash
+    wget -O antrea-octant-plugin https://github.com/vmware-tanzu/antrea/releases/download/v0.8.1/antrea-octant-plugin-linux-x86_64
+    # Make sure antrea-octant-plugin is executable, otherwise Octant cannot find it.
+    chmod a+x antrea-octant-plugin
     # If you did not change OCTANT_PLUGIN_PATH, the default folder should be $HOME/.config/octant/plugins.
-    mv antrea/bin/antrea-octant-plugin $HOME/.config/octant/plugins/
+    mv antrea-octant-plugin $HOME/.config/octant/plugins/
     ```
 
-5. Start Octant as a background process with UI related environment variables.
+4. Start Octant as a background process with UI related environment variables.
 
     ```bash
     # Change port 80 according to your environment and set OCTANT_ACCEPTED_HOSTS based on your requirements
     OCTANT_LISTENER_ADDR=0.0.0.0:80 OCTANT_ACCEPTED_HOSTS=0.0.0.0 OCTANT_DISABLE_OPEN_BROWSER=true nohup octant &
     ```
 
-Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL `http://(IP or $HOSTNAME):80`.
+Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):80.
+
+Note:
+1. In Antrea v0.8.1, the Traceflow UI is a separate Octant plugin called antrea-traceflow-plugin.
+Starting with v0.9.0, the Traceflow UI will be merged into antrea-octant-plugin. When deploying Octant as a Pod using
+image antrea/octant-antrea-ubuntu:v0.8.1, you already have access to the alpha version of the Traceflow UI.
+2. If you deploy Octant and the Antrea UI as a process, you cannot access the Traceflow UI for now when following the
+steps listed above (at least until the v0.9.0 release). However, you can still build the binary yourself with
+the command below, with the remaining steps being almost the same as the ones above.
+
+    ```bash
+    # You will find the compliled binary under folder antrea/plugins/octant/bin.
+    cd plugins/octant
+    make antrea-traceflow-plugin
+    ```

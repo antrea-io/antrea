@@ -32,7 +32,7 @@ TEST_FAILURE=false
 
 _usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>] [--k8s-version <ClusterVersion>] [--svc-account <Name>] [--user <Name>]
                   [--gke-project <Project>] [--gke-zone <Zone>] [--svc-cidr <ServiceCIDR>] [--host-type <HostType]
-                  [--setup-only] [--cleanup-only]
+                  [--gloud-path] [--setup-only] [--cleanup-only]
 
 Setup a GKE cluster to run K8s e2e community tests (Conformance & Network Policy).
 Before running the script, login to gcloud with \`gcloud auth login\` or \`gcloud auth activate-service-account\`
@@ -46,6 +46,7 @@ and create the project to be used for cluster with \`gcloud projects create\`.
         --gke-zone            The GKE zone where the cluster will be initiated. Defaults to us-west1.
         --svc-cidr            The service CIDR to be used for cluster. Defaults to 10.94.0.0/16.
         --host-type           The host type of worker node. Defaults to UBUNTU.
+        --gcloud-path         The path of gcloud installation. Only need to be explicitly set for Jenkins environments.
         --setup-only          Only perform setting up the cluster and run test.
         --cleanup-only        Only perform cleaning up the cluster."
 
@@ -95,6 +96,10 @@ case $key in
     K8S_VERSION="$2"
     shift 2
     ;;
+    --gcloud-path)
+    GCLOUD_PATH="$2"
+    shift 2
+    ;;
     --setup-only)
     RUN_SETUP_ONLY=true
     RUN_ALL=false
@@ -116,25 +121,26 @@ case $key in
 esac
 done
 
+if [[ -z ${GCLOUD_PATH+x} ]]; then
+    GCLOUD_PATH=$(which gcloud)
+fi
+
 function setup_gke() {
 
-    if [[ -z ${CLUSTER+x} ]]; then
-        CLUSTER="${JOB_NAME}-${BUILD_NUMBER}"
-    fi
     if [[ -z ${K8S_VERSION+x} ]]; then
-        K8S_VERSION="1.15.11-gke.11"
+        K8S_VERSION="1.15.12-gke.3"
     fi
 
     echo "=== This cluster to be created is named: ${CLUSTER} ==="
-    echo "CLUSTERNAME=${CLUSTER}" > ci_properties.txt
+    echo "CLUSTERNAME=${CLUSTER}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
 
     echo "=== Using the following gcloud version ==="
-    gcloud --version
+    ${GCLOUD_PATH} --version
     echo "=== Using the following kubectl ==="
     which kubectl
 
     echo '=== Creating a cluster in GKE ==='
-    gcloud container --project ${GKE_PROJECT} clusters create ${CLUSTER} --image-type ${GKE_HOST} \
+    ${GCLOUD_PATH} container --project ${GKE_PROJECT} clusters create ${CLUSTER} --image-type ${GKE_HOST} \
                      --cluster-version ${K8S_VERSION} --zone ${GKE_ZONE} \
                      --enable-ip-alias --services-ipv4-cidr ${GKE_SERVICE_CIDR}
     if [[ $? -ne 0 ]]; then
@@ -155,11 +161,11 @@ function deliver_antrea_to_gke() {
 
     echo "=== Configuring Antrea for cluster ==="
 
-    if [[ -z ${SVC_ACCOUNT_NAME+x} ]]; then
-        gcloud projects add-iam-policy-binding $GKE_PROJECT --member serviceAccount:${SVC_ACCOUNT_NAME} --role roles/container.admin
+    if [[ -n ${SVC_ACCOUNT_NAME+x} ]]; then
+        ${GCLOUD_PATH} projects add-iam-policy-binding $GKE_PROJECT --member serviceAccount:${SVC_ACCOUNT_NAME} --role roles/container.admin
         kubectl create clusterrolebinding cluster-admin-binding --clusterrole cluster-admin --user ${SVC_ACCOUNT_NAME}
-    elif [[ -z ${USER_EMAIL+x} ]]; then
-        gcloud projects add-iam-policy-binding $GKE_PROJECT --member user:${USER_EMAIL} --role roles/container.admin
+    elif [[ -n ${USER_EMAIL+x} ]]; then
+        ${GCLOUD_PATH} projects add-iam-policy-binding $GKE_PROJECT --member user:${USER_EMAIL} --role roles/container.admin
         kubectl create clusterrolebinding cluster-admin-binding --clusterrole cluster-admin --user ${USER_EMAIL}
     else
         echo "Neither service account or user email info is set, cannot create cluster-admin-binding!"
@@ -194,12 +200,15 @@ function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
 
     # Allow nodeport traffic by external IP
-    gcloud compute firewall-rules create allow-nodeport --allow tcp:30000-32767
+    ${GCLOUD_PATH} compute firewall-rules create allow-nodeport --allow tcp:30000-32767
 
-    ./run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy > gke-test.log
+#    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
+#        GIT_CHECKOUT_DIR=..
+#    fi
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy > ${GIT_CHECKOUT_DIR}/gke-test.log
 
-    gcloud compute firewall-rules delete allow-nodeport
-    if grep -Fxq "Failed tests:" gke-test.log
+    ${GCLOUD_PATH} compute firewall-rules delete allow-nodeport
+    if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/gke-test.log
     then
         echo "Failed cases exist."
         TEST_FAILURE=true
@@ -226,7 +235,7 @@ function cleanup_cluster() {
     echo '=== Cleaning up GKE cluster ${cluster} ==='
     retry=5
     while [[ "${retry}" -gt 0 ]]; do
-       yes | gcloud container clusters delete ${CLUSTER} --zone ${GKE_ZONE}
+       yes | ${GCLOUD_PATH} container clusters delete ${CLUSTER} --zone ${GKE_ZONE}
        if [[ $? -eq 0 ]]; then
          break
        fi
@@ -240,6 +249,11 @@ function cleanup_cluster() {
     rm -f $HOME/.kube/kubeconfig
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 }
+
+# ensures that the script can be run from anywhere
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+GIT_CHECKOUT_DIR=${THIS_DIR}/..
+pushd "$THIS_DIR" > /dev/null
 
 if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then
     setup_gke

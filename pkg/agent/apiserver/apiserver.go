@@ -77,10 +77,10 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/ovstracing", ovstracing.HandleFunc(aq))
 }
 
-func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier) error {
+func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier) error {
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(systemv1beta1.GroupName, scheme, metav1.ParameterCodec, codecs)
 	systemStorage := map[string]rest.Storage{}
-	supportBundleStorage := supportbundle.NewStorage("agent", ovsctl.NewClient(aq.GetNodeConfig().OVSBridge))
+	supportBundleStorage := supportbundle.NewAgentStorage(ovsctl.NewClient(aq.GetNodeConfig().OVSBridge), aq, npq)
 	systemStorage["supportbundles"] = supportBundleStorage.SupportBundle
 	systemStorage["supportbundles/download"] = supportBundleStorage.Download
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
@@ -98,7 +98,7 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	if err != nil {
 		return nil, err
 	}
-	if err := installAPIGroup(s, aq); err != nil {
+	if err := installAPIGroup(s, aq, npq); err != nil {
 		return nil, err
 	}
 	installHandlers(aq, npq, s)
@@ -108,7 +108,7 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 func newConfig(bindPort int, enableMetrics bool) (*genericapiserver.CompletedConfig, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
-	authorization := genericoptions.NewDelegatingAuthorizationOptions()
+	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz")
 
 	// Set the PairName but leave certificate directory blank to generate in-memory by default.
 	secureServing.ServerCert.CertDirectory = ""

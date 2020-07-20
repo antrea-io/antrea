@@ -25,6 +25,10 @@ with the following flags:
 * To enable `CNI` network plugins, `kubelet` should be started with the
 `--network-plugin=cni` flag.
 
+* To enable masquerading of traffic for Service cluster IP via iptables,
+`kube-proxy` should be started with the `--cluster-cidr=<CIDR Range for Pods>`
+flag.
+
 As for OVS, when using the built-in kernel module, kernel version >= 4.4 is
 required. On the other hand, when building it from OVS sources, OVS
 version >= 2.6.0 is required.
@@ -37,20 +41,37 @@ In case a node does not have a supported OVS module installed,
 you can install it following the instructions at:
 [Installing Open vSwitch](https://docs.openvswitch.org/en/latest/intro/install).
 
+Some experimental features disabled by default may have additional requirements,
+please refer to the [Feature Gates documentation](feature-gates.md) to determine
+whether it applies to you.
+
+Antrea will work out-of-the-box on most popular Operating Systems. Known issues
+encountered when running Antrea on specific OSes are documented
+[here](os-issues.md).
+
 ## Installation
 
 To deploy a released version of Antrea, pick a deployment manifest from the
 [list of releases](https://github.com/vmware-tanzu/antrea/releases). For any
 given release `<TAG>` (e.g. `v0.1.0`), you can deploy Antrea as follows:
+
 ```bash
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml
 ```
 
 To deploy the latest version of Antrea (built from the master branch), use the
 checked-in [deployment yaml](/build/yamls/antrea.yml):
+
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea.yml
 ```
+
+If you want to add Windows Nodes to your cluster, please refer to the
+installation instructions in [windows.md](/docs/windows.md).
+
+Antrea supports some experimental features that can be enabled or disabled,
+please refer to the [Feature Gates documentation](feature-gates.md) for more
+information.
 
 ### Deploying Antrea on a Cluster with Existing CNI
 
@@ -70,12 +91,12 @@ deleting the previous CNI, existing Pods may not be reachable anymore.
 
 For example, when migrating from Flannel to Antrea, you will need to do the
 following:
-
 1. Delete Flannel with `kubectl delete -f <path to your Flannel YAML manifest>`.
-1. Delete Flannel bridge and tunnel interface with `ip link delete flannel.1 &&
+2. Delete Flannel bridge and tunnel interface with `ip link delete flannel.1 &&
 ip link delete flannel cni0` **on each Node**.
-1. [Deploy Antrea](#installation).
-1. Drain and uncordon Nodes one-by-one. For each Node, run `kubectl drain
+3. Ensure [requirements](#ensuring-requirements-are-satisfied) are satisfied.
+4. [Deploy Antrea](#installation).
+5. Drain and uncordon Nodes one-by-one. For each Node, run `kubectl drain
 --ignore-daemonsets <node name> && kubectl uncordon <node name>`. The
 `--ignore-daemonsets` flag will ignore DaemonSet-managed Pods, including the
 Antrea Agent Pods. If you have any other DaemonSet-managed Pods (besides the
@@ -89,10 +110,33 @@ To build the image locally, you can follow the instructions in the [Contributor
 Guide](/CONTRIBUTING.md#building-and-testing-your-change).
 
 Antrea components can also be run manually as processes for development
-purposes. See [Manual Installation](/docs/manual-installation.md) for
+purposes. See [Manual Installation](manual-installation.md) for
 information.
 
 ### Deploying Antrea in Kind
 
 To deploy Antrea in a [Kind](https://github.com/kubernetes-sigs/kind) cluster,
-please refer to this [guide](/docs/kind.md).
+please refer to this [guide](kind.md).
+
+### Deploying Antrea in EKS and GKE
+
+Antrea can be deployed in NetworkPolicy only mode to an EKS cluster or a GKE
+cluster, and enforce NetworkPolicies for the cluster.
+
+* To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
+* To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
+
+### Deploying Antrea with IPsec Encryption
+
+Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
+IPsec encryption enabled, please refer to this [guide](/docs/ipsec-tunnel.md).
+
+### Deploying Antrea with Custom Certificates
+
+By default, Antrea generates the certificates needed for itself to run. To
+provide your own certificates, please refer to [Securing Control Plane](/docs/securing-control-plane.md).
+
+### Antctl: Installation and Usage
+
+To use antctl, the Antrea command-line tool, please refer to this
+[guide](antctl.md).

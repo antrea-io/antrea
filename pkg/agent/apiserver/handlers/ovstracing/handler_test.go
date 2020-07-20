@@ -45,13 +45,13 @@ var (
 
 	testNodeConfig = &config.NodeConfig{
 		GatewayConfig: &config.GatewayConfig{
-			Name: "gw0",
+			Name: "antrea-gw0",
 			IP:   net.ParseIP("10.1.1.1"),
 			MAC:  gatewayMAC},
 	}
 
-	gatewayInterface = &interfacestore.InterfaceConfig{Type: interfacestore.GatewayInterface, InterfaceName: "gw0"}
-	tunnelInterface  = &interfacestore.InterfaceConfig{Type: interfacestore.TunnelInterface, InterfaceName: "tun0"}
+	gatewayInterface = &interfacestore.InterfaceConfig{Type: interfacestore.GatewayInterface, InterfaceName: "antrea-gw0"}
+	tunnelInterface  = &interfacestore.InterfaceConfig{Type: interfacestore.TunnelInterface, InterfaceName: "antrea-tun0"}
 	inPodInterface   = &interfacestore.InterfaceConfig{
 		Type:          interfacestore.ContainerInterface,
 		InterfaceName: "inPod",
@@ -162,15 +162,15 @@ func TestPodFlows(t *testing.T) {
 		},
 		{
 			test:           "Tunnel traffic",
-			port:           "tun0",
-			query:          "?port=tun0&&source=10.1.1.123&&destination=dstNS/dstPod",
+			port:           "antrea-tun0",
+			query:          "?port=antrea-tun0&&source=10.1.1.123&&destination=dstNS/dstPod",
 			calledTrace:    true,
 			expectedStatus: http.StatusOK,
 		},
 		{
-			test:           "gw0 port",
-			port:           "gw0",
-			query:          "?port=gw0&&destination=dstNS/dstPod",
+			test:           "antrea-gw0 port",
+			port:           "antrea-gw0",
+			query:          "?port=antrea-gw0&&destination=dstNS/dstPod",
 			calledTrace:    true,
 			expectedStatus: http.StatusOK,
 		},
@@ -185,7 +185,7 @@ func TestPodFlows(t *testing.T) {
 		if tc.expectedStatus == http.StatusNotFound {
 			q.EXPECT().GetInterfaceStore().Return(i).Times(1)
 			if tc.port == "pod" {
-				i.EXPECT().GetContainerInterface("inPod", "inNS").Return(nil, false).Times(1)
+				i.EXPECT().GetContainerInterfacesByPod("inPod", "inNS").Return(nil).Times(1)
 			} else {
 				i.EXPECT().GetInterfaceByName(tc.port).Return(nil, false).Times(1)
 			}
@@ -194,19 +194,19 @@ func TestPodFlows(t *testing.T) {
 			assert.False(t, tc.expectedStatus == http.StatusNotFound)
 
 			q.EXPECT().GetInterfaceStore().Return(i).MaxTimes(3)
-			if tc.port == "gw0" {
+			if tc.port == "antrea-gw0" {
 				i.EXPECT().GetInterfaceByName(tc.port).Return(gatewayInterface, true).Times(1)
-			} else if tc.port == "tun0" {
+			} else if tc.port == "antrea-tun0" {
 				i.EXPECT().GetInterfaceByName(tc.port).Return(tunnelInterface, true).Times(1)
 				q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
 				ofc.EXPECT().GetTunnelVirtualMAC().Return(tunnelVirtualMAC).Times(1)
 			} else if tc.port == "pod" {
-				i.EXPECT().GetContainerInterface("inPod", "inNS").Return(inPodInterface, true).Times(1)
+				i.EXPECT().GetContainerInterfacesByPod("inPod", "inNS").Return([]*interfacestore.InterfaceConfig{inPodInterface}).Times(1)
 			} else if tc.port != "" {
 				i.EXPECT().GetInterfaceByName(tc.port).Return(inPodInterface, true).Times(1)
 			}
-			i.EXPECT().GetContainerInterface("srcPod", "srcNS").Return(srcPodInterface, true).MaxTimes(1)
-			i.EXPECT().GetContainerInterface("dstPod", "dstNS").Return(dstPodInterface, true).MaxTimes(1)
+			i.EXPECT().GetContainerInterfacesByPod("srcPod", "srcNS").Return([]*interfacestore.InterfaceConfig{srcPodInterface}).MaxTimes(1)
+			i.EXPECT().GetContainerInterfacesByPod("dstPod", "dstNS").Return([]*interfacestore.InterfaceConfig{dstPodInterface}).MaxTimes(1)
 
 			if tc.expectedStatus == http.StatusBadRequest {
 				// "ovs-appctl" won't be executed. OVSCtlClient.Trace() will just

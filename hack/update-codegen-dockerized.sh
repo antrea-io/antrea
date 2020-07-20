@@ -32,7 +32,26 @@ $GOPATH/bin/client-gen \
   --input "clusterinformation/v1beta1" \
   --input "networking/v1beta1" \
   --input "system/v1beta1" \
+  --input "security/v1alpha1" \
+  --input "core/v1alpha1" \
+  --input "ops/v1alpha1" \
   --output-package "${ANTREA_PKG}/pkg/client/clientset" \
+  --go-header-file hack/boilerplate/license_header.go.txt
+
+# Generate listers with K8s codegen tools.
+$GOPATH/bin/lister-gen \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
+  --output-package "${ANTREA_PKG}/pkg/client/listers" \
+  --go-header-file hack/boilerplate/license_header.go.txt
+
+# Generate informers with K8s codegen tools.
+$GOPATH/bin/informer-gen \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
+  --versioned-clientset-package "${ANTREA_PKG}/pkg/client/clientset/versioned" \
+  --listers-package "${ANTREA_PKG}/pkg/client/listers" \
+  --output-package "${ANTREA_PKG}/pkg/client/informers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/deepcopy-gen \
@@ -40,6 +59,9 @@ $GOPATH/bin/deepcopy-gen \
   --input-dirs "${ANTREA_PKG}/pkg/apis/networking" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/core/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
   -O zz_generated.deepcopy \
   --go-header-file hack/boilerplate/license_header.go.txt
 
@@ -70,6 +92,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/querier AgentQuerier"
   "pkg/controller/querier ControllerQuerier"
   "pkg/querier AgentNetworkPolicyInfoQuerier"
+  "pkg/agent/flowexporter/connections ConnTrackDumper,ConnTrackInterfacer"
 )
 
 # Command mockgen does not automatically replace variable YEAR with current year

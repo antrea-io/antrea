@@ -43,9 +43,6 @@ func (b *ofFlowBuilder) Done() Flow {
 		b.matchers = append(b.matchers, b.ctStateString)
 		b.ctStateString = ""
 	}
-	if b.lastAction == nil {
-		b.lastAction = ofctrl.NewEmptyElem()
-	}
 	return &b.ofFlow
 }
 
@@ -62,13 +59,12 @@ func (b *ofFlowBuilder) MatchReg(regID int, data uint32) FlowBuilder {
 
 // MatchRegRange adds match condition for matching data in the target register at specified range.
 func (b *ofFlowBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBuilder {
-	var regData = data
 	if rng[0] > 0 {
-		regData = data << rng[0]
+		data <<= rng[0]
 	}
 	reg := &ofctrl.NXRegister{
 		ID:    regID,
-		Data:  regData,
+		Data:  data,
 		Range: rng.ToNXRange(),
 	}
 	b.Match.NxRegs = append(b.Match.NxRegs, reg)
@@ -286,6 +282,11 @@ func (b *ofFlowBuilder) MatchConjID(value uint32) FlowBuilder {
 	return b
 }
 
+func (b *ofFlowBuilder) MatchPriority(priority uint16) FlowBuilder {
+	b.Match.Priority = priority
+	return b
+}
+
 // MatchProtocol adds match condition for matching protocol type.
 func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 	switch protocol {
@@ -337,6 +338,76 @@ func (b *ofFlowBuilder) MatchSCTPDstPort(port uint16) FlowBuilder {
 	b.MatchProtocol(ProtocolSCTP)
 	b.Match.SctpDstPort = port
 	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
+	return b
+}
+
+// MatchCTSrcIP matches the source IPv4 address of the connection tracker original direction tuple. This match requires
+// a match to valid connection tracking state as a prerequisite, and valid connection tracking state matches include
+// "+new", "+est", "+rel" and "+trk-inv".
+func (b *ofFlowBuilder) MatchCTSrcIP(ip net.IP) FlowBuilder {
+	b.Match.CtIpSa = &ip
+	b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_src=%s", ip.String()))
+	return b
+}
+
+// MatchCTSrcIPNet is the same as MatchCTSrcIP but supports IP masking.
+func (b *ofFlowBuilder) MatchCTSrcIPNet(ipNet net.IPNet) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ipNet.String()))
+	b.Match.CtIpSa = &ipNet.IP
+	b.Match.CtIpSaMask = maskToIPv4(ipNet.Mask)
+	return b
+}
+
+// MatchCTDstIP matches the destination IPv4 address of the connection tracker original direction tuple. This match
+// requires a match to valid connection tracking state as a prerequisite, and valid connection tracking state matches
+// include "+new", "+est", "+rel" and "+trk-inv".
+func (b *ofFlowBuilder) MatchCTDstIP(ip net.IP) FlowBuilder {
+	b.Match.CtIpDa = &ip
+	b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_dst=%s", ip.String()))
+	return b
+}
+
+// MatchCTDstIPNet is the same as MatchCTDstIP but supports IP masking.
+func (b *ofFlowBuilder) MatchCTDstIPNet(ipNet net.IPNet) FlowBuilder {
+	b.Match.CtIpDa = &ipNet.IP
+	b.Match.CtIpDaMask = maskToIPv4(ipNet.Mask)
+	b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_dst=%s", ipNet.String()))
+	return b
+}
+
+// MatchCTSrcPort matches the transport source port of the connection tracker original direction tuple. This match requires
+// a match to valid connection tracking state as a prerequisite, and valid connection tracking state matches include
+// "+new", "+est", "+rel" and "+trk-inv".
+func (b *ofFlowBuilder) MatchCTSrcPort(port uint16) FlowBuilder {
+	b.Match.CtTpSrcPort = port
+	b.matchers = append(b.matchers, fmt.Sprintf("ct_tp_src=%d", port))
+	return b
+}
+
+// MatchCTDstPort matches the transport destination port of the connection tracker original direction tuple. This match
+// requires a match to valid connection tracking state as a prerequisite, and valid connection tracking state matches
+// include "+new", "+est", "+rel" and "+trk-inv".
+func (b *ofFlowBuilder) MatchCTDstPort(port uint16) FlowBuilder {
+	b.Match.CtTpDstPort = port
+	b.matchers = append(b.matchers, fmt.Sprintf("ct_tp_dst=%d", port))
+	return b
+}
+
+// MatchCTProtocol matches the IP protocol type of the connection tracker original direction tuple. This match requires
+// a match to valid connection tracking state as a prerequisite, and a valid connection tracking state matches include
+// "+new", "+est", "+rel" and "+trk-inv".
+func (b *ofFlowBuilder) MatchCTProtocol(proto Protocol) FlowBuilder {
+	switch proto {
+	case ProtocolTCP:
+		b.Match.CtIpProto = 6
+	case ProtocolUDP:
+		b.Match.CtIpProto = 17
+	case ProtocolSCTP:
+		b.Match.CtIpProto = 132
+	case ProtocolICMP:
+		b.Match.CtIpProto = 1
+	}
+	b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_proto=%d", b.Match.CtIpProto))
 	return b
 }
 

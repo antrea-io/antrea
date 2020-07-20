@@ -26,11 +26,11 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/arping"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ethtool"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -44,26 +44,73 @@ func newInterfaceConfigurator(ovsDatapathType string) (*ifConfigurator, error) {
 	return &ifConfigurator{ovsDatapathType: ovsDatapathType}, nil
 }
 
-// setupInterfaces creates a veth pair: containerIface is in the container
-// network namespace and hostIface is in the host network namespace.
-func (ic *ifConfigurator) setupInterfaces(
-	podName, podNamespace, ifname string,
-	netns ns.NetNS,
-	mtu int) (hostIface *current.Interface, containerIface *current.Interface, err error) {
-	hostVethName := util.GenerateContainerInterfaceName(podName, podNamespace)
-	hostIface = &current.Interface{}
-	containerIface = &current.Interface{}
-
-	if err := netns.Do(func(hostNS ns.NetNS) error {
-		hostVeth, containerVeth, err := ip.SetupVethWithName(ifname, hostVethName, mtu, hostNS)
+// advertiseContainerAddr sends 3 GARP packets in another goroutine with 50ms interval. It's because Openflow entries are
+// installed async, and the gratuitous ARP could be sent out after the Openflow entries are installed. Using another
+// goroutine to ensure the processing of CNI ADD request is not blocked.
+func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containerIfaceName string, result *current.Result) error {
+	if err := ns.IsNSorErr(containerNetNS); err != nil {
+		return fmt.Errorf("%s is not a valid network namespace: %v", containerNetNS, err)
+	}
+	// Sending Gratuitous ARP is a best-effort action and is unlikely to fail as we have ensured the netns is valid.
+	go ns.WithNetNSPath(containerNetNS, func(_ ns.NetNS) error {
+		iface, err := net.InterfaceByName(containerIfaceName)
 		if err != nil {
-			return err
+			klog.Errorf("Failed to find container interface %s in ns %s: %v", containerIfaceName, containerNetNS, err)
+			return nil
 		}
-		klog.V(2).Infof("Setup interfaces host: %s, container %s", hostVeth.Name, containerVeth.Name)
-		containerIface.Name = containerVeth.Name
+		var targetIP net.IP
+		for _, ipc := range result.IPs {
+			if ipc.Version == "4" {
+				targetIP = ipc.Address.IP
+			}
+		}
+		if targetIP == nil {
+			klog.Warning("Failed to find an IPv4 address, skipped sending Gratuitous ARP")
+			return nil
+		}
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+		count := 0
+		for {
+			// Send gratuitous ARP to network in case of stale mappings for this IP address
+			// (e.g. if a previous - deleted - Pod was using the same IP).
+			if err := arping.GratuitousARPOverIface(targetIP, iface); err != nil {
+				klog.Warningf("Failed to send gratuitous ARP #%d: %v", count, err)
+			}
+			count++
+			if count == 3 {
+				break
+			}
+			<-ticker.C
+		}
+		return nil
+	})
+	return nil
+}
+
+// configureContainerLink creates a veth pair: one in the container netns and one in the host netns, and configures IP
+// address and routes to the container veth.
+func (ic *ifConfigurator) configureContainerLink(
+	podName string,
+	podNamespace string,
+	containerID string,
+	containerNetNS string,
+	containerIfaceName string,
+	mtu int,
+	result *current.Result,
+) error {
+	hostIfaceName := util.GenerateContainerInterfaceName(podName, podNamespace, containerID)
+
+	hostIface := &current.Interface{Name: hostIfaceName}
+	containerIface := &current.Interface{Name: containerIfaceName, Sandbox: containerNetNS}
+	result.Interfaces = []*current.Interface{hostIface, containerIface}
+	if err := ns.WithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
+		klog.V(2).Infof("Creating veth devices (%s, %s) for container %s", containerIfaceName, hostIfaceName, containerID)
+		hostVeth, containerVeth, err := ip.SetupVethWithName(containerIfaceName, hostIfaceName, mtu, hostNS)
+		if err != nil {
+			return fmt.Errorf("failed to create veth devices for container %s: %v", containerID, err)
+		}
 		containerIface.Mac = containerVeth.HardwareAddr.String()
-		containerIface.Sandbox = netns.Path()
-		hostIface.Name = hostVeth.Name
 		hostIface.Mac = hostVeth.HardwareAddr.String()
 		// OVS netdev datapath doesn't support TX checksum offloading, i.e. if packet
 		// arrives with bad/no checksum it will be sent to the output port with same bad/no checksum.
@@ -72,103 +119,15 @@ func (ic *ifConfigurator) setupInterfaces(
 				return fmt.Errorf("error when disabling TX checksum offload on container veth: %v", err)
 			}
 		}
-		return nil
-	}); err != nil {
-		return nil, nil, err
-	}
 
-	return hostIface, containerIface, nil
-}
-
-// configureContainerAddr takes the result of the IPAM plugin, and adds the appropriate IP
-// addresses and routes to the interface. It then sends a gratuitous ARP to the network.
-func configureContainerAddr(netns ns.NetNS, containerInterface *current.Interface, result *current.Result) error {
-	if err := netns.Do(func(containerNs ns.NetNS) error {
-		if err := ipam.ConfigureIface(containerInterface.Name, result); err != nil {
-			return err
+		klog.V(2).Infof("Configuring IP address for container %s", containerID)
+		// result.Interfaces must be set before this.
+		if err := ipam.ConfigureIface(containerIface.Name, result); err != nil {
+			return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
 		}
 		return nil
 	}); err != nil {
 		return err
-	}
-	return nil
-}
-
-// advertiseContainerAddr sends 3 GARP packets in another goroutine with 50ms interval. It's because Openflow entries are
-// installed async, and the gratuitous ARP could be sent out after the Openflow entries are installed. Using another
-// goroutine to ensure the processing of CNI ADD request is not blocked.
-func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containerIfaceName string, result *current.Result) error {
-	netns, err := ns.GetNS(containerNetNS)
-	if err != nil {
-		klog.Errorf("Failed to open netns with %s: %v", containerNetNS, err)
-		return err
-	}
-	defer netns.Close()
-	if err := netns.Do(func(containerNs ns.NetNS) error {
-		go func() {
-			// The container veth must exist when this function is called, and do not check error here.
-			containerVeth, err := net.InterfaceByName(containerIfaceName)
-			if err != nil {
-				klog.Errorf("Failed to find container interface %s in ns %s", containerIfaceName, netns.Path())
-				return
-			}
-			var targetIP net.IP
-			for _, ipc := range result.IPs {
-				if ipc.Version == "4" {
-					targetIP = ipc.Address.IP
-					arping.GratuitousArpOverIface(ipc.Address.IP, *containerVeth)
-				}
-			}
-			if targetIP == nil {
-				klog.Warning("Failed to find a valid IP address for Gratuitous ARP, not send GARP")
-				return
-			}
-			count := 0
-			for count < 3 {
-				select {
-				case <-time.Tick(50 * time.Millisecond):
-					// Send gratuitous ARP to network in case of stale mappings for this IP address
-					// (e.g. if a previous - deleted - Pod was using the same IP).
-					arping.GratuitousArpOverIface(targetIP, *containerVeth)
-				}
-				count++
-			}
-		}()
-		return nil
-	}); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (ic *ifConfigurator) configureContainerLink(
-	podName string,
-	podNameSpace string,
-	containerID string,
-	containerNetNS string,
-	containerIFDev string,
-	mtu int,
-	result *current.Result,
-) error {
-	netns, err := ns.GetNS(containerNetNS)
-	if err != nil {
-		return fmt.Errorf("failed to open netns %s: %v", containerNetNS, err)
-	}
-	defer netns.Close()
-	// Create veth pair and link up
-	hostIface, containerIface, err := ic.setupInterfaces(podName, podNameSpace, containerIFDev, netns, mtu)
-	if err != nil {
-		return fmt.Errorf("failed to create veth devices for container %s: %v", containerID, err)
-	}
-
-	result.Interfaces = []*current.Interface{hostIface, containerIface}
-
-	// Note that configuring IP will send gratuitous ARP, it must be executed
-	// after Pod Openflow entries are installed, otherwise gratuitous ARP would
-	// be dropped.
-	klog.V(2).Infof("Configuring IP address for container %s", containerID)
-	if err = configureContainerAddr(netns, containerIface, result); err != nil {
-		return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
 	}
 	return nil
 }

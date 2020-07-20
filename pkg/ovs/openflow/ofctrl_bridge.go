@@ -3,12 +3,15 @@ package openflow
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 )
 
 const (
@@ -60,6 +63,10 @@ func (t *ofTable) UpdateStatus(flowCountDelta int) {
 	} else {
 		t.flowCount += uint(flowCountDelta)
 	}
+
+	metrics.OVSTotalFlowCount.Add(float64(flowCountDelta))
+	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Add(float64(flowCountDelta))
+
 	t.updateTime = time.Now()
 }
 
@@ -68,6 +75,9 @@ func (t *ofTable) ResetStatus() {
 	defer t.Unlock()
 
 	t.flowCount = 0
+
+	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Set(0)
+
 	t.updateTime = time.Now()
 }
 
@@ -147,8 +157,11 @@ func (b *OFBridge) CreateGroup(id GroupIDType) Group {
 }
 
 func (b *OFBridge) DeleteGroup(id GroupIDType) bool {
-	err := b.ofSwitch.DeleteGroup(uint32(id))
-	if err != nil {
+	g := b.ofSwitch.GetGroup(uint32(id))
+	if g == nil {
+		return true
+	}
+	if err := g.Delete(); err != nil {
 		return false
 	}
 	return true
@@ -245,6 +258,8 @@ func (b *OFBridge) initialize() {
 		// reset flow counts, which is needed for reconnections
 		table.ResetStatus()
 	}
+
+	metrics.OVSTotalFlowCount.Set(0)
 }
 
 // Connect initiates the connection to the OFSwitch, and initializes ofTables after connected.
@@ -334,16 +349,15 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 	syncFlows := func(flows []Flow, operation int) error {
 		for _, flow := range flows {
 			ofFlow := flow.(*ofFlow)
-			ofFlow.Flow.NextElem = ofFlow.lastAction
 			// "AddFlow" operation is async, the function only returns error which occur when constructing and sending
 			// the BundleAdd message. An absence of error does not mean that all Openflow entries are added into the
 			// bundle by the switch. The number of entries successfully added to the bundle by the switch will be
 			// returned by function "Complete".
-			flowMod, err := ofFlow.Flow.GenerateFlowModMessage(operation)
+			flowMod, err := ofFlow.Flow.GetBundleMessage(operation)
 			if err != nil {
 				return err
 			}
-			if err := tx.AddFlow(flowMod); err != nil {
+			if err := tx.AddMessage(flowMod); err != nil {
 				// Close the bundle and abort it if there is error when adding the FlowMod message.
 				_, err := tx.Complete()
 				if err == nil {
@@ -388,11 +402,6 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 	for _, flow := range addflows {
 		ofFlow := flow.(*ofFlow)
 		ofFlow.table.UpdateStatus(1)
-		ofFlow.UpdateInstallStatus(true)
-	}
-	for _, flow := range modFlows {
-		ofFlow := flow.(*ofFlow)
-		ofFlow.UpdateInstallStatus(true)
 	}
 	for _, flow := range delFlows {
 		ofFlow := flow.(*ofFlow)
@@ -418,9 +427,6 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 			switch entry.Type() {
 			case FlowEntry:
 				flow := entry.(*ofFlow)
-				if flow.Flow.NextElem == nil {
-					flow.Flow.NextElem = flow.lastAction
-				}
 				flowSet = append(flowSet, entryOperation{
 					entry:     flow,
 					operation: operation,
@@ -505,9 +511,6 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 		switch e.operation {
 		case AddMessage:
 			ofFlow.table.UpdateStatus(1)
-			ofFlow.UpdateInstallStatus(true)
-		case ModifyMessage:
-			ofFlow.UpdateInstallStatus(true)
 		case DeleteMessage:
 			ofFlow.table.UpdateStatus(-1)
 		}

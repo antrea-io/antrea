@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -199,12 +200,12 @@ func TestNetworkPolicyResyncAfterRestart(t *testing.T) {
 	}
 
 	scaleFunc := func(replicas int32) {
-		scale, err := data.clientset.AppsV1().Deployments(antreaNamespace).GetScale(antreaDeployment, metav1.GetOptions{})
+		scale, err := data.clientset.AppsV1().Deployments(antreaNamespace).GetScale(context.TODO(), antreaDeployment, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("error when getting scale of Antrea Deployment: %v", err)
 		}
 		scale.Spec.Replicas = replicas
-		if _, err := data.clientset.AppsV1().Deployments(antreaNamespace).UpdateScale(antreaDeployment, scale); err != nil {
+		if _, err := data.clientset.AppsV1().Deployments(antreaNamespace).UpdateScale(context.TODO(), antreaDeployment, scale, metav1.UpdateOptions{}); err != nil {
 			t.Fatalf("error when scaling Antrea Deployment to %d: %v", replicas, err)
 		}
 	}
@@ -247,6 +248,71 @@ func TestNetworkPolicyResyncAfterRestart(t *testing.T) {
 	}
 }
 
+func TestIngressPolicyWithoutPortNumber(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	serverPort := 80
+	_, serverIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
+	defer cleanupFunc()
+
+	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	defer cleanupFunc()
+
+	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	defer cleanupFunc()
+
+	// Both clients can connect to server.
+	for _, clientName := range []string{client0Name, client1Name} {
+		if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err != nil {
+			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, serverIP, serverPort)
+		}
+	}
+
+	protocol := corev1.ProtocolTCP
+	spec := &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		Ingress: []networkingv1.NetworkPolicyIngressRule{
+			{
+				Ports: []networkingv1.NetworkPolicyPort{
+					{
+						Protocol: &protocol,
+					},
+				},
+				From: []networkingv1.NetworkPolicyPeer{{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"antrea-e2e": client0Name,
+						},
+					}},
+				},
+			},
+		},
+	}
+	np, err := data.createNetworkPolicy("test-networkpolicy-ingress-no-portnumber", spec)
+	if err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(np); err != nil {
+			t.Fatalf("Error when deleting network policy: %v", err)
+		}
+	}()
+
+	// Client0 can access server.
+	if err = data.runNetcatCommandFromTestPod(client0Name, serverIP, serverPort); err != nil {
+		t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", client0Name, serverIP, serverPort)
+	}
+	// Client1 can't access server.
+	if err = data.runNetcatCommandFromTestPod(client1Name, serverIP, serverPort); err == nil {
+		t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", client1Name, serverIP, serverPort)
+	}
+}
+
 func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name string, nodeName string) error, namePrefix string, nodeName string) (string, string, func()) {
 	name := randName(namePrefix)
 	if err := createFunc(name, nodeName); err != nil {
@@ -266,7 +332,7 @@ func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name stri
 func waitForAgentCondition(t *testing.T, data *TestData, podName string, conditionType v1beta1.AgentConditionType, expectedStatus corev1.ConditionStatus) {
 	if err := wait.Poll(1*time.Second, defaultTimeout, func() (bool, error) {
 		cmds := []string{"antctl", "get", "agentinfo", "-o", "json"}
-		stdout, _, err := runAntctl(podName, cmds, data, t)
+		stdout, _, err := runAntctl(podName, cmds, data)
 		var agentInfo agentinfo.AntreaAgentInfoResponse
 		err = json.Unmarshal([]byte(stdout), &agentInfo)
 		if err != nil {

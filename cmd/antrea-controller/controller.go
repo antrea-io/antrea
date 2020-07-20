@@ -34,11 +34,15 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/openapi"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
+	"github.com/vmware-tanzu/antrea/pkg/controller/traceflow"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/version"
@@ -60,10 +64,13 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
+	cnpInformer := crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
+	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
 
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()
@@ -71,9 +78,11 @@ func run(o *Options) error {
 	networkPolicyStore := store.NewNetworkPolicyStore()
 
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
+		crdClient,
 		podInformer,
 		namespaceInformer,
 		networkPolicyInformer,
+		cnpInformer,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore)
@@ -81,6 +90,11 @@ func run(o *Options) error {
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
+
+	var traceflowController *traceflow.Controller
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		traceflowController = traceflow.NewTraceflowController(crdClient, traceflowInformer)
+	}
 
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		client,
@@ -105,7 +119,10 @@ func run(o *Options) error {
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
 
+	log.StartLogFileNumberMonitor(stopCh)
+
 	informerFactory.Start(stopCh)
+	crdInformerFactory.Start(stopCh)
 
 	go controllerMonitor.Run(stopCh)
 
@@ -115,6 +132,10 @@ func run(o *Options) error {
 
 	if o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		go traceflowController.Run(stopCh)
 	}
 
 	<-stopCh
@@ -134,7 +155,7 @@ func createAPIServerConfig(kubeconfig string,
 	enableMetrics bool) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
-	authorization := genericoptions.NewDelegatingAuthorizationOptions()
+	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz")
 
 	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, secureServing)
 	if err != nil {

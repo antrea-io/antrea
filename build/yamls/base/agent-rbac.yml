@@ -22,9 +22,11 @@ rules:
       - ""
     resources:
       - pods
+      - endpoints
       - services
     verbs:
       - get
+      - watch
       - list
   - apiGroups:
       - clusterinformation.antrea.tanzu.vmware.com
@@ -83,6 +85,17 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - ops.antrea.tanzu.vmware.com
+    resources:
+      - traceflows
+      - traceflows/status
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1

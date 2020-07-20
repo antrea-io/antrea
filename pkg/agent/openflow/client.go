@@ -16,14 +16,17 @@ package openflow
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 
+	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 const maxRetryForOFSwitch = 5
@@ -48,6 +51,10 @@ type Client interface {
 	// the different Services running in the Cluster. This method needs to be invoked once with
 	// the Cluster Service CIDR as a parameter.
 	InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
+
+	// InstallClusterServiceFlows sets up the appropriate flows so that traffic can reach
+	// the different Services running in the Cluster. This method needs to be invoked once.
+	InstallClusterServiceFlows() error
 
 	// InstallDefaultTunnelFlows sets up the classification flow for the default (flow based) tunnel.
 	InstallDefaultTunnelFlows(tunnelOFPort uint32) error
@@ -83,6 +90,31 @@ type Client interface {
 	// interfaceName. UninstallPodFlows will do nothing if no connection to the Pod was established.
 	UninstallPodFlows(interfaceName string) error
 
+	// InstallServiceGroup installs a group for Service LB. Each endpoint
+	// is a bucket of the group. For now, each bucket has the same weight.
+	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error
+	// UninstallServiceGroup removes the group and its buckets that are
+	// installed by InstallServiceGroup.
+	UninstallServiceGroup(groupID binding.GroupIDType) error
+
+	// InstallEndpointFlows installs flows for accessing Endpoints.
+	// If an Endpoint is on the current Node, then flows for hairpin and endpoint
+	// L2 forwarding should also be installed.
+	InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error
+	// UninstallEndpointFlows removes flows of the Endpoint installed by
+	// InstallEndpointFlows.
+	UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error
+
+	// InstallServiceFlows installs flows for accessing Service with clusterIP.
+	// It installs the flow that uses the group/bucket to do service LB. If the
+	// affinityTimeout is not zero, it also installs the flow which has a learn
+	// action to maintain the LB decision.
+	// The group with the groupID must be installed before, otherwise the
+	// installation will fail.
+	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error
+	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
+	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
+
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
 
@@ -93,16 +125,17 @@ type Client interface {
 	InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, npName, npNamespace string) error
 
 	// UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
+	// It also returns a slice of stale ofPriorities used by ClusterNetworkPolicies.
 	// UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.
-	UninstallPolicyRuleFlows(ruleID uint32) error
+	UninstallPolicyRuleFlows(ruleID uint32) ([]string, error)
 
 	// AddPolicyRuleAddress adds one or multiple addresses to the specified NetworkPolicy rule. If addrType is true, the
 	// addresses are added to PolicyRule.From, else to PolicyRule.To.
-	AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error
+	AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16) error
 
 	// DeletePolicyRuleAddress removes addresses from the specified NetworkPolicy rule. If addrType is srcAddress, the addresses
 	// are removed from PolicyRule.From, else from PolicyRule.To.
-	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address) error
+	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16) error
 
 	// InstallExternalFlows sets up flows to enable Pods to communicate to the external IP addresses. The corresponding
 	// OpenFlow entries include: 1) identify the packets from local Pods to the external IP address, 2) mark the traffic
@@ -138,6 +171,50 @@ type Client interface {
 	// entries can be added due to conjunctive match flows shared by multiple
 	// rules.
 	GetNetworkPolicyFlowKeys(npName, npNamespace string) []string
+
+	// ReassignFlowPriorities takes a list of priority updates, and update the actionFlows to replace
+	// the old priority with the desired one, for each priority update.
+	ReassignFlowPriorities(updates map[uint16]uint16) error
+
+	// SubscribePacketIn subscribes packet-in channel in Bridge.
+	SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error
+
+	// SendTraceflowPacket injects packet to specified OVS port for Openflow.
+	SendTraceflowPacket(
+		dataplaneTag uint8,
+		srcMAC string,
+		dstMAC string,
+		srcIP string,
+		dstIP string,
+		IPProtocol uint8,
+		ttl uint8,
+		IPFlags uint16,
+		TCPSrcPort uint16,
+		TCPDstPort uint16,
+		TCPFlags uint8,
+		UDPSrcPort uint16,
+		UDPDstPort uint16,
+		ICMPType uint8,
+		ICMPCode uint8,
+		ICMPID uint16,
+		ICMPSequence uint16,
+		inPort uint32,
+		outPort int32) error
+
+	// InstallTraceflowFlows installs flows for specific traceflow request.
+	InstallTraceflowFlows(dataplaneTag uint8) error
+
+	// Initial tun_metadata0 in TLV map for Traceflow.
+	InitialTLVMap() error
+
+	// Find network policy and namespace by conjunction ID.
+	GetPolicyFromConjunction(ruleID uint32) (string, string)
+
+	// RegisterPacketInHandler registers PacketIn handler to process PacketIn event.
+	RegisterPacketInHandler(packetHandlerName string, packetInHandler interface{})
+	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received
+	// packets through registered handlers.
+	StartPacketInHandler(stopCh <-chan struct{})
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -234,12 +311,9 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIP net.IP, po
 		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.arpSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, cookie.Pod),
+		c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod),
 	}
 
-	// NoEncap mode has no tunnel.
-	if c.encapMode.SupportsEncap() {
-		flows = append(flows, c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod))
-	}
 	if c.encapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, traffic to local Pod is routed based on destination IP.
 		flows = append(flows,
@@ -274,12 +348,100 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 	return flowKeys
 }
 
+func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	group := c.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
+	if err := group.Add(); err != nil {
+		return fmt.Errorf("error when installing Service Endpoints Group: %w", err)
+	}
+	c.groupCache.Store(groupID, group)
+	return nil
+}
+
+func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	if !c.bridge.DeleteGroup(groupID) {
+		return fmt.Errorf("group %d delete failed", groupID)
+	}
+	c.groupCache.Delete(groupID)
+	return nil
+}
+
+func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	for _, endpoint := range endpoints {
+		var flows []binding.Flow
+		endpointPort, _ := endpoint.Port()
+		endpointIP := net.ParseIP(endpoint.IP()).To4()
+		portVal := uint16(endpointPort)
+		cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpointIP, endpointPort, protocol)
+		flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
+		if endpoint.GetIsLocal() {
+			flows = append(flows, c.hairpinSNATFlow(endpointIP))
+		}
+		if err := c.addFlows(c.serviceFlowCache, cacheKey, flows); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	port, err := endpoint.Port()
+	if err != nil {
+		return fmt.Errorf("error when getting port: %w", err)
+	}
+	cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpoint.IP(), port, protocol)
+	return c.deleteFlows(c.serviceFlowCache, cacheKey)
+}
+
+func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	var flows []binding.Flow
+	flows = append(flows, c.serviceLBFlow(groupID, svcIP, svcPort, protocol))
+	if affinityTimeout != 0 {
+		flows = append(flows, c.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout))
+	}
+	cacheKey := fmt.Sprintf("Service:%s:%d:%s", svcIP, svcPort, protocol)
+	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	cacheKey := fmt.Sprintf("Service:%s:%d:%s", svcIP, svcPort, protocol)
+	return c.deleteFlows(c.serviceFlowCache, cacheKey)
+}
+
+func (c *client) InstallClusterServiceFlows() error {
+	flows := []binding.Flow{
+		c.l2ForwardOutputServiceHairpinFlow(),
+		c.serviceHairpinResponseDNATFlow(),
+		c.serviceNeedLBFlow(),
+		c.sessionAffinityReselectFlow(),
+		c.serviceLBBypassFlow(),
+	}
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
+		return err
+	}
+	c.defaultServiceFlows = flows
+	return nil
+}
+
 func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
-	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayMAC, gatewayOFPort, cookie.Service)
+	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayMAC, gatewayOFPort)
 	if err := c.ofEntryOperations.Add(flow); err != nil {
 		return err
 	}
-	c.clusterServiceCIDRFlows = []binding.Flow{flow}
+	c.defaultServiceFlows = []binding.Flow{flow}
 	return nil
 }
 
@@ -344,7 +506,6 @@ func (c *client) initialize() error {
 	if err := c.ofEntryOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip established connections: %v", err)
 	}
-
 	if c.encapMode.SupportsNoEncap() {
 		if err := c.ofEntryOperations.Add(c.l2ForwardOutputReentInPortFlow(c.gatewayPort, cookie.Default)); err != nil {
 			return fmt.Errorf("failed to install L2 forward same in-port and out-port flow: %v", err)
@@ -415,7 +576,7 @@ func (c *client) ReplayFlows() {
 	}
 
 	addFixedFlows(c.gatewayFlows)
-	addFixedFlows(c.clusterServiceCIDRFlows)
+	addFixedFlows(c.defaultServiceFlows)
 	addFixedFlows(c.defaultTunnelFlows)
 	// hostNetworkingFlows is used only on Windows. Replay the flows only when there are flows in this cache.
 	if len(c.hostNetworkingFlows) > 0 {
@@ -437,8 +598,15 @@ func (c *client) ReplayFlows() {
 		return true
 	}
 
+	c.groupCache.Range(func(id, gEntry interface{}) bool {
+		if err := gEntry.(binding.Group).Add(); err != nil {
+			klog.Errorf("Error when replaying cached group %d: %v", id, err)
+		}
+		return true
+	})
 	c.nodeFlowCache.Range(installCachedFlows)
 	c.podFlowCache.Range(installCachedFlows)
+	c.serviceFlowCache.Range(installCachedFlows)
 
 	c.replayPolicyFlows()
 }
@@ -469,4 +637,114 @@ func (c *client) setupPolicyOnlyFlows() error {
 		return fmt.Errorf("failed to setup policy-only flows: %w", err)
 	}
 	return nil
+}
+
+func (c *client) SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error {
+	return c.bridge.SubscribePacketIn(reason, ch)
+}
+
+func (c *client) SendTraceflowPacket(
+	dataplaneTag uint8,
+	srcMAC string,
+	dstMAC string,
+	srcIP string,
+	dstIP string,
+	IPProtocol uint8,
+	ttl uint8,
+	IPFlags uint16,
+	TCPSrcPort uint16,
+	TCPDstPort uint16,
+	TCPFlags uint8,
+	UDPSrcPort uint16,
+	UDPDstPort uint16,
+	ICMPType uint8,
+	ICMPCode uint8,
+	ICMPID uint16,
+	ICMPSequence uint16,
+	inPort uint32,
+	outPort int32) error {
+
+	regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
+
+	packetOutBuilder := c.bridge.BuildPacketOut()
+	parsedSrcMAC, _ := net.ParseMAC(srcMAC)
+	parsedDstMAC, _ := net.ParseMAC(dstMAC)
+	if dstMAC == "" {
+		parsedDstMAC = c.nodeConfig.GatewayConfig.MAC
+	}
+
+	packetOutBuilder = packetOutBuilder.SetSrcMAC(parsedSrcMAC)
+	packetOutBuilder = packetOutBuilder.SetDstMAC(parsedDstMAC)
+	packetOutBuilder = packetOutBuilder.SetSrcIP(net.ParseIP(srcIP))
+	packetOutBuilder = packetOutBuilder.SetDstIP(net.ParseIP(dstIP))
+
+	if ttl == 0 {
+		packetOutBuilder = packetOutBuilder.SetTTL(128)
+	} else {
+		packetOutBuilder = packetOutBuilder.SetTTL(ttl)
+	}
+	packetOutBuilder = packetOutBuilder.SetIPFlags(IPFlags)
+
+	switch IPProtocol {
+	case 1:
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMP)
+		packetOutBuilder = packetOutBuilder.SetICMPType(ICMPType)
+		packetOutBuilder = packetOutBuilder.SetICMPCode(ICMPCode)
+		packetOutBuilder = packetOutBuilder.SetICMPID(ICMPID)
+		packetOutBuilder = packetOutBuilder.SetICMPSequence(ICMPSequence)
+	case 6:
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
+		if TCPSrcPort == 0 {
+			TCPSrcPort = uint16(rand.Uint32())
+		}
+		packetOutBuilder = packetOutBuilder.SetTCPSrcPort(TCPSrcPort)
+		packetOutBuilder = packetOutBuilder.SetTCPDstPort(TCPDstPort)
+		packetOutBuilder = packetOutBuilder.SetTCPFlags(TCPFlags)
+	case 17:
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDP)
+		packetOutBuilder = packetOutBuilder.SetUDPSrcPort(UDPSrcPort)
+		packetOutBuilder = packetOutBuilder.SetUDPDstPort(UDPDstPort)
+	}
+
+	packetOutBuilder = packetOutBuilder.SetInport(inPort)
+	if outPort != -1 {
+		packetOutBuilder = packetOutBuilder.SetOutport(uint32(outPort))
+	}
+	packetOutBuilder = packetOutBuilder.AddLoadAction(regName, uint64(dataplaneTag), OfTraceflowMarkRange)
+
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
+	flow := c.traceflowL2ForwardOutputFlow(dataplaneTag, cookie.Default)
+	if err := c.Add(flow); err != nil {
+		return err
+	}
+	flow = c.traceflowConnectionTrackFlows(dataplaneTag, cookie.Default)
+	if err := c.Add(flow); err != nil {
+		return err
+	}
+	flows := []binding.Flow{}
+	c.conjMatchFlowLock.Lock()
+	defer c.conjMatchFlowLock.Unlock()
+	for _, ctx := range c.globalConjMatchFlowCache {
+		if ctx.dropFlow != nil {
+			flows = append(
+				flows,
+				ctx.dropFlow.CopyToBuilder(priorityNormal+2).
+					MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
+					SetHardTimeout(300).
+					Action().SendToController(1).
+					Done())
+		}
+	}
+	return c.AddAll(flows)
+}
+
+// Add TLV map optClass 0x0104, optType 0x80 optLength 4 tunMetadataIndex 0 to store data plane tag
+// in tunnel. Data plane tag will be stored to NXM_NX_TUN_METADATA0[28..31] when packet get encapsulated
+// into geneve, and will be stored back to NXM_NX_REG9[28..31] when packet get decapsulated.
+func (c *client) InitialTLVMap() error {
+	return c.bridge.AddTLVMap(0x0104, 0x80, 4, 0)
 }

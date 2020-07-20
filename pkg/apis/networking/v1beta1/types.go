@@ -17,6 +17,8 @@ package v1beta1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 // +genclient
@@ -29,6 +31,8 @@ type AppliedToGroup struct {
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	// Pods is a list of Pods selected by this group.
 	Pods []GroupMemberPod `json:"pods,omitempty" protobuf:"bytes,2,rep,name=pods"`
+	// GroupMembers is list of resources selected by this group. This eventually will replace Pods
+	GroupMembers []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,3,rep,name=groupMembers"`
 }
 
 // PodReference represents a Pod Reference.
@@ -59,13 +63,44 @@ type GroupMemberPod struct {
 	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,3,rep,name=ports"`
 }
 
+// ExternalEntityReference represents a ExternalEntity Reference.
+type ExternalEntityReference struct {
+	// The name of this ExternalEntity.
+	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
+	// The namespace of this ExternalEntity.
+	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
+}
+
+// Endpoint represents an external endpoint.
+type Endpoint struct {
+	// IP is the IP address of the Endpoint.
+	IP IPAddress `json:"ip,omitempty" protobuf:"bytes,1,opt,name=ip"`
+	// Ports is the list NamedPort of the Endpoint.
+	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,2,rep,name=ports"`
+}
+
+// GroupMember represents resource member to be populated in Groups.
+// This supersedes GroupMemberPod, and will eventually replace it.
+type GroupMember struct {
+	// ExternalEntity maintains the reference to the ExternalEntity.
+	ExternalEntity *ExternalEntityReference `json:"externalEntity,omitempty" protobuf:"bytes,1,opt,name=externalEntity"`
+
+	// Pod maintains the reference to the Pod.
+	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,2,opt,name=pod"`
+
+	// Endpoints maintains a list of EndPoints associated with this groupMember.
+	Endpoints []Endpoint `json:"endpoints,omitempty" protobuf:"bytes,3,rep,name=endpoints"`
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AppliedToGroupPatch describes the incremental update of an AppliedToGroup.
 type AppliedToGroupPatch struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	AddedPods         []GroupMemberPod `json:"addedPods,omitempty" protobuf:"bytes,2,rep,name=addedPods"`
-	RemovedPods       []GroupMemberPod `json:"removedPods,omitempty" protobuf:"bytes,3,rep,name=removedPods"`
+	metav1.TypeMeta     `json:",inline"`
+	metav1.ObjectMeta   `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	AddedPods           []GroupMemberPod `json:"addedPods,omitempty" protobuf:"bytes,2,rep,name=addedPods"`
+	RemovedPods         []GroupMemberPod `json:"removedPods,omitempty" protobuf:"bytes,3,rep,name=removedPods"`
+	AddedGroupMembers   []GroupMember    `json:"addedGroupMembers,omitempty" protobuf:"bytes,4,rep,name=addedGroupMembers"`
+	RemovedGroupMembers []GroupMember    `json:"removedGroupMembers,omitempty" protobuf:"bytes,5,rep,name=removedGroupMembers"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -85,6 +120,7 @@ type AddressGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Pods              []GroupMemberPod `json:"pods,omitempty" protobuf:"bytes,2,rep,name=pods"`
+	GroupMembers      []GroupMember    `json:"groupMembers,omitempty" protobuf:"bytes,3,rep,name=groupMembers"`
 }
 
 // IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.
@@ -99,10 +135,12 @@ type IPNet struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AddressGroupPatch describes the incremental update of an AddressGroup.
 type AddressGroupPatch struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	AddedPods         []GroupMemberPod `json:"addedPods,omitempty" protobuf:"bytes,2,rep,name=addedPods"`
-	RemovedPods       []GroupMemberPod `json:"removedPods,omitempty" protobuf:"bytes,3,rep,name=removedPods"`
+	metav1.TypeMeta     `json:",inline"`
+	metav1.ObjectMeta   `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	AddedPods           []GroupMemberPod `json:"addedPods,omitempty" protobuf:"bytes,2,rep,name=addedPods"`
+	RemovedPods         []GroupMemberPod `json:"removedPods,omitempty" protobuf:"bytes,3,rep,name=removedPods"`
+	AddedGroupMembers   []GroupMember    `json:"addedGroupMembers,omitempty" protobuf:"bytes,4,rep,name=addedGroupMembers"`
+	RemovedGroupMembers []GroupMember    `json:"removedGroupMembers,omitempty" protobuf:"bytes,5,rep,name=removedGroupMembers"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -124,6 +162,9 @@ type NetworkPolicy struct {
 	Rules []NetworkPolicyRule `json:"rules,omitempty" protobuf:"bytes,2,rep,name=rules"`
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
 	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,3,rep,name=appliedToGroups"`
+	// Priority represents the relative priority of this Network Policy as compared to
+	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+	Priority *float64 `json:"priority,omitempty" protobuf:"fixed64,4,opt,name=priority"`
 }
 
 // Direction defines traffic direction of NetworkPolicyRule.
@@ -146,6 +187,13 @@ type NetworkPolicyRule struct {
 	To NetworkPolicyPeer `json:"to,omitempty" protobuf:"bytes,3,opt,name=to"`
 	// Services is a list of services which should be matched.
 	Services []Service `json:"services,omitempty" protobuf:"bytes,4,rep,name=services"`
+	// Priority defines the priority of the Rule as compared to other rules in the
+	// NetworkPolicy.
+	Priority int32 `json:"priority,omitempty" protobuf:"varint,5,opt,name=priority"`
+	// Action specifies the action to be applied on the rule. i.e. Allow/Drop. An empty
+	// action “nil” defaults to Allow action, which would be the case for rules created for
+	// K8s Network Policy.
+	Action *secv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1.RuleAction"`
 }
 
 // Protocol defines network protocols supported for things like container ports.

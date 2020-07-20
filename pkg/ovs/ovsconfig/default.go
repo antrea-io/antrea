@@ -25,8 +25,8 @@ const (
 	DefaultOVSRunDir = "/var/run/openvswitch"
 
 	defaultConnNetwork = "unix"
-	// Wait up to 1 second when get port.
-	defaultGetPortTimeout = 1 * time.Second
+	// Wait up to 5 seconds when getting port.
+	defaultGetPortTimeout = 5 * time.Second
 )
 
 func GetConnAddress(ovsRunDir string) string {

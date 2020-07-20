@@ -22,13 +22,16 @@ function echoerr {
 
 _usage="Usage: $0 [--mode (dev|release)] [--kind] [--ipsec] [--keep] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
-        --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
-        --encap-mode          Traffic encapsulation mode. (default is 'encap')
-        --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
-        --cloud               Generate a manifest appropriate for running Antrea in Public Cloud
-        --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
-        --keep                Debug flag which will preserve the generated kustomization.yml
-        --help, -h            Print this message and exit
+        --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
+        --encap-mode                  Traffic encapsulation mode. (default is 'encap')
+        --kind                        Generate a manifest appropriate for running Antrea in a Kind cluster
+        --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
+        --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
+        --proxy                       Generate a manifest with Antrea proxy enabled
+        --np                          Generate a manifest with Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs enabled
+        --keep                        Debug flag which will preserve the generated kustomization.yml
+        --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
+        --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
@@ -48,9 +51,12 @@ function print_help {
 MODE="dev"
 KIND=false
 IPSEC=false
+PROXY=false
+NP=false
 KEEP=false
 ENCAP_MODE=""
 CLOUD=""
+TUN_TYPE="geneve"
 
 while [[ $# -gt 0 ]]
 do
@@ -77,9 +83,21 @@ case $key in
     IPSEC=true
     shift
     ;;
+    --proxy)
+    PROXY=true
+    shift
+    ;;
+    --np)
+    NP=true
+    shift
+    ;;
     --keep)
     KEEP=true
     shift
+    ;;
+    --tun)
+    TUN_TYPE="$2"
+    shift 2
     ;;
     -h|--help)
     print_usage
@@ -94,6 +112,12 @@ done
 
 if [ "$MODE" != "dev" ] && [ "$MODE" != "release" ]; then
     echoerr "--mode must be one of 'dev' or 'release'"
+    print_help
+    exit 1
+fi
+
+if [ "$TUN_TYPE" != "geneve" ] && [ "$TUN_TYPE" != "vxlan" ] && [ "$TUN_TYPE" != "gre" ] && [ "$TUN_TYPE" != "stt" ]; then
+    echoerr "--tun must be one of 'geneve', 'gre', 'stt' or 'vxlan'"
     print_help
     exit 1
 fi
@@ -132,9 +156,10 @@ BASE=../../base
 
 # do all ConfigMap edits
 mkdir configMap && cd configMap
-# user is not expected to make changes directly to antrea-agent.conf but instead to the generated
-# YAML manifest, so our regexs need not be too robust.
+# user is not expected to make changes directly to antrea-agent.conf and antrea-controller.conf,
+# but instead to the generated YAML manifest, so our regexs need not be too robust.
 cp $KUSTOMIZATION_DIR/base/conf/antrea-agent.conf antrea-agent.conf
+cp $KUSTOMIZATION_DIR/base/conf/antrea-controller.conf antrea-controller.conf
 if $KIND; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ovsDatapathType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/ovsDatapathType: netdev/" antrea-agent.conf
 fi
@@ -145,13 +170,25 @@ if $IPSEC; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
 fi
 
+if $PROXY; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: true/" antrea-agent.conf
+fi
+
+if $NP; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  ClusterNetworkPolicy: true/" antrea-controller.conf
+fi
+
 if [[ $ENCAP_MODE != "" ]]; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: $ENCAP_MODE/" antrea-agent.conf
 fi
 
+if [[ $TUN_TYPE != "geneve" ]]; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: $TUN_TYPE/" antrea-agent.conf
+fi
+
 # unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,
 # which is why we use a template kustomization file.
-sed -e "s/<CONF_FILE>/antrea-agent.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
+sed -e "s/<AGENT_CONF_FILE>/antrea-agent.conf/; s/<CONTROLLER_CONF_FILE>/antrea-controller.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
 $KUSTOMIZE edit add base $BASE
 BASE=../configMap
 cd ..
@@ -170,6 +207,23 @@ if $IPSEC; then
     # add an environment variable to the antrea-agent container for passing the PSK to Agent.
     $KUSTOMIZE edit add patch pskEnv.yml
     BASE=../ipsec
+    cd ..
+fi
+
+if $NP; then
+    mkdir np && cd np
+    cp ../../patches/np/*.yml .
+    cp ../../base/security-crds.yml .
+    cp ../../base/core-crds.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    # add RBAC to antrea-controller for ANP and CNP CRD access.
+    $KUSTOMIZE edit add patch npRbac.yml
+    # create NetworkPolicy related CRDs.
+    $KUSTOMIZE edit add resource security-crds.yml
+    # create ExternalEntity related CRDs.
+    $KUSTOMIZE edit add resource core-crds.yml
+    BASE=../np
     cd ..
 fi
 
@@ -212,9 +266,13 @@ if $KIND; then
 
     # add tun device to antrea OVS container
     $KUSTOMIZE edit add patch tunDevice.yml
-    # antrea-ovs should use start_ovs_netdev instead of start_ovs to ensure that the br_phy bridge
+    # antrea-ovs should use start_ovs_netdev instead of start_ovs to ensure that the br-phy bridge
     # is created.
     $KUSTOMIZE edit add patch startOvs.yml
+    # this adds a small delay before running the antrea-agent process, to give the antrea-ovs
+    # container enough time to set up the br-phy bridge.
+    # workaround for https://github.com/vmware-tanzu/antrea/issues/801
+    $KUSTOMIZE edit add patch startAgent.yml
     # change initContainer script and remove SYS_MODULE capability
     $KUSTOMIZE edit add patch installCni.yml
 

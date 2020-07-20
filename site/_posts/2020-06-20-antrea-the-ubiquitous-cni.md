@@ -1,5 +1,6 @@
 ---
 title: "Antrea: The Ubiquitous CNI"
+image: /img/posts/2020/06/20/antrea-logo.svg
 excerpt: Post by Chip Zoller 
 author_name: Chip Zoller 
 # author_url: https://www.google.com

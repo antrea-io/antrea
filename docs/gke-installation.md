@@ -82,7 +82,7 @@ assign this permission.
 
     Deploy a released version of Antrea from the [list of releases](https://github.com/vmware-tanzu/antrea/releases).
 Note that GKE support was added in release 0.5.0, which means you cannot pick a release older than 0.5.0.
-For any given release `<TAG>` (e.g. `v0.7.0`), get the Antrea GKE deployment yaml at:
+For any given release `<TAG>` (e.g. `v0.8.2`), get the Antrea GKE deployment yaml at:
 
     ````
     https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-gke.yml
@@ -94,8 +94,8 @@ For any given release `<TAG>` (e.g. `v0.7.0`), get the Antrea GKE deployment yam
     https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke.yml
     ````
 
-    Update ``defaultMTU`` (default is 1500) and ``serviceCIDR`` value of antrea-agent.conf in antrea-gke.yml with
-GKE_SERVICE_CIDR selected at the time of deploying GKE cluster.
+    Update ``serviceCIDR`` value of antrea-agent.conf in antrea-gke.yml with GKE_SERVICE_CIDR selected at the time of
+    deploying GKE cluster.
 
 3. Deploy Antrea
 

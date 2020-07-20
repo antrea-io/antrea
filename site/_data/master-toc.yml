@@ -11,6 +11,10 @@ toc:
         url: /manual-installation
       - page: Configuration
         url: /configuration
+      - page: Contributing
+        url: /contributing
+      - page: Code of Conduct
+        url: /code_of_conduct
   - title: Cloud Deployment
     subfolderitems:
       - page: Cloud Overview
@@ -26,6 +30,8 @@ toc:
         url: /policy-only
   - title: Reference
     subfolderitems:
+      - page: Network Policy
+        url: /network-policy
       - page: antctl
         url: /antctl
       - page: Architecture
@@ -44,9 +50,21 @@ toc:
         url: /os-issues
       - page: OVS Pipeline
         url: /ovs-pipeline
+      - page: Feature Gates
+        url: /feature-gates
+  - title: Windows
+    subfolderitems:
+      - page: Windows Deployment
+        url: /windows
+      - page: Windows Design
+        url: /windows-design
   - title: Developer Guide
     subfolderitems:
       - page: Code Generation
         url: /code-generation
       - page: Release Instructions
         url: /maintainers/release
+      - page: Issue Management
+        url: /issue-management
+      - page: GitHub Labels
+        url: /github-labels

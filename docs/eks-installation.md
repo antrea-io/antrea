@@ -8,7 +8,7 @@ the kubeconfig file of that cluster.
 To deploy a released version of Antrea, pick a version from the
 [list of releases](https://github.com/vmware-tanzu/antrea/releases).
 Note that EKS support was added in release 0.5.0, which means you can not
-pick a release older than 0.5.0. For any given release `<TAG>` (e.g. `v0.7.0`),
+pick a release older than 0.5.0. For any given release `<TAG>` (e.g. `v0.8.2`),
 get the Antrea EKS deployment yaml at:
 
 ```
@@ -22,9 +22,8 @@ deployment yaml at:
 https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-eks.yml
 ```
 
-Based on EKS worker Node MTU size and Kubernetes service cluster IP range, adjust
-``defaultMTU`` and ``serviceCIDR`` values of antrea-agent.conf in antrea-eks.yml
- accordingly, and apply antrea-eks.yml to the EKS cluster.
+Based on Kubernetes service cluster IP range, adjust ``serviceCIDR`` values of antrea-agent.conf
+in antrea-eks.yml accordingly, and apply antrea-eks.yml to the EKS cluster.
 
 ```bash
 kubectl apply -f antrea-eks.yaml 

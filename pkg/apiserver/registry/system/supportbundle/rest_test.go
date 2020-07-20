@@ -35,8 +35,8 @@ type testExec struct {
 
 func (te *testExec) Command(cmd string, args ...string) exec.Cmd {
 	fakeCmd := new(exectesting.FakeCmd)
-	fakeCmd.CombinedOutputScript = append(fakeCmd.CombinedOutputScript, func() ([]byte, error) {
-		return []byte(fmt.Sprintf("%s %s", cmd, strings.Join(args, " "))), nil
+	fakeCmd.CombinedOutputScript = append(fakeCmd.CombinedOutputScript, func() ([]byte, []byte, error) {
+		return []byte(fmt.Sprintf("%s %s", cmd, strings.Join(args, " "))), nil, nil
 	})
 	return fakeCmd
 }
@@ -66,7 +66,7 @@ func TestClean(t *testing.T) {
 			require.NoError(t, err)
 			defer defaultFS.Remove(f.Name())
 			require.NoError(t, f.Close())
-			storage := NewStorage("controller", nil)
+			storage := NewControllerStorage()
 			ctx, cancelFunc := context.WithCancel(context.Background())
 			if tc.needCancel {
 				cancelFunc()

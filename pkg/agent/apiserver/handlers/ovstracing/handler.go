@@ -15,6 +15,7 @@
 package ovstracing
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,7 +28,6 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers"
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
@@ -57,7 +57,7 @@ type request struct {
 }
 
 func getServiceClusterIP(aq querier.AgentQuerier, name, namespace string) (net.IP, *handlers.HandlerError) {
-	srv, err := aq.GetK8sClient().CoreV1().Services(namespace).Get(name, metav1.GetOptions{})
+	srv, err := aq.GetK8sClient().CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil, handlers.NewHandlerError(errors.New("Service not found"), http.StatusNotFound)
@@ -86,14 +86,14 @@ func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer) (net.IP, *interf
 		return intf.IP, intf, nil
 	}
 
-	intf, ok := aq.GetInterfaceStore().GetContainerInterface(peer.name, peer.namespace)
-	if ok {
+	interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(peer.name, peer.namespace)
+	if len(interfaces) > 0 {
 		// Local Pod.
-		return intf.IP, intf, nil
+		return interfaces[0].IP, interfaces[0], nil
 	}
 
 	// Try getting the Pod from K8s API.
-	pod, err := aq.GetK8sClient().CoreV1().Pods(peer.namespace).Get(peer.name, metav1.GetOptions{})
+	pod, err := aq.GetK8sClient().CoreV1().Pods(peer.namespace).Get(context.TODO(), peer.name, metav1.GetOptions{})
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			err := handlers.NewHandlerError(fmt.Errorf("Pod %s/%s not found", peer.namespace, peer.name), http.StatusNotFound)
@@ -115,7 +115,11 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 		if req.inputPort.ovsPort != "" {
 			inPort, ok = aq.GetInterfaceStore().GetInterfaceByName(req.inputPort.ovsPort)
 		} else if req.inputPort.name != "" {
-			inPort, ok = aq.GetInterfaceStore().GetContainerInterface(req.inputPort.name, req.inputPort.namespace)
+			interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(req.inputPort.name, req.inputPort.namespace)
+			if len(interfaces) > 0 {
+				inPort = interfaces[0]
+				ok = true
+			}
 		}
 		if !ok {
 			return nil, handlers.NewHandlerError(errors.New("Input port not found"), http.StatusNotFound)
@@ -171,7 +175,7 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 			// Source is a remote Pod. Use the default tunnel port as the input port.
 			// For hybrid TrafficEncapMode, even the remote Node is in the same subnet
 			// as the source Node, the tunnel port is still used as the input port.
-			intf, ok := aq.GetInterfaceStore().GetInterface(config.DefaultTunPortName)
+			intf, ok := aq.GetInterfaceStore().GetInterface(aq.GetNodeConfig().DefaultTunName)
 			// If the default tunnel port is not found, it might be NoEncap or
 			// NetworkPolicyOnly mode. Use gateway port as the input port then.
 			if ok {

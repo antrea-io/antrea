@@ -123,15 +123,15 @@ func TestReconcilerForget(t *testing.T) {
 func TestReconcilerReconcile(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
-		InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1"),
+		InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1", "container1"),
 		IP:                       net.ParseIP("2.2.2.2"),
-		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1"},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1", ContainerID: "container1"},
 		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1},
 	})
 	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
-		InterfaceName:            util.GenerateContainerInterfaceName("pod3", "ns1"),
+		InterfaceName:            util.GenerateContainerInterfaceName("pod3", "ns1", "container3"),
 		IP:                       net.ParseIP("3.3.3.3"),
-		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod3", PodNamespace: "ns1"},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod3", PodNamespace: "ns1", ContainerID: "container3"},
 		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 3},
 	})
 	ipNet1 := newCIDR("10.10.0.0/16")
@@ -443,15 +443,15 @@ func TestReconcilerUpdate(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	ifaceStore.AddInterface(
 		&interfacestore.InterfaceConfig{
-			InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1"),
+			InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1", "container1"),
 			IP:                       net.ParseIP("2.2.2.2"),
-			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1"},
+			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1", ContainerID: "container1"},
 			OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1}})
 	ifaceStore.AddInterface(
 		&interfacestore.InterfaceConfig{
-			InterfaceName:            util.GenerateContainerInterfaceName("pod2", "ns1"),
+			InterfaceName:            util.GenerateContainerInterfaceName("pod2", "ns1", "container2"),
 			IP:                       net.ParseIP("3.3.3.3"),
-			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod2", PodNamespace: "ns1"},
+			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod2", PodNamespace: "ns1", ContainerID: "container2"},
 			OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 2}})
 	tests := []struct {
 		name                string
@@ -561,16 +561,16 @@ func TestReconcilerUpdate(t *testing.T) {
 			mockOFClient := openflowtest.NewMockClient(controller)
 			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any(), gomock.Any(), "", "")
 			if len(tt.expectedAddedFrom) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedAddedFrom))
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedAddedFrom), nil)
 			}
 			if len(tt.expectedAddedTo) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedAddedTo))
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedAddedTo), nil)
 			}
 			if len(tt.expectedDeletedFrom) > 0 {
-				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedDeletedFrom))
+				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedDeletedFrom), nil)
 			}
 			if len(tt.expectedDeletedTo) > 0 {
-				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedDeletedTo))
+				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedDeletedTo), nil)
 			}
 			r := newReconciler(mockOFClient, ifaceStore)
 			if err := r.Reconcile(tt.originalRule); (err != nil) != tt.wantErr {

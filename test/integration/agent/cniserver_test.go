@@ -399,7 +399,7 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 	testRequire.Equal(tester.targetNS.Path(), result.Interfaces[1].Sandbox)
 
 	// Check for the veth link in the test namespace.
-	hostIfaceName := util.GenerateContainerInterfaceName(testPod, testPodNamespace)
+	hostIfaceName := util.GenerateContainerInterfaceName(testPod, testPodNamespace, ContainerID)
 	testRequire.Equal(hostIfaceName, result.Interfaces[0].Name)
 	testRequire.Len(result.Interfaces[0].Mac, 17)
 
@@ -417,7 +417,21 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 		return err
 	})
 	testRequire.Nil(err)
-	testRequire.Len(linkList, 2)
+	// when running the integration tests in a Docker image on macOS (Docker
+	// Desktop), we observe that the namespace includes 4 links, not 2
+	// (localhost and veth). It seems that the HyperKit Linux VM loads the
+	// ipip module, which means that the Linux Kernel creates 2 extra
+	// interfaces in each namespace (tunl0 and ip6tnl).
+	testRequire.GreaterOrEqual(len(linkList), 2)
+	// check that the list includes the eth0 veth
+	vethFound := false
+	for _, link := range linkList {
+		if link.Type() == "veth" && link.Attrs().Name == IFName {
+			vethFound = true
+			break
+		}
+	}
+	testRequire.Truef(vethFound, "Missing '%s' veth in target namespace", IFName)
 
 	// Find the veth peer in the container namespace and the default route.
 	tester.checkContainerNetworking(tc)
@@ -523,9 +537,9 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := interfacestore.NewInterfaceStore()
+	testNodeConfig.NodeMTU = 1450
 	tester.server = cniserver.New(testSock,
 		"",
-		1450,
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
 		make(chan v1beta1.PodReference, 100),
@@ -560,7 +574,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	ipamMock.EXPECT().Add(mock.Any(), mock.Any()).Return(ipamResult, nil).AnyTimes()
 
 	// Mock ovs output while get ovs port external configuration
-	ovsPortname := util.GenerateContainerInterfaceName(testPod, testPodNamespace)
+	ovsPortname := util.GenerateContainerInterfaceName(testPod, testPodNamespace, ContainerID)
 	ovsPortUUID := uuid.New().String()
 	ovsServiceMock.EXPECT().CreatePort(ovsPortname, ovsPortname, mock.Any()).Return(ovsPortUUID, nil).AnyTimes()
 	ovsServiceMock.EXPECT().GetOFPort(ovsPortname).Return(int32(10), nil).AnyTimes()
@@ -665,7 +679,6 @@ func setupChainTest(
 		routeMock = routetest.NewMockInterface(controller)
 		server = cniserver.New(testSock,
 			"",
-			1500,
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
 			make(chan v1beta1.PodReference, 100),
@@ -703,7 +716,7 @@ func TestCNIServerChaining(t *testing.T) {
 	defer controller.Finish()
 	var server *cniserver.CNIServer
 	testContainerOFPort := int32(1234)
-	testPatchPortName := "gw0"
+	testPatchPortName := "antrea-gw0"
 	ctx, _ := context.WithCancel(context.Background())
 
 	tc := testCase{
@@ -789,6 +802,7 @@ func init() {
 	gwMAC, _ = net.ParseMAC("11:11:11:11:11:11")
 	nodeGateway := &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: ""}
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
+	nodeMTU := 1500
 
-	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: nodeGateway}
+	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, NodeMTU: nodeMTU, GatewayConfig: nodeGateway}
 }

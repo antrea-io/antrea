@@ -41,22 +41,22 @@ Use `antrea-agent -h` to see complete options.
 
 # Name of the gateway interface for the local Pod subnet. antrea-agent will create the interface on the OVS bridge.
 # Make sure it doesn't conflict with your existing interfaces.
-#hostGateway: gw0
+#hostGateway: antrea-gw0
 
 # Encapsulation mode for communication between Pods across Nodes, supported values:
-# - vxlan (default)
-# - geneve
+# - geneve (default)
+# - vxlan
 # - gre
 # - stt
-#tunnelType: vxlan
+#tunnelType: geneve
 
 # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
 # for the GRE tunnel type.
 #enableIPSecTunnel: false
 
-# Default MTU to use for the host gateway interface and the network interface of
-# each Pod. If omitted, antrea-agent will default this value to 1450 to accommodate
-# for tunnel encapsulate overhead.
+# Default MTU to use for the host gateway interface and the network interface of each Pod.
+# If omitted, antrea-agent will discover the MTU of the Node's primary interface and
+# also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
 #defaultMTU: 1450
 
 # CIDR Range for services in cluster. It's required to support egress network policy, should
@@ -98,10 +98,12 @@ clientConnection:
 #apiPort: 10349
 
 # Indicates whether to use auto-generated self-signed TLS certificate.
-# If false, A secret named "kube-system/antrea-controller-tls" must be provided with the following keys:
+# If false, A Secret named "antrea-controller-tls" must be provided with the following keys:
 #   ca.crt: <CA certificate>
 #   tls.crt: <TLS certificate>
 #   tls.key: <TLS private key>
+# And the Secret must be mounted to directory "/var/run/antrea/antrea-controller-tls" of the
+# antrea-controller container.
 #selfSignedCert: true
 ```
 
