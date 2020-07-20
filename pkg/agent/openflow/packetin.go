@@ -15,10 +15,8 @@
 package openflow
 
 import (
-	"time"
-
 	"github.com/contiv/ofnet/ofctrl"
-	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 )
 
@@ -31,6 +29,8 @@ type PacketInHandler interface {
 const (
 	// Action explicitly output to controller.
 	ofprAction ofpPacketInReason = 1
+	// Max packetInQueue size.
+	packetInQueueSize int = 256
 )
 
 func (c *client) RegisterPacketInHandler(packetHandlerName string, packetInHandler interface{}) {
@@ -50,16 +50,44 @@ func (c *client) StartPacketInHandler(stopCh <-chan struct{}) {
 	err := c.SubscribePacketIn(uint8(ofprAction), ch)
 	if err != nil {
 		klog.Errorf("Subscribe PacketIn failed %+v", err)
+		return
 	}
+	packetInQueue := workqueue.NewNamed("packetIn")
+	go c.parsePacketIn(packetInQueue, stopCh)
 
-	wait.PollUntil(time.Second, func() (done bool, err error) {
-		pktIn := <-ch
+	for {
+		select {
+		case pktIn := <-ch:
+			// Ensure that the queue doesn't grow too big. This is NOT to provide an exact guarantee.
+			if packetInQueue.Len() < packetInQueueSize {
+				packetInQueue.Add(pktIn)
+			} else {
+				klog.Warningf("Max packetInQueue size exceeded.")
+			}
+		case <-stopCh:
+			packetInQueue.ShutDown()
+			break
+		}
+	}
+}
+
+func (c *client) parsePacketIn(packetInQueue workqueue.Interface, stopCh <-chan struct{}) {
+	for {
+		obj, quit := packetInQueue.Get()
+		if quit {
+			break
+		}
+		packetInQueue.Done(obj)
+		pktIn, ok := obj.(*ofctrl.PacketIn)
+		if !ok {
+			klog.Errorf("Invalid packet in data in queue, skipping.")
+			continue
+		}
 		for name, handler := range c.packetInHandlers {
-			err = handler.HandlePacketIn(pktIn)
+			err := handler.HandlePacketIn(pktIn)
 			if err != nil {
 				klog.Errorf("PacketIn handler %s failed to process packet: %+v", name, err)
 			}
 		}
-		return false, err
-	}, stopCh)
+	}
 }

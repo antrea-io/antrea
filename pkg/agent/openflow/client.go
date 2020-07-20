@@ -176,7 +176,8 @@ type Client interface {
 	// the old priority with the desired one, for each priority update.
 	ReassignFlowPriorities(updates map[uint16]uint16) error
 
-	// SubscribePacketIn subscribes packet-in channel in Bridge.
+	// SubscribePacketIn subscribes packet-in channel in bridge. This method requires a receiver to
+	// pop data from "ch" timely, otherwise it will block all inbound messages from OVS.
 	SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error
 
 	// SendTraceflowPacket injects packet to specified OVS port for Openflow.
