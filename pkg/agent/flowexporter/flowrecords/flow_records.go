@@ -28,6 +28,7 @@ var _ FlowRecords = new(flowRecords)
 
 type FlowRecords interface {
 	BuildFlowRecords() error
+	GetFlowRecordByConnKey(connKey flowexporter.ConnectionKey) (*flowexporter.FlowRecord, bool)
 	IterateFlowRecordsWithSendCB(callback flowexporter.FlowRecordSend, templateID uint16) error
 }
 
@@ -52,6 +53,11 @@ func (fr *flowRecords) BuildFlowRecords() error {
 	}
 	klog.V(2).Infof("No. of flow records built: %d", len(fr.recordsMap))
 	return nil
+}
+
+func (fr *flowRecords) GetFlowRecordByConnKey(connKey flowexporter.ConnectionKey) (*flowexporter.FlowRecord, bool) {
+	record, found := fr.recordsMap[connKey]
+	return &record, found
 }
 
 func (fr *flowRecords) IterateFlowRecordsWithSendCB(sendCallback flowexporter.FlowRecordSend, templateID uint16) error {
