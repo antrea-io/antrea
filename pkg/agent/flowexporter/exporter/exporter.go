@@ -88,6 +88,16 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
+func NewFlowExporter(records flowrecords.FlowRecords, expProcess ipfix.IPFIXExportingProcess, elemList []*ipfixentities.InfoElement, expInterval time.Duration, tempID uint16) *flowExporter {
+	return &flowExporter{
+		records,
+		expProcess,
+		elemList,
+		expInterval,
+		tempID,
+	}
+}
+
 func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expInterval time.Duration) (*flowExporter, error) {
 	// Create IPFIX exporting expProcess and initialize registries and other related entities
 	obsID, err := genObservationID()
@@ -108,15 +118,8 @@ func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expIn
 	}
 	expProcess.LoadRegistries()
 
-	flowExp := &flowExporter{
-		records,
-		expProcess,
-		nil,
-		expInterval,
-		0,
-	}
+	flowExp := NewFlowExporter(records, expProcess, nil, expInterval, expProcess.NewTemplateID())
 
-	flowExp.templateID = flowExp.process.NewTemplateID()
 	templateRec := ipfix.NewIPFIXTemplateRecord(uint16(len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements)), flowExp.templateID)
 
 	sentBytes, err := flowExp.sendTemplateRecord(templateRec)

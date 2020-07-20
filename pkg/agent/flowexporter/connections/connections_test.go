@@ -135,7 +135,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 			iStore.EXPECT().GetInterfaceByIP(test.flow.TupleReply.SourceAddress.String()).Return(interfaceFlow2, true)
 		}
 		connStore.addOrUpdateConn(&test.flow)
-		actualConn, _ := connStore.getConnByKey(flowTuple)
+		actualConn, _ := connStore.GetConnByKey(flowTuple)
 		assert.Equal(t, expConn, *actualConn, "Connections should be equal")
 	}
 }

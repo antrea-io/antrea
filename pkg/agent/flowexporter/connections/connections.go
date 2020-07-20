@@ -29,6 +29,7 @@ var _ ConnectionStore = new(connectionStore)
 type ConnectionStore interface {
 	Run(stopCh <-chan struct{}, pollDone chan bool)
 	IterateCxnMapWithCB(updateCallback flowexporter.FlowRecordUpdate) error
+	GetConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool)
 	FlushConnectionStore()
 }
 
@@ -73,7 +74,7 @@ func (cs *connectionStore) Run(stopCh <-chan struct{}, pollDone chan bool) {
 				// TODO: Optimize this logic by flushing individual connections based on the individual timeout values.
 				cs.FlushConnectionStore()
 			}
-			_, err := cs.poll()
+			_, err := cs.Poll()
 			if err != nil {
 				// Not failing here as errors can be transient and could be resolved in future poll cycles.
 				// TODO: Come up with a backoff/retry mechanism by increasing poll interval and adding retry timeout
@@ -94,7 +95,7 @@ func (cs *connectionStore) Run(stopCh <-chan struct{}, pollDone chan bool) {
 func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 	connKey := flowexporter.NewConnectionKey(conn)
 
-	existingConn, exists := cs.getConnByKey(connKey)
+	existingConn, exists := cs.GetConnByKey(connKey)
 
 	if exists {
 		// Update the necessary fields that are used in generating flow records.
@@ -129,7 +130,7 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 	}
 }
 
-func (cs *connectionStore) getConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
+func (cs *connectionStore) GetConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
 	conn, found := cs.connections[flowTuple]
 	return &conn, found
 }
@@ -148,7 +149,7 @@ func (cs *connectionStore) IterateCxnMapWithCB(updateCallback flowexporter.FlowR
 
 // poll returns number of filtered connections after poll cycle
 // TODO: Optimize polling cycle--Only poll invalid/close connection during every poll. Poll established right before export
-func (cs *connectionStore) poll() (int, error) {
+func (cs *connectionStore) Poll() (int, error) {
 	klog.V(2).Infof("Polling conntrack")
 
 	filteredConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
