@@ -433,6 +433,10 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 func TestAddCNP(t *testing.T) {
 	p10 := float64(10)
 	appTier := antreatypes.TierApplication
+	secOpsTier := antreatypes.TierSecurityOps
+	netOpsTier := antreatypes.TierNetworkOps
+	intTenantTier := antreatypes.TierInterTenant
+	emergencyTier := antreatypes.TierEmergency
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := networking.ProtocolTCP
 	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
@@ -450,6 +454,281 @@ func TestAddCNP(t *testing.T) {
 		expAppliedToGroups int
 		expAddressGroups   int
 	}{
+		{
+			name: "application-tier-policy",
+			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpA", UID: "uidA"},
+				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Tier:     "Application",
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &intstr80,
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:          "uidA",
+				Name:         "cnpA",
+				Namespace:    "",
+				Priority:     &p10,
+				TierPriority: &appTier,
+				Rules: []networking.NetworkPolicyRule{
+					{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+						},
+						Services: []networking.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
+		{
+			name: "secops-tier-policy",
+			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpB", UID: "uidB"},
+				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Tier:     "SecurityOps",
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &intstr80,
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:          "uidB",
+				Name:         "cnpB",
+				Namespace:    "",
+				Priority:     &p10,
+				TierPriority: &secOpsTier,
+				Rules: []networking.NetworkPolicyRule{
+					{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+						},
+						Services: []networking.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
+		{
+			name: "netops-tier-policy",
+			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpC", UID: "uidC"},
+				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Tier:     "NetworkOps",
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &intstr80,
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:          "uidC",
+				Name:         "cnpC",
+				Namespace:    "",
+				Priority:     &p10,
+				TierPriority: &netOpsTier,
+				Rules: []networking.NetworkPolicyRule{
+					{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+						},
+						Services: []networking.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
+		{
+			name: "emergency-tier-policy",
+			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpD", UID: "uidD"},
+				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Tier:     "Emergency",
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &intstr80,
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:          "uidD",
+				Name:         "cnpD",
+				Namespace:    "",
+				Priority:     &p10,
+				TierPriority: &emergencyTier,
+				Rules: []networking.NetworkPolicyRule{
+					{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+						},
+						Services: []networking.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
+		{
+			name: "inter-tenant-tier-policy",
+			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpE", UID: "uidE"},
+				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Tier:     "InterTenant",
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &intstr80,
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:          "uidE",
+				Name:         "cnpE",
+				Namespace:    "",
+				Priority:     &p10,
+				TierPriority: &intTenantTier,
+				Rules: []networking.NetworkPolicyRule{
+					{
+						Direction: networking.DirectionIn,
+						From: networking.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+						},
+						Services: []networking.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
 		{
 			name: "rules-with-same-selectors",
 			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
@@ -639,7 +918,7 @@ func TestAddCNP(t *testing.T) {
 	for _, tt := range tests {
 		npc.addCNP(tt.inputPolicy)
 	}
-	assert.Equal(t, 2, npc.GetNetworkPolicyNum(), "expected networkPolicy number is 2")
+	assert.Equal(t, 7, npc.GetNetworkPolicyNum(), "expected networkPolicy number is 2")
 	assert.Equal(t, 3, npc.GetAddressGroupNum(), "expected addressGroup number is 3")
 	assert.Equal(t, 1, npc.GetAppliedToGroupNum(), "appliedToGroup number is 1")
 }

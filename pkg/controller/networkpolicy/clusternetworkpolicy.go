@@ -32,6 +32,7 @@ var (
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
 
+	// tierPriorityMap maintains a map of the Tier name to it's priority.
 	tierPriorityMap = map[string]antreatypes.TierPriority{
 		"Emergency":   antreatypes.TierEmergency,
 		"SecurityOps": antreatypes.TierSecurityOps,
@@ -163,6 +164,9 @@ func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*networking.IPBlock, e
 	return antreaIPBlock, nil
 }
 
+// getTierPriority retrieves the priority associated with the input Tier name.
+// If the Tier name is empty, by default, the lowest priority Application Tier
+// is returned.
 func getTierPriority(tier string) antreatypes.TierPriority {
 	if tier == "" {
 		return antreatypes.TierApplication

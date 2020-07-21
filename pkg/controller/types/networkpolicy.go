@@ -37,6 +37,8 @@ func (meta *SpanMeta) Has(nodeName string) bool {
 	return meta.NodeNames.Has(nodeName)
 }
 
+// TierPriority specifies the relative ordering among Tiers. A lower
+// TierPriority indicates higher precedence.
 type TierPriority uint32
 
 const (
