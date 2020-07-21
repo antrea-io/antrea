@@ -15,15 +15,14 @@
 package flowexporter
 
 import (
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix"
 	"net"
 	"time"
 )
 
 type ConnectionKey [5]string
 
-type FlowRecordUpdate func(key ConnectionKey, cxn Connection) error
-type FlowRecordSend func(dataRecord ipfix.IPFIXRecord, record FlowRecord) error
+type ConnectionMapCallBack func(key ConnectionKey, conn Connection) error
+type FlowRecordCallBack func(key ConnectionKey, record FlowRecord) error
 
 type Tuple struct {
 	SourceAddress      net.IP
@@ -40,7 +39,9 @@ type Connection struct {
 	StartTime time.Time
 	// For invalid and closed connections: StopTime is the time when connection was updated last.
 	// For established connections: StopTime is latest time when it was polled.
-	StopTime   time.Time
+	StopTime time.Time
+	// IsActive flag helps in cleaning up connections when they are not in conntrack any module more.
+	IsActive   bool
 	Zone       uint16
 	StatusFlag uint32
 	// TODO: Have a separate field for protocol. No need to keep it in Tuple.
@@ -60,5 +61,4 @@ type FlowRecord struct {
 	PrevBytes          uint64
 	PrevReversePackets uint64
 	PrevReverseBytes   uint64
-	IsActive           bool
 }

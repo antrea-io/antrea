@@ -113,7 +113,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
 	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
 	// Hardcoded poll and export intervals; they are not used
-	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, time.Second, time.Second)
+	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, time.Second)
 	flowRecords := flowrecords.NewFlowRecords(connStore)
 	// Prepare connections and interface config for test
 	testConns, testConnKeys := createConnsForTest()
@@ -153,20 +153,5 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 
 	// Test for build flow records
 	testBuildFlowRecords(t, flowRecords, testConns, testConnKeys)
-
-	// Delete the connections from connection store and check
-	connStore.FlushConnectionStore()
-	// Check the resulting connectionStore; connections should not be present in ConnectionStore
-	for i := 0; i < len(testConns); i++ {
-		_, found := connStore.GetConnByKey(*testConnKeys[i])
-		assert.Equal(t, found, false, "testConn should not be part of connection store")
-	}
-	err = flowRecords.BuildFlowRecords()
-	require.Nil(t, err, fmt.Sprintf("Failed to build flow records from connection store: %v", err))
-	// Make sure that records corresponding to testConns are not gone in flow records.
-	for i := 0; i < len(testConns); i++ {
-		_, found := flowRecords.GetFlowRecordByConnKey(*testConnKeys[i])
-		assert.Equal(t, found, true, "testConn should not be part of flow records")
-	}
 
 }
