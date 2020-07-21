@@ -248,14 +248,15 @@ func run(o *Options) error {
 			} else if o.config.OVSDatapathType == ovsconfig.OVSDatapathNetdev {
 				connTrackDumper = connections.NewConnTrackDumper(connections.NewConnTrackNetdev(), nodeConfig, serviceCIDRNet, o.config.OVSDatapathType, agentQuerier.GetOVSCtlClient())
 			}
-			connStore := connections.NewConnectionStore(connTrackDumper, ifaceStore, o.pollingInterval, o.exportInterval)
+			connStore := connections.NewConnectionStore(connTrackDumper, ifaceStore, o.pollingInterval)
 			flowRecords := flowrecords.NewFlowRecords(connStore)
-			flowExporter, err := exporter.InitFlowExporter(o.flowCollector, flowRecords, o.exportInterval)
+			flowExporter, err := exporter.InitFlowExporter(o.flowCollector, flowRecords, o.exportInterval, o.pollingInterval)
 			if err != nil {
 				// If flow exporter cannot be initialized, then Antrea agent does not exit; only error is logged.
 				klog.Errorf("error when initializing flow exporter: %v", err)
 			} else {
-				pollDone := make(chan bool, 1)
+				// pollDone helps in synchronizing connStore.Run and flowExporter.Run go routines.
+				pollDone := make(chan bool)
 				go connStore.Run(stopCh, pollDone)
 				go flowExporter.Run(stopCh, pollDone)
 			}

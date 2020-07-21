@@ -330,6 +330,7 @@ func createAntreaConn(conn *conntrack.Flow) *flowexporter.Connection {
 		conn.Timeout,
 		conn.Timestamp.Start,
 		conn.Timestamp.Stop,
+		true,
 		conn.Zone,
 		uint32(conn.Status.Value),
 		tupleOrig,

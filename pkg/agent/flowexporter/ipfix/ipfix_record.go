@@ -16,6 +16,7 @@ package ipfix
 
 import (
 	"bytes"
+
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 )
 

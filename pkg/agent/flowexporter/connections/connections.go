@@ -15,6 +15,8 @@
 package connections
 
 import (
+	"fmt"
+	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -27,29 +29,32 @@ import (
 var _ ConnectionStore = new(connectionStore)
 
 type ConnectionStore interface {
+	// Run enables to poll conntrack connections periodically at given flowPollInterval
 	Run(stopCh <-chan struct{}, pollDone chan bool)
-	IterateCxnMapWithCB(updateCallback flowexporter.FlowRecordUpdate) error
-	GetConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool)
-	FlushConnectionStore()
+	// Poll calls into conntrackDumper interface
+	Poll() (int, error)
+	// ForAllConnectionsDo execute the callback for each connection in connection map
+	ForAllConnectionsDo(callback flowexporter.ConnectionMapCallBack) error
+	// GetConnByKey gets the connection in connection map given the connection key
+	GetConnByKey(connKey flowexporter.ConnectionKey) (*flowexporter.Connection, bool)
+	// DeleteConnectionByKey deletes the connection in connection map given the connection key
+	DeleteConnectionByKey(connKey flowexporter.ConnectionKey) error
 }
 
 type connectionStore struct {
-	// pollDone channel is used for synchronization of poll(ConnectionStore.Run) and export(FlowExporter.Run) go routines.
-	// Therefore, there is no requirement of lock to make connections map thread safe.
-	connections    map[flowexporter.ConnectionKey]flowexporter.Connection // Add 5-tuple as string array
-	connDumper     ConnTrackDumper
-	ifaceStore     interfacestore.InterfaceStore
-	pollInterval   time.Duration
-	exportInterval time.Duration
+	connections  map[flowexporter.ConnectionKey]flowexporter.Connection
+	mutex        sync.Mutex
+	connDumper   ConnTrackDumper
+	ifaceStore   interfacestore.InterfaceStore
+	pollInterval time.Duration
 }
 
-func NewConnectionStore(ctDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, pollInterval time.Duration, exportInterval time.Duration) *connectionStore {
+func NewConnectionStore(ctDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, pollInterval time.Duration) *connectionStore {
 	return &connectionStore{
-		connections:    make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		connDumper:     ctDumper,
-		ifaceStore:     ifaceStore,
-		pollInterval:   pollInterval,
-		exportInterval: exportInterval,
+		connections:  make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		connDumper:   ctDumper,
+		ifaceStore:   ifaceStore,
+		pollInterval: pollInterval,
 	}
 }
 
@@ -60,32 +65,23 @@ func (cs *connectionStore) Run(stopCh <-chan struct{}, pollDone chan bool) {
 
 	pollTicker := time.NewTicker(cs.pollInterval)
 	defer pollTicker.Stop()
-	exportTrigger := uint(cs.exportInterval / cs.pollInterval)
-	exportCounter := uint(0)
 
 	for {
 		select {
 		case <-stopCh:
 			break
 		case <-pollTicker.C:
-			if exportCounter == 0 {
-				exportCounter = exportTrigger
-				// Flush connection map once all flow records are sent.
-				// TODO: Optimize this logic by flushing individual connections based on the individual timeout values.
-				cs.FlushConnectionStore()
-			}
 			_, err := cs.Poll()
 			if err != nil {
 				// Not failing here as errors can be transient and could be resolved in future poll cycles.
 				// TODO: Come up with a backoff/retry mechanism by increasing poll interval and adding retry timeout
 				klog.Errorf("Error during conntrack poll cycle: %v", err)
 			}
-			exportCounter = exportCounter - 1
-			if exportCounter == 0 {
-				// We need synchronization between ConnectionStore.Run and FlowExporter.Run go routines. pollDone channel provides that synchronization.
-				// More details in exporter/exporter.go.
-				pollDone <- true
-			}
+			// We need synchronization between ConnectionStore.Run and FlowExporter.Run go routines.
+			// ConnectionStore.Run (connection poll) should be done to start FlowExporter.Run (connection export); pollDone signals helps enabling this.
+			// FlowExporter.Run should be done to start ConnectionStore.Run; mutex on connection map object makes sure of this synchronization guarantee.
+			pollDone <- true
+
 		}
 	}
 }
@@ -97,6 +93,8 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 
 	existingConn, exists := cs.GetConnByKey(connKey)
 
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
 	if exists {
 		// Update the necessary fields that are used in generating flow records.
 		// Can same 5-tuple flow get deleted and added to conntrack table? If so use ID.
@@ -105,6 +103,7 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		existingConn.OriginalPackets = conn.OriginalPackets
 		existingConn.ReverseBytes = conn.ReverseBytes
 		existingConn.ReversePackets = conn.ReversePackets
+		existingConn.IsActive = true
 		// Reassign the flow to update the map
 		cs.connections[connKey] = *existingConn
 		klog.V(4).Infof("Antrea flow updated: %v", existingConn)
@@ -131,16 +130,19 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 }
 
 func (cs *connectionStore) GetConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
 	conn, found := cs.connections[flowTuple]
 	return &conn, found
 }
 
-func (cs *connectionStore) IterateCxnMapWithCB(updateCallback flowexporter.FlowRecordUpdate) error {
+func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionMapCallBack) error {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
 	for k, v := range cs.connections {
-		klog.V(4).Infof("After: iterating flow with key: %v, conn: %v", k, v)
-		err := updateCallback(k, v)
+		err := callback(k, v)
 		if err != nil {
-			klog.Errorf("Update callback failed for flow with key: %v, conn: %v, k, v: %v", k, v, err)
+			klog.Errorf("Callback execution failed for flow with key: %v, conn: %v, k, v: %v", k, v, err)
 			return err
 		}
 	}
@@ -151,6 +153,15 @@ func (cs *connectionStore) IterateCxnMapWithCB(updateCallback flowexporter.FlowR
 // TODO: Optimize polling cycle--Only poll invalid/close connection during every poll. Poll established right before export
 func (cs *connectionStore) Poll() (int, error) {
 	klog.V(2).Infof("Polling conntrack")
+
+	// Reset all connections in connection map before dumping flows in conntrack module.
+	resetConn := func(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
+		conn.IsActive = false
+		cs.connections[key] = conn
+		return nil
+	}
+	// We do not expect any error as resetConn is not returning any error
+	cs.ForAllConnectionsDo(resetConn)
 
 	filteredConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
 	if err != nil {
@@ -168,12 +179,15 @@ func (cs *connectionStore) Poll() (int, error) {
 	return connsLen, nil
 }
 
-// FlushConnectionStore after each IPFIX export of flow records.
-// Timed out conntrack connections will not be sent as IPFIX flow records.
-func (cs *connectionStore) FlushConnectionStore() {
-	klog.Infof("Flushing connection map")
-
-	for conn := range cs.connections {
-		delete(cs.connections, conn)
+// DeleteConnectionByKey after each IPFIX export of flow records.
+func (cs *connectionStore) DeleteConnectionByKey(connKey flowexporter.ConnectionKey) error {
+	_, exists := cs.GetConnByKey(connKey)
+	if !exists {
+		return fmt.Errorf("connection with key %v doesn't exist in map", connKey)
 	}
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+	delete(cs.connections, connKey)
+
+	return nil
 }

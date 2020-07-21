@@ -62,6 +62,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		ReverseBytes:    0xbaaa,
 		TupleOrig:       *tuple1,
 		TupleReply:      *revTuple1,
+		IsActive:        true,
 	}
 	// Flow-2, which is not in connectionStore
 	tuple2, revTuple2 := makeTuple(&net.IP{5, 6, 7, 8}, &net.IP{8, 7, 6, 5}, 6, 60001, 200)
@@ -74,6 +75,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		ReverseBytes:    0xcbbbb0000000000,
 		TupleOrig:       *tuple2,
 		TupleReply:      *revTuple2,
+		IsActive:        true,
 	}
 	// Create copy of old conntrack flow for testing purposes.
 	// This flow is already in connection store.
@@ -90,6 +92,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		SourcePodName:           "pod1",
 		DestinationPodNamespace: "",
 		DestinationPodName:      "",
+		IsActive:                true,
 	}
 	podConfigFlow2 := &interfacestore.ContainerInterfaceConfig{
 		ContainerID:  "2",

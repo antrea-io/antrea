@@ -152,7 +152,7 @@ func (o *Options) setDefaults() {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}
 
-	if o.config.FlowCollectorAddr != "" && o.config.PollAndExportInterval == "" {
+	if o.config.FlowCollectorAddr != "" && o.config.FlowPollAndFlowExportIntervals == "" {
 		o.pollingInterval = 5 * time.Second
 		o.exportInterval = 60 * time.Second
 	}
@@ -165,15 +165,13 @@ func (o *Options) validateFlowExporterConfig() error {
 			strSlice := strings.Split(o.config.FlowCollectorAddr, ":")
 			var proto string
 			if len(strSlice) == 2 {
-				// No separator "." and proto is given
+				// If no separator ":" and proto is given, then default to TCP.
 				proto = "tcp"
 			} else if len(strSlice) > 2 {
-				if strSlice[2] == "udp" {
-					proto = "udp"
-				} else {
-					// All other cases default proto is tcp
-					proto = "tcp"
+				if (strSlice[2] != "udp") && (strSlice[2] != "tcp") {
+					return fmt.Errorf("IPFIX flow collector over %s proto is not supported", strSlice[2])
 				}
+				proto = strSlice[2]
 			} else {
 				return fmt.Errorf("IPFIX flow collector is given in invalid format")
 			}
@@ -191,14 +189,14 @@ func (o *Options) validateFlowExporterConfig() error {
 			} else {
 				o.flowCollector, err = net.ResolveTCPAddr("tcp", hostPortAddr)
 				if err != nil {
-					return fmt.Errorf("IPFIX flow collector server TCP proto is not resolved: %v", err)
+					return fmt.Errorf("IPFIX flow collector over TCP proto is not resolved: %v", err)
 				}
 			}
 
-			if o.config.PollAndExportInterval != "" {
-				intervalSlice := strings.Split(o.config.PollAndExportInterval, ":")
+			if o.config.FlowPollAndFlowExportIntervals != "" {
+				intervalSlice := strings.Split(o.config.FlowPollAndFlowExportIntervals, ":")
 				if len(intervalSlice) != 2 {
-					return fmt.Errorf("flow exporter intervals %s is not in acceptable format \"OOs:OOs\"", o.config.PollAndExportInterval)
+					return fmt.Errorf("flow exporter intervals %s is not in acceptable format \"OOs:OOs\"", o.config.FlowPollAndFlowExportIntervals)
 				}
 				o.pollingInterval, err = time.ParseDuration(intervalSlice[0])
 				if err != nil {
