@@ -312,7 +312,7 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
 	}
 	// pollAndExportInterval is added as harcoded value "1s:5s"
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#pollAndExportInterval: \"\"|pollAndExportInterval: \"1s:5s\"|g' %s", antreaYML)
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#flowPollAndFlowExportIntervals: \"\"|flowPollAndFlowExportIntervals: \"1s:5s\"|g' %s", antreaYML)
 	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
@@ -340,7 +340,7 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
 	}
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|pollAndExportInterval: \"1s:5s\"|#pollAndExportInterval: \"\"|g' %s", antreaYML)
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|flowPollAndFlowExportIntervals: \"1s:5s\"|#flowPollAndFlowExportIntervals: \"\"|g' %s", antreaYML)
 	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)

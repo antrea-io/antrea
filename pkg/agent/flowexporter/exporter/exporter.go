@@ -67,6 +67,7 @@ var (
 var _ FlowExporter = new(flowExporter)
 
 type FlowExporter interface {
+	// Run enables to export flow records periodically at given export interval
 	Run(stopCh <-chan struct{}, pollDone <-chan bool)
 }
 
@@ -75,6 +76,7 @@ type flowExporter struct {
 	process        ipfix.IPFIXExportingProcess
 	elementsList   []*ipfixentities.InfoElement
 	exportInterval time.Duration
+	pollInterval   time.Duration
 	templateID     uint16
 }
 
@@ -88,17 +90,18 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
-func NewFlowExporter(records flowrecords.FlowRecords, expProcess ipfix.IPFIXExportingProcess, elemList []*ipfixentities.InfoElement, expInterval time.Duration, tempID uint16) *flowExporter {
+func NewFlowExporter(records flowrecords.FlowRecords, expProcess ipfix.IPFIXExportingProcess, elemList []*ipfixentities.InfoElement, expInterval time.Duration, pollInterval time.Duration, tempID uint16) *flowExporter {
 	return &flowExporter{
 		records,
 		expProcess,
 		elemList,
 		expInterval,
+		pollInterval,
 		tempID,
 	}
 }
 
-func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expInterval time.Duration) (*flowExporter, error) {
+func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expInterval time.Duration, pollInterval time.Duration) (*flowExporter, error) {
 	// Create IPFIX exporting expProcess and initialize registries and other related entities
 	obsID, err := genObservationID()
 	if err != nil {
@@ -118,7 +121,7 @@ func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expIn
 	}
 	expProcess.LoadRegistries()
 
-	flowExp := NewFlowExporter(records, expProcess, nil, expInterval, expProcess.NewTemplateID())
+	flowExp := NewFlowExporter(records, expProcess, nil, expInterval, pollInterval, expProcess.NewTemplateID())
 
 	templateRec := ipfix.NewIPFIXTemplateRecord(uint16(len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements)), flowExp.templateID)
 
@@ -142,11 +145,14 @@ func (exp *flowExporter) Run(stopCh <-chan struct{}, pollDone <-chan bool) {
 			exp.process.CloseConnToCollector()
 			break
 		case <-ticker.C:
-			// Waiting for pollDone channel is necessary because IPFIX collector computes throughput based on
-			// flow records received interval, therefore we need to wait for poll go routine (ConnectionStore.Run).
-			// pollDone provides this synchronization. Note that export interval is multiple of poll interval, and poll
-			// interval is at least one second long.
-			<-pollDone
+			// Waiting for expected number of pollDone signals from go routine(ConnectionStore.Run) is necessary because
+			// IPFIX collector computes throughput based on flow records received interval. Expected number of pollDone
+			// signals should be equal to the number of pollCycles to be done before starting the export cycle; it is computed
+			// from flow poll interval and flow export interval. Note that export interval is multiple of poll interval,
+			// and poll interval is at least one second long.
+			for i := uint(0); i < uint(exp.exportInterval/exp.pollInterval); i++ {
+				<-pollDone
+			}
 			err := exp.flowRecords.BuildFlowRecords()
 			if err != nil {
 				klog.Errorf("Error when building flow records: %v", err)
@@ -164,9 +170,19 @@ func (exp *flowExporter) Run(stopCh <-chan struct{}, pollDone <-chan bool) {
 }
 
 func (exp *flowExporter) sendFlowRecords() error {
-	err := exp.flowRecords.IterateFlowRecordsWithSendCB(exp.sendDataRecord, exp.templateID)
+	sendAndUpdateFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
+		dataRec := ipfix.NewIPFIXDataRecord(exp.templateID)
+		if err := exp.sendDataRecord(dataRec, record); err != nil {
+			return err
+		}
+		if err := exp.flowRecords.ValidateAndUpdateStats(key, record); err != nil {
+			return err
+		}
+		return nil
+	}
+	err := exp.flowRecords.ForAllFlowRecordsDo(sendAndUpdateFlowRecord)
 	if err != nil {
-		return fmt.Errorf("error in iterating flow records: %v", err)
+		return fmt.Errorf("error when iterating flow records: %v", err)
 	}
 	return nil
 }

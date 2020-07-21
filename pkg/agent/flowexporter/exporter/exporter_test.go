@@ -39,6 +39,7 @@ func TestFlowExporter_sendTemplateRecord(t *testing.T) {
 		mockIPFIXExpProc,
 		nil,
 		60 * time.Second,
+		time.Second,
 		256,
 	}
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
@@ -146,6 +147,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 		mockIPFIXExpProc,
 		elemList,
 		60 * time.Second,
+		time.Second,
 		256,
 	}
 	// Expect calls required

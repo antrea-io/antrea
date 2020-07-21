@@ -1,7 +1,7 @@
 FROM ubuntu:18.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image based on Ubuntu 18.04 which contains simple IPFIX collector to run flow exporter tests"
+LABEL description="A Docker image based on Ubuntu 18.04 which contains a simple IPFIX collector to run flow exporter tests"
 
 WORKDIR /ipfix
 
