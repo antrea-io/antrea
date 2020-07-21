@@ -114,6 +114,7 @@ docker-test-integration:
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
 		-v $(CURDIR):/usr/src/github.com/vmware-tanzu/antrea:ro \
+		-v /lib/modules:/lib/modules \
 		antrea/test test-integration $(USERID) $(GRPID)
 
 .PHONY: docker-tidy
