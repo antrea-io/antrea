@@ -165,7 +165,7 @@ func (c *Client) initIPSet() error {
 		return err
 	}
 	// Ensure its own PodCIDR is in it.
-	if err := ipset.AddEntry(antreaPodIPSet, c.nodeConfig.PodCIDR.String()); err != nil {
+	if err := ipset.AddEntry(antreaPodIPSet, c.nodeConfig.PodIPv4CIDR.String()); err != nil {
 		return err
 	}
 	return nil
@@ -269,7 +269,7 @@ func (c *Client) initIPTables() error {
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: masquerade pod to external packets"`,
-			"-s", c.nodeConfig.PodCIDR.String(), "-m", "set", "!", "--match-set", antreaPodIPSet, "dst",
+			"-s", c.nodeConfig.PodIPv4CIDR.String(), "-m", "set", "!", "--match-set", antreaPodIPSet, "dst",
 			"-j", iptables.MasqueradeTarget,
 		}...)
 	}
@@ -407,7 +407,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeIP, nodeGwIP net.IP) error {
 	return nil
 }
 
-// DeleteRoutes deletes routes to a PodCIDR. It does nothing if the routes doesn't exist.
+// DeleteRoutes deletes routes to a PodCIDRs. It does nothing if the routes doesn't exist.
 func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	podCIDRStr := podCIDR.String()
 	// Delete this podCIDR from antreaPodIPSet as the CIDR is no longer for Pods.
@@ -509,7 +509,7 @@ func (c *Client) addServiceRouting() error {
 		route := &netlink.Route{
 			LinkIndex: gwConfig.LinkIndex,
 			Scope:     netlink.SCOPE_LINK,
-			Dst:       c.nodeConfig.PodCIDR,
+			Dst:       c.nodeConfig.PodIPv4CIDR,
 			Table:     c.serviceRtTable.Idx,
 		}
 		if err := netlink.RouteReplace(route); err != nil {

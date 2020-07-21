@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -79,11 +80,11 @@ func TestLoadNetConfig(t *testing.T) {
 	assert.Equal(networkCfg.Name, netCfg.Name)
 	assert.Equal(networkCfg.IPAM.Type, netCfg.IPAM.Type)
 	assert.Equal(
-		netCfg.IPAM.Subnet, testNodeConfig.PodCIDR.String(),
-		"Network configuration (PodCIDR) was not updated",
+		netCfg.IPAM.Subnet, testNodeConfig.PodIPv4CIDR.String(),
+		"Network configuration (PodCIDRs) was not updated",
 	)
 	assert.Equal(
-		netCfg.IPAM.Gateway, testNodeConfig.GatewayConfig.IP.String(),
+		netCfg.IPAM.Gateway, testNodeConfig.GatewayConfig.IPs[0].String(),
 		"Network configuration (Gateway IP) was not updated",
 	)
 }
@@ -311,7 +312,7 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 	// return a Result with 2 v4 addresses.
 	testIps := []string{"10.1.2.100/24, ,4", "192.168.1.100/24, 192.168.2.253, 4"}
 
-	require.Equal(gwIP, testNodeConfig.GatewayConfig.IP)
+	require.Equal(gwIP, testNodeConfig.GatewayConfig.IPs[0])
 
 	t.Run("Gateways updated", func(t *testing.T) {
 		assert := assert.New(t)
@@ -409,7 +410,7 @@ func TestRemoveInterface(t *testing.T) {
 			podName,
 			testPodNamespace,
 			containerMAC,
-			containerIP)
+			[]net.IP{containerIP})
 		containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{fakePortUUID, 0}
 	}
 
@@ -455,11 +456,14 @@ func TestRemoveInterface(t *testing.T) {
 func TestBuildOVSPortExternalIDs(t *testing.T) {
 	containerID := uuid.New().String()
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
-	containerIP := net.ParseIP("10.1.2.100")
-	containerConfig := interfacestore.NewContainerInterface("pod1-abcd", containerID, "test-1", "t1", containerMAC, containerIP)
+	containerIP1 := net.ParseIP("10.1.2.100")
+	containerIP2 := net.ParseIP("2001:fd1a::2")
+	containerIPs := []net.IP{containerIP1, containerIP2}
+	containerConfig := interfacestore.NewContainerInterface("pod1-abcd", containerID, "test-1", "t1", containerMAC, containerIPs)
 	externalIds := BuildOVSPortExternalIDs(containerConfig)
 	parsedIP, existed := externalIds[ovsExternalIDIP]
-	if !existed || parsedIP != "10.1.2.100" {
+	parsedIPStr := parsedIP.(string)
+	if !existed || !strings.Contains(parsedIPStr, "10.1.2.100") || !strings.Contains(parsedIPStr, "2001:fd1a::2") {
 		t.Errorf("Failed to parse container configuration")
 	}
 	parsedMac, existed := externalIds[ovsExternalIDMAC]
@@ -469,6 +473,31 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	parsedID, existed := externalIds[ovsExternalIDContainerID]
 	if !existed || parsedID != containerID {
 		t.Errorf("Failed to parse container configuration")
+	}
+	portExternalIDs := make(map[string]string)
+	for k, v := range externalIds {
+		val := v.(string)
+		portExternalIDs[k] = val
+	}
+	mockPort := &ovsconfig.OVSPortData{
+		Name:        "testPort",
+		ExternalIDs: portExternalIDs,
+	}
+	portConfig := &interfacestore.OVSPortConfig{
+		PortUUID: "12345678",
+		OFPort:   int32(1),
+	}
+	ifaceConfig := ParseOVSPortInterfaceConfig(mockPort, portConfig)
+	assert.Equal(t, len(containerIPs), len(ifaceConfig.IPs))
+	for _, ip1 := range containerIPs {
+		existed := false
+		for _, ip2 := range ifaceConfig.IPs {
+			if ip2.Equal(ip1) {
+				existed = true
+				break
+			}
+		}
+		assert.True(t, existed, fmt.Sprintf("IP %s should exist in the restored InterfaceConfig", ip1.String()))
 	}
 }
 
@@ -543,6 +572,6 @@ func init() {
 	gwIP = net.ParseIP("192.168.1.1")
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 	gwMAC, _ := net.ParseMAC("00:00:00:00:00:01")
-	gateway := &config.GatewayConfig{Name: "", IP: gwIP, MAC: gwMAC}
-	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: gateway}
+	gateway := &config.GatewayConfig{Name: "", IPs: []net.IP{gwIP}, MAC: gwMAC}
+	testNodeConfig = &config.NodeConfig{Name: nodeName, PodIPv4CIDR: nodePodCIDR, GatewayConfig: gateway}
 }
