@@ -68,7 +68,7 @@ func (mr *MockClientMockRecorder) AddPolicyRuleAddress(arg0, arg1, arg2, arg3 in
 }
 
 // BatchInstallPolicyRuleFlows mocks base method
-func (m *MockClient) BatchInstallPolicyRuleFlows(arg0 []types.OFPolicyRule) error {
+func (m *MockClient) BatchInstallPolicyRuleFlows(arg0 []*types.PolicyRule) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BatchInstallPolicyRuleFlows", arg0)
 	ret0, _ := ret[0].(error)
@@ -364,7 +364,7 @@ func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3, arg4 i
 }
 
 // InstallPolicyRuleFlows mocks base method
-func (m *MockClient) InstallPolicyRuleFlows(arg0 types.OFPolicyRule) error {
+func (m *MockClient) InstallPolicyRuleFlows(arg0 *types.PolicyRule) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallPolicyRuleFlows", arg0)
 	ret0, _ := ret[0].(error)

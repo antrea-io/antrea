@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -542,18 +543,19 @@ func TestReconcilerBatchReconcile(t *testing.T) {
 			}
 			// TODO: mock idAllocator and priorityAssigner
 			mockOFClient.EXPECT().BatchInstallPolicyRuleFlows(gomock.Any()).
-				Do(func(rules []types.OFPolicyRule) {
-					if tt.numInstalledRules == 0 && len(rules) != len(tt.expectedOFRules) {
-						t.Fatalf("Expect to install %v flows while %v flows were installed",
+				Do(func(rules []*types.PolicyRule) {
+					if tt.numInstalledRules == 0 {
+						assert.Equalf(t, len(rules), len(tt.expectedOFRules),
+							"Expect to install %v flows while %v flows were installed",
 							len(tt.expectedOFRules), len(rules))
-					} else if tt.numInstalledRules > 0 && len(rules) != len(tt.expectedOFRules)-tt.numInstalledRules {
-						t.Fatalf("Expect to install %v flows while %v flows were installed",
+					} else if tt.numInstalledRules > 0 {
+						assert.Equalf(t, len(rules), len(tt.expectedOFRules)-tt.numInstalledRules,
+							"Expect to install %v flows while %v flows were installed",
 							len(tt.expectedOFRules)-tt.numInstalledRules, len(rules))
 					}
 				})
-			if err := r.BatchReconcile(tt.args); (err != nil) != tt.wantErr {
-				t.Fatalf("BatchReconcile() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			err := r.BatchReconcile(tt.args)
+			assert.Equalf(t, err != nil, tt.wantErr, "BatchReconcile() error = %v, wantErr %v", err, tt.wantErr)
 		})
 	}
 }

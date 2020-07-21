@@ -711,15 +711,15 @@ func (c *policyRuleConjunction) getAddressClause(addrType types.AddressType) *cl
 // If there is an error in any clause's addAddrFlows or addServiceFlows, the conjunction action flow will never be hit.
 // If the default drop flow is already installed before this error, all packets will be dropped by the default drop flow,
 // Otherwise all packets will be allowed.
-func (c *client) InstallPolicyRuleFlows(ofPolicyRule types.OFPolicyRule) error {
+func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
-	conj := c.calculateActionFlowChangesForRule(ofPolicyRule)
+	conj := c.calculateActionFlowChangesForRule(rule)
 
 	c.conjMatchFlowLock.Lock()
 	defer c.conjMatchFlowLock.Unlock()
-	ctxChanges := c.calculateMatchFlowChangesForRule(conj, ofPolicyRule.OfRule, false)
+	ctxChanges := c.calculateMatchFlowChangesForRule(conj, rule, false)
 
 	if err := c.ofEntryOperations.AddAll(conj.actionFlows); err != nil {
 		return err
@@ -733,9 +733,8 @@ func (c *client) InstallPolicyRuleFlows(ofPolicyRule types.OFPolicyRule) error {
 }
 
 // calculateActionFlowChangesForRule calculates and updates the actionFlows for the conjunction corresponded to the ofPolicyRule.
-func (c *client) calculateActionFlowChangesForRule(ofPolicyRule types.OFPolicyRule) *policyRuleConjunction {
-	rule := ofPolicyRule.OfRule
-	ruleID := ofPolicyRule.OfID
+func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *policyRuleConjunction {
+	ruleID := rule.FlowID
 	// Check if the policyRuleConjunction is added into cache or not. If yes, return nil.
 	conj := c.getPolicyRuleConjunction(ruleID)
 	if conj != nil {
@@ -744,8 +743,8 @@ func (c *client) calculateActionFlowChangesForRule(ofPolicyRule types.OFPolicyRu
 	}
 	conj = &policyRuleConjunction{
 		id:          ruleID,
-		npName:      ofPolicyRule.NpName,
-		npNamespace: ofPolicyRule.NpNamespace}
+		npName:      rule.PolicyName,
+		npNamespace: rule.PolicyNamespace}
 	nClause, ruleTable, dropTable := conj.calculateClauses(rule, c)
 
 	// Conjunction action flows are installed only if the number of clauses in the conjunction is > 1. It should be a rule
@@ -781,19 +780,19 @@ func (c *client) calculateMatchFlowChangesForRule(conj *policyRuleConjunction, r
 
 // BatchInstallPolicyRuleFlows installs flows for NetworkPolicy rules in case of agent restart. It calculates and
 // accumulates all Openflow entry updates required and installs all of them on OVS bridge in one bundle.
-func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []types.OFPolicyRule) error {
+func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
 	var allCtxChanges []*conjMatchFlowContextChange
-	var allActionFlowChanges []*binding.Flow
+	var allActionFlowChanges []binding.Flow
 	var updatedConjunctions []*policyRuleConjunction
 
 	for _, rule := range ofPolicyRules {
 		conj := c.calculateActionFlowChangesForRule(rule)
-		ctxChanges := c.calculateMatchFlowChangesForRule(conj, rule.OfRule, true)
+		ctxChanges := c.calculateMatchFlowChangesForRule(conj, rule, true)
 		for _, actionFlow := range conj.actionFlows {
-			allActionFlowChanges = append(allActionFlowChanges, &actionFlow)
+			allActionFlowChanges = append(allActionFlowChanges, actionFlow)
 		}
 		allCtxChanges = append(allCtxChanges, ctxChanges...)
 		updatedConjunctions = append(updatedConjunctions, conj)
@@ -813,7 +812,7 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []types.OFPolicyRule)
 // applyConjunctiveMatchFlows installs OpenFlow entries on the OVS bridge, and then updates the conjMatchFlowContext.
 func (c *client) applyConjunctiveMatchFlows(flowChanges []*conjMatchFlowContextChange) error {
 	// Send the OpenFlow entries to the OVS bridge.
-	if err := c.sendConjunctiveFlows(flowChanges, nil); err != nil {
+	if err := c.sendConjunctiveFlows(flowChanges, []binding.Flow{}); err != nil {
 		return err
 	}
 	// Update conjunctiveMatchContext.
@@ -824,10 +823,10 @@ func (c *client) applyConjunctiveMatchFlows(flowChanges []*conjMatchFlowContextC
 }
 
 // sendConjunctiveFlows sends all the changed OpenFlow entries to the OVS bridge in a single Bundle.
-func (c *client) sendConjunctiveFlows(changes []*conjMatchFlowContextChange, actionFlows []*binding.Flow) error {
+func (c *client) sendConjunctiveFlows(changes []*conjMatchFlowContextChange, actionFlows []binding.Flow) error {
 	var addFlows, modifyFlows, deleteFlows []binding.Flow
 	for _, actionFlow := range actionFlows {
-		addFlows = append(addFlows, *actionFlow)
+		addFlows = append(addFlows, actionFlow)
 	}
 	var flowChanges []*flowChange
 	for _, flowChange := range changes {

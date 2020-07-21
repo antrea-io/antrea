@@ -42,14 +42,18 @@ type Address interface {
 
 // PolicyRule groups configurations to set up conjunctive match for egress/ingress policy rules.
 type PolicyRule struct {
-	Direction v1beta1.Direction
-	From      []Address
-	To        []Address
-	Service   []v1beta1.Service
-	Action    *secv1alpha1.RuleAction
-	Priority  *uint16
+	Direction       v1beta1.Direction
+	From            []Address
+	To              []Address
+	Service         []v1beta1.Service
+	Action          *secv1alpha1.RuleAction
+	Priority        *uint16
+	FlowID          uint32
+	PolicyName      string
+	PolicyNamespace string
 }
 
+// IsAntreaNetworkPolicyRule returns if a PolicyRule is created for Antrea NetworkPolicy types.
 func (r *PolicyRule) IsAntreaNetworkPolicyRule() bool {
 	return r.Priority != nil
 }
@@ -60,12 +64,4 @@ func (r *PolicyRule) IsAntreaNetworkPolicyRule() bool {
 type Priority struct {
 	PolicyPriority float64
 	RulePriority   int32
-}
-
-// OFPolicyRule groups all configurations that the openflow module needs to install flow for PolicyRule.
-type OFPolicyRule struct {
-	OfID        uint32
-	OfRule      *PolicyRule
-	NpName      string
-	NpNamespace string
 }
