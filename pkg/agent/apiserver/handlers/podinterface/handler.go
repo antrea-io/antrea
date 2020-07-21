@@ -40,7 +40,7 @@ func generateResponse(i *interfacestore.InterfaceConfig) Response {
 		PodName:       i.ContainerInterfaceConfig.PodName,
 		PodNamespace:  i.ContainerInterfaceConfig.PodNamespace,
 		InterfaceName: i.InterfaceName,
-		IP:            i.IP.String(),
+		IP:            i.GetIPv4Addr().String(),
 		MAC:           i.MAC.String(),
 		PortUUID:      i.OVSPortConfig.PortUUID,
 		OFPort:        i.OVSPortConfig.OFPort,

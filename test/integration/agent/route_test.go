@@ -61,10 +61,10 @@ var (
 	svcTblIdx         = route.AntreaServiceTableIdx
 	svcTblName        = route.AntreaServiceTable
 	mainTblIdx        = 254
-	gwConfig          = &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: gwName}
+	gwConfig          = &config.GatewayConfig{IPs: []net.IP{gwIP}, MAC: gwMAC, Name: gwName}
 	nodeConfig        = &config.NodeConfig{
 		Name:          "test",
-		PodCIDR:       podCIDR,
+		PodIPv4CIDR:   podCIDR,
 		NodeIPAddr:    nodeIP,
 		GatewayConfig: gwConfig,
 	}
