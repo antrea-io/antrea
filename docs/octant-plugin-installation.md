@@ -10,13 +10,13 @@ There are two ways to deploy Octant and antrea-octant-plugin.
 
 
 ### Prerequisites
-antrea-octant-plugin depends on the Antrea monitoring CRDs, AntreaControllerInfo and AntreaAgentInfo.
+antrea-octant-plugin depends on the Antrea monitoring CRDs (AntreaControllerInfo and AntreaAgentInfo) and Traceflow CRD (Traceflow).
 
-To run Octant together with antrea-octant-plugin, please make sure you have these two CRDs defined in you K8s cluster.
+To run Octant together with antrea-octant-plugin, please make sure you have these CRDs defined in you K8s cluster.
 
-If Antrea is deployed before antrea-octant-plugin starts by using the standard deployment yaml, Antrea monitoring
+If Antrea is deployed before antrea-octant-plugin starts by using the standard deployment yaml, these
 CRDs should already be added. If not, please refer to [antrea.yaml](/build/yamls/antrea.yml) to
-create these two CRDs first.
+create these CRDs first.
 
 ### Deploy Octant and antrea-octant-plugin as a Pod
 
@@ -55,11 +55,16 @@ downloaded which may be due to network issues, you can run command `make
 octant-antrea-ubuntu` to build the image locally. If it is the case, you need
 to make sure that the image exists on all the K8s Nodes since the antrea-octant
 Pod may run on any of them.
-2. If the Pod is running without any explicit issue but you can not access the
+2. In Antrea v0.8.2, the Traceflow UI is a separate Octant plugin called antrea-traceflow-plugin,
+but it has been merged into antrea-octant-plugin on the master branch since then.
+To get the latest version of Traceflow UI, please build image
+antrea/octant-antrea-ubuntu via command `make octant-antrea-ubuntu` and use the image antrea/octant-antrea-ubuntu:latest
+for deploying UI as a Pod.
+3. If the Pod is running without any explicit issue but you can not access the
 URL, please take a further look at the network configurations in your
 environment. It may be due to the network policies or other security rules
 configured on your hosts.
-3. To deploy a released version of the plugin, you can download
+4. To deploy a released version of the plugin, you can download
 `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-octant.yml`,
 where `<TAG>` (e.g. `v0.3.0`) is the desired version (should match the version
 of Antrea you are using). After making the necessary edits, you can apply the
@@ -97,7 +102,7 @@ based on your environment and move the binary to OCTANT_PLUGIN_PATH.
     For example, you can get antrea-octant-plugin-linux-x86_64 if it matches your operating system and architecture.
 
     ```bash
-    wget -O antrea-octant-plugin https://github.com/vmware-tanzu/antrea/releases/download/v0.8.1/antrea-octant-plugin-linux-x86_64
+    wget -O antrea-octant-plugin https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-octant-plugin-linux-x86_64
     # Make sure antrea-octant-plugin is executable, otherwise Octant cannot find it.
     chmod a+x antrea-octant-plugin
     # If you did not change OCTANT_PLUGIN_PATH, the default folder should be $HOME/.config/octant/plugins.
@@ -114,15 +119,12 @@ based on your environment and move the binary to OCTANT_PLUGIN_PATH.
 Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):80.
 
 Note:
-1. In Antrea v0.8.1, the Traceflow UI is a separate Octant plugin called antrea-traceflow-plugin.
-Starting with v0.9.0, the Traceflow UI will be merged into antrea-octant-plugin. When deploying Octant as a Pod using
-image antrea/octant-antrea-ubuntu:v0.8.1, you already have access to the alpha version of the Traceflow UI.
-2. If you deploy Octant and the Antrea UI as a process, you cannot access the Traceflow UI for now when following the
+1.  If you deploy Octant and the Antrea UI as a process, you cannot access the Traceflow UI for now when following the
 steps listed above (at least until the v0.9.0 release). However, you can still build the binary yourself with
 the command below, with the remaining steps being almost the same as the ones above.
 
     ```bash
     # You will find the compliled binary under folder antrea/plugins/octant/bin.
     cd plugins/octant
-    make antrea-traceflow-plugin
+    make antrea-octant-plugin
     ```
