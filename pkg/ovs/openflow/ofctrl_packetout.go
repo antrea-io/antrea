@@ -201,13 +201,17 @@ func (b *ofPacketOutBuilder) AddLoadAction(name string, data uint64, rng Range) 
 func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 	if b.pktOut.ICMPHeader != nil {
 		b.setICMPData()
+		b.pktOut.ICMPHeader.Checksum = b.icmpHeaderChecksum()
 		b.pktOut.IPHeader.Length = 20 + b.pktOut.ICMPHeader.Len()
 	} else if b.pktOut.TCPHeader != nil {
 		b.pktOut.TCPHeader.HdrLen = 5
 		b.pktOut.TCPHeader.SeqNum = rand.Uint32()
 		b.pktOut.TCPHeader.AckNum = rand.Uint32()
+		b.pktOut.TCPHeader.Checksum = b.tcpHeaderChecksum()
 		b.pktOut.IPHeader.Length = 20 + b.pktOut.TCPHeader.Len()
 	} else if b.pktOut.UDPHeader != nil {
+		b.pktOut.UDPHeader.Length = b.pktOut.UDPHeader.Len()
+		b.pktOut.UDPHeader.Checksum = b.udpHeaderChecksum()
 		b.pktOut.IPHeader.Length = 20 + b.pktOut.UDPHeader.Len()
 	}
 	b.pktOut.IPHeader.Id = uint16(rand.Uint32())
@@ -217,6 +221,7 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 	} else {
 		b.pktOut.IPHeader.Version = 0x6
 	}
+	b.pktOut.IPHeader.Checksum = b.ipHeaderChecksum()
 	return b.pktOut
 }
 
@@ -229,4 +234,61 @@ func (b *ofPacketOutBuilder) setICMPData() {
 		binary.BigEndian.PutUint16(data[2:], *b.icmpSeq)
 	}
 	b.pktOut.ICMPHeader.Data = data
+}
+
+func (b *ofPacketOutBuilder) ipHeaderChecksum() uint16 {
+	ipHeader := *b.pktOut.IPHeader
+	ipHeader.Checksum = 0
+	ipHeader.Data = nil
+	data, _ := ipHeader.MarshalBinary()
+	return checksum(data)
+}
+
+func (b *ofPacketOutBuilder) icmpHeaderChecksum() uint16 {
+	icmpHeader := *b.pktOut.ICMPHeader
+	icmpHeader.Checksum = 0
+	data, _ := icmpHeader.MarshalBinary()
+	return checksum(data)
+}
+
+func (b *ofPacketOutBuilder) tcpHeaderChecksum() uint16 {
+	tcpHeader := *b.pktOut.TCPHeader
+	tcpHeader.Checksum = 0
+	data, _ := tcpHeader.MarshalBinary()
+	checksumData := append(b.generatePseudoHeader(uint16(len(data))), data...)
+	return checksum(checksumData)
+}
+
+func (b *ofPacketOutBuilder) udpHeaderChecksum() uint16 {
+	udpHeader := *b.pktOut.UDPHeader
+	udpHeader.Checksum = 0
+	data, _ := udpHeader.MarshalBinary()
+	checksumData := append(b.generatePseudoHeader(uint16(len(data))), data...)
+	return checksum(checksumData)
+}
+
+func (b *ofPacketOutBuilder) generatePseudoHeader(length uint16) []byte {
+	pseudoHeader := make([]byte, 12)
+	copy(pseudoHeader[0:4], b.pktOut.IPHeader.NWSrc.To4())
+	copy(pseudoHeader[4:8], b.pktOut.IPHeader.NWDst.To4())
+	pseudoHeader[8] = 0x0
+	pseudoHeader[9] = b.pktOut.IPHeader.Protocol
+	binary.BigEndian.PutUint16(pseudoHeader[10:12], length)
+	return pseudoHeader
+}
+
+func checksum(data []byte) uint16 {
+	var sum uint32
+	var index int
+	length := len(data)
+	for length > 1 {
+		sum += uint32(data[index])<<8 + uint32(data[index+1])
+		index += 2
+		length -= 2
+	}
+	if length > 0 {
+		sum += uint32(data[index])
+	}
+	sum += (sum >> 16)
+	return uint16(^sum)
 }
