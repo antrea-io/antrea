@@ -32,19 +32,26 @@ import (
 	cpinstall "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/install"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
 	networkinginstall "github.com/vmware-tanzu/antrea/pkg/apis/networking/install"
+	apistats "github.com/vmware-tanzu/antrea/pkg/apis/stats"
+	statsinstall "github.com/vmware-tanzu/antrea/pkg/apis/stats/install"
 	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
 	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/endpoint"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/webhook"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/stats/antreanetworkpolicystats"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/stats/networkpolicystats"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	controllernetworkpolicy "github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
+	"github.com/vmware-tanzu/antrea/pkg/controller/stats"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
@@ -62,6 +69,7 @@ func init() {
 	cpinstall.Install(Scheme)
 	systeminstall.Install(Scheme)
 	networkinginstall.Install(Scheme)
+	statsinstall.Install(Scheme)
 	// We need to add the options to empty v1, see sample-apiserver/pkg/apiserver/apiserver.go.
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
 }
@@ -75,6 +83,7 @@ type ExtraConfig struct {
 	endpointQuerier         controllernetworkpolicy.EndpointQuerier
 	networkPolicyController *controllernetworkpolicy.NetworkPolicyController
 	caCertController        *certificate.CACertController
+	statsAggregator         *stats.Aggregator
 }
 
 // Config defines the config for Antrea apiserver.
@@ -108,6 +117,7 @@ func NewConfig(
 	genericConfig *genericapiserver.Config,
 	addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface,
 	caCertController *certificate.CACertController,
+	statsAggregator *stats.Aggregator,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier controllernetworkpolicy.EndpointQuerier,
 	npController *controllernetworkpolicy.NetworkPolicyController) *Config {
@@ -118,6 +128,7 @@ func NewConfig(
 			appliedToGroupStore:     appliedToGroupStore,
 			networkPolicyStore:      networkPolicyStore,
 			caCertController:        caCertController,
+			statsAggregator:         statsAggregator,
 			controllerQuerier:       controllerQuerier,
 			endpointQuerier:         endpointQuerier,
 			networkPolicyController: npController,
@@ -130,17 +141,25 @@ func (c *Config) Complete(informers informers.SharedInformerFactory) completedCo
 }
 
 func installAPIGroup(s *APIServer, c completedConfig) error {
+	addressGroupStorage := addressgroup.NewREST(c.extraConfig.addressGroupStore)
+	appliedToGroupStorage := appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
+	networkPolicyStorage := networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
 	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	cpStorage := map[string]rest.Storage{}
-	cpStorage["addressgroups"] = addressgroup.NewREST(c.extraConfig.addressGroupStore)
-	cpStorage["appliedtogroups"] = appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
-	cpStorage["networkpolicies"] = networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
+	cpStorage["addressgroups"] = addressGroupStorage
+	cpStorage["appliedtogroups"] = appliedToGroupStorage
+	cpStorage["networkpolicies"] = networkPolicyStorage
+	cpStorage["nodestatssummaries"] = nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	cpGroup.VersionedResourcesStorageMap["v1beta1"] = cpStorage
 
 	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to
 	// two minor versions, the APIs must be kept for two minor releases before it can be deleted.
 	networkingGroup := genericapiserver.NewDefaultAPIGroupInfo(networking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	networkingGroup.VersionedResourcesStorageMap["v1beta1"] = cpStorage
+	networkingStorage := map[string]rest.Storage{}
+	networkingStorage["addressgroups"] = addressGroupStorage
+	networkingStorage["appliedtogroups"] = appliedToGroupStorage
+	networkingStorage["networkpolicies"] = networkPolicyStorage
+	networkingGroup.VersionedResourcesStorageMap["v1beta1"] = networkingStorage
 
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	systemStorage := map[string]rest.Storage{}
@@ -150,7 +169,14 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	systemStorage["supportbundles/download"] = bundleStorage.Download
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
 
-	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &systemGroup, &networkingGroup}
+	statsGroup := genericapiserver.NewDefaultAPIGroupInfo(apistats.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	statsStorage := map[string]rest.Storage{}
+	statsStorage["networkpolicystats"] = networkpolicystats.NewREST(c.extraConfig.statsAggregator)
+	statsStorage["antreaclusternetworkpolicystats"] = antreaclusternetworkpolicystats.NewREST(c.extraConfig.statsAggregator)
+	statsStorage["antreanetworkpolicystats"] = antreanetworkpolicystats.NewREST(c.extraConfig.statsAggregator)
+	statsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage
+
+	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &networkingGroup, &systemGroup, &statsGroup}
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
 			return err

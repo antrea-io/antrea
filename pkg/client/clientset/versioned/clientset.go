@@ -20,12 +20,11 @@ import (
 	"fmt"
 
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
-	controlplanev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1alpha1"
 	controlplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1"
 	corev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha1"
-	metricsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/metrics/v1alpha1"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
+	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
@@ -35,12 +34,11 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface
-	ControlplaneV1alpha1() controlplanev1alpha1.ControlplaneV1alpha1Interface
 	ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface
 	CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface
-	MetricsV1alpha1() metricsv1alpha1.MetricsV1alpha1Interface
 	OpsV1alpha1() opsv1alpha1.OpsV1alpha1Interface
 	SecurityV1alpha1() securityv1alpha1.SecurityV1alpha1Interface
+	StatsV1alpha1() statsv1alpha1.StatsV1alpha1Interface
 	SystemV1beta1() systemv1beta1.SystemV1beta1Interface
 }
 
@@ -49,23 +47,17 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	clusterinformationV1beta1 *clusterinformationv1beta1.ClusterinformationV1beta1Client
-	controlplaneV1alpha1      *controlplanev1alpha1.ControlplaneV1alpha1Client
 	controlplaneV1beta1       *controlplanev1beta1.ControlplaneV1beta1Client
 	coreV1alpha1              *corev1alpha1.CoreV1alpha1Client
-	metricsV1alpha1           *metricsv1alpha1.MetricsV1alpha1Client
 	opsV1alpha1               *opsv1alpha1.OpsV1alpha1Client
 	securityV1alpha1          *securityv1alpha1.SecurityV1alpha1Client
+	statsV1alpha1             *statsv1alpha1.StatsV1alpha1Client
 	systemV1beta1             *systemv1beta1.SystemV1beta1Client
 }
 
 // ClusterinformationV1beta1 retrieves the ClusterinformationV1beta1Client
 func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface {
 	return c.clusterinformationV1beta1
-}
-
-// ControlplaneV1alpha1 retrieves the ControlplaneV1alpha1Client
-func (c *Clientset) ControlplaneV1alpha1() controlplanev1alpha1.ControlplaneV1alpha1Interface {
-	return c.controlplaneV1alpha1
 }
 
 // ControlplaneV1beta1 retrieves the ControlplaneV1beta1Client
@@ -78,11 +70,6 @@ func (c *Clientset) CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface {
 	return c.coreV1alpha1
 }
 
-// MetricsV1alpha1 retrieves the MetricsV1alpha1Client
-func (c *Clientset) MetricsV1alpha1() metricsv1alpha1.MetricsV1alpha1Interface {
-	return c.metricsV1alpha1
-}
-
 // OpsV1alpha1 retrieves the OpsV1alpha1Client
 func (c *Clientset) OpsV1alpha1() opsv1alpha1.OpsV1alpha1Interface {
 	return c.opsV1alpha1
@@ -91,6 +78,11 @@ func (c *Clientset) OpsV1alpha1() opsv1alpha1.OpsV1alpha1Interface {
 // SecurityV1alpha1 retrieves the SecurityV1alpha1Client
 func (c *Clientset) SecurityV1alpha1() securityv1alpha1.SecurityV1alpha1Interface {
 	return c.securityV1alpha1
+}
+
+// StatsV1alpha1 retrieves the StatsV1alpha1Client
+func (c *Clientset) StatsV1alpha1() statsv1alpha1.StatsV1alpha1Interface {
+	return c.statsV1alpha1
 }
 
 // SystemV1beta1 retrieves the SystemV1beta1Client
@@ -123,10 +115,6 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
-	cs.controlplaneV1alpha1, err = controlplanev1alpha1.NewForConfig(&configShallowCopy)
-	if err != nil {
-		return nil, err
-	}
 	cs.controlplaneV1beta1, err = controlplanev1beta1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -135,15 +123,15 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
-	cs.metricsV1alpha1, err = metricsv1alpha1.NewForConfig(&configShallowCopy)
-	if err != nil {
-		return nil, err
-	}
 	cs.opsV1alpha1, err = opsv1alpha1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
 	cs.securityV1alpha1, err = securityv1alpha1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
+	cs.statsV1alpha1, err = statsv1alpha1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -164,12 +152,11 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.NewForConfigOrDie(c)
-	cs.controlplaneV1alpha1 = controlplanev1alpha1.NewForConfigOrDie(c)
 	cs.controlplaneV1beta1 = controlplanev1beta1.NewForConfigOrDie(c)
 	cs.coreV1alpha1 = corev1alpha1.NewForConfigOrDie(c)
-	cs.metricsV1alpha1 = metricsv1alpha1.NewForConfigOrDie(c)
 	cs.opsV1alpha1 = opsv1alpha1.NewForConfigOrDie(c)
 	cs.securityV1alpha1 = securityv1alpha1.NewForConfigOrDie(c)
+	cs.statsV1alpha1 = statsv1alpha1.NewForConfigOrDie(c)
 	cs.systemV1beta1 = systemv1beta1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
@@ -180,12 +167,11 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.New(c)
-	cs.controlplaneV1alpha1 = controlplanev1alpha1.New(c)
 	cs.controlplaneV1beta1 = controlplanev1beta1.New(c)
 	cs.coreV1alpha1 = corev1alpha1.New(c)
-	cs.metricsV1alpha1 = metricsv1alpha1.New(c)
 	cs.opsV1alpha1 = opsv1alpha1.New(c)
 	cs.securityV1alpha1 = securityv1alpha1.New(c)
+	cs.statsV1alpha1 = statsv1alpha1.New(c)
 	cs.systemV1beta1 = systemv1beta1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
