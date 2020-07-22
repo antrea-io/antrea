@@ -1,4 +1,40 @@
-# Cluster Network Policy
+# Native Network Policies
+
+## Tier
+
+Antrea supports grouping native NetworkPolicies together in a tiered fashion
+to provide a hierarchy of security policies. This is achieved by setting the
+native NetworkPolicies, like a ClusterNetworkPolicy, with the name of the
+`tier` to which it is associated. Each tier has a priority associated with it,
+which determines its relative order among other tiers.
+
+**Note**: K8s NetworkPolicies will be evaluated once all tiers have been evaluated.
+
+### Static tiers
+
+Currently we support 5 static tiers in Antrea. They are as follows in the
+relative order of precedence:
+
+    Emergency > SecurityOps > NetworkOps > InterTenant > Application  
+Thus, all ClusterNetworkPolicies associated with "Emergency" tier will be
+evaluated before any other ClusterNetworkPolicy associated with any other tier,
+until an exact match occurs, in which case the policy rule's `action` will be
+enforced. The "Application" tier carries the lowest precedence, and any
+ClusterNetworkPolicy without a `tier` name set in its spec, will be
+associated with the "Application" tier. Even though the policies associated
+with the "Application" tier carry lowest precedence amongst all the tiers,
+they are still evaluated before K8s NetworkPolicies. Thus, admin created tiered
+policies have a higher precedence over developer created K8s NetworkPolicies.
+
+
+### Tier CRDs
+
+Although static tiers provide a way to organize security policies for different
+use cases, they are not flexible i.e. admin cannot add/delete a new tier at
+will. This can be possible by the introduction of Tier as CRDs. Tier CRDs will
+be available soon and will replace the existing static tiers.
+
+## Cluster Network Policy
 
 ClusterNetworkPolicy is a specification of how workloads within a cluster
 communicate with each other and other external endpoints.
@@ -31,6 +67,7 @@ metadata:
   name: test-cnp
 spec:
     priority: 5
+    tier: SecurityOps
     appliedTo:
       - podSelector:
           matchLabels:
@@ -85,6 +122,11 @@ from 1.0 to 10000.0.
 indeterministically. Users should therefore take care to use priorities to
 ensure the behavior they expect.
 
+**tier**: The `tier` field associates a CNP to an existing tier. As of now, the
+`tier` field can be set with "Emergency", "SecurityOps", "NetworkOps",
+"InterTenant" or "Application" as value. If not set, the CNP is associated with
+the lowest priority "Application" tier.
+
 **ingress**: Each ClusterNetworkPolicy may consist of zero or more ordered
 set of ingress rules. Each rule, depending on the `action` field of the rule,
 allows or drops traffic which matches both the `from` and `ports` sections.
@@ -105,11 +147,16 @@ evaluated in the order in which they are written.
 
 ## Rule evaluation based on priorities
 
-Rules belonging to Cluster NetworkPolicy CRDs are associated with various
-priorities, such as the `priority` at the CNP level and the priority at rule
-level. Overall, Cluster Policy with highest precedence (lowest priority number
-value) is evaluated first. Within this policy, rules are evaluated in the order
-in which they are set. For example, consider the following:
+With the introduction of tiers, ClusterNetworkPolicies are first evaluated
+based on the tier to which they are associated with. i.e. all CNP belonging
+to "Emergency" tier are evaluated first, followed by policies associated with
+the "SecurityOps" tier and so on, until the "Application" tier policies are
+evaluated. Within a tier, rules belonging to Cluster NetworkPolicy CRDs are
+associated with various priorities, such as the `priority` at the CNP level and
+the priority at rule level. Overall, Cluster Policy with highest precedence
+(lowest priority number value) is evaluated first. Within this policy, rules
+are evaluated in the order in which they are set. For example, consider the
+following:
 
 - CNP1{priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
 - CNP2{priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
