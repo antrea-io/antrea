@@ -39,8 +39,11 @@ var antreaAgentMetrics = []string{
 	"antrea_agent_ingress_networkpolicy_rule_count",
 	"antrea_agent_local_pod_count",
 	"antrea_agent_networkpolicy_count",
-	"antrea_agent_ovs_total_flow_count",
 	"antrea_agent_ovs_flow_count",
+	"antrea_agent_ovs_flow_ops_count",
+	"antrea_agent_ovs_flow_ops_error_count",
+	"antrea_agent_ovs_flow_ops_latency_milliseconds",
+	"antrea_agent_ovs_total_flow_count",
 	"antrea_agent_runtime_info",
 }
 
@@ -276,7 +279,8 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	// Create a map of all the metrics which were found on the server
 	testMap := make(map[string]bool)
 	for _, metric := range output.Data {
-		testMap[metric["__name__"]] = true
+		name := strings.TrimSuffix(metric["__name__"], "_bucket")
+		testMap[name] = true
 	}
 
 	// Validate that all the required metrics exist in the server's output

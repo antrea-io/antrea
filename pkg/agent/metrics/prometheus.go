@@ -67,6 +67,33 @@ var (
 		Help:           "Flow count for each OVS flow table. The TableID is used as a label.",
 		StabilityLevel: metrics.STABLE,
 	}, []string{"table_id"})
+
+	OVSFlowOpsCount = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Name:           "antrea_agent_ovs_flow_ops_count",
+			Help:           "Number of OVS flow operations, partitioned by operation type (add, modify and delete).",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"operation"},
+	)
+
+	OVSFlowOpsErrorCount = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Name:           "antrea_agent_ovs_flow_ops_error_count",
+			Help:           "Number of OVS flow operation errors, partitioned by operation type (add, modify and delete).",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"operation"},
+	)
+
+	OVSFlowOpsLatency = metrics.NewHistogramVec(
+		&metrics.HistogramOpts{
+			Name:           "antrea_agent_ovs_flow_ops_latency_milliseconds",
+			Help:           "The latency of OVS flow operations, partitioned by operation type (add, modify and delete).",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"operation"},
+	)
 )
 
 func InitializePrometheusMetrics() {
@@ -78,8 +105,9 @@ func InitializePrometheusMetrics() {
 	}
 
 	gaugeHost := metrics.NewGauge(&metrics.GaugeOpts{
-		Name:           "antrea_agent_runtime_info",
-		Help:           "Antrea agent runtime info , defined as labels. The value of the gauge is always set to 1.",
+		Name: "antrea_agent_runtime_info",
+		Help: "Antrea agent runtime info , defined as labels. The value of the gauge is always set to 1.",
+
 		ConstLabels:    metrics.Labels{"k8s_nodename": nodeName, "k8s_podname": env.GetPodName()},
 		StabilityLevel: metrics.STABLE,
 	})
@@ -121,5 +149,23 @@ func InitializeOVSMetrics() {
 	}
 	if err := legacyregistry.Register(OVSFlowCount); err != nil {
 		klog.Error("Failed to register antrea_agent_ovs_flow_count with Prometheus")
+	}
+
+	if err := legacyregistry.Register(OVSFlowOpsCount); err != nil {
+		klog.Error("Failed to register antrea_agent_ovs_flow_ops_count with Prometheus")
+	}
+	if err := legacyregistry.Register(OVSFlowOpsErrorCount); err != nil {
+		klog.Error("Failed to register antrea_agent_ovs_flow_ops_error_count with Prometheus")
+	}
+	if err := legacyregistry.Register(OVSFlowOpsLatency); err != nil {
+		klog.Error("Failed to register antrea_agent_ovs_flow_ops_latency_milliseconds with Prometheus")
+	}
+	// Initialize OpenFlow operations metrics with label add, modify and delete
+	// since those metrics won't come out until observation.
+	opsArray := [3]string{"add", "modify", "delete"}
+	for _, ops := range opsArray {
+		OVSFlowOpsCount.WithLabelValues(ops)
+		OVSFlowOpsErrorCount.WithLabelValues(ops)
+		OVSFlowOpsLatency.WithLabelValues(ops)
 	}
 }
