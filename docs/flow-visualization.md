@@ -67,7 +67,7 @@ Visualization Flows Dashboard">
 Visualization Flow Dashboard"> 
 
 ### Flow Records 
-<img src="/docs/assets/flow-visualization-record.png" width="900" alt="Flow
+<img src="/docs/assets/flow-visualization-flow-record.png" width="900" alt="Flow
 Visualization Flow Record Dashboard">
 
 ### Node Throughput
