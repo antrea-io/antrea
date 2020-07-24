@@ -55,14 +55,23 @@ import `build/yamls/flow/kibana.ndjson`
 ## Pre-built Dashboards
 The following dashboards are pre-built and recommended for Antrea flow
 visualization.
+
 ### Overview
 <img src="/docs/assets/flow-visualization-overview.png" width="900" alt="Flow
 Visualization Overview Dashboard"> 
 
 ### Flows
-<img src="/docs/assets/flow-visualization-flows.png" width="900" alt="Flow
+<img src="/docs/assets/flow-visualization-flow-1.png" width="900" alt="Flow
 Visualization Flows Dashboard"> 
+<img src="/docs/assets/flow-visualization-flow-2.png" width="900" alt="Flow
+Visualization Flow Dashboard"> 
 
 ### Flow Records 
-<img src="/docs/assets/flow-visualization-records.png" width="900" alt="Flow
-Visualization Flow Records Dashboard">
+<img src="/docs/assets/flow-visualization-record.png" width="900" alt="Flow
+Visualization Flow Record Dashboard">
+
+### Node Throughput
+<img src="/docs/assets/flow-visualization-node-1.png" width="900" alt="Flow
+Visualization Node Throughput Dashboard">
+<img src="/docs/assets/flow-visualization-node-2.png" width="900" alt="Flow
+Visualization Node Throughput Dashboard">
