@@ -190,7 +190,7 @@ message NetworkPolicy {
   optional double priority = 4;
 
   // TierPriority represents the priority of the Tier associated with this Network
-  // Policy.
+  // Policy. The TierPriority will remain nil for K8s NetworkPolicy.
   optional uint32 tierPriority = 5;
 }
 

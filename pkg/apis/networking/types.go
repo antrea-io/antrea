@@ -159,7 +159,7 @@ type NetworkPolicy struct {
 	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
 	Priority *float64
 	// TierPriority represents the priority of the Tier associated with this Network
-	// Policy.
+	// Policy. The TierPriority will remain nil for K8s NetworkPolicy.
 	TierPriority *uint32
 }
 
