@@ -55,6 +55,7 @@ type Connection struct {
 	SourcePodName           string
 	DestinationPodNamespace string
 	DestinationPodName      string
+	DestinationServiceName  string
 }
 
 type FlowRecord struct {

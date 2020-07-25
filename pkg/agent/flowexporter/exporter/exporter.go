@@ -58,6 +58,8 @@ var (
 		"destinationPodName",
 		"destinationPodNamespace",
 		"destinationNodeName",
+		"destinationClusterIP",
+		"destinationServiceName",
 	}
 )
 
@@ -319,6 +321,21 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 			// Add nodeName for only local pods whose pod names are resolved.
 			if record.Conn.DestinationPodName != "" {
 				_, err = dataRec.AddInfoElement(ie, nodeName)
+			} else {
+				_, err = dataRec.AddInfoElement(ie, "")
+			}
+		case "destinationClusterIP":
+			if record.Conn.DestinationServiceName != "" {
+				_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.DestinationAddress)
+			} else {
+				// Sending dummy IP as IPFIX collector expects constant length of data for IP field.
+				// We should probably think of better approach as this involves customization of IPFIX collector to ignore
+				// this dummy IP address.
+				_, err = dataRec.AddInfoElement(ie, net.IP{0, 0, 0, 0})
+			}
+		case "destinationServiceName":
+			if record.Conn.DestinationServiceName != "" {
+				_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationServiceName)
 			} else {
 				_, err = dataRec.AddInfoElement(ie, "")
 			}

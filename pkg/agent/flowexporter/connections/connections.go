@@ -16,6 +16,7 @@ package connections
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -24,22 +25,28 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
+	"github.com/vmware-tanzu/antrea/pkg/util/ip"
 )
 
 type ConnectionStore struct {
 	connections  map[flowexporter.ConnectionKey]flowexporter.Connection
 	connDumper   ConnTrackDumper
 	ifaceStore   interfacestore.InterfaceStore
+	serviceCIDR   *net.IPNet
+	antreaProxier proxy.Proxier
 	pollInterval time.Duration
 	mutex        sync.Mutex
 }
 
-func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, pollInterval time.Duration) *ConnectionStore {
+func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, serviceCIDR *net.IPNet, proxier proxy.Proxier, pollInterval time.Duration) *ConnectionStore {
 	return &ConnectionStore{
 		connections:  make(map[flowexporter.ConnectionKey]flowexporter.Connection),
 		connDumper:   connTrackDumper,
 		ifaceStore:   ifaceStore,
-		pollInterval: pollInterval,
+		serviceCIDR:   serviceCIDR,
+		antreaProxier: proxier,
+		pollInterval:  pollInterval,
 	}
 }
 
@@ -91,6 +98,7 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		cs.connections[connKey] = *existingConn
 		klog.V(4).Infof("Antrea flow updated: %v", existingConn)
 	} else {
+		// sourceIP/destinationIP are mapped only to local pods and not remote pods.
 		var srcFound, dstFound bool
 		sIface, srcFound := cs.ifaceStore.GetInterfaceByIP(conn.TupleOrig.SourceAddress.String())
 		dIface, dstFound := cs.ifaceStore.GetInterfaceByIP(conn.TupleReply.SourceAddress.String())
@@ -112,6 +120,26 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		// TODO: Remove this when network policy rule ID are added to flow records.
 		if !srcFound && dstFound {
 			conn.DoExport = false
+		}
+
+		// Pod-to-Service flows w/ antrea-proxy:Antrea proxy is enabled.
+		if cs.antreaProxier != nil {
+			if cs.serviceCIDR.Contains(conn.TupleOrig.DestinationAddress) {
+				clusterIP := conn.TupleOrig.DestinationAddress.String()
+				svcPort := conn.TupleOrig.DestinationPort
+				protocol, err := ip.LookupServiceProtocol(conn.TupleOrig.Protocol)
+				if err != nil {
+					klog.Warningf("Could not retrieve service protocol: %v", err)
+				} else {
+					serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
+					servicePortName, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
+					if !exists {
+						klog.Warningf("Could not retrieve service info from antrea-agent-proxier for serviceStr: %s", serviceStr)
+					} else {
+						conn.DestinationServiceName = servicePortName.String()
+					}
+				}
+			}
 		}
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
