@@ -46,6 +46,39 @@ const (
 	Dropped   TraceflowAction = "Dropped"
 )
 
+// List the supported protocols and their codes in traceflow.
+// According to code in Antrea agent and controller, default protocol is ICMP if protocol is not inputted by users.
+const (
+	ICMPProtocol int32 = 1
+	TCPProtocol  int32 = 6
+	UDPProtocol  int32 = 17
+)
+
+var SupportedProtocols = map[string]int32{
+	"TCP":  TCPProtocol,
+	"UDP":  UDPProtocol,
+	"ICMP": ICMPProtocol,
+}
+
+var ProtocolsToString = map[int32]string{
+	TCPProtocol:  "TCP",
+	UDPProtocol:  "UDP",
+	ICMPProtocol: "ICMP",
+}
+
+// List the supported destination types in traceflow.
+const (
+	DstTypePod     = "Pod"
+	DstTypeService = "Service"
+	DstTypeIPv4    = "IPv4"
+)
+
+var SupportedDestinationTypes = []string{
+	DstTypePod,
+	DstTypeService,
+	DstTypeIPv4,
+}
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -188,4 +221,48 @@ type TraceflowList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []Traceflow `json:"items"`
+}
+
+// GetDstType gets the name of destination for specific traceflow.
+func (tf *Traceflow) GetDstName() string {
+	if len(tf.Spec.Destination.Pod) > 0 {
+		return tf.Spec.Destination.Pod
+	}
+	if len(tf.Spec.Destination.Service) > 0 {
+		return tf.Spec.Destination.Service
+	}
+	if len(tf.Spec.Destination.IP) > 0 {
+		return tf.Spec.Destination.IP
+	}
+	return ""
+}
+
+// GetDstType gets the type of destination for specific traceflow.
+func (tf *Traceflow) GetDstType() string {
+	if len(tf.Spec.Destination.Pod) > 0 {
+		return DstTypePod
+	}
+	if len(tf.Spec.Destination.Service) > 0 {
+		return DstTypeService
+	}
+	if len(tf.Spec.Destination.IP) > 0 {
+		return DstTypeIPv4
+	}
+	return ""
+}
+
+// GetTraceflowMessage gets the shown message string in traceflow graph.
+func (o *Observation) GetTraceflowMessage() string {
+	str := string(o.Component)
+	if len(o.ComponentInfo) > 0 {
+		str += "\n" + o.ComponentInfo
+	}
+	str += "\n" + string(o.Action)
+	if o.Component == NetworkPolicy && len(o.NetworkPolicy) > 0 {
+		str += "\nNetpol: " + o.NetworkPolicy
+	}
+	if o.Action != Dropped && len(o.TunnelDstIP) > 0 {
+		str += "\nTo: " + o.TunnelDstIP
+	}
+	return str
 }
