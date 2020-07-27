@@ -66,6 +66,8 @@ type rule struct {
 	Priority int32
 	// Priority of the NetworkPolicy to which this rule belong. nil for k8s NetworkPolicy.
 	PolicyPriority *float64
+	// Priority of the tier that the NetworkPolicy belong. nil for k8s NetworkPolicy.
+	TierPriority *v1beta1.TierPriority
 	// Targets of this rule.
 	AppliedToGroups []string
 	// The parent Policy ID. Used to identify rules belong to a specified
@@ -113,7 +115,7 @@ func (r *CompletedRule) String() string {
 
 // isAntreaNetworkPolicyRule returns true if the rule is part of a ClusterNetworkPolicy.
 func (r *CompletedRule) isAntreaNetworkPolicyRule() bool {
-	return r.PolicyPriority != nil
+	return r.PolicyPriority != nil && r.TierPriority != nil
 }
 
 // ruleCache caches Antrea AddressGroups, AppliedToGroups and NetworkPolicies,
@@ -199,6 +201,8 @@ func addRuleToNetworkPolicy(np *v1beta1.NetworkPolicy, rule *rule) *v1beta1.Netw
 				Name:      rule.PolicyName,
 				Namespace: rule.PolicyNamespace},
 			AppliedToGroups: rule.AppliedToGroups,
+			Priority:        rule.PolicyPriority,
+			TierPriority:    rule.TierPriority,
 		}
 	}
 	np.Rules = append(np.Rules, v1beta1.NetworkPolicyRule{
@@ -538,13 +542,14 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
 		Services:        r.Services,
 		Action:          r.Action,
 		Priority:        r.Priority,
+		PolicyPriority:  policy.Priority,
+		TierPriority:    policy.TierPriority,
 		AppliedToGroups: policy.AppliedToGroups,
 		PolicyUID:       policy.UID,
 	}
 	rule.ID = hashRule(rule)
 	rule.PolicyNamespace = policy.Namespace
 	rule.PolicyName = policy.Name
-	rule.PolicyPriority = policy.Priority
 	return rule
 }
 

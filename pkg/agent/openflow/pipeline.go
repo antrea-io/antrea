@@ -36,28 +36,36 @@ import (
 
 const (
 	// Flow table id index
-	ClassifierTable       binding.TableIDType = 0
-	uplinkTable           binding.TableIDType = 5
-	spoofGuardTable       binding.TableIDType = 10
-	arpResponderTable     binding.TableIDType = 20
-	serviceHairpinTable   binding.TableIDType = 29
-	conntrackTable        binding.TableIDType = 30
-	conntrackStateTable   binding.TableIDType = 31
-	sessionAffinityTable  binding.TableIDType = 40
-	dnatTable             binding.TableIDType = 40
-	serviceLBTable        binding.TableIDType = 41
-	endpointDNATTable     binding.TableIDType = 42
-	cnpEgressRuleTable    binding.TableIDType = 45
-	EgressRuleTable       binding.TableIDType = 50
-	EgressDefaultTable    binding.TableIDType = 60
-	l3ForwardingTable     binding.TableIDType = 70
-	l2ForwardingCalcTable binding.TableIDType = 80
-	cnpIngressRuleTable   binding.TableIDType = 85
-	IngressRuleTable      binding.TableIDType = 90
-	IngressDefaultTable   binding.TableIDType = 100
-	conntrackCommitTable  binding.TableIDType = 105
-	hairpinSNATTable      binding.TableIDType = 106
-	L2ForwardingOutTable  binding.TableIDType = 110
+	ClassifierTable             binding.TableIDType = 0
+	uplinkTable                 binding.TableIDType = 5
+	spoofGuardTable             binding.TableIDType = 10
+	arpResponderTable           binding.TableIDType = 20
+	serviceHairpinTable         binding.TableIDType = 29
+	conntrackTable              binding.TableIDType = 30
+	conntrackStateTable         binding.TableIDType = 31
+	sessionAffinityTable        binding.TableIDType = 40
+	dnatTable                   binding.TableIDType = 40
+	serviceLBTable              binding.TableIDType = 41
+	endpointDNATTable           binding.TableIDType = 42
+	EmergencyEgressRuleTable    binding.TableIDType = 45
+	SecurityOpsEgressRuleTable  binding.TableIDType = 46
+	NetworkOpsEgressRuleTable   binding.TableIDType = 47
+	PlatformEgressRuleTable     binding.TableIDType = 48
+	ApplicationEgressRuleTable  binding.TableIDType = 49
+	EgressRuleTable             binding.TableIDType = 50
+	EgressDefaultTable          binding.TableIDType = 60
+	l3ForwardingTable           binding.TableIDType = 70
+	l2ForwardingCalcTable       binding.TableIDType = 80
+	EmergencyIngressRuleTable   binding.TableIDType = 85
+	SecurityOpsIngressRuleTable binding.TableIDType = 86
+	NetworkOpsIngressRuleTable  binding.TableIDType = 87
+	PlatformIngressRuleTable    binding.TableIDType = 88
+	ApplicationIngressRuleTable binding.TableIDType = 89
+	IngressRuleTable            binding.TableIDType = 90
+	IngressDefaultTable         binding.TableIDType = 100
+	conntrackCommitTable        binding.TableIDType = 105
+	hairpinSNATTable            binding.TableIDType = 106
+	L2ForwardingOutTable        binding.TableIDType = 110
 
 	// Flow priority level
 	priorityHigh   = uint16(210)
@@ -93,12 +101,20 @@ var (
 		{sessionAffinityTable, "SessionAffinity"},
 		{serviceLBTable, "ServiceLB"},
 		{endpointDNATTable, "EndpointDNAT"},
-		{cnpEgressRuleTable, "CNPEgressRule"},
+		{EmergencyEgressRuleTable, "CNPEmergencyEgressRule"},
+		{SecurityOpsEgressRuleTable, "CNPSecurityOpsEgressRule"},
+		{NetworkOpsEgressRuleTable, "CNPNetworkOpsEgressRule"},
+		{PlatformEgressRuleTable, "CNPPlatformEgressRule"},
+		{ApplicationEgressRuleTable, "CNPApplicationEgressRule"},
 		{EgressRuleTable, "EgressRule"},
 		{EgressDefaultTable, "EgressDefaultRule"},
 		{l3ForwardingTable, "l3Forwarding"},
 		{l2ForwardingCalcTable, "L2Forwarding"},
-		{cnpIngressRuleTable, "CNPIngressRule"},
+		{EmergencyIngressRuleTable, "CNPEmergencyIngressRule"},
+		{SecurityOpsIngressRuleTable, "CNPSecurityOpsIngressRule"},
+		{NetworkOpsIngressRuleTable, "CNPNetworkOpsIngressRule"},
+		{PlatformIngressRuleTable, "CNPPlatformIngressRule"},
+		{ApplicationIngressRuleTable, "CNPApplicationIngressRule"},
 		{IngressRuleTable, "IngressRule"},
 		{IngressDefaultTable, "IngressDefaultRule"},
 		{conntrackCommitTable, "ConntrackCommit"},
@@ -128,6 +144,26 @@ func GetFlowTableNumber(tableName string) binding.TableIDType {
 		}
 	}
 	return binding.TableIDAll
+}
+
+func GetCNPEgressTables() []binding.TableIDType {
+	return []binding.TableIDType{
+		EmergencyEgressRuleTable,
+		SecurityOpsEgressRuleTable,
+		NetworkOpsEgressRuleTable,
+		PlatformEgressRuleTable,
+		ApplicationEgressRuleTable,
+	}
+}
+
+func GetCNPIngressTables() []binding.TableIDType {
+	return []binding.TableIDType{
+		EmergencyIngressRuleTable,
+		SecurityOpsIngressRuleTable,
+		NetworkOpsIngressRuleTable,
+		PlatformIngressRuleTable,
+		ApplicationIngressRuleTable,
+	}
 }
 
 type regType uint
@@ -888,11 +924,15 @@ func (c *client) establishedConnectionFlows(category cookie.Category) (flows []b
 		Action().GotoTable(egressDropTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
-	cnpEgressEstFlow := c.pipeline[cnpEgressRuleTable].BuildFlow(priorityTopCNP).MatchProtocol(binding.ProtocolIP).
-		MatchCTStateNew(false).MatchCTStateEst(true).
-		Action().GotoTable(egressDropTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
+	var cnpEgressFlows []binding.Flow
+	for _, tableID := range GetCNPEgressTables() {
+		cnpEgressEstFlow := c.pipeline[tableID].BuildFlow(priorityTopCNP).MatchProtocol(binding.ProtocolIP).
+			MatchCTStateNew(false).MatchCTStateEst(true).
+			Action().GotoTable(egressDropTable.GetNext()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done()
+		cnpEgressFlows = append(cnpEgressFlows, cnpEgressEstFlow)
+	}
 	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
 	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
 	// ingressRuleTable or ingressDropTable.
@@ -902,12 +942,19 @@ func (c *client) establishedConnectionFlows(category cookie.Category) (flows []b
 		Action().GotoTable(ingressDropTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
-	cnpIngressEstFlow := c.pipeline[cnpIngressRuleTable].BuildFlow(priorityTopCNP).MatchProtocol(binding.ProtocolIP).
-		MatchCTStateNew(false).MatchCTStateEst(true).
-		Action().GotoTable(ingressDropTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
-	return []binding.Flow{egressEstFlow, ingressEstFlow, cnpEgressEstFlow, cnpIngressEstFlow}
+	var cnpIngressFlows []binding.Flow
+	for _, tableID := range GetCNPIngressTables() {
+		cnpIngressEstFlow := c.pipeline[tableID].BuildFlow(priorityTopCNP).MatchProtocol(binding.ProtocolIP).
+			MatchCTStateNew(false).MatchCTStateEst(true).
+			Action().GotoTable(ingressDropTable.GetNext()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done()
+		cnpIngressFlows = append(cnpIngressFlows, cnpIngressEstFlow)
+	}
+	allEstFlows := []binding.Flow{egressEstFlow, ingressEstFlow}
+	allEstFlows = append(allEstFlows, cnpEgressFlows...)
+	allEstFlows = append(allEstFlows, cnpIngressFlows...)
+	return allEstFlows
 }
 
 func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue interface{}) binding.FlowBuilder {
@@ -1278,46 +1325,62 @@ func priorityIndexFunc(obj interface{}) ([]string, error) {
 func generatePipeline(bridge binding.Bridge, enableProxy bool) map[binding.TableIDType]binding.Table {
 	if enableProxy {
 		return map[binding.TableIDType]binding.Table{
-			ClassifierTable:       bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
-			uplinkTable:           bridge.CreateTable(uplinkTable, spoofGuardTable, binding.TableMissActionNone),
-			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop),
-			arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
-			serviceHairpinTable:   bridge.CreateTable(serviceHairpinTable, conntrackTable, binding.TableMissActionNext),
-			conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
-			conntrackStateTable:   bridge.CreateTable(conntrackStateTable, endpointDNATTable, binding.TableMissActionNext),
-			sessionAffinityTable:  bridge.CreateTable(sessionAffinityTable, binding.LastTableID, binding.TableMissActionNone),
-			serviceLBTable:        bridge.CreateTable(serviceLBTable, endpointDNATTable, binding.TableMissActionNext),
-			endpointDNATTable:     bridge.CreateTable(endpointDNATTable, cnpEgressRuleTable, binding.TableMissActionNext),
-			cnpEgressRuleTable:    bridge.CreateTable(cnpEgressRuleTable, EgressRuleTable, binding.TableMissActionNext),
-			EgressRuleTable:       bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
-			EgressDefaultTable:    bridge.CreateTable(EgressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
-			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, cnpIngressRuleTable, binding.TableMissActionNext),
-			cnpIngressRuleTable:   bridge.CreateTable(cnpIngressRuleTable, IngressRuleTable, binding.TableMissActionNext),
-			IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
-			IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
-			conntrackCommitTable:  bridge.CreateTable(conntrackCommitTable, hairpinSNATTable, binding.TableMissActionNext),
-			hairpinSNATTable:      bridge.CreateTable(hairpinSNATTable, L2ForwardingOutTable, binding.TableMissActionNext),
-			L2ForwardingOutTable:  bridge.CreateTable(L2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
+			ClassifierTable:             bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
+			uplinkTable:                 bridge.CreateTable(uplinkTable, spoofGuardTable, binding.TableMissActionNone),
+			spoofGuardTable:             bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop),
+			arpResponderTable:           bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
+			serviceHairpinTable:         bridge.CreateTable(serviceHairpinTable, conntrackTable, binding.TableMissActionNext),
+			conntrackTable:              bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
+			conntrackStateTable:         bridge.CreateTable(conntrackStateTable, endpointDNATTable, binding.TableMissActionNext),
+			sessionAffinityTable:        bridge.CreateTable(sessionAffinityTable, binding.LastTableID, binding.TableMissActionNone),
+			serviceLBTable:              bridge.CreateTable(serviceLBTable, endpointDNATTable, binding.TableMissActionNext),
+			endpointDNATTable:           bridge.CreateTable(endpointDNATTable, EmergencyEgressRuleTable, binding.TableMissActionNext),
+			EmergencyEgressRuleTable:    bridge.CreateTable(EmergencyEgressRuleTable, SecurityOpsEgressRuleTable, binding.TableMissActionNext),
+			SecurityOpsEgressRuleTable:  bridge.CreateTable(SecurityOpsEgressRuleTable, NetworkOpsEgressRuleTable, binding.TableMissActionNext),
+			NetworkOpsEgressRuleTable:   bridge.CreateTable(NetworkOpsEgressRuleTable, PlatformEgressRuleTable, binding.TableMissActionNext),
+			PlatformEgressRuleTable:     bridge.CreateTable(PlatformEgressRuleTable, ApplicationEgressRuleTable, binding.TableMissActionNext),
+			ApplicationEgressRuleTable:  bridge.CreateTable(ApplicationEgressRuleTable, EgressRuleTable, binding.TableMissActionNext),
+			EgressRuleTable:             bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
+			EgressDefaultTable:          bridge.CreateTable(EgressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
+			l3ForwardingTable:           bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+			l2ForwardingCalcTable:       bridge.CreateTable(l2ForwardingCalcTable, EmergencyIngressRuleTable, binding.TableMissActionNext),
+			EmergencyIngressRuleTable:   bridge.CreateTable(EmergencyIngressRuleTable, SecurityOpsIngressRuleTable, binding.TableMissActionNext),
+			SecurityOpsIngressRuleTable: bridge.CreateTable(SecurityOpsIngressRuleTable, NetworkOpsIngressRuleTable, binding.TableMissActionNext),
+			NetworkOpsIngressRuleTable:  bridge.CreateTable(NetworkOpsIngressRuleTable, PlatformIngressRuleTable, binding.TableMissActionNext),
+			PlatformIngressRuleTable:    bridge.CreateTable(PlatformIngressRuleTable, ApplicationIngressRuleTable, binding.TableMissActionNext),
+			ApplicationIngressRuleTable: bridge.CreateTable(ApplicationIngressRuleTable, IngressRuleTable, binding.TableMissActionNext),
+			IngressRuleTable:            bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
+			IngressDefaultTable:         bridge.CreateTable(IngressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
+			conntrackCommitTable:        bridge.CreateTable(conntrackCommitTable, hairpinSNATTable, binding.TableMissActionNext),
+			hairpinSNATTable:            bridge.CreateTable(hairpinSNATTable, L2ForwardingOutTable, binding.TableMissActionNext),
+			L2ForwardingOutTable:        bridge.CreateTable(L2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 		}
 	}
 	return map[binding.TableIDType]binding.Table{
-		ClassifierTable:       bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
-		spoofGuardTable:       bridge.CreateTable(spoofGuardTable, conntrackTable, binding.TableMissActionDrop),
-		arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
-		conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
-		conntrackStateTable:   bridge.CreateTable(conntrackStateTable, dnatTable, binding.TableMissActionNext),
-		dnatTable:             bridge.CreateTable(dnatTable, cnpEgressRuleTable, binding.TableMissActionNext),
-		cnpEgressRuleTable:    bridge.CreateTable(cnpEgressRuleTable, EgressRuleTable, binding.TableMissActionNext),
-		EgressRuleTable:       bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
-		EgressDefaultTable:    bridge.CreateTable(EgressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
-		l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-		l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, cnpIngressRuleTable, binding.TableMissActionNext),
-		cnpIngressRuleTable:   bridge.CreateTable(cnpIngressRuleTable, IngressRuleTable, binding.TableMissActionNext),
-		IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
-		IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
-		conntrackCommitTable:  bridge.CreateTable(conntrackCommitTable, L2ForwardingOutTable, binding.TableMissActionNext),
-		L2ForwardingOutTable:  bridge.CreateTable(L2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
+		ClassifierTable:             bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
+		spoofGuardTable:             bridge.CreateTable(spoofGuardTable, conntrackTable, binding.TableMissActionDrop),
+		arpResponderTable:           bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
+		conntrackTable:              bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
+		conntrackStateTable:         bridge.CreateTable(conntrackStateTable, dnatTable, binding.TableMissActionNext),
+		dnatTable:                   bridge.CreateTable(dnatTable, EmergencyEgressRuleTable, binding.TableMissActionNext),
+		EmergencyEgressRuleTable:    bridge.CreateTable(EmergencyEgressRuleTable, SecurityOpsEgressRuleTable, binding.TableMissActionNext),
+		SecurityOpsEgressRuleTable:  bridge.CreateTable(SecurityOpsEgressRuleTable, NetworkOpsEgressRuleTable, binding.TableMissActionNext),
+		NetworkOpsEgressRuleTable:   bridge.CreateTable(NetworkOpsEgressRuleTable, PlatformEgressRuleTable, binding.TableMissActionNext),
+		PlatformEgressRuleTable:     bridge.CreateTable(PlatformEgressRuleTable, ApplicationEgressRuleTable, binding.TableMissActionNext),
+		ApplicationEgressRuleTable:  bridge.CreateTable(ApplicationEgressRuleTable, EgressRuleTable, binding.TableMissActionNext),
+		EgressRuleTable:             bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
+		EgressDefaultTable:          bridge.CreateTable(EgressDefaultTable, l3ForwardingTable, binding.TableMissActionNext),
+		l3ForwardingTable:           bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+		l2ForwardingCalcTable:       bridge.CreateTable(l2ForwardingCalcTable, EmergencyIngressRuleTable, binding.TableMissActionNext),
+		EmergencyIngressRuleTable:   bridge.CreateTable(EmergencyIngressRuleTable, SecurityOpsIngressRuleTable, binding.TableMissActionNext),
+		SecurityOpsIngressRuleTable: bridge.CreateTable(SecurityOpsIngressRuleTable, NetworkOpsIngressRuleTable, binding.TableMissActionNext),
+		NetworkOpsIngressRuleTable:  bridge.CreateTable(NetworkOpsIngressRuleTable, PlatformIngressRuleTable, binding.TableMissActionNext),
+		PlatformIngressRuleTable:    bridge.CreateTable(PlatformIngressRuleTable, ApplicationIngressRuleTable, binding.TableMissActionNext),
+		ApplicationIngressRuleTable: bridge.CreateTable(ApplicationIngressRuleTable, IngressRuleTable, binding.TableMissActionNext),
+		IngressRuleTable:            bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
+		IngressDefaultTable:         bridge.CreateTable(IngressDefaultTable, conntrackCommitTable, binding.TableMissActionNext),
+		conntrackCommitTable:        bridge.CreateTable(conntrackCommitTable, L2ForwardingOutTable, binding.TableMissActionNext),
+		L2ForwardingOutTable:        bridge.CreateTable(L2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 	}
 }
 

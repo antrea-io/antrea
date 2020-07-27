@@ -453,6 +453,7 @@ type policyRuleConjunction struct {
 	// NetworkPolicy name and Namespace information for debugging usage.
 	npName      string
 	npNamespace string
+	ruleTableID binding.TableIDType
 }
 
 // clause groups conjunctive match flows. Matches in a clause represent source addresses(for fromClause), or destination
@@ -746,6 +747,7 @@ func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *poli
 		npName:      rule.PolicyName,
 		npNamespace: rule.PolicyNamespace}
 	nClause, ruleTable, dropTable := conj.calculateClauses(rule, c)
+	conj.ruleTableID = rule.TableID
 
 	// Conjunction action flows are installed only if the number of clauses in the conjunction is > 1. It should be a rule
 	// to drop all packets.  If the number is 1, no conjunctive match flows or conjunction action flows are installed,
@@ -873,25 +875,16 @@ func (c *policyRuleConjunction) newClause(clauseID uint8, nClause uint8, ruleTab
 // calculateClauses configures the policyRuleConjunction's clauses according to the PolicyRule. The Openflow entries are
 // not installed on the OVS bridge when calculating the clauses.
 func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *client) (uint8, binding.Table, binding.Table) {
-	var ruleTable, dropTable binding.Table
+	var dropTable binding.Table
 	var isEgressRule = false
 	switch rule.Direction {
 	case v1beta1.DirectionOut:
-		if rule.IsAntreaNetworkPolicyRule() {
-			ruleTable = clnt.pipeline[cnpEgressRuleTable]
-		} else {
-			ruleTable = clnt.pipeline[EgressRuleTable]
-		}
 		dropTable = clnt.pipeline[EgressDefaultTable]
 		isEgressRule = true
 	default:
-		if rule.IsAntreaNetworkPolicyRule() {
-			ruleTable = clnt.pipeline[cnpIngressRuleTable]
-		} else {
-			ruleTable = clnt.pipeline[IngressRuleTable]
-		}
 		dropTable = clnt.pipeline[IngressDefaultTable]
 	}
+	ruleTable := clnt.pipeline[rule.TableID]
 
 	var fromID, toID, serviceID, nClause uint8
 	// Calculate clause IDs and the total number of clauses.
@@ -1023,8 +1016,11 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) ([]string, error) {
 		return nil, nil
 	}
 
-	ofPrioritiesToUninstallFlows := conj.ActionFlowPriorities()
-	klog.V(2).Infof("Old priority %v found", ofPrioritiesToUninstallFlows)
+	var ofPrioritiesPotentiallyStale []string
+	if conj.ruleTableID != IngressRuleTable && conj.ruleTableID != EgressRuleTable {
+		ofPrioritiesPotentiallyStale = conj.ActionFlowPriorities()
+	}
+	klog.V(2).Infof("Old priority %v found", ofPrioritiesPotentiallyStale)
 	var staleOFPriorities []string
 	// Delete action flows from the OVS bridge.
 	if err := c.ofEntryOperations.DeleteAll(conj.actionFlows); err != nil {
@@ -1040,9 +1036,18 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) ([]string, error) {
 		return nil, err
 	}
 
-	for _, p := range ofPrioritiesToUninstallFlows {
-		conjsStalePriority, _ := c.policyCache.ByIndex(priorityIndex, p)
-		if len(conjsStalePriority) == 0 {
+	for _, p := range ofPrioritiesPotentiallyStale {
+		conjs, _ := c.policyCache.ByIndex(priorityIndex, p)
+		for i := 0; i < len(conjs); i++ {
+			conjStalePriority := conjs[i].(*policyRuleConjunction)
+			if conj.ruleTableID != conjStalePriority.ruleTableID {
+				// remove the conjStalePriority from the list as the conjunction is installed on another table
+				conjs = append(conjs[:i], conjs[i+1:]...)
+				// reset list index as conjs[i] is removed
+				i--
+			}
+		}
+		if len(conjs) == 0 {
 			klog.V(2).Infof("ofPriority %v is now stale", p)
 			staleOFPriorities = append(staleOFPriorities, p)
 		}

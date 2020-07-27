@@ -174,6 +174,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 		Service:         []v1beta1.Service{npPort1},
 		Action:          &defaultAction,
 		FlowID:          ruleID,
+		TableID:         ofClient.IngressRuleTable,
 		PolicyName:      "np1",
 		PolicyNamespace: "ns1",
 	}
@@ -338,6 +339,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		Service:         []v1beta1.Service{npPort1},
 		Action:          &defaultAction,
 		FlowID:          ruleID,
+		TableID:         ofClient.IngressRuleTable,
 		PolicyName:      "np1",
 		PolicyNamespace: "ns1",
 	}
@@ -376,6 +378,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		Service:         []v1beta1.Service{npPort2},
 		Action:          &defaultAction,
 		FlowID:          ruleID2,
+		TableID:         ofClient.IngressRuleTable,
 		PolicyName:      "np1",
 		PolicyNamespace: "ns1",
 	}
@@ -795,7 +798,7 @@ func prepareDefaultFlows() []expectTableFlows {
 		},
 		{
 			uint8(45),
-			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:50"}},
+			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:46"}},
 		},
 		{
 			uint8(50),
@@ -815,7 +818,7 @@ func prepareDefaultFlows() []expectTableFlows {
 		},
 		{
 			uint8(85),
-			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:90"}},
+			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:86"}},
 		},
 		{
 			uint8(90),
