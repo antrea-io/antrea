@@ -159,6 +159,7 @@ func NetIPNetToIPNet(ipNet *net.IPNet) *v1beta1.IPNet {
 
 // LookupProtocolMap return protocol identifier given protocol name
 func LookupProtocolMap(name string) (uint8, error) {
+	name = strings.TrimSpace(name)
 	lowerCaseStr := strings.ToLower(name)
 	proto, found := protocols[lowerCaseStr]
 	if !found {
