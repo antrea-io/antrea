@@ -685,6 +685,8 @@ data:
 
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
     #  FlowExporter: false
+    # Enables IPv6 dual stack support for Antrea components.
+    #  IPv6DualStack: false
 
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -774,6 +776,8 @@ data:
     featureGates:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
+    # Enables IPv6 dual stack support for Antrea components.
+    #  IPv6DualStack: false
 
     # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster.
@@ -800,7 +804,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-khb8f44hh6
+  name: antrea-config-m7d4m646dd
   namespace: kube-system
 ---
 apiVersion: v1
@@ -906,7 +910,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-khb8f44hh6
+          name: antrea-config-m7d4m646dd
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1121,7 +1125,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-khb8f44hh6
+          name: antrea-config-m7d4m646dd
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

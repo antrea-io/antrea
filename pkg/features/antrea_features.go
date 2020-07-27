@@ -46,6 +46,10 @@ const (
 	// alpha: v0.9
 	// Flow exporter exports IPFIX flow records of Antrea flows seen in conntrack module.
 	FlowExporter featuregate.Feature = "FlowExporter"
+
+	// alpha: v0.10
+	// Adds IPv6 dual stack support for Antrea components.
+	IPv6DualStack featuregate.Feature = "IPv6DualStack"
 )
 
 var (
@@ -64,6 +68,7 @@ var (
 		AntreaProxy:          {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:            {Default: false, PreRelease: featuregate.Alpha},
 		FlowExporter:         {Default: false, PreRelease: featuregate.Alpha},
+		IPv6DualStack:        {Default: false, PreRelease: featuregate.Alpha},
 	}
 )
 

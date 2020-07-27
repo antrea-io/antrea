@@ -37,6 +37,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `ClusterNetworkPolicy`  | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                |       |
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9.0        | N/A          | N/A        | Yes                |       |
+| `IPv6DualStack          | Agent + Controller | `false` | Alpha | v0.10.0       | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -94,3 +95,11 @@ to a flow collector. Refer to this [document](network-flow-visibility.md) for mo
 
 This feature is currently only supported for Nodes running Linux.
 Windows support will be added in the future.
+=======
+### IPv6DualStack
+
+`IPv6DualStack` enables IPv6 dual stack support for Antrea Agent and Controller
+
+#### Requirements for this Feature
+
+Requires Kubernetes IPv6DualStack feature gate enablement.
