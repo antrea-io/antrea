@@ -153,25 +153,19 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 	// Expect calls required
 	var dataRecord ipfixentities.Record
 	tempBytes := uint16(0)
-	for i, ie := range flowExp.elementsList {
-		// Could not come up with a way to exclude if else conditions as different IEs have different data types.
-		if i == 0 || i == 1 {
-			// For time elements
-			mockDataRec.EXPECT().AddInfoElement(ie, record1.Conn.StartTime.Unix()).Return(tempBytes, nil)
-		} else if i == 2 || i == 3 {
-			// For IP addresses
+	for _, ie := range flowExp.elementsList {
+		switch ieName := ie.Name; ieName {
+		case "flowStartSeconds", "flowEndSeconds":
+			mockDataRec.EXPECT().AddInfoElement(ie, time.Time{}.Unix()).Return(tempBytes, nil)
+		case "sourceIPv4Address", "destinationIPv4Address":
 			mockDataRec.EXPECT().AddInfoElement(ie, nil).Return(tempBytes, nil)
-		} else if i == 4 || i == 5 {
-			// For transport ports
+		case "sourceTransportPort", "destinationTransportPort":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint16(0)).Return(tempBytes, nil)
-		} else if i == 6 {
-			// For proto identifier
+		case "protocolIdentifier":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint8(0)).Return(tempBytes, nil)
-		} else if i >= 7 && i < 15 {
-			// For packets and octets
+		case "packetTotalCount", "octetTotalCount", "packetDeltaCount", "octetDeltaCount", "reverse_PacketTotalCount", "reverse_OctetTotalCount", "reverse_PacketDeltaCount", "reverse_OctetDeltaCount":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint64(0)).Return(tempBytes, nil)
-		} else {
-			// For string elements
+		case "sourcePodName", "sourcePodNamespace", "sourceNodeName", "destinationPodName", "destinationPodNamespace", "destinationNodeName":
 			mockDataRec.EXPECT().AddInfoElement(ie, "").Return(tempBytes, nil)
 		}
 	}
