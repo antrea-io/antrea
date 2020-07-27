@@ -214,7 +214,7 @@ func (ctnd *connTrackNetdev) DumpFilter(filter interface{}) ([]*flowexporter.Con
 		conn := flowexporter.Connection{}
 		flowSlice := strings.Split(flow, ",")
 		isReply := false
-		inZone := true
+		inZone := false
 		for _, fs := range flowSlice {
 			// Indicator to populate reply or reverse fields
 			if strings.Contains(fs, "reply") {
@@ -277,9 +277,9 @@ func (ctnd *connTrackNetdev) DumpFilter(filter interface{}) ([]*flowexporter.Con
 					continue
 				}
 				if zoneFilter != uint16(val) {
-					inZone = false
 					break
 				} else {
+					inZone = true
 					conn.Zone = uint16(val)
 				}
 			} else if strings.Contains(fs, "timeout") {
@@ -301,6 +301,7 @@ func (ctnd *connTrackNetdev) DumpFilter(filter interface{}) ([]*flowexporter.Con
 			}
 		}
 		if inZone {
+			conn.IsActive = true
 			antreaConns = append(antreaConns, &conn)
 		}
 	}
