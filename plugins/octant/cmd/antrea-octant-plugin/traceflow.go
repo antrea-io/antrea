@@ -17,10 +17,10 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
@@ -46,12 +46,14 @@ const (
 	srcNamespaceCol = "Source Namespace"
 	srcPodCol       = "Source Pod"
 	srcPortCol      = "Source Port"
+	dstTypeCol      = "Destination Type"
 	dstNamespaceCol = "Destination Namespace"
-	dstPodCol       = "Destination Pod"
+	dstCol          = "Destination"
 	dstPortCol      = "Destination Port"
 	protocolCol     = "Protocol"
 	phaseCol        = "Phase"
 	ageCol          = "Age"
+	traceNameCol    = "Trace Name"
 
 	namespaceStrPattern = `[a-z0-9]([-a-z0-9]*[a-z0-9])?`
 	podStrPattern       = `[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*`
@@ -59,17 +61,32 @@ const (
 	TIME_FORMAT_YYYYMMDD_HHMMSS = "20060102-150405"
 )
 
-// According to code in Antrea agent and controller, default protocol is ICMP if protocol is not inputted by users.
-const (
-	ICMPProtocol int32 = 1
-	TCPProtocol  int32 = 6
-	UDPProtocol  int32 = 17
-)
+// getDstName gets the name of destination for specific traceflow.
+func getDstName(tf *opsv1alpha1.Traceflow) string {
+	if len(tf.Spec.Destination.Pod) > 0 {
+		return tf.Spec.Destination.Pod
+	}
+	if len(tf.Spec.Destination.Service) > 0 {
+		return tf.Spec.Destination.Service
+	}
+	if len(tf.Spec.Destination.IP) > 0 {
+		return tf.Spec.Destination.IP
+	}
+	return ""
+}
 
-var supportedProtocols = map[string]int32{
-	"ICMP": ICMPProtocol,
-	"TCP":  TCPProtocol,
-	"UDP":  UDPProtocol,
+// getDstType gets the type of destination for specific traceflow.
+func getDstType(tf *opsv1alpha1.Traceflow) string {
+	if len(tf.Spec.Destination.Pod) > 0 {
+		return opsv1alpha1.DstTypePod
+	}
+	if len(tf.Spec.Destination.Service) > 0 {
+		return opsv1alpha1.DstTypeService
+	}
+	if len(tf.Spec.Destination.IP) > 0 {
+		return opsv1alpha1.DstTypeIPv4
+	}
+	return ""
 }
 
 func regExpMatch(pattern, str string) bool {
@@ -86,7 +103,7 @@ func regExpMatch(pattern, str string) bool {
 }
 
 // actionHandler handlers clicks and actions from "Start New Trace" and "Generate Trace Graph" buttons.
-func actionHandler(request *service.ActionRequest) error {
+func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error {
 	actionName, err := request.Payload.String("action")
 	if err != nil {
 		log.Printf("Failed to get input at string: %s", err)
@@ -97,60 +114,102 @@ func actionHandler(request *service.ActionRequest) error {
 	case addTfAction:
 		srcNamespace, err := request.Payload.String(srcNamespaceCol)
 		if err != nil {
-			log.Printf("Failed to get srcNamespace at string : %s", err)
+			log.Printf("Failed to get srcNamespace as string: %s", err)
+			return nil
 		}
 		if match := regExpMatch(namespaceStrPattern, srcNamespace); !match {
+			log.Printf("Failed to match namespace %s with K8s Namespace pattern %s", srcNamespace, namespaceStrPattern)
 			return nil
 		}
 
 		srcPod, err := request.Payload.String(srcPodCol)
 		if err != nil {
-			log.Printf("Failed to get srcPod at string : %s", err)
+			log.Printf("Failed to get srcPod as string: %s", err)
+			return nil
 		}
 		if match := regExpMatch(podStrPattern, srcPod); !match {
+			log.Printf("Failed to match pod name %s with K8s Pod pattern %s", srcPod, podStrPattern)
 			return nil
 		}
 
-		srcPort, err := request.Payload.String(srcPortCol)
+		// Judge the destination type and get destination according to the type.
+		dstType, err := request.Payload.StringSlice(dstTypeCol)
+		if err != nil || len(dstType) == 0 {
+			log.Printf("Failed to get dstType as string slice: %s", err)
+			return nil
+		}
+		log.Printf("dstType %+v", dstType)
+		dst, err := request.Payload.String(dstCol)
 		if err != nil {
-			log.Printf("Failed to get srcPort at string : %s", err)
+			log.Printf("Failed to get dst as string: %s", err)
+			return nil
+		}
+		dstNamespace, err := request.Payload.OptionalString(dstNamespaceCol)
+		if err != nil {
+			log.Printf("Failed to get dstNamespace as string: %s", err)
+			return nil
+		}
+		var destination opsv1alpha1.Destination
+		switch dstType[0] {
+		case opsv1alpha1.DstTypePod:
+			if match := regExpMatch(podStrPattern, dst); !match {
+				log.Printf("Failed to match pod name %s with K8s Pod pattern %s", dst, podStrPattern)
+				return nil
+			}
+			if match := regExpMatch(namespaceStrPattern, dstNamespace); !match {
+				log.Printf("Failed to match namespace %s with K8s Namespace pattern %s", dstNamespace, namespaceStrPattern)
+				return nil
+			}
+			destination = opsv1alpha1.Destination{
+				Namespace: dstNamespace,
+				Pod:       dst,
+			}
+		case opsv1alpha1.DstTypeIPv4:
+			s := net.ParseIP(dst)
+			if s == nil {
+				log.Printf("Failed to get destination IP as a valid IPv4 IP: %s", err)
+				return nil
+			}
+			if s.To4() == nil {
+				log.Printf("Failed to get destination IP as a valid IPv4 IP: %s", err)
+				return nil
+			}
+			destination = opsv1alpha1.Destination{
+				IP: dst,
+			}
+		case opsv1alpha1.DstTypeService:
+			if match := regExpMatch(namespaceStrPattern, dstNamespace); !match {
+				log.Printf("Failed to match namespace %s with K8s Namespace pattern %s", dstNamespace, namespaceStrPattern)
+				return nil
+			}
+			destination = opsv1alpha1.Destination{
+				Namespace: dstNamespace,
+				Service:   dst,
+			}
 		}
 
-		dstNamespace, err := request.Payload.String(dstNamespaceCol)
+		srcPort, err := request.Payload.Uint16(srcPortCol)
 		if err != nil {
-			log.Printf("Failed to get dstNamespace at string : %s", err)
+			log.Printf("Failed to get srcPort as int: %s", err)
+			return nil
 		}
-		if match := regExpMatch(namespaceStrPattern, dstNamespace); !match {
+		dstPort, err := request.Payload.Uint16(dstPortCol)
+		if err != nil {
+			log.Printf("Failed to get dstPort as int: %s", err)
 			return nil
 		}
 
-		dstPod, err := request.Payload.String(dstPodCol)
-		if err != nil {
-			log.Printf("Failed to get dstPod at string : %s", err)
-		}
-		if match := regExpMatch(podStrPattern, dstPod); !match {
+		protocol, err := request.Payload.StringSlice(protocolCol)
+		if err != nil || len(protocol) == 0 {
+			log.Printf("Failed to get protocol as string slice: %s", err)
 			return nil
 		}
-
-		dstPort, err := request.Payload.String(dstPortCol)
-		if err != nil {
-			log.Printf("Failed to get dstPort at string : %s", err)
-		}
-
-		protocol, err := request.Payload.String(protocolCol)
-		if err != nil {
-			log.Printf("Failed to get dstPod at string : %s", err)
-		}
-		protocol = strings.ToUpper(protocol)
 
 		// Judge whether the name of trace flow is duplicated.
 		// If it is, then the user creates more than one traceflows in one second, which is not allowed.
-		tfName := srcPod + "-" + dstPod + "-" + time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
+		tfName := srcPod + "-" + dst + "-" + time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
 		ctx := context.Background()
-		tfOld, err := client.OpsV1alpha1().Traceflows().Get(ctx, tfName, v1.GetOptions{})
-		if err != nil {
-			log.Printf("Failed to get traceflow \"%s\", detailed error: %s", tfName, err)
-		}
+		tfOld, _ := p.client.OpsV1alpha1().Traceflows().Get(ctx, tfName, v1.GetOptions{})
 		if tfOld.Name == tfName {
 			log.Printf("Duplicate traceflow \"%s\": same source pod and destination pod in less than one second"+
 				": %+v. ", tfName, tfOld)
@@ -166,48 +225,31 @@ func actionHandler(request *service.ActionRequest) error {
 					Namespace: srcNamespace,
 					Pod:       srcPod,
 				},
-				Destination: opsv1alpha1.Destination{
-					Namespace: dstNamespace,
-					Pod:       dstPod,
-				},
+				Destination: destination,
 				Packet: opsv1alpha1.Packet{
 					IPHeader: opsv1alpha1.IPHeader{
-						Protocol: supportedProtocols[protocol],
+						Protocol: opsv1alpha1.SupportedProtocols[protocol[0]],
 					},
 				},
 			},
 		}
-		var sport, dport int
-		if srcPort != "" {
-			sport, err = strconv.Atoi(srcPort)
-			if err != nil {
-				log.Printf("Failed to get source port: %s", err)
-				return nil
-			}
-		}
-		if dstPort != "" {
-			dport, err = strconv.Atoi(dstPort)
-			if err != nil {
-				log.Printf("Failed to get destination port: %s", err)
-				return nil
-			}
-		}
+
 		switch tf.Spec.Packet.IPHeader.Protocol {
-		case TCPProtocol:
+		case opsv1alpha1.TCPProtocol:
 			{
 				tf.Spec.Packet.TransportHeader.TCP = &opsv1alpha1.TCPHeader{
-					SrcPort: int32(sport),
-					DstPort: int32(dport),
+					SrcPort: int32(srcPort),
+					DstPort: int32(dstPort),
 				}
 			}
-		case UDPProtocol:
+		case opsv1alpha1.UDPProtocol:
 			{
 				tf.Spec.Packet.TransportHeader.UDP = &opsv1alpha1.UDPHeader{
-					SrcPort: int32(sport),
-					DstPort: int32(dport),
+					SrcPort: int32(srcPort),
+					DstPort: int32(dstPort),
 				}
 			}
-		case ICMPProtocol:
+		case opsv1alpha1.ICMPProtocol:
 			{
 				tf.Spec.Packet.TransportHeader.ICMP = &opsv1alpha1.ICMPEchoRequestHeader{
 					ID:       0,
@@ -215,31 +257,43 @@ func actionHandler(request *service.ActionRequest) error {
 				}
 			}
 		}
-		tf, err = client.OpsV1alpha1().Traceflows().Create(ctx, tf, v1.CreateOptions{})
+		log.Printf("Get user input successfully, traceflow: %+v", tf)
+		tf, err = p.client.OpsV1alpha1().Traceflows().Create(ctx, tf, v1.CreateOptions{})
 		if err != nil {
 			log.Printf("Failed to create traceflow CRD \"%s\", err: %s", tfName, err)
 			return nil
 		}
 		log.Printf("Create traceflow CRD \"%s\" successfully, Traceflow Results: %+v", tfName, tf)
-		lastTf = *tf
-		graph = graphviz.GenGraph(&lastTf)
+		// Automatically delete the traceflow CRD after created for 300s(5min).
+		go func(tfName string) {
+			age := time.Second * 300
+			time.Sleep(age)
+			err := p.client.OpsV1alpha1().Traceflows().Delete(context.Background(), tfName, v1.DeleteOptions{})
+			if err != nil {
+				log.Printf("Failed to delete traceflow CRD \"%s\", err: %s", tfName, err)
+				return
+			}
+			log.Printf("Deleted traceflow CRD \"%s\" successfully after %.0f seconds", tfName, age.Seconds())
+		}(tf.Name)
+		p.lastTf = tf
+		p.graph = graphviz.GenGraph(p.lastTf)
 		return nil
 	case showGraphAction:
-		name, err := request.Payload.String("name")
+		name, err := request.Payload.String(traceNameCol)
 		if err != nil {
 			log.Printf("Failed to get name at string : %w", err)
 			return nil
 		}
 		// Invoke GenGraph to show
 		ctx := context.Background()
-		tf, err := client.OpsV1alpha1().Traceflows().Get(ctx, name, v1.GetOptions{})
+		tf, err := p.client.OpsV1alpha1().Traceflows().Get(ctx, name, v1.GetOptions{})
 		if err != nil {
 			log.Printf("Failed to get traceflow CRD \"%s\", err: %s ", name, err)
 			return nil
 		}
 		log.Printf("Get traceflow CRD \"%s\" successfully, Traceflow Results: %+v", name, tf)
-		lastTf = *tf
-		graph = graphviz.GenGraph(&lastTf)
+		p.lastTf = tf
+		p.graph = graphviz.GenGraph(p.lastTf)
 		return nil
 	default:
 		log.Fatalf("Failed to find defined handler after receiving action request for %s", pluginName)
@@ -248,17 +302,49 @@ func actionHandler(request *service.ActionRequest) error {
 }
 
 // traceflowHandler handlers the layout of Traceflow page.
-func traceflowHandler(request service.Request) (component.ContentResponse, error) {
+func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (component.ContentResponse, error) {
 	layout := flexlayout.New()
 	card := component.NewCard(component.TitleFromString(antreaTraceflowTitle))
+
+	// Construct the available values of destination types.
+	dstTypeSelect := make([]component.InputChoice, len(opsv1alpha1.SupportedDestinationTypes))
+	for i, t := range opsv1alpha1.SupportedDestinationTypes {
+		dstTypeSelect[i] = component.InputChoice{
+			Label:   t,
+			Value:   t,
+			Checked: false,
+		}
+		// Set the default destination type.
+		if t == opsv1alpha1.DstTypePod {
+			dstTypeSelect[i].Checked = true
+		}
+	}
+
+	// Construct the available values of protocols.
+	protocolSelect := make([]component.InputChoice, len(opsv1alpha1.SupportedProtocols))
+	i := 0
+	for p, _ := range opsv1alpha1.SupportedProtocols {
+		protocolSelect[i] = component.InputChoice{
+			Label:   p,
+			Value:   p,
+			Checked: false,
+		}
+		// Set the default protocol.
+		if p == "TCP" {
+			protocolSelect[i].Checked = true
+		}
+		i++
+	}
+
 	form := component.Form{Fields: []component.FormField{
 		component.NewFormFieldText(srcNamespaceCol, srcNamespaceCol, ""),
 		component.NewFormFieldText(srcPodCol, srcPodCol, ""),
-		component.NewFormFieldText(srcPortCol, srcPortCol, ""),
-		component.NewFormFieldText(dstNamespaceCol, dstNamespaceCol, ""),
-		component.NewFormFieldText(dstPodCol, dstPodCol, ""),
-		component.NewFormFieldText(dstPortCol, dstPortCol, ""),
-		component.NewFormFieldText(protocolCol, protocolCol, ""),
+		component.NewFormFieldNumber(srcPortCol, srcPortCol, ""),
+		component.NewFormFieldSelect(dstTypeCol, dstTypeCol, dstTypeSelect, false),
+		component.NewFormFieldText(dstNamespaceCol+" (Not required when destination is an IP)", dstNamespaceCol, ""),
+		component.NewFormFieldText(dstCol, dstCol, ""),
+		component.NewFormFieldNumber(dstPortCol, dstPortCol, ""),
+		component.NewFormFieldSelect(protocolCol, protocolCol, protocolSelect, false),
 		component.NewFormFieldHidden("action", addTfAction),
 	}}
 	addTf := component.Action{
@@ -267,7 +353,7 @@ func traceflowHandler(request service.Request) (component.ContentResponse, error
 		Form:  form,
 	}
 	graphForm := component.Form{Fields: []component.FormField{
-		component.NewFormFieldText("name", "name", ""),
+		component.NewFormFieldText(traceNameCol, traceNameCol, ""),
 		component.NewFormFieldHidden("action", showGraphAction),
 	}}
 	genGraph := component.Action{
@@ -280,24 +366,24 @@ func traceflowHandler(request service.Request) (component.ContentResponse, error
 	card.AddAction(genGraph)
 
 	graphCard := component.NewCard(component.TitleFromString("Antrea Traceflow Graph"))
-	if lastTf.Name != "" {
+	if p.lastTf.Name != "" {
 		// Invoke GenGraph to show
 		log.Printf("Generating content from CRD...")
 		ctx := context.Background()
-		tf, err := client.OpsV1alpha1().Traceflows().Get(ctx, lastTf.Name, v1.GetOptions{})
+		tf, err := p.client.OpsV1alpha1().Traceflows().Get(ctx, p.lastTf.Name, v1.GetOptions{})
 		if err != nil {
-			log.Printf("Failed to get latest CRD, using traceflow results cache, last traceflow name: %s, err: %s", lastTf.Name, err)
-			graph = graphviz.GenGraph(&lastTf)
-			log.Printf("Generated content from CRD cache successfully, last traceflow name: %s", lastTf.Name)
+			log.Printf("Failed to get latest CRD, using traceflow results cache, last traceflow name: %s, err: %s", p.lastTf.Name, err)
+			p.graph = graphviz.GenGraph(p.lastTf)
+			log.Printf("Generated content from CRD cache successfully, last traceflow name: %s", p.lastTf.Name)
 		} else {
-			lastTf = *tf
-			graph = graphviz.GenGraph(&lastTf)
-			log.Printf("Generated content from latest CRD successfully, last traceflow name %s", lastTf.Name)
+			p.lastTf = tf
+			p.graph = graphviz.GenGraph(p.lastTf)
+			log.Printf("Generated content from latest CRD successfully, last traceflow name %s", p.lastTf.Name)
 		}
-		log.Printf("Traceflow Results: %+v", lastTf)
+		log.Printf("Traceflow Results: %+v", p.lastTf)
 	}
-	if graph != "" {
-		graphCard.SetBody(component.NewGraphviz(graph))
+	if p.graph != "" {
+		graphCard.SetBody(component.NewGraphviz(p.graph))
 	} else {
 		graphCard.SetBody(component.NewText(""))
 	}
@@ -307,7 +393,7 @@ func traceflowHandler(request service.Request) (component.ContentResponse, error
 		log.Printf("Failed to add card to section: %s", err)
 		return component.EmptyContentResponse, nil
 	}
-	if graph != "" {
+	if p.graph != "" {
 		err = listSection.Add(graphCard, component.WidthFull)
 		if err != nil {
 			log.Printf("Failed to add graphCard to section: %s", err)
@@ -319,7 +405,7 @@ func traceflowHandler(request service.Request) (component.ContentResponse, error
 		Title: component.TitleFromString(antreaTraceflowTitle),
 		Components: []component.Component{
 			layout.ToComponent(antreaTraceflowTitle),
-			getTfTable(request),
+			p.getTfTable(request),
 		},
 	}
 	// Setting the accessor ensures that the page shows the first tab when clicked.
@@ -330,9 +416,9 @@ func traceflowHandler(request service.Request) (component.ContentResponse, error
 }
 
 // getTfTable gets the table for displaying Traceflow information
-func getTfTable(request service.Request) *component.Table {
+func (p *antreaOctantPlugin) getTfTable(request service.Request) *component.Table {
 	ctx := context.Background()
-	tfs, err := client.OpsV1alpha1().Traceflows().List(ctx, v1.ListOptions{ResourceVersion: "0"})
+	tfs, err := p.client.OpsV1alpha1().Traceflows().List(ctx, v1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		log.Fatalf("Failed to get Traceflows %v", err)
 		return nil
@@ -347,11 +433,13 @@ func getTfTable(request service.Request) *component.Table {
 			srcNamespaceCol: component.NewText(tf.Spec.Source.Namespace),
 			srcPodCol:       component.NewText(tf.Spec.Source.Pod),
 			dstNamespaceCol: component.NewText(tf.Spec.Destination.Namespace),
-			dstPodCol:       component.NewText(tf.Spec.Destination.Pod),
+			dstTypeCol:      component.NewText(getDstType(&tf)),
+			dstCol:          component.NewText(getDstName(&tf)),
+			protocolCol:     component.NewText(opsv1alpha1.ProtocolsToString[tf.Spec.Packet.IPHeader.Protocol]),
 			phaseCol:        component.NewText(string(tf.Status.Phase)),
 			ageCol:          component.NewTimestamp(tf.CreationTimestamp.Time),
 		})
 	}
-	tfCols := component.NewTableCols(tfNameCol, srcNamespaceCol, srcPodCol, dstNamespaceCol, dstPodCol, phaseCol, ageCol)
+	tfCols := component.NewTableCols(tfNameCol, srcNamespaceCol, srcPodCol, dstNamespaceCol, dstTypeCol, dstCol, protocolCol, phaseCol, ageCol)
 	return component.NewTableWithRows(traceflowTitle, "We couldn't find any traceflows!", tfCols, tfRows)
 }

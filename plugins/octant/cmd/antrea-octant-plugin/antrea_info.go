@@ -39,27 +39,27 @@ const (
 	heartbeatCol      = "Last Heartbeat Time"
 )
 
-func controllerHandler(request service.Request) (component.ContentResponse, error) {
+func (p *antreaOctantPlugin) controllerHandler(request service.Request) (component.ContentResponse, error) {
 	return component.ContentResponse{
 		Title: component.TitleFromString(controllerTitle),
 		Components: []component.Component{
-			getControllerTable(request),
+			p.getControllerTable(request),
 		},
 	}, nil
 }
 
-func agentHandler(request service.Request) (component.ContentResponse, error) {
+func (p *antreaOctantPlugin) agentHandler(request service.Request) (component.ContentResponse, error) {
 	return component.ContentResponse{
 		Title: component.TitleFromString(agentTitle),
 		Components: []component.Component{
-			getAgentTable(request),
+			p.getAgentTable(request),
 		},
 	}, nil
 }
 
 // getControllerTable gets the table for displaying Controller information
-func getControllerTable(request service.Request) *component.Table {
-	controllers, err := client.ClusterinformationV1beta1().AntreaControllerInfos().List(context.TODO(), v1.ListOptions{
+func (p *antreaOctantPlugin) getControllerTable(request service.Request) *component.Table {
+	controllers, err := p.client.ClusterinformationV1beta1().AntreaControllerInfos().List(context.TODO(), v1.ListOptions{
 		ResourceVersion: "0",
 	})
 	if err != nil {
@@ -85,8 +85,8 @@ func getControllerTable(request service.Request) *component.Table {
 }
 
 // getAgentTable gets the table for displaying Agent information.
-func getAgentTable(request service.Request) *component.Table {
-	agents, err := client.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), v1.ListOptions{
+func (p *antreaOctantPlugin) getAgentTable(request service.Request) *component.Table {
+	agents, err := p.client.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), v1.ListOptions{
 		ResourceVersion: "0",
 	})
 	if err != nil {

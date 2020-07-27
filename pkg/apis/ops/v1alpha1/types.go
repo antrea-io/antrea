@@ -46,6 +46,39 @@ const (
 	Dropped   TraceflowAction = "Dropped"
 )
 
+// List the supported protocols and their codes in traceflow.
+// According to code in Antrea agent and controller, default protocol is ICMP if protocol is not inputted by users.
+const (
+	ICMPProtocol int32 = 1
+	TCPProtocol  int32 = 6
+	UDPProtocol  int32 = 17
+)
+
+var SupportedProtocols = map[string]int32{
+	"TCP":  TCPProtocol,
+	"UDP":  UDPProtocol,
+	"ICMP": ICMPProtocol,
+}
+
+var ProtocolsToString = map[int32]string{
+	TCPProtocol:  "TCP",
+	UDPProtocol:  "UDP",
+	ICMPProtocol: "ICMP",
+}
+
+// List the supported destination types in traceflow.
+const (
+	DstTypePod     = "Pod"
+	DstTypeService = "Service"
+	DstTypeIPv4    = "IPv4"
+)
+
+var SupportedDestinationTypes = []string{
+	DstTypePod,
+	DstTypeService,
+	DstTypeIPv4,
+}
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
