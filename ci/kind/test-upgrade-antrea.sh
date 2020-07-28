@@ -127,6 +127,12 @@ echo "Creating Kind cluster"
 IMAGES="${DOCKER_IMAGES[@]}"
 $THIS_DIR/kind-setup.sh create kind --antrea-cni false --images "$IMAGES"
 
+# Generate manifest for most recent version of Antrea first, in case the minimum
+# required version of kustomize has changed compared to previous
+# version. generate-manifest.sh will install kustomize if it is missing, and
+# this is how we guarantee that the version we install is recent enough.
+$ROOT_DIR/hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea-new.yml
+
 TMP_ANTREA_DIR=$(mktemp -d)
 git clone --branch $FROM_TAG --depth 1 https://github.com/vmware-tanzu/antrea.git $TMP_ANTREA_DIR
 pushd $TMP_ANTREA_DIR > /dev/null
@@ -136,8 +142,6 @@ export IMG_TAG=$FROM_TAG
 ./hack/generate-manifest.sh --mode release --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
 popd
 rm -rf $TMP_DIR
-
-$ROOT_DIR/hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea-new.yml
 
 rc=0
 go test -v -run=TestUpgrade github.com/vmware-tanzu/antrea/test/e2e -provider=kind -upgrade.toYML=antrea-new.yml || rc=$?

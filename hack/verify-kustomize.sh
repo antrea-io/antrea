@@ -15,7 +15,7 @@
 # limitations under the License.
 
 _GOPATH_BIN="$(go env GOPATH)/bin"
-_MIN_KUSTOMIZE_VERSION="v3.3.0"
+_MIN_KUSTOMIZE_VERSION="v3.8.1"
 
 # Ensure the kustomize tool exists and is a viable version, or installs it
 verify_kustomize() {

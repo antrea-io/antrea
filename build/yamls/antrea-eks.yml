@@ -937,8 +937,6 @@ spec:
         command:
         - antrea-agent
         env:
-        - name: ANTREA_CLOUD_EKS
-          value: "true"
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -951,6 +949,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: ANTREA_CLOUD_EKS
+          value: "true"
         image: antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
