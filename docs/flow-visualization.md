@@ -61,9 +61,16 @@ visualization.
 Visualization Overview Dashboard"> 
 
 ### Flows
+#### Pod-to-pod Traffic
 <img src="/docs/assets/flow-visualization-flow-1.png" width="900" alt="Flow
 Visualization Flows Dashboard"> 
 <img src="/docs/assets/flow-visualization-flow-2.png" width="900" alt="Flow
+Visualization Flow Dashboard"> 
+
+#### Pod-to-service Traffic
+<img src="/docs/assets/flow-visualization-flow-3.png" width="900" alt="Flow
+Visualization Flows Dashboard"> 
+<img src="/docs/assets/flow-visualization-flow-4.png" width="900" alt="Flow
 Visualization Flow Dashboard"> 
 
 ### Flow Records 
