@@ -181,8 +181,8 @@ type Client interface {
 	GetNetworkPolicyFlowKeys(npName, npNamespace string) []string
 
 	// ReassignFlowPriorities takes a list of priority updates, and update the actionFlows to replace
-	// the old priority with the desired one, for each priority update.
-	ReassignFlowPriorities(updates map[uint16]uint16) error
+	// the old priority with the desired one, for each priority update on that table.
+	ReassignFlowPriorities(updates map[uint16]uint16, table binding.TableIDType) error
 
 	// SubscribePacketIn subscribes packet-in channel in bridge. This method requires a receiver to
 	// pop data from "ch" timely, otherwise it will block all inbound messages from OVS.

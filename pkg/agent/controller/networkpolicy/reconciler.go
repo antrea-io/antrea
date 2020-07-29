@@ -261,7 +261,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 	}
 	// Re-assign installed priorities on OVS
 	if len(priorityUpdates) > 0 {
-		err := r.ofClient.ReassignFlowPriorities(priorityUpdates)
+		err := r.ofClient.ReassignFlowPriorities(priorityUpdates, table)
 		if err != nil {
 			// TODO: revert the priorityUpdates in priorityMap if err occurred here.
 			r.priorityAssigners[table].Release(*ofPriority)

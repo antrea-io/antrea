@@ -1015,13 +1015,7 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) ([]string, error) {
 		klog.V(2).Infof("policyRuleConjunction with ID %d not found", ruleID)
 		return nil, nil
 	}
-
-	var ofPrioritiesPotentiallyStale []string
-	if conj.ruleTableID != IngressRuleTable && conj.ruleTableID != EgressRuleTable {
-		ofPrioritiesPotentiallyStale = conj.ActionFlowPriorities()
-	}
-	klog.V(2).Infof("Old priority %v found", ofPrioritiesPotentiallyStale)
-	var staleOFPriorities []string
+	staleOFPriorities := c.getStalePriorities(conj)
 	// Delete action flows from the OVS bridge.
 	if err := c.ofEntryOperations.DeleteAll(conj.actionFlows); err != nil {
 		return nil, err
@@ -1036,11 +1030,23 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) ([]string, error) {
 		return nil, err
 	}
 
+	c.policyCache.Delete(conj)
+	return staleOFPriorities, nil
+}
+
+// getStalePriorities returns the ofPriorities that will be stale on the rule table where the
+// policyRuleConjunction is installed, after the deletion of that policyRuleConjunction.
+func (c *client) getStalePriorities(conj *policyRuleConjunction) (staleOFPriorities []string) {
+	var ofPrioritiesPotentiallyStale []string
+	if conj.ruleTableID != IngressRuleTable && conj.ruleTableID != EgressRuleTable {
+		ofPrioritiesPotentiallyStale = conj.ActionFlowPriorities()
+	}
+	klog.V(4).Infof("Potential stale ofpriority %v found", ofPrioritiesPotentiallyStale)
 	for _, p := range ofPrioritiesPotentiallyStale {
 		conjs, _ := c.policyCache.ByIndex(priorityIndex, p)
 		for i := 0; i < len(conjs); i++ {
 			conjStalePriority := conjs[i].(*policyRuleConjunction)
-			if conj.ruleTableID != conjStalePriority.ruleTableID {
+			if conj.id == conjStalePriority.id || conj.ruleTableID != conjStalePriority.ruleTableID {
 				// remove the conjStalePriority from the list as the conjunction is installed on another table
 				conjs = append(conjs[:i], conjs[i+1:]...)
 				// reset list index as conjs[i] is removed
@@ -1052,8 +1058,7 @@ func (c *client) UninstallPolicyRuleFlows(ruleID uint32) ([]string, error) {
 			staleOFPriorities = append(staleOFPriorities, p)
 		}
 	}
-	c.policyCache.Delete(conj)
-	return staleOFPriorities, nil
+	return staleOFPriorities
 }
 
 func (c *client) replayPolicyFlows() {
@@ -1228,6 +1233,7 @@ func (c *client) updateConjunctionActionFlows(conj *policyRuleConjunction, updat
 		actionFlows:   newActionFlows,
 		npName:        conj.npName,
 		npNamespace:   conj.npNamespace,
+		ruleTableID:   conj.ruleTableID,
 	}
 	return newConj
 }
@@ -1253,15 +1259,19 @@ func (c *client) updateConjunctionMatchFlows(conj *policyRuleConjunction, newPri
 }
 
 // calculateFlowUpdates calculates the flow updates required for the priority re-assignments specified in the input map.
-func (c *client) calculateFlowUpdates(updates map[uint16]uint16) (addFlows, delFlows []binding.Flow, conjFlowUpdates map[uint32]flowUpdates) {
+func (c *client) calculateFlowUpdates(updates map[uint16]uint16, table binding.TableIDType) (addFlows, delFlows []binding.Flow,
+	conjFlowUpdates map[uint32]flowUpdates) {
 	conjFlowUpdates = map[uint32]flowUpdates{}
 	for original, newPriority := range updates {
 		originalPriorityStr := strconv.Itoa(int(original))
 		conjs, _ := c.policyCache.ByIndex(priorityIndex, originalPriorityStr)
-		klog.V(4).Infof("%d policyRuleConjunctions have flows installed at priority %v previously",
-			len(conjs), originalPriorityStr)
 		for _, conjObj := range conjs {
 			conj := conjObj.(*policyRuleConjunction)
+			// Only re-assign flow priorities for flows in the table specified.
+			if conj.ruleTableID != table {
+				klog.V(4).Infof("Conjunction %v with the same actionFlow priority is from a different table %v", conj.id, conj.ruleTableID)
+				continue
+			}
 			for _, actionFlow := range conj.actionFlows {
 				flowPriority := actionFlow.FlowPriority()
 				if flowPriority == original {
@@ -1291,8 +1301,8 @@ func (c *client) calculateFlowUpdates(updates map[uint16]uint16) (addFlows, delF
 
 // ReassignFlowPriorities takes a list of priority updates, and update the actionFlows to replace
 // the old priority with the desired one, for each priority update.
-func (c *client) ReassignFlowPriorities(updates map[uint16]uint16) error {
-	addFlows, delFlows, conjFlowUpdates := c.calculateFlowUpdates(updates)
+func (c *client) ReassignFlowPriorities(updates map[uint16]uint16, table binding.TableIDType) error {
+	addFlows, delFlows, conjFlowUpdates := c.calculateFlowUpdates(updates, table)
 	add, update, del := c.processFlowUpdates(addFlows, delFlows)
 	// Commit the flows updates calculated.
 	err := c.bridge.AddFlowsInBundle(add, update, del)
