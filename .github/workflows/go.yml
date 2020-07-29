@@ -32,7 +32,10 @@ jobs:
 
   golangci-lint:
     name: Golangci-lint
-    runs-on: [ubuntu-18.04]
+    strategy:
+      matrix:
+        platform: [ubuntu-18.04, macos-latest]
+    runs-on: ${{ matrix.platform }}
     steps:
     - name: Set up Go 1.13
       uses: actions/setup-go@v1
