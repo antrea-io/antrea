@@ -42,6 +42,7 @@ everything up-and-running, run:
 ```shell
 kubectl create namespace antrea-flow-collector
 kubectl create configmap logstash-configmap -n antrea-flow-collector --from-file=build/yamls/flow-collector/logstash/
+kubectl apply -f build/yamls/antrea-visualization.yml -n antrea-flow-collector
 kubectl apply -f build/yamls/flow-collector/flow-collector.yml -n antrea-flow-collector
 ```
 Kibana dashboard is exposed as a Nodeport, which can be accessed via
@@ -49,7 +50,7 @@ Kibana dashboard is exposed as a Nodeport, which can be accessed via
 
 To import the pre-built and recommended dashboard into Kibana, go to
 **Management -> Saved Objects** and
-import `build/yamls/flow/kibana.ndjson`
+import `build/yamls/flow/kibana-flow-collector.ndjson`
 
 
 ## Pre-built Dashboards

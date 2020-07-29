@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metricbeat-deployment-config
+  labels:
+    app: metricbeat
+data:
+  metricbeat.yml: |-
+    metricbeat.modules:
+    - module: prometheus
+      period: 20s
+      hosts: ["10.192.223.81:30000"]
+      metrics_path: '/federate'
+      query:
+        'match[]': '{__name__!=""}'
+      metrics_filters:
+        include:
+          - "antrea_agent_egress_networkpolicy_rule_count"
+          - "antrea_agent_ingress_networkpolicy_rule_count"
+          - "antrea_agent_local_pod_count"
+          - "antrea_agent_networkpolicy_count"
+          - "antrea_agent_ovs_total_flow_count"
+          - "antrea_agent_ovs_flow_count"
+          - "antrea_agent_runtime_info"
+          - "antrea_controller_applied_to_group_processed"
+          - "antrea_controller_address_group_processed"
+          - "antrea_controller_network_policy_processed"
+          - "antrea_controller_applied_to_group_sync_duration_milliseconds"
+          - "antrea_controller_applied_to_group_sync_duration_milliseconds_count"
+          - "antrea_controller_applied_to_group_sync_duration_milliseconds_sum"
+          - "antrea_controller_address_group_sync_duration_milliseconds"
+          - "antrea_controller_address_group_sync_duration_milliseconds_count"
+          - "antrea_controller_address_group_sync_duration_milliseconds_sum"
+          - "antrea_controller_network_policy_sync_duration_milliseconds"
+          - "antrea_controller_network_policy_sync_duration_milliseconds_count"
+          - "antrea_controller_network_policy_sync_duration_milliseconds_sum"
+          - "antrea_controller_length_applied_to_group_queue"
+          - "antrea_controller_length_address_group_queue"
+          - "antrea_controller_length_network_policy_queue"
+          - "antrea_controller_runtime_info"
+
+    output.elasticsearch:
+      hosts: ['${ELASTICSEARCH_HOST:elasticsearch}:${ELASTICSEARCH_PORT:9200}']
+      setup.template.pattern: "metricbeat-*"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metricbeat
+  labels:
+    app: metricbeat
+spec:
+  selector:
+    matchLabels:
+      app: metricbeat
+  template:
+    metadata:
+      labels:
+        app: metricbeat
+    spec:
+      containers:
+        - name: metricbeat
+          image: docker.elastic.co/beats/metricbeat-oss:7.7.0
+          args: [
+            "-c", "/etc/metricbeat.yml",
+            "-e",
+          ]
+          env:
+            - name: ELASTICSEARCH_HOST
+              value: elasticsearch
+            - name: ELASTICSEARCH_PORT
+              value: "9200"
+          securityContext:
+            runAsUser: 0
+          resources:
+            limits:
+              memory: 200Mi
+            requests:
+              cpu: 100m
+              memory: 100Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/metricbeat.yml
+              readOnly: true
+              subPath: metricbeat.yml
+      volumes:
+        - name: config
+          configMap:
+            defaultMode: 0600
+            name: metricbeat-deployment-config

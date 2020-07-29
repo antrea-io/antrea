@@ -10,7 +10,7 @@ the configuration of Prometheus server to operate with the Antrea components.
 server. Prometheus is capable of collecting metrics from various Kubernetes 
 components, storing and providing alerts.
 Prometheus can provide visibility by integrating with other products such as 
-[Grafana](https://grafana.com/).
+[Grafana](https://grafana.com/) or [Elastic Stack](##Visibility-with-Elastic-Stack).
  
 One of Prometheus capabilities is self-discovery of Kubernetes services which
 expose their metrics. So Prometheus can scrape the metrics of any additional 
@@ -106,3 +106,37 @@ The configuration file above can be used to deploy Prometheus Server with
 scraping configuration for Antrea services.
 To deploy this configuration use
 `kubectl apply -f build/yamls/antrea-prometheus.yml`
+
+## Visibility with Elastic Stack
+[Elastic Stack](https://www.elastic.co) is a group of open source products to
+help collect, store, search, analyze and visualize data in real time. We will
+use Elasticsearch, Kibana and Metricbeat to provide metrics visibility.
+
+[Metricbeat](https://www.elastic.co/beats/metricbeat) works as a metrics shipper from Prometheus to Elastic Stack.
+[Elasticsearch](https://www.elastic.co/elasticsearch/) is responsible for storing collected metrics and indexing.
+[Kibana](https://www.elastic.co/kibana/) is mainly for data visualization and exploration.
+
+### Deployment Steps
+To create all the necessary resources in the `monitoring` namespace
+and get everything up-and-running, run:
+```shell
+kubectl create namespace monitoring
+kubectl apply -f build/yamls/antrea-visualization.yml -n monitoring
+kubectl apply -f build/yamls/metrics-visualization/flow-collector.yml -n monitoring
+```
+Kibana dashboard is exposed as a Nodeport, which can be accessed via
+`http://[NodeIP]: 30007`
+
+To import the pre-built and recommended dashboard into Kibana, go to
+**Management -> Saved Objects** and
+import `build/yamls/flow/kibana-prometheus.ndjson`
+
+### Pre-built Dashboards
+The following dashboards are provided for visualizing metrics collected from Prometheus.
+
+#### Metrics 
+<img src="/docs/assets/metrics-visualization-1.png" width="900" alt="Metrics Dashboard"> 
+
+#### Network Policy 
+<img src="/docs/assets/metrics-visualization-2.png" width="900" alt="Network Policy Dashboard"> 
+<img src="/docs/assets/metrics-visualization-3.png" width="900" alt="Network Policy Dashboard"> 
