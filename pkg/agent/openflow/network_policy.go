@@ -791,9 +791,7 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 	for _, rule := range ofPolicyRules {
 		conj := c.calculateActionFlowChangesForRule(rule)
 		ctxChanges := c.calculateMatchFlowChangesForRule(conj, rule, true)
-		for _, actionFlow := range conj.actionFlows {
-			allActionFlowChanges = append(allActionFlowChanges, actionFlow)
-		}
+		allActionFlowChanges = append(allActionFlowChanges, conj.actionFlows...)
 		allCtxChanges = append(allCtxChanges, ctxChanges...)
 		updatedConjunctions = append(updatedConjunctions, conj)
 	}
@@ -825,10 +823,8 @@ func (c *client) applyConjunctiveMatchFlows(flowChanges []*conjMatchFlowContextC
 // sendConjunctiveFlows sends all the changed OpenFlow entries to the OVS bridge in a single Bundle.
 func (c *client) sendConjunctiveFlows(changes []*conjMatchFlowContextChange, actionFlows []binding.Flow) error {
 	var addFlows, modifyFlows, deleteFlows []binding.Flow
-	for _, actionFlow := range actionFlows {
-		addFlows = append(addFlows, actionFlow)
-	}
 	var flowChanges []*flowChange
+	addFlows = actionFlows
 	for _, flowChange := range changes {
 		if flowChange.matchFlow != nil {
 			flowChanges = append(flowChanges, flowChange.matchFlow)
