@@ -1,5 +1,3 @@
-// +build !windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,13 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ovsctl
-
-import "os/exec"
-
-// File path of the ovs-vswitchd control UNIX domain socket.
-const ovsVSwitchdUDS = "/var/run/openvswitch/ovs-vswitchd.*.ctl"
-
-func getOVSCommand(cmdStr string) *exec.Cmd {
-	return exec.Command("/bin/sh", "-c", cmdStr)
-}
+// Package systcl contains utility functions to read and write sysctl configuration on Linux.
+package sysctl

@@ -178,17 +178,23 @@ fmt:
 	@echo "===> Installing Golangci-lint <==="
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.21.0
 
+# Setting CGO_ENABLED=1 to run golangci-lint is required on macOS to avoid the following error:
+#   build github.com/goccy/go-graphviz/internal/ccall: cannot load github.com/goccy/go-graphviz/internal/ccall: no Go source files
+# By default go never enables cgo when cross-compiling, but it is required by
+# go-graphviz. golangci-lint invokes "go list" to list source directories, which in turn tries to
+# build.
+
 .PHONY: golangci
 golangci: .golangci-bin
-	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml
+	@GOOS=linux CGO_ENABLED=1 .golangci-bin/golangci-lint run -c .golangci.yml
 
 .PHONY: golangci-fix
 golangci-fix: .golangci-bin
-	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml --fix
+	@GOOS=linux CGO_ENABLED=1 .golangci-bin/golangci-lint run -c .golangci.yml --fix
 
 .PHONY: lint
 lint: .golangci-bin
-	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci-golint.yml
+	@GOOS=linux CGO_ENABLED=1 .golangci-bin/golangci-lint run -c .golangci-golint.yml
 
 .PHONY: clean
 clean:
