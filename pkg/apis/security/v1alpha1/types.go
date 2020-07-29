@@ -128,9 +128,9 @@ type RuleAction string
 
 const (
 	// RuleActionAllow describes that rule matching traffic must be allowed.
-	RuleActionAllow RuleAction = "ALLOW"
+	RuleActionAllow RuleAction = "Allow"
 	// RuleActionDrop describes that rule matching traffic must be dropped.
-	RuleActionDrop RuleAction = "DROP"
+	RuleActionDrop RuleAction = "Drop"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

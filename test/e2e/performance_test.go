@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/url"
@@ -143,7 +144,7 @@ func setupTestPodsConnection(data *TestData) error {
 		ObjectMeta: metav1.ObjectMeta{Name: podsConnectionNetworkPolicyName},
 		Spec:       npSpec,
 	}
-	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(np)
+	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(context.TODO(), np, metav1.CreateOptions{})
 	return err
 }
 
@@ -171,14 +172,14 @@ func generateWorkloadNetworkPolicy(policyRules int) *networkv1.NetworkPolicy {
 }
 
 func populateWorkloadNetworkPolicy(np *networkv1.NetworkPolicy, data *TestData) error {
-	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(np)
+	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(context.TODO(), np, metav1.CreateOptions{})
 	return err
 }
 
 func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) {
 	b.Logf("Creating a nginx test Pod")
 	nginxPod := createPerfTestPodDefinition(benchNginxPodName, nginxContainerName, nginxImage)
-	_, err := data.clientset.CoreV1().Pods(testNamespace).Create(nginxPod)
+	_, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), nginxPod, metav1.CreateOptions{})
 	if err != nil {
 		b.Fatalf("Error when creating nginx test pod: %v", err)
 	}
@@ -190,7 +191,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 
 	b.Logf("Creating a perftool test Pod")
 	perfPod := createPerfTestPodDefinition(perftoolPodName, perftoolContainerName, perftoolImage)
-	_, err = data.clientset.CoreV1().Pods(testNamespace).Create(perfPod)
+	_, err = data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), perfPod, metav1.CreateOptions{})
 	if err != nil {
 		b.Fatalf("Error when creating perftool test Pod: %v", err)
 	}
@@ -262,7 +263,7 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 		b.StopTimer()
 		b.Log("Network policy realized")
 
-		err = data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Delete(workloadNetworkPolicyName, new(metav1.DeleteOptions))
+		err = data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Delete(context.TODO(), workloadNetworkPolicyName, metav1.DeleteOptions{})
 		if err != nil {
 			b.Fatalf("Error when cleaning up network policies after running one bench iteration: %v", err)
 		}

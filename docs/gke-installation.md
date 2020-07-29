@@ -94,8 +94,8 @@ For any given release `<TAG>` (e.g. `v0.5.0`), get the Antrea GKE deployment yam
     https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke.yml
     ````
 
-    Update ``defaultMTU`` (default is 1500) and ``serviceCIDR`` value of antrea-agent.conf in antrea-gke.yml with
-GKE_SERVICE_CIDR selected at the time of deploying GKE cluster.
+    Update ``serviceCIDR`` value of antrea-agent.conf in antrea-gke.yml with GKE_SERVICE_CIDR selected at the time of
+    deploying GKE cluster.
 
 3. Deploy Antrea
 

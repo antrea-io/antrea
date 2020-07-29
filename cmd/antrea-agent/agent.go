@@ -29,13 +29,19 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
+	"github.com/vmware-tanzu/antrea/pkg/agent/controller/traceflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -57,6 +63,8 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -80,7 +88,7 @@ func run(o *Options) error {
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr)
+	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, features.DefaultFeatureGate.Enabled(features.AntreaProxy))
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
@@ -89,7 +97,10 @@ func run(o *Options) error {
 		TrafficEncapMode:  encapMode,
 		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
 
-	routeClient, err := route.NewClient(o.config.HostGateway, serviceCIDRNet, encapMode)
+	routeClient, err := route.NewClient(serviceCIDRNet, encapMode)
+	if err != nil {
+		return fmt.Errorf("error creating route client: %v", err)
+	}
 
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -105,7 +116,8 @@ func run(o *Options) error {
 		o.config.HostGateway,
 		o.config.DefaultMTU,
 		serviceCIDRNet,
-		networkConfig)
+		networkConfig,
+		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -122,6 +134,19 @@ func run(o *Options) error {
 		networkConfig,
 		nodeConfig)
 
+	var traceflowController *traceflow.Controller
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		traceflowController = traceflow.NewTraceflowController(
+			k8sClient,
+			crdClient,
+			traceflowInformer,
+			ofClient,
+			ovsBridgeClient,
+			ifaceStore,
+			networkConfig,
+			nodeConfig)
+	}
+
 	// podUpdates is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated Pods.
@@ -131,10 +156,13 @@ func run(o *Options) error {
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
 	}
+	var proxier *proxy.Proxier
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
+	}
 	cniServer := cniserver.New(
 		o.config.CNISocket,
 		o.config.HostProcPathPrefix,
-		o.config.DefaultMTU,
 		nodeConfig,
 		k8sClient,
 		podUpdates,
@@ -159,15 +187,22 @@ func run(o *Options) error {
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
 
+	log.StartLogFileNumberMonitor(stopCh)
+
 	go cniServer.Run(stopCh)
 
 	informerFactory.Start(stopCh)
+	crdInformerFactory.Start(stopCh)
 
 	go antreaClientProvider.Run(stopCh)
 
 	go nodeRouteController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		go traceflowController.Run(stopCh)
+	}
 
 	agentQuerier := querier.NewAgentQuerier(
 		nodeConfig,
@@ -182,6 +217,10 @@ func run(o *Options) error {
 
 	go agentMonitor.Run(stopCh)
 
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		go proxier.Run(stopCh)
+	}
+
 	apiServer, err := apiserver.New(
 		agentQuerier,
 		networkPolicyController,
@@ -191,6 +230,16 @@ func run(o *Options) error {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}
 	go apiServer.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		go ofClient.StartPacketInHandler(stopCh)
+	}
+	// Create connection store that polls conntrack flows with a given polling interval.
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		ctDumper := connections.NewConnTrackDumper(nodeConfig, serviceCIDRNet, connections.NewConnTrackInterfacer())
+		connStore := connections.NewConnectionStore(ctDumper, ifaceStore)
+		go connStore.Run(stopCh)
+	}
 
 	<-stopCh
 	klog.Info("Stopping Antrea agent")

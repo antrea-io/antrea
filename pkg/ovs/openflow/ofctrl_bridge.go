@@ -157,8 +157,11 @@ func (b *OFBridge) CreateGroup(id GroupIDType) Group {
 }
 
 func (b *OFBridge) DeleteGroup(id GroupIDType) bool {
-	err := b.ofSwitch.DeleteGroup(uint32(id))
-	if err != nil {
+	g := b.ofSwitch.GetGroup(uint32(id))
+	if g == nil {
+		return true
+	}
+	if err := g.Delete(); err != nil {
 		return false
 	}
 	return true

@@ -59,13 +59,12 @@ func (b *ofFlowBuilder) MatchReg(regID int, data uint32) FlowBuilder {
 
 // MatchRegRange adds match condition for matching data in the target register at specified range.
 func (b *ofFlowBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBuilder {
-	var regData = data
 	if rng[0] > 0 {
-		regData = data << rng[0]
+		data <<= rng[0]
 	}
 	reg := &ofctrl.NXRegister{
 		ID:    regID,
-		Data:  regData,
+		Data:  data,
 		Range: rng.ToNXRange(),
 	}
 	b.Match.NxRegs = append(b.Match.NxRegs, reg)
@@ -280,6 +279,11 @@ func (b *ofFlowBuilder) MatchARPOp(op uint16) FlowBuilder {
 func (b *ofFlowBuilder) MatchConjID(value uint32) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("conj_id=%d", value))
 	b.Match.ConjunctionID = &value
+	return b
+}
+
+func (b *ofFlowBuilder) MatchPriority(priority uint16) FlowBuilder {
+	b.Match.Priority = priority
 	return b
 }
 

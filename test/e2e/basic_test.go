@@ -83,7 +83,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
 
 	cmds := []string{"antctl", "get", "podinterface", podName, "-n", testNamespace, "-o", "json"}
-	stdout, _, err := runAntctl(antreaPodName, cmds, data, t)
+	stdout, _, err := runAntctl(antreaPodName, cmds, data)
 	var podInterfaces []podinterface.Response
 	if err := json.Unmarshal([]byte(stdout), &podInterfaces); err != nil {
 		t.Fatalf("Error when querying the pod interface: %v", err)
@@ -288,6 +288,10 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		return antreaPodName
 	}
 
+	antreaGWName, err := data.GetGatewayInterfaceName(antreaNamespace)
+	if err != nil {
+		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
+	}
 	getGatewayRoutes := func() (routes []Route, err error) {
 		cmd := fmt.Sprintf("ip route list dev %s", antreaGWName)
 		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)

@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +28,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 const (
@@ -43,7 +46,9 @@ const (
 // calculate an ID based on the rule's fields. That means:
 // 1. If a rule's selector/services/direction changes, it becomes "another" rule.
 // 2. If inserting rules before a rule or shuffling rules in a NetworkPolicy, we
-//    can know the existing rules don't change and skip processing them.
+//    can know the existing rules don't change and skip processing them. Note that
+//    if a CNP/ANP rule's position (from top down) within a networkpolicy changes, it
+//    affects the Priority of the rule.
 type rule struct {
 	// ID is calculated from the hash value of all other fields.
 	ID string
@@ -55,6 +60,12 @@ type rule struct {
 	To v1beta1.NetworkPolicyPeer
 	// Protocols and Ports of this rule.
 	Services []v1beta1.Service
+	// Action of this rule. nil for k8s NetworkPolicy.
+	Action *secv1alpha1.RuleAction
+	// Priority of this rule within the NetworkPolicy. Defaults to -1 for k8s NetworkPolicy.
+	Priority int32
+	// Priority of the NetworkPolicy to which this rule belong. nil for k8s NetworkPolicy.
+	PolicyPriority *float64
 	// Targets of this rule.
 	AppliedToGroups []string
 	// The parent Policy ID. Used to identify rules belong to a specified
@@ -62,7 +73,8 @@ type rule struct {
 	PolicyUID types.UID
 	// The metadata of parent Policy. Used to associate the rule with Policy
 	// for troubleshooting purpose (logging and CLI).
-	PolicyName      string
+	PolicyName string
+	// PolicyNamespace is empty for ClusterNetworkPolicy.
 	PolicyNamespace string
 }
 
@@ -95,7 +107,13 @@ func (r *CompletedRule) String() string {
 	} else {
 		addressString = fmt.Sprintf("ToAddressGroups: %d, ToIPBlocks: %d, ToAddresses: %d", len(r.To.AddressGroups), len(r.To.IPBlocks), len(r.ToAddresses))
 	}
-	return fmt.Sprintf("%s (Direction: %v, Pods: %d, %s, Services: %d)", r.ID, r.Direction, len(r.Pods), addressString, len(r.Services))
+	return fmt.Sprintf("%s (Direction: %v, Pods: %d, %s, Services: %d, PolicyPriority: %v, RulePriority: %v)",
+		r.ID, r.Direction, len(r.Pods), addressString, len(r.Services), r.PolicyPriority, r.Priority)
+}
+
+// isAntreaNetworkPolicyRule returns true if the rule is part of a ClusterNetworkPolicy.
+func (r *CompletedRule) isAntreaNetworkPolicyRule() bool {
+	return r.PolicyPriority != nil
 }
 
 // ruleCache caches Antrea AddressGroups, AppliedToGroups and NetworkPolicies,
@@ -160,6 +178,12 @@ func (c *ruleCache) getNetworkPolicy(npName, npNamespace string) *v1beta1.Networ
 func (c *ruleCache) buildNetworkPolicyFromRules(uid string) *v1beta1.NetworkPolicy {
 	var np *v1beta1.NetworkPolicy
 	rules, _ := c.rules.ByIndex(policyIndex, uid)
+	// Sort the rules by priority
+	sort.Slice(rules, func(i, j int) bool {
+		r1 := rules[i].(*rule)
+		r2 := rules[j].(*rule)
+		return r1.Priority < r2.Priority
+	})
 	for _, ruleObj := range rules {
 		np = addRuleToNetworkPolicy(np, ruleObj.(*rule))
 	}
@@ -181,7 +205,9 @@ func addRuleToNetworkPolicy(np *v1beta1.NetworkPolicy, rule *rule) *v1beta1.Netw
 		Direction: rule.Direction,
 		From:      rule.From,
 		To:        rule.To,
-		Services:  rule.Services})
+		Services:  rule.Services,
+		Action:    rule.Action,
+		Priority:  rule.Priority})
 	return np
 
 }
@@ -510,12 +536,15 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
 		From:            r.From,
 		To:              r.To,
 		Services:        r.Services,
+		Action:          r.Action,
+		Priority:        r.Priority,
 		AppliedToGroups: policy.AppliedToGroups,
 		PolicyUID:       policy.UID,
 	}
 	rule.ID = hashRule(rule)
 	rule.PolicyNamespace = policy.Namespace
 	rule.PolicyName = policy.Name
+	rule.PolicyPriority = policy.Priority
 	return rule
 }
 
@@ -563,6 +592,7 @@ func (c *ruleCache) AddNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 
 func (c *ruleCache) addNetworkPolicyLocked(policy *v1beta1.NetworkPolicy) error {
 	c.policyMap[string(policy.UID)] = &types.NamespacedName{policy.Namespace, policy.Name}
+	metrics.NetworkPolicyCount.Inc()
 	return c.UpdateNetworkPolicy(policy)
 }
 
@@ -576,21 +606,33 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 	}
 
 	for i := range policy.Rules {
-		rule := toRule(&policy.Rules[i], policy)
-		if _, exists := ruleByID[rule.ID]; exists {
+		r := toRule(&policy.Rules[i], policy)
+		if _, exists := ruleByID[r.ID]; exists {
 			// If rule already exists, remove it from the map so the ones left finally are orphaned.
-			klog.V(2).Infof("Rule %v was not changed", rule.ID)
-			delete(ruleByID, rule.ID)
+			klog.V(2).Infof("Rule %v was not changed", r.ID)
+			delete(ruleByID, r.ID)
 		} else {
 			// If rule doesn't exist, add it to cache, mark it as dirty.
-			c.rules.Add(rule)
-			c.dirtyRuleHandler(rule.ID)
+			c.rules.Add(r)
+			// Count up antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
+			if r.Direction == v1beta1.DirectionIn {
+				metrics.IngressNetworkPolicyRuleCount.Inc()
+			} else {
+				metrics.EgressNetworkPolicyRuleCount.Inc()
+			}
+			c.dirtyRuleHandler(r.ID)
 		}
 	}
 
 	// At this moment, the remaining rules are orphaned, remove them from store and mark them as dirty.
-	for ruleID, rule := range ruleByID {
-		c.rules.Delete(rule)
+	for ruleID, r := range ruleByID {
+		c.rules.Delete(r)
+		// Count down antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
+		if r.(*rule).Direction == v1beta1.DirectionIn {
+			metrics.IngressNetworkPolicyRuleCount.Dec()
+		} else {
+			metrics.EgressNetworkPolicyRuleCount.Dec()
+		}
 		c.dirtyRuleHandler(ruleID)
 	}
 	return nil
@@ -610,9 +652,16 @@ func (c *ruleCache) deleteNetworkPolicyLocked(uid string) error {
 	existingRules, _ := c.rules.ByIndex(policyIndex, uid)
 	for _, r := range existingRules {
 		ruleID := r.(*rule).ID
+		// Count down antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
+		if r.(*rule).Direction == v1beta1.DirectionIn {
+			metrics.IngressNetworkPolicyRuleCount.Dec()
+		} else {
+			metrics.EgressNetworkPolicyRuleCount.Dec()
+		}
 		c.rules.Delete(r)
 		c.dirtyRuleHandler(ruleID)
 	}
+	metrics.NetworkPolicyCount.Dec()
 	return nil
 }
 

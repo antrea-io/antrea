@@ -433,6 +433,20 @@ func (mr *MockFlowMockRecorder) Delete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockFlow)(nil).Delete))
 }
 
+// FlowPriority mocks base method
+func (m *MockFlow) FlowPriority() uint16 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FlowPriority")
+	ret0, _ := ret[0].(uint16)
+	return ret0
+}
+
+// FlowPriority indicates an expected call of FlowPriority
+func (mr *MockFlowMockRecorder) FlowPriority() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FlowPriority", reflect.TypeOf((*MockFlow)(nil).FlowPriority))
+}
+
 // GetBundleMessage mocks base method
 func (m *MockFlow) GetBundleMessage(arg0 openflow.OFOperation) (ofctrl.OpenFlowModMessage, error) {
 	m.ctrl.T.Helper()
@@ -500,6 +514,20 @@ func (m *MockFlow) Reset() {
 func (mr *MockFlowMockRecorder) Reset() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockFlow)(nil).Reset))
+}
+
+// ToBuilder mocks base method
+func (m *MockFlow) ToBuilder() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ToBuilder")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// ToBuilder indicates an expected call of ToBuilder
+func (mr *MockFlowMockRecorder) ToBuilder() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToBuilder", reflect.TypeOf((*MockFlow)(nil).ToBuilder))
 }
 
 // Type mocks base method
@@ -1358,6 +1386,20 @@ func (m *MockFlowBuilder) MatchInPort(arg0 uint32) openflow.FlowBuilder {
 func (mr *MockFlowBuilderMockRecorder) MatchInPort(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchInPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchInPort), arg0)
+}
+
+// MatchPriority mocks base method
+func (m *MockFlowBuilder) MatchPriority(arg0 uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchPriority", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchPriority indicates an expected call of MatchPriority
+func (mr *MockFlowBuilderMockRecorder) MatchPriority(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchPriority", reflect.TypeOf((*MockFlowBuilder)(nil).MatchPriority), arg0)
 }
 
 // MatchProtocol mocks base method

@@ -38,6 +38,298 @@ spec:
     served: true
     storage: true
 ---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: clusternetworkpolicies.security.antrea.tanzu.vmware.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.priority
+    description: The Priority of this ClusterNetworkPolicy relative to other policies.
+    format: float
+    name: Priority
+    type: number
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: security.antrea.tanzu.vmware.com
+  names:
+    kind: ClusterNetworkPolicy
+    plural: clusternetworkpolicies
+    shortNames:
+    - cnp
+    singular: clusternetworkpolicy
+  preserveUnknownFields: false
+  scope: Cluster
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            appliedTo:
+              items:
+                properties:
+                  namespaceSelector:
+                    x-kubernetes-preserve-unknown-fields: true
+                  podSelector:
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+              type: array
+            egress:
+              items:
+                properties:
+                  action:
+                    pattern: \bAllow|\bDrop
+                    type: string
+                  ports:
+                    items:
+                      properties:
+                        port:
+                          x-kubernetes-int-or-string: true
+                        protocol:
+                          type: string
+                      type: object
+                    type: array
+                  to:
+                    items:
+                      properties:
+                        ipBlock:
+                          properties:
+                            cidr:
+                              format: cidr
+                              type: string
+                          type: object
+                        namespaceSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                        podSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                      type: object
+                    type: array
+                required:
+                - action
+                type: object
+              type: array
+            ingress:
+              items:
+                properties:
+                  action:
+                    pattern: \bAllow|\bDrop
+                    type: string
+                  from:
+                    items:
+                      properties:
+                        ipBlock:
+                          properties:
+                            cidr:
+                              format: cidr
+                              type: string
+                          type: object
+                        namespaceSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                        podSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                      type: object
+                    type: array
+                  ports:
+                    items:
+                      properties:
+                        port:
+                          x-kubernetes-int-or-string: true
+                        protocol:
+                          type: string
+                      type: object
+                    type: array
+                required:
+                - action
+                type: object
+              type: array
+            priority:
+              format: float
+              maximum: 10000
+              minimum: 1
+              type: number
+          required:
+          - appliedTo
+          - priority
+          type: object
+      type: object
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: traceflows.ops.antrea.tanzu.vmware.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.phase
+    description: The phase of the Traceflow.
+    name: Phase
+    type: string
+  - JSONPath: .spec.source.pod
+    description: The name of the source Pod.
+    name: Source-Pod
+    priority: 10
+    type: string
+  - JSONPath: .spec.destination.pod
+    description: The name of the destination Pod.
+    name: Destination-Pod
+    priority: 10
+    type: string
+  - JSONPath: .spec.destination.ip
+    description: The IP address of the destination.
+    name: Destination-IP
+    priority: 10
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: ops.antrea.tanzu.vmware.com
+  names:
+    kind: Traceflow
+    plural: traceflows
+    shortNames:
+    - tf
+    singular: traceflow
+  preserveUnknownFields: false
+  scope: Cluster
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            destination:
+              oneOf:
+              - required:
+                - pod
+                - namespace
+              - required:
+                - ip
+              properties:
+                ip:
+                  format: ipv4
+                  type: string
+                namespace:
+                  type: string
+                pod:
+                  type: string
+              type: object
+            packet:
+              properties:
+                ipHeader:
+                  properties:
+                    flags:
+                      type: integer
+                    protocol:
+                      type: integer
+                    srcIP:
+                      format: ipv4
+                      type: string
+                    ttl:
+                      type: integer
+                  type: object
+                transportHeader:
+                  properties:
+                    icmp:
+                      properties:
+                        id:
+                          type: integer
+                        sequence:
+                          type: integer
+                      type: object
+                    tcp:
+                      properties:
+                        dstPort:
+                          type: integer
+                        flags:
+                          type: integer
+                        srcPort:
+                          type: integer
+                      type: object
+                    udp:
+                      properties:
+                        dstPort:
+                          type: integer
+                        srcPort:
+                          type: integer
+                      type: object
+                  type: object
+              type: object
+            source:
+              properties:
+                namespace:
+                  type: string
+                pod:
+                  type: string
+              required:
+              - pod
+              - namespace
+              type: object
+          required:
+          - source
+          - destination
+          type: object
+        status:
+          properties:
+            dataplaneTag:
+              type: integer
+            phase:
+              type: string
+            reason:
+              type: string
+            results:
+              items:
+                properties:
+                  node:
+                    type: string
+                  observations:
+                    items:
+                      properties:
+                        action:
+                          type: string
+                        component:
+                          type: string
+                        componentInfo:
+                          type: string
+                        dstMAC:
+                          type: string
+                        networkPolicy:
+                          type: string
+                        pod:
+                          type: string
+                        translatedDstIP:
+                          type: string
+                        translatedSrcIP:
+                          type: string
+                        ttl:
+                          type: integer
+                        tunnelDstIP:
+                          type: string
+                      type: object
+                    type: array
+                  role:
+                    type: string
+                  timestamp:
+                    type: integer
+                type: object
+              type: array
+          type: object
+      required:
+      - spec
+      type: object
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -128,9 +420,11 @@ rules:
   - ""
   resources:
   - pods
+  - endpoints
   - services
   verbs:
   - get
+  - watch
   - list
 - apiGroups:
   - clusterinformation.antrea.tanzu.vmware.com
@@ -183,6 +477,17 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - ops.antrea.tanzu.vmware.com
+  resources:
+  - traceflows
+  - traceflows/status
+  verbs:
+  - get
+  - watch
+  - list
+  - update
+  - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -266,6 +571,25 @@ rules:
   verbs:
   - get
   - update
+- apiGroups:
+  - security.antrea.tanzu.vmware.com
+  resources:
+  - clusternetworkpolicies
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - ops.antrea.tanzu.vmware.com
+  resources:
+  - traceflows
+  - traceflows/status
+  verbs:
+  - get
+  - watch
+  - list
+  - update
+  - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -324,6 +648,17 @@ metadata:
 apiVersion: v1
 data:
   antrea-agent.conf: |
+    # FeatureGates is a map of feature names to bools that enable or disable experimental features.
+    featureGates:
+    # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
+    # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
+    # Service traffic.
+    #  AntreaProxy: false
+    # Enable traceflow which provides packet tracing feature to diagnose network issue.
+    #  Traceflow: false
+    # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
+    #  FlowExporter: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     #ovsBridge: br-int
@@ -337,18 +672,18 @@ data:
 
     # Name of the interface antrea-agent will create and use for host <--> pod communication.
     # Make sure it doesn't conflict with your existing interfaces.
-    #hostGateway: gw0
+    #hostGateway: antrea-gw0
 
     # Encapsulation mode for communication between Pods across Nodes, supported values:
-    # - vxlan (default)
-    # - geneve
+    # - geneve (default)
+    # - vxlan
     # - gre
     # - stt
-    #tunnelType: vxlan
+    #tunnelType: geneve
 
-    # Default MTU to use for the host gateway interface and the network interface of each Pod. If
-    # omitted, antrea-agent will default this value to 1450 to accommodate for tunnel encapsulate
-    # overhead.
+    # Default MTU to use for the host gateway interface and the network interface of each Pod.
+    # If omitted, antrea-agent will discover the MTU of the Node's primary interface and
+    # also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
     #defaultMTU: 1450
 
     # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
@@ -393,6 +728,15 @@ data:
         ]
     }
   antrea-controller.conf: |
+    # FeatureGates is a map of feature names to bools that enable or disable experimental features.
+    featureGates:
+    # Enable traceflow which provides packet tracing feature to diagnose network issue.
+    #  Traceflow: false
+
+    # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
+    # to define security policies which apply to the entire cluster.
+    # ClusterNetworkPolicy: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -402,17 +746,19 @@ data:
     #enablePrometheusMetrics: false
 
     # Indicates whether to use auto-generated self-signed TLS certificate.
-    # If false, A secret named "kube-system/antrea-controller-tls" must be provided with the following keys:
+    # If false, A Secret named "antrea-controller-tls" must be provided with the following keys:
     #   ca.crt: <CA certificate>
     #   tls.crt: <TLS certificate>
     #   tls.key: <TLS private key>
+    # And the Secret must be mounted to directory "/var/run/antrea/antrea-controller-tls" of the
+    # antrea-controller container.
     #selfSignedCert: true
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-mf4t8c67c8
+  name: antrea-config-hc2t9429cd
   namespace: kube-system
 ---
 apiVersion: v1
@@ -458,9 +804,10 @@ spec:
         - --config
         - /etc/antrea/antrea-controller.conf
         - --logtostderr=false
-        - --log_dir
-        - /var/log/antrea
+        - --log_dir=/var/log/antrea
         - --alsologtostderr
+        - --log_file_max_size=100
+        - --log_file_max_num=4
         command:
         - antrea-controller
         env:
@@ -517,7 +864,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-mf4t8c67c8
+          name: antrea-config-hc2t9429cd
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -583,9 +930,10 @@ spec:
         - --config
         - /etc/antrea/antrea-agent.conf
         - --logtostderr=false
-        - --log_dir
-        - /var/log/antrea
+        - --log_dir=/var/log/antrea
         - --alsologtostderr
+        - --log_file_max_size=100
+        - --log_file_max_num=4
         command:
         - antrea-agent
         env:
@@ -666,9 +1014,11 @@ spec:
             command:
             - /bin/sh
             - -c
-            - timeout 5 container_liveness_probe ovs
+            - timeout 10 container_liveness_probe ovs
+          failureThreshold: 5
           initialDelaySeconds: 5
-          periodSeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 10
         name: antrea-ovs
         resources:
           requests:
@@ -729,7 +1079,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-mf4t8c67c8
+          name: antrea-config-hc2t9429cd
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

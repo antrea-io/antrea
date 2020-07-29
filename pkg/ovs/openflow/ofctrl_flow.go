@@ -89,6 +89,10 @@ func (f *ofFlow) MatchString() string {
 	return repr
 }
 
+func (f *ofFlow) FlowPriority() uint16 {
+	return f.Match.Priority
+}
+
 func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMessage, error) {
 	var operation int
 	switch entryOper {
@@ -128,10 +132,21 @@ func (f *ofFlow) CopyToBuilder(priority uint16) FlowBuilder {
 	return &ofFlowBuilder{newFlow}
 }
 
+// ToBuilder returns a new FlowBuilder with all the contents of the original Flow
+func (f *ofFlow) ToBuilder() FlowBuilder {
+	newFlow := ofFlow{
+		table:    f.table,
+		Flow:     f.Flow,
+		matchers: f.matchers,
+		protocol: f.protocol,
+	}
+	return &ofFlowBuilder{newFlow}
+}
+
 func (r *Range) ToNXRange() *openflow13.NXRange {
 	return openflow13.NewNXRange(int(r[0]), int(r[1]))
 }
 
-func (r *Range) length() uint32 {
+func (r *Range) Length() uint32 {
 	return r[1] - r[0] + 1
 }

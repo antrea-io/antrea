@@ -22,6 +22,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
 type Options struct {
@@ -52,7 +53,7 @@ func (o *Options) complete(args []string) error {
 		o.config = c
 	}
 	o.setDefaults()
-	return nil
+	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
 }
 
 // validate validates all the required options.

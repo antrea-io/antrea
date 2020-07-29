@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -34,6 +35,14 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 )
 
+const (
+	// Namespace and name of the Secret that holds user-provided TLS certificate.
+	tlsSecretNamespace = "kube-system"
+	tlsSecretName      = "antrea-controller-tls"
+
+	caConfigMapNamespace = "kube-system"
+)
+
 // TestUserProvidedCert tests the selfSignedCert=false case. It covers dynamic server certificate.
 func TestUserProvidedCert(t *testing.T) {
 	data, err := setupTest(t)
@@ -44,35 +53,24 @@ func TestUserProvidedCert(t *testing.T) {
 
 	// Re-configure antrea-controller to use user-provided cert.
 	// Note antrea-controller must be restarted to take effect.
-	deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(antreaDeployment, metav1.GetOptions{})
-	var configMapName string
-	for _, volume := range deployment.Spec.Template.Spec.Volumes {
-		if volume.ConfigMap != nil {
-			configMapName = volume.ConfigMap.Name
-			break
-		}
-	}
-	if len(configMapName) == 0 {
-		t.Fatalf("Failed to find ConfigMap volume")
-	}
-	configMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Get(configMapName, metav1.GetOptions{})
+	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
-		t.Fatalf("Failed to get ConfigMap %s: %v", configMapName, err)
+		t.Fatalf("Failed to get ConfigMap: %v", err)
 	}
 	antreaControllerConf, _ := configMap.Data["antrea-controller.conf"]
 	antreaControllerConf = strings.Replace(antreaControllerConf, "#selfSignedCert: true", "selfSignedCert: false", 1)
 	configMap.Data["antrea-controller.conf"] = antreaControllerConf
-	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(configMap); err != nil {
-		t.Fatalf("Failed to update ConfigMap %s: %v", configMapName, err)
+	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("Failed to update ConfigMap %s: %v", configMap.Name, err)
 	}
 
 	genCertKeyAndUpdateSecret := func() ([]byte, []byte) {
-		certPem, keyPem, err := certutil.GenerateSelfSignedCertKey("antrea", nil, certificate.AntreaServerNames)
-		secret, err := data.clientset.CoreV1().Secrets(certificate.TLSSecretNamespace).Get(certificate.TLSSecretName, metav1.GetOptions{})
+		certPem, keyPem, err := certutil.GenerateSelfSignedCertKey("antrea", nil, certificate.GetAntreaServerNames())
+		secret, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Get(context.TODO(), tlsSecretName, metav1.GetOptions{})
 		exists := true
 		if err != nil {
 			if !errors.IsNotFound(err) {
-				t.Fatalf("Failed to get Secret %s: %v", certificate.TLSSecretName, err)
+				t.Fatalf("Failed to get Secret %s: %v", tlsSecretName, err)
 			}
 			exists = false
 			secret = &v1.Secret{
@@ -82,8 +80,8 @@ func TestUserProvidedCert(t *testing.T) {
 					certificate.TLSKeyFile:  keyPem,
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      certificate.TLSSecretName,
-					Namespace: certificate.TLSSecretNamespace,
+					Name:      tlsSecretName,
+					Namespace: tlsSecretNamespace,
 				},
 				Type: v1.SecretTypeTLS,
 			}
@@ -94,12 +92,12 @@ func TestUserProvidedCert(t *testing.T) {
 			certificate.TLSKeyFile:  keyPem,
 		}
 		if exists {
-			if _, err := data.clientset.CoreV1().Secrets(certificate.TLSSecretNamespace).Update(secret); err != nil {
-				t.Fatalf("Failed to update Secret %s: %v", certificate.TLSSecretName, err)
+			if _, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
+				t.Fatalf("Failed to update Secret %s: %v", tlsSecretName, err)
 			}
 		} else {
-			if _, err := data.clientset.CoreV1().Secrets(certificate.TLSSecretNamespace).Create(secret); err != nil {
-				t.Fatalf("Failed to create Secret %s: %v", certificate.TLSSecretName, err)
+			if _, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
+				t.Fatalf("Failed to create Secret %s: %v", tlsSecretName, err)
 			}
 		}
 		return certPem, keyPem
@@ -146,12 +144,15 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 		}
 	} else {
 		antreaController, err = data.getAntreaController()
+		if err != nil {
+			t.Fatalf("Error when getting antrea-controller Pod: %v", err)
+		}
 		timeout += 2 * time.Minute
 	}
 
 	var caBundle string
 	if err := wait.Poll(2*time.Second, timeout, func() (bool, error) {
-		configMap, err := data.clientset.CoreV1().ConfigMaps(certificate.CAConfigMapNamespace).Get(certificate.CAConfigMapName, metav1.GetOptions{})
+		configMap, err := data.clientset.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), certificate.CAConfigMapName, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("cannot get ConfigMap antrea-ca")
 		}
@@ -169,7 +170,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 		clientConfig := restclient.Config{
 			TLSClientConfig: restclient.TLSClientConfig{
 				Insecure:   false,
-				ServerName: certificate.AntreaServerNames[0],
+				ServerName: certificate.GetAntreaServerNames()[0],
 				CAData:     []byte(caBundle),
 			},
 		}
@@ -198,7 +199,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea",
 	}
-	apiServices, err := data.aggregatorClient.ApiregistrationV1().APIServices().List(listOptions)
+	apiServices, err := data.aggregatorClient.ApiregistrationV1().APIServices().List(context.TODO(), listOptions)
 	if err != nil {
 		t.Fatalf("Failed to list Antrea APIServices: %v", err)
 	}
@@ -212,7 +213,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	// antrea-agents reconnect every 5 seconds, we expect their connections are restored in a few seconds.
 	if err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 		cmds := []string{"antctl", "get", "controllerinfo", "-o", "json"}
-		stdout, _, err := runAntctl(antreaController.Name, cmds, data, t)
+		stdout, _, err := runAntctl(antreaController.Name, cmds, data)
 		var controllerInfo v1beta1.AntreaControllerInfo
 		err = json.Unmarshal([]byte(stdout), &controllerInfo)
 		if err != nil {

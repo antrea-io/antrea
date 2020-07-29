@@ -83,14 +83,14 @@ func TestReconcilerForget(t *testing.T) {
 		},
 		{
 			"known-single-ofrule",
-			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8}, CompletedRule: &CompletedRule{rule: &rule{Direction: v1beta1.DirectionIn}}}},
+			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8}}},
 			"foo",
 			[]uint32{8},
 			false,
 		},
 		{
 			"known-multiple-ofrule",
-			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8, servicesHash2: 9}, CompletedRule: &CompletedRule{rule: &rule{Direction: v1beta1.DirectionOut}}}},
+			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8, servicesHash2: 9}}},
 			"foo",
 			[]uint32{8, 9},
 			false,
@@ -561,16 +561,16 @@ func TestReconcilerUpdate(t *testing.T) {
 			mockOFClient := openflowtest.NewMockClient(controller)
 			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any(), gomock.Any(), "", "")
 			if len(tt.expectedAddedFrom) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedAddedFrom))
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedAddedFrom), nil)
 			}
 			if len(tt.expectedAddedTo) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedAddedTo))
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedAddedTo), nil)
 			}
 			if len(tt.expectedDeletedFrom) > 0 {
-				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedDeletedFrom))
+				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedDeletedFrom), nil)
 			}
 			if len(tt.expectedDeletedTo) > 0 {
-				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedDeletedTo))
+				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedDeletedTo), nil)
 			}
 			r := newReconciler(mockOFClient, ifaceStore)
 			if err := r.Reconcile(tt.originalRule); (err != nil) != tt.wantErr {

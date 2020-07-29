@@ -78,7 +78,6 @@ https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 | kind/support                       | Categorizes issue or PR as related to a support question. | Any |
 | lifecycle/active                   | Indicates that an issue or PR is actively being worked on by a contributor. | Any |
 | lifecycle/frozen                   | Indicates that an issue or PR should not be auto-closed due to staleness. | Any |
-| lifecycle/rotten                   | Denotes an issue or PR that has aged beyond stale and will be auto-closed. | Any |
 | lifecycle/stale                    | Denotes an issue or PR has remained open with no activity and has become stale. | Any |
 | priority/awaiting-more-evidence    | Lowest priority. Possibly useful, but not yet enough support to actually get it done. | Any |
 | priority/backlog                   | Higher priority than priority/awaiting-more-evidence. | Any |

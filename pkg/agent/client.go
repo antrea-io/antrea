@@ -54,7 +54,12 @@ func NewAntreaClientProvider(config config.ClientConnectionConfiguration, kubeCl
 	// The key "ca.crt" may not exist at the beginning, no need to fail as the CA provider will watch the ConfigMap
 	// and notify antreaClientProvider of any update. The consumers of antreaClientProvider are supposed to always
 	// call GetAntreaClient() to get a client and not cache it.
-	antreaCAProvider, _ := dynamiccertificates.NewDynamicCAFromConfigMapController("antrea-ca", cert.CAConfigMapNamespace, cert.CAConfigMapName, cert.CAConfigMapKey, kubeClient)
+	antreaCAProvider, _ := dynamiccertificates.NewDynamicCAFromConfigMapController(
+		"antrea-ca",
+		cert.GetCAConfigMapNamespace(),
+		cert.CAConfigMapName,
+		cert.CAConfigMapKey,
+		kubeClient)
 	antreaClientProvider := &antreaClientProvider{
 		config:            config,
 		caContentProvider: antreaCAProvider,
@@ -145,7 +150,7 @@ func inClusterConfig(caBundle []byte) (*rest.Config, error) {
 
 	tlsClientConfig := rest.TLSClientConfig{
 		CAData:     caBundle,
-		ServerName: cert.AntreaServerNames[0],
+		ServerName: cert.GetAntreaServerNames()[0],
 	}
 
 	return &rest.Config{

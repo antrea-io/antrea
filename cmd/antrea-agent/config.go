@@ -19,6 +19,9 @@ import (
 )
 
 type AgentConfig struct {
+	// featureGates is a map of feature names to bools that enable or disable experimental features.
+	FeatureGates map[string]bool `yaml:"featureGates,omitempty"`
+
 	CNISocket string `yaml:"cniSocket,omitempty"`
 	// clientConnection specifies the kubeconfig file and client connection settings for the agent
 	// to communicate with the apiserver.
@@ -43,11 +46,11 @@ type AgentConfig struct {
 	OVSRunDir string `yaml:"ovsRunDir,omitempty"`
 	// Name of the interface antrea-agent will create and use for host <--> pod communication.
 	// Make sure it doesn't conflict with your existing interfaces.
-	// Defaults to gw0.
+	// Defaults to antrea-gw0.
 	HostGateway string `yaml:"hostGateway,omitempty"`
 	// Encapsulation mode for communication between Pods across Nodes, supported values:
-	// - vxlan (default)
-	// - geneve
+	// - geneve (default)
+	// - vxlan
 	// - gre
 	// - stt
 	TunnelType string `yaml:"tunnelType,omitempty"`

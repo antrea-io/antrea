@@ -31,7 +31,7 @@ import (
 )
 
 func newAgentInitializer(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore interfacestore.InterfaceStore) *Initializer {
-	return &Initializer{ovsBridgeClient: ovsBridgeClient, ifaceStore: ifaceStore, hostGateway: "gw0"}
+	return &Initializer{ovsBridgeClient: ovsBridgeClient, ifaceStore: ifaceStore, hostGateway: "antrea-gw0"}
 }
 
 func convertExternalIDMap(in map[string]interface{}) map[string]string {
@@ -70,10 +70,10 @@ func TestInitstore(t *testing.T) {
 	p2NetMAC, _ := net.ParseMAC(p2MAC)
 	p2NetIP := net.ParseIP(p2IP)
 
-	ovsPort1 := ovsconfig.OVSPortData{UUID: uuid1, Name: "p1", IFName: "p1", OFPort: 1,
+	ovsPort1 := ovsconfig.OVSPortData{UUID: uuid1, Name: "p1", IFName: "p1", OFPort: 11,
 		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
 			interfacestore.NewContainerInterface("p1", uuid1, "pod1", "ns1", p1NetMAC, p1NetIP)))}
-	ovsPort2 := ovsconfig.OVSPortData{UUID: uuid2, Name: "p2", IFName: "p2", OFPort: 2,
+	ovsPort2 := ovsconfig.OVSPortData{UUID: uuid2, Name: "p2", IFName: "p2", OFPort: 12,
 		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
 			interfacestore.NewContainerInterface("p2", uuid2, "pod2", "ns2", p2NetMAC, p2NetIP)))}
 	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
@@ -92,7 +92,7 @@ func TestInitstore(t *testing.T) {
 	container1, found1 := store.GetContainerInterface(uuid1)
 	if !found1 {
 		t.Errorf("Failed to load OVS port into local store")
-	} else if container1.OFPort != 1 || container1.IP.String() != p1IP || container1.MAC.String() != p1MAC || container1.InterfaceName != "p1" {
+	} else if container1.OFPort != 11 || container1.IP.String() != p1IP || container1.MAC.String() != p1MAC || container1.InterfaceName != "p1" {
 		t.Errorf("Failed to load OVS port configuration into local store")
 	}
 	_, found2 := store.GetContainerInterface(uuid2)

@@ -17,6 +17,7 @@
 package v1alpha1
 
 import (
+	"context"
 	time "time"
 
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
@@ -58,13 +59,13 @@ func NewFilteredClusterNetworkPolicyInformer(client versioned.Interface, resyncP
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.SecurityV1alpha1().ClusterNetworkPolicies().List(options)
+				return client.SecurityV1alpha1().ClusterNetworkPolicies().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.SecurityV1alpha1().ClusterNetworkPolicies().Watch(options)
+				return client.SecurityV1alpha1().ClusterNetworkPolicies().Watch(context.TODO(), options)
 			},
 		},
 		&securityv1alpha1.ClusterNetworkPolicy{},

@@ -46,11 +46,6 @@ antctl-ubuntu:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
 
-.PHONY: antrea-octant-plugin
-antrea-octant-plugin:
-	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-octant-plugin
-
 .PHONY: windows-bin
 windows-bin:
 	@mkdir -p $(BINDIR)
@@ -110,7 +105,7 @@ docker-test-unit: $(DOCKER_CACHE)
 .PHONY: docker-test-integration
 docker-test-integration:
 	@echo "===> Building Antrea Integration Test Docker image <==="
-	@docker build -t antrea/test -f build/images/test/Dockerfile .
+	@docker build --pull -t antrea/test -f build/images/test/Dockerfile .
 	@docker run --privileged --rm \
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
@@ -125,8 +120,10 @@ docker-test-integration:
 docker-tidy: $(DOCKER_CACHE)
 	@rm -f go.sum
 	@$(DOCKER_ENV) $(GO) mod tidy
+	@rm -f plugins/octant/go.sum
+	@$(DOCKER_ENV) bash -c "cd plugins/octant && $(GO) mod tidy"
 	@chmod -R 0755 $<
-	@chmod 0644 go.sum
+	@chmod 0644 go.sum plugins/octant/go.sum
 
 ANTCTL_BINARIES := antctl-darwin antctl-linux antctl-windows
 $(ANTCTL_BINARIES): antctl-%:
@@ -154,6 +151,8 @@ antctl-release:
 tidy:
 	@rm -f go.sum
 	@$(GO) mod tidy
+	@rm -f plugins/octant/go.sum
+	@cd plugins/octant && $(GO) mod tidy
 
 .PHONY: .linux-test-integration
 .linux-test-integration:
@@ -166,6 +165,8 @@ test-tidy:
 	@echo
 	@echo "===> Checking go.mod tidiness <==="
 	@GO=$(GO) $(CURDIR)/hack/tidy-check.sh
+	@echo "===> Checking octant plugins go.mod tidiness <==="
+	@GO=$(GO) $(CURDIR)/hack/tidy-check.sh plugins/octant
 
 .PHONY: fmt
 fmt:

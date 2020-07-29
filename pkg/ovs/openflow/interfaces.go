@@ -149,10 +149,14 @@ type OFEntry interface {
 
 type Flow interface {
 	OFEntry
+	// Returns the flow priority associated with OFEntry
+	FlowPriority() uint16
 	MatchString() string
 	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions. It
 	// resets the priority of the new FlowBuilder if the provided value is not 0.
 	CopyToBuilder(priority uint16) FlowBuilder
+	// ToBuilder returns a new FlowBuilder with all the contents of the original Flow
+	ToBuilder() FlowBuilder
 }
 
 type Action interface {
@@ -189,6 +193,7 @@ type Action interface {
 }
 
 type FlowBuilder interface {
+	MatchPriority(uint16) FlowBuilder
 	MatchProtocol(name Protocol) FlowBuilder
 	MatchReg(regID int, data uint32) FlowBuilder
 	MatchRegRange(regID int, data uint32, rng Range) FlowBuilder
@@ -243,16 +248,19 @@ type LearnAction interface {
 	MatchTransportDst(protocol Protocol) LearnAction
 	MatchLearnedTCPDstPort() LearnAction
 	MatchLearnedUDPDstPort() LearnAction
+	MatchLearnedSCTPDstPort() LearnAction
 	MatchLearnedSrcIP() LearnAction
 	MatchLearnedDstIP() LearnAction
 	MatchReg(regID int, data uint32, rng Range) LearnAction
 	LoadReg(regID int, data uint32, rng Range) LearnAction
 	LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
+	SetDstMAC(mac net.HardwareAddr) LearnAction
 	Done() FlowBuilder
 }
 
 type Group interface {
 	OFEntry
+	ResetBuckets() Group
 	Bucket() BucketBuilder
 }
 

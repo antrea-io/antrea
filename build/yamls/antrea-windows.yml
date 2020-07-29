@@ -1,38 +1,45 @@
 apiVersion: v1
 data:
-  Run-AntreaAgent.ps1: |-
+  Run-AntreaAgent.ps1: |
     $ErrorActionPreference = "Stop"
     # wins will rename the binary when executing it. So we need to copy the binary everytime before running it.
     mkdir -force /host/k/antrea/bin
     cp /k/antrea/bin/* /host/k/antrea/bin/
-    C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr" --envs "KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME"
+    C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr --log_file_max_size=100 --log_file_max_num=4" --envs "KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME"
 kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-agent-windows-9ffbt88hmc
+  name: antrea-agent-windows-59cc7mmd6h
   namespace: kube-system
 ---
 apiVersion: v1
 data:
   antrea-agent.conf: |
+    # FeatureGates is a map of feature names to bools that enable or disable experimental features.
+    featureGates:
+    # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
+    # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
+    # Service traffic.
+      AntreaProxy: true
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     #ovsBridge: br-int
 
     # Name of the interface antrea-agent will create and use for host <--> pod communication.
     # Make sure it doesn't conflict with your existing interfaces.
-    #hostGateway: gw0
+    #hostGateway: antrea-gw0
 
     # Encapsulation mode for communication between Pods across Nodes, supported values:
-    # - vxlan (default)
-    # - geneve
+    # - geneve (default)
+    # - vxlan
     # - stt
-    #tunnelType: vxlan
+    #tunnelType: geneve
 
-    # Default MTU to use for the host gateway interface and the network interface of each Pod. If
-    # omitted, antrea-agent will default this value to 1450 to accommodate for tunnel encapsulate
-    # overhead.
+    # Default MTU to use for the host gateway interface and the network interface of each Pod.
+    # If omitted, antrea-agent will discover the MTU of the Node's primary interface and
+    # also adjust MTU to accommodate for tunnel encapsulation overhead.
     #defaultMTU: 1450
 
     # CIDR Range for services in cluster. It's required to support egress network policy, should
@@ -62,7 +69,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-mthfbgb569
+  name: antrea-windows-config-k24chf74ct
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -150,11 +157,11 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-mthfbgb569
+          name: antrea-windows-config-k24chf74ct
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
-          name: antrea-agent-windows-9ffbt88hmc
+          name: antrea-agent-windows-59cc7mmd6h
         name: antrea-agent-windows
       - hostPath:
           path: /etc/cni/net.d

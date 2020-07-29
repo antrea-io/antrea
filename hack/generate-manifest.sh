@@ -22,14 +22,16 @@ function echoerr {
 
 _usage="Usage: $0 [--mode (dev|release)] [--kind] [--ipsec] [--keep] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
-        --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
-        --encap-mode          Traffic encapsulation mode. (default is 'encap')
-        --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
-        --cloud               Generate a manifest appropriate for running Antrea in Public Cloud
-        --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
-        --np                  Generate a manifest with Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs enabled
-        --keep                Debug flag which will preserve the generated kustomization.yml
-        --help, -h            Print this message and exit
+        --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
+        --encap-mode                  Traffic encapsulation mode. (default is 'encap')
+        --kind                        Generate a manifest appropriate for running Antrea in a Kind cluster
+        --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
+        --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
+        --proxy                       Generate a manifest with Antrea proxy enabled
+        --np                          Generate a manifest with Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs enabled
+        --keep                        Debug flag which will preserve the generated kustomization.yml
+        --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
+        --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
@@ -49,10 +51,12 @@ function print_help {
 MODE="dev"
 KIND=false
 IPSEC=false
+PROXY=false
 NP=false
 KEEP=false
 ENCAP_MODE=""
 CLOUD=""
+TUN_TYPE="geneve"
 
 while [[ $# -gt 0 ]]
 do
@@ -79,6 +83,10 @@ case $key in
     IPSEC=true
     shift
     ;;
+    --proxy)
+    PROXY=true
+    shift
+    ;;
     --np)
     NP=true
     shift
@@ -86,6 +94,10 @@ case $key in
     --keep)
     KEEP=true
     shift
+    ;;
+    --tun)
+    TUN_TYPE="$2"
+    shift 2
     ;;
     -h|--help)
     print_usage
@@ -100,6 +112,12 @@ done
 
 if [ "$MODE" != "dev" ] && [ "$MODE" != "release" ]; then
     echoerr "--mode must be one of 'dev' or 'release'"
+    print_help
+    exit 1
+fi
+
+if [ "$TUN_TYPE" != "geneve" ] && [ "$TUN_TYPE" != "vxlan" ] && [ "$TUN_TYPE" != "gre" ] && [ "$TUN_TYPE" != "stt" ]; then
+    echoerr "--tun must be one of 'geneve', 'gre', 'stt' or 'vxlan'"
     print_help
     exit 1
 fi
@@ -152,12 +170,20 @@ if $IPSEC; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
 fi
 
+if $PROXY; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: true/" antrea-agent.conf
+fi
+
 if $NP; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableSecurityCRDs[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableSecurityCRDs: true/" antrea-controller.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  ClusterNetworkPolicy: true/" antrea-controller.conf
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: $ENCAP_MODE/" antrea-agent.conf
+fi
+
+if [[ $TUN_TYPE != "geneve" ]]; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: $TUN_TYPE/" antrea-agent.conf
 fi
 
 # unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,

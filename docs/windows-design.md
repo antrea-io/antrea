@@ -24,12 +24,14 @@ SNAT based on OpenFlow is needed to make sure the containers can access the exte
 The SNATed address is using the IP configured on the OVS bridge. Some additional OpenFlow entries
 are installed to assist in identifying and forwarding the external traffic.
 
-kube-proxy is running on each Windows Node to implement Kubernetes Service. Service traffic is
-output to the host on gw0, and captured by kube-proxy. kube-proxy sets up a new connection to
-the backend endpoint, and forwards the request using this new connection. The forwarded request
-enters OVS pipeline again and is forwarded to the actual Pod. To be compatible with OVS, kube-proxy
-on Windows must be configured to run in **userspace** mode, and a specific network adapter is 
-required, on which Service IP addresses will be configured by kube-proxy.
+Antrea implements the Kubernetes ClusterIP Service leveraging OVS. Pod-to-ClusterIP-Service traffic
+is load-balanced and forwarded directly inside the OVS pipeline. And kube-proxy is running
+on each Windows Node to implement Kubernetes NodePort Service. Kube-proxy captures NodePort Service
+traffic and sets up a connection to a backend Pod to forwards the request using this connection.
+The forwarded request enters the OVS pipeline through "antrea-gw0" and is then forwarded to the
+Pod. To be compatible with OVS, kube-proxy on Windows must be configured to run in **userspace**
+mode, and a specific network adapter is required, on which Service IP addresses will be configured
+by kube-proxy.
 
 ### HNS Network configuration
 
@@ -56,9 +58,8 @@ containers in the same Pod to ensure that the network configuration can be corre
 operation is to make sure the DNS configuration is readable from all containers).
  
 One OVS internal port with the same name as the HNS Endpoint is also needed, in order to handle
-container traffic with OpenFlow rules. OpenFlow entries are installed to implement Pod-to-Pod and
-Pod-to-external connectivity. Service traffic is handled by kube-proxy, and a specific
-OpenFlow rule is installed to output these packets to the gateway port.
+container traffic with OpenFlow rules. OpenFlow entries are installed to implement Pod-to-Pod,
+Pod-to-external and Pod-to-ClusterIP-Service connectivity.
 
 CNIAdd request might be called multiple times for a given Pod. This is because kubelet on Windows
 assumes CNIAdd is an idempotent event, and it uses this event to query the Pod networking status.
@@ -69,16 +70,16 @@ Antrea needs to identify the container type (sandbox or workload) from the CNIAd
 ### Gateway port configuration
 
 The gateway port is created during the Antrea Agent initialization phase, and the address of the interface
-should be the first IP in the subnet. The port is an OVS internal port and its default name is "gw0".
+should be the first IP in the subnet. The port is an OVS internal port and its default name is "antrea-gw0".
 
 The gateway port is used to help implement L3 connectivity for the containers, including Pod-to-external,
-Pod-to-Service, and Node-to-Pod. For Pod-to-external, and Pod-to-Service cases, OpenFlow entries are
+and Node-to-Pod. For the Pod-to-external case, OpenFlow entries are
 installed in order to output these packets to the host on the gateway port. To ensure the packet is forwarded
 correctly on the host, the IP-Forwarding feature should be enabled on the network adapter of the
 gateway port.
 
 A routing entry for traffic from the Node to the local Pod subnet is needed on the Windows host to ensure 
-that the packet can enter the OVS pipeline on the gateway port. This routing entry is added when "gw0"
+that the packet can enter the OVS pipeline on the gateway port. This routing entry is added when "antrea-gw0"
 is created.
 
 Every time a new Node joins the cluster, a host routing entry on the gateway port is required, and the
@@ -187,7 +188,7 @@ ConntrackCommit Table: 105
 table=105, priority=200,ip,reg0=0x20000/0x20000, ct_state=+new+trk, actions=ct(commit,table=110,zone=65520,nat(src=${nodeIP}:10000-20000),exec(load:0x40->NXM_NX_CT_MARK[])))
 
 L2ForwardingOut Table: 110
-table=110, priority=200,ip,reg0=0x20000/0x20000 actions=output:gw0
+table=110, priority=200,ip,reg0=0x20000/0x20000 actions=output:antrea-gw0
 ```
 
 ### Using Windows named pipe for internal connections
@@ -216,18 +217,12 @@ It is processed and forwarded by OVS, and controlled with OpenFlow entries.
 
 ### Service Traffic
 
-Kube-proxy userspace mode is configured to provide Service functions. A specific Network Adapter named
-"HNS Internal NIC" is provided to kube-proxy to configure Service addresses. The OpenFlow entries for the Service
-traffic on Windows are the same as those on Linux.
+Kube-proxy userspace mode is configured to provide NodePort Service function. A specific Network Adapter named
+"HNS Internal NIC" is provided to kube-proxy to configure Service addresses. The OpenFlow entries for the
+NodePort Service traffic on Windows are the same as those on Linux.
 
-The Pod-to-Service case is similar to Antrea on Linux. A packet from a Pod destined to a Service leaves the OVS pipeline
-on the gateway interface first. kube-proxy captures the packet on the host and then chooses a valid endpoint. 
-The destination IP of the packet is changed to the endpoint, and enters the OVS pipeline again.
-
-One difference is that on Linux, the packet is using the client Pod's IP as source address when it re-enters the
-OVS pipeline, while on Windows, it uses the gateway IP as source. This is because userspace kube-proxy on Windows
-terminates the initial connection and sets up a new connection on the gateway interface to the chosen backend Pod, 
-after which the packet is forwarded back to OVS.
+The ClusterIP Service function is implemented by Antrea leveraging OVS. Antrea installs OpenFlow entries
+to select the backend endpoint and performs DNAT on the traffic.
 
 ### External Traffic
 
@@ -252,11 +247,4 @@ The host traffic case is similar to Pod-to-external traffic, as the destination 
 CIDR, but we can differentiate based on the source IP. If the packet is sent from the OVS bridge interface,
 and if it is destined to a local Pod, it is output to the uplink interface directly. Reply traffic goes through
 conntrack first, then through the rest of the OVS pipeline if the ct_mark is set. If the packet is not set, it
-is output to the Windows host on the OVS bridge interface. 
-
-
-## Future Work
-1. Support NetworkPolicy for Service traffic. Since userspace kube-proxy will change the source
-IP of the request packet, the NetworkPolicy rules don't work as expected.
-This [issue](https://github.com/vmware-tanzu/antrea/issues/761) will be fixed when Antrea implements
-[Kubernetes Service with OVS](https://github.com/vmware-tanzu/antrea/issues/463).
+is output to the Windows host on the OVS bridge interface.

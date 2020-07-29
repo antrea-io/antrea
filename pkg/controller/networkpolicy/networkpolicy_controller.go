@@ -45,13 +45,15 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	secinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security/v1alpha1"
 	seclisters "github.com/vmware-tanzu/antrea/pkg/client/listers/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
 const (
@@ -64,6 +66,8 @@ const (
 	maxRetryDelay = 300 * time.Second
 	// Default number of workers processing a NetworkPolicy change.
 	defaultWorkers = 4
+	// Default rule priority for K8s NetworkPolicy rules.
+	defaultRulePriority = -1
 )
 
 var (
@@ -88,6 +92,8 @@ var (
 	denyAllIngressRule = networking.NetworkPolicyRule{Direction: networking.DirectionIn}
 	// denyAllEgressRule is a NetworkPolicyRule which denies all egress traffic.
 	denyAllEgressRule = networking.NetworkPolicyRule{Direction: networking.DirectionOut}
+	// defaultAction is a RuleAction which sets the default Action for the NetworkPolicy rule.
+	defaultAction = secv1alpha1.RuleActionAllow
 )
 
 // NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
@@ -179,9 +185,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		networkPolicyInformer:      networkPolicyInformer,
 		networkPolicyLister:        networkPolicyInformer.Lister(),
 		networkPolicyListerSynced:  networkPolicyInformer.Informer().HasSynced,
-		cnpInformer:                cnpInformer,
-		cnpLister:                  cnpInformer.Lister(),
-		cnpListerSynced:            cnpInformer.Informer().HasSynced,
 		addressGroupStore:          addressGroupStore,
 		appliedToGroupStore:        appliedToGroupStore,
 		internalNetworkPolicyStore: internalNetworkPolicyStore,
@@ -216,15 +219,20 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		},
 		resyncPeriod,
 	)
-	// Add handlers for ClusterNetworkPolicy events.
-	cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    n.addCNP,
-			UpdateFunc: n.updateCNP,
-			DeleteFunc: n.deleteCNP,
-		},
-		resyncPeriod,
-	)
+	// Register Informer and add handlers for ClusterNetworkPolicy events only if the feature is enabled.
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		n.cnpInformer = cnpInformer
+		n.cnpLister = cnpInformer.Lister()
+		n.cnpListerSynced = cnpInformer.Informer().HasSynced
+		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addCNP,
+				UpdateFunc: n.updateCNP,
+				DeleteFunc: n.deleteCNP,
+			},
+			resyncPeriod,
+		)
+	}
 	return n
 }
 
@@ -304,8 +312,8 @@ func generateNormalizedName(namespace string, podSelector, nsSelector labels.Sel
 }
 
 // createAppliedToGroup creates an AppliedToGroup object in store if it is not created already.
-func (n *NetworkPolicyController) createAppliedToGroup(np *networkingv1.NetworkPolicy) string {
-	groupSelector := toGroupSelector(np.ObjectMeta.Namespace, &np.Spec.PodSelector, nil)
+func (n *NetworkPolicyController) createAppliedToGroup(npNsName string, pSel, nSel *metav1.LabelSelector) string {
+	groupSelector := toGroupSelector(npNsName, pSel, nSel)
 	appliedToGroupUID := getNormalizedUID(groupSelector.NormalizedName)
 	// Get or create a AppliedToGroup for the generated UID.
 	_, found, _ := n.appliedToGroupStore.Get(appliedToGroupUID)
@@ -364,6 +372,14 @@ func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v
 		}
 		// Namespace labels match namespaceSelector.
 		return true
+	} else if sel.PodSelector != nil {
+		// Selector only has a PodSelector and no sel.Namespace. Pods must be matched
+		// from all Namespaces.
+		if !sel.PodSelector.Matches(labels.Set(pod.Labels)) {
+			// pod labels do not match PodSelector.
+			return false
+		}
+		return true
 	}
 	return false
 }
@@ -372,11 +388,12 @@ func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v
 // match the Namespace's labels.
 func (n *NetworkPolicyController) filterAddressGroupsForNamespace(namespace *v1.Namespace) sets.String {
 	matchingKeys := sets.String{}
-	// Only cluster scoped groups can possibly select this Namespace.
+	// Only cluster scoped groups or AddressGroups created by CNP can possibly select this Namespace.
 	addressGroups, _ := n.addressGroupStore.GetByIndex(cache.NamespaceIndex, "")
 	for _, group := range addressGroups {
 		addrGroup := group.(*antreatypes.AddressGroup)
-		if addrGroup.Selector.NamespaceSelector.Matches(labels.Set(namespace.Labels)) {
+		// AddressGroup created by CNP might not have NamespaceSelector.
+		if addrGroup.Selector.NamespaceSelector != nil && addrGroup.Selector.NamespaceSelector.Matches(labels.Set(namespace.Labels)) {
 			matchingKeys.Insert(addrGroup.Name)
 			klog.V(2).Infof("Namespace %s matched AddressGroup %s", namespace.Name, addrGroup.Name)
 		}
@@ -406,9 +423,11 @@ func (n *NetworkPolicyController) filterAddressGroupsForPod(pod *v1.Pod) sets.St
 // match the Pod's labels.
 func (n *NetworkPolicyController) filterAppliedToGroupsForPod(pod *v1.Pod) sets.String {
 	matchingKeySet := sets.String{}
-	// Only AppliedToGroups that are in this namespace can possibly select this Pod as there are
-	// no cluster scoped AppliedToGroups right now.
+	// Get appliedToGroups from the namespace level
 	appliedToGroups, _ := n.appliedToGroupStore.GetByIndex(cache.NamespaceIndex, pod.Namespace)
+	// Get appliedToGroups from the cluster level
+	clusterATGroups, _ := n.appliedToGroupStore.GetByIndex(cache.NamespaceIndex, "")
+	appliedToGroups = append(appliedToGroups, clusterATGroups...)
 	podNS, _ := n.namespaceLister.Get(pod.Namespace)
 	for _, group := range appliedToGroups {
 		appGroup := group.(*antreatypes.AppliedToGroup)
@@ -496,7 +515,7 @@ func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networking.IPBlock, error)
 // wherein, it will be either stored as a new Object in case of ADD event or
 // modified and store the updated instance, in case of an UPDATE event.
 func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkPolicy) *antreatypes.NetworkPolicy {
-	appliedToGroupKey := n.createAppliedToGroup(np)
+	appliedToGroupKey := n.createAppliedToGroup(np.Namespace, &np.Spec.PodSelector, nil)
 	appliedToGroupNames := []string{appliedToGroupKey}
 	rules := make([]networking.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
 	var ingressRuleExists, egressRuleExists bool
@@ -507,6 +526,8 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 			Direction: networking.DirectionIn,
 			From:      *n.toAntreaPeer(ingressRule.From, np, networking.DirectionIn),
 			Services:  toAntreaServices(ingressRule.Ports),
+			Priority:  defaultRulePriority,
+			Action:    &defaultAction,
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
@@ -516,6 +537,8 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 			Direction: networking.DirectionOut,
 			To:        *n.toAntreaPeer(egressRule.To, np, networking.DirectionOut),
 			Services:  toAntreaServices(egressRule.Ports),
+			Priority:  defaultRulePriority,
+			Action:    &defaultAction,
 		})
 	}
 
@@ -936,6 +959,13 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 		klog.Error("Unable to sync caches for NetworkPolicy controller")
 		return
 	}
+	// Only wait for CNPListerSynced when ClusterNetworkPolicy feature gate is enabled.
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		if !cache.WaitForCacheSync(stopCh, n.cnpListerSynced) {
+			klog.Error("Unable to sync CNP caches for NetworkPolicy controller")
+			return
+		}
+	}
 	klog.Info("Caches are synced for NetworkPolicy controller")
 
 	for i := 0; i < defaultWorkers; i++ {
@@ -1106,6 +1136,10 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 			nsPods, _ := n.podLister.Pods(ns.Name).List(labels.Everything())
 			pods = append(pods, nsPods...)
 		}
+	} else if groupSelector.PodSelector != nil {
+		// Lack of Namespace and NamespaceSelector indicates Pods must be selected
+		// from all Namespaces.
+		pods, _ = n.podLister.Pods("").List(groupSelector.PodSelector)
 	}
 	podSet := networking.GroupMemberPodSet{}
 	for _, pod := range pods {
@@ -1180,10 +1214,29 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		return nil
 	}
 	appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
-	// AppliedToGroup will not have NamespaceSelector.
-	podSelector := appliedToGroup.Selector.PodSelector
-	// Retrieve all Pods matching the podSelector.
-	pods, err = n.podLister.Pods(appliedToGroup.Selector.Namespace).List(podSelector)
+	groupSelector := appliedToGroup.Selector
+	if groupSelector.Namespace != "" {
+		// AppliedTo Group was created for k8s networkpolicy and must select pods in its own namespace.
+		pods, _ = n.podLister.Pods(groupSelector.Namespace).List(groupSelector.PodSelector)
+	} else if groupSelector.NamespaceSelector != nil && groupSelector.PodSelector != nil {
+		// Pods must be selected from Namespaces matching nsSelector.
+		namespaces, _ := n.namespaceLister.List(groupSelector.NamespaceSelector)
+		for _, ns := range namespaces {
+			nsPods, _ := n.podLister.Pods(ns.Name).List(groupSelector.PodSelector)
+			pods = append(pods, nsPods...)
+		}
+	} else if groupSelector.NamespaceSelector != nil {
+		// All the Pods from Namespaces matching the nsSelector must be selected.
+		namespaces, _ := n.namespaceLister.List(groupSelector.NamespaceSelector)
+		for _, ns := range namespaces {
+			nsPods, _ := n.podLister.Pods(ns.Name).List(labels.Everything())
+			pods = append(pods, nsPods...)
+		}
+	} else if groupSelector.PodSelector != nil && groupSelector.Namespace == "" {
+		// Lack of Namespace and NamespaceSelector indicates Pods must be selected
+		// from all Namespaces.
+		pods, _ = n.podLister.Pods("").List(groupSelector.PodSelector)
+	}
 	scheduledPodNum := 0
 	for _, pod := range pods {
 		if pod.Spec.NodeName == "" {
@@ -1270,6 +1323,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 		Namespace:       internalNP.Namespace,
 		Rules:           internalNP.Rules,
 		AppliedToGroups: internalNP.AppliedToGroups,
+		Priority:        internalNP.Priority,
 		SpanMeta:        antreatypes.SpanMeta{NodeNames: nodeNames},
 	}
 	klog.V(4).Infof("Updating internal NetworkPolicy %s with %d Nodes", key, nodeNames.Len())

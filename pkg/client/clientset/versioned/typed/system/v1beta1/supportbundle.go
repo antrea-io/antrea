@@ -17,6 +17,8 @@
 package v1beta1
 
 import (
+	"context"
+
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	scheme "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,9 +33,9 @@ type SupportBundlesGetter interface {
 
 // SupportBundleInterface has methods to work with SupportBundle resources.
 type SupportBundleInterface interface {
-	Create(*v1beta1.SupportBundle) (*v1beta1.SupportBundle, error)
-	Delete(name string, options *v1.DeleteOptions) error
-	Get(name string, options v1.GetOptions) (*v1beta1.SupportBundle, error)
+	Create(ctx context.Context, supportBundle *v1beta1.SupportBundle, opts v1.CreateOptions) (*v1beta1.SupportBundle, error)
+	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.SupportBundle, error)
 	SupportBundleExpansion
 }
 
@@ -50,34 +52,35 @@ func newSupportBundles(c *SystemV1beta1Client) *supportBundles {
 }
 
 // Get takes name of the supportBundle, and returns the corresponding supportBundle object, and an error if there is any.
-func (c *supportBundles) Get(name string, options v1.GetOptions) (result *v1beta1.SupportBundle, err error) {
+func (c *supportBundles) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.SupportBundle, err error) {
 	result = &v1beta1.SupportBundle{}
 	err = c.client.Get().
 		Resource("supportbundles").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Create takes the representation of a supportBundle and creates it.  Returns the server's representation of the supportBundle, and an error, if there is any.
-func (c *supportBundles) Create(supportBundle *v1beta1.SupportBundle) (result *v1beta1.SupportBundle, err error) {
+func (c *supportBundles) Create(ctx context.Context, supportBundle *v1beta1.SupportBundle, opts v1.CreateOptions) (result *v1beta1.SupportBundle, err error) {
 	result = &v1beta1.SupportBundle{}
 	err = c.client.Post().
 		Resource("supportbundles").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(supportBundle).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Delete takes name of the supportBundle and deletes it. Returns an error if one occurs.
-func (c *supportBundles) Delete(name string, options *v1.DeleteOptions) error {
+func (c *supportBundles) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Resource("supportbundles").
 		Name(name).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }

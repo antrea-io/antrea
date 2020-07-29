@@ -7,7 +7,73 @@ Features in Alpha or Beta stage are tagged as such. We try to follow the same co
 Kubernetes for [feature development
 stages](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api_changes.md#alpha-beta-and-stable-versions).
 
+Some experimental features can be enabled / disabled using [Feature Gates](docs/feature-gates.md).
+
 ## Unreleased
+
+## 0.8.2 - 2020-07-13
+
+### Fixed
+
+- Fix Agent logic in charge of sending Gratuitous ARP messages when networking is configured for a Pod: the previous code was not thread-safe and causing file descriptor leaks for concurrent CNI ADD requests. ([#933](https://github.com/vmware-tanzu/antrea/pull/933), [@tnqn])
+- Clean up some internal state in the Agent's NetworkPolicy implementation when a rule is updated. ([#929](https://github.com/vmware-tanzu/antrea/pull/929), [@jianjuns])
+
+## 0.8.1 - 2020-07-09
+
+## 0.8.0 - 2020-07-02
+
+### Added
+
+- Add "Antrea Proxy" implementation to provide Pod-to-Service load-balancing (for ClusterIP Services) directly in the OVS pipeline. ([#772](https://github.com/vmware-tanzu/antrea/pull/772), [@weiqiangt]) [Alpha - Feature Gate: `AntreaProxy`]
+   * This feature is enabled by default for Windows Nodes, as it is required for correct NetworkPolicy implementation for Pod-to-Service traffic
+- Add ClusterNetworkPolicy CRD API, which enables cluster admins to define security policies which apply to the entire cluster (not just one Namespace). ([#810](https://github.com/vmware-tanzu/antrea/pull/810) [#872](https://github.com/vmware-tanzu/antrea/pull/872) [#724](https://github.com/vmware-tanzu/antrea/pull/724), [@abhiraut] [@Dyanngg]) [Alpha - Feature Gate: `ClusterNetworkPolicy`]
+- Add Traceflow CRD API, which supports generating tracing requests for traffic going through the Antrea-managed Pod network. ([#660](https://github.com/vmware-tanzu/antrea/pull/660) [#731](https://github.com/vmware-tanzu/antrea/pull/731), [@gran-vmv] [@lzhecheng]) [Alpha - FeatureGate: `Traceflow`]
+- Add Traceflow Octant plugin: requests can be generated from the Web dashboard (by filling-out a form) and responses are displayed in graph format. ([#841](https://github.com/vmware-tanzu/antrea/pull/841), [@ZhangYW18])
+- Wrap klog so that one can specify a maximum number of log files to be kept for each verbosity level (using "--log_file_max_num"), while enforcing the size limit for each file (as specified with "--log_file_max_size"). ([#879](https://github.com/vmware-tanzu/antrea/pull/879), [@jianjuns] [@alex-vmw])
+- Support executing Agent API requests which depend on OVS command-line utilities (e.g., ovs-ofctl, ovs-appctl) on Windows Nodes; this enables using the "antctl get ovsflows" and "antctl trace-packet" commands for Windows Nodes. ([#794](https://github.com/vmware-tanzu/antrea/pull/794), [@wenyingd])
+- Support "antctl supportbundle" command for Windows Nodes. ([#820](https://github.com/vmware-tanzu/antrea/pull/820), [@weiqiangt])
+- Add "--controller-only" flag to "antctl supportbundle" command to only collect information from the Controller, without the Agents. ([#791](https://github.com/vmware-tanzu/antrea/pull/791), [@weiqiangt])
+- Add new Agent Prometheus metrics for NetworkPolicies:
+   * "antrea_agent_ingress_networkpolicy_rule", "antrea_agent_egress_networkpolicy_rule" ([#770](https://github.com/vmware-tanzu/antrea/pull/770), [@yktsubo])
+   * "antrea_agent_networkpolicy_count" ([#834](https://github.com/vmware-tanzu/antrea/pull/834), [@yktsubo])
+- Additional documentation:
+   * Windows design document ([#751](https://github.com/vmware-tanzu/antrea/pull/751), [@wenyingd] [@ruicao93])
+   * information about "supportbundle" command in antctl documentation ([#812](https://github.com/vmware-tanzu/antrea/pull/812), [@antoninbas])
+   * Feature gates documentation ([#892](https://github.com/vmware-tanzu/antrea/issues/892), [@antoninbas])
+
+### Changed
+
+- Change default tunnel type from VXLAN to Geneve. ([#858](https://github.com/vmware-tanzu/antrea/pull/858) [#903](https://github.com/vmware-tanzu/antrea/pull/903), [@jianjuns] [@antoninbas] [@abhiraut])
+   * **this may cause some disruption during upgrade, as inter-Node Pod communications between Nodes running Antrea pre-v0.8 and Nodes running Antrea post-v0.8 will be broken**; edit the manifest if you want to stick to VXLAN
+- Move Octant plugin to a new "plugins/" folder and make it its own Go module. ([#838](https://github.com/vmware-tanzu/antrea/pull/838), [@mengdie-song])
+- Update antrea-cni to support CNI version 0.4.0. ([#784](https://github.com/vmware-tanzu/antrea/pull/784), [@moshe010])
+- Change gateway and tunnel interface names to antrea-gw0 and antrea-tun0 respectively. ([#854](https://github.com/vmware-tanzu/antrea/pull/854), [@jianjuns])
+- Make antrea-agent Pod tolerant of "NoExecute" taints to prevent unwanted evictions. ([#815](https://github.com/vmware-tanzu/antrea/pull/815), [@tnqn])
+- Use "Feature Gates" to control enabling / disabling experimental features instead of introducing separate temporary configuration parameters. ([#847](https://github.com/vmware-tanzu/antrea/pull/847), [@tnqn])
+- Upgrade K8s API version used by Antrea to 1.18. ([#838](https://github.com/vmware-tanzu/antrea/pull/838), [@mengdie-song])
+- Create controller-ca ConfigMap in the same Namespace as the Controller Deployment, instead of hard-coding it to "kube-system". ([#876](https://github.com/vmware-tanzu/antrea/issues/876), [@jianjuns])
+- Log error when "iptables-restore" command fails. ([#839](https://github.com/vmware-tanzu/antrea/pull/839), [@tnqn])
+- Update OVS version to 2.13.1 on Windows because of some issues, notably with the connection tracking implementation. ([#856](https://github.com/vmware-tanzu/antrea/pull/856), [@ruicao93])
+- Update behavior of "antctl supportbundle" command so that the Controller logs are not collected when a Node name or a Node filter is provided. ([#857](https://github.com/vmware-tanzu/antrea/pull/857), [@jianjuns])
+
+### Fixed
+
+- Fix runtime crash in the Agent when processing NetworkPolicy rules for which a Protocol has been provided, but no Port. ([#882](https://github.com/vmware-tanzu/antrea/pull/882), [@wenyingd] [@abhiraut])
+- Clean up stale OVS PID files to avoid failure loops in antrea-ovs startup. ([#880](https://github.com/vmware-tanzu/antrea/pull/880), [@jianjuns])
+- When using CNI chaining in a cloud-managed service, ensure that the initContainer blocks until the "primary CNI"'s conf file is found. ([#864](https://github.com/vmware-tanzu/antrea/pull/864), [@reachjainrahul])
+- Update version of go-iptables library to avoid deadlock when invoking iptables commands. ([#873](https://github.com/vmware-tanzu/antrea/pull/873), [@antoninbas])
+- Improve robustness of the liveness probe for the antrea-ovs container. ([#861](https://github.com/vmware-tanzu/antrea/pull/861), [@tnqn])
+
+## 0.7.2 - 2020-06-15
+
+### Fixed
+
+- Fix handling of StatefulSet Pod rescheduling on same Node: a fast rescheduling can cause unexpected ordering of CNI ADD and DELETE commands, which means Antrea cannot use the Pod Namespace+Name as the unique identifier for a Pod's network configuration. [#827](https://github.com/vmware-tanzu/antrea/pull/827)
+- Fix IP address leak in IPAM caused by Antrea in-memory cache being out-of-sync with IPAM store. [#828](https://github.com/vmware-tanzu/antrea/pull/828)
+- Increase timeout to 5 seconds when waiting for ovs-vswitchd to report the allocated of_port number. [#830](https://github.com/vmware-tanzu/antrea/pull/830)
+- Fix CNI CHECK command implementation: the CNI server was always returning success even in case of failure. [#821](https://github.com/vmware-tanzu/antrea/pull/821)
+- Update ofnet library version to avoid a goroutine leak. [#813](https://github.com/vmware-tanzu/antrea/pull/813)
+- Exclude /healthz from authorization to avoid unnecessary calls to K8s API in readiness probes. [#816](https://github.com/vmware-tanzu/antrea/pull/816)
 
 ## 0.7.1 - 2020-06-05
 
@@ -241,3 +307,20 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [EKS]: https://aws.amazon.com/eks/
 [GKE]: https://cloud.google.com/kubernetes-engine
 [Antrea Windows documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/windows.md
+
+[@abhiraut]: https://github.com/abhiraut
+[@alex-vmw]: https://github.com/alex-vmw
+[@antoninbas]: https://github.com/antoninbas
+[@Dyanngg]: https://github.com/Dyanngg
+[@gran-vmv]: https://github.com/gran-vmv
+[@jianjuns]: https://github.com/jianjuns
+[@lzhecheng]: https://github.com/lzhecheng
+[@mengdie-song]: https://github.com/mengdie-song
+[@moshe010]: https://github.com/moshe010
+[@reachjainrahul]: https://github.com/reachjainrahul
+[@ruicao93]: https://github.com/ruicao93
+[@tnqn]: https://github.com/tnqn
+[@weiqiangt]: https://github.com/weiqiangt
+[@wenyingd]: https://github.com/wenyingd
+[@yktsubo]: https://github.com/yktsubo
+[@ZhangYW18]: https://github.com/ZhangYW18

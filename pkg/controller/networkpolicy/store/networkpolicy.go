@@ -112,6 +112,7 @@ func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *networking.NetworkPolicy, 
 	// Since stored objects are immutable, we just reference the fields here.
 	out.Rules = in.Rules
 	out.AppliedToGroups = in.AppliedToGroups
+	out.Priority = in.Priority
 }
 
 // NetworkPolicyKeyFunc knows how to get the key of a NetworkPolicy.

@@ -39,7 +39,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
+	"github.com/vmware-tanzu/antrea/pkg/controller/traceflow"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/version"
@@ -67,6 +70,7 @@ func run(o *Options) error {
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	cnpInformer := crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
+	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
 
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()
@@ -86,6 +90,11 @@ func run(o *Options) error {
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
+
+	var traceflowController *traceflow.Controller
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		traceflowController = traceflow.NewTraceflowController(crdClient, traceflowInformer)
+	}
 
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		client,
@@ -110,11 +119,10 @@ func run(o *Options) error {
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
 
+	log.StartLogFileNumberMonitor(stopCh)
+
 	informerFactory.Start(stopCh)
-	// Only start watching Security CRDs when config option is set to true.
-	if o.config.EnableSecurityCRDs {
-		crdInformerFactory.Start(stopCh)
-	}
+	crdInformerFactory.Start(stopCh)
 
 	go controllerMonitor.Run(stopCh)
 
@@ -124,6 +132,10 @@ func run(o *Options) error {
 
 	if o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		go traceflowController.Run(stopCh)
 	}
 
 	<-stopCh

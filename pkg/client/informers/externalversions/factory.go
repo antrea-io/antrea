@@ -24,6 +24,7 @@ import (
 	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	core "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/core"
 	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/internalinterfaces"
+	ops "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/ops"
 	security "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -172,11 +173,16 @@ type SharedInformerFactory interface {
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
 	Core() core.Interface
+	Ops() ops.Interface
 	Security() security.Interface
 }
 
 func (f *sharedInformerFactory) Core() core.Interface {
 	return core.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Ops() ops.Interface {
+	return ops.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) Security() security.Interface {

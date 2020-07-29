@@ -25,22 +25,16 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
 	defaultOVSBridge          = "br-int"
-	defaultHostGateway        = "gw0"
+	defaultHostGateway        = "antrea-gw0"
 	defaultHostProcPathPrefix = "/host"
 	defaultServiceCIDR        = "10.96.0.0/12"
-	defaultMTUVXLAN           = 1450
-	defaultMTUGeneve          = 1450
-	defaultMTUGRE             = 1462
-	defaultMTUSTT             = 1500
-	defaultMTU                = 1500
-	// IPsec ESP can add a maximum of 38 bytes to the packet including the ESP
-	// header and trailer.
-	ipsecESPOverhead = 38
+	defaultTunnelType         = ovsconfig.GeneveTunnel
 )
 
 type Options struct {
@@ -71,7 +65,7 @@ func (o *Options) complete(args []string) error {
 		o.config = c
 	}
 	o.setDefaults()
-	return nil
+	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
 }
 
 // validate validates all the required options. It must be called after complete.
@@ -100,6 +94,9 @@ func (o *Options) validate(args []string) error {
 	}
 	if encapMode.SupportsNoEncap() && o.config.EnableIPSecTunnel {
 		return fmt.Errorf("IPSec tunnel may only be enabled on %s mode", config.TrafficEncapModeEncap)
+	}
+	if o.config.OVSDatapathType == ovsconfig.OVSDatapathNetdev && features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		return fmt.Errorf("FlowExporter feature is not supported for OVS datapath type %s", o.config.OVSDatapathType)
 	}
 	return nil
 }
@@ -135,7 +132,7 @@ func (o *Options) setDefaults() {
 		o.config.HostGateway = defaultHostGateway
 	}
 	if o.config.TunnelType == "" {
-		o.config.TunnelType = ovsconfig.VXLANTunnel
+		o.config.TunnelType = defaultTunnelType
 	}
 	if o.config.HostProcPathPrefix == "" {
 		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
@@ -146,26 +143,6 @@ func (o *Options) setDefaults() {
 	if o.config.TrafficEncapMode == "" {
 		o.config.TrafficEncapMode = config.TrafficEncapModeEncap.String()
 	}
-
-	if o.config.DefaultMTU == 0 {
-		ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
-		if ok && !encapMode.SupportsEncap() {
-			o.config.DefaultMTU = defaultMTU
-		} else if o.config.TunnelType == ovsconfig.VXLANTunnel {
-			o.config.DefaultMTU = defaultMTUVXLAN
-		} else if o.config.TunnelType == ovsconfig.GeneveTunnel {
-			o.config.DefaultMTU = defaultMTUGeneve
-		} else if o.config.TunnelType == ovsconfig.GRETunnel {
-			o.config.DefaultMTU = defaultMTUGRE
-		} else if o.config.TunnelType == ovsconfig.STTTunnel {
-			o.config.DefaultMTU = defaultMTUSTT
-		}
-
-		if o.config.EnableIPSecTunnel {
-			o.config.DefaultMTU -= ipsecESPOverhead
-		}
-	}
-
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}

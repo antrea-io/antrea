@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"text/template"
 
@@ -39,6 +40,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 	k8sFake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/component-base/metrics/legacyregistry"
+	"k8s.io/component-base/metrics/testutil"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
@@ -46,6 +49,7 @@ import (
 	cniservertest "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	routetest "github.com/vmware-tanzu/antrea/pkg/agent/route/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
@@ -178,6 +182,7 @@ type testCase struct {
 	expGatewayCIDRs []string    // Expected Gateway addresses in CIDR form
 	addresses       []string
 	networkConfig   string
+	validateMetrics bool
 }
 
 func (tc testCase) netConfJSON(dataDir string) string {
@@ -497,6 +502,17 @@ func (tester *cmdAddDelTester) cmdCheckTest(tc testCase, conf *Net, dataDir stri
 
 	// Find the veth peer in the container namespace and the default route.
 	tester.checkContainerNetworking(tc)
+
+	// If validateMetrics flag is set, check pod count metrics.
+	if tc.validateMetrics {
+		expectedStr := `
+		# HELP antrea_agent_local_pod_count [STABLE] Number of pods on local node which are managed by the Antrea Agent.
+		# TYPE antrea_agent_local_pod_count gauge
+		antrea_agent_local_pod_count 1
+		`
+		assert.Equal(tc.t, nil, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedStr), "antrea_agent_local_pod_count"))
+	}
+
 }
 
 func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
@@ -532,14 +548,24 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 	link, err = linkByName(tester.testNS, tester.vethName)
 	testRequire.NotNil(err)
 	testRequire.Nil(link)
+
+	// If validateMetrics flag is set, check Pod count metrics.
+	if tc.validateMetrics {
+		expectedStr := `
+		# HELP antrea_agent_local_pod_count [STABLE] Number of pods on local node which are managed by the Antrea Agent.
+		# TYPE antrea_agent_local_pod_count gauge
+		antrea_agent_local_pod_count 0
+		`
+		assert.Equal(tc.t, nil, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedStr), "antrea_agent_local_pod_count"))
+	}
 }
 
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := interfacestore.NewInterfaceStore()
+	testNodeConfig.NodeMTU = 1450
 	tester.server = cniserver.New(testSock,
 		"",
-		1450,
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
 		make(chan v1beta1.PodReference, 100),
@@ -660,9 +686,25 @@ func TestAntreaServerFunc(t *testing.T) {
 			addresses:       []string{"10.1.2.100/24,10.1.2.1,4"},
 			Routes:          []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"},
 		},
+		{
+			name:       "Prometheus metrics test with ADD/DEL/CHECK for 0.4.0 config",
+			CNIVersion: "0.4.0",
+			// IPv4 only
+			ranges: []rangeInfo{{
+				subnet: "10.1.2.0/24",
+			}},
+			expGatewayCIDRs: []string{"10.1.2.1/24"},
+			addresses:       []string{"10.1.2.100/24,10.1.2.1,4"},
+			Routes:          []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"},
+			validateMetrics: true,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if strings.Contains(tc.name, "Prometheus") {
+				// Initialize pod metrics
+				metrics.InitializePodMetrics()
+			}
 			setup()
 			defer teardown()
 			tc.t = t
@@ -679,7 +721,6 @@ func setupChainTest(
 		routeMock = routetest.NewMockInterface(controller)
 		server = cniserver.New(testSock,
 			"",
-			1500,
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
 			make(chan v1beta1.PodReference, 100),
@@ -712,12 +753,13 @@ func TestCNIServerChaining(t *testing.T) {
 	if _, inContainer := os.LookupEnv("INCONTAINER"); !inContainer {
 		t.Skipf("Skip test runs only in container")
 	}
+
 	testRequire := require.New(t)
 	controller := mock.NewController(t)
 	defer controller.Finish()
 	var server *cniserver.CNIServer
 	testContainerOFPort := int32(1234)
-	testPatchPortName := "gw0"
+	testPatchPortName := "antrea-gw0"
 	ctx, _ := context.WithCancel(context.Background())
 
 	tc := testCase{
@@ -803,6 +845,7 @@ func init() {
 	gwMAC, _ = net.ParseMAC("11:11:11:11:11:11")
 	nodeGateway := &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: ""}
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
+	nodeMTU := 1500
 
-	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, GatewayConfig: nodeGateway}
+	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, NodeMTU: nodeMTU, GatewayConfig: nodeGateway}
 }

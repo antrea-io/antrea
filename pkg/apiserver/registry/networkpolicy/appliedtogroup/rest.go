@@ -88,3 +88,7 @@ func (r *REST) Watch(ctx context.Context, options *internalversion.ListOptions) 
 	key, label, field := networkpolicy.GetSelectors(options)
 	return r.appliedToGroupStore.Watch(ctx, key, label, field)
 }
+
+func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*v1.Table, error) {
+	return rest.NewDefaultTableConvertor(networking.Resource("appliedtogroup")).ConvertToTable(ctx, obj, tableOptions)
+}
