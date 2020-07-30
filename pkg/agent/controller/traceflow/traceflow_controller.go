@@ -280,8 +280,12 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	dstMAC := ""
 	dstIP := tf.Spec.Destination.IP
 	dstNodeIP := ""
-	// TODO: Find MAC by dstIP
-	if dstIP == "" {
+	if dstIP != "" {
+		dstPodInterface, hasInterface := c.interfaceStore.GetInterfaceByIP(dstIP)
+		if hasInterface {
+			dstMAC = dstPodInterface.MAC.String()
+		}
+	} else {
 		dstPodInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Destination.Pod, tf.Spec.Destination.Namespace)
 		if len(dstPodInterfaces) > 0 {
 			dstMAC = dstPodInterfaces[0].MAC.String()
