@@ -177,7 +177,7 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 	priorityAssigners := map[binding.TableIDType]*priorityAssigner{}
 	priorityMutex := map[binding.TableIDType]*sync.RWMutex{}
 	for _, table := range cnpTables {
-		priorityAssigners[table] = newPriorityAssigner()
+		priorityAssigners[table] = newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
 		priorityMutex[table] = &sync.RWMutex{}
 	}
 	reconciler := &reconciler{
