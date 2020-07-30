@@ -226,7 +226,8 @@ func run(o *Options) error {
 		agentQuerier,
 		networkPolicyController,
 		o.config.APIPort,
-		o.config.EnablePrometheusMetrics)
+		o.config.EnablePrometheusMetrics,
+		o.config.ClientConnection.Kubeconfig)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}
