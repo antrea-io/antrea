@@ -24,6 +24,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +43,7 @@ import (
 	agentapiserver "github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
+	"github.com/vmware-tanzu/antrea/pkg/apis"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	controllerapiserver "github.com/vmware-tanzu/antrea/pkg/apiserver"
 	antrea "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
@@ -116,10 +118,10 @@ func setupKubeconfig(kubeconfig *rest.Config) {
 	kubeconfig.CAData = nil
 	if runtime.InPod {
 		if runtime.Mode == runtime.ModeAgent {
-			kubeconfig.Host = net.JoinHostPort("127.0.0.1", "10350")
+			kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaAgentAPIPort))
 			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
 		} else {
-			kubeconfig.Host = net.JoinHostPort("127.0.0.1", "10349")
+			kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaControllerAPIPort))
 			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
 		}
 	}
