@@ -46,6 +46,10 @@ func InitialOFPrioritySingleTierPerTable(p types.Priority) uint16 {
 	if priorityIndex > InitialPriorityZones-1 {
 		priorityIndex = InitialPriorityZones - 1
 	}
+	// cannot return a negative OF priority
+	if PriorityTopCNP-InitialPriorityOffset*uint16(priorityIndex) <= uint16(p.RulePriority) {
+		return PriorityBottomCNP
+	}
 	return PriorityTopCNP - InitialPriorityOffset*uint16(priorityIndex) - uint16(p.RulePriority)
 }
 
@@ -72,23 +76,15 @@ func newPriorityAssigner(initialOFPriorityFunc InitialOFPriorityGetter) *priorit
 	return pa
 }
 
-// clearOFPriority makes the input ofPriority available for the table.
-func (pa *priorityAssigner) clearOFPriority(ofPriority uint16) {
-	delete(pa.ofPriorityMap, ofPriority)
-	idxToDel := sort.Search(len(pa.sortedOFPriorities), func(i int) bool { return ofPriority <= pa.sortedOFPriorities[i] })
-	pa.sortedOFPriorities = append(pa.sortedOFPriorities[:idxToDel], pa.sortedOFPriorities[idxToDel+1:]...)
-}
-
 // updatePriorityAssignment updates the all local maps to correlate input ofPriority and Priority.
 func (pa *priorityAssigner) updatePriorityAssignment(ofPriority uint16, p types.Priority) {
-	if _, exists := pa.ofPriorityMap[ofPriority]; exists {
-		pa.clearOFPriority(ofPriority)
+	if _, exists := pa.ofPriorityMap[ofPriority]; !exists {
+		priorities := append(pa.sortedOFPriorities, ofPriority)
+		sort.Slice(priorities, func(i, j int) bool { return priorities[i] < priorities[j] })
+		pa.sortedOFPriorities = priorities
 	}
 	pa.ofPriorityMap[ofPriority] = p
 	pa.priorityMap[p] = ofPriority
-	keys := append(pa.sortedOFPriorities, ofPriority)
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-	pa.sortedOFPriorities = keys
 }
 
 // getNextOccupiedOFPriority returns the next ofPriority that is currently occupied on the table,
@@ -112,7 +108,7 @@ func (pa *priorityAssigner) getNextOccupiedOFPriority(ofPriority uint16) (*uint1
 // The search is incrementally against all ofPriorities available as it assumes the table is sparse in most cases.
 func (pa *priorityAssigner) getNextVacantOFPriority(ofPriority uint16) *uint16 {
 	for i := ofPriority; i <= PriorityTopCNP; i++ {
-		if _, exists := pa.ofPriorityMap[i]; !exists {
+		if _, exists := pa.ofPriorityMap[i]; !exists && i >= PriorityBottomCNP {
 			return &i
 		}
 	}
@@ -138,7 +134,7 @@ func (pa *priorityAssigner) getLastOccupiedOFPriority(ofPriority uint16) (*uint1
 // The search is incrementally against all ofPriorities available as it assumes the table is sparse in most cases.
 func (pa *priorityAssigner) getLastVacantOFPriority(ofPriority uint16) *uint16 {
 	for i := ofPriority - 1; i >= PriorityBottomCNP; i-- {
-		if _, exists := pa.ofPriorityMap[i]; !exists {
+		if _, exists := pa.ofPriorityMap[i]; !exists && i <= PriorityTopCNP {
 			return &i
 		}
 	}
@@ -273,5 +269,7 @@ func (pa *priorityAssigner) Release(ofPriority uint16) {
 		return
 	}
 	delete(pa.priorityMap, priority)
-	pa.clearOFPriority(ofPriority)
+	delete(pa.ofPriorityMap, ofPriority)
+	idxToDel := sort.Search(len(pa.sortedOFPriorities), func(i int) bool { return ofPriority <= pa.sortedOFPriorities[i] })
+	pa.sortedOFPriorities = append(pa.sortedOFPriorities[:idxToDel], pa.sortedOFPriorities[idxToDel+1:]...)
 }
