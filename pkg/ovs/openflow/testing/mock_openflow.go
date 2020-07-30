@@ -1374,6 +1374,20 @@ func (mr *MockFlowBuilderMockRecorder) MatchDstMAC(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstMAC", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstMAC), arg0)
 }
 
+// MatchIPDscp mocks base method
+func (m *MockFlowBuilder) MatchIPDscp(arg0 byte) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchIPDscp", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchIPDscp indicates an expected call of MatchIPDscp
+func (mr *MockFlowBuilderMockRecorder) MatchIPDscp(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchIPDscp", reflect.TypeOf((*MockFlowBuilder)(nil).MatchIPDscp), arg0)
+}
+
 // MatchInPort mocks base method
 func (m *MockFlowBuilder) MatchInPort(arg0 uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
