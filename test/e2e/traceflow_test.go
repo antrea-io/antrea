@@ -254,9 +254,9 @@ func TestTraceflow(t *testing.T) {
 							Action:        v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
-							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "IngressDefaultRule",
+							Action:        v1alpha1.Dropped,
 						},
 					},
 				},
