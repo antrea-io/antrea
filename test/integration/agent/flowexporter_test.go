@@ -54,6 +54,7 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 		ReverseBytes:    0xbaaa,
 		TupleOrig:       *tuple1,
 		TupleReply:      *revTuple1,
+		DoExport:        true,
 	}
 	testConnKey1 := flowexporter.NewConnectionKey(testConn1)
 	testConns[0] = testConn1
@@ -69,6 +70,7 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 		ReverseBytes:    0xcbbbb0000000000,
 		TupleOrig:       *tuple2,
 		TupleReply:      *revTuple2,
+		DoExport:        true,
 	}
 	testConnKey2 := flowexporter.NewConnectionKey(testConn2)
 	testConns[1] = testConn2
@@ -97,8 +99,12 @@ func testBuildFlowRecords(t *testing.T, flowRecords flowrecords.FlowRecords, con
 	// Check if records in flow records are built as expected or not
 	for i, expRecConn := range conns {
 		actualRec, found := flowRecords.GetFlowRecordByConnKey(*connKeys[i])
-		assert.Equal(t, found, true, "testConn should be part of flow records")
-		assert.Equal(t, actualRec.Conn, expRecConn, "testConn and connection in connection store should be equal")
+		if expRecConn.DoExport {
+			assert.Equal(t, found, true, "testConn should be part of flow records")
+			assert.Equal(t, actualRec.Conn, expRecConn, "testConn and connection in connection store should be equal")
+		} else {
+			assert.Equal(t, found, false, "testConn should be not part of flow records")
+		}
 	}
 }
 
@@ -142,9 +148,11 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 		if i == 0 {
 			expConn.SourcePodName = testIfConfigs[i].PodName
 			expConn.SourcePodNamespace = testIfConfigs[i].PodNamespace
+			expConn.DoExport = true
 		} else {
 			expConn.DestinationPodName = testIfConfigs[i].PodName
 			expConn.DestinationPodNamespace = testIfConfigs[i].PodNamespace
+			expConn.DoExport = false
 		}
 		actualConn, found := connStore.GetConnByKey(*testConnKeys[i])
 		assert.Equal(t, found, true, "testConn should be present in connection store")

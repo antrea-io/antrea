@@ -97,6 +97,11 @@ func (fr *flowRecords) ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallB
 }
 
 func (fr *flowRecords) addOrUpdateFlowRecord(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
+	// If DoExport flag is not set return immediately.
+	if !conn.DoExport {
+		return nil
+	}
+
 	record, exists := fr.recordsMap[key]
 	if !exists {
 		record = flowexporter.FlowRecord{
