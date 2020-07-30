@@ -711,21 +711,40 @@ func (c *policyRuleConjunction) getAddressClause(addrType types.AddressType) *cl
 // If there is an error in any clause's addAddrFlows or addServiceFlows, the conjunction action flow will never be hit.
 // If the default drop flow is already installed before this error, all packets will be dropped by the default drop flow,
 // Otherwise all packets will be allowed.
-func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, npName, npNamespace string) error {
+func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
+	conj := c.calculateActionFlowChangesForRule(rule)
+
+	c.conjMatchFlowLock.Lock()
+	defer c.conjMatchFlowLock.Unlock()
+	ctxChanges := c.calculateMatchFlowChangesForRule(conj, rule, false)
+
+	if err := c.ofEntryOperations.AddAll(conj.actionFlows); err != nil {
+		return err
+	}
+	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
+		return err
+	}
+	// Add the policyRuleConjunction into policyCache
+	c.policyCache.Add(conj)
+	return nil
+}
+
+// calculateActionFlowChangesForRule calculates and updates the actionFlows for the conjunction corresponded to the ofPolicyRule.
+func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *policyRuleConjunction {
+	ruleID := rule.FlowID
 	// Check if the policyRuleConjunction is added into cache or not. If yes, return nil.
 	conj := c.getPolicyRuleConjunction(ruleID)
 	if conj != nil {
 		klog.V(2).Infof("PolicyRuleConjunction %d is already added in cache", ruleID)
 		return nil
 	}
-
 	conj = &policyRuleConjunction{
 		id:          ruleID,
-		npName:      npName,
-		npNamespace: npNamespace}
+		npName:      rule.PolicyName,
+		npNamespace: rule.PolicyNamespace}
 	nClause, ruleTable, dropTable := conj.calculateClauses(rule, c)
 
 	// Conjunction action flows are installed only if the number of clauses in the conjunction is > 1. It should be a rule
@@ -739,31 +758,59 @@ func (c *client) InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, n
 		} else {
 			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority))
 		}
-		if err := c.ofEntryOperations.AddAll(actionFlows); err != nil {
-			return nil
-		}
-		// Add the action flows after the Openflow entries are installed on the OVS bridge successfully.
 		conj.actionFlows = actionFlows
 	}
-	c.conjMatchFlowLock.Lock()
-	defer c.conjMatchFlowLock.Unlock()
+	return conj
+}
 
+// calculateMatchFlowChangesForRule calculates the contextChanges for the policyRule, and updates the context status in case of batch install.
+func (c *client) calculateMatchFlowChangesForRule(conj *policyRuleConjunction, rule *types.PolicyRule, isBatchInstall bool) []*conjMatchFlowContextChange {
 	// Calculate the conjMatchFlowContext changes. The changed Openflow entries are included in the conjMatchFlowContext change.
 	ctxChanges := conj.calculateChangesForRuleCreation(c, rule)
+	// Update conjunctiveMatchContext if during batch flow install, otherwise the subsequent contextChange
+	// calculations will not be based on the previous flowChanges that have not been sent to OVS bridge.
+	// TODO: roll back if batch flow install fails?
+	if isBatchInstall {
+		for _, ctxChange := range ctxChanges {
+			ctxChange.updateContextStatus()
+		}
+	}
+	return ctxChanges
+}
 
-	// Send the changed Openflow entries to the OVS bridge, and then update the conjMatchFlowContext as the expected status.
-	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
+// BatchInstallPolicyRuleFlows installs flows for NetworkPolicy rules in case of agent restart. It calculates and
+// accumulates all Openflow entry updates required and installs all of them on OVS bridge in one bundle.
+func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	var allCtxChanges []*conjMatchFlowContextChange
+	var allActionFlowChanges []binding.Flow
+	var updatedConjunctions []*policyRuleConjunction
+
+	for _, rule := range ofPolicyRules {
+		conj := c.calculateActionFlowChangesForRule(rule)
+		ctxChanges := c.calculateMatchFlowChangesForRule(conj, rule, true)
+		allActionFlowChanges = append(allActionFlowChanges, conj.actionFlows...)
+		allCtxChanges = append(allCtxChanges, ctxChanges...)
+		updatedConjunctions = append(updatedConjunctions, conj)
+	}
+	// Send the changed Openflow entries to the OVS bridge.
+	if err := c.sendConjunctiveFlows(allCtxChanges, allActionFlowChanges); err != nil {
 		return err
 	}
-	// Add the policyRuleConjunction into policyCache.
-	c.policyCache.Add(conj)
+	// Update conjMatchFlowContexts as the expected status.
+	for _, conj := range updatedConjunctions {
+		// Add the policyRuleConjunction into policyCache
+		c.policyCache.Add(conj)
+	}
 	return nil
 }
 
 // applyConjunctiveMatchFlows installs OpenFlow entries on the OVS bridge, and then updates the conjMatchFlowContext.
 func (c *client) applyConjunctiveMatchFlows(flowChanges []*conjMatchFlowContextChange) error {
 	// Send the OpenFlow entries to the OVS bridge.
-	if err := c.sendConjunctiveMatchFlows(flowChanges); err != nil {
+	if err := c.sendConjunctiveFlows(flowChanges, []binding.Flow{}); err != nil {
 		return err
 	}
 	// Update conjunctiveMatchContext.
@@ -773,10 +820,11 @@ func (c *client) applyConjunctiveMatchFlows(flowChanges []*conjMatchFlowContextC
 	return nil
 }
 
-// sendConjunctiveMatchFlows sends all the changed OpenFlow entries to the OVS bridge in a single Bundle.
-func (c *client) sendConjunctiveMatchFlows(changes []*conjMatchFlowContextChange) error {
+// sendConjunctiveFlows sends all the changed OpenFlow entries to the OVS bridge in a single Bundle.
+func (c *client) sendConjunctiveFlows(changes []*conjMatchFlowContextChange, actionFlows []binding.Flow) error {
 	var addFlows, modifyFlows, deleteFlows []binding.Flow
 	var flowChanges []*flowChange
+	addFlows = actionFlows
 	for _, flowChange := range changes {
 		if flowChange.matchFlow != nil {
 			flowChanges = append(flowChanges, flowChange.matchFlow)

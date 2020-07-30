@@ -73,6 +73,7 @@ type Controller struct {
 	networkPolicyWatcher  *watcher
 	appliedToGroupWatcher *watcher
 	addressGroupWatcher   *watcher
+	fullSyncGroup         sync.WaitGroup
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -87,6 +88,11 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		reconciler:           newReconciler(ofClient, ifaceStore),
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
+	// Create a WaitGroup that is used to block network policy workers from asynchronously processing
+	// NP rules until the events preceding bookmark are synced. It can also be used as part of the
+	// solution to a deterministic mechanism for when to cleanup flows from previous round.
+	// Wait until appliedToGroupWatcher, addressGroupWatcher and networkPolicyWatcher to receive bookmark event.
+	c.fullSyncGroup.Add(3)
 
 	// Use nodeName to filter resources when watching resources.
 	options := metav1.ListOptions{
@@ -134,13 +140,15 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			for i := range objs {
 				policies[i], ok = objs[i].(*v1beta1.NetworkPolicy)
 				if !ok {
-					return fmt.Errorf("Cannot convert to *v1beta1.NetworkPolicy: %v", objs[i])
+					return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", objs[i])
 				}
 				klog.Infof("NetworkPolicy %s/%s applied to Pods on this Node", policies[i].Namespace, policies[i].Name)
 			}
 			c.ruleCache.ReplaceNetworkPolicies(policies)
 			return nil
 		},
+		fullSyncWaitGroup: &c.fullSyncGroup,
+		fullSynced:        false,
 	}
 
 	c.appliedToGroupWatcher = &watcher{
@@ -188,6 +196,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			c.ruleCache.ReplaceAppliedToGroups(groups)
 			return nil
 		},
+		fullSyncWaitGroup: &c.fullSyncGroup,
+		fullSynced:        false,
 	}
 
 	c.addressGroupWatcher = &watcher{
@@ -235,6 +245,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			c.ruleCache.ReplaceAddressGroups(groups)
 			return nil
 		},
+		fullSyncWaitGroup: &c.fullSyncGroup,
+		fullSynced:        false,
 	}
 	return c
 }
@@ -294,6 +306,13 @@ func (c *Controller) Run(stopCh <-chan struct{}) error {
 	go wait.NonSlidingUntil(c.addressGroupWatcher.watch, 5*time.Second, stopCh)
 	go wait.NonSlidingUntil(c.networkPolicyWatcher.watch, 5*time.Second, stopCh)
 
+	klog.Infof("Waiting for all watchers to complete full sync")
+	c.fullSyncGroup.Wait()
+	klog.Infof("All watchers have completed full sync, installing flows for init events")
+	// Batch install all rules in queue after fullSync is finished.
+	c.processAllItemsInQueue()
+
+	klog.Infof("Starting NetworkPolicy workers now")
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
@@ -328,6 +347,26 @@ func (c *Controller) processNextWorkItem() bool {
 	return true
 }
 
+// processAllItemsInQueue pops all rule keys queued at the moment and calls syncRules to
+// reconcile those rules in batch.
+func (c *Controller) processAllItemsInQueue() {
+	numRules := c.queue.Len()
+	batchSyncRuleKeys := make([]string, numRules)
+	for i := 0; i < numRules; i++ {
+		ruleKey, _ := c.queue.Get()
+		batchSyncRuleKeys[i] = ruleKey.(string)
+		// set key to done to prevent missing watched updates between here and fullSync finish.
+		c.queue.Done(ruleKey)
+	}
+	// Reconcile all rule keys at once.
+	if err := c.syncRules(batchSyncRuleKeys); err != nil {
+		klog.Errorf("Error occurred when reconciling all rules for init events: %v", err)
+		for _, k := range batchSyncRuleKeys {
+			c.queue.AddRateLimited(k)
+		}
+	}
+}
+
 func (c *Controller) syncRule(key string) error {
 	startTime := time.Now()
 	defer func() {
@@ -349,6 +388,30 @@ func (c *Controller) syncRule(key string) error {
 		return nil
 	}
 	if err := c.reconciler.Reconcile(rule); err != nil {
+		return err
+	}
+	return nil
+}
+
+// syncRules calls the reconciler to sync all the rules after watchers complete full sync.
+// After flows for those init events are installed, subsequent rules will be handled asynchronously
+// by the syncRule() function.
+func (c *Controller) syncRules(keys []string) error {
+	startTime := time.Now()
+	defer func() {
+		klog.V(4).Infof("Finished syncing all rules before bookmark event (%v)", time.Since(startTime))
+	}()
+
+	var allRules []*CompletedRule
+	for _, key := range keys {
+		rule, exists, completed := c.ruleCache.GetCompletedRule(key)
+		if !exists || !completed {
+			klog.Errorf("Rule %s is not complete or does not exist in cache", key)
+		} else {
+			allRules = append(allRules, rule)
+		}
+	}
+	if err := c.reconciler.BatchReconcile(allRules); err != nil {
 		return err
 	}
 	return nil
@@ -383,6 +446,10 @@ type watcher struct {
 	connected bool
 	// lock protects connected.
 	lock sync.RWMutex
+	// group to be notified when each watcher receives bookmark event
+	fullSyncWaitGroup *sync.WaitGroup
+	// fullSynced indicates if the resource has been synced at least once since agent started.
+	fullSynced bool
 }
 
 func (w *watcher) isConnected() bool {
@@ -441,6 +508,11 @@ loop:
 	if err := w.ReplaceFunc(initObjects); err != nil {
 		klog.Errorf("Failed to handle init events: %v", err)
 		return
+	}
+	if !w.fullSynced {
+		w.fullSynced = true
+		// Notify fullSyncWaitGroup that all events before bookmark is handled
+		w.fullSyncWaitGroup.Done()
 	}
 
 	for {

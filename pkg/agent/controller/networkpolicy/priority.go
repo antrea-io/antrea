@@ -144,6 +144,17 @@ func (pa *priorityAssigner) GetOFPriority(p types.Priority) (*uint16, map[uint16
 	return &ofPriority, map[uint16]uint16{}, nil
 }
 
+// RegisterPriorities registers a list of Priorities to be created with priorityMap.
+// It is used to populate the priorityMap in case of batch rule adds.
+func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) error {
+	for _, p := range priorities {
+		if _, _, err := pa.GetOFPriority(p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Release removes the priority that currently corresponds to the input OFPriority from the priorityMap.
 func (pa *priorityAssigner) Release(priorityNum uint16) error {
 	for priorityKey, p := range pa.priorityMap {

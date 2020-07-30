@@ -24,6 +24,7 @@ import (
 
 var (
 	c             *client
+	cnpOutTable   *mocks.MockTable
 	outTable      *mocks.MockTable
 	outDropTable  *mocks.MockTable
 	outAllowTable *mocks.MockTable
@@ -122,10 +123,13 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	defaultAction := secv1alpha1.RuleActionAllow
 	ruleID1 := uint32(101)
 	rule1 := &types.PolicyRule{
-		Direction: v1beta1.DirectionOut,
-		From:      parseAddresses([]string{"192.168.1.30", "192.168.1.50"}),
-		Action:    &defaultAction,
-		Priority:  nil,
+		Direction:       v1beta1.DirectionOut,
+		From:            parseAddresses([]string{"192.168.1.30", "192.168.1.50"}),
+		Action:          &defaultAction,
+		Priority:        nil,
+		FlowID:          ruleID1,
+		PolicyName:      "np1",
+		PolicyNamespace: "ns1",
 	}
 
 	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
@@ -146,10 +150,13 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 	ruleID2 := uint32(102)
 	rule2 := &types.PolicyRule{
-		Direction: v1beta1.DirectionOut,
-		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
-		Action:    &defaultAction,
-		To:        parseAddresses([]string{"0.0.0.0/0"}),
+		Direction:       v1beta1.DirectionOut,
+		From:            parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
+		Action:          &defaultAction,
+		To:              parseAddresses([]string{"0.0.0.0/0"}),
+		FlowID:          ruleID2,
+		PolicyName:      "np1",
+		PolicyNamespace: "ns1",
 	}
 	conj2 := &policyRuleConjunction{id: ruleID2}
 	conj2.calculateClauses(rule2, c)
@@ -168,7 +175,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	require.Nil(t, err)
 
 	assert.Equal(t, 0, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
-	err = c.InstallPolicyRuleFlows(ruleID2, rule2, "np1", "ns1")
+	err = c.InstallPolicyRuleFlows(rule2)
 	require.Nil(t, err)
 	checkConjunctionConfig(t, ruleID2, 1, 2, 1, 0)
 	assert.Equal(t, 6, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
@@ -180,11 +187,14 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port1}
 	npPort2 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	rule3 := &types.PolicyRule{
-		Direction: v1beta1.DirectionOut,
-		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.60"}),
-		To:        parseAddresses([]string{"192.168.2.0/24"}),
-		Action:    &defaultAction,
-		Service:   []v1beta1.Service{npPort1, npPort2},
+		Direction:       v1beta1.DirectionOut,
+		From:            parseAddresses([]string{"192.168.1.40", "192.168.1.60"}),
+		To:              parseAddresses([]string{"192.168.2.0/24"}),
+		Action:          &defaultAction,
+		Service:         []v1beta1.Service{npPort1, npPort2},
+		FlowID:          ruleID3,
+		PolicyName:      "np1",
+		PolicyNamespace: "ns1",
 	}
 	conj3 := &policyRuleConjunction{id: ruleID3}
 	conj3.calculateClauses(rule3, c)
@@ -203,7 +213,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	err = c.applyConjunctiveMatchFlows(ctxChanges3)
 	require.Nil(t, err)
 
-	err = c.InstallPolicyRuleFlows(ruleID3, rule3, "np1", "ns1")
+	err = c.InstallPolicyRuleFlows(rule3)
 	require.Nil(t, err, "Failed to invoke InstallPolicyRuleFlows")
 	checkConjunctionConfig(t, ruleID3, 1, 2, 1, 2)
 	assert.Equal(t, 14, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
@@ -225,6 +235,81 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	err = c.applyConjunctiveMatchFlows(ctxChanges5)
 	assert.Equal(t, 11, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
 	require.Nil(t, err)
+}
+
+func TestBatchInstallPolicyRuleFlows(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	c = prepareClient(ctrl)
+	defaultAction := secv1alpha1.RuleActionAllow
+	priorityRule2 := uint16(10000)
+
+	ruleID1 := uint32(10)
+	rule1 := &types.PolicyRule{
+		Direction:       v1beta1.DirectionOut,
+		From:            parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
+		Action:          &defaultAction,
+		To:              parseAddresses([]string{"0.0.0.0/0"}),
+		FlowID:          ruleID1,
+		PolicyName:      "np1",
+		PolicyNamespace: "ns1",
+	}
+	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
+	ruleFlowBuilder := newMockRuleFlowBuilder(ctrl)
+	outTable.EXPECT().BuildFlow(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	cnpOutTable.EXPECT().BuildFlow(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+
+	conj := &policyRuleConjunction{id: ruleID1}
+	conj.calculateClauses(rule1, c)
+	require.NotNil(t, conj.toClause)
+	require.Nil(t, conj.serviceClause)
+	ruleFlowBuilder.EXPECT().MatchConjID(ruleID1).MaxTimes(1)
+	ruleFlowBuilder.EXPECT().MatchPriority(priorityLow).MaxTimes(1)
+	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID1, 2, 2}})
+	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID1, 1, 2}})
+	ctxChanges1 := conj.calculateChangesForRuleCreation(c, rule1)
+	matchFlows1, dropFlows1 := getChangedFlows(ctxChanges1)
+	assert.Equal(t, 2, getChangedFlowCount(dropFlows1))
+	assert.Equal(t, 3, getChangedFlowCount(matchFlows1))
+	assert.Equal(t, 3, getChangedFlowOPCount(matchFlows1, insertion))
+
+	ruleID2 := uint32(20)
+	rule2 := &types.PolicyRule{
+		Direction:       v1beta1.DirectionOut,
+		From:            parseAddresses([]string{"192.168.1.60"}),
+		Action:          &defaultAction,
+		Priority:        &priorityRule2,
+		To:              parseAddresses([]string{"192.168.1.70"}),
+		FlowID:          ruleID2,
+		PolicyName:      "np2",
+		PolicyNamespace: "ns1",
+	}
+
+	conj2 := &policyRuleConjunction{id: ruleID2}
+	conj2.calculateClauses(rule2, c)
+	require.NotNil(t, conj2.toClause)
+	require.Nil(t, conj2.serviceClause)
+	ruleFlowBuilder.EXPECT().MatchConjID(ruleID2).MaxTimes(1)
+	ruleFlowBuilder.EXPECT().MatchPriority(priorityRule2).MaxTimes(1)
+	ruleAction.EXPECT().Conjunction(ruleID2, gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).MaxTimes(1)
+	ruleAction.EXPECT().Conjunction(ruleID2, gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).MaxTimes(1)
+	ctxChanges2 := conj2.calculateChangesForRuleCreation(c, rule2)
+	matchFlows2, dropFlows2 := getChangedFlows(ctxChanges2)
+	assert.Equal(t, 0, getChangedFlowCount(dropFlows2))
+	assert.Equal(t, 2, getChangedFlowCount(matchFlows2))
+	assert.Equal(t, 2, getChangedFlowOPCount(matchFlows2, insertion))
+
+	err := c.applyConjunctiveMatchFlows(append(ctxChanges1, ctxChanges2...))
+	require.Nil(t, err)
+
+	err = c.BatchInstallPolicyRuleFlows([]*types.PolicyRule{rule1, rule2})
+	require.Nil(t, err)
+	checkConjunctionConfig(t, ruleID1, 1, 2, 1, 0)
+	checkActionFlowPriority(t, ruleID1, priorityNormal)
+	checkConjunctionConfig(t, ruleID2, 1, 1, 1, 0)
+	assert.Equal(t, 6, len(c.GetNetworkPolicyFlowKeys("np1", "ns1")))
+	assert.Equal(t, 3, len(c.GetNetworkPolicyFlowKeys("np2", "ns1")))
 }
 
 func TestConjMatchFlowContextKeyConflict(t *testing.T) {
@@ -326,6 +411,15 @@ func checkConjunctionConfig(t *testing.T, ruleID uint32, actionFlowCount, fromMa
 	}
 }
 
+func checkActionFlowPriority(t *testing.T, ruleID uint32, priority uint16) {
+	conj := c.getPolicyRuleConjunction(ruleID)
+	require.NotNil(t, conj, "Failed to add policyRuleConjunction into client cache")
+	actionFlowPriorities := conj.ActionFlowPriorities()
+	for _, p := range actionFlowPriorities {
+		assert.Equal(t, strconv.Itoa(int(priority)), p, fmt.Sprintf("Action flow for rule %d installed at wrong priority, expect: %s, actual: %s", ruleID, strconv.Itoa(int(priority)), p))
+	}
+}
+
 func checkFlowCount(t *testing.T, expectCount int) {
 	actualCount := len(c.globalConjMatchFlowCache)
 	assert.Equal(t, expectCount, actualCount, fmt.Sprintf("Incorrect count of conjunctive match flow context into global cache, expect: %d, actual: %d", expectCount, actualCount))
@@ -354,6 +448,8 @@ func newMockDropFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	dropFlowBuilder.EXPECT().MatchDstIP(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchSrcIP(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchInPort(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
+	dropFlowBuilder.EXPECT().MatchConjID(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	dropFlowBuilder.EXPECT().MatchPriority(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	action := mocks.NewMockAction(ctrl)
 	action.EXPECT().Drop().Return(dropFlowBuilder).AnyTimes()
@@ -423,11 +519,13 @@ func prepareClient(ctrl *gomock.Controller) *client {
 	)
 	bridge := mocks.NewMockBridge(ctrl)
 	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	cnpOutTable = createMockTable(ctrl, cnpEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
 	outTable = createMockTable(ctrl, EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext)
 	outDropTable = createMockTable(ctrl, EgressDefaultTable, l3ForwardingTable, binding.TableMissActionNext)
 	outAllowTable = createMockTable(ctrl, l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext)
 	c = &client{
 		pipeline: map[binding.TableIDType]binding.Table{
+			cnpEgressRuleTable: cnpOutTable,
 			EgressRuleTable:    outTable,
 			EgressDefaultTable: outDropTable,
 			l3ForwardingTable:  outAllowTable,
