@@ -9,18 +9,18 @@ import (
 )
 
 var (
-	p111  = types.Priority{TierPriority: 1, PolicyPriority: 1, RulePriority: 1}
-	p1121 = types.Priority{TierPriority: 1, PolicyPriority: 1.2, RulePriority: 1}
-	p1122 = types.Priority{TierPriority: 1, PolicyPriority: 1.2, RulePriority: 2}
-	p1131 = types.Priority{TierPriority: 1, PolicyPriority: 1.3, RulePriority: 1}
-	p1132 = types.Priority{TierPriority: 1, PolicyPriority: 1.3, RulePriority: 2}
-	p1141 = types.Priority{TierPriority: 1, PolicyPriority: 1.4, RulePriority: 1}
-	p1142 = types.Priority{TierPriority: 1, PolicyPriority: 1.4, RulePriority: 2}
-	p1161 = types.Priority{TierPriority: 1, PolicyPriority: 1.6, RulePriority: 1}
-	p191  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 1}
-	p192  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 2}
-	p193  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 3}
-	p194  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 4}
+	p111  = types.Priority{TierPriority: 1, PolicyPriority: 1, RulePriority: 0}
+	p1121 = types.Priority{TierPriority: 1, PolicyPriority: 1.2, RulePriority: 0}
+	p1122 = types.Priority{TierPriority: 1, PolicyPriority: 1.2, RulePriority: 1}
+	p1131 = types.Priority{TierPriority: 1, PolicyPriority: 1.3, RulePriority: 0}
+	p1132 = types.Priority{TierPriority: 1, PolicyPriority: 1.3, RulePriority: 1}
+	p1141 = types.Priority{TierPriority: 1, PolicyPriority: 1.4, RulePriority: 0}
+	p1142 = types.Priority{TierPriority: 1, PolicyPriority: 1.4, RulePriority: 1}
+	p1161 = types.Priority{TierPriority: 1, PolicyPriority: 1.6, RulePriority: 0}
+	p191  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 0}
+	p192  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 1}
+	p193  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 2}
+	p194  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 3}
 )
 
 func TestUpdatePriorityAssignment(t *testing.T) {

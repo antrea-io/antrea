@@ -46,8 +46,7 @@ func InitialOFPrioritySingleTierPerTable(p types.Priority) uint16 {
 	if priorityIndex > InitialPriorityZones-1 {
 		priorityIndex = InitialPriorityZones - 1
 	}
-	offset := InitialPriorityOffset*uint16(priorityIndex) + uint16(p.RulePriority)
-	return PriorityTopCNP - offset + uint16(1)
+	return PriorityTopCNP - InitialPriorityOffset*uint16(priorityIndex) - uint16(p.RulePriority)
 }
 
 // priorityAssigner is a struct that maintains the current mapping between types.Priority and

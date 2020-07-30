@@ -52,6 +52,11 @@ func (b *ClusterNetworkPolicySpecBuilder) SetPriority(p float64) *ClusterNetwork
 	return b
 }
 
+func (b *ClusterNetworkPolicySpecBuilder) SetTier(tier string) *ClusterNetworkPolicySpecBuilder {
+	b.Spec.Tier = tier
+	return b
+}
+
 func (b *ClusterNetworkPolicySpecBuilder) SetAppliedToGroup(podSelector map[string]string,
 	nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement,
