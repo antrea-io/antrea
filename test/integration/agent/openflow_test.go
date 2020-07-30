@@ -168,14 +168,17 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
-		Direction: v1beta1.DirectionIn,
-		From:      prepareIPAddresses(fromList),
-		To:        toIPList,
-		Service:   []v1beta1.Service{npPort1},
-		Action:    &defaultAction,
+		Direction:       v1beta1.DirectionIn,
+		From:            prepareIPAddresses(fromList),
+		To:              toIPList,
+		Service:         []v1beta1.Service{npPort1},
+		Action:          &defaultAction,
+		FlowID:          ruleID,
+		PolicyName:      "np1",
+		PolicyNamespace: "ns1",
 	}
 
-	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
+	err = c.InstallPolicyRuleFlows(rule)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 
 	err = c.AddPolicyRuleAddress(ruleID, types.SrcAddress, prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"}), nil)
@@ -329,14 +332,16 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
-		Direction: v1beta1.DirectionIn,
-		From:      prepareIPAddresses(fromList),
-		To:        toIPList,
-		Service:   []v1beta1.Service{npPort1},
-		Action:    &defaultAction,
+		Direction:       v1beta1.DirectionIn,
+		From:            prepareIPAddresses(fromList),
+		To:              toIPList,
+		Service:         []v1beta1.Service{npPort1},
+		Action:          &defaultAction,
+		FlowID:          ruleID,
+		PolicyName:      "np1",
+		PolicyNamespace: "ns1",
 	}
-
-	err = c.InstallPolicyRuleFlows(ruleID, rule, "np1", "ns1")
+	err = c.InstallPolicyRuleFlows(rule)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 	checkConjunctionFlows(t, ingressRuleTable, ingressDefaultTable, contrackCommitTable, priorityNormal, ruleID, rule, assert.True)
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList, true)
@@ -366,12 +371,15 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	udpProtocol := v1beta1.ProtocolUDP
 	npPort2 := v1beta1.Service{Protocol: &udpProtocol}
 	rule2 := &types.PolicyRule{
-		Direction: v1beta1.DirectionIn,
-		To:        toIPList2,
-		Service:   []v1beta1.Service{npPort2},
-		Action:    &defaultAction,
+		Direction:       v1beta1.DirectionIn,
+		To:              toIPList2,
+		Service:         []v1beta1.Service{npPort2},
+		Action:          &defaultAction,
+		FlowID:          ruleID2,
+		PolicyName:      "np1",
+		PolicyNamespace: "ns1",
 	}
-	err = c.InstallPolicyRuleFlows(ruleID2, rule2, "np1", "ns1")
+	err = c.InstallPolicyRuleFlows(rule2)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 
 	// Dump flows

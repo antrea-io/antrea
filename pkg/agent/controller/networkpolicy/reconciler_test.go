@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -428,13 +429,133 @@ func TestReconcilerReconcile(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
-			for _, ofRule := range tt.expectedOFRules {
-				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any(), gomock.Eq(ofRule), "", "")
+			// TODO: mock idAllocator and priorityAssigner
+			for i := 0; i < len(tt.expectedOFRules); i++ {
+				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
 			}
 			r := newReconciler(mockOFClient, ifaceStore)
 			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
 				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
 			}
+		})
+	}
+}
+
+func TestReconcilerBatchReconcile(t *testing.T) {
+	ifaceStore := interfacestore.NewInterfaceStore()
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1", "container1"),
+		IP:                       net.ParseIP("2.2.2.2"),
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1", ContainerID: "container1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1},
+	})
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("pod3", "ns1", "container3"),
+		IP:                       net.ParseIP("3.3.3.3"),
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod3", PodNamespace: "ns1", ContainerID: "container3"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 3},
+	})
+	completedRules := []*CompletedRule{
+		{
+			rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceTCP80, serviceTCP}},
+			FromAddresses: addressGroup1,
+			ToAddresses:   nil,
+			Pods:          appliedToGroup1,
+		},
+		{
+			rule: &rule{ID: "ingress-rule-no-ports", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{}},
+			Pods: appliedToGroup1,
+		},
+		{
+			rule: &rule{ID: "ingress-rule-diff-named-port", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceHTTP}},
+			Pods: appliedToGroupWithDiffContainerPort,
+		},
+		{
+			rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+			FromAddresses: nil,
+			ToAddresses:   addressGroup1,
+			Pods:          appliedToGroup1,
+		},
+	}
+	expectedOFRules := []*types.PolicyRule{
+		{
+			Direction: v1beta1.DirectionIn,
+			From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
+			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+			Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+		},
+		{
+			Direction: v1beta1.DirectionIn,
+			From:      []types.Address{},
+			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+			Service:   nil,
+		},
+		{
+			Direction: v1beta1.DirectionIn,
+			From:      []types.Address{},
+			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+			Service:   []v1beta1.Service{serviceTCP80},
+		},
+		{
+			Direction: v1beta1.DirectionIn,
+			From:      []types.Address{},
+			To:        ofPortsToOFAddresses(sets.NewInt32(3)),
+			Service:   []v1beta1.Service{serviceTCP443},
+		},
+		{
+			Direction: v1beta1.DirectionOut,
+			From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
+			To:        ipsToOFAddresses(sets.NewString("1.1.1.1")),
+			Service:   nil,
+		},
+	}
+	tests := []struct {
+		name              string
+		args              []*CompletedRule
+		expectedOFRules   []*types.PolicyRule
+		numInstalledRules int
+		wantErr           bool
+	}{
+		{
+			"batch-install",
+			completedRules,
+			expectedOFRules,
+			0,
+			false,
+		},
+		{
+			"batch-install-partial",
+			completedRules,
+			expectedOFRules,
+			1,
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+			mockOFClient := openflowtest.NewMockClient(controller)
+			r := newReconciler(mockOFClient, ifaceStore)
+			if tt.numInstalledRules > 0 {
+				// BatchInstall should skip rules already installed
+				r.lastRealizeds.Store(tt.args[0].ID, newLastRealized(tt.args[0]))
+			}
+			// TODO: mock idAllocator and priorityAssigner
+			mockOFClient.EXPECT().BatchInstallPolicyRuleFlows(gomock.Any()).
+				Do(func(rules []*types.PolicyRule) {
+					if tt.numInstalledRules == 0 {
+						assert.Equalf(t, len(rules), len(tt.expectedOFRules),
+							"Expect to install %v flows while %v flows were installed",
+							len(tt.expectedOFRules), len(rules))
+					} else if tt.numInstalledRules > 0 {
+						assert.Equalf(t, len(rules), len(tt.expectedOFRules)-tt.numInstalledRules,
+							"Expect to install %v flows while %v flows were installed",
+							len(tt.expectedOFRules)-tt.numInstalledRules, len(rules))
+					}
+				})
+			err := r.BatchReconcile(tt.args)
+			assert.Equalf(t, err != nil, tt.wantErr, "BatchReconcile() error = %v, wantErr %v", err, tt.wantErr)
 		})
 	}
 }
@@ -559,7 +680,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
-			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any(), gomock.Any(), "", "")
+			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
 			if len(tt.expectedAddedFrom) > 0 {
 				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedAddedFrom), nil)
 			}

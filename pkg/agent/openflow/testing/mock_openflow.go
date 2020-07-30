@@ -67,6 +67,20 @@ func (mr *MockClientMockRecorder) AddPolicyRuleAddress(arg0, arg1, arg2, arg3 in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).AddPolicyRuleAddress), arg0, arg1, arg2, arg3)
 }
 
+// BatchInstallPolicyRuleFlows mocks base method
+func (m *MockClient) BatchInstallPolicyRuleFlows(arg0 []*types.PolicyRule) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BatchInstallPolicyRuleFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BatchInstallPolicyRuleFlows indicates an expected call of BatchInstallPolicyRuleFlows
+func (mr *MockClientMockRecorder) BatchInstallPolicyRuleFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchInstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).BatchInstallPolicyRuleFlows), arg0)
+}
+
 // DeletePolicyRuleAddress mocks base method
 func (m *MockClient) DeletePolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address, arg3 *uint16) error {
 	m.ctrl.T.Helper()
@@ -350,17 +364,17 @@ func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3, arg4 i
 }
 
 // InstallPolicyRuleFlows mocks base method
-func (m *MockClient) InstallPolicyRuleFlows(arg0 uint32, arg1 *types.PolicyRule, arg2, arg3 string) error {
+func (m *MockClient) InstallPolicyRuleFlows(arg0 *types.PolicyRule) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallPolicyRuleFlows", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "InstallPolicyRuleFlows", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallPolicyRuleFlows indicates an expected call of InstallPolicyRuleFlows
-func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyRuleFlows), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyRuleFlows), arg0)
 }
 
 // InstallServiceFlows mocks base method

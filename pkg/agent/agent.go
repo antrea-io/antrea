@@ -334,8 +334,11 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// the time required for convergence may be large and there is no simple way to
 		// determine when is a right time to perform the cleanup task.
 		// TODO: introduce a deterministic mechanism through which the different entities
-		// responsible for installing flows can notify the agent that this deletion
-		// operation can take place.
+		//  responsible for installing flows can notify the agent that this deletion
+		//  operation can take place. A waitGroup can be created here and notified when
+		//  full sync in agent networkpolicy controller is complete. This would signal NP
+		//  flows have been synced once. Other mechanisms are still needed for node flows
+		//  fullSync check.
 		time.Sleep(10 * time.Second)
 		klog.Info("Deleting stale flows from previous round if any")
 		if err := i.ofClient.DeleteStaleFlows(); err != nil {

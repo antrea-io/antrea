@@ -127,7 +127,10 @@ type Client interface {
 	// NetworkPolicy rule. Each ingress/egress policy rule installs Openflow entries on two tables, one for
 	// ruleTable and the other for dropTable. If a packet does not pass the ruleTable, it will be dropped by the
 	// dropTable.
-	InstallPolicyRuleFlows(ruleID uint32, rule *types.PolicyRule, npName, npNamespace string) error
+	InstallPolicyRuleFlows(ofPolicyRule *types.PolicyRule) error
+
+	// BatchInstallPolicyRuleFlows installs multiple flows for NetworkPolicy rules in batch.
+	BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) error
 
 	// UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
 	// It also returns a slice of stale ofPriorities used by ClusterNetworkPolicies.

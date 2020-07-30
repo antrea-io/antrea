@@ -76,6 +76,16 @@ func (r *mockReconciler) Reconcile(rule *CompletedRule) error {
 	return nil
 }
 
+func (r *mockReconciler) BatchReconcile(rules []*CompletedRule) error {
+	r.Lock()
+	defer r.Unlock()
+	for _, rule := range rules {
+		r.lastRealized[rule.ID] = rule
+		r.updated <- rule.ID
+	}
+	return nil
+}
+
 func (r *mockReconciler) Forget(ruleID string) error {
 	r.Lock()
 	defer r.Unlock()
