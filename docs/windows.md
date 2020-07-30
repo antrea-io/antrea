@@ -21,6 +21,10 @@ The following components should be configured and run on the Windows Node.
 
 antrea-agent and kube-proxy run as processes on host and are managed by
 management Pods. It is recommended to run OVS daemons as Windows services.
+If you don't want to run antrea-agent and kube-proxy from the management Pods
+Antrea also provides scripts which help install and run these two components
+directly without Pod, please see [Manually run kube-proxy and antrea-agent on Windows worker Nodes](#Manually-run-kube-proxy-and-antrea-agent-on-Windows-worker-Nodes)
+section for details.
 
 ### Antrea Windows demo
 Watch this [demo video](https://www.youtube.com/watch?v=xjhizZ3BJzQ) of running
@@ -226,7 +230,26 @@ kubectl get pods -o wide -nkube-system | grep windows
 antrea-agent-windows-6hvkw                             1/1     Running     0          100s
 kube-proxy-windows-2d45w                               1/1     Running     0          102s
 ```
+### Manually run kube-proxy and antrea-agent on Windows worker Nodes
 
+Aside from starting kube-proxy and antrea-agent from the management Pods, Antrea
+also provides powershell scripts which help install and run these two components
+directly without Pod. Please complete the steps in [Installation](#Installation)
+section, skip [Add Windows kube-proxy DaemonSet](#Add-Windows-kube-proxy-DaemonSet)
+and [Add Windows antrea-agent DaemonSet](#Add-Windows-antrea-agent-DaemonSet)
+steps. And then run the following commands in powershell.
+```
+mkdir c:\k\antrea
+cd c:\k\antrea
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Start.ps1
+# $KubeConfigPath is the path of kubeconfig file
+# $AntreaVersion is the version of Antrea
+./Start.ps1 -kubeconfig $KubeConfigPath -AntreaVersion $AntreaVersion
+``` 
+
+> Note: Some features such as supportbundle collection are not supported in this
+> way. It's recommended to start kube-proxy and antrea-agent through management
+> Pods.
 
 ## Known issues
 1. HNS Network is not persistent on Windows. So after the Windows Node reboots,
