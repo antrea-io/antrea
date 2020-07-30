@@ -126,6 +126,7 @@ func TestConnTackNetdev_DumpFilter(t *testing.T) {
 		StartTime:  time.Time{},
 		StopTime:   time.Time{},
 		IsActive:   true,
+		DoExport:   true,
 		Zone:       65520,
 		StatusFlag: 0,
 		TupleOrig: flowexporter.Tuple{

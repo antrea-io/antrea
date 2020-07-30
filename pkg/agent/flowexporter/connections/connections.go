@@ -123,6 +123,13 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 			conn.DestinationPodName = dIface.ContainerInterfaceConfig.PodName
 			conn.DestinationPodNamespace = dIface.ContainerInterfaceConfig.PodNamespace
 		}
+		// Do not export flow records of connections, who destination is local pod and source is remote pod.
+		// We export flow records only form "source node", where the connection is originated from. This is to avoid
+		// 2 copies of flow records. This restriction will be removed when flow records store network policy rule ID.
+		// TODO: Remove this when network policy rule ID are added to flow records.
+		if !srcFound && dstFound {
+			conn.DoExport = false
+		}
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
 		cs.connections[connKey] = *conn
@@ -149,7 +156,7 @@ func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionM
 	return nil
 }
 
-// poll returns number of filtered connections after poll cycle
+// Poll returns number of filtered connections after poll cycle
 // TODO: Optimize polling cycle--Only poll invalid/close connection during every poll. Poll established right before export
 func (cs *connectionStore) Poll() (int, error) {
 	klog.V(2).Infof("Polling conntrack")

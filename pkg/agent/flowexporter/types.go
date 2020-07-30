@@ -41,7 +41,9 @@ type Connection struct {
 	// For established connections: StopTime is latest time when it was polled.
 	StopTime time.Time
 	// IsActive flag helps in cleaning up connections when they are not in conntrack any module more.
-	IsActive   bool
+	IsActive bool
+	// DoExport flag helps in tagging connections that can be exported by Flow Exporter
+	DoExport   bool
 	Zone       uint16
 	StatusFlag uint32
 	// TODO: Have a separate field for protocol. No need to keep it in Tuple.

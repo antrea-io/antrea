@@ -302,6 +302,7 @@ func (ctnd *connTrackNetdev) DumpFilter(filter interface{}) ([]*flowexporter.Con
 		}
 		if inZone {
 			conn.IsActive = true
+			conn.DoExport = true
 			antreaConns = append(antreaConns, &conn)
 		}
 	}
@@ -331,6 +332,7 @@ func createAntreaConn(conn *conntrack.Flow) *flowexporter.Connection {
 		conn.Timeout,
 		conn.Timestamp.Start,
 		conn.Timestamp.Stop,
+		true,
 		true,
 		conn.Zone,
 		uint32(conn.Status.Value),
