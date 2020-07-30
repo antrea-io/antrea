@@ -18,7 +18,7 @@ package proxy
 import (
 	"net"
 
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )

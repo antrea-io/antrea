@@ -17,6 +17,7 @@
 package log
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,8 +26,10 @@ import (
 
 	"github.com/spf13/pflag"
 
+	klogv1 "k8s.io/klog"
+
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -40,6 +43,10 @@ const (
 	logFileCheckInterval = time.Minute * 10
 	// Allowed maximum value for the maximum file size limit.
 	maxMaxSizeMB = 1024 * 100
+
+	outputCallDepth = 6
+	// log prefix that we have to strip out
+	defaultPrefixLength = 53
 )
 
 var (
@@ -189,4 +196,55 @@ func checkLogFiles() {
 	checkFilesFn(infoLogFiles)
 	checkFilesFn(warningLogFiles)
 	checkFilesFn(errorLogFiles)
+}
+
+// Support code for klogv2 while klogv1 is still used
+// in third_party and "k8s.io/component-base/logs"
+// TODO: remove when they are upgraded to klogv2.
+
+// klogWriter is used in SetOutputBySeverity call below to redirect
+// any calls to klogv1 to end up in klogv2
+type klogWriter struct{}
+
+func (kw klogWriter) Write(p []byte) (n int, err error) {
+	if len(p) < defaultPrefixLength {
+		klog.InfoDepth(outputCallDepth, string(p))
+		return len(p), nil
+	}
+	if p[0] == 'I' {
+		klog.InfoDepth(outputCallDepth, string(p[defaultPrefixLength:]))
+	} else if p[0] == 'W' {
+		klog.WarningDepth(outputCallDepth, string(p[defaultPrefixLength:]))
+	} else if p[0] == 'E' {
+		klog.ErrorDepth(outputCallDepth, string(p[defaultPrefixLength:]))
+	} else if p[0] == 'F' {
+		klog.FatalDepth(outputCallDepth, string(p[defaultPrefixLength:]))
+	} else {
+		klog.InfoDepth(outputCallDepth, string(p[defaultPrefixLength:]))
+	}
+	return len(p), nil
+}
+
+// Klogv2Flags The flag file for klog.
+var Klogv2Flags flag.FlagSet
+
+// InitKlog sets up the klog.
+// Redirects klogv1 to klogv2.
+// TODO: remove once components use klogv2 by default.
+func InitKlog() {
+	klog.InitFlags(&Klogv2Flags)
+	addKlogv2Flags()
+	var klogv1Flags flag.FlagSet
+	klogv1.InitFlags(&klogv1Flags)
+	klogv1Flags.Set("logtostderr", "false")
+	klogv1Flags.Set("stderrthreshold", "FATAL")
+	klogv1.SetOutputBySeverity("INFO", klogWriter{})
+}
+
+// addKlogv2Flags adds flags used by controller and agent.
+// Used to allow for parsing of flags.
+// TODO: remove once all components use klogv2.
+func addKlogv2Flags() {
+	Klogv2Flags.String("config", "", "Unused.")
+	Klogv2Flags.Uint(maxNumFlag, 0, "Unused.")
 }

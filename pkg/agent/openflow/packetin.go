@@ -17,7 +17,7 @@ package openflow
 import (
 	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 type ofpPacketInReason uint

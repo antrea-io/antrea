@@ -18,11 +18,16 @@ import (
 	"fmt"
 
 	"github.com/vmware-tanzu/antrea/pkg/cni"
+	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cni_version "github.com/containernetworking/cni/pkg/version"
 )
+
+func init() {
+	log.InitKlog()
+}
 
 func main() {
 	skel.PluginMain(
