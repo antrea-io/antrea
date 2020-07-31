@@ -1,10 +1,20 @@
-# Native Network Policies
+# Antrea Network Policies
+
+## Summary
+
+Antrea supports standard K8s NetworkPolicies to secure traffic between Pods. These
+NetworkPolicies are written from an application developers perspective, hence they
+lack the ability to gain a finer-grained control over the security policies that
+a cluster administrator would require. This document describes a few new CRDs
+supported by Antrea to provide the administrator with more control over
+security within the cluster and which are meant to co-exist with and complement the
+K8s NetworkPolicy.
 
 ## Tier
 
-Antrea supports grouping native NetworkPolicies together in a tiered fashion
+Antrea supports grouping Antrea NetworkPolicies together in a tiered fashion
 to provide a hierarchy of security policies. This is achieved by setting the
-native NetworkPolicies, like a ClusterNetworkPolicy, with the name of the
+Antrea NetworkPolicies, like a ClusterNetworkPolicy, with the name of the
 `tier` to which it is associated. Each tier has a priority associated with it,
 which determines its relative order among other tiers.
 
@@ -12,7 +22,7 @@ which determines its relative order among other tiers.
 
 ### Static tiers
 
-Currently we support 5 static tiers in Antrea. They are as follows in the
+Currently, we support 5 static tiers in Antrea. They are as follows in the
 relative order of precedence:
 
     Emergency > SecurityOps > NetworkOps > InterTenant > Application  
@@ -22,7 +32,7 @@ until an exact match occurs, in which case the policy rule's `action` will be
 enforced. The "Application" tier carries the lowest precedence, and any
 ClusterNetworkPolicy without a `tier` name set in its spec, will be
 associated with the "Application" tier. Even though the policies associated
-with the "Application" tier carry lowest precedence amongst all the tiers,
+with the "Application" tier carry the lowest precedence amongst all the tiers,
 they are still evaluated before K8s NetworkPolicies. Thus, admin created tiered
 policies have a higher precedence over developer created K8s NetworkPolicies.
 
@@ -109,7 +119,7 @@ which the policy applies to. Pods can be selected cluster-wide using
 selected by the namespaceSelector will be selected. Specific Pods from
 specific Namespaces can be selected by providing both a `podSelector` and a
 `namespaceSelector` in the same `appliedTo` entry.
-IPBlock is not allowed to be set in the `appliedTo` field.
+IPBlock cannot be set in the `appliedTo` field.
 In the example, the policy applies to Pods, which either match the labels
 "role=db" in all the Namespaces, or are from Namespaces which match the
 labels "env=prod".
@@ -153,7 +163,7 @@ to "Emergency" tier are evaluated first, followed by policies associated with
 the "SecurityOps" tier and so on, until the "Application" tier policies are
 evaluated. Within a tier, rules belonging to Cluster NetworkPolicy CRDs are
 associated with various priorities, such as the `priority` at the CNP level and
-the priority at rule level. Overall, Cluster Policy with highest precedence
+the priority at rule level. Overall, Cluster Policy with the highest precedence
 (lowest priority number value) is evaluated first. Within this policy, rules
 are evaluated in the order in which they are set. For example, consider the
 following:
@@ -204,5 +214,5 @@ ephemeral and unpredictable.
 ## Notes
 
 - The v1alpha1 CNP CRD supports up to 10000 unique priority at policy level. In
-  order to reduce churn in the agent, it is recommended to set the priority
+  order to reduce the churn in the agent, it is recommended to set the priority
   within the range 1.0 to 100.0.
