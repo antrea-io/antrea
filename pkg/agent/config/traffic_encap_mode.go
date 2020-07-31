@@ -42,7 +42,7 @@ var (
 // Otherwise, false and undefined value is returned
 func GetTrafficEncapModeFromStr(str string) (bool, TrafficEncapModeType) {
 	for idx, ms := range modeStrs {
-		if strings.ToLower(ms) == strings.ToLower(str) {
+		if strings.EqualFold(ms, str) {
 			return true, TrafficEncapModeType(idx)
 		}
 	}

@@ -49,8 +49,9 @@ import (
 const Name = "antrea-agent-api"
 
 var (
-	scheme    = runtime.NewScheme()
-	codecs    = serializer.NewCodecFactory(scheme)
+	scheme = runtime.NewScheme()
+	codecs = serializer.NewCodecFactory(scheme)
+	// #nosec G101: false positive triggered by variable name which includes "token"
 	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
 

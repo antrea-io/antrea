@@ -14,8 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build linux
-
 package agent
 
 import (
@@ -28,6 +26,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
@@ -197,6 +196,7 @@ func TestInitialize(t *testing.T) {
 		}
 
 		for table, expectedData := range expectedIPTables {
+			// #nosec G204: ignore in test code
 			actualData, err := exec.Command(
 				"bash", "-c", fmt.Sprintf("iptables-save -t %s | grep -i antrea", table),
 			).Output()
@@ -402,10 +402,12 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	expRoute := strings.Join(strings.Fields(
 		"default via 169.254.253.1 dev antrea-gw0 onlink"), "")
 	routeOut, err := ExecOutputTrim(fmt.Sprintf("ip route show table %d", svcTblIdx))
+	require.Nil(t, err, "error when running 'ip route show'")
 	assert.Equal(t, expRoute, routeOut)
 	expNeigh := strings.Join(strings.Fields(
 		"169.254.253.1 dev antrea-gw0 lladdr 12:34:56:78:9a:bc PERMANENT"), "")
 	neighOut, err := ExecOutputTrim(fmt.Sprintf("ip neigh | grep %s", gwName))
+	require.Nil(t, err, "error when running 'ip neigh'")
 	assert.Equal(t, expNeigh, neighOut)
 
 	cLink := &netlink.Dummy{}

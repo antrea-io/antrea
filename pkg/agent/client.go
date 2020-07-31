@@ -137,6 +137,7 @@ func (p *antreaClientProvider) updateAntreaClient() error {
 // running inside a pod running on kubernetes. It will return error
 // if called from a process not running in a kubernetes environment.
 func inClusterConfig(caBundle []byte) (*rest.Config, error) {
+	// #nosec G101: false positive triggered by variable name which includes "token"
 	const tokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	host, port := os.Getenv("ANTREA_SERVICE_HOST"), os.Getenv("ANTREA_SERVICE_PORT")
 	if len(host) == 0 || len(port) == 0 {

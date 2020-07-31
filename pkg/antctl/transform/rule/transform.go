@@ -31,7 +31,7 @@ type ipBlock struct {
 
 type peer struct {
 	AddressGroups []string  `json:"addressGroups,omitempty"`
-	IPBlocks      []ipBlock `json:"ipBlocks,omitempty" json:"ipBlocks,omitempty"`
+	IPBlocks      []ipBlock `json:"ipBlocks,omitempty"`
 }
 
 type Response struct {

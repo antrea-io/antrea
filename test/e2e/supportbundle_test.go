@@ -83,7 +83,7 @@ func testSupportBundle(name string, t *testing.T) {
 	require.NoError(t, err)
 	// Clearing any existing support bundle.
 	err = clients.SystemV1beta1().SupportBundles().Delete(context.TODO(), name, metav1.DeleteOptions{})
-	require.NoError(t, nil)
+	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
 	// Checking the initial status.
 	bundle, err := clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
@@ -125,7 +125,7 @@ func testSupportBundle(name string, t *testing.T) {
 	require.Equal(t, bundle.Sum, fmt.Sprintf("%x", hasher.Sum(nil)))
 	// Deleting the bundle.
 	err = clients.SystemV1beta1().SupportBundles().Delete(context.TODO(), name, metav1.DeleteOptions{})
-	require.NoError(t, nil)
+	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
 	// Checking that the bundle was deleted.
 	bundle, err = clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
