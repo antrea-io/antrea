@@ -89,6 +89,16 @@ func (ic *ifConfigurator) delEndpoint(name string) {
 	ic.epCache.Delete(name)
 }
 
+// findContainerIPConfig finds a valid IPv4 address since IPv6 is not supported for Windows at this stage.
+func findContainerIPConfig(ips []*current.IPConfig) (*current.IPConfig, error) {
+	for _, ipc := range ips {
+		if ipc.Version == "4" {
+			return ipc, nil
+		}
+	}
+	return nil, fmt.Errorf("failed to find a valid IP address")
+}
+
 // configureContainerLink creates a HNSEndpoint for the container using the IPAM result, and then attach it on the container interface.
 func (ic *ifConfigurator) configureContainerLink(
 	podName string,

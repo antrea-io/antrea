@@ -93,7 +93,7 @@ type NodeConfig struct {
 }
 
 func (n *NodeConfig) String() string {
-	return fmt.Sprintf("NodeName: %s, OVSBridge: %s, PodIPv4CIDR %s, PodIPv6CIDR: %s, NodeIP: %s, Gateway: %s",
+	return fmt.Sprintf("NodeName: %s, OVSBridge: %s, PodIPv4CIDR: %s, PodIPv6CIDR: %s, NodeIP: %s, Gateway: %s",
 		n.Name, n.OVSBridge, n.PodIPv4CIDR, n.PodIPv6CIDR, n.NodeIPAddr, n.GatewayConfig)
 }
 

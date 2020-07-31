@@ -80,11 +80,11 @@ func TestLoadNetConfig(t *testing.T) {
 	assert.Equal(networkCfg.Name, netCfg.Name)
 	assert.Equal(networkCfg.IPAM.Type, netCfg.IPAM.Type)
 	assert.Equal(
-		netCfg.IPAM.Subnet, testNodeConfig.PodIPv4CIDR.String(),
+		netCfg.IPAM.Ranges[0][0].Subnet, testNodeConfig.PodIPv4CIDR.String(),
 		"Network configuration (PodCIDRs) was not updated",
 	)
 	assert.Equal(
-		netCfg.IPAM.Gateway, testNodeConfig.GatewayConfig.IPs[0].String(),
+		netCfg.IPAM.Ranges[0][0].Gateway, testNodeConfig.GatewayConfig.IPs[0].String(),
 		"Network configuration (Gateway IP) was not updated",
 	)
 }
@@ -318,7 +318,7 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 		assert := assert.New(t)
 
 		result := ipamtest.GenerateIPAMResult(supportedCNIVersion, testIps, routes, dns)
-		updateResultIfaceConfig(result, gwIP)
+		updateResultIfaceConfig(result, []net.IP{gwIP})
 
 		assert.Len(result.IPs, 2, "Failed to construct result")
 		for _, ipc := range result.IPs {
@@ -336,7 +336,7 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 	t.Run("Default route added", func(t *testing.T) {
 		emptyRoutes := []string{}
 		result := ipamtest.GenerateIPAMResult(supportedCNIVersion, testIps, emptyRoutes, dns)
-		updateResultIfaceConfig(result, gwIP)
+		updateResultIfaceConfig(result, []net.IP{gwIP})
 		require.NotEmpty(t, result.Routes)
 		defaultRoute := func() *cnitypes.Route {
 			for _, route := range result.Routes {

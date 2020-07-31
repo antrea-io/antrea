@@ -528,7 +528,10 @@ func (c *client) initialize() error {
 	if err := c.ofEntryOperations.Add(c.arpNormalFlow(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install arp normal flow: %v", err)
 	}
-	if err := c.ofEntryOperations.Add(c.l2ForwardOutputFlow(cookie.Default)); err != nil {
+	if err := c.ofEntryOperations.AddAll(c.ipv6Flows(cookie.Default)); err != nil {
+		return fmt.Errorf("failed to install ipv6 flows: %v", err)
+	}
+	if err := c.ofEntryOperations.AddAll(c.l2ForwardOutputFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install L2 forward output flows: %v", err)
 	}
 	if err := c.ofEntryOperations.AddAll(c.connectionTrackFlows(cookie.Default)); err != nil {

@@ -102,19 +102,30 @@ func newPodConfigurator(
 	}, nil
 }
 
-func findContainerIPConfig(ips []*current.IPConfig) (*current.IPConfig, error) {
+func findContainerIPConfigs(ips []*current.IPConfig) ([]*current.IPConfig, error) {
+	var ipcs []*current.IPConfig
 	for _, ipc := range ips {
 		if ipc.Version == "4" {
-			return ipc, nil
+			ipcs = append(ipcs, ipc)
+		} else if ipc.Version == "6" {
+			ipcs = append(ipcs, ipc)
 		}
 	}
-	return nil, fmt.Errorf("failed to find a valid IP address")
+	if len(ipcs) > 0 {
+		return ipcs, nil
+	} else {
+		return nil, fmt.Errorf("failed to find a valid IP address")
+	}
 }
 
-func parseContainerIP(ips []*current.IPConfig) (net.IP, error) {
-	ipc, err := findContainerIPConfig(ips)
+func parseContainerIP(ips []*current.IPConfig) ([]net.IP, error) {
+	ipcs, err := findContainerIPConfigs(ips)
 	if err == nil {
-		return ipc.Address.IP, nil
+		var ips []net.IP
+		for _, ipc := range ipcs {
+			ips = append(ips, ipc.Address.IP)
+		}
+		return ips, nil
 	}
 	return nil, fmt.Errorf("failed to find a valid IP address")
 }
@@ -123,7 +134,7 @@ func buildContainerConfig(
 	interfaceName, containerID, podName, podNamespace string,
 	containerIface *current.Interface,
 	ips []*current.IPConfig) *interfacestore.InterfaceConfig {
-	containerIP, err := parseContainerIP(ips)
+	containerIPs, err := parseContainerIP(ips)
 	if err != nil {
 		klog.Errorf("Failed to find container %s IP", containerID)
 	}
@@ -135,7 +146,7 @@ func buildContainerConfig(
 		podName,
 		podNamespace,
 		containerMAC,
-		[]net.IP{containerIP})
+		containerIPs)
 }
 
 // BuildOVSPortExternalIDs parses OVS port external_ids from InterfaceConfig.

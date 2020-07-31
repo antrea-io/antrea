@@ -193,16 +193,38 @@ func (b *ofFlowBuilder) MatchInPort(inPort uint32) FlowBuilder {
 
 // MatchDstIP adds match condition for matching destination IP address.
 func (b *ofFlowBuilder) MatchDstIP(ip net.IP) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ip.String()))
+	if ip.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ip.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_dst=%s", ip.String()))
+	}
 	b.Match.IpDa = &ip
 	return b
 }
 
 // MatchDstIPNet adds match condition for matching destination IP CIDR.
 func (b *ofFlowBuilder) MatchDstIPNet(ipnet net.IPNet) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ipnet.String()))
+	if ipnet.IP.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ipnet.String()))
+		b.Match.IpDaMask = maskToIPv4(ipnet.Mask)
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_dst=%s", ipnet.String()))
+		ipMask := net.IP(ipnet.Mask)
+		b.Match.IpDaMask = &ipMask
+	}
 	b.Match.IpDa = &ipnet.IP
-	b.Match.IpDaMask = maskToIPv4(ipnet.Mask)
+	return b
+}
+
+func (b *ofFlowBuilder) MatchICMPv6Type(icmp6Type byte) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_type=%d", icmp6Type))
+	b.Match.Icmp6Type = &icmp6Type
+	return b
+}
+
+func (b *ofFlowBuilder) MatchICMPv6Code(icmp6Code byte) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_code=%d", icmp6Code))
+	b.Match.Icmp6Code = &icmp6Code
 	return b
 }
 
@@ -213,16 +235,26 @@ func maskToIPv4(mask net.IPMask) *net.IP {
 
 // MatchSrcIP adds match condition for matching source IP address.
 func (b *ofFlowBuilder) MatchSrcIP(ip net.IP) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ip.String()))
+	if ip.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ip.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_src=%s", ip.String()))
+	}
 	b.Match.IpSa = &ip
 	return b
 }
 
 // MatchSrcIPNet adds match condition for matching source IP CIDR.
 func (b *ofFlowBuilder) MatchSrcIPNet(ipnet net.IPNet) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ipnet.String()))
+	if ipnet.IP.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ipnet.String()))
+		b.Match.IpSaMask = maskToIPv4(ipnet.Mask)
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_src=%s", ipnet.String()))
+		ipMask := net.IP(ipnet.Mask)
+		b.Match.IpSaMask = &ipMask
+	}
 	b.Match.IpSa = &ipnet.IP
-	b.Match.IpSaMask = maskToIPv4(ipnet.Mask)
 	return b
 }
 
