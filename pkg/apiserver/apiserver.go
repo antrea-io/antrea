@@ -43,7 +43,8 @@ var (
 	Scheme = runtime.NewScheme()
 	// Codecs provides methods for retrieving codecs and serializers for specific
 	// versions and content types.
-	Codecs    = serializer.NewCodecFactory(Scheme)
+	Codecs = serializer.NewCodecFactory(Scheme)
+	// #nosec G101: false positive triggered by variable name which includes "token"
 	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
 

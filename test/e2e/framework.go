@@ -1053,6 +1053,9 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 
 func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*v1.ConfigMap, error) {
 	deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(context.TODO(), antreaDeployment, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve Antrea Controller deployment: %v", err)
+	}
 	var configMapName string
 	for _, volume := range deployment.Spec.Template.Spec.Volumes {
 		if volume.ConfigMap != nil && volume.Name == antreaConfigVolume {
@@ -1061,11 +1064,11 @@ func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*v1.ConfigMap,
 		}
 	}
 	if len(configMapName) == 0 {
-		return nil, fmt.Errorf("Failed to locate %s ConfigMap volume", antreaConfigVolume)
+		return nil, fmt.Errorf("failed to locate %s ConfigMap volume", antreaConfigVolume)
 	}
 	configMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get ConfigMap %s: %v", configMapName, err)
+		return nil, fmt.Errorf("failed to get ConfigMap %s: %v", configMapName, err)
 	}
 	return configMap, nil
 }

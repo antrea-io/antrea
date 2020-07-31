@@ -104,6 +104,7 @@ func getMonitoringAuthToken(t *testing.T, data *TestData) string {
 
 // getMetricsFromApiServer retrieves Antrea metrics from Pod apiserver
 func getMetricsFromApiServer(t *testing.T, url string, token string) string {
+	// #nosec G402: ignore insecure options in test code
 	config := &tls.Config{
 		InsecureSkipVerify: true,
 	}

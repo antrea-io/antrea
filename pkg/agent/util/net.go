@@ -15,7 +15,7 @@
 package util
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -29,7 +29,7 @@ const (
 )
 
 func generateInterfaceName(key string, name string, useHead bool) string {
-	hash := sha1.New()
+	hash := sha1.New() // #nosec G401: not used for security purposes
 	io.WriteString(hash, key)
 	interfaceKey := hex.EncodeToString(hash.Sum(nil))
 	prefix := name

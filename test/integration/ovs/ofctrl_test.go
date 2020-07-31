@@ -820,9 +820,10 @@ func TestNoteAction(t *testing.T) {
 	}
 
 	err = flow1.Add()
-	assert.Nil(t, err, "no error returned when adding flow")
+	assert.Nil(t, err, "expected no error when adding flow")
 	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), true, expectFlows)
 	err = flow1.Delete()
+	assert.Nil(t, err, "expected no error when deleting flow")
 	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), false, expectFlows)
 }
 

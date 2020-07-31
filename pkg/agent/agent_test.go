@@ -55,9 +55,7 @@ func TestInitstore(t *testing.T) {
 	initializer.nodeConfig = &config.NodeConfig{UplinkNetConfig: &uplinkNetConfig}
 
 	err := initializer.initInterfaceStore()
-	if err == nil {
-		t.Errorf("Failed to handle OVS return error")
-	}
+	assert.Error(t, err, "failed to handle OVS return error")
 
 	uuid1 := uuid.New().String()
 	uuid2 := uuid.New().String()
@@ -79,13 +77,13 @@ func TestInitstore(t *testing.T) {
 	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
 
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, ovsconfig.NewTransactionError(fmt.Errorf("Failed to list OVS ports"), true))
-	err = initializer.initInterfaceStore()
+	initializer.initInterfaceStore()
 	if store.Len() != 0 {
 		t.Errorf("Failed to load OVS port in store")
 	}
 
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, nil)
-	err = initializer.initInterfaceStore()
+	initializer.initInterfaceStore()
 	if store.Len() != 2 {
 		t.Errorf("Failed to load OVS port in store")
 	}

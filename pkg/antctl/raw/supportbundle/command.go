@@ -48,10 +48,11 @@ import (
 )
 
 const (
-	barTmpl      pb.ProgressBarTemplate = `{{string . "prefix"}}{{bar . }} {{percent . }} {{rtime . "ETA %s"}}` // Example: 'Prefix[-->______] 20%'
-	requestRate                         = 50
-	requestBurst                        = 100
-	timeFormat                          = "20060102T150405Z0700"
+	barTmpl pb.ProgressBarTemplate = `{{string . "prefix"}}{{bar . }} {{percent . }} {{rtime . "ETA %s"}}` // Example: 'Prefix[-->______] 20%'
+
+	requestRate  = 50
+	requestBurst = 100
+	timeFormat   = "20060102T150405Z0700"
 )
 
 // Command is the support bundle command implementation.

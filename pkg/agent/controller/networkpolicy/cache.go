@@ -15,7 +15,7 @@
 package networkpolicy
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -80,7 +80,7 @@ type rule struct {
 
 // hashRule calculates a string based on the rule's content.
 func hashRule(r *rule) string {
-	hash := sha1.New()
+	hash := sha1.New() // #nosec G401: not used for security purposes
 	b, _ := json.Marshal(r)
 	hash.Write(b)
 	hashValue := hex.EncodeToString(hash.Sum(nil))

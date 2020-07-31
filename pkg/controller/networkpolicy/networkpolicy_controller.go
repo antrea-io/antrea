@@ -316,6 +316,8 @@ func (n *NetworkPolicyController) createAppliedToGroup(npNsName string, pSel, nS
 	groupSelector := toGroupSelector(npNsName, pSel, nSel)
 	appliedToGroupUID := getNormalizedUID(groupSelector.NormalizedName)
 	// Get or create a AppliedToGroup for the generated UID.
+	// Ignoring returned error (here and elsewhere in this file) as with the
+	// current store implementation, no error is ever returned.
 	_, found, _ := n.appliedToGroupStore.Get(appliedToGroupUID)
 	if found {
 		return appliedToGroupUID
@@ -842,10 +844,9 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	curAddressGroupKeySet := n.filterAddressGroupsForNamespace(curNamespace)
 	// Find groups matching the old Namespace's labels.
 	oldAddressGroupKeySet := n.filterAddressGroupsForNamespace(oldNamespace)
-	addressGroupKeys := sets.String{}
 	// No need to enqueue common AddressGroups as they already have latest
 	// Namespace information.
-	addressGroupKeys = oldAddressGroupKeySet.Difference(curAddressGroupKeySet).Union(curAddressGroupKeySet.Difference(oldAddressGroupKeySet))
+	addressGroupKeys := oldAddressGroupKeySet.Difference(curAddressGroupKeySet).Union(curAddressGroupKeySet.Difference(oldAddressGroupKeySet))
 	for group := range addressGroupKeys {
 		n.enqueueAddressGroup(group)
 	}
@@ -1101,7 +1102,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	if err != nil {
 		return fmt.Errorf("unable to filter internal NetworkPolicies for AddressGroup %s: %v", key, err)
 	}
-	addressGroupObj, found, err := n.addressGroupStore.Get(key)
+	addressGroupObj, found, _ := n.addressGroupStore.Get(key)
 	if !found {
 		// AddressGroup was already deleted. No need to process further.
 		klog.V(2).Infof("AddressGroup %s not found.", key)
@@ -1208,7 +1209,7 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	podSetByNode := make(map[string]networking.GroupMemberPodSet)
 	var pods []*v1.Pod
 	appGroupNodeNames := sets.String{}
-	appliedToGroupObj, found, err := n.appliedToGroupStore.Get(key)
+	appliedToGroupObj, found, _ := n.appliedToGroupStore.Get(key)
 	if !found {
 		klog.V(2).Infof("AppliedToGroup %s not found.", key)
 		return nil
@@ -1297,11 +1298,11 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 	// same internal NetworkPolicy is being updated in the NetworkPolicy UPDATE
 	// handler.
 	n.internalNetworkPolicyMutex.Lock()
-	internalNPObj, found, err := n.internalNetworkPolicyStore.Get(key)
+	internalNPObj, found, _ := n.internalNetworkPolicyStore.Get(key)
 	if !found {
 		// Make sure to unlock the store before returning.
 		n.internalNetworkPolicyMutex.Unlock()
-		return fmt.Errorf("internal NetworkPolicy %s not found: %v", key, err)
+		return fmt.Errorf("internal NetworkPolicy %s not found", key)
 	}
 	internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
 	// Maintain a copy of old SpanMeta Nodenames so we can later enqueue Groups
