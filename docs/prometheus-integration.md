@@ -21,6 +21,9 @@ Enable Prometheus metrics listener by setting `enablePrometheusMetrics`
 parameter to true in the Controller and the Agent configurations.
  
 ## Prometheus Configuration
+
+### Prometheus version
+Prometheus integration with Antrea is validated as part of CI using Prometheus v2.19.3.
   
 ### Prometheus RBAC
 Prometheus requires access to Kubernetes API resources for the service discovery
