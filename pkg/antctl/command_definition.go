@@ -494,7 +494,9 @@ func (cd *commandDefinition) tableOutput(obj interface{}, writer io.Writer) erro
 			for k := range m {
 				args = append(args, k)
 			}
-			break
+			// break after one iteration intentionally (we are just retrieving attribute
+			// names to use as the table header in the output)
+			break // nolint:staticcheck
 		}
 	} else {
 		m, _ := target.(map[string]interface{})

@@ -32,14 +32,15 @@ import (
 )
 
 const (
-	seed                            uint64 = 0xA1E47 // Use a specific rand seed to make the generated workloads always same
-	perfTestAppLabel                       = "antrea-perf-test"
-	podsConnectionNetworkPolicyName        = "pods.ingress"
-	workloadNetworkPolicyName              = "workloads.ingress"
-	perftoolImage                          = "antrea/perftool"
-	nginxImage                             = "nginx"
-	perftoolContainerName                  = "perftool"
-	nginxContainerName                     = "nginx"
+	seed uint64 = 0xA1E47 // Use a specific rand seed to make the generated workloads always same
+
+	perfTestAppLabel                = "antrea-perf-test"
+	podsConnectionNetworkPolicyName = "pods.ingress"
+	workloadNetworkPolicyName       = "workloads.ingress"
+	perftoolImage                   = "antrea/perftool"
+	nginxImage                      = "nginx"
+	perftoolContainerName           = "perftool"
+	nginxContainerName              = "nginx"
 )
 
 var (
@@ -250,7 +251,11 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 		go func() {
 			err := populateWorkloadNetworkPolicy(generateWorkloadNetworkPolicy(policyRules), data)
 			if err != nil {
-				b.Fatalf("Error when populating workload network policy: %v", err)
+				// cannot use Fatal in a goroutine
+				// if populating policies fails, waitNetworkPolicyRealize will
+				// eventually time out and the test will fail, although it would be
+				// better to fail early in that case.
+				b.Errorf("Error when populating workload network policy: %v", err)
 			}
 		}()
 

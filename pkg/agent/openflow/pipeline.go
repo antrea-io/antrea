@@ -1184,13 +1184,13 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 		Action().Learn(sessionAffinityTable, priorityNormal, affinityTimeout, 0, cookieID).
 		DeleteLearned()
 	if protocol == binding.ProtocolTCP {
-		learnFlowBuilder = learnFlowBuilder.MatchTCPDstPort(svcPort)
+		learnFlowBuilder.MatchTCPDstPort(svcPort)
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedTCPDstPort()
 	} else if protocol == binding.ProtocolUDP {
-		learnFlowBuilder = learnFlowBuilder.MatchUDPDstPort(svcPort)
+		learnFlowBuilder.MatchUDPDstPort(svcPort)
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedUDPDstPort()
 	} else if protocol == binding.ProtocolSCTP {
-		learnFlowBuilder = learnFlowBuilder.MatchSCTPDstPort(svcPort)
+		learnFlowBuilder.MatchSCTPDstPort(svcPort)
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedSCTPDstPort()
 	}
 	return learnFlowBuilderLearnAction.

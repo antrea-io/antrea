@@ -15,7 +15,7 @@
 package networking
 
 import (
-	"crypto/md5"
+	"crypto/md5" // #nosec G501: not used for security purposes
 	"encoding/hex"
 
 	"github.com/davecgh/go-spew/spew"
@@ -41,7 +41,7 @@ type GroupMemberPodSet map[groupMemberPodHash]*GroupMemberPod
 // actual values of the nested objects to ensure the hash does not change when
 // a pointer changes.
 func hashGroupMemberPod(pod *GroupMemberPod) groupMemberPodHash {
-	hasher := md5.New()
+	hasher := md5.New() // #nosec G401: not used for security purposes
 	hashObj := GroupMemberPod{Pod: pod.Pod, IP: pod.IP}
 	printer.Fprintf(hasher, "%#v", hashObj)
 	return groupMemberPodHash(hex.EncodeToString(hasher.Sum(nil)[0:]))

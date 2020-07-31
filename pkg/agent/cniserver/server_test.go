@@ -143,6 +143,7 @@ func TestIPAMService(t *testing.T) {
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Times(1)
 		cniConfig, _ := cniServer.checkRequestMessage(&requestMsg)
 		_, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
+		require.Nil(t, err, "expected no Add error")
 
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM delete error"))
 		response, err := cniServer.CmdDel(cxt, &requestMsg)

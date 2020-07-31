@@ -65,7 +65,7 @@ func TestUserProvidedCert(t *testing.T) {
 	}
 
 	genCertKeyAndUpdateSecret := func() ([]byte, []byte) {
-		certPem, keyPem, err := certutil.GenerateSelfSignedCertKey("antrea", nil, certificate.GetAntreaServerNames())
+		certPem, keyPem, _ := certutil.GenerateSelfSignedCertKey("antrea", nil, certificate.GetAntreaServerNames())
 		secret, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Get(context.TODO(), tlsSecretName, metav1.GetOptions{})
 		exists := true
 		if err != nil {
@@ -214,6 +214,9 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	if err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 		cmds := []string{"antctl", "get", "controllerinfo", "-o", "json"}
 		stdout, _, err := runAntctl(antreaController.Name, cmds, data)
+		if err != nil {
+			return true, err
+		}
 		var controllerInfo v1beta1.AntreaControllerInfo
 		err = json.Unmarshal([]byte(stdout), &controllerInfo)
 		if err != nil {

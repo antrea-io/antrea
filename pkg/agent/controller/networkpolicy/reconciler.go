@@ -15,7 +15,7 @@
 package networkpolicy
 
 import (
-	"crypto/md5"
+	"crypto/md5" // #nosec G501: not used for security purposes
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -66,7 +66,7 @@ type servicesHash string
 // actual values of the nested objects to ensure the hash does not change when
 // a pointer changes.
 func hashServices(services []v1beta1.Service) servicesHash {
-	hasher := md5.New()
+	hasher := md5.New() // #nosec G401: not used for security purposes
 	printer.Fprintf(hasher, "%#v", services)
 	return servicesHash(hex.EncodeToString(hasher.Sum(nil)[0:]))
 }

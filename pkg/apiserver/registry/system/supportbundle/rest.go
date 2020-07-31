@@ -21,7 +21,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -214,7 +213,7 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 			return nil, err
 		}
 	}
-	outputFile, err := defaultFS.Create(filepath.Join(afero.GetTempDir(defaultFS, ""), fmt.Sprintf("bundle_%d.tar.gz", rand.Int())))
+	outputFile, err := afero.TempFile(defaultFS, "", "bundle_*.tar.gz")
 	if err != nil {
 		return nil, fmt.Errorf("error when creating output tarfile: %w", err)
 	}

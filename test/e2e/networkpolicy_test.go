@@ -333,6 +333,9 @@ func waitForAgentCondition(t *testing.T, data *TestData, podName string, conditi
 	if err := wait.Poll(1*time.Second, defaultTimeout, func() (bool, error) {
 		cmds := []string{"antctl", "get", "agentinfo", "-o", "json"}
 		stdout, _, err := runAntctl(podName, cmds, data)
+		if err != nil {
+			return true, err
+		}
 		var agentInfo agentinfo.AntreaAgentInfoResponse
 		err = json.Unmarshal([]byte(stdout), &agentInfo)
 		if err != nil {

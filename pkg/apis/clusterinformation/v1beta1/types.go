@@ -78,7 +78,7 @@ type AntreaControllerInfo struct {
 	Version                     string                      `json:"version,omitempty"`                     // Antrea binary version
 	PodRef                      corev1.ObjectReference      `json:"podRef,omitempty"`                      // The Pod that Antrea Controller is running in
 	NodeRef                     corev1.ObjectReference      `json:"nodeRef,omitempty"`                     // The Node that Antrea Controller is running in
-	ServiceRef                  corev1.ObjectReference      `json:"serviceRef, omitempty"`                 // Antrea Controller Service
+	ServiceRef                  corev1.ObjectReference      `json:"serviceRef,omitempty"`                  // Antrea Controller Service
 	NetworkPolicyControllerInfo NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Controller NetworkPolicy information
 	ConnectedAgentNum           int32                       `json:"connectedAgentNum,omitempty"`           // Number of agents which are connected to this controller
 	ControllerConditions        []ControllerCondition       `json:"controllerConditions,omitempty"`        // Controller condition contains types like ControllerHealthy
