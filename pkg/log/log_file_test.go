@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/component-base/logs"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const oneMB = 1 * 1024 * 1024
@@ -82,6 +82,8 @@ func TestKlogFileLimits(t *testing.T) {
 	testMaxNum := 2
 	args := []string{"--logtostderr=false", "--log_dir=" + testLogDir, "--log_file_max_size=1",
 		fmt.Sprintf("--log_file_max_num=%d", testMaxNum)}
+	InitKlog()
+	Klogv2Flags.Parse(args)
 	testFlags.Parse(args)
 	InitLogFileLimits(testFlags)
 	logs.InitLogs()
