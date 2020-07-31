@@ -9,6 +9,10 @@ spec:
     - name: v1beta1
       served: true
       storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
   scope: Cluster
   names:
     plural: antreacontrollerinfos
@@ -27,6 +31,10 @@ spec:
     - name: v1beta1
       served: true
       storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
   scope: Cluster
   names:
     plural: antreaagentinfos
@@ -45,6 +53,155 @@ spec:
     - name: v1alpha1
       served: true
       storage: true
+      additionalPrinterColumns:
+        - JSONPath: .status.phase
+          description: The phase of the Traceflow.
+          name: Phase
+          type: string
+        - JSONPath: .spec.source.pod
+          description: The name of the source Pod.
+          name: Source-Pod
+          type: string
+          priority: 10
+        - JSONPath: .spec.destination.pod
+          description: The name of the destination Pod.
+          name: Destination-Pod
+          type: string
+          priority: 10
+        - JSONPath: .spec.destination.ip
+          description: The IP address of the destination.
+          name: Destination-IP
+          type: string
+          priority: 10
+        - JSONPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - source
+                - destination
+              properties:
+                source:
+                  type: object
+                  required:
+                    - pod
+                    - namespace
+                  properties:
+                    pod:
+                      type: string
+                    namespace:
+                      type: string
+                destination:
+                  type: object
+                  properties:
+                    pod:
+                      type: string
+                    service:
+                      type: string
+                    namespace:
+                      type: string
+                    ip:
+                      type: string
+                      format: ipv4
+                  oneOf:
+                    - required: ["pod", "namespace"]
+                    - required: ["service", "namespace"]
+                    - required: ["ip"]
+                packet:
+                  type: object
+                  properties:
+                    ipHeader:
+                      type: object
+                      properties:
+                        srcIP:
+                          type: string
+                          format: ipv4
+                        protocol:
+                          type: integer
+                        ttl:
+                          type: integer
+                        flags:
+                          type: integer
+                    transportHeader:
+                      type: object
+                      properties:
+                        icmp:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            sequence:
+                              type: integer
+                        udp:
+                          type: object
+                          properties:
+                            srcPort:
+                              type: integer
+                            dstPort:
+                              type: integer
+                        tcp:
+                          type: object
+                          properties:
+                            srcPort:
+                              type: integer
+                            dstPort:
+                              type: integer
+                            flags:
+                              type: integer
+            status:
+              type: object
+              properties:
+                reason:
+                  type: string
+                dataplaneTag:
+                  type: integer
+                phase:
+                  type: string
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      node:
+                        type: string
+                      role:
+                        type: string
+                      timestamp:
+                        type: integer
+                      observations:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            component:
+                              type: string
+                            componentInfo:
+                              type: string
+                            action:
+                              type: string
+                            pod:
+                              type: string
+                            dstMAC:
+                              type: string
+                            networkPolicy:
+                              type: string
+                            ttl:
+                              type: integer
+                            translatedSrcIP:
+                              type: string
+                            translatedDstIP:
+                              type: string
+                            tunnelDstIP:
+                              type: string
+      subresources:
+        status: {}
   scope: Cluster
   names:
     plural: traceflows
@@ -52,157 +209,6 @@ spec:
     kind: Traceflow
     shortNames:
       - tf
-  additionalPrinterColumns:
-  - JSONPath: .status.phase
-    description: The phase of the Traceflow.
-    name: Phase
-    type: string
-  - JSONPath: .spec.source.pod
-    description: The name of the source Pod.
-    name: Source-Pod
-    type: string
-    priority: 10
-  - JSONPath: .spec.destination.pod
-    description: The name of the destination Pod.
-    name: Destination-Pod
-    type: string
-    priority: 10
-  - JSONPath: .spec.destination.ip
-    description: The IP address of the destination.
-    name: Destination-IP
-    type: string
-    priority: 10
-  - JSONPath: .metadata.creationTimestamp
-    name: Age
-    type: date
-  # Prune any unknown fields
-  preserveUnknownFields: false
-  validation:
-    openAPIV3Schema:
-      type: object
-      required:
-        - spec
-      properties:
-        spec:
-          type: object
-          required:
-            - source
-            - destination
-          properties:
-            source:
-              type: object
-              required:
-                - pod
-                - namespace
-              properties:
-                pod:
-                  type: string
-                namespace:
-                  type: string
-            destination:
-              type: object
-              properties:
-                pod:
-                  type: string
-                service:
-                  type: string
-                namespace:
-                  type: string
-                ip:
-                  type: string
-                  format: ipv4
-              oneOf:
-                - required: ["pod", "namespace"]
-                - required: ["service", "namespace"]
-                - required: ["ip"]
-            packet:
-              type: object
-              properties:
-                ipHeader:
-                  type: object
-                  properties:
-                    srcIP:
-                      type: string
-                      format: ipv4
-                    protocol:
-                      type: integer
-                    ttl:
-                      type: integer
-                    flags:
-                      type: integer
-                transportHeader:
-                  type: object
-                  properties:
-                    icmp:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        sequence:
-                          type: integer
-                    udp:
-                      type: object
-                      properties:
-                        srcPort:
-                          type: integer
-                        dstPort:
-                          type: integer
-                    tcp:
-                      type: object
-                      properties:
-                        srcPort:
-                          type: integer
-                        dstPort:
-                          type: integer
-                        flags:
-                          type: integer
-        status:
-          type: object
-          properties:
-            reason:
-              type: string
-            dataplaneTag:
-              type: integer
-            phase:
-              type: string
-            results:
-              type: array
-              items:
-                type: object
-                properties:
-                  node:
-                    type: string
-                  role:
-                    type: string
-                  timestamp:
-                    type: integer
-                  observations:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        component:
-                          type: string
-                        componentInfo:
-                          type: string
-                        action:
-                          type: string
-                        pod:
-                          type: string
-                        dstMAC:
-                          type: string
-                        networkPolicy:
-                          type: string
-                        ttl:
-                          type: integer
-                        translatedSrcIP:
-                          type: string
-                        translatedDstIP:
-                          type: string
-                        tunnelDstIP:
-                          type: string
-  subresources:
-    status: {} 
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -247,7 +253,7 @@ spec:
             description:
               type: string
 ---
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: clusternetworkpolicies.security.antrea.tanzu.vmware.com
@@ -257,39 +263,21 @@ spec:
     - name: v1alpha1
       served: true
       storage: true
-  scope: Cluster
-  names:
-    plural: clusternetworkpolicies
-    singular: clusternetworkpolicy
-    kind: ClusterNetworkPolicy
-    shortNames:
-      # Short name cnp is deprecated and will be removed in 0.12 release
-      - cnp
-      - acnp
-  # Prune any unknown fields
-  preserveUnknownFields: false
-  additionalPrinterColumns:
-  - name: Tier
-    type: string
-    description: The Tier to which this ClusterNetworkPolicy belongs to.
-    JSONPath: .spec.tier
-  - name: Priority
-    type: number
-    format: float
-    description: The Priority of this ClusterNetworkPolicy relative to other policies.
-    JSONPath: .spec.priority
-  - name: Age
-    type: date
-    JSONPath: .metadata.creationTimestamp
-  validation:
-    openAPIV3Schema:
-      type: object
-      properties:
-        spec:
-          # Ensure that Spec.AppliedTo and Spec.Priority fields are set
-          required:
-            - appliedTo
-            - priority
+      additionalPrinterColumns:
+       - name: Tier
+         type: string
+         description: The Tier to which this ClusterNetworkPolicy belongs to.
+         jsonPath: .spec.tier
+       - name: Priority
+         type: number
+         format: float
+         description: The Priority of this ClusterNetworkPolicy relative to other policies.
+         jsonPath: .spec.priority
+       - name: Age
+         type: date
+         jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
           type: object
           properties:
             tier:
@@ -342,46 +330,71 @@ spec:
                         ipBlock:
                           type: object
                           properties:
-                            cidr:
+                            protocol:
                               type: string
-                              format: cidr
-            egress:
-              type: array
-              items:
-                type: object
-                required:
-                  - action
-                properties:
-                  # Ensure that Action field allows only ALLOW and DROP values
-                  action:
-                    type: string
-                    enum: ['Allow', 'Drop']
-                  ports:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        protocol:
-                          type: string
-                        port:
-                          x-kubernetes-int-or-string: true
-                  to:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        podSelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        namespaceSelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        ipBlock:
+                            port:
+                              x-kubernetes-int-or-string: true
+                      from:
+                        type: array
+                        items:
                           type: object
                           properties:
-                            cidr:
+                            podSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            namespaceSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            ipBlock:
+                              type: object
+                              properties:
+                                cidr:
+                                  type: string
+                                  format: cidr
+                egress:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - action
+                    properties:
+                      # Ensure that Action field allows only ALLOW and DROP values
+                      action:
+                        type: string
+                        enum: ['Allow', 'Drop']
+                      ports:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
                               type: string
-                              format: cidr
+                            port:
+                              x-kubernetes-int-or-string: true
+                      to:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            podSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            namespaceSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            ipBlock:
+                              type: object
+                              properties:
+                                cidr:
+                                  type: string
+                                  format: cidr
+  scope: Cluster
+  names:
+    plural: clusternetworkpolicies
+    singular: clusternetworkpolicy
+    kind: ClusterNetworkPolicy
+    shortNames:
+      # Short name cnp is deprecated and will be removed in 0.12 release
+      - cnp
+      - acnp
 ---
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: networkpolicies.security.antrea.tanzu.vmware.com
@@ -391,6 +404,122 @@ spec:
     - name: v1alpha1
       served: true
       storage: true
+      additionalPrinterColumns:
+        - name: Tier
+          type: string
+          description: The Tier to which this Antrea NetworkPolicy belongs to.
+          jsonPath: .spec.tier
+        - name: Priority
+          type: number
+          format: float
+          description: The Priority of this Antrea NetworkPolicy relative to other policies.
+          jsonPath: .spec.priority
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              # Ensure that Spec.AppliedTo and Spec.Priority fields are set
+              required:
+                - appliedTo
+                - priority
+              type: object
+              properties:
+                tier:
+                  type: string
+                  enum: ['Emergency', 'SecurityOps', 'NetworkOps', 'Platform', 'Application']
+                priority:
+                  type: number
+                  format: float
+                  # Ensure that Spec.Priority field is between 1 and 10000
+                  minimum: 1.0
+                  maximum: 10000.0
+                appliedTo:
+                  type: array
+                  items:
+                    type: object
+                    # Ensure that Spec.AppliedTo does not allow NamespaceSelector/IPBlock field
+                    properties:
+                      podSelector:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                ingress:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - action
+                    properties:
+                      # Ensure that Action field allows only ALLOW and DROP values
+                      action:
+                        type: string
+                        enum: ['Allow', 'Drop']
+                      ports:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
+                              type: string
+                            port:
+                              x-kubernetes-int-or-string: true
+                      from:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            podSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            namespaceSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            externalEntitySelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            ipBlock:
+                              type: object
+                              properties:
+                                cidr:
+                                  type: string
+                                  format: cidr
+                egress:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - action
+                    properties:
+                      # Ensure that Action field allows only ALLOW and DROP values
+                      action:
+                        type: string
+                        enum: ['Allow', 'Drop']
+                      ports:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
+                              type: string
+                            port:
+                              x-kubernetes-int-or-string: true
+                      to:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            podSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            namespaceSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            externalEntitySelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            ipBlock:
+                              type: object
+                              properties:
+                                cidr:
+                                  type: string
+                                  format: cidr
   scope: Namespaced
   names:
     plural: networkpolicies
@@ -400,126 +529,8 @@ spec:
       # Short name netpol is deprecated and will be removed in 0.12 release
       - netpol
       - anp
-  # Prune any unknown fields
-  preserveUnknownFields: false
-  additionalPrinterColumns:
-    - name: Tier
-      type: string
-      description: The Tier to which this Antrea NetworkPolicy belongs to.
-      JSONPath: .spec.tier
-    - name: Priority
-      type: number
-      format: float
-      description: The Priority of this Antrea NetworkPolicy relative to other policies.
-      JSONPath: .spec.priority
-    - name: Age
-      type: date
-      JSONPath: .metadata.creationTimestamp
-  validation:
-    openAPIV3Schema:
-      type: object
-      properties:
-        spec:
-          # Ensure that Spec.AppliedTo and Spec.Priority fields are set
-          required:
-            - appliedTo
-            - priority
-          type: object
-          properties:
-            tier:
-              type: string
-              enum: ['Emergency', 'SecurityOps', 'NetworkOps', 'Platform', 'Application']
-            priority:
-              type: number
-              format: float
-              # Ensure that Spec.Priority field is between 1 and 10000
-              minimum: 1.0
-              maximum: 10000.0
-            appliedTo:
-              type: array
-              items:
-                type: object
-                # Ensure that Spec.AppliedTo does not allow NamespaceSelector/IPBlock field
-                properties:
-                  podSelector:
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-            ingress:
-              type: array
-              items:
-                type: object
-                required:
-                  - action
-                properties:
-                  # Ensure that Action field allows only ALLOW and DROP values
-                  action:
-                    type: string
-                    enum: ['Allow', 'Drop']
-                  ports:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        protocol:
-                          type: string
-                        port:
-                          x-kubernetes-int-or-string: true
-                  from:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        podSelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        namespaceSelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        externalEntitySelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        ipBlock:
-                          type: object
-                          properties:
-                            cidr:
-                              type: string
-                              format: cidr
-            egress:
-              type: array
-              items:
-                type: object
-                required:
-                  - action
-                properties:
-                  # Ensure that Action field allows only ALLOW and DROP values
-                  action:
-                    type: string
-                    enum: ['Allow', 'Drop']
-                  ports:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        protocol:
-                          type: string
-                        port:
-                          x-kubernetes-int-or-string: true
-                  to:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        podSelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        namespaceSelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        externalEntitySelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        ipBlock:
-                          type: object
-                          properties:
-                            cidr:
-                              type: string
-                              format: cidr
 ---
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: externalentities.core.antrea.tanzu.vmware.com
@@ -529,6 +540,36 @@ spec:
     - name: v1alpha1
       served: true
       storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                endpoints:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      ip:
+                        type: string
+                        format: ipv4
+                      name:
+                        type: string
+                      ports:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
+                              type: string
+                            port:
+                              x-kubernetes-int-or-string: true
+                            name:
+                              type: string
+                externalNode:
+                  type: string
   scope: Namespaced
   names:
     plural: externalentities
@@ -536,35 +577,3 @@ spec:
     kind: ExternalEntity
     shortNames:
       - ee
-  # Prune any unknown fields
-  preserveUnknownFields: false
-  validation:
-    openAPIV3Schema:
-      type: object
-      properties:
-        spec:
-          type: object
-          properties:
-            endpoints:
-              type: array
-              items:
-                type: object
-                properties:
-                  ip:
-                    type: string
-                    format: ipv4
-                  name:
-                    type: string
-                  ports:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        protocol:
-                          type: string
-                        port:
-                          x-kubernetes-int-or-string: true
-                        name:
-                          type: string
-            externalNode:
-              type: string
