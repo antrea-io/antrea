@@ -26,7 +26,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/component-base/config"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	cert "github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
