@@ -15,6 +15,10 @@ spec:
   scope: Cluster
   versions:
   - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
     served: true
     storage: true
 ---
@@ -35,6 +39,10 @@ spec:
   scope: Cluster
   versions:
   - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
     served: true
     storage: true
 ---
@@ -45,6 +53,7 @@ metadata:
     app: antrea
   name: clusternetworkpolicies.security.antrea.tanzu.vmware.com
 spec:
+<<<<<<< HEAD
   additionalPrinterColumns:
   - JSONPath: .spec.tier
     description: The Tier to which this ClusterNetworkPolicy belongs to.
@@ -58,6 +67,8 @@ spec:
   - JSONPath: .metadata.creationTimestamp
     name: Age
     type: date
+=======
+>>>>>>> 960197f... Run make manifest
   group: security.antrea.tanzu.vmware.com
   names:
     kind: ClusterNetworkPolicy
@@ -66,8 +77,8 @@ spec:
     - cnp
     - acnp
     singular: clusternetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
+<<<<<<< HEAD
   validation:
     openAPIV3Schema:
       properties:
@@ -359,8 +370,111 @@ spec:
           - priority
           type: object
       type: object
+=======
+>>>>>>> 960197f... Run make manifest
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - JSONPath: .spec.priority
+      description: The Priority of this ClusterNetworkPolicy relative to other policies.
+      format: float
+      name: Priority
+      type: number
+    - JSONPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              appliedTo:
+                items:
+                  properties:
+                    namespaceSelector:
+                      x-kubernetes-preserve-unknown-fields: true
+                    podSelector:
+                      x-kubernetes-preserve-unknown-fields: true
+                  type: object
+                type: array
+              egress:
+                items:
+                  properties:
+                    action:
+                      pattern: \bAllow|\bDrop
+                      type: string
+                    ports:
+                      items:
+                        properties:
+                          port:
+                            x-kubernetes-int-or-string: true
+                          protocol:
+                            type: string
+                        type: object
+                      type: array
+                    to:
+                      items:
+                        properties:
+                          ipBlock:
+                            properties:
+                              cidr:
+                                format: cidr
+                                type: string
+                            type: object
+                          namespaceSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                          podSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
+                  required:
+                  - action
+                  type: object
+                type: array
+              ingress:
+                items:
+                  properties:
+                    action:
+                      pattern: \bAllow|\bDrop
+                      type: string
+                    from:
+                      items:
+                        properties:
+                          ipBlock:
+                            properties:
+                              cidr:
+                                format: cidr
+                                type: string
+                            type: object
+                          namespaceSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                          podSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
+                    ports:
+                      items:
+                        properties:
+                          port:
+                            x-kubernetes-int-or-string: true
+                          protocol:
+                            type: string
+                        type: object
+                      type: array
+                  required:
+                  - action
+                  type: object
+                type: array
+              priority:
+                format: float
+                maximum: 10000
+                minimum: 1
+                type: number
+            required:
+            - appliedTo
+            - priority
+            type: object
+        type: object
     served: true
     storage: true
 ---
@@ -415,29 +529,6 @@ metadata:
     app: antrea
   name: traceflows.ops.antrea.tanzu.vmware.com
 spec:
-  additionalPrinterColumns:
-  - JSONPath: .status.phase
-    description: The phase of the Traceflow.
-    name: Phase
-    type: string
-  - JSONPath: .spec.source.pod
-    description: The name of the source Pod.
-    name: Source-Pod
-    priority: 10
-    type: string
-  - JSONPath: .spec.destination.pod
-    description: The name of the destination Pod.
-    name: Destination-Pod
-    priority: 10
-    type: string
-  - JSONPath: .spec.destination.ip
-    description: The IP address of the destination.
-    name: Destination-IP
-    priority: 10
-    type: string
-  - JSONPath: .metadata.creationTimestamp
-    name: Age
-    type: date
   group: ops.antrea.tanzu.vmware.com
   names:
     kind: Traceflow
@@ -445,20 +536,104 @@ spec:
     shortNames:
     - tf
     singular: traceflow
-  preserveUnknownFields: false
   scope: Cluster
-  subresources:
-    status: {}
-  validation:
-    openAPIV3Schema:
-      properties:
-        spec:
-          properties:
-            destination:
-              oneOf:
-              - required:
+  versions:
+  - additionalPrinterColumns:
+    - JSONPath: .status.phase
+      description: The phase of the Traceflow.
+      name: Phase
+      type: string
+    - JSONPath: .spec.source.pod
+      description: The name of the source Pod.
+      name: Source-Pod
+      priority: 10
+      type: string
+    - JSONPath: .spec.destination.pod
+      description: The name of the destination Pod.
+      name: Destination-Pod
+      priority: 10
+      type: string
+    - JSONPath: .spec.destination.ip
+      description: The IP address of the destination.
+      name: Destination-IP
+      priority: 10
+      type: string
+    - JSONPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              destination:
+                oneOf:
+                - required:
+                  - pod
+                  - namespace
+                - required:
+                  - ip
+                properties:
+                  ip:
+                    format: ipv4
+                    type: string
+                  namespace:
+                    type: string
+                  pod:
+                    type: string
+                type: object
+              packet:
+                properties:
+                  ipHeader:
+                    properties:
+                      flags:
+                        type: integer
+                      protocol:
+                        type: integer
+                      srcIP:
+                        format: ipv4
+                        type: string
+                      ttl:
+                        type: integer
+                    type: object
+                  transportHeader:
+                    properties:
+                      icmp:
+                        properties:
+                          id:
+                            type: integer
+                          sequence:
+                            type: integer
+                        type: object
+                      tcp:
+                        properties:
+                          dstPort:
+                            type: integer
+                          flags:
+                            type: integer
+                          srcPort:
+                            type: integer
+                        type: object
+                      udp:
+                        properties:
+                          dstPort:
+                            type: integer
+                          srcPort:
+                            type: integer
+                        type: object
+                    type: object
+                type: object
+              source:
+                properties:
+                  namespace:
+                    type: string
+                  pod:
+                    type: string
+                required:
                 - pod
                 - namespace
+<<<<<<< HEAD
               - required:
                 - service
                 - namespace
@@ -478,110 +653,65 @@ spec:
             packet:
               properties:
                 ipHeader:
-                  properties:
-                    flags:
-                      type: integer
-                    protocol:
-                      type: integer
-                    srcIP:
-                      format: ipv4
-                      type: string
-                    ttl:
-                      type: integer
-                  type: object
-                transportHeader:
-                  properties:
-                    icmp:
-                      properties:
-                        id:
-                          type: integer
-                        sequence:
-                          type: integer
-                      type: object
-                    tcp:
-                      properties:
-                        dstPort:
-                          type: integer
-                        flags:
-                          type: integer
-                        srcPort:
-                          type: integer
-                      type: object
-                    udp:
-                      properties:
-                        dstPort:
-                          type: integer
-                        srcPort:
-                          type: integer
-                      type: object
-                  type: object
-              type: object
-            source:
-              properties:
-                namespace:
-                  type: string
-                pod:
-                  type: string
-              required:
-              - pod
-              - namespace
-              type: object
-          required:
-          - source
-          - destination
-          type: object
-        status:
-          properties:
-            dataplaneTag:
-              type: integer
-            phase:
-              type: string
-            reason:
-              type: string
-            results:
-              items:
-                properties:
-                  node:
-                    type: string
-                  observations:
-                    items:
-                      properties:
-                        action:
-                          type: string
-                        component:
-                          type: string
-                        componentInfo:
-                          type: string
-                        dstMAC:
-                          type: string
-                        networkPolicy:
-                          type: string
-                        pod:
-                          type: string
-                        translatedDstIP:
-                          type: string
-                        translatedSrcIP:
-                          type: string
-                        ttl:
-                          type: integer
-                        tunnelDstIP:
-                          type: string
-                      type: object
-                    type: array
-                  role:
-                    type: string
-                  timestamp:
-                    type: integer
+=======
                 type: object
-              type: array
-          type: object
-      required:
-      - spec
-      type: object
-  versions:
-  - name: v1alpha1
+            required:
+            - source
+            - destination
+            type: object
+          status:
+            properties:
+              dataplaneTag:
+                type: integer
+              phase:
+                type: string
+              reason:
+                type: string
+              results:
+                items:
+>>>>>>> 960197f... Run make manifest
+                  properties:
+                    node:
+                      type: string
+                    observations:
+                      items:
+                        properties:
+                          action:
+                            type: string
+                          component:
+                            type: string
+                          componentInfo:
+                            type: string
+                          dstMAC:
+                            type: string
+                          networkPolicy:
+                            type: string
+                          pod:
+                            type: string
+                          translatedDstIP:
+                            type: string
+                          translatedSrcIP:
+                            type: string
+                          ttl:
+                            type: integer
+                          tunnelDstIP:
+                            type: string
+                        type: object
+                      type: array
+                    role:
+                      type: string
+                    timestamp:
+                      type: integer
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: v1
 kind: ServiceAccount
