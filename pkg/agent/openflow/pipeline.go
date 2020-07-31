@@ -29,7 +29,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/features"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -155,7 +154,6 @@ const (
 	serviceLearnReg         = endpointPortReg // Use reg4[16..18] to store endpoint selection states.
 	EgressReg       regType = 5
 	IngressReg      regType = 6
-	TraceflowReg    regType = 9 // Use reg9[28..31] to store traceflow dataplaneTag.
 	// marksRegServiceNeedLB indicates a packet need to do service selection.
 	marksRegServiceNeedLB uint32 = 0b001
 	// marksRegServiceSelected indicates a packet has done service selection.
@@ -180,8 +178,9 @@ var (
 	// ofPortMarkRange takes the 16th bit of register marksReg to indicate if the ofPort number of an interface
 	// is found or not. Its value is 0x1 if yes.
 	ofPortMarkRange = binding.Range{16, 16}
-	// OfTraceflowMarkRange stores dataplaneTag at range 28-31 in marksReg.
-	OfTraceflowMarkRange = binding.Range{28, 31}
+	// OfTraceflowMarkRange stores dataplaneTag at range 2-5 in DSCP field of IP header.
+	// IPv4/v6 DSCP (Bits 2-7) Field supports exact match only.
+	OfTraceflowMarkRange = binding.Range{2, 7}
 	// ofPortRegRange takes a 32-bit range of register portCacheReg to cache the ofPort number of the interface.
 	ofPortRegRange = binding.Range{0, 31}
 	// snatMarkRange takes the 17th bit of register marksReg to indicate if the packet needs to be SNATed with Node's IP
@@ -383,11 +382,6 @@ func (c *client) defaultFlows() (flows []binding.Flow) {
 func (c *client) tunnelClassifierFlow(tunnelOFPort uint32, category cookie.Category) binding.Flow {
 	flowBuilder := c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
 		MatchInPort(tunnelOFPort)
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
-		tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
-		flowBuilder = flowBuilder.Action().MoveRange(tunMetadataName, regName, OfTraceflowMarkRange, OfTraceflowMarkRange)
-	}
 	return flowBuilder.Action().LoadRegRange(int(marksReg), markTrafficFromTunnel, binding.Range{0, 15}).
 		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 		Action().GotoTable(conntrackTable).
@@ -513,8 +507,9 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 // avoid unexpected packet drop in Traceflow.
 func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cookie.Category) binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	return connectionTrackStateTable.BuildFlow(priorityNormal+2).
-		MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
+	return connectionTrackStateTable.BuildFlow(priorityNormal + 2).
+		MatchProtocol(binding.ProtocolIP).
+		MatchIPDscp(dataplaneTag).
 		SetHardTimeout(300).
 		Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -585,14 +580,11 @@ func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
 // traceflowL2ForwardOutputFlow generates Traceflow specific flow that outputs traceflow packets to OVS port and Antrea
 // Agent after L2forwarding calculation.
 func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cookie.Category) binding.Flow {
-	regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
-	tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
 	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
-		MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
+		MatchIPDscp(dataplaneTag).
 		SetHardTimeout(300).
 		MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().MoveRange(regName, tunMetadataName, OfTraceflowMarkRange, OfTraceflowMarkRange).
 		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
 		Action().SendToController(1).
 		Cookie(c.cookieAllocator.Request(category).Raw()).

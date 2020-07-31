@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/contiv/libOpenflow/openflow13"
+	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/ofnet/ofctrl"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -68,23 +69,24 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	var match *ofctrl.MatchField
 
 	// Get data plane tag.
-	if match = getMatchRegField(matchers, uint32(openflow.TraceflowReg)); match == nil {
-		return nil, nil, errors.New("traceflow data plane tag not found")
-	}
-	rngTag := openflow13.NewNXRange(int(openflow.OfTraceflowMarkRange[0]), int(openflow.OfTraceflowMarkRange[1]))
-	tag, err := getInfoInReg(match, rngTag)
-	if err != nil {
-		return nil, nil, err
+	// Directly read data plane tag from packet.
+	var tag uint8
+	if pktIn.Data.Ethertype == protocol.IPv4_MSG {
+		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
+		if !ok {
+			return nil, nil, errors.New("invalid traceflow IPv4 packet")
+		}
+		tag = ipPacket.DSCP
 	}
 
 	// Get traceflow CRD from cache by data plane tag.
-	tf, err := c.GetRunningTraceflowCRD(uint8(tag))
+	tf, err := c.GetRunningTraceflowCRD(tag)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	obs := make([]opsv1alpha1.Observation, 0)
-	isSender := c.isSender(uint8(tag))
+	isSender := c.isSender(tag)
 	tableID := pktIn.TableId
 
 	if isSender {
