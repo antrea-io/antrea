@@ -374,12 +374,12 @@ spec:
 >>>>>>> 960197f... Run make manifest
   versions:
   - additionalPrinterColumns:
-    - JSONPath: .spec.priority
-      description: The Priority of this ClusterNetworkPolicy relative to other policies.
+    - description: The Priority of this ClusterNetworkPolicy relative to other policies.
       format: float
+      jsonPath: .spec.priority
       name: Priority
       type: number
-    - JSONPath: .metadata.creationTimestamp
+    - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
     name: v1alpha1
@@ -539,26 +539,26 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - JSONPath: .status.phase
-      description: The phase of the Traceflow.
+    - description: The phase of the Traceflow.
+      jsonPath: .status.phase
       name: Phase
       type: string
-    - JSONPath: .spec.source.pod
-      description: The name of the source Pod.
+    - description: The name of the source Pod.
+      jsonPath: .spec.source.pod
       name: Source-Pod
       priority: 10
       type: string
-    - JSONPath: .spec.destination.pod
-      description: The name of the destination Pod.
+    - description: The name of the destination Pod.
+      jsonPath: .spec.destination.pod
       name: Destination-Pod
       priority: 10
       type: string
-    - JSONPath: .spec.destination.ip
-      description: The IP address of the destination.
+    - description: The IP address of the destination.
+      jsonPath: .spec.destination.ip
       name: Destination-IP
       priority: 10
       type: string
-    - JSONPath: .metadata.creationTimestamp
+    - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
     name: v1alpha1

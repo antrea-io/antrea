@@ -54,26 +54,26 @@ spec:
       served: true
       storage: true
       additionalPrinterColumns:
-        - JSONPath: .status.phase
+        - jsonPath: .status.phase
           description: The phase of the Traceflow.
           name: Phase
           type: string
-        - JSONPath: .spec.source.pod
+        - jsonPath: .spec.source.pod
           description: The name of the source Pod.
           name: Source-Pod
           type: string
           priority: 10
-        - JSONPath: .spec.destination.pod
+        - jsonPath: .spec.destination.pod
           description: The name of the destination Pod.
           name: Destination-Pod
           type: string
           priority: 10
-        - JSONPath: .spec.destination.ip
+        - jsonPath: .spec.destination.ip
           description: The IP address of the destination.
           name: Destination-IP
           type: string
           priority: 10
-        - JSONPath: .metadata.creationTimestamp
+        - jsonPath: .metadata.creationTimestamp
           name: Age
           type: date
       schema:
@@ -264,18 +264,18 @@ spec:
       served: true
       storage: true
       additionalPrinterColumns:
-       - name: Tier
-         type: string
-         description: The Tier to which this ClusterNetworkPolicy belongs to.
-         jsonPath: .spec.tier
-       - name: Priority
-         type: number
-         format: float
-         description: The Priority of this ClusterNetworkPolicy relative to other policies.
-         jsonPath: .spec.priority
-       - name: Age
-         type: date
-         jsonPath: .metadata.creationTimestamp
+        - name: Tier
+          type: string
+          description: The Tier to which this ClusterNetworkPolicy belongs to.
+          jsonPath: .spec.tier
+        - name: Priority
+          type: number
+          format: float
+          description: The Priority of this ClusterNetworkPolicy relative to other policies.
+          jsonPath: .spec.priority
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
       schema:
         openAPIV3Schema:
           type: object
