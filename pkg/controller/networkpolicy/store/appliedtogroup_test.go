@@ -31,7 +31,7 @@ import (
 )
 
 func newAppliedToGroupMember(name, namespace string) *networking.GroupMemberPod {
-	return &networking.GroupMemberPod{Pod: &networking.PodReference{name, namespace}}
+	return &networking.GroupMemberPod{Pod: &networking.PodReference{Name: name, Namespace: namespace}}
 }
 
 func TestWatchAppliedToGroupEvent(t *testing.T) {
@@ -53,22 +53,22 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 			operations: func(store storage.Interface) {
 				store.Create(&types.AppliedToGroup{
 					Name:       "foo",
-					SpanMeta:   types.SpanMeta{sets.NewString("node1", "node2")},
+					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
 					PodsByNode: map[string]networking.GroupMemberPodSet{"node1": networking.NewGroupMemberPodSet(pod1), "node2": networking.NewGroupMemberPodSet(pod2)},
 				})
 				store.Update(&types.AppliedToGroup{
 					Name:       "foo",
-					SpanMeta:   types.SpanMeta{sets.NewString("node1", "node2")},
+					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
 					PodsByNode: map[string]networking.GroupMemberPodSet{"node1": networking.NewGroupMemberPodSet(pod1), "node2": networking.NewGroupMemberPodSet(pod3)},
 				})
 			},
 			expected: []watch.Event{
-				{watch.Bookmark, nil},
-				{watch.Added, &networking.AppliedToGroup{
+				{Type: watch.Bookmark, Object: nil},
+				{Type: watch.Added, Object: &networking.AppliedToGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 					Pods:       []networking.GroupMemberPod{*pod1, *pod2},
 				}},
-				{watch.Modified, &networking.AppliedToGroupPatch{
+				{Type: watch.Modified, Object: &networking.AppliedToGroupPatch{
 					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
 					AddedPods:   []networking.GroupMemberPod{*pod3},
 					RemovedPods: []networking.GroupMemberPod{*pod2},
@@ -82,46 +82,46 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 				// This should not be seen as it doesn't span node3.
 				store.Create(&types.AppliedToGroup{
 					Name:       "foo",
-					SpanMeta:   types.SpanMeta{sets.NewString("node1", "node2")},
+					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
 					PodsByNode: map[string]networking.GroupMemberPodSet{"node1": networking.NewGroupMemberPodSet(pod1), "node2": networking.NewGroupMemberPodSet(pod2)},
 				})
 				// This should be seen as an added event as it makes foo span node3 for the first time.
 				store.Update(&types.AppliedToGroup{
 					Name:       "foo",
-					SpanMeta:   types.SpanMeta{sets.NewString("node1", "node3")},
+					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
 					PodsByNode: map[string]networking.GroupMemberPodSet{"node1": networking.NewGroupMemberPodSet(pod1), "node3": networking.NewGroupMemberPodSet(pod3)},
 				})
 				// This should be seen as a modified event as it updates appliedToGroups of node3.
 				store.Update(&types.AppliedToGroup{
 					Name:       "foo",
-					SpanMeta:   types.SpanMeta{sets.NewString("node1", "node3")},
+					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
 					PodsByNode: map[string]networking.GroupMemberPodSet{"node1": networking.NewGroupMemberPodSet(pod1), "node3": networking.NewGroupMemberPodSet(pod4)},
 				})
 				// This should not be seen as a modified event as the change doesn't span node3.
 				store.Update(&types.AppliedToGroup{
 					Name:       "foo",
-					SpanMeta:   types.SpanMeta{sets.NewString("node3")},
+					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node3")},
 					PodsByNode: map[string]networking.GroupMemberPodSet{"node3": networking.NewGroupMemberPodSet(pod4)},
 				})
 				// This should be seen as a deleted event as it makes foo not span node3 any more.
 				store.Update(&types.AppliedToGroup{
 					Name:       "foo",
-					SpanMeta:   types.SpanMeta{sets.NewString("node1")},
+					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1")},
 					PodsByNode: map[string]networking.GroupMemberPodSet{"node1": networking.NewGroupMemberPodSet(pod1)},
 				})
 			},
 			expected: []watch.Event{
-				{watch.Bookmark, nil},
-				{watch.Added, &networking.AppliedToGroup{
+				{Type: watch.Bookmark, Object: nil},
+				{Type: watch.Added, Object: &networking.AppliedToGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 					Pods:       []networking.GroupMemberPod{*pod3},
 				}},
-				{watch.Modified, &networking.AppliedToGroupPatch{
+				{Type: watch.Modified, Object: &networking.AppliedToGroupPatch{
 					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
 					AddedPods:   []networking.GroupMemberPod{*pod4},
 					RemovedPods: []networking.GroupMemberPod{*pod3},
 				}},
-				{watch.Deleted, &networking.AppliedToGroup{
+				{Type: watch.Deleted, Object: &networking.AppliedToGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 				}},
 			},

@@ -86,7 +86,7 @@ func (t *ofTable) BuildFlow(priority uint16) FlowBuilder {
 	fb := new(ofFlowBuilder)
 	fb.table = t
 	// Set ofctl.Table to Flow, otherwise the flow can't find OFSwitch to install.
-	fb.Flow = ofctrl.Flow{Table: t.Table, Match: ofctrl.FlowMatch{Priority: priority}}
+	fb.Flow = &ofctrl.Flow{Table: t.Table, Match: ofctrl.FlowMatch{Priority: priority}}
 	return fb
 }
 

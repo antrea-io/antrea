@@ -1019,8 +1019,8 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	natedIP1 := net.ParseIP("10.10.0.1")
 	natedIP2 := net.ParseIP("10.10.0.10")
-	natIPRange1 := &binding.IPRange{natedIP1, natedIP1}
-	natIPRange2 := &binding.IPRange{natedIP1, natedIP2}
+	natIPRange1 := &binding.IPRange{StartIP: natedIP1, EndIP: natedIP1}
+	natIPRange2 := &binding.IPRange{StartIP: natedIP1, EndIP: natedIP2}
 	snatCTMark := uint32(0x40)
 	natRequireMark := uint32(0x1)
 	snatMarkRange1 := binding.Range{17, 17}

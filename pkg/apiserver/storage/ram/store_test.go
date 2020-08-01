@@ -293,9 +293,9 @@ func TestRamStoreWatchAll(t *testing.T) {
 				store.Update(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}})
 			},
 			expected: []watch.Event{
-				{watch.Bookmark, &v1.Pod{}},
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				{watch.Modified, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}}},
 			},
 		},
 		{
@@ -304,9 +304,9 @@ func TestRamStoreWatchAll(t *testing.T) {
 				store.Delete("pod1")
 			},
 			expected: []watch.Event{
-				{watch.Bookmark, &v1.Pod{}},
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				{watch.Deleted, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
 		},
 	}
@@ -353,10 +353,10 @@ func TestRamStoreWatchWithInitOperations(t *testing.T) {
 				store.Update(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx3"}}})
 			},
 			expected: []watch.Event{
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx3"}}}},
-				{watch.Bookmark, &v1.Pod{}},
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx2"}}}},
-				{watch.Modified, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx3"}}}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx3"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx2"}}}},
+				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx3"}}}},
 			},
 		},
 		{
@@ -369,9 +369,9 @@ func TestRamStoreWatchWithInitOperations(t *testing.T) {
 				store.Delete("pod1")
 			},
 			expected: []watch.Event{
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				{watch.Bookmark, &v1.Pod{}},
-				{watch.Deleted, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
 		},
 	}
@@ -415,9 +415,9 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 			},
 			labelSelector: labels.SelectorFromSet(labels.Set{"app": "nginx1"}),
 			expected: []watch.Event{
-				{watch.Bookmark, &v1.Pod{}},
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				{watch.Deleted, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
 		},
 		{
@@ -427,8 +427,8 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 			},
 			labelSelector: labels.SelectorFromSet(labels.Set{"app": "nginx2"}),
 			expected: []watch.Event{
-				{watch.Bookmark, &v1.Pod{}},
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}}},
 			},
 		},
 		{
@@ -440,9 +440,9 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 			},
 			labelSelector: labels.SelectorFromSet(labels.Set{"app": "nginx1"}),
 			expected: []watch.Event{
-				{watch.Bookmark, &v1.Pod{}},
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				{watch.Deleted, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
 		},
 	}
@@ -484,7 +484,7 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 		<-ch
 		for i := 0; i < maxBuffered+1; i++ {
 			actualEvent := <-ch
-			expectedEvent := watch.Event{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}}}
+			expectedEvent := watch.Event{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}}}
 			if !reflect.DeepEqual(actualEvent, expectedEvent) {
 				t.Errorf("Unexpected event %d, got %#v, expected %#v ", i, actualEvent, expectedEvent)
 			}

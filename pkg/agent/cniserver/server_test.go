@@ -436,7 +436,7 @@ func TestRemoveInterface(t *testing.T) {
 			testPodNamespace,
 			containerMAC,
 			containerIP)
-		containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{fakePortUUID, 0}
+		containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: fakePortUUID, OFPort: 0}
 	}
 
 	t.Run("Successful remove", func(t *testing.T) {
