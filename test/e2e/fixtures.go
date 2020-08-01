@@ -83,8 +83,6 @@ func setupTest(tb testing.TB) (*TestData, error) {
 func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error) {
 	data := &TestData{}
 	tb.Logf("Creating K8s clientset")
-	// TODO: it is probably not needed to re-create the clientset in each test, maybe we could
-	// just keep it in clusterInfo?
 	if err := data.createClient(); err != nil {
 		return nil, err
 	}

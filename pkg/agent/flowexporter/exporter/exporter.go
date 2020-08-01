@@ -64,20 +64,13 @@ var (
 	}
 )
 
-var _ FlowExporter = new(flowExporter)
-
-type FlowExporter interface {
-	// Run enables to export flow records periodically at given export interval
-	Run(stopCh <-chan struct{}, pollDone <-chan bool)
-}
-
 type flowExporter struct {
-	flowRecords    flowrecords.FlowRecords
-	process        ipfix.IPFIXExportingProcess
-	elementsList   []*ipfixentities.InfoElement
-	exportInterval time.Duration
-	pollInterval   time.Duration
-	templateID     uint16
+	flowRecords     *flowrecords.FlowRecords
+	process         ipfix.IPFIXExportingProcess
+	elementsList    []*ipfixentities.InfoElement
+	exportFrequency uint
+	pollInterval    time.Duration
+	templateID      uint16
 }
 
 func genObservationID() (uint32, error) {
@@ -90,18 +83,18 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
-func NewFlowExporter(records flowrecords.FlowRecords, expProcess ipfix.IPFIXExportingProcess, elemList []*ipfixentities.InfoElement, expInterval time.Duration, pollInterval time.Duration, tempID uint16) *flowExporter {
+func NewFlowExporter(records *flowrecords.FlowRecords, expProcess ipfix.IPFIXExportingProcess, elemList []*ipfixentities.InfoElement, exportFrequency uint, pollInterval time.Duration, tempID uint16) *flowExporter {
 	return &flowExporter{
 		records,
 		expProcess,
 		elemList,
-		expInterval,
+		exportFrequency,
 		pollInterval,
 		tempID,
 	}
 }
 
-func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expInterval time.Duration, pollInterval time.Duration) (*flowExporter, error) {
+func InitFlowExporter(collector net.Addr, records *flowrecords.FlowRecords, exportFrequency uint, pollInterval time.Duration) (*flowExporter, error) {
 	// Create IPFIX exporting expProcess and initialize registries and other related entities
 	obsID, err := genObservationID()
 	if err != nil {
@@ -121,7 +114,7 @@ func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expIn
 	}
 	expProcess.LoadRegistries()
 
-	flowExp := NewFlowExporter(records, expProcess, nil, expInterval, pollInterval, expProcess.NewTemplateID())
+	flowExp := NewFlowExporter(records, expProcess, nil, exportFrequency, pollInterval, expProcess.NewTemplateID())
 
 	templateRec := ipfix.NewIPFIXTemplateRecord(uint16(len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements)), flowExp.templateID)
 
@@ -134,9 +127,10 @@ func InitFlowExporter(collector net.Addr, records flowrecords.FlowRecords, expIn
 	return flowExp, nil
 }
 
-func (exp *flowExporter) Run(stopCh <-chan struct{}, pollDone <-chan bool) {
+// Run enables to export flow records periodically at a given flow export frequency
+func (exp *flowExporter) Run(stopCh <-chan struct{}, pollDone <-chan struct{}) {
 	klog.Infof("Start exporting IPFIX flow records")
-	ticker := time.NewTicker(exp.exportInterval)
+	ticker := time.NewTicker(time.Duration(exp.exportFrequency) * exp.pollInterval)
 	defer ticker.Stop()
 
 	for {
@@ -146,11 +140,9 @@ func (exp *flowExporter) Run(stopCh <-chan struct{}, pollDone <-chan bool) {
 			break
 		case <-ticker.C:
 			// Waiting for expected number of pollDone signals from go routine(ConnectionStore.Run) is necessary because
-			// IPFIX collector computes throughput based on flow records received interval. Expected number of pollDone
-			// signals should be equal to the number of pollCycles to be done before starting the export cycle; it is computed
-			// from flow poll interval and flow export interval. Note that export interval is multiple of poll interval,
-			// and poll interval is at least one second long.
-			for i := uint(0); i < uint(exp.exportInterval/exp.pollInterval); i++ {
+			// IPFIX collector computes throughput based on flow records received interval. Number of pollDone
+			// signals should be equal to export frequency before starting the export cycle.
+			for i := uint(0); i < exp.exportFrequency; i++ {
 				<-pollDone
 			}
 			err := exp.flowRecords.BuildFlowRecords()

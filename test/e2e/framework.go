@@ -311,8 +311,14 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
 	}
-	// pollAndExportInterval is added as harcoded value "1s:5s"
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#flowPollAndFlowExportIntervals: \"\"|flowPollAndFlowExportIntervals: \"1s:5s\"|g' %s", antreaYML)
+	// flowPollInterval is added as harcoded value "1s"
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#flowPollInterval: \"5s\"|flowPollInterval: \"1s\"|g' %s", antreaYML)
+	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+	}
+	// exportFrequency is added as harcoded value "5"
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#flowExportFrequency: 12|flowExportFrequency: 5|g' %s", antreaYML)
 	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
@@ -340,7 +346,12 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
 	}
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|flowPollAndFlowExportIntervals: \"1s:5s\"|#flowPollAndFlowExportIntervals: \"\"|g' %s", antreaYML)
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|flowPollInterval: \"1s\"|#flowPollInterval: \"5s\"|g' %s", antreaYML)
+	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+	}
+	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|flowExportFrequency: 5|#flowExportFrequency: 12|g' %s", antreaYML)
 	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)

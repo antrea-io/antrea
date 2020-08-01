@@ -21,7 +21,7 @@ import (
 	"unicode"
 
 	"github.com/golang/mock/gomock"
-	"gotest.tools/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	ipfixtest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix/testing"
@@ -38,7 +38,7 @@ func TestFlowExporter_sendTemplateRecord(t *testing.T) {
 		nil,
 		mockIPFIXExpProc,
 		nil,
-		60 * time.Second,
+		12,
 		time.Second,
 		256,
 	}
@@ -146,7 +146,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 		nil,
 		mockIPFIXExpProc,
 		elemList,
-		60 * time.Second,
+		12,
 		time.Second,
 		256,
 	}
