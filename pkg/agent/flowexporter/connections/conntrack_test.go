@@ -29,11 +29,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	connectionstest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
 )
 
-func TestConnTrack_DumpFlows(t *testing.T) {
+func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	// Create flows for test
@@ -62,8 +61,42 @@ func TestConnTrack_DumpFlows(t *testing.T) {
 	}
 	testFlows := []*flowexporter.Connection{antreaFlow, antreaServiceFlow, antreaGWFlow, nonAntreaFlow}
 
-	// Create mock interfaces
-	mockCTInterfacer := connectionstest.NewMockConnTrackInterfacer(ctrl)
+	// Create nodeConfig and gateWayConfig
+	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
+	gwConfig := &config.GatewayConfig{
+		IP: net.IP{8, 7, 6, 5},
+	}
+	nodeConfig := &config.NodeConfig{
+		GatewayConfig: gwConfig,
+	}
+	// Create serviceCIDR
+	serviceCIDR := &net.IPNet{
+		IP:   net.IP{100, 50, 25, 0},
+		Mask: net.IPMask{255, 255, 255, 0},
+	}
+	// Test the DumpFlows implementation of connTrackSystem
+	mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
+	connDumperDPSystem := &connTrackSystem{
+		nodeConfig,
+		serviceCIDR,
+		mockNetlinkCT,
+	}
+	// Set expects for mocks
+	mockNetlinkCT.EXPECT().Dial().Return(nil)
+	mockNetlinkCT.EXPECT().DumpFilter(conntrack.Filter{}).Return(testFlows, nil)
+
+	conns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
+	if err != nil {
+		t.Errorf("Dump flows function returned error: %v", err)
+	}
+	assert.Equal(t, 1, len(conns), "number of filtered Connections should be equal")
+}
+
+func TestConnTackOvsAppCtl_DumpFlows(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create mock interface
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
@@ -79,46 +112,10 @@ func TestConnTrack_DumpFlows(t *testing.T) {
 		Mask: net.IPMask{255, 255, 255, 0},
 	}
 
-	// Test DumpFlows implementation of connTrackSystem
-	connDumperDPSystem := NewConnTrackDumper(mockCTInterfacer, nodeConfig, serviceCIDR, ovsconfig.OVSDatapathSystem, mockOVSCtlClient)
-	// Set expects for mocks
-	mockCTInterfacer.EXPECT().GetConnTrack(nil).Return(nil)
-	mockCTInterfacer.EXPECT().DumpFilter(conntrack.Filter{}).Return(testFlows, nil)
-
-	conns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
-	if err != nil {
-		t.Errorf("Dump flows function returned error: %v", err)
-	}
-	assert.Equal(t, 1, len(conns), "number of filtered connections should be equal")
-
-	// Test DumpFlows implementation of connTrackNetdev
-	connDumperDPNetdev := NewConnTrackDumper(mockCTInterfacer, nodeConfig, serviceCIDR, ovsconfig.OVSDatapathNetdev, mockOVSCtlClient)
-	// Re-initialize testFlows
-	testFlows = []*flowexporter.Connection{antreaFlow, antreaServiceFlow, antreaGWFlow, nonAntreaFlow}
-	// Set expects for mocks
-	mockCTInterfacer.EXPECT().GetConnTrack(mockOVSCtlClient).Return(nil)
-	mockCTInterfacer.EXPECT().DumpFilter(uint16(openflow.CtZone)).Return(testFlows, nil)
-
-	conns, err = connDumperDPNetdev.DumpFlows(openflow.CtZone)
-	if err != nil {
-		t.Errorf("Dump flows function returned error: %v", err)
-	}
-	assert.Equal(t, 1, len(conns), "number of filtered connections should be equal")
-}
-
-func TestConnTackNetdev_DumpFilter(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create mock interfaces
-	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
-	conntrackNetdev := NewConnTrackNetdev()
-	err := conntrackNetdev.GetConnTrack(mockOVSCtlClient)
-	assert.Nil(t, err, "GetConnTrack call should be successful")
-
+	connDumper := NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, mockOVSCtlClient)
 	// Set expect call for mock ovsCtlClient
 	ovsctlCmdOutput := []byte("tcp,orig=(src=127.0.0.1,dst=127.0.0.1,sport=45218,dport=2379,packets=320108,bytes=24615344),reply=(src=127.0.0.1,dst=127.0.0.1,sport=2379,dport=45218,packets=239595,bytes=24347883),start=2020-07-24T05:07:03.998,id=3750535678,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86399,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
-		"tcp,orig=(src=127.0.0.1,dst=127.0.0.1,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=127.0.0.1,dst=127.0.0.1,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
+		"tcp,orig=(src=127.0.0.1,dst=8.7.6.5,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=8.7.6.5,dst=127.0.0.1,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
 		"tcp,orig=(src=100.10.0.105,dst=10.96.0.1,sport=41284,dport=443,packets=343260,bytes=19340621),reply=(src=192.168.86.82,dst=100.10.0.105,sport=6443,dport=41284,packets=381035,bytes=181176472),start=2020-07-25T08:40:08.959,id=982464968,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|DST_NAT|DST_NAT_DONE,timeout=86399,mark=33,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)")
 	expConn := &flowexporter.Connection{
 		ID:         982464968,
@@ -154,9 +151,9 @@ func TestConnTackNetdev_DumpFilter(t *testing.T) {
 	}
 	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/dump-conntrack", false, "-m", "-s").Return(ovsctlCmdOutput, nil)
 
-	conns, err := conntrackNetdev.DumpFilter(uint16(openflow.CtZone))
+	conns, err := connDumper.DumpFlows(uint16(openflow.CtZone))
 	if err != nil {
-		t.Errorf("conntrackNetdev.DumpFilter function returned error: %v", err)
+		t.Errorf("conntrackNetdev.DumpConnections function returned error: %v", err)
 	}
 	assert.Equal(t, len(conns), 1)
 	assert.Equal(t, conns[0], expConn, "filtered connection and expected connection should be same")

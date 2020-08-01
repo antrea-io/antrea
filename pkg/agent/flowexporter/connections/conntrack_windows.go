@@ -17,18 +17,21 @@
 package connections
 
 import (
+	"net"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 )
 
-func (cp *connTrackDumper) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error) {
+// TODO:  Implement ConnTrackDumper for windows.
+var _ ConnTrackDumper = new(connTrackSystem)
+
+type connTrackSystem struct{}
+
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackSystem {
+	return nil
+}
+
+func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error) {
 	return nil, nil
-}
-
-// TODO:  Implement ConnTrackInterfacer when flow exporter is supported for windows.
-func NewConnTrackSystem() ConnTrackInterfacer {
-	return nil
-}
-
-func NewConnTrackNetdev() ConnTrackInterfacer {
-	return nil
 }

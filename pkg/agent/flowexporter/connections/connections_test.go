@@ -49,9 +49,9 @@ func makeTuple(srcIP *net.IP, dstIP *net.IP, protoID uint8, srcPort uint16, dstP
 func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	// Create two flows; one is already in connectionStore and other one is new
+	// Create two flows; one is already in ConnectionStore and other one is new
 	refTime := time.Now()
-	// Flow-1, which is already in connectionStore
+	// Flow-1, which is already in ConnectionStore
 	tuple1, revTuple1 := makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
 	testFlow1 := flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 50)),
@@ -64,7 +64,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		TupleReply:      *revTuple1,
 		IsActive:        true,
 	}
-	// Flow-2, which is not in connectionStore
+	// Flow-2, which is not in ConnectionStore
 	tuple2, revTuple2 := makeTuple(&net.IP{5, 6, 7, 8}, &net.IP{8, 7, 6, 5}, 6, 60001, 200)
 	testFlow2 := flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 20)),
@@ -107,15 +107,15 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	// Mock interface store with one of the couple of IPs correspond to Pods
 	iStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockCT := connectionstest.NewMockConnTrackDumper(ctrl)
-	// Create connectionStore
-	connStore := &connectionStore{
-		connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		connDumper:  mockCT,
-		ifaceStore:  iStore,
+	// Create ConnectionStore
+	connStore := &ConnectionStore{
+		Connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		ConnDumper:  mockCT,
+		IfaceStore:  iStore,
 	}
 	// Add flow1conn to the Connection map
 	testFlow1Tuple := flowexporter.NewConnectionKey(&testFlow1)
-	connStore.connections[testFlow1Tuple] = oldTestFlow1
+	connStore.Connections[testFlow1Tuple] = oldTestFlow1
 
 	addOrUpdateConnTests := []struct {
 		flow flowexporter.Connection
@@ -147,11 +147,11 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	// Create two flows; one is already in connectionStore and other one is new
+	// Create two flows; one is already in ConnectionStore and other one is new
 	testFlows := make([]*flowexporter.Connection, 2)
 	testFlowKeys := make([]*flowexporter.ConnectionKey, 2)
 	refTime := time.Now()
-	// Flow-1, which is already in connectionStore
+	// Flow-1, which is already in ConnectionStore
 	tuple1, revTuple1 := makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
 	testFlows[0] = &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 50)),
@@ -164,7 +164,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 		TupleReply:      *revTuple1,
 		IsActive:        true,
 	}
-	// Flow-2, which is not in connectionStore
+	// Flow-2, which is not in ConnectionStore
 	tuple2, revTuple2 := makeTuple(&net.IP{5, 6, 7, 8}, &net.IP{8, 7, 6, 5}, 6, 60001, 200)
 	testFlows[1] = &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 20)),
@@ -181,21 +181,21 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 		connKey := flowexporter.NewConnectionKey(flow)
 		testFlowKeys[i] = &connKey
 	}
-	// Create connectionStore
-	connStore := &connectionStore{
-		connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		connDumper:  nil,
-		ifaceStore:  nil,
+	// Create ConnectionStore
+	connStore := &ConnectionStore{
+		Connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		ConnDumper:  nil,
+		IfaceStore:  nil,
 	}
 	// Add flows to the Connection store
 	for i, flow := range testFlows {
-		connStore.connections[*testFlowKeys[i]] = *flow
+		connStore.Connections[*testFlowKeys[i]] = *flow
 	}
 
 	resetTwoFields := func(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
 		conn.IsActive = false
 		conn.OriginalPackets = 0
-		connStore.connections[key] = conn
+		connStore.Connections[key] = conn
 		return nil
 	}
 	connStore.ForAllConnectionsDo(resetTwoFields)
@@ -211,11 +211,11 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	// Create two flows; one is already in connectionStore and other one is new
+	// Create two flows; one is already in ConnectionStore and other one is new
 	testFlows := make([]*flowexporter.Connection, 2)
 	testFlowKeys := make([]*flowexporter.ConnectionKey, 2)
 	refTime := time.Now()
-	// Flow-1, which is already in connectionStore
+	// Flow-1, which is already in ConnectionStore
 	tuple1, revTuple1 := makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
 	testFlows[0] = &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 50)),
@@ -228,7 +228,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		TupleReply:      *revTuple1,
 		IsActive:        true,
 	}
-	// Flow-2, which is not in connectionStore
+	// Flow-2, which is not in ConnectionStore
 	tuple2, revTuple2 := makeTuple(&net.IP{5, 6, 7, 8}, &net.IP{8, 7, 6, 5}, 6, 60001, 200)
 	testFlows[1] = &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 20)),
@@ -245,17 +245,17 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		connKey := flowexporter.NewConnectionKey(flow)
 		testFlowKeys[i] = &connKey
 	}
-	// Create connectionStore
-	connStore := &connectionStore{
-		connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		connDumper:  nil,
-		ifaceStore:  nil,
+	// Create ConnectionStore
+	connStore := &ConnectionStore{
+		Connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		ConnDumper:  nil,
+		IfaceStore:  nil,
 	}
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
-		connStore.connections[*testFlowKeys[i]] = *flow
+		connStore.Connections[*testFlowKeys[i]] = *flow
 	}
-	// Delete the connections in connection store.
+	// Delete the Connections in connection store.
 	for i := 0; i < len(testFlows); i++ {
 		err := connStore.DeleteConnectionByKey(*testFlowKeys[i])
 		assert.Nil(t, err, "DeleteConnectionByKey should return nil")

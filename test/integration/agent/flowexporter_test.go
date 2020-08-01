@@ -93,7 +93,7 @@ func prepareInterfaceConfigs(contID, podName, podNS, ifName string, ip *net.IP) 
 	return iface
 }
 
-func testBuildFlowRecords(t *testing.T, flowRecords flowrecords.FlowRecords, conns []*flowexporter.Connection, connKeys []*flowexporter.ConnectionKey) {
+func testBuildFlowRecords(t *testing.T, flowRecords *flowrecords.FlowRecords, conns []*flowexporter.Connection, connKeys []*flowexporter.ConnectionKey) {
 	err := flowRecords.BuildFlowRecords()
 	require.Nil(t, err, fmt.Sprintf("Failed to build flow records from connection store: %v", err))
 	// Check if records in flow records are built as expected or not
@@ -115,18 +115,20 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	ctrl := mock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create ConnectionStore, FlowRecords and associated mocks
-	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
-	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
-	// Hardcoded poll and export intervals; they are not used
-	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, time.Second)
-	flowRecords := flowrecords.NewFlowRecords(connStore)
 	// Prepare connections and interface config for test
 	testConns, testConnKeys := createConnsForTest()
 	testIfConfigs := make([]*interfacestore.InterfaceConfig, 2)
 	testIfConfigs[0] = prepareInterfaceConfigs("1", "pod1", "ns1", "interface1", &testConns[0].TupleOrig.SourceAddress)
 	testIfConfigs[1] = prepareInterfaceConfigs("2", "pod2", "ns2", "interface2", &testConns[1].TupleOrig.DestinationAddress)
-
+	// Create ConnectionStore, FlowRecords and associated mocks
+	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
+	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
+	// Hardcoded poll and export intervals; they are not used
+	connStore := &connections.ConnectionStore{
+		Connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection, 2),
+		ConnDumper:  connDumperMock,
+		IfaceStore:  ifStoreMock,
+	}
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, nil)
 	for i, testConn := range testConns {
@@ -160,6 +162,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	}
 
 	// Test for build flow records
+	flowRecords := flowrecords.NewFlowRecords(connStore)
 	testBuildFlowRecords(t, flowRecords, testConns, testConnKeys)
 
 }

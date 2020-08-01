@@ -46,10 +46,8 @@ type Options struct {
 	config *AgentConfig
 	// IPFIX flow collector
 	flowCollector net.Addr
-	// Flow exporter polling interval
-	pollingInterval time.Duration
-	// Flow exporter export interval
-	exportInterval time.Duration
+	// Flow exporter poll interval
+	pollInterval time.Duration
 }
 
 func newOptions() *Options {
@@ -152,15 +150,22 @@ func (o *Options) setDefaults() {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}
 
-	if o.config.FlowCollectorAddr != "" && o.config.FlowPollAndFlowExportIntervals == "" {
-		o.pollingInterval = 5 * time.Second
-		o.exportInterval = 60 * time.Second
+	if o.config.FeatureGates[string(features.FlowExporter)] {
+		if o.config.FlowPollInterval == "" {
+			o.pollInterval = 5 * time.Second
+		}
+		if o.config.FlowExportFrequency == 0 {
+			// This frequency value makes flow export interval as 60s
+			o.config.FlowExportFrequency = 12
+		}
 	}
 }
 
 func (o *Options) validateFlowExporterConfig() error {
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		if o.config.FlowCollectorAddr != "" {
+		if o.config.FlowCollectorAddr == "" {
+			return fmt.Errorf("IPFIX flow collector address should be provided")
+		} else {
 			// Check if it is TCP or UDP
 			strSlice := strings.Split(o.config.FlowCollectorAddr, ":")
 			var proto string
@@ -175,6 +180,7 @@ func (o *Options) validateFlowExporterConfig() error {
 			} else {
 				return fmt.Errorf("IPFIX flow collector is given in invalid format")
 			}
+
 			// Convert the string input in net.Addr format
 			hostPortAddr := strSlice[0] + ":" + strSlice[1]
 			_, _, err := net.SplitHostPort(hostPortAddr)
@@ -184,37 +190,23 @@ func (o *Options) validateFlowExporterConfig() error {
 			if proto == "udp" {
 				o.flowCollector, err = net.ResolveUDPAddr("udp", hostPortAddr)
 				if err != nil {
-					return fmt.Errorf("IPFIX flow collector over UDP proto is not resolved: %v", err)
+					return fmt.Errorf("IPFIX flow collector over UDP proto cannot be resolved: %v", err)
 				}
 			} else {
 				o.flowCollector, err = net.ResolveTCPAddr("tcp", hostPortAddr)
 				if err != nil {
-					return fmt.Errorf("IPFIX flow collector over TCP proto is not resolved: %v", err)
+					return fmt.Errorf("IPFIX flow collector over TCP proto cannot be resolved: %v", err)
 				}
 			}
-
-			if o.config.FlowPollAndFlowExportIntervals != "" {
-				intervalSlice := strings.Split(o.config.FlowPollAndFlowExportIntervals, ":")
-				if len(intervalSlice) != 2 {
-					return fmt.Errorf("flow exporter intervals %s is not in acceptable format \"OOs:OOs\"", o.config.FlowPollAndFlowExportIntervals)
-				}
-				o.pollingInterval, err = time.ParseDuration(intervalSlice[0])
-				if err != nil {
-					return fmt.Errorf("poll interval is not provided in right format: %v", err)
-				}
-				o.exportInterval, err = time.ParseDuration(intervalSlice[1])
-				if err != nil {
-					return fmt.Errorf("export interval is not provided in right format: %v", err)
-				}
-				if o.pollingInterval < time.Second {
-					return fmt.Errorf("poll interval should be minimum of one second")
-				}
-				if o.pollingInterval > o.exportInterval {
-					return fmt.Errorf("poll interval should be less than or equal to export interval")
-				}
-				if o.exportInterval%o.pollingInterval != 0 {
-					return fmt.Errorf("export interval should be a multiple of poll interval")
-				}
+		}
+		if o.config.FlowPollInterval != "" {
+			var err error
+			o.pollInterval, err = time.ParseDuration(o.config.FlowPollInterval)
+			if err != nil {
+				return fmt.Errorf("FlowPollInterval is not provided in right format: %v", err)
+			}
+			if o.pollInterval < time.Second {
+				return fmt.Errorf("FlowPollInterval should be greater than or equal to one second")
 			}
 		}
 	}
