@@ -22,34 +22,21 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
 )
 
-var _ FlowRecords = new(flowRecords)
-
-type FlowRecords interface {
-	// BuildFlowRecords builds the flow record map from connection map in connection store
-	BuildFlowRecords() error
-	// GetFlowRecordByConnKey gets the record from the flow record map given the connection key
-	GetFlowRecordByConnKey(connKey flowexporter.ConnectionKey) (*flowexporter.FlowRecord, bool)
-	// ValidateAndUpdateStats validates and updates the flow record given the connection key
-	ValidateAndUpdateStats(connKey flowexporter.ConnectionKey, record flowexporter.FlowRecord) error
-	// ForAllFlowRecordsDo executes the callback for all records in the flow record map
-	ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallBack) error
-}
-
-type flowRecords struct {
-	// synchronization is not required as there is no concurrency, involving this object.
+type FlowRecords struct {
 	// Add lock when this map is consumed by more than one entity concurrently.
 	recordsMap map[flowexporter.ConnectionKey]flowexporter.FlowRecord
-	connStore  connections.ConnectionStore
+	connStore  *connections.ConnectionStore
 }
 
-func NewFlowRecords(connStore connections.ConnectionStore) *flowRecords {
-	return &flowRecords{
+func NewFlowRecords(connStore *connections.ConnectionStore) *FlowRecords {
+	return &FlowRecords{
 		make(map[flowexporter.ConnectionKey]flowexporter.FlowRecord),
 		connStore,
 	}
 }
 
-func (fr *flowRecords) BuildFlowRecords() error {
+// BuildFlowRecords builds the flow record map from connection map in connection store
+func (fr *FlowRecords) BuildFlowRecords() error {
 	err := fr.connStore.ForAllConnectionsDo(fr.addOrUpdateFlowRecord)
 	if err != nil {
 		return fmt.Errorf("error when iterating connection map: %v", err)
@@ -58,12 +45,14 @@ func (fr *flowRecords) BuildFlowRecords() error {
 	return nil
 }
 
-func (fr *flowRecords) GetFlowRecordByConnKey(connKey flowexporter.ConnectionKey) (*flowexporter.FlowRecord, bool) {
+// GetFlowRecordByConnKey gets the record from the flow record map given the connection key
+func (fr *FlowRecords) GetFlowRecordByConnKey(connKey flowexporter.ConnectionKey) (*flowexporter.FlowRecord, bool) {
 	record, found := fr.recordsMap[connKey]
 	return &record, found
 }
 
-func (fr *flowRecords) ValidateAndUpdateStats(connKey flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
+// ValidateAndUpdateStats validates and updates the flow record given the connection key
+func (fr *FlowRecords) ValidateAndUpdateStats(connKey flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
 	// Delete the flow record if the corresponding connection is not active, i.e., not present in conntrack table.
 	// Delete the corresponding connection in connectionMap as well.
 	if !record.Conn.IsActive {
@@ -84,7 +73,8 @@ func (fr *flowRecords) ValidateAndUpdateStats(connKey flowexporter.ConnectionKey
 	return nil
 }
 
-func (fr *flowRecords) ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallBack) error {
+// ForAllFlowRecordsDo executes the callback for all records in the flow record map
+func (fr *FlowRecords) ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallBack) error {
 	for k, v := range fr.recordsMap {
 		err := callback(k, v)
 		if err != nil {
@@ -96,7 +86,7 @@ func (fr *flowRecords) ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallB
 	return nil
 }
 
-func (fr *flowRecords) addOrUpdateFlowRecord(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
+func (fr *FlowRecords) addOrUpdateFlowRecord(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
 	// If DoExport flag is not set return immediately.
 	if !conn.DoExport {
 		return nil

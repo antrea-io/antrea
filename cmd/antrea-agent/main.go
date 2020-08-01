@@ -62,7 +62,7 @@ func newAgentCommand() *cobra.Command {
 			if err := opts.validate(args); err != nil {
 				klog.Fatalf("Failed to validate: %v", err)
 			}
-			// Not passing args again as it is already validated and not used in flow exporter config
+			// Not passing args again as they are already validated and are not used in flow exporter config
 			if err := opts.validateFlowExporterConfig(); err != nil {
 				klog.Fatalf("Failed to validate flow exporter config: %v", err)
 			}

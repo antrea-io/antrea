@@ -86,15 +86,18 @@ type AgentConfig struct {
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to false.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
-	// Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also enables flow exporter that sends IPFIX
-	// flow records of conntrack flows on OVS bridge. If no L4 transport proto is given, we consider tcp as default.
+	// Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also
+	// enables the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge. If no L4 transport proto
+	// is given, we consider tcp as default.
 	// Defaults to "".
 	FlowCollectorAddr string `yaml:"flowCollectorAddr,omitempty"`
-	// Provide flow exporter poll and export intervals in format "0s:0s". This determines how often flow exporter polls connections
-	// in conntrack module and exports IPFIX flow records that are built from connection store.
-	// Flow export interval should be a multiple of flow poll interval.
-	// Flow poll interval value should be in range [1s, ExportInterval(s)).
-	// Flow export interval value should be in range (PollInterval(s), 600s].
-	// Defaults to "5s:60s". Follow the time units of duration.
-	FlowPollAndFlowExportIntervals string `yaml:"flowPollAndFlowExportIntervals,omitempty"`
+	// Provide flow poll interval in format "0s". This determines how often flow exporter dumps connections in conntrack module.
+	// Flow poll interval should be greater than or equal to 1s(one second).
+	// Defaults to "5s". Follow the time units of duration.
+	FlowPollInterval string `yaml:"flowPollInterval,omitempty"`
+	// Provide flow export frequency, which is the number of poll cycles elapsed before flow exporter exports flow records to
+	// the flow collector.
+	// Flow export frequency should be greater than or equal to 1.
+	// Defaults to "12".
+	FlowExportFrequency uint `yaml:"flowExportFrequency,omitempty"`
 }

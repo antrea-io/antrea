@@ -239,28 +239,28 @@ func run(o *Options) error {
 		go ofClient.StartPacketInHandler(stopCh)
 	}
 
-	// Initialize flow exporter; start go routines to poll conntrack flows and export IPFIX flow records
+	// Initialize flow exporter to start go routines to poll conntrack flows and export IPFIX flow records
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		if o.flowCollector != nil {
-			var connTrackDumper connections.ConnTrackDumper
-			if o.config.OVSDatapathType == ovsconfig.OVSDatapathSystem {
-				connTrackDumper = connections.NewConnTrackDumper(connections.NewConnTrackSystem(), nodeConfig, serviceCIDRNet, o.config.OVSDatapathType, agentQuerier.GetOVSCtlClient())
-			} else if o.config.OVSDatapathType == ovsconfig.OVSDatapathNetdev {
-				connTrackDumper = connections.NewConnTrackDumper(connections.NewConnTrackNetdev(), nodeConfig, serviceCIDRNet, o.config.OVSDatapathType, agentQuerier.GetOVSCtlClient())
-			}
-			connStore := connections.NewConnectionStore(connTrackDumper, ifaceStore, o.pollingInterval)
-			flowRecords := flowrecords.NewFlowRecords(connStore)
-			flowExporter, err := exporter.InitFlowExporter(o.flowCollector, flowRecords, o.exportInterval, o.pollingInterval)
-			if err != nil {
-				// If flow exporter cannot be initialized, then Antrea agent does not exit; only error is logged.
-				klog.Errorf("error when initializing flow exporter: %v", err)
-			} else {
-				// pollDone helps in synchronizing connStore.Run and flowExporter.Run go routines.
-				pollDone := make(chan bool)
-				go connStore.Run(stopCh, pollDone)
-				go flowExporter.Run(stopCh, pollDone)
-			}
+		connStore := connections.NewConnectionStore(
+			o.config.OVSDatapathType,
+			nodeConfig,
+			serviceCIDRNet,
+			agentQuerier.GetOVSCtlClient(),
+			ifaceStore,
+			o.pollInterval)
+		// pollDone helps in synchronizing connStore.Run and flowExporter.Run go routines.
+		pollDone := make(chan struct{})
+		go connStore.Run(stopCh, pollDone)
+
+		flowExporter, err := exporter.InitFlowExporter(
+			o.flowCollector,
+			flowrecords.NewFlowRecords(connStore),
+			o.config.FlowExportFrequency,
+			o.pollInterval)
+		if err != nil {
+			return fmt.Errorf("error when initializing flow exporter: %v", err)
 		}
+		go flowExporter.Run(stopCh, pollDone)
 	}
 
 	<-stopCh
