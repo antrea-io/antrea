@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,6 +50,8 @@ var (
 // CACertController is responsible for taking the CA certificate from the
 // caContentProvider and publishing it to the ConfigMap and the APIServices.
 type CACertController struct {
+	mutex sync.RWMutex
+
 	// caContentProvider provides the very latest content of the ca bundle.
 	caContentProvider dynamiccertificates.CAContentProvider
 	// queue only ever has one item, but it has nice error handling backoff/retry semantics
@@ -86,6 +89,25 @@ func newCACertController(caContentProvider dynamiccertificates.CAContentProvider
 	return c
 }
 
+// UpdateCertificate updates the certificate to a new one. Used to rotate statically signed certificates before they
+// expire.
+func (c *CACertController) UpdateCertificate(caContentProvider dynamiccertificates.CAContentProvider) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.caContentProvider = caContentProvider
+
+	// Need to trigger a sync.
+	c.Enqueue()
+}
+
+// getCertificate exposes the certificate for testing.
+func (c *CACertController) getCertificate() []byte {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.caContentProvider.CurrentCABundleContent()
+}
+
 // Enqueue will be called after CACertController is registered as a listener of CA cert change.
 func (c *CACertController) Enqueue() {
 	// The key can be anything as we only have single item.
@@ -93,7 +115,11 @@ func (c *CACertController) Enqueue() {
 }
 
 func (c *CACertController) syncCACert() error {
-	caCert := c.caContentProvider.CurrentCABundleContent()
+	caCert := func() []byte {
+		c.mutex.RLock()
+		defer c.mutex.RUnlock()
+		return c.caContentProvider.CurrentCABundleContent()
+	}()
 
 	if err := c.syncConfigMap(caCert); err != nil {
 		return err

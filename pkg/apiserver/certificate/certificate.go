@@ -15,6 +15,8 @@
 package certificate
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"os"
@@ -36,6 +38,9 @@ var (
 	certDir = "/var/run/antrea/antrea-controller-tls"
 	// certReadyTimeout is the timeout we will wait for the TLS Secret being ready. Declaring it as a variable for testing.
 	certReadyTimeout = 2 * time.Minute
+
+	// globalMaxRotateDuration forces all rotations to occur within a year minus a day.
+	globalMaxRotateDuration = time.Hour * (24 * 364)
 )
 
 const (
@@ -62,22 +67,14 @@ func GetAntreaServerNames() []string {
 	return []string{antreaServerName}
 }
 
-func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregatorClient clientset.Interface, secureServing *options.SecureServingOptionsWithLoopback) (*CACertController, error) {
+func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregatorClient clientset.Interface,
+	secureServing *options.SecureServingOptionsWithLoopback) (*CACertController, error) {
 	var err error
 	var caContentProvider dynamiccertificates.CAContentProvider
 	if selfSignedCert {
-		// Set the PairName but leave certificate directory blank to generate in-memory by default.
-		secureServing.ServerCert.CertDirectory = ""
-		secureServing.ServerCert.PairName = "antrea-controller"
-
-		if err := secureServing.MaybeDefaultWithSelfSignedCerts("antrea", GetAntreaServerNames(), []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
-			return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
-		}
-
-		certPEMBlock, _ := secureServing.ServerCert.GeneratedCert.CurrentCertKeyContent()
-		caContentProvider, err = dynamiccertificates.NewStaticCAContent("self-signed cert", certPEMBlock)
+		caContentProvider, err = generateSelfSignedCertificate(secureServing)
 		if err != nil {
-			return nil, fmt.Errorf("error reading self-signed CA certificate: %v", err)
+			return nil, fmt.Errorf("error creating self-signed CA certificate: %v", err)
 		}
 	} else {
 		caCertPath := path.Join(certDir, CACertFile)
@@ -110,5 +107,83 @@ func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregato
 	}
 
 	caCertController := newCACertController(caContentProvider, client, aggregatorClient)
+
+	if selfSignedCert {
+		go rotateSelfSignedCertificates(caCertController, secureServing, globalMaxRotateDuration)
+	}
+
 	return caCertController, nil
+}
+
+// generateSelfSignedCertificate generates a new self signed certificate.
+func generateSelfSignedCertificate(secureServing *options.SecureServingOptionsWithLoopback) (dynamiccertificates.CAContentProvider, error) {
+	var err error
+	var caContentProvider dynamiccertificates.CAContentProvider
+
+	// Set the PairName but leave certificate directory blank to generate in-memory by default.
+	secureServing.ServerCert.CertDirectory = ""
+	secureServing.ServerCert.PairName = "antrea-controller"
+
+	if err := secureServing.MaybeDefaultWithSelfSignedCerts("antrea", GetAntreaServerNames(), []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
+	}
+
+	certPEMBlock, _ := secureServing.ServerCert.GeneratedCert.CurrentCertKeyContent()
+	caContentProvider, err = dynamiccertificates.NewStaticCAContent("self-signed cert", certPEMBlock)
+	if err != nil {
+		return nil, fmt.Errorf("error reading self-signed CA certificate: %v", err)
+	}
+
+	return caContentProvider, nil
+}
+
+// Used to determine which is sooner, the provided maxRotateDuration or the expiration date
+// of the cert. Used to allow for unit testing with a far shorter rotation period.
+// Also can be used to pass a user provided rotation window.
+func nextRotationDuration(secureServing *options.SecureServingOptionsWithLoopback,
+	maxRotateDuration time.Duration) (time.Duration, error) {
+	pemCert, pemKey := secureServing.ServerCert.GeneratedCert.CurrentCertKeyContent()
+	cert, err := tls.X509KeyPair(pemCert, pemKey)
+	if err != nil {
+		return time.Duration(0), fmt.Errorf("error parsing generated certificate: %v", err)
+	}
+
+	x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return time.Duration(0), fmt.Errorf("error parsing generated certificate: %v", err)
+	}
+
+	// One day removed so rotation happens before expiration.
+	// Large interval to account for clock drift.
+	duration := x509Cert.NotAfter.Sub(time.Now()) - time.Hour*24
+
+	waitDuration := duration
+	if maxRotateDuration < waitDuration {
+		waitDuration = maxRotateDuration
+	}
+
+	return waitDuration, nil
+}
+
+// rotateSelfSignedCertificates calculates the rotation duration for the current certificate.
+// Then once the duration is complete, generates a new self-signed certificate and repeats the process.
+func rotateSelfSignedCertificates(c *CACertController, secureServing *options.SecureServingOptionsWithLoopback,
+	maxRotateDuration time.Duration) {
+	for {
+		rotationDuration, err := nextRotationDuration(secureServing, maxRotateDuration)
+		if err != nil {
+			klog.Errorf("error reading expiration date of cert: %v", err)
+			return
+		}
+		time.Sleep(rotationDuration)
+
+		klog.Infof("Rotating self signed certificate")
+
+		caContentProvider, err := generateSelfSignedCertificate(secureServing)
+		if err != nil {
+			klog.Errorf("error generating new cert: %v", err)
+			return
+		}
+		c.UpdateCertificate(caContentProvider)
+	}
 }

@@ -15,6 +15,7 @@
 package certificate
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"path"
@@ -22,10 +23,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/util/wait"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/keyutil"
+
 	fakeaggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 )
 
@@ -84,6 +87,7 @@ func TestApplyServerCert(t *testing.T) {
 		wantCertKey       bool
 		wantGeneratedCert bool
 		wantCACert        []byte
+		testRotate        bool
 	}{
 		{
 			name:              "self-signed",
@@ -95,6 +99,7 @@ func TestApplyServerCert(t *testing.T) {
 			wantCertKey:       false,
 			wantGeneratedCert: true,
 			wantCACert:        nil,
+			testRotate:        false,
 		},
 		{
 			name:              "user-provided",
@@ -106,6 +111,7 @@ func TestApplyServerCert(t *testing.T) {
 			wantCertKey:       true,
 			wantGeneratedCert: false,
 			wantCACert:        []byte(fakeCACert),
+			testRotate:        false,
 		},
 		{
 			name:           "user-provided-missing-tls-crt",
@@ -114,6 +120,7 @@ func TestApplyServerCert(t *testing.T) {
 			tlsKey:         []byte(fakeTLSKey),
 			caCert:         []byte(fakeCACert),
 			wantErr:        true,
+			testRotate:     false,
 		},
 		{
 			name:           "user-provided-missing-tls-key",
@@ -122,6 +129,7 @@ func TestApplyServerCert(t *testing.T) {
 			tlsKey:         nil,
 			caCert:         []byte(fakeCACert),
 			wantErr:        true,
+			testRotate:     false,
 		},
 		{
 			name:           "user-provided-missing-ca-crt",
@@ -130,6 +138,19 @@ func TestApplyServerCert(t *testing.T) {
 			tlsKey:         []byte(fakeTLSKey),
 			caCert:         nil,
 			wantErr:        true,
+			testRotate:     false,
+		},
+		{
+			name:              "self-signed-rotate",
+			selfSignedCert:    true,
+			tlsCert:           nil,
+			tlsKey:            nil,
+			caCert:            nil,
+			wantErr:           false,
+			wantCertKey:       false,
+			wantGeneratedCert: true,
+			wantCACert:        nil,
+			testRotate:        true,
 		},
 	}
 	for _, tt := range tests {
@@ -151,6 +172,11 @@ func TestApplyServerCert(t *testing.T) {
 			if tt.caCert != nil {
 				certutil.WriteCert(path.Join(certDir, CACertFile), tt.caCert)
 			}
+
+			if tt.testRotate {
+				globalMaxRotateDuration = 2 * time.Second
+			}
+
 			clientset := fakeclientset.NewSimpleClientset()
 			aggregatorClientset := fakeaggregatorclientset.NewSimpleClientset()
 			got, err := ApplyServerCert(tt.selfSignedCert, clientset, aggregatorClientset, secureServing)
@@ -161,6 +187,18 @@ func TestApplyServerCert(t *testing.T) {
 				}
 				return
 			}
+
+			if tt.selfSignedCert && tt.testRotate {
+				oldCertKeyContent := got.getCertificate()
+				err := wait.Poll(time.Second, 8*time.Second, func() (bool, error) {
+					newCertKeyContent := got.getCertificate()
+					equal := bytes.Equal(oldCertKeyContent, newCertKeyContent)
+					return !equal, nil
+				})
+
+				assert.Nil(t, err, "CA cert not updated")
+			}
+
 			if tt.wantCertKey {
 				assert.Equal(t, genericoptions.CertKey{CertFile: certDir + "/tls.crt", KeyFile: certDir + "/tls.key"}, secureServing.ServerCert.CertKey, "CertKey doesn't match")
 			}
