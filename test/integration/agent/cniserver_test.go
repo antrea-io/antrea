@@ -666,6 +666,7 @@ func TestAntreaServerFunc(t *testing.T) {
 		ipamMock.EXPECT().Check(mock.Any(), mock.Any()).Return(nil).AnyTimes()
 
 		ovsServiceMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).AnyTimes()
+		ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
 	}
 
 	teardown := func() {
@@ -783,6 +784,7 @@ func TestCNIServerChaining(t *testing.T) {
 			ovsServiceMock = ovsconfigtest.NewMockOVSBridgeClient(controller)
 			ofServiceMock = openflowtest.NewMockClient(controller)
 			ifaceStore := interfacestore.NewInterfaceStore()
+			ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
 			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
 			testRequire.Nil(err)
 		}

@@ -17,6 +17,7 @@ package ovsconfig
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/dbtransaction"
@@ -28,10 +29,11 @@ import (
 const defaultOVSDBFile = "db.sock"
 
 type OVSBridge struct {
-	ovsdb        *ovsdb.OVSDB
-	name         string
-	datapathType string
-	uuid         string
+	ovsdb                    *ovsdb.OVSDB
+	name                     string
+	datapathType             string
+	uuid                     string
+	isHardwareOffloadEnabled bool
 }
 
 type OVSPortData struct {
@@ -53,6 +55,7 @@ const (
 	openflowProtoVersion13 = "OpenFlow13"
 	// Maximum allowed value of ofPortRequest.
 	ofPortRequestMax = 65279
+	hardwareOffload  = "hw-offload"
 )
 
 // NewOVSDBConnectionUDS connects to the OVSDB server on the UNIX domain socket
@@ -92,14 +95,16 @@ func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 
 // NewOVSBridge creates and returns a new OVSBridge struct.
 func NewOVSBridge(bridgeName string, ovsDatapathType string, ovsdb *ovsdb.OVSDB) *OVSBridge {
-	return &OVSBridge{ovsdb, bridgeName, ovsDatapathType, ""}
+	return &OVSBridge{ovsdb, bridgeName, ovsDatapathType, "", false}
 }
 
 // Create looks up or creates the bridge. If the bridge with name bridgeName
 // does not exist, it will be created. Openflow protocol version 1.0 and 1.3
 // will be enabled for the bridge.
 func (br *OVSBridge) Create() Error {
-	if exists, err := br.lookupByName(); err != nil {
+	var err Error
+	var exists bool
+	if exists, err = br.lookupByName(); err != nil {
 		return err
 	} else if exists {
 		klog.Info("Bridge exists: ", br.uuid)
@@ -112,7 +117,10 @@ func (br *OVSBridge) Create() Error {
 	} else {
 		klog.Info("Created bridge: ", br.uuid)
 	}
-
+	br.isHardwareOffloadEnabled, err = br.getHardwareOffload()
+	if err != nil {
+		klog.Warning("Failed to get hardware offload: ", err)
+	}
 	return nil
 }
 
@@ -795,4 +803,25 @@ func (br *OVSBridge) DeleteOVSOtherConfig(configs map[string]interface{}) Error 
 
 func (br *OVSBridge) GetBridgeName() string {
 	return br.name
+}
+
+func (br *OVSBridge) IsHardwareOffloadEnabled() bool {
+	return br.isHardwareOffloadEnabled
+}
+
+func (br *OVSBridge) getHardwareOffload() (bool, Error) {
+	otherConfig, err := br.GetOVSOtherConfig()
+	if err != nil {
+		return false, err
+	}
+	for configKey, configValue := range otherConfig {
+		if configKey == hardwareOffload {
+			boolConfigVal, err := strconv.ParseBool(configValue)
+			if err != nil {
+				return boolConfigVal, newInvalidArgumentsError(fmt.Sprint("invalid hardwareOffload value: ", boolConfigVal))
+			}
+			return boolConfigVal, nil
+		}
+	}
+	return false, nil
 }

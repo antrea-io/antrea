@@ -244,24 +244,49 @@ func TestValidatePrevResult(t *testing.T) {
 		return cniConfig
 	}
 
-	t.Run("Invalid container interface", func(t *testing.T) {
+	t.Run("Invalid container interface veth", func(t *testing.T) {
 		cniConfig := baseCNIConfig()
 		cniConfig.Ifname = "invalid_iface" // invalid
+		sriovVFDeviceID := ""
 		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult)
+		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult, sriovVFDeviceID)
 		checkErrorResponse(
 			t, response, cnipb.ErrorCode_INVALID_NETWORK_CONFIG,
 			"prevResult does not match network configuration",
 		)
 	})
 
-	t.Run("Interface check failure", func(t *testing.T) {
+	t.Run("Invalid container interface SR-IOV VF", func(t *testing.T) {
+		cniConfig := baseCNIConfig()
+		cniConfig.Ifname = "invalid_iface" // invalid
+		sriovVFDeviceID := "0000:03:00.6"
+		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
+		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult, sriovVFDeviceID)
+		checkErrorResponse(
+			t, response, cnipb.ErrorCode_INVALID_NETWORK_CONFIG,
+			"prevResult does not match network configuration",
+		)
+	})
+
+	t.Run("Interface check failure veth", func(t *testing.T) {
 		cniConfig := baseCNIConfig()
 		cniConfig.Ifname = ifname
 		cniConfig.Netns = "invalid_netns"
+		sriovVFDeviceID := ""
 		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "")
-		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult)
+		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "", false)
+		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult, sriovVFDeviceID)
+		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
+	})
+
+	t.Run("Interface check failure SR-IOV VF", func(t *testing.T) {
+		cniConfig := baseCNIConfig()
+		cniConfig.Ifname = ifname
+		cniConfig.Netns = "invalid_netns"
+		sriovVFDeviceID := "0000:03:00.6"
+		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
+		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "", true)
+		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, k8sPodArgs, prevResult, sriovVFDeviceID)
 		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
 	})
 }
@@ -378,7 +403,7 @@ func TestRemoveInterface(t *testing.T) {
 	mockOFClient := openflowtest.NewMockClient(controller)
 	ifaceStore := interfacestore.NewInterfaceStore()
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
-	podConfigurator, err := newPodConfigurator(mockOVSBridgeClient, mockOFClient, nil, ifaceStore, gwMAC, "system")
+	podConfigurator, err := newPodConfigurator(mockOVSBridgeClient, mockOFClient, nil, ifaceStore, gwMAC, "system", false)
 	require.Nil(t, err, "No error expected in podConfigurator constructor")
 
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")

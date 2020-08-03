@@ -311,6 +311,20 @@ func (mr *MockOVSBridgeClientMockRecorder) GetPortList() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPortList", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetPortList))
 }
 
+// IsHardwareOffloadEnabled mocks base method
+func (m *MockOVSBridgeClient) IsHardwareOffloadEnabled() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsHardwareOffloadEnabled")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsHardwareOffloadEnabled indicates an expected call of IsHardwareOffloadEnabled
+func (mr *MockOVSBridgeClientMockRecorder) IsHardwareOffloadEnabled() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsHardwareOffloadEnabled", reflect.TypeOf((*MockOVSBridgeClient)(nil).IsHardwareOffloadEnabled))
+}
+
 // SetDatapathID mocks base method
 func (m *MockOVSBridgeClient) SetDatapathID(arg0 string) ovsconfig.Error {
 	m.ctrl.T.Helper()
