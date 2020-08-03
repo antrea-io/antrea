@@ -155,7 +155,7 @@ spec:
               minimum: 1
               type: number
             tier:
-              pattern: \bEmergency|\bSecurityOps|\bNetworkOps|\bInterTenant|\bApplication
+              pattern: \bEmergency|\bSecurityOps|\bNetworkOps|\bPlatform|\bApplication
               type: string
           required:
           - appliedTo

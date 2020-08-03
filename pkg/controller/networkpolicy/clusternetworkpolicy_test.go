@@ -435,7 +435,7 @@ func TestAddCNP(t *testing.T) {
 	appTier := antreatypes.TierApplication
 	secOpsTier := antreatypes.TierSecurityOps
 	netOpsTier := antreatypes.TierNetworkOps
-	intTenantTier := antreatypes.TierInterTenant
+	platformTier := antreatypes.TierPlatform
 	emergencyTier := antreatypes.TierEmergency
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := networking.ProtocolTCP
@@ -683,7 +683,7 @@ func TestAddCNP(t *testing.T) {
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Tier:     "InterTenant",
+					Tier:     "Platform",
 					Ingress: []secv1alpha1.Rule{
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
@@ -707,7 +707,7 @@ func TestAddCNP(t *testing.T) {
 				Name:         "cnpE",
 				Namespace:    "",
 				Priority:     &p10,
-				TierPriority: &intTenantTier,
+				TierPriority: &platformTier,
 				Rules: []networking.NetworkPolicyRule{
 					{
 						Direction: networking.DirectionIn,

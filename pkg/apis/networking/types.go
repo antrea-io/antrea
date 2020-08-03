@@ -155,11 +155,11 @@ type NetworkPolicy struct {
 	Rules []NetworkPolicyRule
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
 	AppliedToGroups []string
-	// Priority represents the relative priority of this Network Policy as compared to
-	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+	// Priority represents the relative priority of this NetworkPolicy as compared to
+	// other NetworkPolicies. Priority will be unset (nil) for K8s NetworkPolicy.
 	Priority *float64
-	// TierPriority represents the priority of the Tier associated with this Network
-	// Policy. The TierPriority will remain nil for K8s NetworkPolicy.
+	// TierPriority represents the priority of the Tier associated with this NetworkPolicy.
+	// The TierPriority will remain nil for K8s NetworkPolicy.
 	TierPriority *uint32
 }
 
@@ -188,7 +188,7 @@ type NetworkPolicyRule struct {
 	Priority int32
 	// Action specifies the action to be applied on the rule. i.e. Allow/Drop. An empty
 	// action “nil” defaults to Allow action, which would be the case for rules created for
-	// K8s Network Policy.
+	// K8s NetworkPolicy.
 	Action *secv1alpha1.RuleAction
 }
 

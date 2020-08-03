@@ -37,7 +37,7 @@ var (
 		"Emergency":   antreatypes.TierEmergency,
 		"SecurityOps": antreatypes.TierSecurityOps,
 		"NetworkOps":  antreatypes.TierNetworkOps,
-		"InterTenant": antreatypes.TierInterTenant,
+		"Platform":    antreatypes.TierPlatform,
 		"Application": antreatypes.TierApplication,
 	}
 )

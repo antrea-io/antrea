@@ -45,7 +45,7 @@ const (
 	TierEmergency TierPriority = iota + 1
 	TierSecurityOps
 	TierNetworkOps
-	TierInterTenant
+	TierPlatform
 	TierApplication
 )
 

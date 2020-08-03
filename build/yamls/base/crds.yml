@@ -246,7 +246,7 @@ spec:
           properties:
             tier:
               type: string
-              pattern: '\bEmergency|\bSecurityOps|\bNetworkOps|\bInterTenant|\bApplication'
+              pattern: '\bEmergency|\bSecurityOps|\bNetworkOps|\bPlatform|\bApplication'
             priority:
               type: number
               format: float
