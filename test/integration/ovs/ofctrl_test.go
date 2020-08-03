@@ -66,6 +66,8 @@ var (
 	tunnelPeer       = net.ParseIP("10.1.1.2")
 	peerGW           = net.ParseIP("192.168.2.1")
 	vMAC, _          = net.ParseMAC("aa:bb:cc:dd:ee:ff")
+
+	ipDscp = uint8(10)
 )
 
 func newOFBridge(brName string) binding.Bridge {
@@ -956,6 +958,13 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			MatchDstIPNet(*serviceCIDR).
 			Action().Output(int(gwOFPort)).
 			Done(),
+		table.BuildFlow(priorityNormal).
+			Cookie(getCookieID()).
+			MatchProtocol(binding.ProtocolIP).
+			MatchSrcIP(podIP).
+			MatchIPDscp(ipDscp).
+			Action().GotoTable(table.GetNext()).
+			Done(),
 		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchTCPDstPort(uint16(8080)).
 			Action().Conjunction(uint32(1001), uint8(3), uint8(3)).Done(),
 		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchSrcIP(podIP).
@@ -993,6 +1002,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		&ExpectFlow{"priority=200,dl_dst=aa:aa:aa:aa:aa:13", fmt.Sprintf("load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,reg0=0x10000/0x10000", "output:NXM_NX_REG1[]"},
 		&ExpectFlow{"priority=200,ip,nw_dst=172.16.0.0/16", "output:1"},
+		&ExpectFlow{fmt.Sprintf("priority=200,ip,nw_src=192.168.1.3,nw_tos=%d", ipDscp<<2), gotoTableAction},
 		&ExpectFlow{"priority=220,tcp,tp_dst=8080", "conjunction(1001,3/3)"},
 		&ExpectFlow{"priority=220,ip,nw_src=192.168.1.3", "conjunction(1001,1/3)"},
 		&ExpectFlow{"priority=220,ip,nw_dst=192.168.3.0/24", "conjunction(1001,2/3)"},

@@ -275,6 +275,15 @@ func (b *ofFlowBuilder) MatchARPOp(op uint16) FlowBuilder {
 	return b
 }
 
+// MatchIPDscp adds match condition for matching DSCP field in the IP header. Note, OVS use TOS to present DSCP, and
+// the field name is shown as "nw_tos" with OVS command line, and the value is calculated by shifting the given value
+// left 2 bits.
+func (b *ofFlowBuilder) MatchIPDscp(dscp uint8) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("nw_tos=%d", dscp<<2))
+	b.Match.IpDscp = dscp
+	return b
+}
+
 // MatchConjID adds match condition for matching conj_id.
 func (b *ofFlowBuilder) MatchConjID(value uint32) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("conj_id=%d", value))

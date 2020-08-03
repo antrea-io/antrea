@@ -209,6 +209,7 @@ type FlowBuilder interface {
 	MatchARPSpa(ip net.IP) FlowBuilder
 	MatchARPTpa(ip net.IP) FlowBuilder
 	MatchARPOp(op uint16) FlowBuilder
+	MatchIPDscp(dscp uint8) FlowBuilder
 	MatchCTStateNew(isSet bool) FlowBuilder
 	MatchCTStateRel(isSet bool) FlowBuilder
 	MatchCTStateRpl(isSet bool) FlowBuilder
