@@ -22,6 +22,7 @@ function cleanup_ovs_run_files {
 }
 
 function start_ovs {
+    offload=$1
     if daemon_is_running ovsdb-server; then
         log_info $CONTAINER_NAME "ovsdb-server is already running"
     else
@@ -38,6 +39,8 @@ function start_ovs {
         # mishandled in its default fashion, the config will be removed after antrea-agent
         # restoring flows.
         ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait="true"
+        log_info $CONTAINER_NAME "ovs-vswitchd set hw-offload to $offload"
+        ovs-vsctl --no-wait set open_vswitch . other_config:hw-offload="$offload"
         /usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server --system-id=random start --db-file=$OVS_DB_FILE
         log_info $CONTAINER_NAME "Started ovs-vswitchd"
     fi
@@ -64,7 +67,12 @@ trap "quit" INT TERM
 
 cleanup_ovs_run_files
 
-start_ovs
+offload=false
+if [ $# == 1 ] && [ -n "$1" ] && [ "$1" == "--hw-offload" ]; then
+    offload=true
+fi
+
+start_ovs $offload
 
 log_info $CONTAINER_NAME "Started the loop that checks OVS status every 30 seconds"
 while true; do
