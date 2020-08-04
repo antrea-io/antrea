@@ -155,7 +155,12 @@ spec:
               minimum: 1
               type: number
             tier:
-              pattern: \bEmergency|\bSecurityOps|\bNetworkOps|\bPlatform|\bApplication
+              enum:
+              - Emergency
+              - SecurityOps
+              - NetworkOps
+              - Platform
+              - Application
               type: string
           required:
           - appliedTo
