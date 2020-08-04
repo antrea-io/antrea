@@ -83,6 +83,8 @@ spec:
                   action:
                     pattern: \bAllow|\bDrop
                     type: string
+                  enableLogging:
+                    type: boolean
                   ports:
                     items:
                       properties:
@@ -117,6 +119,8 @@ spec:
                   action:
                     pattern: \bAllow|\bDrop
                     type: string
+                  enableLogging:
+                    type: boolean
                   from:
                     items:
                       properties:
@@ -735,7 +739,7 @@ data:
 
     # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster.
-    # ClusterNetworkPolicy: false
+    ClusterNetworkPolicy: true
 
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the

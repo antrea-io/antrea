@@ -240,6 +240,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			Services:  toAntreaServicesForCRD(ingressRule.Ports),
 			Action:    ingressRule.Action,
 			Priority:  int32(idx),
+			EnableLogging: ingressRule.EnableLogging,
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
@@ -251,6 +252,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			Services:  toAntreaServicesForCRD(egressRule.Ports),
 			Action:    egressRule.Action,
 			Priority:  int32(idx),
+			EnableLogging: egressRule.EnableLogging,
 		})
 	}
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
