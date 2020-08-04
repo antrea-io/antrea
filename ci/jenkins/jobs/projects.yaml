@@ -411,13 +411,13 @@
               #!/bin/bash
               source /home/ubuntu/.bashrc
               sudo ./ci/test-conformance-eks.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
-                --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} --setup-only
+                --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} --log-mode detail --setup-only
           triggers:
           - timed: H H */2 * *
           publishers:
           - archive:
               allow-empty: true
-              artifacts: 'eks-test.log'
+              artifacts: 'eks-test.log, ci/*.tar.gz'
               case-sensitive: true
               default-excludes: true
               fingerprint: false
@@ -468,13 +468,13 @@
               ${{GCLOUD_PATH}} auth activate-service-account --key-file=${{GCLOUD_KEY_PATH}}
               sudo ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
                 --k8s-version 1.16.11-gke.5 --svc-account antrea-gcp@antrea.iam.gserviceaccount.com \
-                --gcloud-path ${{GCLOUD_PATH}} --setup-only
+                --gcloud-path ${{GCLOUD_PATH}} --log-mode detail --setup-only
           triggers:
           - timed: H H */2 * *
           publishers:
           - archive:
               allow-empty: true
-              artifacts: 'gke-test.log'
+              artifacts: 'gke-test.log, ci/*.tar.gz'
               case-sensitive: true
               default-excludes: true
               fingerprint: false
@@ -515,13 +515,14 @@
               #!/bin/bash
               source /home/ubuntu/.bashrc
               sudo ./ci/test-conformance-aks.sh --azure-app-id ${{AZURE_APP_ID}} --azure-password ${{AZURE_PASSWORD}} \
-                --azure-tenant-id ${{AZURE_TENANT_ID}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} --setup-only
+                --azure-tenant-id ${{AZURE_TENANT_ID}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} \
+                --log-mode detail --setup-only
           triggers:
           - timed: H H */2 * *
           publishers:
           - archive:
               allow-empty: true
-              artifacts: 'aks-test.log'
+              artifacts: 'aks-test.log, ci/*.tar.gz'
               case-sensitive: true
               default-excludes: true
               fingerprint: false
