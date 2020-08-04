@@ -93,7 +93,7 @@ func testQueryEndpoint(t *testing.T, maxExecutionTime time.Duration, namespaces 
 	}()
 	// create controller
 	objs := toRunTimeObjects(namespaces, networkPolicies, pods)
-	_, querier := makeControllerAndEndpointQueryReplier(objs...)
+	querier := makeControllerAndEndpointQueryReplier(objs...)
 	// Everything is ready, now start timing.
 	start := time.Now()
 	// track execution time by calling query endpoint 1000 times on random pods

@@ -18,8 +18,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"io"
 	"os"
 	"reflect"
@@ -36,6 +34,8 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 )
 
 type formatterType string
@@ -251,6 +251,7 @@ func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client *
 	cmd.RunE = cd.newCommandRunE(client)
 }
 
+// validate checks if the commandDefinition is valid.
 func (cd *commandDefinition) validate() []error {
 	var errs []error
 	if len(cd.use) == 0 {

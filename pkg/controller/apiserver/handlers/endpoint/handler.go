@@ -16,8 +16,9 @@ package endpoint
 
 import (
 	"encoding/json"
-	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"net/http"
+
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 )
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier

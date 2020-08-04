@@ -75,10 +75,10 @@ func NewEndpointQueryReplier(networkPolicyController *NetworkPolicyController) *
 	return n
 }
 
-//QueryNetworkPolicies returns kubernetes network policy references relevant to the selected network endpoint. Relevant
-//policies fall into three categories: applied policies (Policies in Endpoint type) are policies which directly apply to
-//an endpoint, egress and ingress rules (Rules in Endpoint type) are policies which reference the endpoint in an ingress/
-//egress rule respectively.
+// QueryNetworkPolicies returns kubernetes network policy references relevant to the selected network endpoint. Relevant
+// policies fall into three categories: applied policies (Policies in Endpoint type) are policies which directly apply to
+// an endpoint, egress and ingress rules (Rules in Endpoint type) are policies which reference the endpoint in an ingress/
+// egress rule respectively.
 func (eq EndpointQueryReplier) QueryNetworkPolicies(namespace string, podName string) (*EndpointQueryResponse, error) {
 	// check if namespace and podName select an existing pod
 	_, err := eq.networkPolicyController.podInformer.Lister().Pods(namespace).Get(podName)
@@ -90,8 +90,9 @@ func (eq EndpointQueryReplier) QueryNetworkPolicies(namespace string, podName st
 		index  int
 	}
 	// create network policies categories
-	applied, ingress, egress := make([]*antreatypes.NetworkPolicy, 0), make([]*ruleTemp, 0),
-		make([]*ruleTemp, 0)
+	applied := make([]*antreatypes.NetworkPolicy, 0)
+	ingress := make([]*ruleTemp, 0)
+	egress := make([]*ruleTemp, 0)
 	// get all appliedToGroups using pod index, then get applied policies using appliedToGroup
 	appliedToGroups, err := eq.networkPolicyController.appliedToGroupStore.GetByIndex(store.PodIndex, podName+"/"+namespace)
 	if err != nil {
