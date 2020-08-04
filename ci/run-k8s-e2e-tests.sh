@@ -25,9 +25,11 @@ RUN_NETWORK_POLICY=false
 RUN_E2E_FOCUS=""
 KUBECONFIG_OPTION=""
 E2E_CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
+MODE="report"
 
 _usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-conformance-skip <SkipRegex>]
                   [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]
+                  [--log-mode <SonobuoyResultLogLevel>]
 Run the K8s e2e community tests (Conformance & Network Policy) which are relevant to Project Antrea,
 using the sonobuoy tool.
         --e2e-conformance                                         Run Conformance tests.
@@ -36,6 +38,7 @@ using the sonobuoy tool.
         --e2e-focus TestRegex                                     Run only tests matching a specific regex, this is useful to run a single tests for example.
         --kubeconfig Kubeconfig                                   Explicit path to Kubeconfig file. You may also set the KUBECONFIG environment variable.
         --kube-conformance-image-version ConformanceImageVersion  Use specific version of the Conformance tests container image. Default is $KUBE_CONFORMANCE_IMAGE_VERSION.
+        --log-mode                                                Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --help, -h                                                Print this message and exit
 
 This tool uses sonobuoy (https://github.com/vmware-tanzu/sonobuoy) to run the K8s e2e community
@@ -88,6 +91,10 @@ case $key in
     E2E_CONFORMANCE_SKIP="$2"
     shift 2
     ;;
+    --log-mode)
+    MODE="$2"
+    shift 2
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -121,7 +128,7 @@ function run_sonobuoy() {
               --kube-conformance-image-version $KUBE_CONFORMANCE_IMAGE_VERSION \
               --e2e-focus "$focus_regex" --e2e-skip "$skip_regex"
     results=$($SONOBUOY retrieve $KUBECONFIG_OPTION)
-    $SONOBUOY results $results   
+    $SONOBUOY results $results --mode=$MODE
 }
 
 function run_conformance() {
