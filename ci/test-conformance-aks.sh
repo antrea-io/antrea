@@ -26,12 +26,13 @@ RESOURCE_GROUP="antrea-ci-rg"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
-KUBECONFIG_PATH="$HOME/jenkins/out/"
+KUBECONFIG_PATH="$HOME/jenkins/out/aks"
 TEST_FAILURE=false
+MODE="report"
 
 _usage="Usage: $0 [--cluster-name <AKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--azure-app-id <AppID>] [--azure-tenant-id <TenantID>] [--azure-password <Password>] \
-                  [--aks-region <Region>] [--setup-only] [--cleanup-only]
+                  [--aks-region <Region>] [--log-mode <SonobuoyResultLogLevel>] [--setup-only] [--cleanup-only]
 
 Setup a AKS cluster to run K8s e2e community tests (Conformance & Network Policy).
 
@@ -42,6 +43,7 @@ Setup a AKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --azure-tenant-id        Azure Service Principal Tenant ID.
         --azure-password         Azure Service Principal Password.
         --aks-region             The Azure region where the cluster will be initiated. Defaults to westus.
+        --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --setup-only             Only perform setting up the cluster and run test.
         --cleanup-only           Only perform cleaning up the cluster."
 
@@ -84,6 +86,10 @@ case $key in
     ;;
     --k8s-version)
     K8S_VERSION="$2"
+    shift 2
+    ;;
+    --log-mode)
+    MODE="$2"
     shift 2
     ;;
     --setup-only)
@@ -179,7 +185,8 @@ function deliver_antrea_to_aks() {
 
 function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
-    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy > ${GIT_CHECKOUT_DIR}/aks-test.log
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy \
+      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log
 
     if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/aks-test.log
     then

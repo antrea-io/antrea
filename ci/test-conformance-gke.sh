@@ -24,21 +24,24 @@ GKE_ZONE="us-west1"
 GKE_HOST="UBUNTU"
 GKE_SERVICE_CIDR="10.94.0.0/16"
 GKE_PROJECT="antrea"
+KUBECONFIG_PATH="$HOME/jenkins/out/gke"
+MODE="report"
 
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 TEST_FAILURE=false
 
-_usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>] [--k8s-version <ClusterVersion>] [--svc-account <Name>] [--user <Name>]
-                  [--gke-project <Project>] [--gke-zone <Zone>] [--svc-cidr <ServiceCIDR>] [--host-type <HostType]
-                  [--gloud-path] [--setup-only] [--cleanup-only]
+_usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>]  [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>] \
+                  [--svc-account <Name>] [--user <Name>] [--gke-project <Project>] [--gke-zone <Zone>] [--log-mode <SonobuoyResultLogLevel>] \
+                  [--svc-cidr <ServiceCIDR>] [--host-type <HostType] [--gloud-path] [--setup-only] [--cleanup-only]
 
 Setup a GKE cluster to run K8s e2e community tests (Conformance & Network Policy).
 Before running the script, login to gcloud with \`gcloud auth login\` or \`gcloud auth activate-service-account\`
 and create the project to be used for cluster with \`gcloud projects create\`.
 
         --cluster-name        The cluster name to be used for the generated GKE cluster. Must be specified if not run in Jenkins environment.
+        --kubeconfig          Path to save kubeconfig of generated EKS cluster.
         --k8s-version         GKE K8s cluster version. Defaults to 1.15.11-gke.11.
         --svc-account         Service acount name if logged in with service account. Use --user instead if logged in with gcloud auth login.
         --user                Email address if logged in with user account. Use --svc-account instead if logged in with service account.
@@ -47,6 +50,7 @@ and create the project to be used for cluster with \`gcloud projects create\`.
         --svc-cidr            The service CIDR to be used for cluster. Defaults to 10.94.0.0/16.
         --host-type           The host type of worker node. Defaults to UBUNTU.
         --gcloud-path         The path of gcloud installation. Only need to be explicitly set for Jenkins environments.
+        --log-mode            Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --setup-only          Only perform setting up the cluster and run test.
         --cleanup-only        Only perform cleaning up the cluster."
 
@@ -66,6 +70,10 @@ key="$1"
 case $key in
     --cluster-name)
     CLUSTER="$2"
+    shift 2
+    ;;
+    --kubeconfig)
+    KUBECONFIG_PATH="$2"
     shift 2
     ;;
     --gke-project)
@@ -98,6 +106,10 @@ case $key in
     ;;
     --gcloud-path)
     GCLOUD_PATH="$2"
+    shift 2
+    ;;
+   --log-mode)
+    MODE="$2"
     shift 2
     ;;
     --setup-only)
@@ -147,6 +159,9 @@ function setup_gke() {
         echo "=== Failed to deploy GKE cluster! ==="
         exit 1
     fi
+
+    mkdir -p ${KUBECONFIG_PATH}
+    ${GCLOUD_PATH} container clusters get-credentials ${CLUSTER} --zone ${GKE_ZONE} > ${KUBECONFIG_PATH}/kubeconfig
 
     sleep 10
     if [[ $(kubectl get nodes) ]]; then
@@ -202,10 +217,8 @@ function run_conformance() {
     # Allow nodeport traffic by external IP
     ${GCLOUD_PATH} compute firewall-rules create allow-nodeport --allow tcp:30000-32767
 
-#    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
-#        GIT_CHECKOUT_DIR=..
-#    fi
-    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy > ${GIT_CHECKOUT_DIR}/gke-test.log
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy \
+      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/gke-test.log
 
     ${GCLOUD_PATH} compute firewall-rules delete allow-nodeport
     if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/gke-test.log
@@ -246,7 +259,7 @@ function cleanup_cluster() {
        echo "=== Failed to delete GKE cluster ${CLUSTER}! ==="
        exit 1
     fi
-    rm -f $HOME/.kube/kubeconfig
+    rm -f ${KUBECONFIG_PATH}/kubeconfig
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 }
 

@@ -28,12 +28,13 @@ SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_rsa"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
-KUBECONFIG_PATH="$HOME/jenkins/out/"
+KUBECONFIG_PATH="$HOME/jenkins/out/eks"
+MODE="report"
 TEST_FAILURE=false
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] \
-                  [--ssh-private-key <SSHPrivateKey] [--setup-only] [--cleanup-only]
+                  [--ssh-private-key <SSHPrivateKey] [--log-mode <SonobuoyResultLogLevel>] [--setup-only] [--cleanup-only]
 
 Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy).
 
@@ -44,6 +45,7 @@ Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --aws-secret-key         AWS Secret Key for logging in to awscli.
         --aws-region             The AWS region where the cluster will be initiated. Defaults to us-east-2.
         --ssh-key                The path of key to be used for ssh access to worker nodes.
+        --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --setup-only             Only perform setting up the cluster and run test.
         --cleanup-only           Only perform cleaning up the cluster."
 
@@ -90,6 +92,10 @@ case $key in
     ;;
     --k8s-version)
     K8S_VERSION="$2"
+    shift 2
+    ;;
+    --log-mode)
+    MODE="$2"
     shift 2
     ;;
     --setup-only)
@@ -205,7 +211,8 @@ function run_conformance() {
     # Skip NodePort related cases for EKS since by default eksctl does not create security groups for nodeport service
     # access through node external IP. See https://github.com/vmware-tanzu/antrea/issues/690
     skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
-    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-conformance-skip ${skip_regex} > ${GIT_CHECKOUT_DIR}/eks-test.log
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-conformance-skip ${skip_regex} \
+       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/eks-test.log
 
     if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/eks-test.log
     then
