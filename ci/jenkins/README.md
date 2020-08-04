@@ -62,9 +62,9 @@ should be deleted. This ensures that all tests are run on a clean testbed.
   community tests on AKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
   Current test environment matrix:
 
-  |  K8s Version   |  Node Type          |  Node OS    |  Status  |
-  | :------------: | :-----------------: | :---------: | :------: |
-  | 1.16.10        |  Standard_DS2_v2    |  16.04      |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
+  |  K8s Version   |  Node Type          |  Node OS        |  Status  |
+  | :------------: | :-----------------: | :-------------: | :------: |
+  | 1.16.10        |  Standard_DS2_v2    |  Ubuntu 16.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
 
 If you need to run the K8s community tests locally, you may use the
 [ci/run-k8s-e2e-tests.sh](/ci/run-k8s-e2e-tests.sh) script. It takes care of
