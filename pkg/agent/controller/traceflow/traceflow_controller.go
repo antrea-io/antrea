@@ -126,7 +126,7 @@ func NewTraceflowController(
 		resyncPeriod,
 	)
 	// Register packetInHandler
-	c.ofClient.RegisterPacketInHandler("traceflow", c)
+	c.ofClient.RegisterPacketInHandler(openflow.NewOFReason(1),"traceflow", c)
 	// Add serviceLister if AntreaProxy enabled
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		c.serviceLister = informerFactory.Core().V1().Services().Lister()

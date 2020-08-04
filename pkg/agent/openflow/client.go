@@ -220,11 +220,14 @@ type Client interface {
 	// Find network policy and namespace by conjunction ID.
 	GetPolicyFromConjunction(ruleID uint32) *v1beta1.NetworkPolicyReference
 
+	// Find OFpriority by conjunction ID. Return "0" if none.
+	GetPriorityFromConjunction(ruleID uint32) string
+
 	// RegisterPacketInHandler registers PacketIn handler to process PacketIn event.
-	RegisterPacketInHandler(packetHandlerName string, packetInHandler interface{})
+	RegisterPacketInHandler(packetHandlerReason ofpPacketInReason, packetHandlerName string, packetInHandler interface{})
 	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received
 	// packets through registered handlers.
-	StartPacketInHandler(stopCh <-chan struct{})
+	StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{})
 	// Get traffic metrics of each NetworkPolicy rule.
 	NetworkPolicyMetrics() map[uint32]*types.RuleMetric
 }

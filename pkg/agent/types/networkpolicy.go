@@ -52,6 +52,7 @@ type PolicyRule struct {
 	FlowID    uint32
 	TableID   binding.TableIDType
 	PolicyRef *v1beta1.NetworkPolicyReference
+	EnableLogging 	bool
 }
 
 // IsAntreaNetworkPolicyRule returns if a PolicyRule is created for Antrea NetworkPolicy types.

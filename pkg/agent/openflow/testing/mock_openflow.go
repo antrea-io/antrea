@@ -23,9 +23,9 @@ import (
 	ofctrl "github.com/contiv/ofnet/ofctrl"
 	gomock "github.com/golang/mock/gomock"
 	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
+	openflow "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
-	openflow "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	proxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 	net "net"
 	reflect "reflect"
@@ -125,10 +125,10 @@ func (mr *MockClientMockRecorder) Disconnect() *gomock.Call {
 }
 
 // GetFlowTableStatus mocks base method
-func (m *MockClient) GetFlowTableStatus() []openflow.TableStatus {
+func (m *MockClient) GetFlowTableStatus() []openflow0.TableStatus {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetFlowTableStatus")
-	ret0, _ := ret[0].([]openflow.TableStatus)
+	ret0, _ := ret[0].([]openflow0.TableStatus)
 	return ret0
 }
 
@@ -280,7 +280,7 @@ func (mr *MockClientMockRecorder) InstallDefaultTunnelFlows(arg0 interface{}) *g
 }
 
 // InstallEndpointFlows mocks base method
-func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 []proxy.Endpoint) error {
+func (m *MockClient) InstallEndpointFlows(arg0 openflow0.Protocol, arg1 []proxy.Endpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallEndpointFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -322,7 +322,7 @@ func (mr *MockClientMockRecorder) InstallGatewayFlows(arg0, arg1, arg2 interface
 }
 
 // InstallLoadBalancerServiceFromOutsideFlows mocks base method
-func (m *MockClient) InstallLoadBalancerServiceFromOutsideFlows(arg0 net.IP, arg1 uint16, arg2 openflow.Protocol) error {
+func (m *MockClient) InstallLoadBalancerServiceFromOutsideFlows(arg0 net.IP, arg1 uint16, arg2 openflow0.Protocol) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallLoadBalancerServiceFromOutsideFlows", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -378,7 +378,7 @@ func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0 interface{}) *gomo
 }
 
 // InstallServiceFlows mocks base method
-func (m *MockClient) InstallServiceFlows(arg0 openflow.GroupIDType, arg1 net.IP, arg2 uint16, arg3 openflow.Protocol, arg4 uint16) error {
+func (m *MockClient) InstallServiceFlows(arg0 openflow0.GroupIDType, arg1 net.IP, arg2 uint16, arg3 openflow0.Protocol, arg4 uint16) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallServiceFlows", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
@@ -392,7 +392,7 @@ func (mr *MockClientMockRecorder) InstallServiceFlows(arg0, arg1, arg2, arg3, ar
 }
 
 // InstallServiceGroup mocks base method
-func (m *MockClient) InstallServiceGroup(arg0 openflow.GroupIDType, arg1 bool, arg2 []proxy.Endpoint) error {
+func (m *MockClient) InstallServiceGroup(arg0 openflow0.GroupIDType, arg1 bool, arg2 []proxy.Endpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallServiceGroup", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -448,7 +448,7 @@ func (mr *MockClientMockRecorder) NetworkPolicyMetrics() *gomock.Call {
 }
 
 // ReassignFlowPriorities mocks base method
-func (m *MockClient) ReassignFlowPriorities(arg0 map[uint16]uint16, arg1 openflow.TableIDType) error {
+func (m *MockClient) ReassignFlowPriorities(arg0 map[uint16]uint16, arg1 openflow0.TableIDType) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReassignFlowPriorities", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -462,15 +462,15 @@ func (mr *MockClientMockRecorder) ReassignFlowPriorities(arg0, arg1 interface{})
 }
 
 // RegisterPacketInHandler mocks base method
-func (m *MockClient) RegisterPacketInHandler(arg0 string, arg1 interface{}) {
+func (m *MockClient) RegisterPacketInHandler(arg0 openflow.ofpPacketInReason, arg1 string, arg2 interface{}) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RegisterPacketInHandler", arg0, arg1)
+	m.ctrl.Call(m, "RegisterPacketInHandler", arg0, arg1, arg2)
 }
 
 // RegisterPacketInHandler indicates an expected call of RegisterPacketInHandler
-func (mr *MockClientMockRecorder) RegisterPacketInHandler(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) RegisterPacketInHandler(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPacketInHandler", reflect.TypeOf((*MockClient)(nil).RegisterPacketInHandler), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPacketInHandler", reflect.TypeOf((*MockClient)(nil).RegisterPacketInHandler), arg0, arg1, arg2)
 }
 
 // ReplayFlows mocks base method
@@ -500,15 +500,15 @@ func (mr *MockClientMockRecorder) SendTraceflowPacket(arg0, arg1, arg2, arg3, ar
 }
 
 // StartPacketInHandler mocks base method
-func (m *MockClient) StartPacketInHandler(arg0 <-chan struct{}) {
+func (m *MockClient) StartPacketInHandler(arg0 []byte, arg1 <-chan struct{}) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartPacketInHandler", arg0)
+	m.ctrl.Call(m, "StartPacketInHandler", arg0, arg1)
 }
 
 // StartPacketInHandler indicates an expected call of StartPacketInHandler
-func (mr *MockClientMockRecorder) StartPacketInHandler(arg0 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) StartPacketInHandler(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPacketInHandler", reflect.TypeOf((*MockClient)(nil).StartPacketInHandler), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPacketInHandler", reflect.TypeOf((*MockClient)(nil).StartPacketInHandler), arg0, arg1)
 }
 
 // SubscribePacketIn mocks base method
@@ -526,7 +526,7 @@ func (mr *MockClientMockRecorder) SubscribePacketIn(arg0, arg1 interface{}) *gom
 }
 
 // UninstallEndpointFlows mocks base method
-func (m *MockClient) UninstallEndpointFlows(arg0 openflow.Protocol, arg1 proxy.Endpoint) error {
+func (m *MockClient) UninstallEndpointFlows(arg0 openflow0.Protocol, arg1 proxy.Endpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UninstallEndpointFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -583,7 +583,7 @@ func (mr *MockClientMockRecorder) UninstallPolicyRuleFlows(arg0 interface{}) *go
 }
 
 // UninstallServiceFlows mocks base method
-func (m *MockClient) UninstallServiceFlows(arg0 net.IP, arg1 uint16, arg2 openflow.Protocol) error {
+func (m *MockClient) UninstallServiceFlows(arg0 net.IP, arg1 uint16, arg2 openflow0.Protocol) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UninstallServiceFlows", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -597,7 +597,7 @@ func (mr *MockClientMockRecorder) UninstallServiceFlows(arg0, arg1, arg2 interfa
 }
 
 // UninstallServiceGroup mocks base method
-func (m *MockClient) UninstallServiceGroup(arg0 openflow.GroupIDType) error {
+func (m *MockClient) UninstallServiceGroup(arg0 openflow0.GroupIDType) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UninstallServiceGroup", arg0)
 	ret0, _ := ret[0].(error)
@@ -634,7 +634,7 @@ func (m *MockOFEntryOperations) EXPECT() *MockOFEntryOperationsMockRecorder {
 }
 
 // Add mocks base method
-func (m *MockOFEntryOperations) Add(arg0 openflow.Flow) error {
+func (m *MockOFEntryOperations) Add(arg0 openflow0.Flow) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Add", arg0)
 	ret0, _ := ret[0].(error)
@@ -648,7 +648,7 @@ func (mr *MockOFEntryOperationsMockRecorder) Add(arg0 interface{}) *gomock.Call 
 }
 
 // AddAll mocks base method
-func (m *MockOFEntryOperations) AddAll(arg0 []openflow.Flow) error {
+func (m *MockOFEntryOperations) AddAll(arg0 []openflow0.Flow) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddAll", arg0)
 	ret0, _ := ret[0].(error)
@@ -662,7 +662,7 @@ func (mr *MockOFEntryOperationsMockRecorder) AddAll(arg0 interface{}) *gomock.Ca
 }
 
 // AddOFEntries mocks base method
-func (m *MockOFEntryOperations) AddOFEntries(arg0 []openflow.OFEntry) error {
+func (m *MockOFEntryOperations) AddOFEntries(arg0 []openflow0.OFEntry) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddOFEntries", arg0)
 	ret0, _ := ret[0].(error)
@@ -676,7 +676,7 @@ func (mr *MockOFEntryOperationsMockRecorder) AddOFEntries(arg0 interface{}) *gom
 }
 
 // Delete mocks base method
-func (m *MockOFEntryOperations) Delete(arg0 openflow.Flow) error {
+func (m *MockOFEntryOperations) Delete(arg0 openflow0.Flow) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", arg0)
 	ret0, _ := ret[0].(error)
@@ -690,7 +690,7 @@ func (mr *MockOFEntryOperationsMockRecorder) Delete(arg0 interface{}) *gomock.Ca
 }
 
 // DeleteAll mocks base method
-func (m *MockOFEntryOperations) DeleteAll(arg0 []openflow.Flow) error {
+func (m *MockOFEntryOperations) DeleteAll(arg0 []openflow0.Flow) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteAll", arg0)
 	ret0, _ := ret[0].(error)
@@ -704,7 +704,7 @@ func (mr *MockOFEntryOperationsMockRecorder) DeleteAll(arg0 interface{}) *gomock
 }
 
 // DeleteOFEntries mocks base method
-func (m *MockOFEntryOperations) DeleteOFEntries(arg0 []openflow.OFEntry) error {
+func (m *MockOFEntryOperations) DeleteOFEntries(arg0 []openflow0.OFEntry) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteOFEntries", arg0)
 	ret0, _ := ret[0].(error)
@@ -718,7 +718,7 @@ func (mr *MockOFEntryOperationsMockRecorder) DeleteOFEntries(arg0 interface{}) *
 }
 
 // Modify mocks base method
-func (m *MockOFEntryOperations) Modify(arg0 openflow.Flow) error {
+func (m *MockOFEntryOperations) Modify(arg0 openflow0.Flow) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Modify", arg0)
 	ret0, _ := ret[0].(error)

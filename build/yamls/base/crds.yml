@@ -340,6 +340,8 @@ spec:
                                   format: cidr
                       name:
                         type: string
+                      enableLogging:
+                        type: boolean
                 egress:
                   type: array
                   items:
@@ -377,6 +379,8 @@ spec:
                                   format: cidr
                       name:
                         type: string
+                      enableLogging:
+                        type: boolean
   scope: Cluster
   names:
     plural: clusternetworkpolicies

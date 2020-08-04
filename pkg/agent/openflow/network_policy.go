@@ -765,10 +765,10 @@ func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *poli
 		var metricFlows []binding.Flow
 		if rule.IsAntreaNetworkPolicyRule() && *rule.Action == secv1alpha1.RuleActionDrop {
 			metricFlows = append(metricFlows, c.dropRuleMetricFlow(ruleID, isIngress))
-			actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleID, ruleTable.GetID(), rule.Priority))
+			actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleID, ruleTable.GetID(), rule.Priority, rule.EnableLogging))
 		} else {
 			metricFlows = append(metricFlows, c.allowRulesMetricFlows(ruleID, isIngress)...)
-			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority))
+			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority, rule.EnableLogging))
 		}
 		conj.actionFlows = actionFlows
 		conj.metricFlows = metricFlows
@@ -1013,6 +1013,16 @@ func (c *client) GetPolicyFromConjunction(ruleID uint32) *v1beta1.NetworkPolicyR
 		return nil
 	}
 	return conjunction.npRef
+}
+
+func (c *client) GetPriorityFromConjunction(ruleID uint32) string {
+	conjunction := c.getPolicyRuleConjunction(ruleID)
+	priorities := conjunction.ActionFlowPriorities()
+	priorityStr := ""
+	if len(priorities) > 0 {
+		priorityStr = priorities[len(priorities)-1]
+	}
+	return priorityStr
 }
 
 // UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.

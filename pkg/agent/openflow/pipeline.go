@@ -200,6 +200,7 @@ const (
 	serviceLearnReg         = endpointPortReg // Use reg4[16..18] to store endpoint selection states.
 	EgressReg       regType = 5
 	IngressReg      regType = 6
+	DispositionReg	regType = 7	// Stores Allow or Drop
 	TraceflowReg    regType = 9 // Use reg9[28..31] to store traceflow dataplaneTag.
 	// cnpDropConjunctionIDReg reuses reg3 which will also be used for storing endpoint IP to store the rule ID. Since
 	// the service selection will finish when a packet hitting NetworkPolicy related rules, there is no conflict.
@@ -309,7 +310,7 @@ type client struct {
 	encapMode   config.TrafficEncapModeType
 	gatewayPort uint32 // OVSOFPort number
 	// packetInHandlers stores handler to process PacketIn event
-	packetInHandlers map[string]PacketInHandler
+	packetInHandlers map[ofpPacketInReason]map[string]PacketInHandler
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -962,7 +963,7 @@ func (c *client) dropRuleMetricFlow(conjunctionID uint32, ingress bool) binding.
 
 // conjunctionActionFlow generates the flow to jump to a specific table if policyRuleConjunction ID is matched. Priority of
 // conjunctionActionFlow is created at priorityLow for k8s network policies, and *priority assigned by PriorityAssigner for AntreaPolicy.
-func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, priority *uint16) binding.Flow {
+func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, priority *uint16, enableLogging bool) binding.Flow {
 	var ofPriority uint16
 	if priority == nil {
 		ofPriority = priorityLow
@@ -975,34 +976,63 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 		conjReg = EgressReg
 		labelRange = metricEgressRuleIDRange
 	}
-	return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
-		MatchConjID(conjunctionID).
-		MatchPriority(ofPriority).
-		Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
-		Action().CT(true, nextTable, CtZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
-		LoadToLabelRange(uint64(conjunctionID), &labelRange).
-		CTDone().
-		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-		Done()
+	if enableLogging {
+		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
+			MatchConjID(conjunctionID).
+			MatchPriority(ofPriority).
+			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
+			Action().LoadRegRange(int(DispositionReg), 1, binding.Range{0, 31}). //CNP
+			Action().SendToController(0).
+			Action().CT(true, nextTable, CtZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
+			LoadToLabelRange(uint64(conjunctionID), &labelRange).
+			CTDone().
+			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+			Done()
+	} else {
+		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
+			MatchConjID(conjunctionID).
+			MatchPriority(ofPriority).
+			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
+			Action().CT(true, nextTable, CtZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
+			LoadToLabelRange(uint64(conjunctionID), &labelRange).
+			CTDone().
+			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+			Done()
+	}
 }
 
 // conjunctionActionDropFlow generates the flow to mark the packet to be dropped if policyRuleConjunction ID is matched.
 // Any matched flow will be dropped in corresponding metric tables.
-func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding.TableIDType, priority *uint16) binding.Flow {
+func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding.TableIDType, priority *uint16, enableLogging bool) binding.Flow {
 	ofPriority := *priority
+	conjReg := IngressReg
 	metricTableID := IngressMetricTable
 	if _, ok := egressTables[tableID]; ok {
+		conjReg = EgressReg
 		metricTableID = EgressMetricTable
 	}
 	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
-	return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
-		MatchConjID(conjunctionID).
-		MatchPriority(ofPriority).
-		Action().LoadRegRange(int(cnpDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
-		Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
-		Action().GotoTable(metricTableID).
-		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-		Done()
+	if enableLogging {
+		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
+			MatchConjID(conjunctionID).
+			MatchPriority(ofPriority).
+			Action().LoadRegRange(int(cnpDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
+			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Logging
+			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
+			Action().LoadRegRange(int(DispositionReg), 2, binding.Range{0, 31}). //Logging
+			Action().SendToController(0).
+			Action().GotoTable(metricTableID).
+			Done()
+	} else {
+		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
+			MatchConjID(conjunctionID).
+			MatchPriority(ofPriority).
+			Action().LoadRegRange(int(cnpDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
+			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
+			Action().GotoTable(metricTableID).
+			Done()
+	}
+
 }
 
 func (c *client) Disconnect() error {
@@ -1487,7 +1517,7 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 		policyCache:              policyCache,
 		groupCache:               sync.Map{},
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
-		packetInHandlers:         map[string]PacketInHandler{},
+		packetInHandlers:         map[ofpPacketInReason]map[string]PacketInHandler{},
 	}
 	c.ofEntryOperations = c
 	c.enableProxy = enableProxy
