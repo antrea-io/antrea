@@ -35,7 +35,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/openapi"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
-	queryapiserver "github.com/vmware-tanzu/antrea/pkg/controller/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -108,6 +107,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		controllerQuerier,
+		endpointQueryReplier,
 		o.config.EnablePrometheusMetrics)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
@@ -116,9 +116,6 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating API server: %v", err)
 	}
-	// install handlers for query functionality onto apiServer
-	queryapiserver.InstallHandlers(*endpointQueryReplier, apiServer.GenericAPIServer)
-
 	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
@@ -157,6 +154,7 @@ func createAPIServerConfig(kubeconfig string,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
+	endpointQueryReplier *networkpolicy.EndpointQueryReplier,
 	enableMetrics bool) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
@@ -204,5 +202,6 @@ func createAPIServerConfig(kubeconfig string,
 		appliedToGroupStore,
 		networkPolicyStore,
 		caCertController,
-		controllerQuerier), nil
+		controllerQuerier,
+		endpointQueryReplier), nil
 }

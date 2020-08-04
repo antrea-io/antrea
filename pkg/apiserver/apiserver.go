@@ -15,6 +15,7 @@
 package apiserver
 
 import (
+	"github.com/vmware-tanzu/antrea/pkg/controller/apiserver/handlers/endpoint"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -35,6 +36,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	networkquery "github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
 )
 
@@ -56,11 +58,12 @@ func init() {
 
 // ExtraConfig holds custom apiserver config.
 type ExtraConfig struct {
-	addressGroupStore   storage.Interface
-	appliedToGroupStore storage.Interface
-	networkPolicyStore  storage.Interface
-	controllerQuerier   querier.ControllerQuerier
-	caCertController    *certificate.CACertController
+	addressGroupStore    storage.Interface
+	appliedToGroupStore  storage.Interface
+	networkPolicyStore   storage.Interface
+	controllerQuerier    querier.ControllerQuerier
+	endpointQueryReplier *networkquery.EndpointQueryReplier
+	caCertController     *certificate.CACertController
 }
 
 // Config defines the config for Antrea apiserver.
@@ -94,15 +97,17 @@ func NewConfig(
 	genericConfig *genericapiserver.Config,
 	addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface,
 	caCertController *certificate.CACertController,
-	controllerQuerier querier.ControllerQuerier) *Config {
+	controllerQuerier querier.ControllerQuerier,
+	endpointQueryReplier *networkquery.EndpointQueryReplier) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
-			addressGroupStore:   addressGroupStore,
-			appliedToGroupStore: appliedToGroupStore,
-			networkPolicyStore:  networkPolicyStore,
-			caCertController:    caCertController,
-			controllerQuerier:   controllerQuerier,
+			addressGroupStore:    addressGroupStore,
+			appliedToGroupStore:  appliedToGroupStore,
+			networkPolicyStore:   networkPolicyStore,
+			caCertController:     caCertController,
+			controllerQuerier:    controllerQuerier,
+			endpointQueryReplier: endpointQueryReplier,
 		},
 	}
 }
@@ -143,6 +148,10 @@ func (c completedConfig) New() (*APIServer, error) {
 			return nil, err
 		}
 	}
-
+	installHandlers(*c.extraConfig.endpointQueryReplier, s.GenericAPIServer)
 	return s, nil
+}
+
+func installHandlers(eq networkquery.EndpointQueryReplier, s *genericapiserver.GenericAPIServer) {
+	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(eq))
 }
