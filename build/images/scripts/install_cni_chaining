@@ -12,6 +12,11 @@ while true; do
   sleep 2s
 done
 cni_conf="/host/etc/cni/net.d/$cni_conf"
+
+if grep -sq "azure" $cni_conf; then
+  sed -i 's/"mode":"bridge",/"mode":"transparent",/g' $cni_conf
+fi
+
 cat $cni_conf | jq '.plugins[] | .type' | grep antrea > /dev/null 2>&1
 if [[ $? != 0 ]]; then
   content=$(cat $cni_conf | jq '.plugins += [{"type": "antrea"}]')
