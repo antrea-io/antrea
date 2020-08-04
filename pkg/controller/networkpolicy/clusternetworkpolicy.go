@@ -151,6 +151,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			Services:  services,
 			Action:    ingressRule.Action,
 			Priority:  int32(idx),
+			EnableLogging: ingressRule.EnableLogging,
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
@@ -163,6 +164,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			Services:  services,
 			Action:    egressRule.Action,
 			Priority:  int32(idx),
+			EnableLogging: egressRule.EnableLogging,
 		})
 	}
 	tierPriority := getTierPriority(cnp.Spec.Tier)

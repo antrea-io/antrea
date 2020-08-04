@@ -87,6 +87,8 @@ spec:
                   action:
                     pattern: \bAllow|\bDrop
                     type: string
+                  enableLogging:
+                    type: boolean
                   ports:
                     items:
                       properties:
@@ -121,6 +123,8 @@ spec:
                   action:
                     pattern: \bAllow|\bDrop
                     type: string
+                  enableLogging:
+                    type: boolean
                   from:
                     items:
                       properties:
