@@ -505,3 +505,60 @@
               send-to-individuals: false
           triggers: []
           wrappers: []
+      - 'cloud-{name}-{test_name}':
+          test_name: aks-conformance-net-policy
+          node: antrea-cloud
+          description: 'This is AKS conformance and network policy test for antrea.'
+          parameters: []
+          builders:
+          - shell: |-
+              #!/bin/bash
+              source /home/ubuntu/.bashrc
+              sudo ./ci/test-conformance-aks.sh --azure-app-id ${{AZURE_APP_ID}} --azure-password ${{AZURE_PASSWORD}} \
+                --azure-tenant-id ${{AZURE_TENANT_ID}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} --setup-only
+          triggers:
+          - timed: H H */2 * *
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'aks-test.log'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - trigger-parameterized-builds:
+            - project:
+              - cloud-{name}-aks-cleanup
+              property-file: 'ci_properties.txt'
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: AZURE_APP_ID # Jenkins secret that stores azure app id
+                variable: AZURE_APP_ID
+            - text:
+                credential-id: AZURE_PASSWORD # Jenkins secret that stores azure password
+                variable: AZURE_PASSWORD
+            - text:
+                credential-id: AZURE_TENANT_ID # Jenkins secret that stores azure tenant id
+                variable: AZURE_TENANT_ID
+      - 'cloud-{name}-{test_name}':
+          test_name: aks-cleanup
+          description: This is for deleting AKS test clusters.
+          builders:
+            - builder-aks-cluster-cleanup
+          concurrent: false
+          disabled: false
+          node: antrea-cloud
+          parameters:
+          - string:
+              default: ''
+              description: The cluster name of the last finished build.
+              name: CLUSTERNAME
+              trim: 'false'
+          publishers:
+          - email:
+              notify-every-unstable-build: true
+              recipients: dingyang@vmware.com zhengshengz@vmware.com rahulj@vmware.com
+              send-to-individuals: false
+          triggers: []
+          wrappers: []
