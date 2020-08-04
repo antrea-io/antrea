@@ -25,7 +25,7 @@ which determines its relative order among other tiers.
 Currently, we support 5 static tiers in Antrea. They are as follows in the
 relative order of precedence:
 
-    Emergency > SecurityOps > NetworkOps > InterTenant > Application  
+    Emergency > SecurityOps > NetworkOps > Platform > Application  
 Thus, all ClusterNetworkPolicies associated with "Emergency" tier will be
 evaluated before any other ClusterNetworkPolicy associated with any other tier,
 until an exact match occurs, in which case the policy rule's `action` will be
@@ -134,7 +134,7 @@ ensure the behavior they expect.
 
 **tier**: The `tier` field associates a CNP to an existing tier. As of now, the
 `tier` field can be set with "Emergency", "SecurityOps", "NetworkOps",
-"InterTenant" or "Application" as value. If not set, the CNP is associated with
+"Platform" or "Application" as value. If not set, the CNP is associated with
 the lowest priority "Application" tier.
 
 **ingress**: Each ClusterNetworkPolicy may consist of zero or more ordered
