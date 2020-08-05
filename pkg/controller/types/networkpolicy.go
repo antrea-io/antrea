@@ -37,12 +37,8 @@ func (meta *SpanMeta) Has(nodeName string) bool {
 	return meta.NodeNames.Has(nodeName)
 }
 
-// TierPriority specifies the relative ordering among Tiers. A lower
-// TierPriority indicates higher precedence.
-type TierPriority uint32
-
 const (
-	TierEmergency TierPriority = iota + 1
+	TierEmergency networking.TierPriority = iota + 1
 	TierSecurityOps
 	TierNetworkOps
 	TierPlatform
@@ -114,5 +110,5 @@ type NetworkPolicy struct {
 	AppliedToGroups []string
 	// TierPriority represents the priority of the Tier associated with this Network
 	// Policy.
-	TierPriority *TierPriority
+	TierPriority *networking.TierPriority
 }

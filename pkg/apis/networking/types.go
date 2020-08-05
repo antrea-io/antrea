@@ -146,6 +146,10 @@ type AddressGroupList struct {
 	Items []AddressGroup
 }
 
+// TierPriority specifies the relative ordering among Tiers. A lower
+// TierPriority indicates higher precedence.
+type TierPriority uint32
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.
 type NetworkPolicy struct {
@@ -160,7 +164,7 @@ type NetworkPolicy struct {
 	Priority *float64
 	// TierPriority represents the priority of the Tier associated with this NetworkPolicy.
 	// The TierPriority will remain nil for K8s NetworkPolicy.
-	TierPriority *uint32
+	TierPriority *TierPriority
 }
 
 // Direction defines traffic direction of NetworkPolicyRule.

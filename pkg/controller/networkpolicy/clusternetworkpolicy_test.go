@@ -918,9 +918,9 @@ func TestAddCNP(t *testing.T) {
 	for _, tt := range tests {
 		npc.addCNP(tt.inputPolicy)
 	}
-	assert.Equal(t, 7, npc.GetNetworkPolicyNum(), "expected networkPolicy number is 2")
-	assert.Equal(t, 3, npc.GetAddressGroupNum(), "expected addressGroup number is 3")
-	assert.Equal(t, 1, npc.GetAppliedToGroupNum(), "appliedToGroup number is 1")
+	assert.Equal(t, 7, npc.GetNetworkPolicyNum(), "number of NetworkPolicies do not match")
+	assert.Equal(t, 3, npc.GetAddressGroupNum(), "number of AddressGroups do not match")
+	assert.Equal(t, 1, npc.GetAppliedToGroupNum(), "number of AppliedToGroups do not match")
 }
 
 func TestDeleteCNP(t *testing.T) {

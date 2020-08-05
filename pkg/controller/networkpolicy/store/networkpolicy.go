@@ -113,10 +113,7 @@ func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *networking.NetworkPolicy, 
 	out.Rules = in.Rules
 	out.AppliedToGroups = in.AppliedToGroups
 	out.Priority = in.Priority
-	if in.TierPriority != nil {
-		inTierPriority := uint32(*in.TierPriority)
-		out.TierPriority = &inTierPriority
-	}
+	out.TierPriority = in.TierPriority
 }
 
 // NetworkPolicyKeyFunc knows how to get the key of a NetworkPolicy.
