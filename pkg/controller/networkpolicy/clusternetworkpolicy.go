@@ -33,7 +33,7 @@ var (
 	}
 
 	// tierPriorityMap maintains a map of the Tier name to it's priority.
-	tierPriorityMap = map[string]antreatypes.TierPriority{
+	tierPriorityMap = map[string]networking.TierPriority{
 		"Emergency":   antreatypes.TierEmergency,
 		"SecurityOps": antreatypes.TierSecurityOps,
 		"NetworkOps":  antreatypes.TierNetworkOps,
@@ -167,7 +167,7 @@ func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*networking.IPBlock, e
 // getTierPriority retrieves the priority associated with the input Tier name.
 // If the Tier name is empty, by default, the lowest priority Application Tier
 // is returned.
-func getTierPriority(tier string) antreatypes.TierPriority {
+func getTierPriority(tier string) networking.TierPriority {
 	if tier == "" {
 		return antreatypes.TierApplication
 	}
