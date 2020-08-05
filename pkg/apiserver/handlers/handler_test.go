@@ -25,7 +25,7 @@ import (
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/vmware-tanzu/antrea/pkg/controller/apiserver/handlers/endpoint"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/endpoint"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	queriermock "github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/testing"
 )
