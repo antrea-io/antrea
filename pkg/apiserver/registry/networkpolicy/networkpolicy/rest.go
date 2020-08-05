@@ -19,7 +19,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/endpoints/request"
@@ -59,7 +59,7 @@ func (r *REST) NewList() runtime.Object {
 	return &networking.NetworkPolicyList{}
 }
 
-func (r *REST) Get(ctx context.Context, name string, options *v1.GetOptions) (runtime.Object, error) {
+func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	ns, ok := request.NamespaceFrom(ctx)
 	if !ok || len(ns) == 0 {
 		return nil, errors.NewBadRequest("Namespace parameter required.")
@@ -107,6 +107,6 @@ func (r *REST) Watch(ctx context.Context, options *internalversion.ListOptions) 
 	return r.networkPolicyStore.Watch(ctx, key, label, field)
 }
 
-func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*v1.Table, error) {
+func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	return rest.NewDefaultTableConvertor(networking.Resource("networkpolicy")).ConvertToTable(ctx, obj, tableOptions)
 }

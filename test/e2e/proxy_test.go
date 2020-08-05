@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -100,10 +100,10 @@ func TestProxyHairpin(t *testing.T) {
 	skipIfProxyDisabled(t, data)
 
 	nodeName := nodeName(1)
-	err = data.createPodOnNode("busybox", nodeName, "busybox", []string{"nc", "-lk", "-p", "80"}, nil, nil, []v1.ContainerPort{{ContainerPort: 80, Protocol: v1.ProtocolTCP}})
+	err = data.createPodOnNode("busybox", nodeName, "busybox", []string{"nc", "-lk", "-p", "80"}, nil, nil, []corev1.ContainerPort{{ContainerPort: 80, Protocol: corev1.ProtocolTCP}})
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, "busybox", testNamespace))
-	svc, err := data.createService("busybox", 80, 80, map[string]string{"antrea-e2e": "busybox"}, false, v1.ServiceTypeClusterIP)
+	svc, err := data.createService("busybox", 80, 80, map[string]string{"antrea-e2e": "busybox"}, false, corev1.ServiceTypeClusterIP)
 	require.NoError(t, err)
 	stdout, stderr, err := data.runCommandFromPod(testNamespace, "busybox", busyboxContainerName, []string{"nc", svc.Spec.ClusterIP, "80", "-w", "1", "-e", "ls", "/"})
 	require.NoError(t, err, fmt.Sprintf("stdout: %s\n, stderr: %s", stdout, stderr))

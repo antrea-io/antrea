@@ -18,7 +18,7 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -143,14 +143,14 @@ func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
 }
 
 func (monitor *controllerMonitor) deleteStaleAgentCRD(old interface{}) {
-	node, ok := old.(*v1.Node)
+	node, ok := old.(*corev1.Node)
 	if !ok {
 		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting Node, invalid type: %v", old)
 			return
 		}
-		node, ok = tombstone.Obj.(*v1.Node)
+		node, ok = tombstone.Obj.(*corev1.Node)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting Node, invalid type: %v", tombstone.Obj)
 			return
