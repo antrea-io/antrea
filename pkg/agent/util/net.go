@@ -127,3 +127,12 @@ func GetIPv4Addr(ips []net.IP) net.IP {
 	}
 	return nil
 }
+
+func ContainIPv6Addr(ips []net.IP) bool {
+	for _, ip := range ips {
+		if ip.To4() == nil {
+			return true
+		}
+	}
+	return false
+}
