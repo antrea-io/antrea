@@ -15,7 +15,6 @@
 package apiserver
 
 import (
-	"github.com/vmware-tanzu/antrea/pkg/controller/apiserver/handlers/endpoint"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,6 +35,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	"github.com/vmware-tanzu/antrea/pkg/controller/apiserver/handlers/endpoint"
 	networkquery "github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
 )
