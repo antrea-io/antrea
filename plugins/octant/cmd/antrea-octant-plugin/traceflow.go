@@ -332,7 +332,7 @@ func traceflowHandler(request service.Request) (component.ContentResponse, error
 // getTfTable gets the table for displaying Traceflow information
 func getTfTable(request service.Request) *component.Table {
 	ctx := context.Background()
-	tfs, err := client.OpsV1alpha1().Traceflows().List(ctx, v1.ListOptions{})
+	tfs, err := client.OpsV1alpha1().Traceflows().List(ctx, v1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		log.Fatalf("Failed to get Traceflows %v", err)
 		return nil
