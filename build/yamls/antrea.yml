@@ -46,6 +46,10 @@ metadata:
   name: clusternetworkpolicies.security.antrea.tanzu.vmware.com
 spec:
   additionalPrinterColumns:
+  - JSONPath: .spec.tier
+    description: The Tier to which this ClusterNetworkPolicy belongs to.
+    name: Tier
+    type: string
   - JSONPath: .spec.priority
     description: The Priority of this ClusterNetworkPolicy relative to other policies.
     format: float
@@ -150,6 +154,14 @@ spec:
               maximum: 10000
               minimum: 1
               type: number
+            tier:
+              enum:
+              - Emergency
+              - SecurityOps
+              - NetworkOps
+              - Platform
+              - Application
+              type: string
           required:
           - appliedTo
           - priority

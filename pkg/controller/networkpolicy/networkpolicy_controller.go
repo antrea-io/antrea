@@ -1325,6 +1325,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 		Rules:           internalNP.Rules,
 		AppliedToGroups: internalNP.AppliedToGroups,
 		Priority:        internalNP.Priority,
+		TierPriority:    internalNP.TierPriority,
 		SpanMeta:        antreatypes.SpanMeta{NodeNames: nodeNames},
 	}
 	klog.V(4).Infof("Updating internal NetworkPolicy %s with %d Nodes", key, nodeNames.Len())

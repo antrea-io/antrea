@@ -151,6 +151,10 @@ type AddressGroupList struct {
 	Items           []AddressGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
+// TierPriority specifies the relative ordering among Tiers. A lower
+// TierPriority indicates higher precedence.
+type TierPriority uint32
+
 // +genclient
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -165,6 +169,9 @@ type NetworkPolicy struct {
 	// Priority represents the relative priority of this Network Policy as compared to
 	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
 	Priority *float64 `json:"priority,omitempty" protobuf:"fixed64,4,opt,name=priority"`
+	// TierPriority represents the priority of the Tier associated with this Network
+	// Policy. The TierPriority will remain nil for K8s NetworkPolicy.
+	TierPriority *TierPriority `json:"tierPriority,omitempty" protobuf:"varint,5,opt,name=tierPriority"`
 }
 
 // Direction defines traffic direction of NetworkPolicyRule.
