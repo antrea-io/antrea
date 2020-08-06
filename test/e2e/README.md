@@ -81,7 +81,8 @@ kubectl cluster-info
 
 Make sure that your cluster was provisioned and that the Antrea build artifacts
 were pushed to all the nodes. You can then run the tests from the top-level
-directory with `go test -v github.com/vmware-tanzu/antrea/test/e2e` (the `-v` enables verbose output).
+directory with `go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e`
+(the `-v` enables verbose output).
 
 If you are running the test for the first time and are using the scripts we
 provide under `infra/vagrant` to provision your Kubernetes cluster, you will
@@ -90,7 +91,7 @@ therefore need the following steps:
 1. `./infra/vagrant/provision.sh`
 2. `make`
 3. `./infra/vagrant/push_antrea.sh`
-4. `go test -v github.com/vmware-tanzu/antrea/test/e2e`
+4. `go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e`
 
 If you need to test an updated version of Antrea, just run
 `./infra/vagrant/push_antrea.sh` and then run the tests again.

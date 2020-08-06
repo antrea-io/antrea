@@ -50,8 +50,8 @@ func TestTraceflow(t *testing.T) {
 		t.Fatal("Error when enabling Traceflow")
 	}
 
-	node1 := workerNodeName(1)
-	node2 := workerNodeName(2)
+	node1 := nodeName(0)
+	node2 := nodeName(1)
 
 	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 2, node1)
 	node2Pods, node2IPs, node2CleanupFn := createTestBusyboxPods(t, data, 1, node2)
