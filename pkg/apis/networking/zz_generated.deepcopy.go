@@ -517,6 +517,11 @@ func (in *NetworkPolicy) DeepCopyInto(out *NetworkPolicy) {
 		*out = new(float64)
 		**out = **in
 	}
+	if in.TierPriority != nil {
+		in, out := &in.TierPriority, &out.TierPriority
+		*out = new(TierPriority)
+		**out = **in
+	}
 	return
 }
 

@@ -545,6 +545,7 @@ func autoConvert_v1beta1_NetworkPolicy_To_networking_NetworkPolicy(in *NetworkPo
 	out.Rules = *(*[]networking.NetworkPolicyRule)(unsafe.Pointer(&in.Rules))
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
+	out.TierPriority = (*networking.TierPriority)(unsafe.Pointer(in.TierPriority))
 	return nil
 }
 
@@ -558,6 +559,7 @@ func autoConvert_networking_NetworkPolicy_To_v1beta1_NetworkPolicy(in *networkin
 	out.Rules = *(*[]NetworkPolicyRule)(unsafe.Pointer(&in.Rules))
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
+	out.TierPriority = (*TierPriority)(unsafe.Pointer(in.TierPriority))
 	return nil
 }
 

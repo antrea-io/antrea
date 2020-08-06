@@ -31,6 +31,15 @@ var (
 	matchAllPodsPeerCrd = secv1alpha1.NetworkPolicyPeer{
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
+
+	// tierPriorityMap maintains a map of the Tier name to it's priority.
+	tierPriorityMap = map[string]networking.TierPriority{
+		"Emergency":   antreatypes.TierEmergency,
+		"SecurityOps": antreatypes.TierSecurityOps,
+		"NetworkOps":  antreatypes.TierNetworkOps,
+		"Platform":    antreatypes.TierPlatform,
+		"Application": antreatypes.TierApplication,
+	}
 )
 
 // addCNP receives ClusterNetworkPolicy ADD events and creates resources
@@ -155,6 +164,16 @@ func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*networking.IPBlock, e
 	return antreaIPBlock, nil
 }
 
+// getTierPriority retrieves the priority associated with the input Tier name.
+// If the Tier name is empty, by default, the lowest priority Application Tier
+// is returned.
+func getTierPriority(tier string) networking.TierPriority {
+	if tier == "" {
+		return antreatypes.TierApplication
+	}
+	return tierPriorityMap[tier]
+}
+
 func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer, cnp *secv1alpha1.ClusterNetworkPolicy, dir networking.Direction) *networking.NetworkPolicyPeer {
 	var addressGroups []string
 	// Empty NetworkPolicyPeer is supposed to match all addresses.
@@ -253,6 +272,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			Priority:  int32(idx),
 		})
 	}
+	tierPriority := getTierPriority(cnp.Spec.Tier)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
 		Name:            cnp.Name,
 		Namespace:       "",
@@ -260,6 +280,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 		AppliedToGroups: appliedToGroupNames,
 		Rules:           rules,
 		Priority:        &cnp.Spec.Priority,
+		TierPriority:    &tierPriority,
 	}
 	return internalNetworkPolicy
 }

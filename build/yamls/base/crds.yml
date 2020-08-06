@@ -221,6 +221,10 @@ spec:
   # Prune any unknown fields
   preserveUnknownFields: false
   additionalPrinterColumns:
+  - name: Tier
+    type: string
+    description: The Tier to which this ClusterNetworkPolicy belongs to.
+    JSONPath: .spec.tier
   - name: Priority
     type: number
     format: float
@@ -240,6 +244,9 @@ spec:
             - priority
           type: object
           properties:
+            tier:
+              type: string
+              enum: ['Emergency', 'SecurityOps', 'NetworkOps', 'Platform', 'Application']
             priority:
               type: number
               format: float
