@@ -22,7 +22,6 @@ import (
 	"time"
 
 	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -328,11 +327,11 @@ func TestTraceflow(t *testing.T) {
 			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
-				if _, err := data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), tc.tf, v1.CreateOptions{}); err != nil {
+				if _, err := data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
 					t.Fatalf("Error when creating traceflow: %v", err)
 				}
 				defer func() {
-					if err := data.crdClient.OpsV1alpha1().Traceflows().Delete(context.TODO(), tc.tf.Name, v1.DeleteOptions{}); err != nil {
+					if err := data.crdClient.OpsV1alpha1().Traceflows().Delete(context.TODO(), tc.tf.Name, metav1.DeleteOptions{}); err != nil {
 						t.Errorf("Error when deleting traceflow: %v", err)
 					}
 				}()
@@ -381,7 +380,7 @@ func (data *TestData) waitForTraceflow(name string, phase v1alpha1.TraceflowPhas
 	var tf *v1alpha1.Traceflow
 	var err error
 	if err = wait.PollImmediate(1*time.Second, 15*time.Second, func() (bool, error) {
-		tf, err = data.crdClient.OpsV1alpha1().Traceflows().Get(context.TODO(), name, v1.GetOptions{})
+		tf, err = data.crdClient.OpsV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil || tf.Status.Phase != phase {
 			return false, nil
 		}

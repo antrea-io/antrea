@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/client-go/kubernetes"
@@ -109,7 +109,7 @@ func (c *CACertController) syncCACert() error {
 func (c *CACertController) syncAPIServices(caCert []byte) error {
 	klog.Info("Syncing CA certificate with APIServices")
 	for _, name := range apiServiceNames {
-		apiService, err := c.aggregatorClient.ApiregistrationV1().APIServices().Get(context.TODO(), name, v1.GetOptions{})
+		apiService, err := c.aggregatorClient.ApiregistrationV1().APIServices().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("error getting APIService %s: %v", name, err)
 		}
@@ -117,7 +117,7 @@ func (c *CACertController) syncAPIServices(caCert []byte) error {
 			continue
 		}
 		apiService.Spec.CABundle = caCert
-		if _, err := c.aggregatorClient.ApiregistrationV1().APIServices().Update(context.TODO(), apiService, v1.UpdateOptions{}); err != nil {
+		if _, err := c.aggregatorClient.ApiregistrationV1().APIServices().Update(context.TODO(), apiService, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("error updating antrea CA cert of APIService %s: %v", name, err)
 		}
 	}
@@ -129,7 +129,7 @@ func (c *CACertController) syncConfigMap(caCert []byte) error {
 	klog.Info("Syncing CA certificate with ConfigMap")
 	// Use the Antrea Pod Namespace for the CA cert ConfigMap.
 	caConfigMapNamespace := GetCAConfigMapNamespace()
-	caConfigMap, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), CAConfigMapName, v1.GetOptions{})
+	caConfigMap, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), CAConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting ConfigMap %s: %v", CAConfigMapName, err)
 	}
@@ -139,7 +139,7 @@ func (c *CACertController) syncConfigMap(caCert []byte) error {
 	caConfigMap.Data = map[string]string{
 		CAConfigMapKey: string(caCert),
 	}
-	if _, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Update(context.TODO(), caConfigMap, v1.UpdateOptions{}); err != nil {
+	if _, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Update(context.TODO(), caConfigMap, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("error updating ConfigMap %s: %v", CAConfigMapName, err)
 	}
 	return nil

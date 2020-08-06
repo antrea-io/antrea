@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -115,16 +115,16 @@ func NewNodeRouteController(
 }
 
 // enqueueNode adds an object to the controller work queue
-// obj could be an *v1.Node, or a DeletionFinalStateUnknown item.
+// obj could be an *corev1.Node, or a DeletionFinalStateUnknown item.
 func (c *Controller) enqueueNode(obj interface{}) {
-	node, isNode := obj.(*v1.Node)
+	node, isNode := obj.(*corev1.Node)
 	if !isNode {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Received unexpected object: %v", obj)
 			return
 		}
-		node, ok = deletedState.Obj.(*v1.Node)
+		node, ok = deletedState.Obj.(*corev1.Node)
 		if !ok {
 			klog.Errorf("DeletedFinalStateUnknown contains non-Node object: %v", deletedState.Obj)
 			return
@@ -384,7 +384,7 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 	return nil
 }
 
-func (c *Controller) addNodeRoute(nodeName string, node *v1.Node) error {
+func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	if _, installed := c.installedNodes.Load(nodeName); installed {
 		// Route is already added for this Node.
 		return nil
@@ -523,15 +523,15 @@ func ParseTunnelInterfaceConfig(
 
 // GetNodeAddr gets the available IP address of a Node. GetNodeAddr will first try to get the
 // NodeInternalIP, then try to get the NodeExternalIP.
-func GetNodeAddr(node *v1.Node) (net.IP, error) {
-	addresses := make(map[v1.NodeAddressType]string)
+func GetNodeAddr(node *corev1.Node) (net.IP, error) {
+	addresses := make(map[corev1.NodeAddressType]string)
 	for _, addr := range node.Status.Addresses {
 		addresses[addr.Type] = addr.Address
 	}
 	var ipAddrStr string
-	if internalIP, ok := addresses[v1.NodeInternalIP]; ok {
+	if internalIP, ok := addresses[corev1.NodeInternalIP]; ok {
 		ipAddrStr = internalIP
-	} else if externalIP, ok := addresses[v1.NodeExternalIP]; ok {
+	} else if externalIP, ok := addresses[corev1.NodeExternalIP]; ok {
 		ipAddrStr = externalIP
 	} else {
 		return nil, fmt.Errorf("node %s has neither external ip nor internal ip", node.Name)

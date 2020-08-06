@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -236,7 +236,7 @@ func (c *Controller) checkTraceflowStatus(tf *opsv1alpha1.Traceflow) (retry bool
 	}
 	if sender && receiver {
 		tf.Status.Phase = opsv1alpha1.Succeeded
-		_, err = c.client.OpsV1alpha1().Traceflows().UpdateStatus(context.TODO(), tf, v1.UpdateOptions{})
+		_, err = c.client.OpsV1alpha1().Traceflows().UpdateStatus(context.TODO(), tf, metav1.UpdateOptions{})
 		return
 	}
 	if time.Now().UTC().Sub(tf.CreationTimestamp.UTC()).Seconds() > timeout {
@@ -256,7 +256,7 @@ func (c *Controller) runningTraceflowCRD(tf *opsv1alpha1.Traceflow, dataPlaneTag
 	}
 	patchData := Traceflow{Status: opsv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, DataplaneTag: dataPlaneTag}}
 	payloads, _ := json.Marshal(patchData)
-	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{}, "status")
+	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
 
 func (c *Controller) errorTraceflowCRD(tf *opsv1alpha1.Traceflow, reason string) (*opsv1alpha1.Traceflow, error) {
@@ -267,7 +267,7 @@ func (c *Controller) errorTraceflowCRD(tf *opsv1alpha1.Traceflow, reason string)
 	}
 	patchData := Traceflow{Status: opsv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
 	payloads, _ := json.Marshal(patchData)
-	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{}, "status")
+	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
 
 func (c *Controller) occupyTag(tf *opsv1alpha1.Traceflow) error {

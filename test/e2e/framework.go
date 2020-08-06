@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -216,7 +216,7 @@ func collectClusterInfo() error {
 
 // createNamespace creates the provided namespace.
 func (data *TestData) createNamespace(namespace string) error {
-	ns := v1.Namespace{
+	ns := corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,
 		},
@@ -227,7 +227,7 @@ func (data *TestData) createNamespace(namespace string) error {
 			return fmt.Errorf("error when creating '%s' Namespace: %v", namespace, err)
 		}
 		// When namespace already exists, check phase
-		if ns.Status.Phase == v1.NamespaceTerminating {
+		if ns.Status.Phase == corev1.NamespaceTerminating {
 			return fmt.Errorf("error when creating '%s' Namespace: namespace exists but is in 'Terminating' phase", namespace)
 		}
 	}
@@ -261,7 +261,7 @@ func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) e
 				return true, nil
 			}
 			return false, fmt.Errorf("error when getting Namespace '%s' after delete: %v", namespace, err)
-		} else if ns.Status.Phase != v1.NamespaceTerminating {
+		} else if ns.Status.Phase != corev1.NamespaceTerminating {
 			return false, fmt.Errorf("deleted Namespace '%s' should be in 'Terminating' phase", namespace)
 		}
 
@@ -467,23 +467,23 @@ func getImageName(uri string) string {
 
 // createPodOnNode creates a pod in the test namespace with a container whose type is decided by imageName.
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createPodOnNode(name string, nodeName string, image string, command []string, args []string, env []v1.EnvVar, ports []v1.ContainerPort) error {
+func (data *TestData) createPodOnNode(name string, nodeName string, image string, command []string, args []string, env []corev1.EnvVar, ports []corev1.ContainerPort) error {
 	// image could be a fully qualified URI which can't be used as container name and label value,
 	// extract the image name from it.
 	imageName := getImageName(image)
-	podSpec := v1.PodSpec{
-		Containers: []v1.Container{
+	podSpec := corev1.PodSpec{
+		Containers: []corev1.Container{
 			{
 				Name:            imageName,
 				Image:           image,
-				ImagePullPolicy: v1.PullIfNotPresent,
+				ImagePullPolicy: corev1.PullIfNotPresent,
 				Command:         command,
 				Args:            args,
 				Env:             env,
 				Ports:           ports,
 			},
 		},
-		RestartPolicy: v1.RestartPolicyNever,
+		RestartPolicy: corev1.RestartPolicyNever,
 	}
 	if nodeName != "" {
 		podSpec.NodeSelector = map[string]string{
@@ -492,14 +492,14 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 	}
 	if nodeName == masterNodeName() {
 		// tolerate NoSchedule taint if we want Pod to run on master node
-		noScheduleToleration := v1.Toleration{
+		noScheduleToleration := corev1.Toleration{
 			Key:      "node-role.kubernetes.io/master",
-			Operator: v1.TolerationOpExists,
-			Effect:   v1.TaintEffectNoSchedule,
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoSchedule,
 		}
-		podSpec.Tolerations = []v1.Toleration{noScheduleToleration}
+		podSpec.Tolerations = []corev1.Toleration{noScheduleToleration}
 	}
-	pod := &v1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
@@ -530,11 +530,11 @@ func (data *TestData) createBusyboxPod(name string) error {
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
-	return data.createPodOnNode(name, nodeName, "nginx", []string{}, nil, nil, []v1.ContainerPort{
+	return data.createPodOnNode(name, nodeName, "nginx", []string{}, nil, nil, []corev1.ContainerPort{
 		{
 			Name:          "http",
 			ContainerPort: 80,
-			Protocol:      v1.ProtocolTCP,
+			Protocol:      corev1.ProtocolTCP,
 		},
 	})
 }
@@ -549,13 +549,13 @@ func (data *TestData) createServerPod(name string, portName string, portNum int,
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.
 	image := "gcr.io/kubernetes-e2e-test-images/agnhost:2.8"
 	cmd := "porter"
-	env := v1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
-	port := v1.ContainerPort{Name: portName, ContainerPort: int32(portNum)}
+	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
+	port := corev1.ContainerPort{Name: portName, ContainerPort: int32(portNum)}
 	if setHostPort {
 		// If hostPort is to be set, it must match the container port number.
 		port.HostPort = int32(portNum)
 	}
-	return data.createPodOnNode(name, "", image, nil, []string{cmd}, []v1.EnvVar{env}, []v1.ContainerPort{port})
+	return data.createPodOnNode(name, "", image, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port})
 }
 
 // deletePod deletes a Pod in the test namespace.
@@ -595,11 +595,11 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error
 	}
 }
 
-type PodCondition func(*v1.Pod) (bool, error)
+type PodCondition func(*corev1.Pod) (bool, error)
 
 // podWaitFor polls the K8s apiserver until the specified Pod is found (in the test Namespace) and
 // the condition predicate is met (or until the provided timeout expires).
-func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*v1.Pod, error) {
+func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*corev1.Pod, error) {
 	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
 		if pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
@@ -619,8 +619,8 @@ func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, 
 // podWaitForRunning polls the k8s apiserver until the specified Pod is in the "running" state (or
 // until the provided timeout expires).
 func (data *TestData) podWaitForRunning(timeout time.Duration, name, namespace string) error {
-	_, err := data.podWaitFor(timeout, name, namespace, func(pod *v1.Pod) (bool, error) {
-		return pod.Status.Phase == v1.PodRunning, nil
+	_, err := data.podWaitFor(timeout, name, namespace, func(pod *corev1.Pod) (bool, error) {
+		return pod.Status.Phase == corev1.PodRunning, nil
 	})
 	return err
 }
@@ -628,8 +628,8 @@ func (data *TestData) podWaitForRunning(timeout time.Duration, name, namespace s
 // podWaitForIP polls the K8s apiserver until the specified Pod is in the "running" state (or until
 // the provided timeout expires). The function then returns the IP address assigned to the Pod.
 func (data *TestData) podWaitForIP(timeout time.Duration, name, namespace string) (string, error) {
-	pod, err := data.podWaitFor(timeout, name, namespace, func(pod *v1.Pod) (bool, error) {
-		return pod.Status.Phase == v1.PodRunning, nil
+	pod, err := data.podWaitFor(timeout, name, namespace, func(pod *corev1.Pod) (bool, error) {
+		return pod.Status.Phase == corev1.PodRunning, nil
 	})
 	if err != nil {
 		return "", err
@@ -699,7 +699,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 			return false, nil
 		}
 		for _, pod := range pods.Items {
-			if pod.Status.Phase != v1.PodRunning {
+			if pod.Status.Phase != corev1.PodRunning {
 				return false, nil
 			}
 		}
@@ -728,7 +728,7 @@ func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err e
 }
 
 // getAntreaController retrieves the name of the Antrea Controller (antrea-controller-*) running in the k8s cluster.
-func (data *TestData) getAntreaController() (*v1.Pod, error) {
+func (data *TestData) getAntreaController() (*corev1.Pod, error) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea,component=antrea-controller",
 	}
@@ -744,7 +744,7 @@ func (data *TestData) getAntreaController() (*v1.Pod, error) {
 
 // restartAntreaControllerPod deletes the antrea-controller Pod to force it to be re-scheduled. It then waits
 // for the new Pod to become available, and returns it.
-func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*v1.Pod, error) {
+func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1.Pod, error) {
 	var gracePeriodSeconds int64 = 1
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
@@ -756,7 +756,7 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*v1.Pod
 		return nil, fmt.Errorf("error when deleting antrea-controller Pod: %v", err)
 	}
 
-	var newPod *v1.Pod
+	var newPod *corev1.Pod
 	// wait for new antrea-controller Pod
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
 		pods, err := data.clientset.CoreV1().Pods("kube-system").List(context.TODO(), listOptions)
@@ -771,7 +771,7 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*v1.Pod
 			return false, nil
 		}
 		pod := pods.Items[0]
-		if pod.Status.Phase != v1.PodRunning || pod.DeletionTimestamp != nil {
+		if pod.Status.Phase != corev1.PodRunning || pod.DeletionTimestamp != nil {
 			return false, nil
 		}
 		newPod = &pod
@@ -814,12 +814,12 @@ func validatePodIP(podNetworkCIDR, podIP string) (bool, error) {
 
 // createService creates a service with port and targetPort.
 func (data *TestData) createService(serviceName string, port, targetPort int, selector map[string]string, affinity bool,
-	serviceType v1.ServiceType) (*v1.Service, error) {
-	affinityType := v1.ServiceAffinityNone
+	serviceType corev1.ServiceType) (*corev1.Service, error) {
+	affinityType := corev1.ServiceAffinityNone
 	if affinity {
-		affinityType = v1.ServiceAffinityClientIP
+		affinityType = corev1.ServiceAffinityClientIP
 	}
-	service := v1.Service{
+	service := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
 			Namespace: testNamespace,
@@ -828,9 +828,9 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 				"app":        serviceName,
 			},
 		},
-		Spec: v1.ServiceSpec{
+		Spec: corev1.ServiceSpec{
 			SessionAffinity: affinityType,
-			Ports: []v1.ServicePort{{
+			Ports: []corev1.ServicePort{{
 				Port:       int32(port),
 				TargetPort: intstr.FromInt(targetPort),
 			}},
@@ -842,16 +842,16 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 }
 
 // createNginxClusterIPService create a nginx service with the given name.
-func (data *TestData) createNginxClusterIPService(affinity bool) (*v1.Service, error) {
-	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, v1.ServiceTypeClusterIP)
+func (data *TestData) createNginxClusterIPService(affinity bool) (*corev1.Service, error) {
+	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP)
 }
 
-func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string) (*v1.Service, error) {
-	svc, err := data.createService("nginx-loadbalancer", 80, 80, map[string]string{"app": "nginx"}, affinity, v1.ServiceTypeLoadBalancer)
+func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string) (*corev1.Service, error) {
+	svc, err := data.createService("nginx-loadbalancer", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeLoadBalancer)
 	if err != nil {
 		return svc, err
 	}
-	ingress := make([]v1.LoadBalancerIngress, len(ingressIPs))
+	ingress := make([]corev1.LoadBalancerIngress, len(ingressIPs))
 	for idx, ingressIP := range ingressIPs {
 		ingress[idx].IP = ingressIP
 	}
@@ -920,7 +920,7 @@ func (data *TestData) runCommandFromPod(podNamespace string, podName string, con
 		Name(podName).
 		SubResource("exec").
 		Param("container", containerName).
-		VersionedParams(&v1.PodExecOptions{
+		VersionedParams(&corev1.PodExecOptions{
 			Command: cmd,
 			Stdin:   false,
 			Stdout:  true,
@@ -1051,7 +1051,7 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 	return config.TrafficEncapModeInvalid, fmt.Errorf("antrea-conf config map is not found")
 }
 
-func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*v1.ConfigMap, error) {
+func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*corev1.ConfigMap, error) {
 	deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(context.TODO(), antreaDeployment, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve Antrea Controller deployment: %v", err)
