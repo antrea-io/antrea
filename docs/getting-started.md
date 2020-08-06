@@ -78,6 +78,7 @@ information.
 The instructions above only apply when deploying Antrea in a new cluster. If you
 need to migrate your existing cluster from another CNI plugin to Antrea, you
 will need to do the following:
+
  * Delete previous CNI, including all resources (K8s objects, iptables rules,
  interfaces, ...) created by that CNI.
  * Deploy Antrea.
@@ -91,6 +92,7 @@ deleting the previous CNI, existing Pods may not be reachable anymore.
 
 For example, when migrating from Flannel to Antrea, you will need to do the
 following:
+
 1. Delete Flannel with `kubectl delete -f <path to your Flannel YAML manifest>`.
 2. Delete Flannel bridge and tunnel interface with `ip link delete flannel.1 &&
 ip link delete flannel cni0` **on each Node**.

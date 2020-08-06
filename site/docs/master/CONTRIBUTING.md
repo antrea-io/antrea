@@ -25,6 +25,7 @@ to effectively get it merged upstream.
 
 To get started, let's ensure you have completed the following prerequisites for
 contributing to project Antrea:
+
 1. Read and observe the [code of conduct](CODE_OF_CONDUCT.md).
 2. Sign the [CLA](#cla).
 3. Check out the [Architecture document](architecture.md) for the Antrea architecture and design.
@@ -45,6 +46,7 @@ tracker.
 ### Accounts Setup
 
 At minimum, you need the following accounts for effective participation:
+
 1. **Github**: Committing any change requires you to have a [github
    account](https://github.com/join).
 2. **Slack**: Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
@@ -71,38 +73,53 @@ project's repository.
 1. Fork your own copy of the repository to your GitHub account by clicking on
    `Fork` button on [Antrea's GitHub repository](https://github.com/vmware-tanzu/antrea).
 2. Clone the forked repository on your local setup.
+
     ```
     git clone https://github.com/$user/antrea
     ```
+
     Add a remote upstream to track upstream Antrea repository.
+
     ```
     git remote add upstream https://github.com/vmware-tanzu/antrea
     ```
+
     Never push to upstream master
+
     ```
     git remote set-url --push upstream no_push
     ```
+
 3. Create a topic branch.
+
     ```
     git checkout -b branchName
     ```
+
 4. Make changes and commit it locally.
+
     ```
     git add <modifiedFile>
     git commit
     ```
-5. Update the "Unreleased" section of the [CHANGELOG](CHANGELOG.md) for any
+
+5. Update the "Unreleased" section of the [CHANGELOG](/CHANGELOG.md) for any
    significant change that impacts users.
+
 6. Keeping branch in sync with upstream.
+
     ```
     git checkout branchName
     git fetch upstream
     git rebase upstream/master
     ```
+
 7. Push local branch to your forked repository.
+
     ```
     git push -f $remoteBranchName branchName
     ```
+
 8. Create a Pull request on GitHub.
    Visit your fork at `https://github.com/vmware-tanzu/antrea` and click
    `Compare & Pull Request` button next to your `remoteBranchName` branch.
@@ -116,6 +133,7 @@ fork. Once a PR is ready to merge, squash any *fix review feedback, typo*
 and *merged* sorts of commits.
 
 To make it easier for reviewers to review your PR, consider the following:
+
 1. Follow the golang [coding conventions](https://github.com/golang/go/wiki/CodeReviewComments)
 2. Follow [git commit](https://chris.beams.io/posts/git-commit/) guidelines.
 3. Follow [logging](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md) guidelines.
@@ -159,22 +177,30 @@ including how to setup a local Kubernetes cluster, can be found in
 ### Reverting a commit
 
 1. Create a branch in your forked repo
+
     ```
     git checkout -b revertName
     ```
+
 2. Sync the branch with upstream
+
     ```
     git fetch upstream
     git rebase upstream/master
     ```
+
 3. Create a revert based on the SHA of the commit.
+
     ```
     git revert SHA
     ```
+
 4. Push this new commit.
+
     ```
     git push $remoteRevertName revertName
     ```
+
 5. Create a Pull Request on GitHub.
    Visit your fork at `https://github.com/vmware-tanzu/antrea` and click
    `Compare & Pull Request` button next to your `remoteRevertName` branch.
@@ -183,7 +209,7 @@ including how to setup a local Kubernetes cluster, can be found in
 
 We use labels and workflows (some manual, some automated with GitHub Actions) to
 help us manage triage, prioritize, and track issue progress. For a detailed
-discussion, see [issue-management.md](docs/issue-management.md).
+discussion, see [issue-management.md](issue-management.md).
 
 ### Filing An Issue
 
@@ -210,7 +236,7 @@ labels are included on your issue:
   area label will identify the area of interest an issue or PR belongs in and
   will ensure the appropriate reviewers shepherd the issue or PR through to its
   closure. For an overview of areas, see the 
-  [`github-labels.md`](docs/github-labels.md).
+  [`github-labels.md`](github-labels.md).
 * **size** (optional) -- if you have an idea of the size (lines of code, complexity,
   effort) of the issue, you can label it using a [size label](#size). The size
   can be updated during backlog grooming by contributors. This estimate is used

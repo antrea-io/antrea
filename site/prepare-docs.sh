@@ -6,13 +6,22 @@ pushd $THIS_DIR/docs/master
 # Copy README.md and other root markdown docs used in site documentation
 printf "Copying root markdown docs and fixing up relative links..."
 
-ROOT_DOCS=( README CONTRIBUTING CODE_OF_CONDUCT )
+ROOT_DOCS=( README CONTRIBUTING CODE_OF_CONDUCT CHANGELOG ROADMAP )
 
 for doc in "${ROOT_DOCS[@]}"; do
     cp -f ../../../${doc}.md .
-    sed -i.bak 's/\/docs\///' ${doc}.md
-    sed -i.bak 's/docs\///' ${doc}.md
+    sed -i.bak 's/\/docs\///g' ${doc}.md
+    sed -i.bak 's/docs\///g' ${doc}.md
     rm -f ${doc}.md.bak
+done
+
+# Copy VERSION into site documentation
+printf "Copying VERSION file into site root and converting to MD..."
+
+VERSION=( VERSION )
+
+for doc in "${VERSION[@]}"; do
+    cp -f ../../../${doc} ../../${doc}
 done
 
 # Create symbolic links to docs files and subdirectories.
