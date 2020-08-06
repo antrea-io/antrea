@@ -49,6 +49,7 @@ your environment and preference.
 Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):NodePort.
 
 Note:
+
 1. Docker image antrea/octant-antrea-ubuntu should be automatically downloaded
 when you apply antrea-octant.yml in step 3. If the image is not successfully
 downloaded which may be due to network issues, you can run command `make
@@ -80,12 +81,14 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
 1. Get and install Octant v0.13.1.
 
     Depending on your linux operating system, to install Octant v0.13.1, you can use either
+
     ```bash
     wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.deb
     dpkg -i octant_0.13.1_Linux-64bit.deb
     ```
 
     or
+    
     ```bash
     wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.rpm
     rpm -i octant_0.13.1_Linux-64bit.rpm
@@ -120,7 +123,16 @@ based on your environment and move the binary to OCTANT_PLUGIN_PATH.
 Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):80.
 
 Note:
+<<<<<<< HEAD
 1.  If you deploy Octant and the Antrea UI as a process, you cannot access the Traceflow UI for now when following the
+=======
+
+1. In Antrea v0.8.1, the Traceflow UI is a separate Octant plugin called antrea-traceflow-plugin.
+Starting with v0.9.0, the Traceflow UI will be merged into antrea-octant-plugin. When deploying Octant as a Pod using
+image antrea/octant-antrea-ubuntu:v0.8.1, you already have access to the alpha version of the Traceflow UI.
+
+2. If you deploy Octant and the Antrea UI as a process, you cannot access the Traceflow UI for now when following the
+>>>>>>> Cleanup
 steps listed above (at least until the v0.9.0 release). However, you can still build the binary yourself with
 the command below, with the remaining steps being almost the same as the ones above.
 
@@ -129,3 +141,4 @@ the command below, with the remaining steps being almost the same as the ones ab
     cd plugins/octant
     make antrea-octant-plugin
     ```
+
