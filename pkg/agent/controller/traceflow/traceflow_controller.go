@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -291,7 +291,7 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 			dstMAC = dstPodInterfaces[0].MAC.String()
 			dstIP = dstPodInterfaces[0].IP.String()
 		} else {
-			dstPod, err := c.kubeClient.CoreV1().Pods(tf.Spec.Destination.Namespace).Get(context.TODO(), tf.Spec.Destination.Pod, v1.GetOptions{})
+			dstPod, err := c.kubeClient.CoreV1().Pods(tf.Spec.Destination.Namespace).Get(context.TODO(), tf.Spec.Destination.Pod, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
@@ -367,7 +367,7 @@ func (c *Controller) errorTraceflowCRD(tf *opsv1alpha1.Traceflow, reason string)
 	}
 	patchData := Traceflow{Status: opsv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
 	payloads, _ := json.Marshal(patchData)
-	return c.traceflowClient.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{}, "status")
+	return c.traceflowClient.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
 
 // Deallocate tag from cache. Ignore DataplaneTag == 0 which is invalid case.

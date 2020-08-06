@@ -6,6 +6,10 @@ run:
     - ".*\\.pb\\.go"
   skip-dirs-use-default: true
 
+linters-settings:
+  goimports:
+    local-prefixes: github.com/vmware-tanzu/antrea
+
 linters:
   disable-all: true
   enable:
@@ -14,3 +18,4 @@ linters:
     - deadcode
     - staticcheck
     - gosec
+    - goimports

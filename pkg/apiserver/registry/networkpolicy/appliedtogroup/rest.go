@@ -19,7 +19,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -57,7 +57,7 @@ func (r *REST) NewList() runtime.Object {
 	return &networking.AppliedToGroupList{}
 }
 
-func (r *REST) Get(ctx context.Context, name string, options *v1.GetOptions) (runtime.Object, error) {
+func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	appliedToGroup, exists, err := r.appliedToGroupStore.Get(name)
 	if err != nil {
 		return nil, errors.NewInternalError(err)
@@ -89,6 +89,6 @@ func (r *REST) Watch(ctx context.Context, options *internalversion.ListOptions) 
 	return r.appliedToGroupStore.Watch(ctx, key, label, field)
 }
 
-func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*v1.Table, error) {
+func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	return rest.NewDefaultTableConvertor(networking.Resource("appliedtogroup")).ConvertToTable(ctx, obj, tableOptions)
 }

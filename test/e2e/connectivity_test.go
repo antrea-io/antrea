@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
@@ -101,8 +101,8 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	}
 	defer deletePodWrapper(t, data, hpPodName)
 	// Retrieve the IP Address of the Node on which the Pod is scheduled.
-	hpPod, err := data.podWaitFor(defaultTimeout, hpPodName, testNamespace, func(pod *v1.Pod) (bool, error) {
-		return pod.Status.Phase == v1.PodRunning, nil
+	hpPod, err := data.podWaitFor(defaultTimeout, hpPodName, testNamespace, func(pod *corev1.Pod) (bool, error) {
+		return pod.Status.Phase == corev1.PodRunning, nil
 	})
 	if err != nil {
 		t.Fatalf("Error when waiting for Pod '%s': %v", hpPodName, err)

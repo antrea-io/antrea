@@ -19,7 +19,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
@@ -59,7 +59,7 @@ func (r *REST) getControllerInfo() *clusterinfo.AntreaControllerInfo {
 	return info
 }
 
-func (r *REST) Get(ctx context.Context, name string, options *v1.GetOptions) (runtime.Object, error) {
+func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	info := r.getControllerInfo()
 	// The provided name should match the AntreaControllerInfo.Name.
 	if info.Name != name {
@@ -82,6 +82,6 @@ func (r *REST) NamespaceScoped() bool {
 	return false
 }
 
-func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*v1.Table, error) {
+func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	return rest.NewDefaultTableConvertor(system.Resource("clusterinfos")).ConvertToTable(ctx, obj, tableOptions)
 }

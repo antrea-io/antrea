@@ -17,12 +17,12 @@ package main
 import (
 	"fmt"
 
+	"github.com/containernetworking/cni/pkg/skel"
+	cniversion "github.com/containernetworking/cni/pkg/version"
+
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/version"
-
-	"github.com/containernetworking/cni/pkg/skel"
-	cni_version "github.com/containernetworking/cni/pkg/version"
 )
 
 func init() {
@@ -34,7 +34,7 @@ func main() {
 		cni.ActionAdd.Request,
 		cni.ActionCheck.Request,
 		cni.ActionDel.Request,
-		cni_version.All,
+		cniversion.All,
 		fmt.Sprintf("Antrea CNI %s", version.GetFullVersionWithRuntimeInfo()),
 	)
 }
