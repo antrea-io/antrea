@@ -65,6 +65,7 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
 ## Features
 
 Antrea currently supports the following features:
+
 * IPv4 overlay network for a Kubernetes cluster. Geneve, VXLAN, GRE, or STT can
 be used as the encapsulation protocol.
 * [Kubernetes Network Policies](https://kubernetes.ioconcepts/services-networking/network-policies)
@@ -77,7 +78,7 @@ Antrea components, which publish runtime information as
 ## Roadmap
 
 We are adding features very quickly to Antrea. Check out the list of features we are considering 
-on our [Roadmap](ROADMAP.md) page. Feel free to throw your ideas in!
+on our [Roadmap](ROADMAP) page. Feel free to throw your ideas in!
 
 ## License
 
