@@ -25,16 +25,18 @@ function echoerr {
 }
 
 # Inspired from https://stackoverflow.com/a/24067243/4538702
-# 'sort -V' is available on Ubuntu 18.04
+# 'sort -V' is available on Ubuntu 20.04
 # less than
 function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
 # greater than
 function version_gt() { test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"; }
+# less than or equal to
+function version_let() { test "$(printf '%s\n' "$@" | sort -V | head -n 1)" == "$1"; }
 # greater than or equal to
 function version_get() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" == "$1"; }
 
-if version_lt "$OVS_VERSION" "2.11.0" || version_gt "$OVS_VERSION" "2.13.0"; then
-    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.11.0 and <= 2.13.0)"
+if version_lt "$OVS_VERSION" "2.13.0" || version_gt "$OVS_VERSION" "2.13.1"; then
+    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and <= 2.13.1)"
     exit 1
 fi
 
@@ -42,7 +44,7 @@ fi
 # merge, we will need to clone the repository with git instead of downloading a
 # release tarball (see Dockerfile).
 
-# These 2 patches (post 2.13.0) ensures that datapath flows are not deleted on
+# These 2 patches (post 2.13.x) ensures that datapath flows are not deleted on
 # ovs-vswitchd exit by default. Antrea relies on this to support hitless upgrade
 # of the Agent DaemonSet.
 # The second patch depends on the first one.
@@ -52,19 +54,27 @@ curl https://github.com/openvswitch/ovs/commit/586cd3101e7fda54d14fb5bf12d847f35
 curl https://github.com/openvswitch/ovs/commit/79eadafeb1b47a3871cb792aa972f6e4d89d1a0b.patch | \
     git apply --exclude NEWS --exclude vswitchd/ovs-vswitchd.8.in
 
-# This patch (post 2.13.0) ensures that ovs-vswitchd does not delete datapath
+# This patch (post 2.13.x) ensures that ovs-vswitchd does not delete datapath
 # ports on exit.
 curl https://github.com/openvswitch/ovs/commit/7cc77b301f80a63cd4893198d82be0eef303f731.patch | \
     git apply
 
 # This patch (post 2.13.0) ensures that ct_nw_src/ct_nw_dst supports IP Mask.
-curl https://github.com/openvswitch/ovs/commit/1740aaf49dad6f533705dc3dce8d955a1840052a.patch | \
+if version_let "$OVS_VERSION" "2.13.0"; then
+    curl https://github.com/openvswitch/ovs/commit/1740aaf49dad6f533705dc3dce8d955a1840052a.patch | \
+        git apply
+fi
+
+# These patches (post 2.13.x) are needed to fix the debian build on Ubuntu 20.04.
+curl https://github.com/openvswitch/ovs/commit/c101cd4171cfe04e214f858b4bbe089e56f13f9b.patch | \
+    git apply
+curl https://github.com/openvswitch/ovs/commit/3c18bb0fe9f23308061217f72e2245f0e311b20b.patch | \
+    git apply
+curl https://github.com/openvswitch/ovs/commit/fe175ac17352ceb2dbc9958112b4b1bc114d82f0.patch | \
     git apply
 
-if version_get "$OVS_VERSION" "2.13.0"; then
-    # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
-    # does not seem to be in the Python path in Ubuntu 18.04. There may be a better way to do this,
-    # but this seems like an acceptable workaround.
-    sed -i 's/python3\.7/python3\.6/' debian/openvswitch-test.install
-    sed -i 's/python3\.7/python3\.6/' debian/python3-openvswitch.install
-fi
+# OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
+# does not seem to be in the Python path in Ubuntu 20.04. There may be a better way to do this,
+# but this seems like an acceptable workaround.
+sed -i 's/python3\.7/python3\.8/' debian/openvswitch-test.install
+sed -i 's/python3\.7/python3\.8/' debian/python3-openvswitch.install
