@@ -24,7 +24,7 @@ function echoerr {
 }
 
 if [ -z "$OVS_VERSION" ]; then
-    echoerr "The OVS_VERSION env variable must be set to a valid value (e.g. 2.13.0)"
+    echoerr "The OVS_VERSION env variable must be set to a valid value (e.g. 2.13.1)"
     exit 1
 fi
 
@@ -39,7 +39,7 @@ pushd $THIS_DIR > /dev/null
 # locally.
 # See https://github.com/moby/moby/issues/34715.
 
-docker pull ubuntu:18.04
+docker pull ubuntu:20.04
 
 docker build --target ovs-debs \
        --cache-from antrea/openvswitch-debs:$OVS_VERSION \

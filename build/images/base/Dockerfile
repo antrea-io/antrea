@@ -1,5 +1,5 @@
-ARG OVS_VERSION=2.13.0
-FROM ubuntu:18.04 as cni-binaries
+ARG OVS_VERSION=2.13.1
+FROM ubuntu:20.04 as cni-binaries
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget ca-certificates
