@@ -22,6 +22,13 @@ The following components should be configured and run on the Windows Node.
 antrea-agent and kube-proxy run as processes on host and are managed by
 management Pods. It is recommended to run OVS daemons as Windows services.
 
+### Antrea Windows demo
+Watch this [demo video](https://www.youtube.com/watch?v=xjhizZ3BJzQ) of running
+Antrea in a Kubernetes cluster with both Linux and Windows nodes. The demo also
+shows the Antrea OVS bridge configuration on a Windows Node, NetworkPolicy
+enforcement for Windows Pods, and Antrea Traceflow from Octant. Note, OVS driver
+and daemons are pre-installed on the Windows Nodes in the demo.
+
 ## Deploying Antrea on Windows Worker Node
 
 ### Prerequisites
