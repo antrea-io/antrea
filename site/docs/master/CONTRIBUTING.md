@@ -183,7 +183,7 @@ including how to setup a local Kubernetes cluster, can be found in
 
 We use labels and workflows (some manual, some automated with GitHub Actions) to
 help us manage triage, prioritize, and track issue progress. For a detailed
-discussion, see [docs/issue-management.md](issue-management.md).
+discussion, see [issue-management.md](docs/issue-management.md).
 
 ### Filing An Issue
 
@@ -210,7 +210,7 @@ labels are included on your issue:
   area label will identify the area of interest an issue or PR belongs in and
   will ensure the appropriate reviewers shepherd the issue or PR through to its
   closure. For an overview of areas, see the 
-  [`docs/github-labels.md`](github-labels.md).
+  [`github-labels.md`](docs/github-labels.md).
 * **size** (optional) -- if you have an idea of the size (lines of code, complexity,
   effort) of the issue, you can label it using a [size label](#size). The size
   can be updated during backlog grooming by contributors. This estimate is used
