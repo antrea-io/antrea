@@ -457,6 +457,7 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 			portName,
 			c.networkConfig.TunnelType,
 			0, // ofPortRequest - let OVS allocate OFPort number.
+			false,
 			"",
 			nodeIP.String(),
 			c.networkConfig.IPSecPSK,
@@ -500,7 +501,7 @@ func ParseTunnelInterfaceConfig(
 		klog.V(2).Infof("OVS port %s has no options", portData.Name)
 		return nil
 	}
-	remoteIP, localIP, psk := ovsconfig.ParseTunnelInterfaceOptions(portData)
+	remoteIP, localIP, psk, csum := ovsconfig.ParseTunnelInterfaceOptions(portData)
 
 	var interfaceConfig *interfacestore.InterfaceConfig
 	var nodeName string
@@ -515,7 +516,7 @@ func ParseTunnelInterfaceConfig(
 			remoteIP,
 			psk)
 	} else {
-		interfaceConfig = interfacestore.NewTunnelInterface(portData.Name, ovsconfig.TunnelType(portData.IFType), localIP)
+		interfaceConfig = interfacestore.NewTunnelInterface(portData.Name, ovsconfig.TunnelType(portData.IFType), localIP, csum)
 	}
 	interfaceConfig.OVSPortConfig = portConfig
 	return interfaceConfig
