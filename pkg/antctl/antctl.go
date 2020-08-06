@@ -333,7 +333,7 @@ var CommandList = &commandList{
 					params: []flagInfo{
 						{
 							name:      "namespace",
-							usage:     "Namespace of the entity (required)",
+							usage:     "Namespace of the endpoint (required)",
 							shorthand: "n",
 						},
 						{

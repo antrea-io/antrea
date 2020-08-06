@@ -90,7 +90,7 @@ func TestIncompleteArguments(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	// sample selector arguments (right now, only supports podname and namespace)
-	pod, namespace := "pod", "namespace"
+	namespace := "namespace"
 	// outline test cases with expected behavior
 	testCases := map[string]TestCase{
 		"Responds with error given no name and no namespace": {
@@ -102,11 +102,6 @@ func TestIncompleteArguments(t *testing.T) {
 			handlerRequest: "?namespace=namespace",
 			expectedStatus: http.StatusBadRequest,
 			argsMock:       []string{namespace, ""},
-		},
-		"Responds with error given no namespace": {
-			handlerRequest: "?pod=pod",
-			expectedStatus: http.StatusBadRequest,
-			argsMock:       []string{"", pod},
 		},
 	}
 

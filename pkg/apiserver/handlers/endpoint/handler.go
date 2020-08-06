@@ -27,23 +27,26 @@ func HandleFunc(eq networkpolicy.EndpointQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		podName := r.URL.Query().Get("pod")
 		namespace := r.URL.Query().Get("namespace")
+		if namespace == "" {
+			namespace = "default"
+		}
 		// check for incomplete arguments
-		if podName == "" || namespace == "" {
-			http.Error(w, "namespace and pod must be provided", http.StatusBadRequest)
+		if podName == "" {
+			http.Error(w, "pod must be provided", http.StatusBadRequest)
 			return
 		}
 		// query endpoint and handle response errors
 		endpointQueryResponse, err := eq.QueryNetworkPolicies(namespace, podName)
-		if err == nil && endpointQueryResponse == nil {
-			http.Error(w, "could not find any endpoints matching your selection", http.StatusNotFound)
-			return
-		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		if endpointQueryResponse == nil {
+			http.Error(w, "could not find any endpoints matching your selection", http.StatusNotFound)
+			return
+		}
 		if err := json.NewEncoder(w).Encode(*endpointQueryResponse); err != nil {
-			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "failed to encode response: "+err.Error(), http.StatusInternalServerError)
 		}
 	}
 }

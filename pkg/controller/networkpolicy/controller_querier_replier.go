@@ -67,7 +67,7 @@ type Rule struct {
 	RuleIndex int                         `json:"ruleindex,omitempty"`
 }
 
-// NewNetworkPolicyController returns a new *NetworkPolicyController.
+// NewEndpointQueryReplier returns a new *NewEndpointQueryReplier.
 func NewEndpointQueryReplier(networkPolicyController *NetworkPolicyController) *EndpointQueryReplier {
 	n := &EndpointQueryReplier{
 		networkPolicyController: networkPolicyController,

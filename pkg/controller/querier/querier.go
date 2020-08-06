@@ -41,6 +41,7 @@ func NewControllerQuerier(networkPolicyInfoQuerier querier.ControllerNetworkPoli
 	return &controllerQuerier{networkPolicyInfoQuerier: networkPolicyInfoQuerier, apiPort: apiPort}
 }
 
+// GetNodeSubnet gets current network policy info querier.
 func (cq controllerQuerier) getNetworkPolicyInfoQuerier() querier.ControllerNetworkPolicyInfoQuerier {
 	return cq.networkPolicyInfoQuerier
 }
