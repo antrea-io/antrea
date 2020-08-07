@@ -17,7 +17,6 @@ package e2e
 import (
 	"encoding/hex"
 	"fmt"
-	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -66,7 +65,41 @@ func TestFlowExporter(t *testing.T) {
 		t.Fatalf("error when getting logs %v, rc: %v", err, rc)
 	}
 
-	// Parse through IPFIX collector output
+	/* Parse through IPFIX collector output. Sample output (with truncated fields) is given below:
+	 IPFIX-HDR:
+	 version=10, length=158
+	 unixtime=1596608557 (2020-08-04 23:22:37 PDT)
+	 seqno=51965, odid=4093457084
+	DATA RECORD:
+	 template id:  256
+	 nfields:      21
+	 sourceIPv4Address: 100.10.0.117
+	 destinationIPv4Address: 100.10.1.128
+	 sourceTransportPort: 44586
+	 destinationTransportPort: 8080
+	 protocolIdentifier: 6
+	 packetTotalCount: 7
+	 octetTotalCount: 420
+	 packetDeltaCount: 0
+	 octetDeltaCount: 0
+	 55829_101: 0x7765622d636c69
+	IPFIX-HDR:
+	 version=10, length=119
+	 unixtime=1596608558 (2020-08-04 23:22:38 PDT)
+	 seqno=159, odid=1269807227
+	DATA RECORD:
+	 template id:  256
+	 nfields:      21
+	 sourceIPv4Address: 100.10.0.114
+	 destinationIPv4Address: 100.10.1.127
+	 sourceTransportPort: 42872
+	 destinationTransportPort: 8080
+	 protocolIdentifier: 6
+	 packetTotalCount: 7
+	 octetTotalCount: 420
+	 packetDeltaCount: 0
+	 octetDeltaCount: 0
+	*/
 	re := regexp.MustCompile("(?m)^.*" + "#" + ".*$[\r\n]+")
 	collectorOutput = re.ReplaceAllString(collectorOutput, "")
 	collectorOutput = strings.TrimSpace(collectorOutput)
@@ -109,18 +142,16 @@ func TestFlowExporter(t *testing.T) {
 								t.Fatalf("Error in converting octetDeltaCount to int type")
 							}
 							// compute the bandwidth using 5s as interval
-							recBandwidth := (deltaBytes * 8.0) / (5.0 * math.Pow10(9))
+							recBandwidth := (deltaBytes * 8.0) / float64((int64(5.0))*time.Second.Nanoseconds())
 							// bandwidth from iperf output
 							bwSlice := strings.Split(bandwidth, " ")
 							iperfBandwidth, err := strconv.ParseFloat(bwSlice[0], 64)
 							if err != nil {
 								t.Fatalf("Error in converting iperf bandwidth to float64 type")
 							}
-							// Check if at least the first digit is equal, i.e., 42 Gb/s and 48 Gb/s are considered equal
-							// we cannot guarantee both will be exactly same. Logging both values to give visibility.
 							t.Logf("Iperf bandwidth: %v", iperfBandwidth)
 							t.Logf("IPFIX record bandwidth: %v", recBandwidth)
-							assert.Equal(t, int(recBandwidth/10), int(float64(iperfBandwidth)/10), "Iperf bandwidth and IPFIX record bandwidth should be similar")
+							assert.InEpsilonf(t, recBandwidth, iperfBandwidth, 5, "Difference between Iperf bandwidth and IPFIX record bandwidth should be less than 5Gb/s")
 							break
 						}
 					}

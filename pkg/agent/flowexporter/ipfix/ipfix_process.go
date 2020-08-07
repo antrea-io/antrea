@@ -25,6 +25,7 @@ import (
 
 var _ IPFIXExportingProcess = new(ipfixExportingProcess)
 
+// IPFIXExportingProcess interface is added to facilitate unit testing without involving the code from go-ipfix library.
 type IPFIXExportingProcess interface {
 	LoadRegistries()
 	GetIANARegistryInfoElement(name string, isReverse bool) (*ipfixentities.InfoElement, error)

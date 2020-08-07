@@ -16,6 +16,7 @@ package flowrecords
 
 import (
 	"fmt"
+
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"

@@ -23,6 +23,7 @@ import (
 var _ IPFIXRecord = new(ipfixDataRecord)
 var _ IPFIXRecord = new(ipfixTemplateRecord)
 
+// IPFIXRecord interface is added to facilitate unit testing without involving the code from go-ipfix library.
 type IPFIXRecord interface {
 	GetRecord() ipfixentities.Record
 	PrepareRecord() (uint16, error)
@@ -54,13 +55,11 @@ func (dr *ipfixDataRecord) GetRecord() ipfixentities.Record {
 }
 
 func (dr *ipfixDataRecord) PrepareRecord() (uint16, error) {
-	addedBytes, err := dr.dataRecord.PrepareRecord()
-	return addedBytes, err
+	return dr.dataRecord.PrepareRecord()
 }
 
 func (dr *ipfixDataRecord) AddInfoElement(element *ipfixentities.InfoElement, val interface{}) (uint16, error) {
-	addedBytes, err := dr.dataRecord.AddInfoElement(element, val)
-	return addedBytes, err
+	return dr.dataRecord.AddInfoElement(element, val)
 }
 
 func (dr *ipfixDataRecord) GetBuffer() *bytes.Buffer {
@@ -80,13 +79,11 @@ func (tr *ipfixTemplateRecord) GetRecord() ipfixentities.Record {
 }
 
 func (tr *ipfixTemplateRecord) PrepareRecord() (uint16, error) {
-	addedBytes, err := tr.templateRecord.PrepareRecord()
-	return addedBytes, err
+	return tr.templateRecord.PrepareRecord()
 }
 
 func (tr *ipfixTemplateRecord) AddInfoElement(element *ipfixentities.InfoElement, val interface{}) (uint16, error) {
-	addedBytes, err := tr.templateRecord.AddInfoElement(element, val)
-	return addedBytes, err
+	return tr.templateRecord.AddInfoElement(element, val)
 }
 
 func (tr *ipfixTemplateRecord) GetBuffer() *bytes.Buffer {

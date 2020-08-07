@@ -89,7 +89,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	if err != nil {
 		t.Errorf("Dump flows function returned error: %v", err)
 	}
-	assert.Equal(t, 1, len(conns), "number of filtered Connections should be equal")
+	assert.Equal(t, 1, len(conns), "number of filtered connections should be equal")
 }
 
 func TestConnTackOvsAppCtl_DumpFlows(t *testing.T) {

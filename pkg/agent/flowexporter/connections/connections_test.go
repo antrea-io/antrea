@@ -28,6 +28,8 @@ import (
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
 )
 
+const testPollInterval = 0 // Not used in these tests, hence 0.
+
 func makeTuple(srcIP *net.IP, dstIP *net.IP, protoID uint8, srcPort uint16, dstPort uint16) (*flowexporter.Tuple, *flowexporter.Tuple) {
 	tuple := &flowexporter.Tuple{
 		SourceAddress:      *srcIP,
@@ -104,18 +106,12 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		IP:                       net.IP{8, 7, 6, 5},
 		ContainerInterfaceConfig: podConfigFlow2,
 	}
-	// Mock interface store with one of the couple of IPs correspond to Pods
-	iStore := interfacestoretest.NewMockInterfaceStore(ctrl)
-	mockCT := connectionstest.NewMockConnTrackDumper(ctrl)
-	// Create ConnectionStore
-	connStore := &ConnectionStore{
-		Connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		ConnDumper:  mockCT,
-		IfaceStore:  iStore,
-	}
+	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
+	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, testPollInterval)
 	// Add flow1conn to the Connection map
 	testFlow1Tuple := flowexporter.NewConnectionKey(&testFlow1)
-	connStore.Connections[testFlow1Tuple] = oldTestFlow1
+	connStore.connections[testFlow1Tuple] = oldTestFlow1
 
 	addOrUpdateConnTests := []struct {
 		flow flowexporter.Connection
@@ -134,8 +130,8 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 			expConn = test.flow
 			expConn.DestinationPodNamespace = "ns2"
 			expConn.DestinationPodName = "pod2"
-			iStore.EXPECT().GetInterfaceByIP(test.flow.TupleOrig.SourceAddress.String()).Return(nil, false)
-			iStore.EXPECT().GetInterfaceByIP(test.flow.TupleReply.SourceAddress.String()).Return(interfaceFlow2, true)
+			mockIfaceStore.EXPECT().GetInterfaceByIP(test.flow.TupleOrig.SourceAddress.String()).Return(nil, false)
+			mockIfaceStore.EXPECT().GetInterfaceByIP(test.flow.TupleReply.SourceAddress.String()).Return(interfaceFlow2, true)
 		}
 		connStore.addOrUpdateConn(&test.flow)
 		actualConn, ok := connStore.GetConnByKey(flowTuple)
@@ -182,20 +178,18 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 		testFlowKeys[i] = &connKey
 	}
 	// Create ConnectionStore
-	connStore := &ConnectionStore{
-		Connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		ConnDumper:  nil,
-		IfaceStore:  nil,
-	}
+	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
+	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, testPollInterval)
 	// Add flows to the Connection store
 	for i, flow := range testFlows {
-		connStore.Connections[*testFlowKeys[i]] = *flow
+		connStore.connections[*testFlowKeys[i]] = *flow
 	}
 
 	resetTwoFields := func(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
 		conn.IsActive = false
 		conn.OriginalPackets = 0
-		connStore.Connections[key] = conn
+		connStore.connections[key] = conn
 		return nil
 	}
 	connStore.ForAllConnectionsDo(resetTwoFields)
@@ -246,16 +240,14 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		testFlowKeys[i] = &connKey
 	}
 	// Create ConnectionStore
-	connStore := &ConnectionStore{
-		Connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		ConnDumper:  nil,
-		IfaceStore:  nil,
-	}
+	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
+	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, testPollInterval)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
-		connStore.Connections[*testFlowKeys[i]] = *flow
+		connStore.connections[*testFlowKeys[i]] = *flow
 	}
-	// Delete the Connections in connection store.
+	// Delete the connections in connection store.
 	for i := 0; i < len(testFlows); i++ {
 		err := connStore.DeleteConnectionByKey(*testFlowKeys[i])
 		assert.Nil(t, err, "DeleteConnectionByKey should return nil")

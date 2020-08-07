@@ -16,8 +16,6 @@ package exporter
 
 import (
 	"fmt"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	"hash/fnv"
 	"net"
 	"strings"
@@ -29,6 +27,8 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 var (
@@ -46,8 +46,6 @@ var (
 		"octetDeltaCount",
 	}
 	// Substring "reverse" is an indication to get reverse element of go-ipfix library.
-	// Specifically using GetReverseInfoElement, which is part of implementations of GetIANARegistryInfoElement and
-	// GetAntreaRegistryInfoElement.
 	IANAReverseInfoElements = []string{
 		"reverse_PacketTotalCount",
 		"reverse_OctetTotalCount",
