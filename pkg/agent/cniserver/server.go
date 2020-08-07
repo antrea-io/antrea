@@ -601,8 +601,11 @@ func (s *CNIServer) interceptCheck(_ *CNIConfig) (*cnipb.CniCmdResponse, error) 
 // K8s apiserver and replay the necessary flows.
 func (s *CNIServer) reconcile() error {
 	klog.Infof("Reconciliation for CNI server")
+	// For performance reasons, use ResourceVersion="0" in the ListOptions to ensure the request is served from
+	// the watch cache in kube-apiserver.
 	pods, err := s.kubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
-		FieldSelector: "spec.nodeName=" + s.nodeConfig.Name,
+		FieldSelector:   "spec.nodeName=" + s.nodeConfig.Name,
+		ResourceVersion: "0",
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list Pods running on Node %s: %v", s.nodeConfig.Name, err)

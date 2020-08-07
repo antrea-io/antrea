@@ -283,14 +283,14 @@ func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *res
 func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, nameFilter string) (map[string]*rest.RESTClient, error) {
 	clients := map[string]*rest.RESTClient{}
 	nodeAgentInfoMap := map[string]string{}
-	agentInfoList, err := antreaClientset.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{})
+	agentInfoList, err := antreaClientset.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		return nil, err
 	}
 	for _, agentInfo := range agentInfoList.Items {
 		nodeAgentInfoMap[agentInfo.NodeRef.Name] = fmt.Sprint(agentInfo.APIPort)
 	}
-	nodeList, err := k8sClientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: option.labelSelector})
+	nodeList, err := k8sClientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: option.labelSelector, ResourceVersion: "0"})
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +372,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 	}
 
 	g.Go(func() error {
-		pods, err := k8sClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		pods, err := k8sClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -382,7 +382,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		nodes, err := k8sClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+		nodes, err := k8sClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -392,7 +392,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		deployments, err := k8sClient.AppsV1().Deployments(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		deployments, err := k8sClient.AppsV1().Deployments(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -402,7 +402,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		replicas, err := k8sClient.AppsV1().ReplicaSets(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		replicas, err := k8sClient.AppsV1().ReplicaSets(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -412,7 +412,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		daemonsets, err := k8sClient.AppsV1().DaemonSets(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		daemonsets, err := k8sClient.AppsV1().DaemonSets(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -422,7 +422,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		configs, err := k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).List(context.TODO(), metav1.ListOptions{LabelSelector: "app=antrea"})
+		configs, err := k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).List(context.TODO(), metav1.ListOptions{LabelSelector: "app=antrea", ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
