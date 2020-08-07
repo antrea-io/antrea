@@ -37,6 +37,7 @@ func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.I
 
 func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, zoneFilter uint16, isAntreaProxyEnabled bool) []*flowexporter.Connection {
 	filteredConns := conns[:0]
+conLoop:
 	for _, conn := range conns {
 		if conn.Zone != zoneFilter {
 			continue
@@ -44,10 +45,12 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 		srcIP := conn.TupleOrig.SourceAddress
 		dstIP := conn.TupleReply.SourceAddress
 
-		// Consider Pod-to-Pod, Pod-To-Service and Pod-To-External flows.
-		if srcIP.Equal(nodeConfig.GatewayConfig.IP) || dstIP.Equal(nodeConfig.GatewayConfig.IP) {
-			klog.V(4).Infof("Detected flow for which one of the endpoint is host gateway %s :%+v", nodeConfig.GatewayConfig.IP.String(), conn)
-			continue
+		// Only get Pod-to-Pod flows.
+		for _, ip := range nodeConfig.GatewayConfig.IPs {
+			if srcIP.Equal(ip) || dstIP.Equal(ip) {
+				klog.V(4).Infof("Detected flow through gateway :%v", conn)
+				continue conLoop
+			}
 		}
 
 		if !isAntreaProxyEnabled {
