@@ -37,11 +37,11 @@ type connTrackSystem struct {
 }
 
 func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackSystem {
-	// Ensure net.netfilter.nf_conntrack_acct value to be 1. This will enable flow exporter to export stats of Connections.
+	// Ensure net.netfilter.nf_conntrack_acct value to be 1. This will enable flow exporter to export stats of connections.
 	// Do not handle error and continue with creation of interfacer object as we can still dump flows with no stats.
 	// If log says permission error, please ensure net.netfilter.nf_conntrack_acct to be set to 1.
 	sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_acct", 1)
-	// Ensure net.netfilter.nf_conntrack_timestamp value to be 1. This will enable flow exporter to export timestamps of Connections.
+	// Ensure net.netfilter.nf_conntrack_timestamp value to be 1. This will enable flow exporter to export timestamps of connections.
 	// Do not handle error and continue with creation of interfacer object as we can still dump flows with no timestamps.
 	// If log says permission error, please ensure net.netfilter.nf_conntrack_timestamp to be set to 1.
 	sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_timestamp", 1)

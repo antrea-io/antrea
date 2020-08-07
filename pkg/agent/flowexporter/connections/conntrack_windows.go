@@ -20,18 +20,9 @@ import (
 	"net"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 )
 
-// TODO:  Implement ConnTrackDumper for windows.
-var _ ConnTrackDumper = new(connTrackSystem)
-
-type connTrackSystem struct{}
-
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackSystem {
-	return nil
-}
-
-func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error) {
-	return nil, nil
+// TODO: Support FlowExporter feature for windows. We have to pass ovsctlClient when supported.
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackOvsCtl {
+	return NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, nil)
 }

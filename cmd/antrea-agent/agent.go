@@ -242,10 +242,7 @@ func run(o *Options) error {
 	// Initialize flow exporter to start go routines to poll conntrack flows and export IPFIX flow records
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		connStore := connections.NewConnectionStore(
-			o.config.OVSDatapathType,
-			nodeConfig,
-			serviceCIDRNet,
-			agentQuerier.GetOVSCtlClient(),
+			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, agentQuerier.GetOVSCtlClient(), o.config.OVSDatapathType),
 			ifaceStore,
 			o.pollInterval)
 		// pollDone helps in synchronizing connStore.Run and flowExporter.Run go routines.

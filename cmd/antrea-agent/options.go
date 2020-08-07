@@ -32,11 +32,13 @@ import (
 )
 
 const (
-	defaultOVSBridge          = "br-int"
-	defaultHostGateway        = "antrea-gw0"
-	defaultHostProcPathPrefix = "/host"
-	defaultServiceCIDR        = "10.96.0.0/12"
-	defaultTunnelType         = ovsconfig.GeneveTunnel
+	defaultOVSBridge           = "br-int"
+	defaultHostGateway         = "antrea-gw0"
+	defaultHostProcPathPrefix  = "/host"
+	defaultServiceCIDR         = "10.96.0.0/12"
+	defaultTunnelType          = ovsconfig.GeneveTunnel
+	defaultFlowPollInterval    = 5 * time.Second
+	defaultFlowExportFrequency = 12
 )
 
 type Options struct {
@@ -101,6 +103,9 @@ func (o *Options) validate(args []string) error {
 	if encapMode.SupportsNoEncap() && o.config.EnableIPSecTunnel {
 		return fmt.Errorf("IPSec tunnel may only be enabled on %s mode", config.TrafficEncapModeEncap)
 	}
+	if err := o.validateFlowExporterConfig(); err != nil {
+		return fmt.Errorf("Failed to validate flow exporter config: %v", err)
+	}
 	return nil
 }
 
@@ -152,11 +157,11 @@ func (o *Options) setDefaults() {
 
 	if o.config.FeatureGates[string(features.FlowExporter)] {
 		if o.config.FlowPollInterval == "" {
-			o.pollInterval = 5 * time.Second
+			o.pollInterval = defaultFlowPollInterval
 		}
 		if o.config.FlowExportFrequency == 0 {
-			// This frequency value makes flow export interval as 60s
-			o.config.FlowExportFrequency = 12
+			// This frequency value makes flow export interval as 60s by default.
+			o.config.FlowExportFrequency = defaultFlowExportFrequency
 		}
 	}
 }

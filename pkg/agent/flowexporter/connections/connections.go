@@ -16,10 +16,6 @@ package connections
 
 import (
 	"fmt"
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
-	"net"
 	"sync"
 	"time"
 
@@ -31,29 +27,23 @@ import (
 )
 
 type ConnectionStore struct {
-	Connections  map[flowexporter.ConnectionKey]flowexporter.Connection
-	ConnDumper   ConnTrackDumper
-	IfaceStore   interfacestore.InterfaceStore
+	connections  map[flowexporter.ConnectionKey]flowexporter.Connection
+	connDumper   ConnTrackDumper
+	ifaceStore   interfacestore.InterfaceStore
 	pollInterval time.Duration
 	mutex        sync.Mutex
 }
 
-func NewConnectionStore(ovsDatapathType string, nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsctlClient ovsctl.OVSCtlClient, ifaceStore interfacestore.InterfaceStore, pollInterval time.Duration) *ConnectionStore {
-	var connTrackDumper ConnTrackDumper
-	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
-		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDR)
-	} else if ovsDatapathType == ovsconfig.OVSDatapathNetdev {
-		connTrackDumper = NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, ovsctlClient)
-	}
+func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, pollInterval time.Duration) *ConnectionStore {
 	return &ConnectionStore{
-		Connections:  make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		ConnDumper:   connTrackDumper,
-		IfaceStore:   ifaceStore,
+		connections:  make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		connDumper:   connTrackDumper,
+		ifaceStore:   ifaceStore,
 		pollInterval: pollInterval,
 	}
 }
 
-// Run enables the periodical polling of conntrack Connections, at the given flowPollInterval
+// Run enables the periodical polling of conntrack connections, at the given flowPollInterval
 func (cs *ConnectionStore) Run(stopCh <-chan struct{}, pollDone chan struct{}) {
 	klog.Infof("Starting conntrack polling")
 
@@ -99,12 +89,12 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		existingConn.ReversePackets = conn.ReversePackets
 		existingConn.IsActive = true
 		// Reassign the flow to update the map
-		cs.Connections[connKey] = *existingConn
+		cs.connections[connKey] = *existingConn
 		klog.V(4).Infof("Antrea flow updated: %v", existingConn)
 	} else {
 		var srcFound, dstFound bool
-		sIface, srcFound := cs.IfaceStore.GetInterfaceByIP(conn.TupleOrig.SourceAddress.String())
-		dIface, dstFound := cs.IfaceStore.GetInterfaceByIP(conn.TupleReply.SourceAddress.String())
+		sIface, srcFound := cs.ifaceStore.GetInterfaceByIP(conn.TupleOrig.SourceAddress.String())
+		dIface, dstFound := cs.ifaceStore.GetInterfaceByIP(conn.TupleReply.SourceAddress.String())
 		if !srcFound && !dstFound {
 			klog.Warningf("Cannot map any of the IP %s or %s to a local Pod", conn.TupleOrig.SourceAddress.String(), conn.TupleReply.SourceAddress.String())
 		}
@@ -117,7 +107,7 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 			conn.DestinationPodName = dIface.ContainerInterfaceConfig.PodName
 			conn.DestinationPodNamespace = dIface.ContainerInterfaceConfig.PodNamespace
 		}
-		// Do not export flow records of Connections, whose destination is local pod and source is remote pod.
+		// Do not export flow records of connections whose destination is local pod and source is remote pod.
 		// We export flow records only form "source node", where the connection is originated from. This is to avoid
 		// 2 copies of flow records at flow collector. This restriction will be removed when flow records store network policy rule ID.
 		// TODO: Remove this when network policy rule ID are added to flow records.
@@ -126,7 +116,7 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		}
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
-		cs.Connections[connKey] = *conn
+		cs.connections[connKey] = *conn
 	}
 }
 
@@ -134,7 +124,7 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 func (cs *ConnectionStore) GetConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
-	conn, found := cs.Connections[flowTuple]
+	conn, found := cs.connections[flowTuple]
 	return &conn, found
 }
 
@@ -142,7 +132,7 @@ func (cs *ConnectionStore) GetConnByKey(flowTuple flowexporter.ConnectionKey) (*
 func (cs *ConnectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionMapCallBack) error {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
-	for k, v := range cs.Connections {
+	for k, v := range cs.connections {
 		err := callback(k, v)
 		if err != nil {
 			klog.Errorf("Callback execution failed for flow with key: %v, conn: %v, k, v: %v", k, v, err)
@@ -153,21 +143,21 @@ func (cs *ConnectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionM
 }
 
 // Poll calls into conntrackDumper interface to dump conntrack flows
-// TODO: As optimization, only poll invalid/closed Connections during every poll, and poll the established Connections right before the export.
+// TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
 func (cs *ConnectionStore) Poll() (int, error) {
 	klog.V(2).Infof("Polling conntrack")
 
-	// Reset isActive flag for all Connections in connection map before dumping flows in conntrack module.
+	// Reset isActive flag for all connections in connection map before dumping flows in conntrack module.
 	// This is to specify that the connection and the flow record can be deleted after the next export.
 	resetConn := func(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
 		conn.IsActive = false
-		cs.Connections[key] = conn
+		cs.connections[key] = conn
 		return nil
 	}
 	// We do not expect any error as resetConn is not returning any error
 	cs.ForAllConnectionsDo(resetConn)
 
-	filteredConns, err := cs.ConnDumper.DumpFlows(openflow.CtZone)
+	filteredConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
 	if err != nil {
 		return 0, err
 	}
@@ -191,7 +181,7 @@ func (cs *ConnectionStore) DeleteConnectionByKey(connKey flowexporter.Connection
 	}
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
-	delete(cs.Connections, connKey)
+	delete(cs.connections, connKey)
 
 	return nil
 }

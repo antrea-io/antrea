@@ -22,10 +22,17 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	ipfixtest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix/testing"
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+)
+
+const (
+	testTemplateID           = 256
+	testFlowPollInterval     = time.Second
+	testFlowExportFrequency  = 12
+	antreaEnterpriseRegistry = 29305
 )
 
 func TestFlowExporter_sendTemplateRecord(t *testing.T) {
@@ -38,18 +45,18 @@ func TestFlowExporter_sendTemplateRecord(t *testing.T) {
 		nil,
 		mockIPFIXExpProc,
 		nil,
-		12,
-		time.Second,
-		256,
+		testFlowExportFrequency,
+		testFlowPollInterval,
+		testTemplateID,
 	}
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
-	// Need only element name and other are dummys
+	// Only the element name is needed, other arguments have dummy values.
 	elemList := make([]*ipfixentities.InfoElement, 0)
 	for _, ie := range IANAInfoElements {
 		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, 0, 0))
 	}
 	for _, ie := range IANAReverseInfoElements {
-		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, 29305, 0))
+		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, antreaEnterpriseRegistry, 0))
 	}
 	for _, ie := range AntreaInfoElements {
 		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, 0, 0))
@@ -76,8 +83,8 @@ func TestFlowExporter_sendTemplateRecord(t *testing.T) {
 	}
 	mockTempRec.EXPECT().GetRecord().Return(templateRecord)
 	mockTempRec.EXPECT().GetTemplateElements().Return(elemList)
-	// Passing 0 for sentBytes as it is not used anywhere in the test. In reality, this IPFIX message size
-	// for template record of above elements.
+	// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
+	// above elements: IANAInfoElements, IANAReverseInfoElements and AntreaInfoElements.
 	mockIPFIXExpProc.EXPECT().AddRecordAndSendMsg(ipfixentities.Template, templateRecord).Return(0, nil)
 
 	_, err := flowExp.sendTemplateRecord(mockTempRec)
@@ -135,7 +142,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 		elemList[i] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
 	}
 	for i, ie := range IANAReverseInfoElements {
-		elemList[i+len(IANAInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, 29305, 0)
+		elemList[i+len(IANAInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, antreaEnterpriseRegistry, 0)
 	}
 	for i, ie := range AntreaInfoElements {
 		elemList[i+len(IANAInfoElements)+len(IANAReverseInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
@@ -146,9 +153,9 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 		nil,
 		mockIPFIXExpProc,
 		elemList,
-		12,
-		time.Second,
-		256,
+		testFlowExportFrequency,
+		testFlowPollInterval,
+		testTemplateID,
 	}
 	// Expect calls required
 	var dataRecord ipfixentities.Record
