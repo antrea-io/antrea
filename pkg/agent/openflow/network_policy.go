@@ -1048,7 +1048,7 @@ func (c *client) getStalePriorities(conj *policyRuleConjunction) (staleOFPriorit
 		priorityStale := true
 		for i := 0; i < len(conjs); i++ {
 			conjFiltered := conjs[i].(*policyRuleConjunction)
-			if conj.id != conjFiltered.id || conj.ruleTableID == conjFiltered.ruleTableID {
+			if conj.id != conjFiltered.id && conj.ruleTableID == conjFiltered.ruleTableID {
 				// There are other policyRuleConjuctions in the same table created with this
 				// ofPriority. The ofPriority is thus not stale and cannot be released.
 				priorityStale = false

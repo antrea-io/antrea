@@ -115,7 +115,7 @@ func (r *CompletedRule) String() string {
 
 // isAntreaNetworkPolicyRule returns true if the rule is part of a ClusterNetworkPolicy.
 func (r *CompletedRule) isAntreaNetworkPolicyRule() bool {
-	return r.PolicyPriority != nil && r.TierPriority != nil
+	return r.PolicyPriority != nil
 }
 
 // ruleCache caches Antrea AddressGroups, AppliedToGroups and NetworkPolicies,

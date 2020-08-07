@@ -60,7 +60,7 @@ func (r *PolicyRule) IsAntreaNetworkPolicyRule() bool {
 	return r.Priority != nil
 }
 
-// Priority is a struct that is composed of CNP priority, rule priority and tier priority.
+// Priority is a struct that is composed of Antrea NetworkPolicy priority, rule priority and Tier priority.
 // It is used as the basic unit for priority sorting.
 type Priority struct {
 	TierPriority   v1beta1.TierPriority
