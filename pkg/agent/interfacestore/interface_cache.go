@@ -245,11 +245,15 @@ func podIndexFunc(obj interface{}) ([]string, error) {
 
 func interfaceIPIndexFunc(obj interface{}) ([]string, error) {
 	interfaceConfig := obj.(*InterfaceConfig)
-	if interfaceConfig.IP == nil {
+	if interfaceConfig.IPs == nil {
 		// If interfaceConfig IP is not set, we return empty key.
 		return []string{}, nil
 	}
-	return []string{interfaceConfig.IP.String()}, nil
+	var intfIPs []string
+	for _, ip := range interfaceConfig.IPs {
+		intfIPs = append(intfIPs, ip.String())
+	}
+	return intfIPs, nil
 }
 
 func NewInterfaceStore() InterfaceStore {
