@@ -63,7 +63,7 @@ type expectTableFlows struct {
 }
 
 type testPortConfig struct {
-	ip     net.IP
+	ips    []net.IP
 	mac    net.HardwareAddr
 	ofPort uint32
 }
@@ -291,11 +291,11 @@ func testUninstallNodeFlows(t *testing.T, config *testConfig) {
 
 func testInstallPodFlows(t *testing.T, config *testConfig) {
 	for _, pod := range config.localPods {
-		err := c.InstallPodFlows(pod.name, pod.ip, pod.mac, config.localGateway.mac, pod.ofPort)
+		err := c.InstallPodFlows(pod.name, pod.ips, pod.mac, config.localGateway.mac, pod.ofPort)
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for pod: %v", err)
 		}
-		for _, tableFlow := range preparePodFlows(pod.ip, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC) {
+		for _, tableFlow := range preparePodFlows(pod.ips, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 		}
 	}
@@ -307,7 +307,7 @@ func testUninstallPodFlows(t *testing.T, config *testConfig) {
 		if err != nil {
 			t.Fatalf("Failed to uninstall Openflow entries for pod: %v", err)
 		}
-		for _, tableFlow := range preparePodFlows(pod.ip, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC) {
+		for _, tableFlow := range preparePodFlows(pod.ips, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, false, tableFlow.flows)
 		}
 	}
@@ -750,11 +750,11 @@ func checkOVSFlowMetrics(t *testing.T, client ofClient.Client) {
 }
 
 func testInstallGatewayFlows(t *testing.T, config *testConfig) {
-	err := c.InstallGatewayFlows(config.localGateway.ip, config.localGateway.mac, config.localGateway.ofPort)
+	err := c.InstallGatewayFlows(config.localGateway.ips, config.localGateway.mac, config.localGateway.ofPort)
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries for gateway: %v", err)
 	}
-	for _, tableFlow := range prepareGatewayFlows(config.localGateway.ip, config.localGateway.mac, config.localGateway.ofPort, config.globalMAC) {
+	for _, tableFlow := range prepareGatewayFlows(config.localGateway.ips, config.localGateway.mac, config.localGateway.ofPort, config.globalMAC) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -765,13 +765,13 @@ func prepareConfiguration() *testConfig {
 	podCfg := &testLocalPodConfig{
 		name: "container-1",
 		testPortConfig: &testPortConfig{
-			ip:     net.ParseIP("192.168.1.3"),
+			ips:    []net.IP{net.ParseIP("192.168.1.3")},
 			mac:    podMAC,
 			ofPort: uint32(3),
 		},
 	}
 	gwCfg := &testPortConfig{
-		ip:     net.ParseIP("192.168.1.1"),
+		ips:    []net.IP{net.ParseIP("192.168.1.1")},
 		mac:    gwMAC,
 		ofPort: uint32(1),
 	}
@@ -795,36 +795,14 @@ func prepareConfiguration() *testConfig {
 	}
 }
 
-func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gwMAC, vMAC net.HardwareAddr) []expectTableFlows {
-	return []expectTableFlows{
+func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32, gwMAC, vMAC net.HardwareAddr) []expectTableFlows {
+	flows := []expectTableFlows{
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=190,in_port=%d", podOFPort),
 					ActStr:   "load:0x2->NXM_NX_REG0[0..15],goto_table:10",
-				},
-			},
-		},
-		{
-			uint8(10),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d,dl_src=%s,nw_src=%s", podOFPort, podMAC.String(), podIP.String()),
-					ActStr:   "goto_table:29",
-				},
-				{
-					MatchStr: fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", podOFPort, podIP.String(), podMAC.String()),
-					ActStr:   "goto_table:20",
-				},
-			},
-		},
-		{
-			uint8(70),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x80000/0x80000,nw_dst=%s", podIP.String()),
-					ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,dec_ttl,goto_table:80", gwMAC.String(), podMAC.String()),
 				},
 			},
 		},
@@ -838,10 +816,50 @@ func preparePodFlows(podIP net.IP, podMAC net.HardwareAddr, podOFPort uint32, gw
 			},
 		},
 	}
+
+	for _, podIP := range podIPs {
+		var ipProto string
+		if podIP.To4() != nil {
+			ipProto = "ip"
+			flows = append(flows,
+				expectTableFlows{
+					uint8(10),
+					[]*ofTestUtils.ExpectFlow{
+						{
+							MatchStr: fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", podOFPort, podIP.String(), podMAC.String()),
+							ActStr:   "goto_table:20",
+						},
+					},
+				})
+		} else {
+			ipProto = "ipv6"
+		}
+		flows = append(flows,
+			expectTableFlows{
+				uint8(10),
+				[]*ofTestUtils.ExpectFlow{
+					{
+						MatchStr: fmt.Sprintf("priority=200,%s,in_port=%d,dl_src=%s,nw_src=%s", ipProto, podOFPort, podMAC.String(), podIP.String()),
+						ActStr:   "goto_table:29",
+					},
+				},
+			},
+			expectTableFlows{
+				uint8(70),
+				[]*ofTestUtils.ExpectFlow{
+					{
+						MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x80000/0x80000,nw_dst=%s", podIP.String()),
+						ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,dec_ttl,goto_table:80", gwMAC.String(), podMAC.String())},
+				},
+			},
+		)
+	}
+
+	return flows
 }
 
-func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, vMAC net.HardwareAddr) []expectTableFlows {
-	return []expectTableFlows{
+func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, vMAC net.HardwareAddr) []expectTableFlows {
+	flows := []expectTableFlows{
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{
@@ -861,28 +879,6 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			},
 		},
 		{
-			uint8(10),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", gwOFPort, gwIP, gwMAC),
-					ActStr:   "goto_table:20",
-				},
-				{
-					MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d", gwOFPort),
-					ActStr:   "goto_table:29",
-				},
-			},
-		},
-		{
-			uint8(70),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: fmt.Sprintf("priority=200,ip,dl_dst=%s,nw_dst=%s", vMAC.String(), gwIP.String()),
-					ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:80", gwMAC.String()),
-				},
-			},
-		},
-		{
 			uint8(80),
 			[]*ofTestUtils.ExpectFlow{
 				{
@@ -891,16 +887,52 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 				},
 			},
 		},
-		{
-			uint8(90),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: fmt.Sprintf("priority=210,ip,nw_src=%s", gwIP.String()),
-					ActStr:   "goto_table:105",
+	}
+
+	for _, gwIP := range gwIPs {
+		var ipProtoStr string
+		if gwIP.To4() != nil {
+			ipProtoStr = "ip"
+			flows = append(flows,
+				expectTableFlows{
+					uint8(10),
+					[]*ofTestUtils.ExpectFlow{
+						{
+							MatchStr: fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", gwOFPort, gwIP, gwMAC),
+							ActStr:   "goto_table:20",
+						},
+						{
+							MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d", gwOFPort),
+							ActStr:   "goto_table:29",
+						},
+					},
+				})
+		} else {
+			ipProtoStr = "ipv6"
+		}
+		flows = append(flows,
+			expectTableFlows{
+				uint8(70),
+				[]*ofTestUtils.ExpectFlow{
+					{
+						MatchStr: fmt.Sprintf("priority=200,%s,dl_dst=%s,nw_dst=%s", ipProtoStr, vMAC.String(), gwIP.String()),
+						ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:80", gwMAC.String()),
+					},
 				},
 			},
-		},
+			expectTableFlows{
+				tableID: uint8(90),
+				flows: []*ofTestUtils.ExpectFlow{
+					{
+						MatchStr: fmt.Sprintf("priority=210,%s,nw_src=%s", ipProtoStr, gwIP.String()),
+						ActStr:   "goto_table:105",
+					},
+				},
+			},
+		)
 	}
+
+	return flows
 }
 
 func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableFlows {
