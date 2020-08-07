@@ -301,20 +301,34 @@ func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 	switch protocol {
 	case ProtocolIP:
 		b.Match.Ethertype = 0x0800
+	case ProtocolIPv6:
+		b.Match.Ethertype = 0x86dd
 	case ProtocolARP:
 		b.Match.Ethertype = 0x0806
 	case ProtocolTCP:
 		b.Match.Ethertype = 0x0800
 		b.Match.IpProto = 6
+	case ProtocolTCPv6:
+		b.Match.Ethertype = 0x86dd
+		b.Match.IpProto = 6
 	case ProtocolUDP:
 		b.Match.Ethertype = 0x0800
+		b.Match.IpProto = 17
+	case ProtocolUDPv6:
+		b.Match.Ethertype = 0x86dd
 		b.Match.IpProto = 17
 	case ProtocolSCTP:
 		b.Match.Ethertype = 0x0800
 		b.Match.IpProto = 132
+	case ProtocolSCTPv6:
+		b.Match.Ethertype = 0x86dd
+		b.Match.IpProto = 132
 	case ProtocolICMP:
 		b.Match.Ethertype = 0x0800
 		b.Match.IpProto = 1
+	case ProtocolICMPv6:
+		b.Match.Ethertype = 0x86dd
+		b.Match.IpProto = 58
 	}
 	b.protocol = protocol
 	return b
