@@ -118,3 +118,12 @@ func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, *net.Interface, error) {
 	}
 	return nil, nil, fmt.Errorf("unable to find local IP and device")
 }
+
+func GetIPv4Addr(ips []net.IP) net.IP {
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			return ip
+		}
+	}
+	return nil
+}

@@ -64,6 +64,7 @@ func (ctdump *connTrackDumper) DumpFlows(zoneFilter uint16) ([]*flowexporter.Con
 	}
 
 	filteredConns := make([]*flowexporter.Connection, 0, len(conns))
+connLoop:
 	for _, conn := range conns {
 		if conn.Zone != openflow.CtZone {
 			continue
@@ -71,8 +72,10 @@ func (ctdump *connTrackDumper) DumpFlows(zoneFilter uint16) ([]*flowexporter.Con
 		srcIP := conn.TupleOrig.IP.SourceAddress
 		dstIP := conn.TupleReply.IP.SourceAddress
 		// Only get Pod-to-Pod flows. Pod-to-ExternalService flows are ignored for now.
-		if srcIP.Equal(ctdump.nodeConfig.GatewayConfig.IP) || dstIP.Equal(ctdump.nodeConfig.GatewayConfig.IP) {
-			continue
+		for _, ip := range ctdump.nodeConfig.GatewayConfig.IPs {
+			if srcIP.Equal(ip) || dstIP.Equal(ip) {
+				continue connLoop
+			}
 		}
 
 		// Pod-to-Service flows w/ kube-proxy: There are two conntrack flows for every Pod-to-Service flow.

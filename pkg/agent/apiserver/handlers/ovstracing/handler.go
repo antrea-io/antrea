@@ -83,13 +83,13 @@ func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer) (net.IP, *interf
 			err := handlers.NewHandlerError(fmt.Errorf("OVS port %s not found", peer.ovsPort), http.StatusNotFound)
 			return nil, nil, err
 		}
-		return intf.IP, intf, nil
+		return intf.GetIPv4Addr(), intf, nil
 	}
 
 	interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(peer.name, peer.namespace)
 	if len(interfaces) > 0 {
 		// Local Pod.
-		return interfaces[0].IP, interfaces[0], nil
+		return interfaces[0].GetIPv4Addr(), interfaces[0], nil
 	}
 
 	// Try getting the Pod from K8s API.
