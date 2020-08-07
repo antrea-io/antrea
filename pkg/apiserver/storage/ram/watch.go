@@ -119,14 +119,14 @@ func (w *storeWatcher) process(ctx context.Context, initEvents []storage.Interna
 		select {
 		case event, ok := <-w.input:
 			if !ok {
-				klog.Info("The input channel had been closed, stopping process")
+				klog.V(4).Info("The input channel has been closed, stopping process for watcher")
 				return
 			}
 			if event.GetResourceVersion() > resourceVersion {
 				w.sendWatchEvent(event, false)
 			}
 		case <-ctx.Done():
-			klog.Info("The context had been canceled, stopping process")
+			klog.V(4).Info("The context has been canceled, stopping process for watcher")
 			return
 		}
 	}

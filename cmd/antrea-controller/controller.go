@@ -48,10 +48,24 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
-// informerDefaultResync is the default resync period if a handler doesn't specify one.
-// Use the same default value as kube-controller-manager:
-// https://github.com/kubernetes/kubernetes/blob/release-1.17/pkg/controller/apis/config/v1alpha1/defaults.go#L120
-const informerDefaultResync = 12 * time.Hour
+const (
+	// informerDefaultResync is the default resync period if a handler doesn't specify one.
+	// Use the same default value as kube-controller-manager:
+	// https://github.com/kubernetes/kubernetes/blob/release-1.17/pkg/controller/apis/config/v1alpha1/defaults.go#L120
+	informerDefaultResync = 12 * time.Hour
+
+	// serverMinWatchTimeout determines the timeout allocated to watches from Antrea
+	// clients. Each watch will be allocated a random timeout between this value and twice this
+	// value, to help randomly distribute reconnections over time.
+	// This parameter corresponds to the MinRequestTimeout server config parameter in
+	// https://godoc.org/k8s.io/apiserver/pkg/server#Config.
+	// When the Antrea client re-creates a watch, all relevant NetworkPolicy objects need to be
+	// sent again by the controller. It may be a good idea to use a value which is larger than
+	// the kube-apiserver default (1800s). The K8s documentation states that clients should be
+	// able to handle watch timeouts gracefully but recommends using a large value in
+	// production.
+	serverMinWatchTimeout = 2 * time.Hour
+)
 
 // run starts Antrea Controller with the given options and waits for termination signal.
 func run(o *Options) error {
@@ -192,6 +206,7 @@ func createAPIServerConfig(kubeconfig string,
 		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
 	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
 	serverConfig.EnableMetrics = enableMetrics
+	serverConfig.MinRequestTimeout = int(serverMinWatchTimeout.Seconds())
 
 	return apiserver.NewConfig(
 		serverConfig,
