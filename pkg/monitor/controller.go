@@ -127,7 +127,9 @@ func (monitor *controllerMonitor) updateControllerCRD(partial bool) (*v1beta1.An
 }
 
 func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
-	crds, err := monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{})
+	crds, err := monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{
+		ResourceVersion: "0",
+	})
 	if err != nil {
 		klog.Errorf("Failed to list agent monitoring CRDs: %v", err)
 		return
