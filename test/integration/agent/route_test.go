@@ -26,7 +26,6 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
@@ -57,9 +56,6 @@ var (
 	gwIP              = net.ParseIP("10.10.10.1")
 	gwMAC, _          = net.ParseMAC("12:34:56:78:bb:cc")
 	gwName            = "antrea-gw0"
-	svcTblIdx         = route.AntreaServiceTableIdx
-	svcTblName        = route.AntreaServiceTable
-	mainTblIdx        = 254
 	gwConfig          = &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: gwName}
 	nodeConfig        = &config.NodeConfig{
 		Name:          "test",
@@ -94,18 +90,13 @@ func TestInitialize(t *testing.T) {
 	link := createDummyGW(t)
 	defer netlink.LinkDel(link)
 
-	refRouteTablesStr, _ := ExecOutputTrim("cat /etc/iproute2/rt_tables")
-
 	tcs := []struct {
 		// variations
 		mode config.TrafficEncapModeType
-		// expectations
-		expSvcTbl bool
-		expIPRule bool
 	}{
-		{mode: config.TrafficEncapModeNoEncap, expSvcTbl: true, expIPRule: true},
-		{mode: config.TrafficEncapModeHybrid, expSvcTbl: true, expIPRule: true},
-		{mode: config.TrafficEncapModeEncap, expSvcTbl: false, expIPRule: false},
+		{mode: config.TrafficEncapModeNoEncap},
+		{mode: config.TrafficEncapModeHybrid},
+		{mode: config.TrafficEncapModeEncap},
 	}
 
 	for _, tc := range tcs {
@@ -123,41 +114,6 @@ func TestInitialize(t *testing.T) {
 			t.Error(err)
 		}
 
-		// verify route tables
-		expRouteTablesStr := refRouteTablesStr
-		if tc.expSvcTbl {
-			expRouteTablesStr = fmt.Sprintf("%s%d%s", refRouteTablesStr, svcTblIdx, svcTblName)
-		}
-		routeTables, err := ExecOutputTrim("cat /etc/iproute2/rt_tables")
-		if err != nil {
-			t.Error(err)
-		}
-		if !assert.Equal(t, expRouteTablesStr, routeTables) {
-			t.Errorf("mismatch route tables")
-		}
-
-		if tc.expSvcTbl {
-			expRouteStr := fmt.Sprintf("%s dev %s scope link", podCIDR, gwName)
-			expRouteStr = strings.Join(strings.Fields(expRouteStr), "")
-			ipRoute, _ := ExecOutputTrim(fmt.Sprintf("ip route show table %d | grep %s", svcTblIdx, podCIDR))
-			if len(ipRoute) > len(expRouteStr) {
-				ipRoute = ipRoute[:len(expRouteStr)]
-			}
-			assert.Equal(t, expRouteStr, ipRoute, "mismatch link route")
-		}
-
-		// verify ip rules
-		expIPRulesStr := ""
-		if tc.expIPRule {
-			expIPRulesStr = fmt.Sprintf("%d: from all fwmark %#x/%#x iif %s lookup %s", route.AntreaIPRulePriority, route.RtTblSelectorValue, route.RtTblSelectorValue,
-				gwName, svcTblName)
-			expIPRulesStr = strings.Join(strings.Fields(expIPRulesStr), "")
-		}
-		ipRule, _ := ExecOutputTrim(fmt.Sprintf("ip rule | grep %x", route.RtTblSelectorValue))
-		if !assert.Equal(t, expIPRulesStr, ipRule) {
-			t.Errorf("mismatch ip rules")
-		}
-
 		// verify ipset
 		err = exec.Command("ipset", "list", "ANTREA-POD-IP").Run()
 		assert.NoError(t, err, "ipset not exist")
@@ -172,9 +128,6 @@ func TestInitialize(t *testing.T) {
 -A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local pods" -j ACCEPT
 -A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local pods" -j ACCEPT
 `,
-			"raw": `:ANTREA-RAW - [0:0]
--A PREROUTING -m comment --comment "Antrea: jump to Antrea raw rules" -j ANTREA-RAW
-`,
 			"mangle": `:ANTREA-MANGLE - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea mangle rules" -j ANTREA-MANGLE
 `,
@@ -182,17 +135,6 @@ func TestInitialize(t *testing.T) {
 -A POSTROUTING -m comment --comment "Antrea: jump to Antrea postrouting rules" -j ANTREA-POSTROUTING
 -A ANTREA-POSTROUTING -s 10.10.10.0/24 -m comment --comment "Antrea: masquerade pod to external packets" -m set ! --match-set ANTREA-POD-IP dst -j MASQUERADE
 `,
-		}
-		if tc.mode.SupportsNoEncap() {
-			expectedIPTables["mangle"] = `:ANTREA-MANGLE - [0:0]
--A PREROUTING -m comment --comment "Antrea: jump to Antrea mangle rules" -j ANTREA-MANGLE
--A ANTREA-MANGLE -d 200.200.0.0/16 -i antrea-gw0 -m comment --comment "Antrea: mark pod to service packets" -j MARK --set-xmark 0x800/0x800
--A ANTREA-MANGLE ! -d 200.200.0.0/16 -i antrea-gw0 -m comment --comment "Antrea: unmark post LB service packets" -j MARK --set-xmark 0x0/0xffffffff
-`
-			expectedIPTables["raw"] = `:ANTREA-RAW - [0:0]
--A PREROUTING -m comment --comment "Antrea: jump to Antrea raw rules" -j ANTREA-RAW
--A ANTREA-RAW -i antrea-gw0 -m comment --comment "Antrea: reentry pod traffic skip conntrack" -m mac --mac-source DE:AD:BE:EF:DE:AD -j CT --notrack
-`
 		}
 
 		for table, expectedData := range expectedIPTables {
@@ -221,18 +163,13 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 		peerCIDR string
 		peerIP   net.IP
 		// expectations
-		expRoutes map[int]netlink.Link // keyed on rt id, and val indicates outbound dev
+		uplink netlink.Link // indicates outbound of the route.
 	}{
-		{mode: config.TrafficEncapModeEncap, peerCIDR: "10.10.20.0/24", peerIP: localPeerIP,
-			expRoutes: map[int]netlink.Link{mainTblIdx: gwLink}},
-		{mode: config.TrafficEncapModeNoEncap, peerCIDR: "10.10.30.0/24", peerIP: localPeerIP,
-			expRoutes: map[int]netlink.Link{svcTblIdx: gwLink, mainTblIdx: nodeLink}},
-		{mode: config.TrafficEncapModeNoEncap, peerCIDR: "10.10.40.0/24", peerIP: remotePeerIP,
-			expRoutes: map[int]netlink.Link{svcTblIdx: gwLink}},
-		{mode: config.TrafficEncapModeHybrid, peerCIDR: "10.10.50.0/24", peerIP: localPeerIP,
-			expRoutes: map[int]netlink.Link{svcTblIdx: gwLink, mainTblIdx: nodeLink}},
-		{mode: config.TrafficEncapModeHybrid, peerCIDR: "10.10.60.0/24", peerIP: remotePeerIP,
-			expRoutes: map[int]netlink.Link{svcTblIdx: gwLink, mainTblIdx: gwLink}},
+		{mode: config.TrafficEncapModeEncap, peerCIDR: "10.10.20.0/24", peerIP: localPeerIP, uplink: gwLink},
+		{mode: config.TrafficEncapModeNoEncap, peerCIDR: "10.10.30.0/24", peerIP: localPeerIP, uplink: nodeLink},
+		{mode: config.TrafficEncapModeNoEncap, peerCIDR: "10.10.40.0/24", peerIP: remotePeerIP, uplink: nil},
+		{mode: config.TrafficEncapModeHybrid, peerCIDR: "10.10.50.0/24", peerIP: localPeerIP, uplink: nodeLink},
+		{mode: config.TrafficEncapModeHybrid, peerCIDR: "10.10.60.0/24", peerIP: remotePeerIP, uplink: gwLink},
 	}
 
 	for _, tc := range tcs {
@@ -251,22 +188,23 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 			t.Errorf("route add failed with err %v", err)
 		}
 
-		for tblIdx, link := range tc.expRoutes {
+		expRouteStr := ""
+		if tc.uplink != nil {
 			nhIP := nhCIDRIP
 			onlink := "onlink"
-			if link.Attrs().Name != gwName {
+			if tc.uplink.Attrs().Name != gwName {
 				nhIP = tc.peerIP
 				onlink = ""
 			}
-			expRouteStr := fmt.Sprintf("%s via %s dev %s %s", peerCIDR, nhIP, link.Attrs().Name, onlink)
+			expRouteStr = fmt.Sprintf("%s via %s dev %s %s", peerCIDR, nhIP, tc.uplink.Attrs().Name, onlink)
 			expRouteStr = strings.Join(strings.Fields(expRouteStr), "")
-			ipRoute, _ := ExecOutputTrim(fmt.Sprintf("ip route show table %d | grep %s", tblIdx, tc.peerCIDR))
-			if len(ipRoute) > len(expRouteStr) {
-				ipRoute = ipRoute[:len(expRouteStr)]
-			}
-			if !assert.Equal(t, expRouteStr, ipRoute) {
-				t.Errorf("mismatch route")
-			}
+		}
+		ipRoute, _ := ExecOutputTrim(fmt.Sprintf("ip route show | grep %s", tc.peerCIDR))
+		if len(ipRoute) > len(expRouteStr) {
+			ipRoute = ipRoute[:len(expRouteStr)]
+		}
+		if !assert.Equal(t, expRouteStr, ipRoute) {
+			t.Errorf("mismatch route")
 		}
 
 		entries, err := ipset.ListEntries("ANTREA-POD-IP")
@@ -305,7 +243,7 @@ func TestReconcile(t *testing.T) {
 		addedRoutes      []peer
 		desiredPeerCIDRs []string
 		// expectations
-		expRouteNum map[string]int
+		expRoutes map[string]netlink.Link
 	}{
 		{
 			mode: config.TrafficEncapModeEncap,
@@ -314,7 +252,7 @@ func TestReconcile(t *testing.T) {
 				{peerCIDR: "10.10.30.0/24", peerIP: ip.NextIP((remotePeerIP))},
 			},
 			desiredPeerCIDRs: []string{"10.10.20.0/24"},
-			expRouteNum:      map[string]int{"10.10.20.0/24": 1, "10.10.30.0/24": 0},
+			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": gwLink, "10.10.30.0/24": nil},
 		},
 		{
 			mode: config.TrafficEncapModeNoEncap,
@@ -323,7 +261,7 @@ func TestReconcile(t *testing.T) {
 				{peerCIDR: "10.10.30.0/24", peerIP: ip.NextIP((localPeerIP))},
 			},
 			desiredPeerCIDRs: []string{"10.10.20.0/24"},
-			expRouteNum:      map[string]int{"10.10.20.0/24": 2, "10.10.30.0/24": 0},
+			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": nodeLink, "10.10.30.0/24": nil},
 		},
 		{
 			mode: config.TrafficEncapModeHybrid,
@@ -334,11 +272,12 @@ func TestReconcile(t *testing.T) {
 				{peerCIDR: "10.10.50.0/24", peerIP: ip.NextIP((remotePeerIP))},
 			},
 			desiredPeerCIDRs: []string{"10.10.20.0/24", "10.10.40.0/24"},
-			expRouteNum:      map[string]int{"10.10.20.0/24": 2, "10.10.30.0/24": 0, "10.10.40.0/24": 2, "10.10.50.0/24": 0},
+			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": nodeLink, "10.10.30.0/24": nil, "10.10.40.0/24": gwLink, "10.10.50.0/24": nil},
 		},
 	}
 
 	for _, tc := range tcs {
+		t.Logf("Running test with mode %s added routes %v desired routes %v", tc.mode, tc.addedRoutes, tc.desiredPeerCIDRs)
 		routeClient, err := route.NewClient(serviceCIDR, tc.mode)
 		if err != nil {
 			t.Error(err)
@@ -359,7 +298,14 @@ func TestReconcile(t *testing.T) {
 			t.Errorf("Reconcile failed with err %v", err)
 		}
 
-		for dst, expNum := range tc.expRouteNum {
+		for dst, uplink := range tc.expRoutes {
+			expNum := 0
+			if uplink != nil {
+				output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", dst))
+				assert.NoError(t, err)
+				assert.Contains(t, output, fmt.Sprintf("dev%s", uplink.Attrs().Name))
+				expNum = 1
+			}
 			output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s | wc -l", dst))
 			assert.NoError(t, err)
 			assert.Equal(t, fmt.Sprint(expNum), output, "mismatch number of routes to %s", dst)
@@ -387,7 +333,7 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	if err := routeClient.Initialize(nodeConfig); err != nil {
 		t.Error(err)
 	}
-	//verify gw IP
+	// Verify gw IP
 	gwName := nodeConfig.GatewayConfig.Name
 	gwIPOut, err := ExecOutputTrim(fmt.Sprintf("ip addr show %s", gwName))
 	if err != nil {
@@ -398,17 +344,6 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 		Mask: net.CIDRMask(32, 32),
 	}
 	assert.Contains(t, gwIPOut, gwIP.String())
-	// verify default routes and neigh
-	expRoute := strings.Join(strings.Fields(
-		"default via 169.254.253.1 dev antrea-gw0 onlink"), "")
-	routeOut, err := ExecOutputTrim(fmt.Sprintf("ip route show table %d", svcTblIdx))
-	require.Nil(t, err, "error when running 'ip route show'")
-	assert.Equal(t, expRoute, routeOut)
-	expNeigh := strings.Join(strings.Fields(
-		"169.254.253.1 dev antrea-gw0 lladdr 12:34:56:78:9a:bc PERMANENT"), "")
-	neighOut, err := ExecOutputTrim(fmt.Sprintf("ip neigh | grep %s", gwName))
-	require.Nil(t, err, "error when running 'ip neigh'")
-	assert.Equal(t, expNeigh, neighOut)
 
 	cLink := &netlink.Dummy{}
 	cLink.Name = "containerLink"
@@ -439,7 +374,7 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	if err := routeClient.MigrateRoutesToGw(cLink.Name); err != nil {
 		t.Error(err)
 	}
-	expRoute = strings.Join(strings.Fields(
+	expRoute := strings.Join(strings.Fields(
 		fmt.Sprintf("%s dev %s scope link", hostRt.IP, gwName)), "")
 	output, _ := ExecOutputTrim(fmt.Sprintf("ip route show"))
 	assert.Containsf(t, output, expRoute, output)

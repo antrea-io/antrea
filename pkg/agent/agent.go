@@ -453,9 +453,10 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 	i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: gwMAC}
 	gatewayIface.MAC = gwMAC
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		// In policy-only mode, Node IP is also assigned to local gateway for masquerade.
+		// Assign IP to gw as required by SpoofGuard.
 		i.nodeConfig.GatewayConfig.IP = i.nodeConfig.NodeIPAddr.IP
 		gatewayIface.IP = i.nodeConfig.NodeIPAddr.IP
+		// No need to assign local CIDR to gw0 because local CIDR is not managed by Antrea
 		return nil
 	}
 

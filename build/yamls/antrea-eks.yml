@@ -665,7 +665,7 @@ data:
     # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic.
-    #  AntreaProxy: false
+      AntreaProxy: true
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
@@ -770,7 +770,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-hhthk4g2f4
+  name: antrea-config-h7cg6t86ht
   namespace: kube-system
 ---
 apiVersion: v1
@@ -876,7 +876,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-hhthk4g2f4
+          name: antrea-config-h7cg6t86ht
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1093,7 +1093,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-hhthk4g2f4
+          name: antrea-config-h7cg6t86ht
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -478,10 +478,6 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 		flows = append(flows, c.l3ToGatewayFlow(gatewayAddr, gatewayMAC, cookie.Default))
 	}
 
-	if c.encapMode.SupportsNoEncap() {
-		flows = append(flows, c.reEntranceBypassCTFlow(gatewayOFPort, gatewayOFPort, cookie.Default))
-	}
-
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
@@ -523,11 +519,6 @@ func (c *client) initialize() error {
 	}
 	if err := c.ofEntryOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip established connections: %v", err)
-	}
-	if c.encapMode.SupportsNoEncap() {
-		if err := c.ofEntryOperations.Add(c.l2ForwardOutputReentInPortFlow(c.gatewayPort, cookie.Default)); err != nil {
-			return fmt.Errorf("failed to install L2 forward same in-port and out-port flow: %v", err)
-		}
 	}
 	if c.encapMode.IsNetworkPolicyOnly() {
 		if err := c.setupPolicyOnlyFlows(); err != nil {
@@ -644,8 +635,6 @@ func (c *client) DeleteStaleFlows() error {
 
 func (c *client) setupPolicyOnlyFlows() error {
 	flows := []binding.Flow{
-		// Bypasses remaining l3forwarding flows if the MAC is set via ctRewriteDstMACFlow.
-		c.l3BypassMACRewriteFlow(c.nodeConfig.GatewayConfig.MAC, cookie.Default),
 		// Rewrites MAC to gw port if the packet received is unmatched by local Pod flows.
 		c.l3ToGWFlow(c.nodeConfig.GatewayConfig.MAC, cookie.Default),
 		// Replies any ARP request with the same global virtual MAC.

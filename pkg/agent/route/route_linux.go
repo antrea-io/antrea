@@ -18,9 +18,8 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
-	"strings"
+	"reflect"
 	"sync"
 
 	"github.com/vishvananda/netlink"
@@ -29,7 +28,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
@@ -37,21 +35,6 @@ import (
 )
 
 const (
-	// AntreaServiceTable is route table name for Antrea service traffic.
-	AntreaServiceTable = "Antrea-service"
-	// AntreaServiceTableIdx is route table index for Antrea service traffic.
-	AntreaServiceTableIdx = 300
-	mainTable             = "main"
-	mainTableIdx          = 254
-
-	routeTableConfigPath = "/etc/iproute2/rt_tables"
-	// AntreaIPRulePriority is Antrea IP rule priority
-	AntreaIPRulePriority = 300
-	// Service route table default route next hop IP, used in policy-only mode.
-	svcTblVirtualDefaultGWIP = "169.254.253.1"
-	// Service route table default route next hop MAC, used in policy-only mode.
-	svcTblVirtualDefaultGWMAC = "12:34:56:78:9a:bc"
-
 	// Antrea managed ipset.
 	// antreaPodIPSet contains all Pod CIDRs of this cluster.
 	antreaPodIPSet = "ANTREA-POD-IP"
@@ -60,13 +43,6 @@ const (
 	antreaForwardChain     = "ANTREA-FORWARD"
 	antreaPostRoutingChain = "ANTREA-POSTROUTING"
 	antreaMangleChain      = "ANTREA-MANGLE"
-	antreaRawChain         = "ANTREA-RAW"
-)
-
-var (
-	// RtTblSelectorValue selects which route table to use to forward service traffic back to host gateway antrea-gw0.
-	RtTblSelectorValue = 1 << 11
-	rtTblSelectorMark  = fmt.Sprintf("%#x/%#x", RtTblSelectorValue, RtTblSelectorValue)
 )
 
 // Client implements Interface.
@@ -78,23 +54,8 @@ type Client struct {
 	encapMode   config.TrafficEncapModeType
 	serviceCIDR *net.IPNet
 	ipt         *iptables.Client
-	// serviceRtTable contains Antrea service route table information.
-	serviceRtTable *serviceRtTableConfig
 	// nodeRoutes caches ip routes to remote Pods. It's a map of podCIDR to routes.
 	nodeRoutes sync.Map
-}
-
-type serviceRtTableConfig struct {
-	Idx  int
-	Name string
-}
-
-func (s *serviceRtTableConfig) String() string {
-	return fmt.Sprintf("%s: idx %d", s.Name, s.Idx)
-}
-
-func (s *serviceRtTableConfig) IsMainTable() bool {
-	return s.Name == "main"
 }
 
 // NewClient returns a route client.
@@ -104,17 +65,10 @@ func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType) (*
 		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
 	}
 
-	serviceRtTable := &serviceRtTableConfig{Idx: mainTableIdx, Name: mainTable}
-	if encapMode.SupportsNoEncap() {
-		serviceRtTable.Idx = AntreaServiceTableIdx
-		serviceRtTable.Name = AntreaServiceTable
-	}
-
 	return &Client{
-		serviceCIDR:    serviceCIDR,
-		encapMode:      encapMode,
-		ipt:            ipt,
-		serviceRtTable: serviceRtTable,
+		serviceCIDR: serviceCIDR,
+		encapMode:   encapMode,
+		ipt:         ipt,
 	}, nil
 }
 
@@ -204,7 +158,6 @@ func (c *Client) initIPTables() error {
 		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules"},
 		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules"},
 		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"},
-		{iptables.RawTable, iptables.PreRoutingChain, antreaRawChain, "Antrea: jump to Antrea raw rules"},
 	}
 	for _, rule := range jumpRules {
 		if err := c.ipt.EnsureChain(rule.table, rule.dstChain); err != nil {
@@ -224,24 +177,10 @@ func (c *Client) initIPTables() error {
 	writeLine(iptablesData, "*mangle")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaMangleChain))
 	hostGateway := c.nodeConfig.GatewayConfig.Name
-	if c.encapMode.SupportsNoEncap() {
-		writeLine(iptablesData, []string{
-			"-A", antreaMangleChain,
-			"-m", "comment", "--comment", `"Antrea: mark pod to service packets"`,
-			"-i", hostGateway, "-d", c.serviceCIDR.String(),
-			"-j", iptables.MarkTarget, "--set-xmark", rtTblSelectorMark,
-		}...)
-		writeLine(iptablesData, []string{
-			"-A", antreaMangleChain,
-			"-m", "comment", "--comment", `"Antrea: unmark post LB service packets"`,
-			"-i", hostGateway, "!", "-d", c.serviceCIDR.String(),
-			"-j", iptables.MarkTarget, "--set-xmark", "0/0xffffffff",
-		}...)
-		// When Antrea is used to enforce NetworkPolicies in EKS, an additional iptables
-		// mangle rule is required. See https://github.com/vmware-tanzu/antrea/issues/678.
-		if env.IsCloudEKS() {
-			c.writeEKSMangleRule(iptablesData)
-		}
+	// When Antrea is used to enforce NetworkPolicies in EKS, an additional iptables
+	// mangle rule is required. See https://github.com/vmware-tanzu/antrea/issues/678.
+	if env.IsCloudEKS() {
+		c.writeEKSMangleRule(iptablesData)
 	}
 	writeLine(iptablesData, "COMMIT")
 
@@ -275,18 +214,6 @@ func (c *Client) initIPTables() error {
 	}
 	writeLine(iptablesData, "COMMIT")
 
-	writeLine(iptablesData, "*raw")
-	writeLine(iptablesData, iptables.MakeChainLine(antreaRawChain))
-	if c.encapMode.SupportsNoEncap() {
-		writeLine(iptablesData, []string{
-			"-A", antreaRawChain,
-			"-m", "comment", "--comment", `"Antrea: reentry pod traffic skip conntrack"`,
-			"-i", hostGateway, "-m", "mac", "--mac-source", openflow.ReentranceMAC.String(),
-			"-j", iptables.ConnTrackTarget, "--notrack",
-		}...)
-	}
-	writeLine(iptablesData, "COMMIT")
-
 	// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 	if err := c.ipt.Restore(iptablesData.Bytes(), false); err != nil {
 		return err
@@ -295,16 +222,11 @@ func (c *Client) initIPTables() error {
 }
 
 func (c *Client) initIPRoutes() error {
-	if c.serviceRtTable.IsMainTable() {
-		_ = c.removeServiceRouting()
-		return nil
-	}
-	if err := c.addServiceRouting(); err != nil {
-		return err
-	}
 	if c.encapMode.IsNetworkPolicyOnly() {
-		if err := c.setupPolicyOnlyMode(); err != nil {
-			return err
+		gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
+		_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/32", c.nodeConfig.NodeIPAddr.IP.String()))
+		if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
+			return fmt.Errorf("failed to add address %s to gw %s: %v", gwIP, gwLink.Attrs().Name, err)
 		}
 	}
 	return nil
@@ -313,8 +235,6 @@ func (c *Client) initIPRoutes() error {
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
 // based on the desired podCIDRs.
 func (c *Client) Reconcile(podCIDRs []string) error {
-	// TODO add an IPSet for migrated routes for reconciliation too.
-
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 
 	// Remove orphaned podCIDRs from antreaPodIPSet.
@@ -326,29 +246,45 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 		if desiredPodCIDRs.Has(entry) {
 			continue
 		}
-		klog.V(4).Infof("Deleting orphaned ip %s from ipset", entry)
+		klog.Infof("Deleting orphaned PodIP %s from ipset and route table", entry)
 		if err := ipset.DelEntry(antreaPodIPSet, entry); err != nil {
+			return err
+		}
+		_, cidr, err := net.ParseCIDR(entry)
+		if err != nil {
+			return err
+		}
+		route := &netlink.Route{Dst: cidr}
+		if err := netlink.RouteDel(route); err != nil && err != unix.ESRCH {
 			return err
 		}
 	}
 
-	// Remove orphaned routes from host network.
-	actualRouteMap, err := c.listIPRoutes()
+	// Remove any unknown routes on antrea-gw0.
+	routes, err := c.listIPRoutesOnGW()
 	if err != nil {
 		return fmt.Errorf("error listing ip routes: %v", err)
 	}
-	for podCIDR, actualRoutes := range actualRouteMap {
-		if desiredPodCIDRs.Has(podCIDR) {
+	for _, route := range routes {
+		if reflect.DeepEqual(route.Dst, c.nodeConfig.PodCIDR) {
 			continue
 		}
-		for _, route := range actualRoutes {
-			klog.V(4).Infof("Deleting orphaned route %v", route)
-			if err := netlink.RouteDel(route); err != nil && err != unix.ESRCH {
-				return err
-			}
+		if desiredPodCIDRs.Has(route.Dst.String()) {
+			continue
+		}
+		klog.Infof("Deleting unknown route %v", route)
+		if err := netlink.RouteDel(&route); err != nil && err != unix.ESRCH {
+			return err
 		}
 	}
 	return nil
+}
+
+// listIPRoutes returns list of routes on antrea-gw0.
+func (c *Client) listIPRoutesOnGW() ([]netlink.Route, error) {
+	filter := &netlink.Route{
+		LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex}
+	return netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_OIF)
 }
 
 // AddRoutes adds routes to a new podCIDR. It overrides the routes if they already exist.
@@ -358,52 +294,25 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeIP, nodeGwIP net.IP) error {
 	if err := ipset.AddEntry(antreaPodIPSet, podCIDRStr); err != nil {
 		return err
 	}
-
 	// Install routes to this Node.
-	routes := []*netlink.Route{
-		{
-			Dst:       podCIDR,
-			Flags:     int(netlink.FLAG_ONLINK),
-			LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
-			Gw:        nodeGwIP,
-			Table:     c.serviceRtTable.Idx,
-		},
+	route := &netlink.Route{
+		Dst: podCIDR,
 	}
-
-	// If service route table and main route table is not the same , add
-	// peer CIDR to main route table too (i.e in NoEncap and hybrid mode)
-	if !c.serviceRtTable.IsMainTable() {
-		if c.encapMode.NeedsEncapToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
-			// need overlay tunnel
-			routes = append(routes, &netlink.Route{
-				Dst:       podCIDR,
-				Flags:     int(netlink.FLAG_ONLINK),
-				LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
-				Gw:        nodeGwIP,
-			})
-		} else if !c.encapMode.NeedsRoutingToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
-			routes = append(routes, &netlink.Route{
-				Dst: podCIDR,
-				Gw:  nodeIP,
-			})
-		}
-		// If Pod traffic needs underlying routing support, it is handled by host default route.
+	if c.encapMode.NeedsEncapToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
+		route.Flags = int(netlink.FLAG_ONLINK)
+		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
+		route.Gw = nodeGwIP
+	} else if !c.encapMode.NeedsRoutingToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
+		// NoEncap traffic need routing help.
+		route.Gw = nodeIP
+	} else {
+		// NoEncap traffic to Node on the same subnet. It is handled by host default route.
+		return nil
 	}
-
-	// clean up function if any route add failed
-	deleteRtFn := func() {
-		for _, route := range routes {
-			_ = netlink.RouteDel(route)
-		}
+	if err := netlink.RouteReplace(route); err != nil {
+		return fmt.Errorf("failed to install route to peer %s with netlink: %v", nodeIP, err)
 	}
-
-	for _, route := range routes {
-		if err := netlink.RouteReplace(route); err != nil {
-			deleteRtFn()
-			return fmt.Errorf("failed to install route to peer %s with netlink: %v", nodeIP, err)
-		}
-	}
-	c.nodeRoutes.Store(podCIDRStr, routes)
+	c.nodeRoutes.Store(podCIDRStr, route)
 	return nil
 }
 
@@ -415,192 +324,16 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 		return err
 	}
 
-	routes, exists := c.nodeRoutes.Load(podCIDRStr)
+	i, exists := c.nodeRoutes.Load(podCIDRStr)
 	if !exists {
 		return nil
 	}
-	for _, r := range routes.([]*netlink.Route) {
-		klog.V(4).Infof("Deleting route %v", r)
-		if err := netlink.RouteDel(r); err != nil && err != unix.ESRCH {
-			return err
-		}
-	}
-	c.nodeRoutes.Delete(podCIDRStr)
-	return nil
-}
-
-// listIPRoutes returns list of routes from peer and local CIDRs
-func (c *Client) listIPRoutes() (map[string][]*netlink.Route, error) {
-	// get all routes on antrea-gw0 from service table.
-	filter := &netlink.Route{
-		Table:     c.serviceRtTable.Idx,
-		LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex}
-	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_TABLE|netlink.RT_FILTER_OIF)
-	if err != nil {
-		return nil, err
-	}
-
-	rtMap := make(map[string][]*netlink.Route)
-	for _, rt := range routes {
-		// rt is reference to actual data, as it changes,
-		// it cannot be used for assignment
-		tmpRt := rt
-		rtMap[rt.Dst.String()] = append(rtMap[rt.Dst.String()], &tmpRt)
-	}
-
-	if !c.serviceRtTable.IsMainTable() {
-		// get all routes on antrea-gw0 from main table.
-		filter.Table = 0
-		routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_OIF)
-		if err != nil {
-			return nil, err
-		}
-		for _, rt := range routes {
-			// rt is reference to actual data, as it changes,
-			// it cannot be used for assignment
-			tmpRt := rt
-			rtMap[rt.Dst.String()] = append(rtMap[rt.Dst.String()], &tmpRt)
-		}
-
-		// now get all routes antrea-gw0 on other interfaces from main table.
-		routes, err = netlink.RouteListFiltered(netlink.FAMILY_V4, nil, 0)
-		if err != nil {
-			return nil, err
-		}
-		for _, rt := range routes {
-			if rt.Dst == nil {
-				continue
-			}
-			// insert the route if it is CIDR route and has not been added already.
-			// routes with same dst are different if table or linkIndex differs.
-			if rl, ok := rtMap[rt.Dst.String()]; ok && (rl[len(rl)-1].LinkIndex != rt.LinkIndex || rl[len(rl)-1].Table != rt.Table) {
-				tmpRt := rt
-				rtMap[rt.Dst.String()] = append(rl, &tmpRt)
-			}
-		}
-	}
-	return rtMap, nil
-}
-
-func (c *Client) addServiceRouting() error {
-	f, err := os.OpenFile(routeTableConfigPath, os.O_RDWR|os.O_APPEND, 0)
-	if err != nil {
-		return fmt.Errorf("unable to create service route table(open): %v", err)
-	}
-	defer f.Close()
-
-	oldTablesRaw := make([]byte, 1024)
-	bLen, err := f.Read(oldTablesRaw)
-	if err != nil {
-		return fmt.Errorf("unable to create service route table(read): %v", err)
-	}
-	oldTables := string(oldTablesRaw[:bLen])
-	newTable := fmt.Sprintf("%d %s", c.serviceRtTable.Idx, c.serviceRtTable.Name)
-
-	if strings.Index(oldTables, newTable) == -1 {
-		if _, err := f.WriteString(newTable); err != nil {
-			return fmt.Errorf("failed to add antrea service route table: %v", err)
-		}
-	}
-
-	gwConfig := c.nodeConfig.GatewayConfig
-	if !c.encapMode.IsNetworkPolicyOnly() {
-		// Add local podCIDR if applicable to service rt table.
-		route := &netlink.Route{
-			LinkIndex: gwConfig.LinkIndex,
-			Scope:     netlink.SCOPE_LINK,
-			Dst:       c.nodeConfig.PodCIDR,
-			Table:     c.serviceRtTable.Idx,
-		}
-		if err := netlink.RouteReplace(route); err != nil {
-			return fmt.Errorf("failed to add link route to service table: %v", err)
-		}
-	}
-
-	// create ip rule to select route table
-	ipRule := netlink.NewRule()
-	ipRule.IifName = c.nodeConfig.GatewayConfig.Name
-	ipRule.Mark = RtTblSelectorValue
-	ipRule.Mask = RtTblSelectorValue
-	ipRule.Table = c.serviceRtTable.Idx
-	ipRule.Priority = AntreaIPRulePriority
-
-	ruleList, err := netlink.RuleList(netlink.FAMILY_V4)
-	if err != nil {
-		return fmt.Errorf("failed to get ip rule: %v", err)
-	}
-	// Check for ip rule presence.
-	for _, rule := range ruleList {
-		if rule == *ipRule {
-			return nil
-		}
-	}
-	err = netlink.RuleAdd(ipRule)
-	if err != nil {
-		return fmt.Errorf("failed to create ip rule for service route table: %v", err)
-	}
-	return nil
-}
-
-func (c *Client) readRtTable() (string, error) {
-	f, err := os.OpenFile(routeTableConfigPath, os.O_RDONLY, 0)
-	if err != nil {
-		return "", fmt.Errorf("route table(open): %w", err)
-	}
-	defer f.Close()
-
-	tablesRaw := make([]byte, 1024)
-	bLen, err := f.Read(tablesRaw)
-	if err != nil {
-		return "", fmt.Errorf("route table(read): %w", err)
-	}
-	return string(tablesRaw[:bLen]), nil
-}
-
-// removeServiceRouting removes service routing setup.
-func (c *Client) removeServiceRouting() error {
-	// remove service table
-	tables, err := c.readRtTable()
-	if err != nil {
+	r := i.(*netlink.Route)
+	klog.V(4).Infof("Deleting route %v", r)
+	if err := netlink.RouteDel(r); err != nil && err != unix.ESRCH {
 		return err
 	}
-	newTable := fmt.Sprintf("%d %s", AntreaServiceTableIdx, AntreaServiceTable)
-	if strings.Index(tables, newTable) != -1 {
-		tables = strings.Replace(tables, newTable, "", -1)
-		f, err := os.OpenFile(routeTableConfigPath, os.O_WRONLY|os.O_TRUNC, 0)
-		if err != nil {
-			return fmt.Errorf("route table(open): %w", err)
-		}
-		defer f.Close()
-		if _, err = f.WriteString(tables); err != nil {
-			return fmt.Errorf("route table(write): %w", err)
-		}
-	}
-
-	// flush service table
-	filter := &netlink.Route{
-		Table:     AntreaServiceTableIdx,
-		LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex}
-	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_TABLE|netlink.RT_FILTER_OIF)
-	if err != nil {
-		return fmt.Errorf("route table(list): %w", err)
-	}
-	for _, route := range routes {
-		if err = netlink.RouteDel(&route); err != nil {
-			return fmt.Errorf("route delete: %w", err)
-		}
-	}
-
-	// delete ip rule for service table
-	ipRule := netlink.NewRule()
-	ipRule.IifName = c.nodeConfig.GatewayConfig.Name
-	ipRule.Mark = RtTblSelectorValue
-	ipRule.Mask = RtTblSelectorValue
-	ipRule.Table = AntreaServiceTableIdx
-	ipRule.Priority = AntreaIPRulePriority
-	if err = netlink.RuleDel(ipRule); err != nil {
-		return fmt.Errorf("ip rule delete: %w", err)
-	}
+	c.nodeRoutes.Delete(podCIDRStr)
 	return nil
 }
 
@@ -623,48 +356,6 @@ func disableICMPSendRedirects(intfName string) error {
 	if err := cmd.Run(); err != nil {
 		klog.Errorf("Failed to disable send_redirect for interface %s: %v", intfName, err)
 		return err
-	}
-	return nil
-}
-
-// resolveDefaultRouteNHMAC resolves the MAC of default route next
-// hop on service route table.
-func (c *Client) resolveDefaultRouteNHMAC() (net.HardwareAddr, error) {
-	return net.ParseMAC(svcTblVirtualDefaultGWMAC)
-}
-
-// setupPolicyOnlyMode configures routing needed by traffic in policy-only mode.
-func (c *Client) setupPolicyOnlyMode() error {
-	gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
-	_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/32", c.nodeConfig.NodeIPAddr.IP.String()))
-	if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
-		return fmt.Errorf("failed to add address %s to gw %s: %v", gwIP, gwLink.Attrs().Name, err)
-	}
-
-	// Add default route to service table.
-	_, defaultRt, _ := net.ParseCIDR("0/0")
-	nhIP := net.ParseIP(svcTblVirtualDefaultGWIP)
-	route := &netlink.Route{
-		LinkIndex: gwLink.Attrs().Index,
-		Table:     c.serviceRtTable.Idx,
-		Flags:     int(netlink.FLAG_ONLINK),
-		Dst:       defaultRt,
-		Gw:        nhIP,
-	}
-	if err := netlink.RouteReplace(route); err != nil {
-		return fmt.Errorf("failed to add default route to service table: %v", err)
-	}
-	// Add static neighbor to next hop so that no ARPING is ever required on antrea-gw0.
-	nhMAC, _ := c.resolveDefaultRouteNHMAC()
-	neigh := &netlink.Neigh{
-		LinkIndex:    gwLink.Attrs().Index,
-		Family:       netlink.FAMILY_V4,
-		State:        netlink.NUD_PERMANENT,
-		IP:           nhIP,
-		HardwareAddr: nhMAC,
-	}
-	if err := netlink.NeighSet(neigh); err != nil {
-		return fmt.Errorf("failed to add neigh %v to gw %s: %v", neigh, gwLink.Attrs().Name, err)
 	}
 	return nil
 }

@@ -206,7 +206,6 @@ var (
 	serviceLearnRegRange = binding.Range{16, 18}
 
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
-	ReentranceMAC, _    = net.ParseMAC("de:ad:be:ef:de:ad")
 	hairpinIP           = net.ParseIP("169.254.169.252").To4()
 )
 
@@ -521,20 +520,6 @@ func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cook
 		Done()
 }
 
-// reEntranceBypassCTFlow generates flow that bypass CT for traffic re-entering host network space.
-// In host network space, we disable conntrack for re-entrance traffic so not to confuse conntrack
-// in host namespace, This however has inverse effect on conntrack in Antrea conntrack zone as well,
-// all subsequent re-entrance traffic becomes invalid.
-func (c *client) reEntranceBypassCTFlow(gwPort, reentPort uint32, category cookie.Category) binding.Flow {
-	conntrackCommitTable := c.pipeline[conntrackCommitTable]
-	return conntrackCommitTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		MatchInPort(gwPort).MatchReg(int(portCacheReg), reentPort).
-		Action().GotoTable(conntrackCommitTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
-}
-
 // ctRewriteDstMACFlow rewrites the destination MAC with local host gateway MAC if the packets has set ct_mark but not sent from the host gateway.
 func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
@@ -599,18 +584,6 @@ func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cooki
 		Done()
 }
 
-// l2ForwardOutputReentInPortFlow generates the flow that forwards re-entrance peer Node traffic via antrea-gw0.
-// This flow supersedes default output flow because ovs by default auto-skips packets with output = input port.
-func (c *client) l2ForwardOutputReentInPortFlow(gwPort uint32, category cookie.Category) binding.Flow {
-	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		MatchInPort(gwPort).MatchReg(int(portCacheReg), gwPort).
-		Action().SetSrcMAC(ReentranceMAC).
-		Action().OutputInPort().
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
-}
-
 // l2ForwardOutputServiceHairpinFlow uses in_port action for Service
 // hairpin packets to avoid packets from being dropped by OVS.
 func (c *client) l2ForwardOutputServiceHairpinFlow() binding.Flow {
@@ -618,18 +591,6 @@ func (c *client) l2ForwardOutputServiceHairpinFlow() binding.Flow {
 		MatchRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
 		Action().OutputInPort().
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-		Done()
-}
-
-// l3BypassMACRewriteFlow bypasses remaining l3forwarding flows if the MAC is set via ctRewriteDstMACFlow in
-// conntrackState stage.
-func (c *client) l3BypassMACRewriteFlow(gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
-	l3FwdTable := c.pipeline[l3ForwardingTable]
-	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchCTMark(gatewayCTMark).
-		MatchDstMAC(gatewayMAC).
-		Action().GotoTable(l3FwdTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
 
