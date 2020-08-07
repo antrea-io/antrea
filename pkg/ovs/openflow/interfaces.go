@@ -35,12 +35,17 @@ const (
 )
 
 const (
-	ProtocolIP   Protocol = "ip"
-	ProtocolARP  Protocol = "arp"
-	ProtocolTCP  Protocol = "tcp"
-	ProtocolUDP  Protocol = "udp"
-	ProtocolSCTP Protocol = "sctp"
-	ProtocolICMP Protocol = "icmp"
+	ProtocolIP     Protocol = "ip"
+	ProtocolIPv6   Protocol = "ipv6"
+	ProtocolARP    Protocol = "arp"
+	ProtocolTCP    Protocol = "tcp"
+	ProtocolTCPv6  Protocol = "tcpv6"
+	ProtocolUDP    Protocol = "udp"
+	ProtocolUDPv6  Protocol = "udpv6"
+	ProtocolSCTP   Protocol = "sctp"
+	ProtocolSCTPv6 Protocol = "sctpv6"
+	ProtocolICMP   Protocol = "icmp"
+	ProtocolICMPv6 Protocol = "icmpv6"
 )
 
 const (
