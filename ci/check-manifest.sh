@@ -29,6 +29,8 @@ YAMLS=(
     "build/yamls/antrea.yml"
     "build/yamls/antrea-ipsec.yml"
     "build/yamls/antrea-eks.yml"
+    "build/yamls/antrea-gke.yml"
+    "build/yamls/antrea-aks.yml"
     "build/yamls/antrea-octant.yml"
     "build/yamls/antrea-windows.yml"
 )
