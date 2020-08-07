@@ -146,6 +146,13 @@ func newLastRealized(rule *CompletedRule) *lastRealized {
 	}
 }
 
+// tablePriorityAssigner groups the priorityAssigner and mutex for a single OVS table
+// that is reserved for installing ClusterNetworkPolicy rules.
+type tablePriorityAssigner struct {
+	assigner *priorityAssigner
+	mutex    sync.RWMutex
+}
+
 // reconciler implements Reconciler.
 // Note that although its Reconcile and Forget methods are thread-safe, it's
 // assumed each rule can only be processed by a single client at any given
@@ -165,20 +172,17 @@ type reconciler struct {
 	idAllocator *idAllocator
 
 	// priorityAssigners provides interfaces to manage OF priorities for each OVS table.
-	priorityAssigners map[binding.TableIDType]*priorityAssigner
-
-	// priorityMutex prevents concurrent priority re-assignments for each OVS table.
-	priorityMutex map[binding.TableIDType]*sync.RWMutex
+	priorityAssigners map[binding.TableIDType]*tablePriorityAssigner
 }
 
 // newReconciler returns a new *reconciler.
 func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore) *reconciler {
 	cnpTables := append(openflow.GetCNPEgressTables(), openflow.GetCNPIngressTables()...)
-	priorityAssigners := map[binding.TableIDType]*priorityAssigner{}
-	priorityMutex := map[binding.TableIDType]*sync.RWMutex{}
+	priorityAssigners := map[binding.TableIDType]*tablePriorityAssigner{}
 	for _, table := range cnpTables {
-		priorityAssigners[table] = newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
-		priorityMutex[table] = &sync.RWMutex{}
+		priorityAssigners[table] = &tablePriorityAssigner{
+			assigner: newPriorityAssigner(InitialOFPrioritySingleTierPerTable),
+		}
 	}
 	reconciler := &reconciler{
 		ofClient:          ofClient,
@@ -186,7 +190,6 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 		lastRealizeds:     sync.Map{},
 		idAllocator:       newIDAllocator(),
 		priorityAssigners: priorityAssigners,
-		priorityMutex:     priorityMutex,
 	}
 	return reconciler
 }
@@ -200,14 +203,15 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 
 	value, exists := r.lastRealizeds.Load(rule.ID)
 	ruleTable := r.getOFRuleTable(rule)
+	priorityAssigner, _ := r.priorityAssigners[ruleTable]
 	if rule.isAntreaNetworkPolicyRule() {
 		// For CNP, only release priorityMutex after rule is installed on OVS. Otherwise,
 		// priority re-assignments for flows that have already been assigned priorities but
 		// not yet installed on OVS will be missed.
-		r.priorityMutex[ruleTable].Lock()
-		defer r.priorityMutex[ruleTable].Unlock()
+		priorityAssigner.mutex.Lock()
+		defer priorityAssigner.mutex.Unlock()
 	}
-	ofPriority, err = r.getOFPriority(rule, ruleTable)
+	ofPriority, err = r.getOFPriority(rule, ruleTable, priorityAssigner)
 	if err != nil {
 		return err
 	}
@@ -218,7 +222,7 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 		ofRuleInstallErr = r.update(value.(*lastRealized), rule, ofPriority, ruleTable)
 	}
 	if ofRuleInstallErr != nil && ofPriority != nil {
-		r.priorityAssigners[ruleTable].Release(*ofPriority)
+		priorityAssigner.assigner.Release(*ofPriority)
 	}
 	return ofRuleInstallErr
 }
@@ -245,7 +249,7 @@ func (r *reconciler) getOFRuleTable(rule *CompletedRule) binding.TableIDType {
 
 // getOFPriority retrieves the OFPriority for the input CompletedRule to be installed,
 // and re-arranges installed priorities on OVS if necessary.
-func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDType) (*uint16, error) {
+func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDType, pa *tablePriorityAssigner) (*uint16, error) {
 	if rule.PolicyPriority == nil {
 		klog.V(2).Infof("Assigning default priority for k8s NetworkPolicy.")
 		return nil, nil
@@ -255,7 +259,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 		PolicyPriority: *rule.PolicyPriority,
 		RulePriority:   rule.Priority,
 	}
-	ofPriority, priorityUpdates, err := r.priorityAssigners[table].GetOFPriority(p)
+	ofPriority, priorityUpdates, err := pa.assigner.GetOFPriority(p)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +268,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 		err := r.ofClient.ReassignFlowPriorities(priorityUpdates, table)
 		if err != nil {
 			// TODO: revert the priorityUpdates in priorityMap if err occurred here.
-			r.priorityAssigners[table].Release(*ofPriority)
+			pa.assigner.Release(*ofPriority)
 			return nil, err
 		}
 	}
@@ -291,8 +295,9 @@ func (r *reconciler) BatchReconcile(rules []*CompletedRule) error {
 	}
 	for _, rule := range rulesToInstall {
 		ruleTable := r.getOFRuleTable(rule)
+		priorityAssigner := r.priorityAssigners[ruleTable]
 		klog.V(2).Infof("Adding rule %s of NetworkPolicy %s/%s to be reconciled in batch", rule.ID, rule.PolicyNamespace, rule.PolicyName)
-		ofPriority, _ := r.getOFPriority(rule, ruleTable)
+		ofPriority, _ := r.getOFPriority(rule, ruleTable, priorityAssigner)
 		priorities = append(priorities, ofPriority)
 		if ofPriority != nil {
 			prioritiesByTable[ruleTable] = append(prioritiesByTable[ruleTable], ofPriority)
@@ -301,16 +306,17 @@ func (r *reconciler) BatchReconcile(rules []*CompletedRule) error {
 	ofRuleInstallErr := r.batchAdd(rulesToInstall, priorities)
 	if ofRuleInstallErr != nil {
 		for tableID, ofPriorities := range prioritiesByTable {
+			pa := r.priorityAssigners[tableID]
 			for _, ofPriority := range ofPriorities {
-				r.priorityAssigners[tableID].Release(*ofPriority)
+				pa.assigner.Release(*ofPriority)
 			}
 		}
 	}
 	return ofRuleInstallErr
 }
 
-// registerOFPriorities make the Priorities corresponding to each CompletedRule
-// known to the priorityAssigner for each OpenFlow table.
+// registerOFPriorities constructs a Priority type for each CompletedRule in the input list,
+// and registers those Priorities with appropriate tablePriorityAssigner based on Tier.
 func (r *reconciler) registerOFPriorities(rules []*CompletedRule) error {
 	prioritiesToRegister := map[binding.TableIDType][]types.Priority{}
 	for _, rule := range rules {
@@ -325,7 +331,7 @@ func (r *reconciler) registerOFPriorities(rules []*CompletedRule) error {
 		}
 	}
 	for tableID, priorities := range prioritiesToRegister {
-		if err := r.priorityAssigners[tableID].RegisterPriorities(priorities); err != nil {
+		if err := r.priorityAssigners[tableID].assigner.RegisterPriorities(priorities); err != nil {
 			return err
 		}
 	}
@@ -630,9 +636,10 @@ func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedT
 
 func (r *reconciler) uninstallOFRule(ofID uint32, table binding.TableIDType) error {
 	klog.V(2).Infof("Uninstalling ofRule %d", ofID)
-	if priorityMutex, ok := r.priorityMutex[table]; ok {
-		priorityMutex.Lock()
-		defer priorityMutex.Unlock()
+	priorityAssigner, exists := r.priorityAssigners[table]
+	if exists {
+		priorityAssigner.mutex.Lock()
+		defer priorityAssigner.mutex.Unlock()
 	}
 	stalePriorities, err := r.ofClient.UninstallPolicyRuleFlows(ofID)
 	if err != nil {
@@ -646,7 +653,7 @@ func (r *reconciler) uninstallOFRule(ofID uint32, table binding.TableIDType) err
 				// Cannot parse the priority str. Theoretically this should never happen.
 				return err
 			}
-			r.priorityAssigners[table].Release(uint16(priorityNum))
+			priorityAssigner.assigner.Release(uint16(priorityNum))
 		}
 	}
 	if err := r.idAllocator.release(ofID); err != nil {

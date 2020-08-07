@@ -62,11 +62,11 @@ type rule struct {
 	Services []v1beta1.Service
 	// Action of this rule. nil for k8s NetworkPolicy.
 	Action *secv1alpha1.RuleAction
-	// Priority of this rule within the NetworkPolicy. Defaults to -1 for k8s NetworkPolicy.
+	// Priority of this rule within the NetworkPolicy. Defaults to -1 for K8s NetworkPolicy.
 	Priority int32
-	// Priority of the NetworkPolicy to which this rule belong. nil for k8s NetworkPolicy.
+	// Priority of the NetworkPolicy to which this rule belong. nil for K8s NetworkPolicy.
 	PolicyPriority *float64
-	// Priority of the tier that the NetworkPolicy belong. nil for k8s NetworkPolicy.
+	// Priority of the tier that the NetworkPolicy belongs to. nil for K8s NetworkPolicy.
 	TierPriority *v1beta1.TierPriority
 	// Targets of this rule.
 	AppliedToGroups []string

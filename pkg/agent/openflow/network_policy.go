@@ -1043,17 +1043,19 @@ func (c *client) getStalePriorities(conj *policyRuleConjunction) (staleOFPriorit
 	}
 	klog.V(4).Infof("Potential stale ofpriority %v found", ofPrioritiesPotentiallyStale)
 	for _, p := range ofPrioritiesPotentiallyStale {
+		// Filter out all the policyRuleConjuctions created at the ofPriority across all CNP tables.
 		conjs, _ := c.policyCache.ByIndex(priorityIndex, p)
+		priorityStale := true
 		for i := 0; i < len(conjs); i++ {
-			conjStalePriority := conjs[i].(*policyRuleConjunction)
-			if conj.id == conjStalePriority.id || conj.ruleTableID != conjStalePriority.ruleTableID {
-				// remove the conjStalePriority from the list as the conjunction is installed on another table
-				conjs = append(conjs[:i], conjs[i+1:]...)
-				// reset list index as conjs[i] is removed
-				i--
+			conjFiltered := conjs[i].(*policyRuleConjunction)
+			if conj.id != conjFiltered.id || conj.ruleTableID == conjFiltered.ruleTableID {
+				// There are other policyRuleConjuctions in the same table created with this
+				// ofPriority. The ofPriority is thus not stale and cannot be released.
+				priorityStale = false
+				break
 			}
 		}
-		if len(conjs) == 0 {
+		if priorityStale {
 			klog.V(2).Infof("ofPriority %v is now stale", p)
 			staleOFPriorities = append(staleOFPriorities, p)
 		}

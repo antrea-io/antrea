@@ -56,9 +56,9 @@ func InitialOFPrioritySingleTierPerTable(p types.Priority) uint16 {
 // priorityAssigner is a struct that maintains the current mapping between types.Priority and
 // OpenFlow priorities in a single OVS table. It also knows how to re-assign priorities if certain section overflows.
 type priorityAssigner struct {
-	// priorityMap maintains the current mapping of known Prioriteis to OpenFlow priorities.
+	// priorityMap maintains the current mapping of known Priorities to OpenFlow priorities.
 	priorityMap map[types.Priority]uint16
-	// priorityMap maintains the current mapping of a OpenFlow priorities in the table to Priorities.
+	// priorityMap maintains the current mapping of OpenFlow priorities in the table to Priorities.
 	ofPriorityMap map[uint16]types.Priority
 	// sortedPriorities maintains a slice of sorted OpenFlow priorities in the table that are occupied.
 	sortedOFPriorities []uint16
@@ -87,8 +87,8 @@ func (pa *priorityAssigner) updatePriorityAssignment(ofPriority uint16, p types.
 	pa.priorityMap[p] = ofPriority
 }
 
-// getNextOccupiedOFPriority returns the next ofPriority that is currently occupied on the table,
-// as well as the corresponded Priority, starting from the input ofPriority.
+// getNextOccupiedOFPriority returns the first ofPriority higher than the input ofPriority that is
+// currently occupied on the table, as well as the corresponded Priority.
 // Note that if the input ofPriority itself is occupied, this function will return that ofPriority
 // and the Priority that maps to it currently. The search is based on sortedOFPriorities as it assumes
 // the table is sparse in most cases.
@@ -102,7 +102,7 @@ func (pa *priorityAssigner) getNextOccupiedOFPriority(ofPriority uint16) (*uint1
 	return nil, nil
 }
 
-// getNextVacantOFPriority returns the next ofPriority that is currently vacant on the table,
+// getNextVacantOFPriority returns the first higher ofPriority that is currently vacant on the table,
 // starting from the input ofPriority.
 // Note that if the input ofPriority itself is vacant, it will simply return that ofPriority.
 // The search is incrementally against all ofPriorities available as it assumes the table is sparse in most cases.
@@ -115,9 +115,9 @@ func (pa *priorityAssigner) getNextVacantOFPriority(ofPriority uint16) *uint16 {
 	return nil
 }
 
-// getLastOccupiedOFPriority returns the first smaller ofPriority that is currently occupied on the table,
-// as well as the corresponded Priority, starting from the input ofPriority.
-// Note that the function must return a ofPriority that is smaller than the input ofPriority.
+// getLastOccupiedOFPriority returns the first ofPriority lower than the input ofPriority that is
+// currently occupied on the table, as well as the corresponded Priority.
+// Note that the function must return a ofPriority that is lower than the input ofPriority.
 // The search is based on sortedOFPriorities as it assumes the table is sparse in most cases.
 func (pa *priorityAssigner) getLastOccupiedOFPriority(ofPriority uint16) (*uint16, *types.Priority) {
 	idx := sort.Search(len(pa.sortedOFPriorities), func(i int) bool { return ofPriority <= pa.sortedOFPriorities[i] })
@@ -129,7 +129,7 @@ func (pa *priorityAssigner) getLastOccupiedOFPriority(ofPriority uint16) (*uint1
 	return nil, nil
 }
 
-// getLastVacantOFPriority returns the first smaller ofPriority that is currently vacant on the table,
+// getLastVacantOFPriority returns the first lower ofPriority that is currently vacant on the table,
 // starting from the ofPriority one below the input.
 // The search is incrementally against all ofPriorities available as it assumes the table is sparse in most cases.
 func (pa *priorityAssigner) getLastVacantOFPriority(ofPriority uint16) *uint16 {
@@ -238,16 +238,15 @@ func (pa *priorityAssigner) siftPrioritiesDown(insertionPoint, lastVacant uint16
 // GetOFPriority retrieves the OFPriority for the input Priority to be installed,
 // and returns installed priorities that need to be re-assigned if necessary.
 func (pa *priorityAssigner) GetOFPriority(p types.Priority) (*uint16, map[uint16]uint16, error) {
-	noPriorityReassignments := map[uint16]uint16{}
 	if ofPriority, exists := pa.priorityMap[p]; exists {
-		return &ofPriority, noPriorityReassignments, nil
+		return &ofPriority, nil, nil
 	}
 	insertionPoint, occupied := pa.getInsertionPoint(p)
 	if insertionPoint == PriorityBottomCNP || insertionPoint > PriorityTopCNP || occupied {
 		return pa.reassignPriorities(insertionPoint, p)
 	}
 	pa.updatePriorityAssignment(insertionPoint, p)
-	return &insertionPoint, noPriorityReassignments, nil
+	return &insertionPoint, nil, nil
 }
 
 // RegisterPriorities registers a list of Priorities to be created with the priorityAssigner.
