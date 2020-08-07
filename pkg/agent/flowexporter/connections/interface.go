@@ -18,7 +18,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 )
 
-// ConnTrackDumper is an interface that is used to dump Connections from conntrack module. This supports dumping through
+// ConnTrackDumper is an interface that is used to dump connections from conntrack module. This supports dumping through
 // netfilter socket (OVS kernel datapath) and ovs-appctl command (OVS userspace datapath).
 // In future, support will be extended to Windows.
 type ConnTrackDumper interface {

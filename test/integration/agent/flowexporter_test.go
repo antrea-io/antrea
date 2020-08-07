@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"net"
 	"testing"
 	"time"
@@ -15,9 +14,12 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
 	connectionstest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 )
+
+const testPollInterval = 0 // Not used in the test, hence 0.
 
 func makeTuple(srcIP *net.IP, dstIP *net.IP, protoID uint8, srcPort uint16, dstPort uint16) (*flowexporter.Tuple, *flowexporter.Tuple) {
 	tuple := &flowexporter.Tuple{
@@ -123,12 +125,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Create ConnectionStore, FlowRecords and associated mocks
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
 	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
-	// Hardcoded poll and export intervals; they are not used
-	connStore := &connections.ConnectionStore{
-		Connections: make(map[flowexporter.ConnectionKey]flowexporter.Connection, 2),
-		ConnDumper:  connDumperMock,
-		IfaceStore:  ifStoreMock,
-	}
+	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, testPollInterval)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, nil)
 	for i, testConn := range testConns {
@@ -164,5 +161,4 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Test for build flow records
 	flowRecords := flowrecords.NewFlowRecords(connStore)
 	testBuildFlowRecords(t, flowRecords, testConns, testConnKeys)
-
 }

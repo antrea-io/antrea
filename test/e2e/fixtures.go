@@ -94,16 +94,12 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error) {
 	if err := data.createPodOnNode("ipfix-collector", masterNodeName(), ipfixCollectorImage, nil, nil, nil, nil, true); err != nil {
 		tb.Fatalf("Error when creating the ipfix collector Pod: %v", err)
 	}
-	ipfixCollIP, err := data.podWaitForIP(defaultTimeout, "ipfix-collector", testNamespace)
+	ipfixCollectorIP, err := data.podWaitForIP(defaultTimeout, "ipfix-collector", testNamespace)
 	if err != nil {
 		tb.Fatalf("Error when waiting to get ipfix collector Pod IP: %v", err)
 	}
 	tb.Logf("Applying Antrea YAML with ipfix collector address")
-	if err := data.deployAntreaFlowExporter(ipfixCollIP + ":" + ipfixCollectorPort + ":tcp"); err != nil {
-		return data, err
-	}
-	tb.Logf("Waiting for all Antrea DaemonSet Pods")
-	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
+	if err := data.deployAntreaFlowExporter(ipfixCollectorIP + ":" + ipfixCollectorPort + ":tcp"); err != nil {
 		return data, err
 	}
 	tb.Logf("Checking CoreDNS deployment")

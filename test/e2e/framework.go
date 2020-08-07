@@ -304,62 +304,28 @@ func (data *TestData) deployAntreaIPSec() error {
 
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
 func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
-	// May be better to change this from configmap rather than directly changing antrea manifest?
-	// This is to add ipfixCollector address and pollAndExportInterval config params to antrea agent configmap
-	cmd := fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#flowCollectorAddr: \"\"|flowCollectorAddr: \"%s\"|g' %s", ipfixCollector, antreaYML)
-	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), cmd)
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+	// Enable flow exporter feature and add related config params to antrea agent configmap.
+	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to get ConfigMap: %v", err)
 	}
-	// flowPollInterval is added as harcoded value "1s"
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#flowPollInterval: \"5s\"|flowPollInterval: \"1s\"|g' %s", antreaYML)
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
-	}
-	// exportFrequency is added as harcoded value "5"
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#flowExportFrequency: 12|flowExportFrequency: 5|g' %s", antreaYML)
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
-	}
-	// Turn on FlowExporter feature in featureGates
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|#  FlowExporter: false|  FlowExporter: true|g' %s", antreaYML)
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+
+	antreaAgentConf, _ := configMap.Data["antrea-agent.conf"]
+	antreaAgentConf = strings.Replace(antreaAgentConf, "#  FlowExporter: false", " FlowExporter: true", 1)
+	antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
+	antreaAgentConf = strings.Replace(antreaAgentConf, "#flowPollInterval: \"5s\"", "flowPollInterval: \"1s\"", 1)
+	antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 5", 1)
+	configMap.Data["antrea-agent.conf"] = antreaAgentConf
+
+	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
 	}
 
 	// Delete and re-deploy antrea for config map settings to take effect.
-	// Question: Can end-to-end tests run in parallel? Is there an issue deleting Antrea daemon set?
 	// TODO: Remove this when configmap can be changed runtime
-	if err := data.deleteAntrea(defaultTimeout); err != nil {
-		return err
-	}
-	if err := data.deployAntreaCommon(antreaYML, ""); err != nil {
-		return err
-	}
-
-	// Change the yaml file back for other tests
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|flowCollectorAddr: \"%s\"|#flowCollectorAddr: \"\"|g' %s", ipfixCollector, antreaYML)
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
-	}
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|flowPollInterval: \"1s\"|#flowPollInterval: \"5s\"|g' %s", antreaYML)
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
-	}
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|flowExportFrequency: 5|#flowExportFrequency: 12|g' %s", antreaYML)
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when changing yamlFile %s back on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
-	}
-	cmd = fmt.Sprintf("/bin/sh -c sed -i.bak -E 's|  FlowExporter: true|#  FlowExporter: false|g' %s", antreaYML)
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), cmd)
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when changing yamlFile %s on the master Node %s: %v rc: %v", antreaYML, masterNodeName(), err, rc)
+	err = data.restartAntreaAgentPods(defaultTimeout)
+	if err != nil {
+		return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
 	}
 
 	return nil

@@ -34,7 +34,7 @@ func RunDockerExecCommand(container string, cmd string, workdir string) (
 	args = append(args, "exec", "-w", workdir, "-t", container)
 	if strings.Contains(cmd, "/bin/sh") {
 		// Just split in to "/bin/sh" "-c" and "actual_cmd"
-		// This is useful for passing piped commands in to exec
+		// This is useful for passing piped commands in to os/exec interface.
 		args = append(args, strings.SplitN(cmd, " ", 3)...)
 	} else {
 		args = append(args, strings.Fields(cmd)...)
