@@ -114,7 +114,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	}
 	interfaceFlow2 := &interfacestore.InterfaceConfig{
 		InterfaceName:            "interface2",
-		IP:                       net.IP{8, 7, 6, 5},
+		IPs:                      []net.IP{{8, 7, 6, 5}},
 		ContainerInterfaceConfig: podConfigFlow2,
 	}
 	serviceCIDR := &net.IPNet{
