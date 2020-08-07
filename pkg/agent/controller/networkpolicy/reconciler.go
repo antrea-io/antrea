@@ -746,8 +746,11 @@ func (r *reconciler) getPodIPs(members v1beta2.GroupMemberSet) sets.String {
 			continue
 		}
 		for _, iface := range ifaces {
-			klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IP, m.Pod.Namespace, m.Pod.Name)
-			ips.Insert(iface.IP.String())
+			ipv4Addr := iface.GetIPv4Addr()
+			if ipv4Addr != nil {
+				klog.V(2).Infof("Got IP %v for Pod %s/%s", ipv4Addr, m.Pod.Namespace, m.Pod.Name)
+				ips.Insert(ipv4Addr.String())
+			}
 		}
 	}
 	return ips
