@@ -120,10 +120,10 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 		{
 			name: "encap-mode non-partial",
 			nodeConfig: &config.NodeConfig{
-				Name:       "foo",
-				OVSBridge:  "br-int",
-				NodeIPAddr: getIPNet("10.10.0.10"),
-				PodCIDR:    getIPNet("20.20.20.0/24"),
+				Name:        "foo",
+				OVSBridge:   "br-int",
+				NodeIPAddr:  getIPNet("10.10.0.10"),
+				PodIPv4CIDR: getIPNet("20.20.20.0/24"),
 			},
 			apiPort: 10350,
 			partial: false,

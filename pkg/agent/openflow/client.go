@@ -25,6 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
@@ -42,7 +43,7 @@ type Client interface {
 	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType, gatewayOFPort uint32) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
-	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
+	InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
 
 	// InstallBridgeUplinkFlows installs Openflow flows between bridge local port and uplink port to support
 	// host networking. These flows are only needed on windows platform.
@@ -85,7 +86,7 @@ type Client interface {
 	// flows will be installed). Calls to InstallPodFlows are idempotent. Concurrent calls
 	// to InstallPodFlows and / or UninstallPodFlows are supported as long as they are all
 	// for different interfaceNames.
-	InstallPodFlows(interfaceName string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error
+	InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error
 
 	// UninstallPodFlows removes the connection to the local Pod specified with the
 	// interfaceName. UninstallPodFlows will do nothing if no connection to the Pod was established.
@@ -315,21 +316,27 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 	return c.deleteFlows(c.nodeFlowCache, hostname)
 }
 
-func (c *client) InstallPodFlows(interfaceName string, podInterfaceIP net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
+func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	flows := []binding.Flow{
 		c.podClassifierFlow(ofPort, cookie.Pod),
-		c.podIPSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
-		c.arpSpoofGuardFlow(podInterfaceIP, podInterfaceMAC, ofPort, cookie.Pod),
 		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, cookie.Pod),
-		c.l3FlowsToPod(gatewayMAC, podInterfaceIP, podInterfaceMAC, cookie.Pod),
 	}
+	// Add support for IPv4 ARP responder.
+	podInterfaceIPv4 := util.GetIPv4Addr(podInterfaceIPs)
+	if podInterfaceIPv4 != nil {
+		flows = append(flows, c.arpSpoofGuardFlow(podInterfaceIPv4, podInterfaceMAC, ofPort, cookie.Pod))
+	}
+	// Add IP SpoofGuard flows for all validate IPs.
+	flows = append(flows, c.podIPSpoofGuardFlow(podInterfaceIPs, podInterfaceMAC, ofPort, cookie.Pod)...)
+	// Add L3 Routing flows to rewrite Pod's dst MAC for all validate IPs.
+	flows = append(flows, c.l3FlowsToPod(gatewayMAC, podInterfaceIPs, podInterfaceMAC, cookie.Pod)...)
 
 	if c.encapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, traffic to local Pod is routed based on destination IP.
 		flows = append(flows,
-			c.l3ToPodFlow(podInterfaceIP, podInterfaceMAC, cookie.Pod),
+			c.l3ToPodFlow(podInterfaceIPs, podInterfaceMAC, cookie.Pod)...,
 		)
 	}
 	return c.addFlows(c.podFlowCache, interfaceName, flows)
@@ -466,19 +473,25 @@ func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOF
 	return nil
 }
 
-func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
+func (c *client) InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
 	flows := []binding.Flow{
 		c.gatewayClassifierFlow(gatewayOFPort, cookie.Default),
 		c.gatewayIPSpoofGuardFlow(gatewayOFPort, cookie.Default),
-		c.gatewayARPSpoofGuardFlow(gatewayOFPort, gatewayAddr, gatewayMAC, cookie.Default),
 		c.ctRewriteDstMACFlow(gatewayMAC, cookie.Default),
 		c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default),
-		c.localProbeFlow(gatewayAddr, cookie.Default),
 	}
+
+	// Add ARP SpoofGuard flow for local gateway interface.
+	gwIPv4 := util.GetIPv4Addr(gatewayAddrs)
+	if gwIPv4 != nil {
+		flows = append(flows, c.gatewayARPSpoofGuardFlow(gatewayOFPort, gwIPv4, gatewayMAC, cookie.Default))
+	}
+	// Add flow to ensure the liveness check packet could be forwarded correctly.
+	flows = append(flows, c.localProbeFlow(gatewayAddrs, cookie.Default)...)
 
 	// In NoEncap , no traffic from tunnel port
 	if c.encapMode.SupportsEncap() {
-		flows = append(flows, c.l3ToGatewayFlow(gatewayAddr, gatewayMAC, cookie.Default))
+		flows = append(flows, c.l3ToGatewayFlow(gatewayAddrs, gatewayMAC, cookie.Default)...)
 	}
 
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
