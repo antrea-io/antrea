@@ -67,7 +67,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
 	gwConfig := &config.GatewayConfig{
-		IP: net.IP{8, 7, 6, 5},
+		IPs: []net.IP{{8, 7, 6, 5}},
 	}
 	nodeConfig := &config.NodeConfig{
 		GatewayConfig: gwConfig,
@@ -103,7 +103,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
 	gwConfig := &config.GatewayConfig{
-		IP: net.IP{8, 7, 6, 5},
+		IPs: []net.IP{{8, 7, 6, 5}},
 	}
 	nodeConfig := &config.NodeConfig{
 		GatewayConfig: gwConfig,

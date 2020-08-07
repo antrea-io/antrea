@@ -37,6 +37,7 @@ func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.I
 
 func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, zoneFilter uint16) []*flowexporter.Connection {
 	filteredConns := conns[:0]
+conLoop:
 	for _, conn := range conns {
 		if conn.Zone != zoneFilter {
 			continue
@@ -45,9 +46,11 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 		dstIP := conn.TupleReply.SourceAddress
 
 		// Only get Pod-to-Pod flows.
-		if srcIP.Equal(nodeConfig.GatewayConfig.IP) || dstIP.Equal(nodeConfig.GatewayConfig.IP) {
-			klog.V(4).Infof("Detected flow through gateway :%+v", conn)
-			continue
+		for _, ip := range nodeConfig.GatewayConfig.IPs {
+			if srcIP.Equal(ip) || dstIP.Equal(ip) {
+				klog.V(4).Infof("Detected flow through gateway :%v", conn)
+				continue conLoop
+			}
 		}
 
 		// Pod-to-Service flows w/ kube-proxy: There are two conntrack flows for every Pod-to-Service flow.
