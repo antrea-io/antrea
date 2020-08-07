@@ -91,7 +91,7 @@ var responses = []Response{
 var testInterfaceConfigs = []*interfacestore.InterfaceConfig{
 	{
 		InterfaceName: "interface0",
-		IP:            net.ParseIP(ipStrs[0]),
+		IPs:           []net.IP{net.ParseIP(ipStrs[0])},
 		MAC:           macs[0],
 		OVSPortConfig: &interfacestore.OVSPortConfig{
 			PortUUID: "portuuid0",
@@ -105,7 +105,7 @@ var testInterfaceConfigs = []*interfacestore.InterfaceConfig{
 	},
 	{
 		InterfaceName: "interface1",
-		IP:            net.ParseIP(ipStrs[1]),
+		IPs:           []net.IP{net.ParseIP(ipStrs[1])},
 		MAC:           macs[1],
 		OVSPortConfig: &interfacestore.OVSPortConfig{
 			PortUUID: "portuuid1",
@@ -119,7 +119,7 @@ var testInterfaceConfigs = []*interfacestore.InterfaceConfig{
 	},
 	{
 		InterfaceName: "interface2",
-		IP:            net.ParseIP(ipStrs[2]),
+		IPs:           []net.IP{net.ParseIP(ipStrs[2])},
 		MAC:           macs[2],
 		OVSPortConfig: &interfacestore.OVSPortConfig{
 			PortUUID: "portuuid2",
