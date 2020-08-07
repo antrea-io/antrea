@@ -317,7 +317,7 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		dstPodInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Destination.Pod, tf.Spec.Destination.Namespace)
 		if len(dstPodInterfaces) > 0 {
 			dstMAC = dstPodInterfaces[0].MAC.String()
-			dstIP = dstPodInterfaces[0].IP.String()
+			dstIP = dstPodInterfaces[0].GetIPv4Addr().String()
 		} else {
 			dstPod, err := c.kubeClient.CoreV1().Pods(tf.Spec.Destination.Namespace).Get(context.TODO(), tf.Spec.Destination.Pod, metav1.GetOptions{})
 			if err != nil {
@@ -376,7 +376,7 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		tf.Status.DataplaneTag,
 		podInterfaces[0].MAC.String(),
 		dstMAC,
-		podInterfaces[0].IP.String(),
+		podInterfaces[0].GetIPv4Addr().String(),
 		dstIP,
 		uint8(tf.Spec.Packet.IPHeader.Protocol),
 		uint8(tf.Spec.Packet.IPHeader.TTL),
