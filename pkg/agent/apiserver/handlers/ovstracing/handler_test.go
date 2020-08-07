@@ -46,7 +46,7 @@ var (
 	testNodeConfig = &config.NodeConfig{
 		GatewayConfig: &config.GatewayConfig{
 			Name: "antrea-gw0",
-			IP:   net.ParseIP("10.1.1.1"),
+			IPs:  []net.IP{net.ParseIP("10.1.1.1")},
 			MAC:  gatewayMAC},
 	}
 
@@ -55,19 +55,19 @@ var (
 	inPodInterface   = &interfacestore.InterfaceConfig{
 		Type:          interfacestore.ContainerInterface,
 		InterfaceName: "inPod",
-		IP:            net.ParseIP("10.1.1.11"),
+		IPs:           []net.IP{net.ParseIP("10.1.1.11")},
 		MAC:           podMAC,
 	}
 	srcPodInterface = &interfacestore.InterfaceConfig{
 		Type:          interfacestore.ContainerInterface,
 		InterfaceName: "srcPod",
-		IP:            net.ParseIP("10.1.1.12"),
+		IPs:           []net.IP{net.ParseIP("10.1.1.12")},
 		MAC:           podMAC,
 	}
 	dstPodInterface = &interfacestore.InterfaceConfig{
 		Type:          interfacestore.ContainerInterface,
 		InterfaceName: "dstPod",
-		IP:            net.ParseIP("10.1.1.13"),
+		IPs:           []net.IP{net.ParseIP("10.1.1.13")},
 		MAC:           podMAC,
 	}
 )
