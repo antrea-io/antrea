@@ -606,7 +606,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	ovsServiceMock.EXPECT().GetOFPort(ovsPortname).Return(int32(10), nil).AnyTimes()
 	ofServiceMock.EXPECT().InstallPodFlows(ovsPortname, mock.Any(), mock.Any(), mock.Any(), mock.Any()).Return(nil)
 
-	// Test ip allocation
+	// Test ips allocation
 	prevResult, err := tester.cmdAddTest(tc, dataDir)
 	testRequire.Nil(err)
 
@@ -814,7 +814,7 @@ func TestCNIServerChaining(t *testing.T) {
 			routeMock.EXPECT().MigrateRoutesToGw(hostVeth.Name),
 			ovsServiceMock.EXPECT().CreatePort(ovsPortname, ovsPortname, mock.Any()).Return(ovsPortUUID, nil),
 			ovsServiceMock.EXPECT().GetOFPort(ovsPortname).Return(testContainerOFPort, nil),
-			ofServiceMock.EXPECT().InstallPodFlows(ovsPortname, podIP, containerIntf.HardwareAddr, gwMAC, mock.Any()),
+			ofServiceMock.EXPECT().InstallPodFlows(ovsPortname, []net.IP{podIP}, containerIntf.HardwareAddr, gwMAC, mock.Any()),
 		)
 		mock.InOrder(orderedCalls...)
 		cniResp, err := server.CmdAdd(ctx, cniReq)
@@ -845,9 +845,9 @@ func init() {
 	nodeName := "node1"
 	gwIP := net.ParseIP("192.168.1.1")
 	gwMAC, _ = net.ParseMAC("11:11:11:11:11:11")
-	nodeGateway := &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: ""}
+	nodeGateway := &config.GatewayConfig{IPs: []net.IP{gwIP}, MAC: gwMAC, Name: ""}
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
 	nodeMTU := 1500
 
-	testNodeConfig = &config.NodeConfig{Name: nodeName, PodCIDR: nodePodCIDR, NodeMTU: nodeMTU, GatewayConfig: nodeGateway}
+	testNodeConfig = &config.NodeConfig{Name: nodeName, PodIPv4CIDR: nodePodCIDR, NodeMTU: nodeMTU, GatewayConfig: nodeGateway}
 }
