@@ -119,7 +119,7 @@ func (c *Client) initIPSet() error {
 		return err
 	}
 	// Ensure its own PodCIDR is in it.
-	if err := ipset.AddEntry(antreaPodIPSet, c.nodeConfig.PodCIDR.String()); err != nil {
+	if err := ipset.AddEntry(antreaPodIPSet, c.nodeConfig.PodIPv4CIDR.String()); err != nil {
 		return err
 	}
 	return nil
@@ -208,7 +208,7 @@ func (c *Client) initIPTables() error {
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: masquerade pod to external packets"`,
-			"-s", c.nodeConfig.PodCIDR.String(), "-m", "set", "!", "--match-set", antreaPodIPSet, "dst",
+			"-s", c.nodeConfig.PodIPv4CIDR.String(), "-m", "set", "!", "--match-set", antreaPodIPSet, "dst",
 			"-j", iptables.MasqueradeTarget,
 		}...)
 	}
@@ -266,7 +266,7 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 		return fmt.Errorf("error listing ip routes: %v", err)
 	}
 	for _, route := range routes {
-		if reflect.DeepEqual(route.Dst, c.nodeConfig.PodCIDR) {
+		if reflect.DeepEqual(route.Dst, c.nodeConfig.PodIPv4CIDR) || reflect.DeepEqual(route.Dst, c.nodeConfig.PodIPv6CIDR) {
 			continue
 		}
 		if desiredPodCIDRs.Has(route.Dst.String()) {
