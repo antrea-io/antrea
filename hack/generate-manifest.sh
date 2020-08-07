@@ -134,6 +134,11 @@ if [ "$MODE" == "release" ] && [ -z "$IMG_TAG" ]; then
     exit 1
 fi
 
+# noEncap/policy-only mode works with antrea-proxy.
+if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]]; then
+      PROXY=true
+fi
+
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 source $THIS_DIR/verify-kustomize.sh
