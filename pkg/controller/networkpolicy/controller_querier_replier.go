@@ -81,7 +81,7 @@ func NewEndpointQueryReplier(networkPolicyController *NetworkPolicyController) *
 // egress rule respectively.
 func (eq EndpointQueryReplier) QueryNetworkPolicies(namespace string, podName string) (*EndpointQueryResponse, error) {
 	// check if namespace and podName select an existing pod
-	_, err := eq.networkPolicyController.podInformer.Lister().Pods(namespace).Get(podName)
+	pod, err := eq.networkPolicyController.podInformer.Lister().Pods(namespace).Get(podName)
 	if err != nil {
 		return nil, nil
 	}
@@ -93,14 +93,14 @@ func (eq EndpointQueryReplier) QueryNetworkPolicies(namespace string, podName st
 	applied := make([]*antreatypes.NetworkPolicy, 0)
 	ingress := make([]*ruleTemp, 0)
 	egress := make([]*ruleTemp, 0)
-	// get all appliedToGroups using pod index, then get applied policies using appliedToGroup
-	appliedToGroups, err := eq.networkPolicyController.appliedToGroupStore.GetByIndex(store.PodIndex, podName+"/"+namespace)
+	// get all appliedToGroups using filter, then get applied policies using appliedToGroup
+	appliedToGroupKeys := eq.networkPolicyController.filterAppliedToGroupsForPod(pod)
 	if err != nil {
 		return nil, err
 	}
-	for _, appliedToGroup := range appliedToGroups {
+	for appliedToGroupKey := range appliedToGroupKeys {
 		policies, err := eq.networkPolicyController.internalNetworkPolicyStore.GetByIndex(store.AppliedToGroupIndex,
-			string(appliedToGroup.(*antreatypes.AppliedToGroup).UID))
+			appliedToGroupKey)
 		if err != nil {
 			return nil, err
 		}
@@ -108,14 +108,18 @@ func (eq EndpointQueryReplier) QueryNetworkPolicies(namespace string, podName st
 			applied = append(applied, policy.(*antreatypes.NetworkPolicy))
 		}
 	}
-	// get all addressGroups using pod index, then get ingress and egress policies using addressGroup
-	addressGroups, err := eq.networkPolicyController.addressGroupStore.GetByIndex(store.PodIndex, podName+"/"+namespace)
+	// get all addressGroups using filter, then get ingress and egress policies using addressGroup
+	addressGroupKeys := eq.networkPolicyController.filterAddressGroupsForPod(pod)
 	if err != nil {
 		return nil, err
 	}
-	for _, addressGroup := range addressGroups {
+	for addressGroupKey := range addressGroupKeys {
+		addressGroup, found, err := eq.networkPolicyController.addressGroupStore.Get(addressGroupKey)
+		if !found {
+			continue
+		}
 		policies, err := eq.networkPolicyController.internalNetworkPolicyStore.GetByIndex(store.AddressGroupIndex,
-			string(addressGroup.(*antreatypes.AddressGroup).UID))
+			addressGroupKey)
 		if err != nil {
 			return nil, err
 		}

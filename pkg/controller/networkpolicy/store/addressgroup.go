@@ -162,20 +162,6 @@ func NewAddressGroupStore() storage.Interface {
 			// ag.Selector.Namespace == "" means it's a cluster scoped group, we index it as it is.
 			return []string{ag.Selector.Namespace}, nil
 		},
-		PodIndex: func(obj interface{}) ([]string, error) {
-			ag, ok := obj.(*types.AddressGroup)
-			if !ok {
-				return []string{}, nil
-			}
-			keys := make([]string, 0)
-			for _, pod := range ag.Pods {
-				if pod != nil && pod.Pod != nil {
-					name, namespace := pod.Pod.Name, pod.Pod.Namespace
-					keys = append(keys, name+"/"+namespace)
-				}
-			}
-			return keys, nil
-		},
 	}
 	return ram.NewStore(AddressGroupKeyFunc, indexers, genAddressGroupEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(networking.AddressGroup) })
 }

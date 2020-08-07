@@ -32,7 +32,6 @@ import (
 const (
 	AppliedToGroupIndex = "appliedToGroup"
 	AddressGroupIndex   = "addressGroup"
-	PodIndex            = "pod"
 )
 
 // networkPolicyEvent implements storage.InternalEvent.

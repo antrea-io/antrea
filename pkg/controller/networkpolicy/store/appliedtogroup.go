@@ -174,22 +174,6 @@ func NewAppliedToGroupStore() storage.Interface {
 			}
 			return []string{atg.Selector.Namespace}, nil
 		},
-		PodIndex: func(obj interface{}) ([]string, error) {
-			atg, ok := obj.(*types.AppliedToGroup)
-			if !ok {
-				return []string{}, nil
-			}
-			keys := make([]string, 0)
-			for _, podSet := range atg.PodsByNode {
-				for _, pod := range podSet {
-					if pod != nil && pod.Pod != nil {
-						name, namespace := pod.Pod.Name, pod.Pod.Namespace
-						keys = append(keys, name+"/"+namespace)
-					}
-				}
-			}
-			return keys, nil
-		},
 	}
 	return ram.NewStore(AppliedToGroupKeyFunc, indexers, genAppliedToGroupEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(networking.AppliedToGroup) })
 }
