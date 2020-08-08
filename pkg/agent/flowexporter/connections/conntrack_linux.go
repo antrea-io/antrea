@@ -38,12 +38,10 @@ type connTrackSystem struct {
 
 func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackSystem {
 	// Ensure net.netfilter.nf_conntrack_acct value to be 1. This will enable flow exporter to export stats of connections.
-	// Do not handle error and continue with creation of interfacer object as we can still dump flows with no stats.
-	// If log says permission error, please ensure net.netfilter.nf_conntrack_acct to be set to 1.
+	// Do not fail, but continue after logging error as we can still dump flows with no stats.
 	sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_acct", 1)
 	// Ensure net.netfilter.nf_conntrack_timestamp value to be 1. This will enable flow exporter to export timestamps of connections.
-	// Do not handle error and continue with creation of interfacer object as we can still dump flows with no timestamps.
-	// If log says permission error, please ensure net.netfilter.nf_conntrack_timestamp to be set to 1.
+	// Do not fail, but continue after logging error as we can still dump flows with no timestamps.
 	sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_timestamp", 1)
 
 	return &connTrackSystem{
@@ -103,7 +101,7 @@ func (nfct *netFilterConnTrack) DumpFilter(filter conntrack.Filter) ([]*flowexpo
 	}
 	antreaConns := make([]*flowexporter.Connection, len(conns))
 	for i, conn := range conns {
-		antreaConns[i] = createAntreaConn(&conn)
+		antreaConns[i] = netlinkFlowToAntreaConnection(&conn)
 	}
 
 	klog.V(2).Infof("Finished dumping -- total no. of flows in conntrack: %d", len(antreaConns))
@@ -112,7 +110,7 @@ func (nfct *netFilterConnTrack) DumpFilter(filter conntrack.Filter) ([]*flowexpo
 	return antreaConns, nil
 }
 
-func createAntreaConn(conn *conntrack.Flow) *flowexporter.Connection {
+func netlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connection {
 	tupleOrig := flowexporter.Tuple{
 		SourceAddress:      conn.TupleOrig.IP.SourceAddress,
 		DestinationAddress: conn.TupleOrig.IP.DestinationAddress,

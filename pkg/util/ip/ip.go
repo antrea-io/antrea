@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"sort"
-	"strings"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
@@ -28,15 +27,6 @@ const (
 	v4BitLen = 8 * net.IPv4len
 	v6BitLen = 8 * net.IPv6len
 )
-
-// Following map is for converting protocol name (string) to protocol identifier
-var protocols = map[string]uint8{
-	"icmp":      1,
-	"igmp":      2,
-	"tcp":       6,
-	"udp":       17,
-	"ipv6-icmp": 58,
-}
 
 // This function takes in one allow CIDR and multiple except CIDRs and gives diff CIDRs
 // in allowCIDR eliminating except CIDRs. It currently supports only IPv4. except CIDR input
@@ -155,15 +145,4 @@ func IPNetToNetIPNet(ipNet *v1beta1.IPNet) *net.IPNet {
 func NetIPNetToIPNet(ipNet *net.IPNet) *v1beta1.IPNet {
 	prefix, _ := ipNet.Mask.Size()
 	return &v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet.IP), PrefixLength: int32(prefix)}
-}
-
-// LookupProtocolMap return protocol identifier given protocol name
-func LookupProtocolMap(name string) (uint8, error) {
-	name = strings.TrimSpace(name)
-	lowerCaseStr := strings.ToLower(name)
-	proto, found := protocols[lowerCaseStr]
-	if !found {
-		return 0, fmt.Errorf("unknown IP protocol specified: %s", name)
-	}
-	return proto, nil
 }
