@@ -30,21 +30,20 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
 	proxytest "github.com/vmware-tanzu/antrea/pkg/agent/proxy/testing"
-	"github.com/vmware-tanzu/antrea/pkg/util/ip"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 const testPollInterval = 0 // Not used in these tests, hence 0.
 
-func makeTuple(srcIP *net.IP, dstIP *net.IP, protoID uint8, srcPort uint16, dstPort uint16) (*flowexporter.Tuple, *flowexporter.Tuple) {
-	tuple := &flowexporter.Tuple{
+func makeTuple(srcIP *net.IP, dstIP *net.IP, protoID uint8, srcPort uint16, dstPort uint16) (flowexporter.Tuple, flowexporter.Tuple) {
+	tuple := flowexporter.Tuple{
 		SourceAddress:      *srcIP,
 		DestinationAddress: *dstIP,
 		Protocol:           protoID,
 		SourcePort:         srcPort,
 		DestinationPort:    dstPort,
 	}
-	revTuple := &flowexporter.Tuple{
+	revTuple := flowexporter.Tuple{
 		SourceAddress:      *dstIP,
 		DestinationAddress: *srcIP,
 		Protocol:           protoID,
@@ -68,8 +67,8 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		OriginalBytes:   0xbaaaaa0000000000,
 		ReversePackets:  0xff,
 		ReverseBytes:    0xbaaa,
-		TupleOrig:       *tuple1,
-		TupleReply:      *revTuple1,
+		TupleOrig:       tuple1,
+		TupleReply:      revTuple1,
 		IsActive:        true,
 	}
 	// Flow-2, which is not in ConnectionStore
@@ -81,14 +80,14 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		OriginalBytes:   0xcbbb,
 		ReversePackets:  0xbbbb,
 		ReverseBytes:    0xcbbbb0000000000,
-		TupleOrig:       *tuple2,
-		TupleReply:      *revTuple2,
+		TupleOrig:       tuple2,
+		TupleReply:      revTuple2,
 		IsActive:        true,
 	}
 	tuple3, revTuple3 := makeTuple(&net.IP{10, 10, 10, 10}, &net.IP{20, 20, 20, 20}, 6, 5000, 80)
 	testFlow3 := flowexporter.Connection{
-		TupleOrig:  *tuple3,
-		TupleReply: *revTuple3,
+		TupleOrig:  tuple3,
+		TupleReply: revTuple3,
 		IsActive:   true,
 	}
 	// Create copy of old conntrack flow for testing purposes.
@@ -100,8 +99,8 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		OriginalBytes:           0xbaaaaa00000000,
 		ReversePackets:          0xf,
 		ReverseBytes:            0xba,
-		TupleOrig:               *tuple1,
-		TupleReply:              *revTuple1,
+		TupleOrig:               tuple1,
+		TupleReply:              revTuple1,
 		SourcePodNamespace:      "ns1",
 		SourcePodName:           "pod1",
 		DestinationPodNamespace: "",
@@ -124,8 +123,8 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	}
 	servicePortName := k8sproxy.ServicePortName{
 		NamespacedName: types.NamespacedName{
-			"serviceNS1",
-			"service1",
+			Namespace: "serviceNS1",
+			Name:      "service1",
 		},
 		Port:     "255",
 		Protocol: v1.ProtocolTCP,
@@ -162,10 +161,10 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 			mockIfaceStore.EXPECT().GetInterfaceByIP(expConn.TupleOrig.SourceAddress.String()).Return(nil, false)
 			mockIfaceStore.EXPECT().GetInterfaceByIP(expConn.TupleReply.SourceAddress.String()).Return(nil, false)
 
-			protocol, _ := ip.LookupServiceProtocol(expConn.TupleOrig.Protocol)
+			protocol, _ := lookupServiceProtocol(expConn.TupleOrig.Protocol)
 			serviceStr := fmt.Sprintf("%s:%d/%s", expConn.TupleOrig.DestinationAddress.String(), expConn.TupleOrig.DestinationPort, protocol)
 			mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
-			expConn.DestinationServiceName = servicePortName.String()
+			expConn.DestinationServicePortName = servicePortName.String()
 		}
 		connStore.addOrUpdateConn(&test.flow)
 		actualConn, ok := connStore.GetConnByKey(flowTuple)
@@ -190,8 +189,8 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 		OriginalBytes:   0xbaaaaa0000000000,
 		ReversePackets:  0xff,
 		ReverseBytes:    0xbaaa,
-		TupleOrig:       *tuple1,
-		TupleReply:      *revTuple1,
+		TupleOrig:       tuple1,
+		TupleReply:      revTuple1,
 		IsActive:        true,
 	}
 	// Flow-2, which is not in ConnectionStore
@@ -203,8 +202,8 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 		OriginalBytes:   0xcbbb,
 		ReversePackets:  0xbbbb,
 		ReverseBytes:    0xcbbbb0000000000,
-		TupleOrig:       *tuple2,
-		TupleReply:      *revTuple2,
+		TupleOrig:       tuple2,
+		TupleReply:      revTuple2,
 		IsActive:        true,
 	}
 	for i, flow := range testFlows {
@@ -252,8 +251,8 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		OriginalBytes:   0xbaaaaa0000000000,
 		ReversePackets:  0xff,
 		ReverseBytes:    0xbaaa,
-		TupleOrig:       *tuple1,
-		TupleReply:      *revTuple1,
+		TupleOrig:       tuple1,
+		TupleReply:      revTuple1,
 		IsActive:        true,
 	}
 	// Flow-2, which is not in ConnectionStore
@@ -265,8 +264,8 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		OriginalBytes:   0xcbbb,
 		ReversePackets:  0xbbbb,
 		ReverseBytes:    0xcbbbb0000000000,
-		TupleOrig:       *tuple2,
-		TupleReply:      *revTuple2,
+		TupleOrig:       tuple2,
+		TupleReply:      revTuple2,
 		IsActive:        true,
 	}
 	for i, flow := range testFlows {

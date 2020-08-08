@@ -147,7 +147,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 	for i, ie := range AntreaInfoElements {
 		elemList[i+len(IANAInfoElements)+len(IANAReverseInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
 	}
-	// Define mocks and flowExporter
+
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
 	mockDataRec := ipfixtest.NewMockIPFIXRecord(ctrl)
 	flowExp := &flowExporter{
@@ -175,7 +175,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 			mockDataRec.EXPECT().AddInfoElement(ie, uint8(0)).Return(tempBytes, nil)
 		case "packetTotalCount", "octetTotalCount", "packetDeltaCount", "octetDeltaCount", "reverse_PacketTotalCount", "reverse_OctetTotalCount", "reverse_PacketDeltaCount", "reverse_OctetDeltaCount":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint64(0)).Return(tempBytes, nil)
-		case "sourcePodName", "sourcePodNamespace", "sourceNodeName", "destinationPodName", "destinationPodNamespace", "destinationNodeName", "destinationServiceName":
+		case "sourcePodName", "sourcePodNamespace", "sourceNodeName", "destinationPodName", "destinationPodNamespace", "destinationNodeName", "destinationServicePortName":
 			mockDataRec.EXPECT().AddInfoElement(ie, "").Return(tempBytes, nil)
 		}
 	}

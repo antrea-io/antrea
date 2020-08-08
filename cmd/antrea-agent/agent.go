@@ -245,6 +245,7 @@ func run(o *Options) error {
 		connStore := connections.NewConnectionStore(
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, agentQuerier.GetOVSCtlClient(), o.config.OVSDatapathType),
 			ifaceStore,
+			serviceCIDRNet,
 			proxier,
 			o.pollInterval)
 		pollDone := make(chan struct{})

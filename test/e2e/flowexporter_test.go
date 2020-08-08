@@ -142,7 +142,7 @@ func TestFlowExporter(t *testing.T) {
 								t.Fatalf("Error in converting octetDeltaCount to int type")
 							}
 							// compute the bandwidth using 5s as interval
-							recBandwidth := (deltaBytes * 8.0) / float64((int64(5.0))*time.Second.Nanoseconds())
+							recBandwidth := (deltaBytes * 8.0) / float64(5*time.Second.Nanoseconds())
 							// bandwidth from iperf output
 							bwSlice := strings.Split(bandwidth, " ")
 							iperfBandwidth, err := strconv.ParseFloat(bwSlice[0], 64)

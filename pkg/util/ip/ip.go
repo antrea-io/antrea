@@ -20,8 +20,6 @@ import (
 	"net"
 	"sort"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
 
@@ -29,12 +27,6 @@ const (
 	v4BitLen = 8 * net.IPv4len
 	v6BitLen = 8 * net.IPv6len
 )
-
-var serviceProtocolMap = map[uint8]corev1.Protocol{
-	6:   corev1.ProtocolTCP,
-	17:  corev1.ProtocolUDP,
-	132: corev1.ProtocolSCTP,
-}
 
 // This function takes in one allow CIDR and multiple except CIDRs and gives diff CIDRs
 // in allowCIDR eliminating except CIDRs. It currently supports only IPv4. except CIDR input
@@ -153,13 +145,4 @@ func IPNetToNetIPNet(ipNet *v1beta1.IPNet) *net.IPNet {
 func NetIPNetToIPNet(ipNet *net.IPNet) *v1beta1.IPNet {
 	prefix, _ := ipNet.Mask.Size()
 	return &v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet.IP), PrefixLength: int32(prefix)}
-}
-
-// LookupServiceProtocol return service protocol string given protocol identifier
-func LookupServiceProtocol(protoID uint8) (corev1.Protocol, error) {
-	serviceProto, found := serviceProtocolMap[protoID]
-	if !found {
-		return "", fmt.Errorf("unknown protocol identifier: %d", protoID)
-	}
-	return serviceProto, nil
 }

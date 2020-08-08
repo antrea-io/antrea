@@ -282,7 +282,7 @@ func (p *proxier) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, b
 func (p *proxier) addServiceByIP(serviceStr string, servicePortName k8sproxy.ServicePortName) {
 	p.serviceStringMapMutex.Lock()
 	defer p.serviceStringMapMutex.Unlock()
-	klog.V(2).Infof("Added service with key: %v value: %v", serviceStr, servicePortName)
+
 	p.serviceStringMap[serviceStr] = servicePortName
 }
 
