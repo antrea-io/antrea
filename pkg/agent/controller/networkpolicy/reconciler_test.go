@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -47,19 +48,25 @@ var (
 		newAppliedToGroupMember("pod3", "ns1", v1beta1.NamedPort{Name: "http", Protocol: v1beta1.ProtocolTCP, Port: 443}),
 	)
 
-	protocolTCP   = v1beta1.ProtocolTCP
-	port80        = intstr.FromInt(80)
-	port443       = intstr.FromInt(443)
-	portHTTP      = intstr.FromString("http")
-	serviceTCP80  = v1beta1.Service{Protocol: &protocolTCP, Port: &port80}
-	serviceTCP443 = v1beta1.Service{Protocol: &protocolTCP, Port: &port443}
-	serviceTCP    = v1beta1.Service{Protocol: &protocolTCP}
-	serviceHTTP   = v1beta1.Service{Protocol: &protocolTCP, Port: &portHTTP}
+	protocolTCP = v1beta1.ProtocolTCP
 
-	services1     = []v1beta1.Service{serviceTCP80}
-	servicesHash1 = hashServices(services1)
-	services2     = []v1beta1.Service{serviceTCP}
-	servicesHash2 = hashServices(services2)
+	port80    = intstr.FromInt(80)
+	port443   = intstr.FromInt(443)
+	port8080  = intstr.FromInt(8080)
+	portHTTP  = intstr.FromString("http")
+	portHTTPS = intstr.FromString("https")
+
+	serviceTCP80   = v1beta1.Service{Protocol: &protocolTCP, Port: &port80}
+	serviceTCP443  = v1beta1.Service{Protocol: &protocolTCP, Port: &port443}
+	serviceTCP8080 = v1beta1.Service{Protocol: &protocolTCP, Port: &port8080}
+	serviceTCP     = v1beta1.Service{Protocol: &protocolTCP}
+	serviceHTTP    = v1beta1.Service{Protocol: &protocolTCP, Port: &portHTTP}
+	serviceHTTPS   = v1beta1.Service{Protocol: &protocolTCP, Port: &portHTTPS}
+
+	services1    = []v1beta1.Service{serviceTCP80}
+	servicesKey1 = normalizeServices(services1)
+	services2    = []v1beta1.Service{serviceTCP}
+	servicesKey2 = normalizeServices(services2)
 )
 
 func newCIDR(cidrStr string) *net.IPNet {
@@ -77,21 +84,21 @@ func TestReconcilerForget(t *testing.T) {
 	}{
 		{
 			"unknown-rule",
-			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8}}},
+			map[string]*lastRealized{"foo": {ofIDs: map[servicesKey]uint32{servicesKey1: 8}}},
 			"unknown-rule-id",
 			nil,
 			false,
 		},
 		{
 			"known-single-ofrule",
-			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8}}},
+			map[string]*lastRealized{"foo": {ofIDs: map[servicesKey]uint32{servicesKey1: 8}}},
 			"foo",
 			[]uint32{8},
 			false,
 		},
 		{
 			"known-multiple-ofrule",
-			map[string]*lastRealized{"foo": {ofIDs: map[servicesHash]uint32{servicesHash1: 8, servicesHash2: 9}}},
+			map[string]*lastRealized{"foo": {ofIDs: map[servicesKey]uint32{servicesKey1: 8, servicesKey2: 9}}},
 			"foo",
 			[]uint32{8, 9},
 			false,
@@ -702,4 +709,168 @@ func TestReconcilerUpdate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGroupPodsByServices(t *testing.T) {
+	numberedServices := []v1beta1.Service{serviceTCP80, serviceTCP443}
+	numberedServicesKey := normalizeServices(numberedServices)
+	namedServices := []v1beta1.Service{serviceHTTP, serviceHTTPS}
+
+	tests := []struct {
+		name                  string
+		services              []v1beta1.Service
+		pods                  v1beta1.GroupMemberPodSet
+		wantPodsByServicesMap map[servicesKey]v1beta1.GroupMemberPodSet
+		wantServicesMap       map[servicesKey][]v1beta1.Service
+	}{
+		{
+			name:     "numbered ports",
+			services: numberedServices,
+			pods: v1beta1.NewGroupMemberPodSet(
+				&v1beta1.GroupMemberPod{
+					IP: v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
+				},
+				&v1beta1.GroupMemberPod{
+					IP: v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
+				},
+			),
+			wantPodsByServicesMap: map[servicesKey]v1beta1.GroupMemberPodSet{
+				numberedServicesKey: v1beta1.NewGroupMemberPodSet(
+					&v1beta1.GroupMemberPod{
+						IP: v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
+					},
+					&v1beta1.GroupMemberPod{
+						IP: v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
+					},
+				),
+			},
+			wantServicesMap: map[servicesKey][]v1beta1.Service{
+				numberedServicesKey: numberedServices,
+			},
+		},
+		{
+			name:     "named ports",
+			services: namedServices,
+			pods: v1beta1.NewGroupMemberPodSet(
+				&v1beta1.GroupMemberPod{
+					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
+					Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+				},
+				&v1beta1.GroupMemberPod{
+					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
+					Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+				},
+				&v1beta1.GroupMemberPod{
+					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.3")),
+					Ports: []v1beta1.NamedPort{{Port: 8080, Name: "http", Protocol: protocolTCP}},
+				},
+				&v1beta1.GroupMemberPod{
+					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.4")),
+					Ports: []v1beta1.NamedPort{{Port: 443, Name: "https", Protocol: protocolTCP}},
+				},
+				&v1beta1.GroupMemberPod{
+					IP: v1beta1.IPAddress(net.ParseIP("1.1.1.5")),
+				},
+				&v1beta1.GroupMemberPod{
+					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.6")),
+					Ports: []v1beta1.NamedPort{{Port: 443, Name: "foo", Protocol: protocolTCP}},
+				},
+			),
+			wantPodsByServicesMap: map[servicesKey]v1beta1.GroupMemberPodSet{
+				normalizeServices([]v1beta1.Service{serviceTCP80, serviceHTTPS}): v1beta1.NewGroupMemberPodSet(
+					&v1beta1.GroupMemberPod{
+						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
+						Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+					},
+					&v1beta1.GroupMemberPod{
+						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
+						Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+					},
+				),
+				normalizeServices([]v1beta1.Service{serviceTCP8080, serviceHTTPS}): v1beta1.NewGroupMemberPodSet(
+					&v1beta1.GroupMemberPod{
+						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.3")),
+						Ports: []v1beta1.NamedPort{{Port: 8080, Name: "http", Protocol: protocolTCP}},
+					},
+				),
+				normalizeServices([]v1beta1.Service{serviceHTTP, serviceTCP443}): v1beta1.NewGroupMemberPodSet(
+					&v1beta1.GroupMemberPod{
+						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.4")),
+						Ports: []v1beta1.NamedPort{{Port: 443, Name: "https", Protocol: protocolTCP}},
+					},
+				),
+				normalizeServices([]v1beta1.Service{serviceHTTP, serviceHTTPS}): v1beta1.NewGroupMemberPodSet(
+					&v1beta1.GroupMemberPod{
+						IP: v1beta1.IPAddress(net.ParseIP("1.1.1.5")),
+					},
+					&v1beta1.GroupMemberPod{
+						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.6")),
+						Ports: []v1beta1.NamedPort{{Port: 443, Name: "foo", Protocol: protocolTCP}},
+					},
+				),
+			},
+			wantServicesMap: map[servicesKey][]v1beta1.Service{
+				normalizeServices([]v1beta1.Service{serviceTCP80, serviceHTTPS}):   {serviceTCP80, serviceHTTPS},
+				normalizeServices([]v1beta1.Service{serviceTCP8080, serviceHTTPS}): {serviceTCP8080, serviceHTTPS},
+				normalizeServices([]v1beta1.Service{serviceHTTP, serviceTCP443}):   {serviceHTTP, serviceTCP443},
+				normalizeServices([]v1beta1.Service{serviceHTTP, serviceHTTPS}):    {serviceHTTP, serviceHTTPS},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotPodsByServicesMap, gotServicesMap := groupPodsByServices(tt.services, tt.pods)
+			assert.Equal(t, tt.wantPodsByServicesMap, gotPodsByServicesMap)
+			assert.Equal(t, tt.wantServicesMap, gotServicesMap)
+		})
+	}
+}
+
+func BenchmarkNormalizeServices(b *testing.B) {
+	services := []v1beta1.Service{serviceTCP80, serviceTCP8080}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		normalizeServices(services)
+	}
+}
+
+func benchmarkGroupPodsByServices(b *testing.B, withNamedPort bool) {
+	serviceHTTP := v1beta1.Service{Protocol: &protocolTCP}
+	if withNamedPort {
+		serviceHTTP.Port = &portHTTP
+	} else {
+		serviceHTTP.Port = &port80
+	}
+
+	services := []v1beta1.Service{serviceHTTP}
+	pods := v1beta1.NewGroupMemberPodSet()
+	// 50,000 Pods in this group.
+	for i1 := 1; i1 <= 100; i1++ {
+		for i2 := 1; i2 <= 50; i2++ {
+			for i3 := 1; i3 <= 10; i3++ {
+				pod := &v1beta1.GroupMemberPod{
+					IP: v1beta1.IPAddress(net.ParseIP(fmt.Sprintf("1.%d.%d.%d", i1, i2, i3))),
+				}
+				if withNamedPort {
+					pod.Ports = []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}}
+				}
+				pods.Insert(pod)
+			}
+		}
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		groupPodsByServices(services, pods)
+	}
+}
+
+func BenchmarkGroupPodsByServicesWithNamedPort(b *testing.B) {
+	benchmarkGroupPodsByServices(b, true)
+}
+
+func BenchmarkGroupPodsByServicesWithoutNamedPort(b *testing.B) {
+	benchmarkGroupPodsByServices(b, false)
 }

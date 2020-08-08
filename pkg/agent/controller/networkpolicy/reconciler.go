@@ -15,14 +15,13 @@
 package networkpolicy
 
 import (
-	"crypto/md5" // #nosec G501: not used for security purposes
-	"encoding/hex"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 
-	"github.com/davecgh/go-spew/spew"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
@@ -32,15 +31,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/util/ip"
-)
-
-var (
-	printer = spew.ConfigState{
-		Indent:         " ",
-		SortKeys:       true,
-		DisableMethods: true,
-		SpewKeys:       true,
-	}
 )
 
 // Reconciler is an interface that knows how to reconcile the desired state of
@@ -59,16 +49,28 @@ type Reconciler interface {
 	Forget(ruleID string) error
 }
 
-// servicesHash is used to uniquely identify Services.
-type servicesHash string
+// servicesKey is used to identify Services based on their numbered ports.
+type servicesKey string
 
-// hashServices uses the spew library which follows pointers and prints
-// actual values of the nested objects to ensure the hash does not change when
-// a pointer changes.
-func hashServices(services []v1beta1.Service) servicesHash {
-	hasher := md5.New() // #nosec G401: not used for security purposes
-	printer.Fprintf(hasher, "%#v", services)
-	return servicesHash(hex.EncodeToString(hasher.Sum(nil)[0:]))
+// normalizeServices calculates the servicesKey of the provided services based
+// on their numbered ports.
+// It constructs the string with strings.Builder instead of using the spew
+// library for efficiency consideration as this function is called quite often.
+// It ignores the difference of protocol and non resolved ports because the
+// servicesKey is only used to distinguish the results obtained by resolving
+// named ports for the same services.
+func normalizeServices(services []v1beta1.Service) servicesKey {
+	var b strings.Builder
+	for _, svc := range services {
+		if svc.Port != nil {
+			if svc.Port.Type == intstr.String {
+				binary.Write(&b, binary.BigEndian, int32(0))
+			} else {
+				binary.Write(&b, binary.BigEndian, svc.Port.IntVal)
+			}
+		}
+	}
+	return servicesKey(b.String())
 }
 
 // lastRealized is the struct cached by reconciler. It's used to track the
@@ -114,8 +116,8 @@ func hashServices(services []v1beta1.Service) servicesHash {
 // can be mapped to same group.
 type lastRealized struct {
 	// ofIDs identifies Openflow rules in Openflow implementation.
-	// It's a map of servicesHash to Openflow rule ID.
-	ofIDs map[servicesHash]uint32
+	// It's a map of servicesKey to Openflow rule ID.
+	ofIDs map[servicesKey]uint32
 	// The desired state of a policy rule.
 	*CompletedRule
 	// The OFPort set we have realized for target Pods. We need to record them
@@ -125,8 +127,8 @@ type lastRealized struct {
 	// difference, which could also cover the stale OFPorts produced by the case
 	// that Kubelet calls CNI ADD for a Pod more than once due to non CNI issues.
 	// It's only used for ingress rule as its "to" addresses.
-	// It's grouped by services hash, mapping to multiple Openflow rules.
-	podOFPorts map[servicesHash]sets.Int32
+	// It's grouped by servicesKey, mapping to multiple Openflow rules.
+	podOFPorts map[servicesKey]sets.Int32
 	// The IP set we have realized for target Pods. Same as podOFPorts.
 	// It's only used for egress rule as its "from" addresses.
 	// It's same in all Openflow rules, because named port is only for
@@ -136,9 +138,9 @@ type lastRealized struct {
 
 func newLastRealized(rule *CompletedRule) *lastRealized {
 	return &lastRealized{
-		ofIDs:         map[servicesHash]uint32{},
+		ofIDs:         map[servicesKey]uint32{},
 		CompletedRule: rule,
-		podOFPorts:    map[servicesHash]sets.Int32{},
+		podOFPorts:    map[servicesKey]sets.Int32{},
 		podIPs:        nil,
 	}
 }
@@ -285,7 +287,7 @@ func (r *reconciler) registerOFPriorities(rules []*CompletedRule) error {
 func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16) error {
 	klog.V(2).Infof("Adding new rule %v", rule)
 	ofRuleByServicesMap, lastRealized := r.computeOFRulesForAdd(rule, ofPriority)
-	for svcHash, ofRule := range ofRuleByServicesMap {
+	for svcKey, ofRule := range ofRuleByServicesMap {
 		// Each pod group gets an Openflow ID.
 		ofID, err := r.idAllocator.allocate()
 		if err != nil {
@@ -298,17 +300,17 @@ func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16) error {
 			return err
 		}
 		// Record ofID only if its Openflow is installed successfully.
-		lastRealized.ofIDs[svcHash] = ofID
+		lastRealized.ofIDs[svcKey] = ofID
 	}
 	return nil
 }
 
-func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint16) (map[servicesHash]*types.PolicyRule, *lastRealized) {
+func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint16) (map[servicesKey]*types.PolicyRule, *lastRealized) {
 	lastRealized := newLastRealized(rule)
 	// TODO: Handle the case that the following processing fails or partially succeeds.
 	r.lastRealizeds.Store(rule.ID, lastRealized)
 
-	ofRuleByServicesMap := map[servicesHash]*types.PolicyRule{}
+	ofRuleByServicesMap := map[servicesKey]*types.PolicyRule{}
 
 	if rule.Direction == v1beta1.DirectionIn {
 		// Addresses got from source Pod IPs.
@@ -318,14 +320,14 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 
 		podsByServicesMap, servicesMap := groupPodsByServices(rule.Services, rule.Pods)
 
-		for svcHash, pods := range podsByServicesMap {
+		for svcKey, pods := range podsByServicesMap {
 			ofPorts := r.getPodOFPorts(pods)
-			lastRealized.podOFPorts[svcHash] = ofPorts
-			ofRuleByServicesMap[svcHash] = &types.PolicyRule{
+			lastRealized.podOFPorts[svcKey] = ofPorts
+			ofRuleByServicesMap[svcKey] = &types.PolicyRule{
 				Direction: v1beta1.DirectionIn,
 				From:      append(from1, from2...),
 				To:        ofPortsToOFAddresses(ofPorts),
-				Service:   filterUnresolvablePort(servicesMap[svcHash]),
+				Service:   filterUnresolvablePort(servicesMap[svcKey]),
 				Action:    rule.Action,
 				Priority:  ofPriority,
 			}
@@ -336,12 +338,12 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		from := ipsToOFAddresses(ips)
 
 		podsByServicesMap, servicesMap := groupPodsByServices(rule.Services, rule.ToAddresses)
-		for svcHash, pods := range podsByServicesMap {
-			ofRuleByServicesMap[svcHash] = &types.PolicyRule{
+		for svcKey, pods := range podsByServicesMap {
+			ofRuleByServicesMap[svcKey] = &types.PolicyRule{
 				Direction: v1beta1.DirectionOut,
 				From:      from,
 				To:        podsToOFAddresses(pods),
-				Service:   filterUnresolvablePort(servicesMap[svcHash]),
+				Service:   filterUnresolvablePort(servicesMap[svcKey]),
 				Action:    rule.Action,
 				Priority:  ofPriority,
 			}
@@ -353,8 +355,8 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		// If there are IPBlocks or Pods that cannot resolve any named port, they will share
 		// this PolicyRule. ClusterNetworkPolicy does not need this default isolation.
 		if !rule.isAntreaNetworkPolicyRule() || len(rule.To.IPBlocks) > 0 {
-			svcHash := hashServices(rule.Services)
-			ofRule, exists := ofRuleByServicesMap[svcHash]
+			svcKey := normalizeServices(rule.Services)
+			ofRule, exists := ofRuleByServicesMap[svcKey]
 			// Create a new Openflow rule if the group doesn't exist.
 			if !exists {
 				ofRule = &types.PolicyRule{
@@ -365,7 +367,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 					Action:    rule.Action,
 					Priority:  nil,
 				}
-				ofRuleByServicesMap[svcHash] = ofRule
+				ofRuleByServicesMap[svcKey] = ofRule
 			}
 			if len(rule.To.IPBlocks) > 0 {
 				// Diff Addresses between To and Except of IPBlocks
@@ -379,14 +381,14 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 
 func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) error {
 	lastRealizeds := make([]*lastRealized, len(rules))
-	ofIDUpdateMaps := make([]map[servicesHash]uint32, len(rules))
+	ofIDUpdateMaps := make([]map[servicesKey]uint32, len(rules))
 
 	var allOFRules []*types.PolicyRule
 
 	for idx, rule := range rules {
 		ofRuleByServicesMap, lastRealized := r.computeOFRulesForAdd(rule, ofPriorities[idx])
 		lastRealizeds[idx] = lastRealized
-		for svcHash, ofRule := range ofRuleByServicesMap {
+		for svcKey, ofRule := range ofRuleByServicesMap {
 			ofID, err := r.idAllocator.allocate()
 			if err != nil {
 				return fmt.Errorf("error allocating Openflow ID")
@@ -396,9 +398,9 @@ func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) er
 			ofRule.PolicyNamespace = lastRealized.CompletedRule.PolicyNamespace
 			allOFRules = append(allOFRules, ofRule)
 			if ofIDUpdateMaps[idx] == nil {
-				ofIDUpdateMaps[idx] = make(map[servicesHash]uint32)
+				ofIDUpdateMaps[idx] = make(map[servicesKey]uint32)
 			}
-			ofIDUpdateMaps[idx][svcHash] = ofID
+			ofIDUpdateMaps[idx][svcKey] = ofID
 		}
 	}
 	if err := r.ofClient.BatchInstallPolicyRuleFlows(allOFRules); err != nil {
@@ -409,8 +411,8 @@ func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) er
 	}
 	for i, lastRealized := range lastRealizeds {
 		ofIDUpdatesByRule := ofIDUpdateMaps[i]
-		for svcHash, ofID := range ofIDUpdatesByRule {
-			lastRealized.ofIDs[svcHash] = ofID
+		for svcKey, ofID := range ofIDUpdatesByRule {
+			lastRealized.ofIDs[svcKey] = ofID
 		}
 	}
 	return nil
@@ -420,11 +422,11 @@ func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) er
 // and invokes Openflow client's methods to reconcile them.
 func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, ofPriority *uint16) error {
 	klog.V(2).Infof("Updating existing rule %v", newRule)
-	// staleOFIDs tracks servicesHash that are no long needed.
+	// staleOFIDs tracks servicesKey that are no long needed.
 	// Firstly fill it with the last realized ofIDs.
-	staleOFIDs := make(map[servicesHash]uint32, len(lastRealized.ofIDs))
-	for svcHash, ofID := range lastRealized.ofIDs {
-		staleOFIDs[svcHash] = ofID
+	staleOFIDs := make(map[servicesKey]uint32, len(lastRealized.ofIDs))
+	for svcKey, ofID := range lastRealized.ofIDs {
+		staleOFIDs[svcKey] = ofID
 	}
 
 	// As rule identifier is calculated from the rule's content, the update can
@@ -436,9 +438,9 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 		deletedFrom := podsToOFAddresses(lastRealized.FromAddresses.Difference(newRule.FromAddresses))
 
 		podsByServicesMap, servicesMap := groupPodsByServices(newRule.Services, newRule.Pods)
-		for svcHash, pods := range podsByServicesMap {
+		for svcKey, pods := range podsByServicesMap {
 			newOFPorts := r.getPodOFPorts(pods)
-			ofID, exists := lastRealized.ofIDs[svcHash]
+			ofID, exists := lastRealized.ofIDs[svcKey]
 			// Install a new Openflow rule if this group doesn't exist, otherwise do incremental update.
 			if !exists {
 				ofID, err := r.idAllocator.allocate()
@@ -449,7 +451,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					Direction:       v1beta1.DirectionIn,
 					From:            append(from1, from2...),
 					To:              ofPortsToOFAddresses(newOFPorts),
-					Service:         filterUnresolvablePort(servicesMap[svcHash]),
+					Service:         filterUnresolvablePort(servicesMap[svcKey]),
 					Action:          newRule.Action,
 					Priority:        ofPriority,
 					FlowID:          ofID,
@@ -459,17 +461,17 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				if err = r.installOFRule(ofRule); err != nil {
 					return err
 				}
-				lastRealized.ofIDs[svcHash] = ofID
+				lastRealized.ofIDs[svcKey] = ofID
 			} else {
-				addedTo := ofPortsToOFAddresses(newOFPorts.Difference(lastRealized.podOFPorts[svcHash]))
-				deletedTo := ofPortsToOFAddresses(lastRealized.podOFPorts[svcHash].Difference(newOFPorts))
+				addedTo := ofPortsToOFAddresses(newOFPorts.Difference(lastRealized.podOFPorts[svcKey]))
+				deletedTo := ofPortsToOFAddresses(lastRealized.podOFPorts[svcKey].Difference(newOFPorts))
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
-				// Delete valid servicesHash from staleOFIDs.
-				delete(staleOFIDs, svcHash)
+				// Delete valid servicesKey from staleOFIDs.
+				delete(staleOFIDs, svcKey)
 			}
-			lastRealized.podOFPorts[svcHash] = newOFPorts
+			lastRealized.podOFPorts[svcKey] = newOFPorts
 		}
 	} else {
 		newIPs := r.getPodIPs(newRule.Pods)
@@ -480,14 +482,14 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 		podsByServicesMap, servicesMap := groupPodsByServices(newRule.Services, newRule.ToAddresses)
 		// Same as the process in `add`, we must ensure the group for the original services is present
 		// in podsByServicesMap, so that this group won't be removed and its "From" will be updated.
-		svcHash := hashServices(newRule.Services)
-		if _, exists := podsByServicesMap[svcHash]; !exists {
-			podsByServicesMap[svcHash] = v1beta1.NewGroupMemberPodSet()
-			servicesMap[svcHash] = newRule.Services
+		svcKey := normalizeServices(newRule.Services)
+		if _, exists := podsByServicesMap[svcKey]; !exists {
+			podsByServicesMap[svcKey] = v1beta1.NewGroupMemberPodSet()
+			servicesMap[svcKey] = newRule.Services
 		}
 		prevPodsByServicesMap, _ := groupPodsByServices(lastRealized.Services, lastRealized.ToAddresses)
-		for svcHash, pods := range podsByServicesMap {
-			ofID, exists := lastRealized.ofIDs[svcHash]
+		for svcKey, pods := range podsByServicesMap {
+			ofID, exists := lastRealized.ofIDs[svcKey]
 			if !exists {
 				ofID, err := r.idAllocator.allocate()
 				if err != nil {
@@ -497,7 +499,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					Direction:       v1beta1.DirectionOut,
 					From:            from,
 					To:              podsToOFAddresses(pods),
-					Service:         filterUnresolvablePort(servicesMap[svcHash]),
+					Service:         filterUnresolvablePort(servicesMap[svcKey]),
 					Action:          newRule.Action,
 					Priority:        ofPriority,
 					FlowID:          ofID,
@@ -507,26 +509,26 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				if err = r.installOFRule(ofRule); err != nil {
 					return err
 				}
-				lastRealized.ofIDs[svcHash] = ofID
+				lastRealized.ofIDs[svcKey] = ofID
 			} else {
-				addedTo := podsToOFAddresses(pods.Difference(prevPodsByServicesMap[svcHash]))
-				deletedTo := podsToOFAddresses(prevPodsByServicesMap[svcHash].Difference(pods))
+				addedTo := podsToOFAddresses(pods.Difference(prevPodsByServicesMap[svcKey]))
+				deletedTo := podsToOFAddresses(prevPodsByServicesMap[svcKey].Difference(pods))
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
-				// Delete valid servicesHash from staleOFIDs.
-				delete(staleOFIDs, svcHash)
+				// Delete valid servicesKey from staleOFIDs.
+				delete(staleOFIDs, svcKey)
 			}
 		}
 		lastRealized.podIPs = newIPs
 	}
 	// Remove stale Openflow rules.
-	for svcHash, ofID := range staleOFIDs {
+	for svcKey, ofID := range staleOFIDs {
 		if err := r.uninstallOFRule(ofID); err != nil {
 			return err
 		}
-		delete(lastRealized.ofIDs, svcHash)
-		delete(lastRealized.podOFPorts, svcHash)
+		delete(lastRealized.ofIDs, svcKey)
+		delete(lastRealized.podOFPorts, svcKey)
 	}
 	lastRealized.CompletedRule = newRule
 	return nil
@@ -608,12 +610,12 @@ func (r *reconciler) Forget(ruleID string) error {
 	}
 
 	lastRealized := value.(*lastRealized)
-	for svcHash, ofID := range lastRealized.ofIDs {
+	for svcKey, ofID := range lastRealized.ofIDs {
 		if err := r.uninstallOFRule(ofID); err != nil {
 			return err
 		}
-		delete(lastRealized.ofIDs, svcHash)
-		delete(lastRealized.podOFPorts, svcHash)
+		delete(lastRealized.ofIDs, svcKey)
+		delete(lastRealized.podOFPorts, svcKey)
 	}
 
 	r.lastRealizeds.Delete(ruleID)
@@ -655,22 +657,42 @@ func (r *reconciler) getPodIPs(pods v1beta1.GroupMemberPodSet) sets.String {
 }
 
 // groupPodsByServices groups the provided Pods based on their services resolving result.
-// A map of servicesHash to the Pod groups and a map of servicesHash to the services resolving result will be returned.
-func groupPodsByServices(services []v1beta1.Service, pods v1beta1.GroupMemberPodSet) (map[servicesHash]v1beta1.GroupMemberPodSet, map[servicesHash][]v1beta1.Service) {
-	podsByServicesMap := map[servicesHash]v1beta1.GroupMemberPodSet{}
-	servicesMap := map[servicesHash][]v1beta1.Service{}
-	for _, pod := range pods {
-		var resolvedServices []v1beta1.Service
-		for _, service := range services {
-			resolvedService := resolveService(&service, pod)
-			resolvedServices = append(resolvedServices, *resolvedService)
+// A map of servicesKey to the Pod groups and a map of servicesKey to the services resolving result will be returned.
+func groupPodsByServices(services []v1beta1.Service, pods v1beta1.GroupMemberPodSet) (map[servicesKey]v1beta1.GroupMemberPodSet, map[servicesKey][]v1beta1.Service) {
+	podsByServicesMap := map[servicesKey]v1beta1.GroupMemberPodSet{}
+	servicesMap := map[servicesKey][]v1beta1.Service{}
+
+	// If there is no named port in services, all Pods are in same group.
+	namedPortServiceExist := false
+	for _, svc := range services {
+		if svc.Port != nil && svc.Port.Type == intstr.String {
+			namedPortServiceExist = true
+			break
 		}
-		svcHash := hashServices(resolvedServices)
-		if _, exists := podsByServicesMap[svcHash]; !exists {
-			podsByServicesMap[svcHash] = v1beta1.NewGroupMemberPodSet()
-			servicesMap[svcHash] = resolvedServices
+	}
+	if !namedPortServiceExist {
+		svcKey := normalizeServices(services)
+		podsByServicesMap[svcKey] = pods
+		servicesMap[svcKey] = services
+		return podsByServicesMap, servicesMap
+	}
+
+	// Reuse the slice to avoid memory reallocations in the following loop. The
+	// optimization makes difference as the number of Pods might get up to tens
+	// of thousands.
+	resolvedServices := make([]v1beta1.Service, len(services))
+	for podKey, pod := range pods {
+		for i := range services {
+			resolvedServices[i] = *resolveService(&services[i], pod)
 		}
-		podsByServicesMap[svcHash].Insert(pod)
+		svcKey := normalizeServices(resolvedServices)
+		if _, exists := podsByServicesMap[svcKey]; !exists {
+			podsByServicesMap[svcKey] = v1beta1.NewGroupMemberPodSet()
+			// Copy resolvedServices as it may be updated in next iteration.
+			servicesMap[svcKey] = make([]v1beta1.Service, len(resolvedServices))
+			copy(servicesMap[svcKey], resolvedServices)
+		}
+		podsByServicesMap[svcKey][podKey] = pod
 	}
 	return podsByServicesMap, servicesMap
 }
