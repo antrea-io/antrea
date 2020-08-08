@@ -62,10 +62,9 @@ func (cs *ConnectionStore) Run(stopCh <-chan struct{}, pollDone chan struct{}) {
 				klog.Errorf("Error during conntrack poll cycle: %v", err)
 			}
 			// We need synchronization between ConnectionStore.Run and FlowExporter.Run go routines.
-			// ConnectionStore.Run (connection poll) should be done to start FlowExporter.Run (connection export); pollDone signals helps enabling this.
+			// ConnectionStore.Run (connection poll) should be done to start FlowExporter.Run (connection export); pollDone signal helps enabling this.
 			// FlowExporter.Run should be done to start ConnectionStore.Run; mutex on connection map object makes sure of this synchronization guarantee.
 			pollDone <- struct{}{}
-
 		}
 	}
 }
@@ -98,7 +97,7 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		if !srcFound && !dstFound {
 			klog.Warningf("Cannot map any of the IP %s or %s to a local Pod", conn.TupleOrig.SourceAddress.String(), conn.TupleReply.SourceAddress.String())
 		}
-		// sourceIP/destinationIP are mapped only to local pods and not remote pods.
+		// sourceIP/destinationIP are mapped only to local Pods and not remote Pods.
 		if srcFound && sIface.Type == interfacestore.ContainerInterface {
 			conn.SourcePodName = sIface.ContainerInterfaceConfig.PodName
 			conn.SourcePodNamespace = sIface.ContainerInterfaceConfig.PodNamespace
@@ -107,7 +106,7 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 			conn.DestinationPodName = dIface.ContainerInterfaceConfig.PodName
 			conn.DestinationPodNamespace = dIface.ContainerInterfaceConfig.PodNamespace
 		}
-		// Do not export flow records of connections whose destination is local pod and source is remote pod.
+		// Do not export flow records of connections whose destination is local Pod and source is remote Pod.
 		// We export flow records only form "source node", where the connection is originated from. This is to avoid
 		// 2 copies of flow records at flow collector. This restriction will be removed when flow records store network policy rule ID.
 		// TODO: Remove this when network policy rule ID are added to flow records.

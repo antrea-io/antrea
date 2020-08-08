@@ -328,6 +328,20 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 		return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
 	}
 
+	// Just to be safe disabling the FlowExporter feature for subsequent tests.
+	configMap, err = data.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to get ConfigMap: %v", err)
+	}
+
+	antreaAgentConf, _ = configMap.Data["antrea-agent.conf"]
+	antreaAgentConf = strings.Replace(antreaAgentConf, " FlowExporter: true", " FlowExporter: false", 1)
+	configMap.Data["antrea-agent.conf"] = antreaAgentConf
+
+	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
+	}
+
 	return nil
 }
 

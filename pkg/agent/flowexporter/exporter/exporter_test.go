@@ -30,7 +30,6 @@ import (
 
 const (
 	testTemplateID           = 256
-	testFlowPollInterval     = time.Second
 	testFlowExportFrequency  = 12
 	antreaEnterpriseRegistry = 29305
 )
@@ -46,7 +45,7 @@ func TestFlowExporter_sendTemplateRecord(t *testing.T) {
 		mockIPFIXExpProc,
 		nil,
 		testFlowExportFrequency,
-		testFlowPollInterval,
+		0,
 		testTemplateID,
 	}
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
@@ -154,7 +153,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 		mockIPFIXExpProc,
 		elemList,
 		testFlowExportFrequency,
-		testFlowPollInterval,
+		0,
 		testTemplateID,
 	}
 	// Expect calls required

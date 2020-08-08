@@ -25,6 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
+// InitializeConnTrackDumper initialize the ConnTrackDumper interface for different OS and datapath types.
 func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsctlClient ovsctl.OVSCtlClient, ovsDatapathType string) ConnTrackDumper {
 	var connTrackDumper ConnTrackDumper
 	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
