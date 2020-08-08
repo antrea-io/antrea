@@ -15,8 +15,6 @@
 package flowrecords
 
 import (
-	"fmt"
-
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
@@ -38,10 +36,8 @@ func NewFlowRecords(connStore *connections.ConnectionStore) *FlowRecords {
 
 // BuildFlowRecords builds the flow record map from connection map in connection store
 func (fr *FlowRecords) BuildFlowRecords() error {
-	err := fr.connStore.ForAllConnectionsDo(fr.addOrUpdateFlowRecord)
-	if err != nil {
-		return fmt.Errorf("error when iterating connection map: %v", err)
-	}
+	// fr.addOrUpdateFlowRecord method does not return any error, hence no error handling required.
+	fr.connStore.ForAllConnectionsDo(fr.addOrUpdateFlowRecord)
 	klog.V(2).Infof("No. of flow records built: %d", len(fr.recordsMap))
 	return nil
 }

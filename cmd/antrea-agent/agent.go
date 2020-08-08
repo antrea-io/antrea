@@ -19,6 +19,7 @@ import (
 	"net"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog/v2"
 
@@ -245,19 +246,13 @@ func run(o *Options) error {
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, agentQuerier.GetOVSCtlClient(), o.config.OVSDatapathType),
 			ifaceStore,
 			o.pollInterval)
-		// pollDone helps in synchronizing connStore.Run and flowExporter.Run go routines.
 		pollDone := make(chan struct{})
 		go connStore.Run(stopCh, pollDone)
 
-		flowExporter, err := exporter.InitFlowExporter(
-			o.flowCollector,
+		flowExporter := exporter.NewFlowExporter(
 			flowrecords.NewFlowRecords(connStore),
-			o.config.FlowExportFrequency,
-			o.pollInterval)
-		if err != nil {
-			return fmt.Errorf("error when initializing flow exporter: %v", err)
-		}
-		go flowExporter.Run(stopCh, pollDone)
+			o.config.FlowExportFrequency)
+		go wait.Until(func() { flowExporter.CheckAndDoExport(o.flowCollector, pollDone) }, o.pollInterval, stopCh)
 	}
 
 	<-stopCh

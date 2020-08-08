@@ -19,7 +19,6 @@ import (
 	"hash/fnv"
 	"net"
 	"strings"
-	"time"
 	"unicode"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
@@ -67,7 +66,7 @@ type flowExporter struct {
 	process         ipfix.IPFIXExportingProcess
 	elementsList    []*ipfixentities.InfoElement
 	exportFrequency uint
-	pollInterval    time.Duration
+	pollCycle       uint
 	templateID      uint16
 }
 
@@ -81,22 +80,52 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
-func NewFlowExporter(records *flowrecords.FlowRecords, expProcess ipfix.IPFIXExportingProcess, elemList []*ipfixentities.InfoElement, exportFrequency uint, pollInterval time.Duration, tempID uint16) *flowExporter {
+func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint) *flowExporter {
 	return &flowExporter{
 		records,
-		expProcess,
-		elemList,
+		nil,
+		nil,
 		exportFrequency,
-		pollInterval,
-		tempID,
+		0,
+		0,
 	}
 }
 
-func InitFlowExporter(collector net.Addr, records *flowrecords.FlowRecords, exportFrequency uint, pollInterval time.Duration) (*flowExporter, error) {
-	// Create IPFIX exporting expProcess and initialize registries and other related entities
+// CheckAndDoExport enables us to export flow records periodically at a given flow export frequency.
+func (exp *flowExporter) CheckAndDoExport(collector net.Addr, pollDone chan struct{}) {
+	// Number of pollDone signals received or poll cycles should be equal to export frequency before starting the export cycle.
+	// This is necessary because IPFIX collector computes throughput based on flow records received interval.
+	<-pollDone
+	exp.pollCycle++
+	if exp.pollCycle%exp.exportFrequency == 0 {
+		if exp.process == nil {
+			err := exp.initFlowExporter(collector)
+			if err != nil {
+				klog.Errorf("Error when initializing flow exporter: %v", err)
+				return
+			}
+		}
+		exp.flowRecords.BuildFlowRecords()
+		err := exp.sendFlowRecords()
+		if err != nil {
+			klog.Errorf("Error when sending flow records: %v", err)
+			// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
+			// to IPFIX collector and retry in the next export cycle to reinitialize the connection and send flow records.
+			exp.process.CloseConnToCollector()
+			exp.process = nil
+		}
+		exp.pollCycle = 0
+		klog.V(2).Infof("Successfully exported IPFIX flow records")
+	}
+
+	return
+}
+
+func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
+	// Create IPFIX exporting expProcess, initialize registries and other related entities
 	obsID, err := genObservationID()
 	if err != nil {
-		return nil, fmt.Errorf("cannot generate obsID for IPFIX ipfixexport: %v", err)
+		return fmt.Errorf("cannot generate obsID for IPFIX ipfixexport: %v", err)
 	}
 
 	var expProcess ipfix.IPFIXExportingProcess
@@ -108,55 +137,21 @@ func InitFlowExporter(collector net.Addr, records *flowrecords.FlowRecords, expo
 		expProcess, err = ipfix.NewIPFIXExportingProcess(collector, obsID, 1800)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("error while initializing IPFIX exporting expProcess: %v", err)
+		return err
 	}
+	exp.process = expProcess
+	exp.templateID = expProcess.NewTemplateID()
+
 	expProcess.LoadRegistries()
+	templateRec := ipfix.NewIPFIXTemplateRecord(uint16(len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements)), exp.templateID)
 
-	flowExp := NewFlowExporter(records, expProcess, nil, exportFrequency, pollInterval, expProcess.NewTemplateID())
-
-	templateRec := ipfix.NewIPFIXTemplateRecord(uint16(len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements)), flowExp.templateID)
-
-	sentBytes, err := flowExp.sendTemplateRecord(templateRec)
+	sentBytes, err := exp.sendTemplateRecord(templateRec)
 	if err != nil {
-		return nil, fmt.Errorf("error while creating and sending template record through IPFIX process: %v", err)
+		return err
 	}
 	klog.V(2).Infof("Initialized flow exporter and sent %d bytes size of template record", sentBytes)
 
-	return flowExp, nil
-}
-
-// Run enables to export flow records periodically at a given flow export frequency
-func (exp *flowExporter) Run(stopCh <-chan struct{}, pollDone <-chan struct{}) {
-	klog.Infof("Start exporting IPFIX flow records")
-	ticker := time.NewTicker(time.Duration(exp.exportFrequency) * exp.pollInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-stopCh:
-			exp.process.CloseConnToCollector()
-			break
-		case <-ticker.C:
-			// Waiting for expected number of pollDone signals from go routine(ConnectionStore.Run) is necessary because
-			// IPFIX collector computes throughput based on flow records received interval. Number of pollDone
-			// signals should be equal to export frequency before starting the export cycle.
-			for i := uint(0); i < exp.exportFrequency; i++ {
-				<-pollDone
-			}
-			err := exp.flowRecords.BuildFlowRecords()
-			if err != nil {
-				klog.Errorf("Error when building flow records: %v", err)
-				exp.process.CloseConnToCollector()
-				break
-			}
-			err = exp.sendFlowRecords()
-			if err != nil {
-				klog.Errorf("Error when sending flow records: %v", err)
-				exp.process.CloseConnToCollector()
-				break
-			}
-		}
-	}
+	return nil
 }
 
 func (exp *flowExporter) sendFlowRecords() error {
