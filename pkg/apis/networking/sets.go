@@ -14,37 +14,29 @@
 
 package networking
 
-import (
-	"crypto/md5" // #nosec G501: not used for security purposes
-	"encoding/hex"
+import "strings"
 
-	"github.com/davecgh/go-spew/spew"
-)
-
-var (
-	printer = spew.ConfigState{
-		Indent:         " ",
-		SortKeys:       true,
-		DisableMethods: true,
-		SpewKeys:       true,
-	}
-)
-
-// groupMemberPodHash is used to uniquely identify GroupMemberPod. Only Pod and
-// IP field are included as unique identifiers.
-type groupMemberPodHash string
+// groupMemberPodKey is used to uniquely identify GroupMemberPod. Either Pod or
+// IP is used as unique key.
+type groupMemberPodKey string
 
 // GroupMemberPodSet is a set of GroupMemberPods.
-type GroupMemberPodSet map[groupMemberPodHash]*GroupMemberPod
+type GroupMemberPodSet map[groupMemberPodKey]*GroupMemberPod
 
-// hashGroupMemberPod uses the spew library which follows pointers and prints
-// actual values of the nested objects to ensure the hash does not change when
-// a pointer changes.
-func hashGroupMemberPod(pod *GroupMemberPod) groupMemberPodHash {
-	hasher := md5.New() // #nosec G401: not used for security purposes
-	hashObj := GroupMemberPod{Pod: pod.Pod, IP: pod.IP}
-	printer.Fprintf(hasher, "%#v", hashObj)
-	return groupMemberPodHash(hex.EncodeToString(hasher.Sum(nil)[0:]))
+// normalizeGroupMemberPod calculates the groupMemberPodKey of the provided
+// GroupMemberPod based on the Pod's namespaced name or IP.
+func normalizeGroupMemberPod(pod *GroupMemberPod) groupMemberPodKey {
+	// "/" is illegal in Namespace and name so is safe as the delimiter.
+	const delimiter = "/"
+	var b strings.Builder
+	if pod.Pod != nil {
+		b.WriteString(pod.Pod.Namespace)
+		b.WriteString(delimiter)
+		b.WriteString(pod.Pod.Name)
+	} else if len(pod.IP) != 0 {
+		b.Write(pod.IP)
+	}
+	return groupMemberPodKey(b.String())
 }
 
 // NewGroupMemberPodSet builds a GroupMemberPodSet from a list of GroupMemberPod.
@@ -57,20 +49,20 @@ func NewGroupMemberPodSet(items ...*GroupMemberPod) GroupMemberPodSet {
 // Insert adds items to the set.
 func (s GroupMemberPodSet) Insert(items ...*GroupMemberPod) {
 	for _, item := range items {
-		s[hashGroupMemberPod(item)] = item
+		s[normalizeGroupMemberPod(item)] = item
 	}
 }
 
 // Delete removes all items from the set.
 func (s GroupMemberPodSet) Delete(items ...*GroupMemberPod) {
 	for _, item := range items {
-		delete(s, hashGroupMemberPod(item))
+		delete(s, normalizeGroupMemberPod(item))
 	}
 }
 
 // Has returns true if and only if item is contained in the set.
 func (s GroupMemberPodSet) Has(item *GroupMemberPod) bool {
-	_, contained := s[hashGroupMemberPod(item)]
+	_, contained := s[normalizeGroupMemberPod(item)]
 	return contained
 }
 
