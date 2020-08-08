@@ -5,6 +5,12 @@ This document describes steps to deploy Antrea in NetworkPolicy only mode to an 
 Assuming you already have an EKS cluster, and have ``KUBECONFIG`` environment variable point to
 the kubeconfig file of that cluster.
 
+With Antrea >=v0.9.0 release, you should apply `antrea-eks-node-init.yaml` before deploying Antrea.
+This would restart existing PODs (except in host network) so that Antrea can also manage it, once installed.
+```
+kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-eks-node-init.yml
+```
+
 To deploy a released version of Antrea, pick a version from the
 [list of releases](https://github.com/vmware-tanzu/antrea/releases).
 Note that EKS support was added in release 0.5.0, which means you can not
@@ -20,20 +26,7 @@ deployment yaml at:
 https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-eks.yml
 ```
 
-Based on Kubernetes service cluster IP range, adjust ``serviceCIDR`` values of antrea-agent.conf
-in antrea-eks.yml accordingly, and apply antrea-eks.yml to the EKS cluster.
-
 ```bash
-kubectl apply -f antrea-eks.yaml 
+kubectl apply -f antrea-eks.yaml
 ```
 Now Antrea should be plugged into the EKS CNI and is ready to enforce NetworkPolicy.
-
-### Caveats
-
-Some Pods may already be installed before Antrea deployment. Antrea cannot enforce NetworkPolicy
-on these pre-installed Pods. This may be remedied by restarting the Pods. For example,
-
-```bash
-kubectl scale deployment coredns --replicas 0 -n kube-system
-kubectl scale deployment coredns --replicas 2 -n kube-system
-```
