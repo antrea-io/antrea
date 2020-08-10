@@ -38,8 +38,8 @@ const (
 // OpenFlow priority to insert the input Priority.
 type InitialOFPriorityGetter func(p types.Priority) uint16
 
-// InitialOFPrioritySingleTierPerTable is an InitialOFPriorityGetter that can be used by OVS tables
-// handling only one Antrea NetworkPolicy Tier. It roughly divides the table into 100 zones and computes
+// InitialOFPrioritySingleTierPerTable is an InitialOFPriorityGetter that can be used by OVS tables that
+// handles only one Antrea NetworkPolicy Tier. It roughly divides the table into 100 zones and computes
 // the initial OpenFlow priority based on rule priority.
 func InitialOFPrioritySingleTierPerTable(p types.Priority) uint16 {
 	priorityIndex := int32(math.Floor(p.PolicyPriority))
@@ -77,11 +77,15 @@ func newPriorityAssigner(initialOFPriorityFunc InitialOFPriorityGetter) *priorit
 }
 
 // updatePriorityAssignment updates all the local maps to correlate input ofPriority and Priority.
+// TODO: Add performance benchmark for priority allocation and ways to optimize sortedOFPriorities.
 func (pa *priorityAssigner) updatePriorityAssignment(ofPriority uint16, p types.Priority) {
 	if _, exists := pa.ofPriorityMap[ofPriority]; !exists {
-		priorities := append(pa.sortedOFPriorities, ofPriority)
-		sort.Slice(priorities, func(i, j int) bool { return priorities[i] < priorities[j] })
-		pa.sortedOFPriorities = priorities
+		// idx is the insertion point for the newly allocated ofPriority.
+		idx := sort.Search(len(pa.sortedOFPriorities), func(i int) bool { return ofPriority <= pa.sortedOFPriorities[i] })
+		pa.sortedOFPriorities = append(pa.sortedOFPriorities, 0)
+		// Move elements starting from idx back one position to make room for the inserting ofPriority.
+		copy(pa.sortedOFPriorities[idx+1:], pa.sortedOFPriorities[idx:])
+		pa.sortedOFPriorities[idx] = ofPriority
 	}
 	pa.ofPriorityMap[ofPriority] = p
 	pa.priorityMap[p] = ofPriority
