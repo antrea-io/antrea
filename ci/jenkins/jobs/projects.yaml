@@ -49,6 +49,8 @@
           test_name: list-tests
           node: null
           description: 'This is for listing all test choices.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-list-tests:
                 org_repo: '{org_repo}'
@@ -99,9 +101,50 @@
           included_regions:
           - ci/jenkins/jobs/.*
       - '{name}-{test_name}-for-pull-request':
+          test_name: integration
+          node: 'antrea-test-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ipv6
+          builders:
+          - builder-integration
+          trigger_phrase: null
+          allow_whitelist_orgs_as_admins: false
+          admin_list: []
+          org_list: []
+          white_list:
+          - nobody123_nobody123_
+          only_trigger_phrase: false
+          trigger_permit_all: true
+          status_context: jenkins-integration
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed.
+          error_status: Failed.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 10
+              type: absolute
+          - credentials-binding:
+              - text:
+                  credential-id: GOVC_URL
+                  variable: GOVC_URL
+              - text:
+                  credential-id: GOVC_USERNAME
+                  variable: GOVC_USERNAME
+              - text:
+                  credential-id: GOVC_PASSWORD
+                  variable: GOVC_PASSWORD
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
           test_name: e2e-pending-label
           node: null
           description: 'This is for marking PR as pending for e2e test.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-pending-label
           trigger_phrase: null
@@ -124,6 +167,8 @@
           test_name: e2e
           node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-workload-cluster-setup
             - builder-prepare-antrea
@@ -160,6 +205,8 @@
           test_name: e2e-skip
           node: null
           description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
           builders: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -181,6 +228,8 @@
           test_name: conformance-pending-label
           node: null
           description: 'This is for marking PR as pending for conformance test.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-pending-label
           trigger_phrase: null
@@ -203,6 +252,8 @@
           test_name: conformance
           node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-workload-cluster-setup
             - builder-prepare-antrea
@@ -242,6 +293,8 @@
           test_name: conformance-skip
           node: null
           description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
           builders: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -263,6 +316,8 @@
           test_name: whole-conformance
           node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-workload-cluster-setup
             - builder-prepare-antrea
@@ -302,6 +357,8 @@
           test_name: whole-conformance-skip
           node: null
           description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
           builders: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -323,6 +380,8 @@
           test_name: networkpolicy-pending-label
           node: null
           description: 'This is for marking PR as pending for networkpolicy test.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-pending-label
           trigger_phrase: null
@@ -345,6 +404,8 @@
           test_name: networkpolicy
           node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-workload-cluster-setup
             - builder-prepare-antrea
@@ -384,6 +445,8 @@
           test_name: networkpolicy-skip
           node: null
           description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
           builders: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
