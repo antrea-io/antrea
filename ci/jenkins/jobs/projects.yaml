@@ -129,7 +129,7 @@
             - builder-prepare-antrea
             - builder-e2e
             - builder-workload-cluster-cleanup
-          trigger_phrase: .*/test-(e2e|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(e2e|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
@@ -167,7 +167,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: .*/skip-(e2e|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(e2e|all).*
           status_context: jenkins-e2e
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
@@ -211,7 +211,7 @@
                 focus_regex: '\[Conformance\]'
                 skip_regex: '\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]'
             - builder-workload-cluster-cleanup
-          trigger_phrase: .*/test-(conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(conformance|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
@@ -249,7 +249,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: .*/skip-(conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(conformance|all).*
           status_context: jenkins-conformance
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
@@ -353,7 +353,7 @@
                 focus_regex: '\[Feature:NetworkPolicy\]'
                 skip_regex: 'SKIP_NO_TESTCASE'
             - builder-workload-cluster-cleanup
-          trigger_phrase: .*/test-(networkpolicy|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(networkpolicy|all).*
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
@@ -391,7 +391,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: .*/skip-(networkpolicy|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(networkpolicy|all).*
           status_context: jenkins-networkpolicy
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
