@@ -33,9 +33,11 @@ config_antrea() {
   kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea.yml
   sleep 20
   kubectl wait --for=condition=ready pod -l app=antrea -n kube-system --timeout=300s
-  echo "=== Antrea flow exporter starts to send data ==="
+  echo "=== Antrea Agent flow exporter starts to send data ==="
 }
 
+# Antrea agent flow exporter starts to send CoreDNS flow records.
+# It will check if flow records with one of desired fields (soursePodName) are received correctly.
 check_record() {
   echo "=== Wait for 5 minutes to receive data ==="
   sleep 5m
