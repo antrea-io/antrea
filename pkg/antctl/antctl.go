@@ -24,6 +24,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/supportbundle"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/traceflow"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
@@ -321,6 +322,11 @@ var CommandList = &commandList{
 	rawCommands: []rawCommand{
 		{
 			cobraCommand:      supportbundle.Command,
+			supportAgent:      true,
+			supportController: true,
+		},
+		{
+			cobraCommand:      traceflow.Command,
 			supportAgent:      true,
 			supportController: true,
 		},

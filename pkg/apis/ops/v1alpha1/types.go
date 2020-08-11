@@ -149,37 +149,37 @@ type TraceflowStatus struct {
 
 type NodeResult struct {
 	// Node is the node of the observation.
-	Node string `json:"node,omitempty"`
+	Node string `json:"node,omitempty" yaml:"node,omitempty"`
 	// Role of the node like sender, receiver, etc.
-	Role string `json:"role,omitempty"`
+	Role string `json:"role,omitempty" yaml:"role,omitempty"`
 	// Timestamp is the timestamp of the observations on the node.
-	Timestamp int64 `json:"timestamp,omitempty"`
+	Timestamp int64 `json:"timestamp,omitempty" yaml:"timestamp,omitempty"`
 	// Observations includes all observations from sender nodes, receiver ones, etc.
-	Observations []Observation `json:"observations,omitempty"`
+	Observations []Observation `json:"observations,omitempty" yaml:"observations,omitempty"`
 }
 
 // Observation describes those from sender nodes or receiver nodes.
 type Observation struct {
 	// Component is the observation component.
-	Component TraceflowComponent `json:"component,omitempty"`
+	Component TraceflowComponent `json:"component,omitempty" yaml:"component,omitempty"`
 	// ComponentInfo is the extension of Component field.
-	ComponentInfo string `json:"componentInfo,omitempty"`
+	ComponentInfo string `json:"componentInfo,omitempty" yaml:"componentInfo,omitempty"`
 	// Action is the action to the observation.
-	Action TraceflowAction `json:"action,omitempty"`
+	Action TraceflowAction `json:"action,omitempty" yaml:"action,omitempty"`
 	// Pod is the combination of Pod name and Pod Namespace.
-	Pod string `json:"pod,omitempty"`
+	Pod string `json:"pod,omitempty" yaml:"pod,omitempty"`
 	// DstMAC is the destination MAC.
-	DstMAC string `json:"dstMAC,omitempty"`
+	DstMAC string `json:"dstMAC,omitempty" yaml:"dstMAC,omitempty"`
 	// NetworkPolicy is the combination of Namespace and NetworkPolicyName.
-	NetworkPolicy string `json:"networkPolicy,omitempty"`
+	NetworkPolicy string `json:"networkPolicy,omitempty" yaml:"networkPolicy,omitempty"`
 	// TTL is the observation TTL.
-	TTL int32 `json:"ttl,omitempty"`
+	TTL int32 `json:"ttl,omitempty" yaml:"ttl,omitempty"`
 	// TranslatedSrcIP is the translated source IP.
-	TranslatedSrcIP string `json:"translatedSrcIP,omitempty"`
+	TranslatedSrcIP string `json:"translatedSrcIP,omitempty" yaml:"translatedSrcIP,omitempty"`
 	// TranslatedSrcIP is the translated destination IP.
-	TranslatedDstIP string `json:"translatedDstIP,omitempty"`
+	TranslatedDstIP string `json:"translatedDstIP,omitempty" yaml:"translatedDstIP,omitempty"`
 	// TunnelDstIP is the tunnel destination IP.
-	TunnelDstIP string `json:"tunnelDstIP,omitempty"`
+	TunnelDstIP string `json:"tunnelDstIP,omitempty" yaml:"tunnelDstIP,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
