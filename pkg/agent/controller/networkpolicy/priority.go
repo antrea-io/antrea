@@ -36,21 +36,32 @@ const (
 // "guess" on the OpenFlow priority that can be assigned to the input Priority. If that OpenFlow
 // priority is not available, getInsertionPoint of priorityAssigner will then search for the appropriate
 // OpenFlow priority to insert the input Priority.
-type InitialOFPriorityGetter func(p types.Priority) uint16
+type InitialOFPriorityGetter func(p types.Priority, numTiers uint16) uint16
 
-// InitialOFPrioritySingleTierPerTable is an InitialOFPriorityGetter that can be used by OVS tables that
-// handles only one Antrea NetworkPolicy Tier. It roughly divides the table into 100 zones and computes
-// the initial OpenFlow priority based on rule priority.
-func InitialOFPrioritySingleTierPerTable(p types.Priority) uint16 {
+// InitialOFPriority is an InitialOFPriorityGetter that can be used by OVS tables handling <numTiers>
+// Antrea NetworkPolicy Tiers. It divides the table into <numTiers> tierzones that are roughly equal sized,
+// and each tier zone into <InitialPriorityZones> priority zones.
+// Then it computes the initial OpenFlow priority based on rule priority.
+func InitialOFPriority(p types.Priority, numTiers uint16) uint16 {
 	priorityIndex := int32(math.Floor(p.PolicyPriority))
 	if priorityIndex > InitialPriorityZones-1 {
 		priorityIndex = InitialPriorityZones - 1
 	}
+	priorityOffset := InitialPriorityOffset / numTiers
+	var tierStart uint16
+	if numTiers == 1 {
+		tierStart = PriorityTopCNP
+	} else {
+		// For the Tier of TierPriority 1, tierStart is equal to PriorityTopCNP. Each subsequent tierStart
+		// will be offseted with the initial tierZone size.
+		// TODO: this logic will no longer be valid after dyanmic tiering is introduced.
+		tierStart = PriorityTopCNP - priorityOffset*InitialPriorityZones*(uint16(p.TierPriority)-1)
+	}
 	// Cannot return a negative OF priority.
-	if PriorityTopCNP-InitialPriorityOffset*uint16(priorityIndex) <= uint16(p.RulePriority) {
+	if tierStart-priorityOffset*uint16(priorityIndex) <= uint16(p.RulePriority) {
 		return PriorityBottomCNP
 	}
-	return PriorityTopCNP - InitialPriorityOffset*uint16(priorityIndex) - uint16(p.RulePriority)
+	return tierStart - priorityOffset*uint16(priorityIndex) - uint16(p.RulePriority)
 }
 
 // priorityAssigner is a struct that maintains the current mapping between types.Priority and
@@ -64,14 +75,17 @@ type priorityAssigner struct {
 	sortedOFPriorities []uint16
 	// initialOFPriorityFunc determines the initial OpenFlow priority to be checked for input Priorities.
 	initialOFPriorityFunc InitialOFPriorityGetter
+	// numTiers keeps track of the number of CNP Tiers that the priorityAssigner is responsible for.
+	numTiers uint16
 }
 
-func newPriorityAssigner(initialOFPriorityFunc InitialOFPriorityGetter) *priorityAssigner {
+func newPriorityAssigner(initialOFPriorityFunc InitialOFPriorityGetter, numTiers uint16) *priorityAssigner {
 	pa := &priorityAssigner{
 		priorityMap:           map[types.Priority]uint16{},
 		ofPriorityMap:         map[uint16]types.Priority{},
 		sortedOFPriorities:    []uint16{},
 		initialOFPriorityFunc: initialOFPriorityFunc,
+		numTiers:              numTiers,
 	}
 	return pa
 }
@@ -164,7 +178,7 @@ func (pa *priorityAssigner) lowerBoundOk(ofPriority uint16, p types.Priority) bo
 // and Priorities *on* and after the insertionPoint index is higher than the input Priority.
 // ofPriority returned will range from PriorityBottomCNP to PriorityTopCNP+1.
 func (pa *priorityAssigner) getInsertionPoint(p types.Priority) (uint16, bool) {
-	insertionPoint := pa.initialOFPriorityFunc(p)
+	insertionPoint := pa.initialOFPriorityFunc(p, pa.numTiers)
 	occupied, upwardSearching := false, false
 Loop:
 	for insertionPoint >= PriorityBottomCNP && insertionPoint <= PriorityTopCNP {

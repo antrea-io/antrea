@@ -65,7 +65,7 @@ func TestUpdatePriorityAssignment(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
+			pa := newPriorityAssigner(InitialOFPriority, 1)
 			for i := 0; i < len(tt.argsPriorities); i++ {
 				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
 			}
@@ -161,9 +161,9 @@ func TestGetInsertionPoint(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(func(p types.Priority) uint16 {
+			pa := newPriorityAssigner(func(p types.Priority, numTiers uint16) uint16 {
 				return tt.initialOFPriority
-			})
+			}, 1)
 			for i := 0; i < len(tt.argsPriorities); i++ {
 				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
 			}
@@ -234,7 +234,7 @@ func TestReassignPriorities(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
+			pa := newPriorityAssigner(InitialOFPriority, 1)
 			for i := 0; i < len(tt.argsPriorities); i++ {
 				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
 			}
@@ -251,7 +251,7 @@ func TestReassignPriorities(t *testing.T) {
 }
 
 func TestRegisterPrioritiesAndRelease(t *testing.T) {
-	pa := newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
+	pa := newPriorityAssigner(InitialOFPriority, 1)
 	err := pa.RegisterPriorities([]types.Priority{
 		p111, p1121, p1122, p1141, p1142, p1131, p1161,
 	})
