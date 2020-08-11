@@ -66,7 +66,7 @@ func TestUpdatePriorityAssignment(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
+			pa := newPriorityAssigner(InitialOFPriority, true)
 			for i := 0; i < len(tt.argsPriorities); i++ {
 				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
 			}
@@ -162,9 +162,9 @@ func TestGetInsertionPoint(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(func(p types.Priority) uint16 {
+			pa := newPriorityAssigner(func(p types.Priority, isSingleTier bool) uint16 {
 				return tt.initialOFPriority
-			})
+			}, true)
 			for i := 0; i < len(tt.argsPriorities); i++ {
 				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
 			}
@@ -235,7 +235,7 @@ func TestReassignPriorities(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
+			pa := newPriorityAssigner(InitialOFPriority, true)
 			for i := 0; i < len(tt.argsPriorities); i++ {
 				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
 			}
@@ -250,26 +250,29 @@ func TestReassignPriorities(t *testing.T) {
 }
 
 func TestRegisterPrioritiesAndRelease(t *testing.T) {
-	pa := newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
-	err := pa.RegisterPriorities([]types.Priority{
-		p110, p1120, p1121, p1140, p1141, p1130, p1160,
-	})
+	pa := newPriorityAssigner(InitialOFPriority, true)
+	priorites := []types.Priority{p1160, p1141, p1140, p1130, p1121, p1120, p110}
+	err := pa.RegisterPriorities(priorites)
 	assert.Equalf(t, err, nil, "Error occurred in registering priorities")
-	expectedOFMap := map[uint16]types.Priority{
-		64360: p110, 64359: p1120, 64358: p1121, 64357: p1130, 64356: p1140, 64355: p1141, 64354: p1160,
+	expectedPriorityMap := map[types.Priority]uint16{}
+	ofPriorities := make([]uint16, len(priorites))
+	for i, p := range priorites {
+		ofPriority := pa.initialOFPriorityFunc(p, true)
+		expectedPriorityMap[p] = ofPriority
+		ofPriorities[i] = ofPriority
 	}
-	assert.Equalf(t, expectedOFMap, pa.ofPriorityMap, "Got unexpected ofPriorityMap")
+	assert.Equalf(t, expectedPriorityMap, pa.priorityMap, "Got unexpected priorityMap")
 
-	pa.Release(64359)
-	pa.Release(64356)
-	pa.Release(64354)
-	expectedOFMap = map[uint16]types.Priority{
-		64360: p110, 64358: p1121, 64357: p1130, 64355: p1141,
+	pa.Release(ofPriorities[0])
+	pa.Release(ofPriorities[2])
+	pa.Release(ofPriorities[5])
+	expectedOFMap := map[uint16]types.Priority{
+		ofPriorities[1]: p1141, ofPriorities[3]: p1130, ofPriorities[4]: p1121, ofPriorities[6]: p110,
 	}
-	expectedPriorityMap := map[types.Priority]uint16{
-		p110: 64360, p1121: 64358, p1130: 64357, p1141: 64355,
+	expectedPriorityMap = map[types.Priority]uint16{
+		p110: ofPriorities[6], p1121: ofPriorities[4], p1130: ofPriorities[3], p1141: ofPriorities[1],
 	}
-	expectedSorted := []uint16{64355, 64357, 64358, 64360}
+	expectedSorted := []uint16{ofPriorities[1], ofPriorities[3], ofPriorities[4], ofPriorities[6]}
 	assert.Equalf(t, expectedOFMap, pa.ofPriorityMap, "Got unexpected priorityMap")
 	assert.Equalf(t, expectedPriorityMap, pa.priorityMap, "Got unexpected ofPriorityMap")
 	assert.Equalf(t, expectedSorted, pa.sortedOFPriorities, "Got unexpected sortedOFPriorities")
@@ -323,9 +326,9 @@ func TestRevertUpdates(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(func(p types.Priority) uint16 {
+			pa := newPriorityAssigner(func(p types.Priority, isSingleTier bool) uint16 {
 				return tt.insertionPoint
-			})
+			}, true)
 			for ofPriority, p := range tt.originalOFMap {
 				pa.updatePriorityAssignment(ofPriority, p)
 			}
@@ -347,7 +350,7 @@ func generatePriorities(start, end int32) []types.Priority {
 }
 
 func TestRegisterAllOFPriorities(t *testing.T) {
-	pa := newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
+	pa := newPriorityAssigner(InitialOFPriority, true)
 	maxPriorities := generatePriorities(int32(PolicyBottomPriority), int32(PolicyTopPriority))
 	err := pa.RegisterPriorities(maxPriorities)
 	assert.Equalf(t, nil, err, "Error occurred in registering max number of allowed priorities")

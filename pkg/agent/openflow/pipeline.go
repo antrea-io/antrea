@@ -47,21 +47,15 @@ const (
 	dnatTable                   binding.TableIDType = 40
 	serviceLBTable              binding.TableIDType = 41
 	endpointDNATTable           binding.TableIDType = 42
-	EmergencyEgressRuleTable    binding.TableIDType = 45
-	SecurityOpsEgressRuleTable  binding.TableIDType = 46
-	NetworkOpsEgressRuleTable   binding.TableIDType = 47
-	PlatformEgressRuleTable     binding.TableIDType = 48
-	ApplicationEgressRuleTable  binding.TableIDType = 49
+	MultiTierEgressRuleTable    binding.TableIDType = 45
+	DefaultTierEgressRuleTable  binding.TableIDType = 49
 	EgressRuleTable             binding.TableIDType = 50
 	EgressDefaultTable          binding.TableIDType = 60
 	EgressMetricTable           binding.TableIDType = 61
 	l3ForwardingTable           binding.TableIDType = 70
 	l2ForwardingCalcTable       binding.TableIDType = 80
-	EmergencyIngressRuleTable   binding.TableIDType = 85
-	SecurityOpsIngressRuleTable binding.TableIDType = 86
-	NetworkOpsIngressRuleTable  binding.TableIDType = 87
-	PlatformIngressRuleTable    binding.TableIDType = 88
-	ApplicationIngressRuleTable binding.TableIDType = 89
+	MultiTierIngressRuleTable   binding.TableIDType = 85
+	DefaultTierIngressRuleTable binding.TableIDType = 89
 	IngressRuleTable            binding.TableIDType = 90
 	IngressDefaultTable         binding.TableIDType = 100
 	IngressMetricTable          binding.TableIDType = 101
@@ -70,12 +64,12 @@ const (
 	L2ForwardingOutTable        binding.TableIDType = 110
 
 	// Flow priority level
-	priorityHigh   = uint16(210)
-	priorityNormal = uint16(200)
-	priorityLow    = uint16(190)
-	prioritySNAT   = uint16(180)
-	priorityMiss   = uint16(0)
-	priorityTopCNP = uint16(64990)
+	priorityHigh            = uint16(210)
+	priorityNormal          = uint16(200)
+	priorityLow             = uint16(190)
+	prioritySNAT            = uint16(180)
+	priorityMiss            = uint16(0)
+	priorityTopAntreaPolicy = uint16(64990)
 
 	// Index for priority cache
 	priorityIndex = "priority"
@@ -91,11 +85,8 @@ var (
 	// egressTables map records all IDs of tables related to
 	// egress rules.
 	egressTables = map[binding.TableIDType]struct{}{
-		EmergencyEgressRuleTable:   {},
-		SecurityOpsEgressRuleTable: {},
-		NetworkOpsEgressRuleTable:  {},
-		PlatformEgressRuleTable:    {},
-		ApplicationEgressRuleTable: {},
+		MultiTierEgressRuleTable:   {},
+		DefaultTierEgressRuleTable: {},
 		EgressRuleTable:            {},
 		EgressDefaultTable:         {},
 	}
@@ -115,21 +106,15 @@ var (
 		{sessionAffinityTable, "SessionAffinity"},
 		{serviceLBTable, "ServiceLB"},
 		{endpointDNATTable, "EndpointDNAT"},
-		{EmergencyEgressRuleTable, "CNPEmergencyEgressRule"},
-		{SecurityOpsEgressRuleTable, "CNPSecurityOpsEgressRule"},
-		{NetworkOpsEgressRuleTable, "CNPNetworkOpsEgressRule"},
-		{PlatformEgressRuleTable, "CNPPlatformEgressRule"},
-		{ApplicationEgressRuleTable, "CNPApplicationEgressRule"},
+		{MultiTierEgressRuleTable, "AntreaPolicyMultiTierEgressRule"},
+		{DefaultTierEgressRuleTable, "AntreaPolicyAppTierEgressRule"},
 		{EgressRuleTable, "EgressRule"},
 		{EgressDefaultTable, "EgressDefaultRule"},
 		{EgressMetricTable, "EgressMetric"},
 		{l3ForwardingTable, "l3Forwarding"},
 		{l2ForwardingCalcTable, "L2Forwarding"},
-		{EmergencyIngressRuleTable, "CNPEmergencyIngressRule"},
-		{SecurityOpsIngressRuleTable, "CNPSecurityOpsIngressRule"},
-		{NetworkOpsIngressRuleTable, "CNPNetworkOpsIngressRule"},
-		{PlatformIngressRuleTable, "CNPPlatformIngressRule"},
-		{ApplicationIngressRuleTable, "CNPApplicationIngressRule"},
+		{MultiTierIngressRuleTable, "AntreaPolicyMultiTierIngressRule"},
+		{DefaultTierIngressRuleTable, "AntreaPolicyAppTierIngressRule"},
 		{IngressRuleTable, "IngressRule"},
 		{IngressDefaultTable, "IngressDefaultRule"},
 		{IngressMetricTable, "IngressMetric"},
@@ -162,23 +147,31 @@ func GetFlowTableNumber(tableName string) binding.TableIDType {
 	return binding.TableIDAll
 }
 
-func GetCNPEgressTables() []binding.TableIDType {
+func GetAntreaPolicyEgressTables() []binding.TableIDType {
 	return []binding.TableIDType{
-		EmergencyEgressRuleTable,
-		SecurityOpsEgressRuleTable,
-		NetworkOpsEgressRuleTable,
-		PlatformEgressRuleTable,
-		ApplicationEgressRuleTable,
+		MultiTierEgressRuleTable,
+		DefaultTierEgressRuleTable,
 	}
 }
 
-func GetCNPIngressTables() []binding.TableIDType {
+func GetAntreaPolicyIngressTables() []binding.TableIDType {
 	return []binding.TableIDType{
-		EmergencyIngressRuleTable,
-		SecurityOpsIngressRuleTable,
-		NetworkOpsIngressRuleTable,
-		PlatformIngressRuleTable,
-		ApplicationIngressRuleTable,
+		MultiTierIngressRuleTable,
+		DefaultTierIngressRuleTable,
+	}
+}
+
+func GetAntreaPolicySingleTierTables() []binding.TableIDType {
+	return []binding.TableIDType{
+		DefaultTierEgressRuleTable,
+		DefaultTierIngressRuleTable,
+	}
+}
+
+func GetAntreaPolicyMultiTierTables() []binding.TableIDType {
+	return []binding.TableIDType{
+		MultiTierEgressRuleTable,
+		MultiTierIngressRuleTable,
 	}
 }
 
@@ -945,7 +938,7 @@ func (c *client) dropRuleMetricFlow(conjunctionID uint32, ingress bool) binding.
 }
 
 // conjunctionActionFlow generates the flow to jump to a specific table if policyRuleConjunction ID is matched. Priority of
-// conjunctionActionFlow is created at priorityLow for k8s network policies, and *priority assigned by PriorityAssigner for CNP.
+// conjunctionActionFlow is created at priorityLow for k8s network policies, and *priority assigned by PriorityAssigner for AntreaPolicy.
 func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, priority *uint16) binding.Flow {
 	var ofPriority uint16
 	if priority == nil {
@@ -1021,24 +1014,24 @@ func (c *client) establishedConnectionFlows(category cookie.Category) (flows []b
 	if !c.enableAntreaPolicy {
 		return allEstFlows
 	}
-	cnpFlows := make([]binding.Flow, len(GetCNPEgressTables())+len(GetCNPIngressTables()))
-	for i, tableID := range GetCNPEgressTables() {
-		cnpEgressEstFlow := c.pipeline[tableID].BuildFlow(priorityTopCNP).MatchProtocol(binding.ProtocolIP).
+	apFlows := make([]binding.Flow, len(GetAntreaPolicyEgressTables())+len(GetAntreaPolicyIngressTables()))
+	for i, tableID := range GetAntreaPolicyEgressTables() {
+		apEgressEstFlow := c.pipeline[tableID].BuildFlow(priorityTopAntreaPolicy).MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(false).MatchCTStateEst(true).
 			Action().GotoTable(egressDropTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done()
-		cnpFlows[i] = cnpEgressEstFlow
+		apFlows[i] = apEgressEstFlow
 	}
-	for i, tableID := range GetCNPIngressTables() {
-		cnpIngressEstFlow := c.pipeline[tableID].BuildFlow(priorityTopCNP).MatchProtocol(binding.ProtocolIP).
+	for i, tableID := range GetAntreaPolicyIngressTables() {
+		apIngressEstFlow := c.pipeline[tableID].BuildFlow(priorityTopAntreaPolicy).MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(false).MatchCTStateEst(true).
 			Action().GotoTable(ingressDropTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done()
-		cnpFlows[i+len(GetCNPEgressTables())] = cnpIngressEstFlow
+		apFlows[i+len(GetAntreaPolicyEgressTables())] = apIngressEstFlow
 	}
-	allEstFlows = append(allEstFlows, cnpFlows...)
+	allEstFlows = append(allEstFlows, apFlows...)
 	return allEstFlows
 }
 
@@ -1411,7 +1404,7 @@ func priorityIndexFunc(obj interface{}) ([]string, error) {
 func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) map[binding.TableIDType]binding.Table {
 	var egressEntryTable, IngressEntryTable binding.TableIDType
 	if enableAntreaNP {
-		egressEntryTable, IngressEntryTable = EmergencyEgressRuleTable, EmergencyIngressRuleTable
+		egressEntryTable, IngressEntryTable = MultiTierEgressRuleTable, MultiTierIngressRuleTable
 	} else {
 		egressEntryTable, IngressEntryTable = EgressRuleTable, IngressRuleTable
 	}
@@ -1462,16 +1455,10 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 	if !enableAntreaNP {
 		return pipeline
 	}
-	pipeline[EmergencyEgressRuleTable] = bridge.CreateTable(EmergencyEgressRuleTable, SecurityOpsEgressRuleTable, binding.TableMissActionNext)
-	pipeline[SecurityOpsEgressRuleTable] = bridge.CreateTable(SecurityOpsEgressRuleTable, NetworkOpsEgressRuleTable, binding.TableMissActionNext)
-	pipeline[NetworkOpsEgressRuleTable] = bridge.CreateTable(NetworkOpsEgressRuleTable, PlatformEgressRuleTable, binding.TableMissActionNext)
-	pipeline[PlatformEgressRuleTable] = bridge.CreateTable(PlatformEgressRuleTable, ApplicationEgressRuleTable, binding.TableMissActionNext)
-	pipeline[ApplicationEgressRuleTable] = bridge.CreateTable(ApplicationEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
-	pipeline[EmergencyIngressRuleTable] = bridge.CreateTable(EmergencyIngressRuleTable, SecurityOpsIngressRuleTable, binding.TableMissActionNext)
-	pipeline[SecurityOpsIngressRuleTable] = bridge.CreateTable(SecurityOpsIngressRuleTable, NetworkOpsIngressRuleTable, binding.TableMissActionNext)
-	pipeline[NetworkOpsIngressRuleTable] = bridge.CreateTable(NetworkOpsIngressRuleTable, PlatformIngressRuleTable, binding.TableMissActionNext)
-	pipeline[PlatformIngressRuleTable] = bridge.CreateTable(PlatformIngressRuleTable, ApplicationIngressRuleTable, binding.TableMissActionNext)
-	pipeline[ApplicationIngressRuleTable] = bridge.CreateTable(ApplicationIngressRuleTable, IngressRuleTable, binding.TableMissActionNext)
+	pipeline[MultiTierEgressRuleTable] = bridge.CreateTable(MultiTierEgressRuleTable, DefaultTierEgressRuleTable, binding.TableMissActionNext)
+	pipeline[DefaultTierEgressRuleTable] = bridge.CreateTable(DefaultTierEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
+	pipeline[MultiTierIngressRuleTable] = bridge.CreateTable(MultiTierIngressRuleTable, DefaultTierIngressRuleTable, binding.TableMissActionNext)
+	pipeline[DefaultTierIngressRuleTable] = bridge.CreateTable(DefaultTierIngressRuleTable, IngressRuleTable, binding.TableMissActionNext)
 	return pipeline
 }
 

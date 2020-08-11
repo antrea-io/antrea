@@ -242,6 +242,37 @@ func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(ns string, netpol *v1net.N
 	return np, err
 }
 
+// DeleteTier is a convenience function for deleting an Antrea Policy Tier with specific name.
+func (k *KubernetesUtils) DeleteTier(name string) error {
+	_, err := k.securityClient.Tiers().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to get tier %s", name)
+	}
+	log.Infof("deleting tier %s", name)
+	if err = k.securityClient.Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+		return errors.Wrapf(err, "unable to delete tier %s", name)
+	}
+	return nil
+}
+
+// CreateTier is a convenience function for creating an Antrea Policy Tier by name and priority.
+func (k *KubernetesUtils) CreateNewTier(name string, tierPriority int32) (*secv1alpha1.Tier, error) {
+	log.Infof("creating tier %s", name)
+	_, err := k.securityClient.Tiers().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		tr := &secv1alpha1.Tier{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Spec:       secv1alpha1.TierSpec{Priority: tierPriority},
+		}
+		tr, err = k.securityClient.Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
+		if err != nil {
+			log.Debugf("unable to create tier %s: %s", name, err)
+		}
+		return tr, err
+	}
+	return nil, fmt.Errorf("tier with name %s already exists", name)
+}
+
 // CleanCNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
 func (k *KubernetesUtils) CleanCNPs() error {
 	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
