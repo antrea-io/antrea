@@ -107,7 +107,7 @@ func run(o *Options) error {
 
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		traceflowController = traceflow.NewTraceflowController(crdClient, traceflowInformer)
+		traceflowController = traceflow.NewTraceflowController(crdClient, podInformer, traceflowInformer)
 	}
 
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
