@@ -252,7 +252,7 @@ func run(o *Options) error {
 		flowExporter := exporter.NewFlowExporter(
 			flowrecords.NewFlowRecords(connStore),
 			o.config.FlowExportFrequency)
-		go wait.Until(func() { flowExporter.CheckAndDoExport(o.flowCollector, pollDone) }, o.pollInterval, stopCh)
+		go wait.Until(func() { flowExporter.Export(o.flowCollector, stopCh, pollDone) }, 0, stopCh)
 	}
 
 	<-stopCh

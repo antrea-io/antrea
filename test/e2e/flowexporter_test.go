@@ -62,7 +62,7 @@ func TestFlowExporter(t *testing.T) {
 
 	rc, collectorOutput, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl logs ipfix-collector -n antrea-test"))
 	if err != nil || rc != 0 {
-		t.Fatalf("error when getting logs %v, rc: %v", err, rc)
+		t.Fatalf("Error when getting logs %v, rc: %v", err, rc)
 	}
 
 	/* Parse through IPFIX collector output. Sample output (with truncated fields) is given below:
