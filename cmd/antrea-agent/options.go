@@ -92,8 +92,13 @@ func (o *Options) validate(args []string) error {
 	if !ok {
 		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
 	}
-	if encapMode.SupportsNoEncap() && o.config.EnableIPSecTunnel {
-		return fmt.Errorf("IPSec tunnel may only be enabled on %s mode", config.TrafficEncapModeEncap)
+	if encapMode.SupportsNoEncap() {
+		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+			return fmt.Errorf("Mode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
+		}
+		if o.config.EnableIPSecTunnel {
+			return fmt.Errorf("IPSec tunnel may only be enabled on %s mode", config.TrafficEncapModeEncap)
+		}
 	}
 	if o.config.OVSDatapathType == ovsconfig.OVSDatapathNetdev && features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		return fmt.Errorf("FlowExporter feature is not supported for OVS datapath type %s", o.config.OVSDatapathType)
