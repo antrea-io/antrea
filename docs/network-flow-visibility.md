@@ -1,4 +1,4 @@
-# Network Flow Visibility
+# ELK Flow Collector
 ## Purpose
 Antrea supports sending IPFIX flow records through a flow exporter. The Elastic
 Stack (ELK Stack) works as the data collector, data storage and visualization tool
@@ -28,7 +28,6 @@ with standard IANA fields.
 | sourceNodeName            | 55829         | 104      | string      |
 | destinationNodeName       | 55829         | 105      | string      |
 | destinationClusterIP      | 55829         | 106      | ipv4Address |
-| destinationServicePort    | 55829         | 107      | unsigned16  |
 | destinationServicePortName| 55829         | 108      | string      |
 
 [Elasticsearch](https://www.elastic.co/elasticsearch/), as a RESTful search
@@ -48,25 +47,25 @@ Kibana dashboard is exposed as a Nodeport Service, which can be accessed via
 `http://[NodeIP]: 30007`
 
 `build/yamls/flow/kibana.ndjson` is an auto-generated reusable file containing 
-pre-built objects for visualizing pod-to-pod, pod-to-service and node-to-node 
+pre-built objects for visualizing Pod-to-Pod, Pod-to-Service and Node-to-Node 
 flow records. To import the dashboards into Kibana, go to 
 **Management -> Saved Objects** and import `build/yamls/flow/kibana.ndjson`.
 
 
 ## Pre-built Dashboards
-The following dashboards are pre-built and recommended for Antrea flow
+The following dashboards are pre-built and are recommended for Antrea flow
 visualization.
 
 ### Overview
-An overview of pod-based flow records information is provided.
+An overview of Pod-based flow records information is provided.
 
 <img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-overview.png" width="900" alt="Flow
 Visualization Overview Dashboard"> 
 
 ### Flows
-#### Pod-to-pod Traffic
-Pod-to-pod Tx and Rx traffic is shown in sankey diagrams. Corresponding 
-source/destinationpod throughput is visualized using stacked line graph. 
+#### Pod-to-Pod Traffic
+Pod-to-Pod Tx and Rx traffic is shown in sankey diagrams. Corresponding 
+source or destination Pod throughput is visualized using stacked line graph. 
 
 <img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-flow-1.png" width="900" alt="Flow
 Visualization Flows Dashboard"> 
@@ -74,9 +73,9 @@ Visualization Flows Dashboard">
 <img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-flow-2.png" width="900" alt="Flow
 Visualization Flow Dashboard"> 
 
-#### Pod-to-service Traffic
-Pod-to-service traffic is presented similar to pod-to-pod traffic.
-Corresponding source/destination IP addresses are shown in tooltips.
+#### Pod-to-Service Traffic
+Pod-to-Service traffic is presented similar to Pod-to-Pod traffic.
+Corresponding source or destination IP addresses are shown in tooltips.
 
 <img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-flow-3.png" width="900" alt="Flow
 Visualization Flows Dashboard"> 
@@ -85,14 +84,15 @@ Visualization Flows Dashboard">
 Visualization Flow Dashboard"> 
 
 ### Flow Records 
-Flow Records dashboard shows raw flow records over time with filter.
+Flow Records dashboard shows the raw flow records over time with support 
+for filters.
 
 <img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-flow-record.png" width="900" alt="Flow
 Visualization Flow Record Dashboard">
 
 ### Node Throughput
-Node Throughput dashboard visualizes inter-node and intra-node traffic
-by aggregating pod traffic per node.
+Node Throughput dashboard shows the visualization of inter-Node and 
+intra-Node traffic by aggregating all the Pod traffic per Node.
 
 <img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-node-1.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
