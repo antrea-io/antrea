@@ -78,7 +78,7 @@ spec:
             - name: ES_JAVA_OPTS
               value: "-Xms1g -Xmx2g"
             - name: cluster.name
-              value: "antrea-flow-collector"
+              value: "elk-flow-collector"
             - name: bootstrap.memory_lock
               value: "false"
             - name: network.host

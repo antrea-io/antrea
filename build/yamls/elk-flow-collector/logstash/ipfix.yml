@@ -1,3 +1,4 @@
+# ipfix fields definition file. Antrea-specific fields are with Enterprise ID 55829
 ---
 0:
   0:
