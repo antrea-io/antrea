@@ -572,7 +572,7 @@ func newTester() *cmdAddDelTester {
 		false,
 		nil)
 	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
-	ctx, _ := context.WithCancel(context.Background())
+	ctx := context.Background()
 	tester.ctx = ctx
 	return tester
 }
@@ -761,7 +761,7 @@ func TestCNIServerChaining(t *testing.T) {
 	var server *cniserver.CNIServer
 	testContainerOFPort := int32(1234)
 	testPatchPortName := "antrea-gw0"
-	ctx, _ := context.WithCancel(context.Background())
+	ctx := context.Background()
 
 	tc := testCase{
 		name:       "CNI chaining ",

@@ -524,7 +524,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 			return err
 		}
 		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType, localIP)
-		tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{tunnelPortUUID, config.DefaultTunOFPort}
+		tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: tunnelPortUUID, OFPort: config.DefaultTunOFPort}
 		i.ifaceStore.AddInterface(tunnelIface)
 	}
 	return nil

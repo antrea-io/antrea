@@ -998,7 +998,7 @@ func (c *client) localProbeFlow(localGatewayIP net.IP, category cookie.Category)
 }
 
 func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint32, nodeIP net.IP, localSubnet net.IPNet, category cookie.Category) []binding.Flow {
-	snatIPRange := &binding.IPRange{nodeIP, nodeIP}
+	snatIPRange := &binding.IPRange{StartIP: nodeIP, EndIP: nodeIP}
 	vMACInt, _ := strconv.ParseUint(strings.Replace(globalVirtualMAC.String(), ":", "", -1), 16, 64)
 	ctStateNext := dnatTable
 	if c.enableProxy {

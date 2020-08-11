@@ -19,7 +19,7 @@ type ofFlow struct {
 	// The Flow.Table field can be updated by Reset(), which can be called by
 	// ReplayFlows() when replaying the Flow to OVS. For thread safety, any access
 	// to Flow.Table should hold the replayMutex read lock.
-	ofctrl.Flow
+	*ofctrl.Flow
 
 	// matchers is string slice, it is used to generate a readable match string of the Flow.
 	matchers []string
@@ -117,7 +117,7 @@ func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMess
 func (f *ofFlow) CopyToBuilder(priority uint16) FlowBuilder {
 	newFlow := ofFlow{
 		table: f.table,
-		Flow: ofctrl.Flow{
+		Flow: &ofctrl.Flow{
 			Table:      f.Flow.Table,
 			CookieID:   f.Flow.CookieID,
 			CookieMask: f.Flow.CookieMask,

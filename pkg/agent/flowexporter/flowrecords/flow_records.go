@@ -92,11 +92,11 @@ func (fr *FlowRecords) addOrUpdateFlowRecord(key flowexporter.ConnectionKey, con
 	record, exists := fr.recordsMap[key]
 	if !exists {
 		record = flowexporter.FlowRecord{
-			&conn,
-			0,
-			0,
-			0,
-			0,
+			Conn:               &conn,
+			PrevPackets:        0,
+			PrevBytes:          0,
+			PrevReversePackets: 0,
+			PrevReverseBytes:   0,
 		}
 	} else {
 		record.Conn = &conn

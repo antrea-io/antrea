@@ -68,6 +68,7 @@ func TestClean(t *testing.T) {
 			require.NoError(t, f.Close())
 			storage := NewControllerStorage()
 			ctx, cancelFunc := context.WithCancel(context.Background())
+			defer cancelFunc()
 			if tc.needCancel {
 				cancelFunc()
 			}
