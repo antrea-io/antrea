@@ -214,7 +214,7 @@ func addRuleToNetworkPolicy(np *v1beta1.NetworkPolicy, rule *rule) *v1beta1.Netw
 
 func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string) []v1beta1.NetworkPolicy {
 	var groups []string
-	memberPod := &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{pod, namespace}}
+	memberPod := &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{Name: pod, Namespace: namespace}}
 	c.podSetLock.RLock()
 	for group, podSet := range c.podSetByGroup {
 		if podSet.Has(memberPod) {
@@ -591,7 +591,7 @@ func (c *ruleCache) AddNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 }
 
 func (c *ruleCache) addNetworkPolicyLocked(policy *v1beta1.NetworkPolicy) error {
-	c.policyMap[string(policy.UID)] = &types.NamespacedName{policy.Namespace, policy.Name}
+	c.policyMap[string(policy.UID)] = &types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name}
 	metrics.NetworkPolicyCount.Inc()
 	return c.UpdateNetworkPolicy(policy)
 }

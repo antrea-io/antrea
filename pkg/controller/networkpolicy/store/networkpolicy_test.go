@@ -35,7 +35,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 	policyV1 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
-		SpanMeta:  types.SpanMeta{sets.NewString("node1", "node2")},
+		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
 		Rules: []networking.NetworkPolicyRule{{
 			Direction: networking.DirectionIn,
 			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
@@ -47,7 +47,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 	policyV2 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
-		SpanMeta:  types.SpanMeta{sets.NewString("node1", "node3")},
+		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
 		Rules: []networking.NetworkPolicyRule{{
 			Direction: networking.DirectionIn,
 			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
@@ -59,7 +59,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 	policyV3 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
-		SpanMeta:  types.SpanMeta{sets.NewString("node1", "node3")},
+		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
 		Rules: []networking.NetworkPolicyRule{{
 			Direction: networking.DirectionIn,
 			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
@@ -84,13 +84,13 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV2)
 			},
 			expected: []watch.Event{
-				{watch.Bookmark, &networking.NetworkPolicy{}},
-				{watch.Added, &networking.NetworkPolicy{
+				{Type: watch.Bookmark, Object: &networking.NetworkPolicy{}},
+				{Type: watch.Added, Object: &networking.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV1.Rules,
 					AppliedToGroups: policyV1.AppliedToGroups,
 				}},
-				{watch.Modified, &networking.NetworkPolicy{
+				{Type: watch.Modified, Object: &networking.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
@@ -111,18 +111,18 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV1)
 			},
 			expected: []watch.Event{
-				{watch.Bookmark, &networking.NetworkPolicy{}},
-				{watch.Added, &networking.NetworkPolicy{
+				{Type: watch.Bookmark, Object: &networking.NetworkPolicy{}},
+				{Type: watch.Added, Object: &networking.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
 				}},
-				{watch.Modified, &networking.NetworkPolicy{
+				{Type: watch.Modified, Object: &networking.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV3.Rules,
 					AppliedToGroups: policyV3.AppliedToGroups,
 				}},
-				{watch.Deleted, &networking.NetworkPolicy{
+				{Type: watch.Deleted, Object: &networking.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 				}},
 			},

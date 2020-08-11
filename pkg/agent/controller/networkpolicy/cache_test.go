@@ -430,7 +430,7 @@ func TestRuleCacheReplaceNetworkPolicies(t *testing.T) {
 			c, recorder, _ := newFakeRuleCache()
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
-				c.policyMap[string(rule.PolicyUID)] = &types.NamespacedName{rule.PolicyNamespace, rule.PolicyName}
+				c.policyMap[string(rule.PolicyUID)] = &types.NamespacedName{Namespace: rule.PolicyNamespace, Name: rule.PolicyName}
 			}
 			c.ReplaceNetworkPolicies(tt.args)
 
@@ -975,7 +975,7 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 			"non-matching-group",
 			nil,
 			nil,
-			v1beta1.PodReference{"foo", "bar"},
+			v1beta1.PodReference{Name: "foo", Namespace: "bar"},
 			sets.NewString(),
 		},
 		{

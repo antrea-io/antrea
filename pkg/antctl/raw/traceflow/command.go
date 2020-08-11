@@ -125,7 +125,8 @@ func runE(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("error when filling up traceflow config: %w", err)
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	if _, err = client.OpsV1alpha1().Traceflows().Create(ctx, tf, metav1.CreateOptions{}); err != nil {
 		return fmt.Errorf("error when creating traceflow, is traceflow feature gate enabled? %w", err)
 	}
@@ -233,7 +234,8 @@ func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
 }
 
 func dstIsPod(client kubernetes.Interface, ns string, name string) (bool, error) {
-	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	_, err := client.CoreV1().Pods(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
