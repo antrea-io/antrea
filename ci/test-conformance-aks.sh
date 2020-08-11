@@ -25,6 +25,7 @@ K8S_VERSION="1.16.10"
 RESOURCE_GROUP="antrea-ci-rg"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
+SETUP_AND_TEST_ONLY=false
 RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/aks"
 TEST_FAILURE=false
@@ -32,7 +33,7 @@ MODE="report"
 
 _usage="Usage: $0 [--cluster-name <AKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--azure-app-id <AppID>] [--azure-tenant-id <TenantID>] [--azure-password <Password>] \
-                  [--aks-region <Region>] [--log-mode <SonobuoyResultLogLevel>] [--setup-only] [--cleanup-only]
+                  [--aks-region <Region>] [--log-mode <SonobuoyResultLogLevel>] [--setup-only] [--setup-and-test-only] [--cleanup-only]
 
 Setup a AKS cluster to run K8s e2e community tests (Conformance & Network Policy).
 
@@ -44,7 +45,8 @@ Setup a AKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --azure-password         Azure Service Principal Password.
         --aks-region             The Azure region where the cluster will be initiated. Defaults to westus.
         --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
-        --setup-only             Only perform setting up the cluster and run test.
+        --setup-only             Only perform setting up the cluster and configuring Antrea.
+        --setup-and-test-only    Only perform setting up the cluster, configuring Antrea and running conformance test.
         --cleanup-only           Only perform cleaning up the cluster."
 
 function print_usage {
@@ -94,6 +96,11 @@ case $key in
     ;;
     --setup-only)
     RUN_SETUP_ONLY=true
+    RUN_ALL=false
+    shift
+    ;;
+    --setup-and-test-only)
+    SETUP_AND_TEST_ONLY=true
     RUN_ALL=false
     shift
     ;;
@@ -221,9 +228,12 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/..
 pushd "$THIS_DIR" > /dev/null
 
-if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then
+if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true || "$SETUP_AND_TEST_ONLY" == true ]]; then
     setup_aks
     deliver_antrea_to_aks
+fi
+
+if [[ "$RUN_ALL" == true || "$SETUP_AND_TEST_ONLY" == true ]]; then
     run_conformance
 fi
 

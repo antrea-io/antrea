@@ -22,37 +22,37 @@ function echoerr {
 
 GKE_ZONE="us-west1"
 GKE_HOST="UBUNTU"
-GKE_SERVICE_CIDR="10.94.0.0/16"
 GKE_PROJECT="antrea"
 KUBECONFIG_PATH="$HOME/jenkins/out/gke"
 MODE="report"
 
 RUN_ALL=true
 RUN_SETUP_ONLY=false
+SETUP_AND_TEST_ONLY=false
 RUN_CLEANUP_ONLY=false
 TEST_FAILURE=false
 
 _usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>]  [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>] \
                   [--svc-account <Name>] [--user <Name>] [--gke-project <Project>] [--gke-zone <Zone>] [--log-mode <SonobuoyResultLogLevel>] \
-                  [--svc-cidr <ServiceCIDR>] [--host-type <HostType] [--gloud-path] [--setup-only] [--cleanup-only]
+                  [--host-type <HostType] [--gloud-path] [--setup-only] [--setup-and-test-only] [--cleanup-only]
 
 Setup a GKE cluster to run K8s e2e community tests (Conformance & Network Policy).
 Before running the script, login to gcloud with \`gcloud auth login\` or \`gcloud auth activate-service-account\`
 and create the project to be used for cluster with \`gcloud projects create\`.
 
-        --cluster-name        The cluster name to be used for the generated GKE cluster. Must be specified if not run in Jenkins environment.
-        --kubeconfig          Path to save kubeconfig of generated EKS cluster.
-        --k8s-version         GKE K8s cluster version. Defaults to 1.15.11-gke.11.
-        --svc-account         Service acount name if logged in with service account. Use --user instead if logged in with gcloud auth login.
-        --user                Email address if logged in with user account. Use --svc-account instead if logged in with service account.
-        --gke-project         The GKE project to be used. Needs to be pre-created before running the script.
-        --gke-zone            The GKE zone where the cluster will be initiated. Defaults to us-west1.
-        --svc-cidr            The service CIDR to be used for cluster. Defaults to 10.94.0.0/16.
-        --host-type           The host type of worker node. Defaults to UBUNTU.
-        --gcloud-path         The path of gcloud installation. Only need to be explicitly set for Jenkins environments.
-        --log-mode            Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
-        --setup-only          Only perform setting up the cluster and run test.
-        --cleanup-only        Only perform cleaning up the cluster."
+        --cluster-name         The cluster name to be used for the generated GKE cluster. Must be specified if not run in Jenkins environment.
+        --kubeconfig           Path to save kubeconfig of generated EKS cluster.
+        --k8s-version          GKE K8s cluster version. Defaults to 1.15.12-gke.3.
+        --svc-account          Service acount name if logged in with service account. Use --user instead if logged in with gcloud auth login.
+        --user                 Email address if logged in with user account. Use --svc-account instead if logged in with service account.
+        --gke-project          The GKE project to be used. Needs to be pre-created before running the script.
+        --gke-zone             The GKE zone where the cluster will be initiated. Defaults to us-west1.
+        --host-type            The host type of worker node. Defaults to UBUNTU.
+        --gcloud-path          The path of gcloud installation. Only need to be explicitly set for Jenkins environments.
+        --log-mode             Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
+        --setup-only           Only perform setting up the cluster and configuring Antrea.
+        --setup-and-test-only  Only perform setting up the cluster, configuring Antrea and running conformance test.
+        --cleanup-only         Only perform cleaning up the cluster."
 
 
 function print_usage {
@@ -92,10 +92,6 @@ case $key in
     GKE_ZONE="$2"
     shift 2
     ;;
-    --svc-cidr)
-    GKE_SERVICE_CIDR="$2"
-    shift 2
-    ;;
     --host-type)
     GKE_HOST="$2"
     shift 2
@@ -114,6 +110,11 @@ case $key in
     ;;
     --setup-only)
     RUN_SETUP_ONLY=true
+    RUN_ALL=false
+    shift
+    ;;
+    --setup-and-test-only)
+    SETUP_AND_TEST_ONLY=true
     RUN_ALL=false
     shift
     ;;
@@ -153,8 +154,7 @@ function setup_gke() {
 
     echo '=== Creating a cluster in GKE ==='
     ${GCLOUD_PATH} container --project ${GKE_PROJECT} clusters create ${CLUSTER} --image-type ${GKE_HOST} \
-                     --cluster-version ${K8S_VERSION} --zone ${GKE_ZONE} \
-                     --enable-ip-alias --services-ipv4-cidr ${GKE_SERVICE_CIDR}
+                     --cluster-version ${K8S_VERSION} --zone ${GKE_ZONE} --enable-ip-alias
     if [[ $? -ne 0 ]]; then
         echo "=== Failed to deploy GKE cluster! ==="
         exit 1
@@ -192,11 +192,6 @@ function deliver_antrea_to_gke() {
         GIT_CHECKOUT_DIR=..
     fi
     kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke-node-init.yml
-    sed -i "s|#defaultMTU: 1450|defaultMTU: 1500|g" ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke.yml
-    sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: ${GKE_SERVICE_CIDR}|g" ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke.yml
-    echo "defaultMTU set as 1450"
-    echo "seviceCIDR set as ${GKE_SERVICE_CIDR}"
-
     kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke.yml
     kubectl rollout status --timeout=2m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=2m daemonset/antrea-agent -n kube-system
@@ -224,24 +219,11 @@ function run_conformance() {
     if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/gke-test.log
     then
         echo "Failed cases exist."
-        TEST_FAILURE=true
+        echo "=== FAILURE !!! ==="
     else
         echo "All tests passed."
-    fi
-
-    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
-        GIT_CHECKOUT_DIR=..
-    fi
-    echo "=== Cleanup Antrea Installation ==="
-    for antrea_yml in ${GIT_CHECKOUT_DIR}/build/yamls/*.yml
-    do
-        kubectl delete -f ${antrea_yml} --ignore-not-found=true || true
-    done
-
-    if [[ "$TEST_FAILURE" == false ]]; then
         echo "=== SUCCESS !!! ==="
     fi
-    echo "=== FAILURE !!! ==="
 }
 
 function cleanup_cluster() {
@@ -268,9 +250,12 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/..
 pushd "$THIS_DIR" > /dev/null
 
-if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then
+if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true || "$SETUP_AND_TEST_ONLY" == true ]]; then
     setup_gke
     deliver_antrea_to_gke
+fi
+
+if [[ "$RUN_ALL" == true || "$SETUP_AND_TEST_ONLY" == true ]]; then
     run_conformance
 fi
 

@@ -27,6 +27,7 @@ SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
 SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_rsa"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
+SETUP_AND_TEST_ONLY=false
 RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/eks"
 MODE="report"
@@ -34,7 +35,7 @@ TEST_FAILURE=false
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] \
-                  [--ssh-private-key <SSHPrivateKey] [--log-mode <SonobuoyResultLogLevel>] [--setup-only] [--cleanup-only]
+                  [--ssh-private-key <SSHPrivateKey] [--log-mode <SonobuoyResultLogLevel>] [--setup-only] [--setup-and-test-only] [--cleanup-only]
 
 Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy).
 
@@ -46,7 +47,8 @@ Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --aws-region             The AWS region where the cluster will be initiated. Defaults to us-east-2.
         --ssh-key                The path of key to be used for ssh access to worker nodes.
         --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
-        --setup-only             Only perform setting up the cluster and run test.
+        --setup-only             Only perform setting up the cluster and configuring Antrea.
+        --setup-and-test-only    Only perform setting up the cluster, configuring Antrea and running conformance test.
         --cleanup-only           Only perform cleaning up the cluster."
 
 function print_usage {
@@ -100,6 +102,11 @@ case $key in
     ;;
     --setup-only)
     RUN_SETUP_ONLY=true
+    RUN_ALL=false
+    shift
+    ;;
+    --setup-and-test-only)
+    SETUP_AND_TEST_ONLY=true
     RUN_ALL=false
     shift
     ;;
@@ -217,21 +224,11 @@ function run_conformance() {
     if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/eks-test.log
     then
         echo "Failed cases exist."
-        TEST_FAILURE=true
+        echo "=== FAILURE !!! ==="
     else
         echo "All tests passed."
-    fi
-
-    echo "=== Cleanup Antrea Installation ==="
-    for antrea_yml in ${GIT_CHECKOUT_DIR}/build/yamls/*.yml
-    do
-        kubectl delete -f ${antrea_yml} --ignore-not-found=true || true
-    done
-
-    if [[ "$TEST_FAILURE" == false ]]; then
         echo "=== SUCCESS !!! ==="
     fi
-    echo "=== FAILURE !!! ==="
 }
 
 function cleanup_cluster() {
@@ -258,9 +255,12 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/..
 pushd "$THIS_DIR" > /dev/null
 
-if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then
+if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true || "$SETUP_AND_TEST_ONLY" == true ]]; then
     setup_eks
     deliver_antrea_to_eks
+fi
+
+if [[ "$RUN_ALL" == true || "$SETUP_AND_TEST_ONLY" == true ]]; then
     run_conformance
 fi
 

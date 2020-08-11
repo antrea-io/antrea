@@ -32,17 +32,15 @@ on both VPC-native Enable/Disable modes.
 You can use any method to create a GKE cluster (gcloud SDK, gcloud Console, etc). The example
 given here is using the Google Cloud SDK.
 
-**Note:** Antrea is supported on Ubuntu Nodes only for GKE cluster. Also, it is a must to select service
-CIDR at the time of cluster deployment.
+**Note:** Antrea is supported on Ubuntu Nodes only for GKE cluster.
 
 1. Create a GKE cluster
 
     ```bash
     export GKE_ZONE="us-west1"
     export GKE_HOST="UBUNTU"
-    export GKE_SERVICE_CIDR="10.94.0.0/16"
     gcloud container --project $GKE_PROJECT clusters create cluster1 --image-type $GKE_HOST \
-       --zone $GKE_ZONE --enable-ip-alias --services-ipv4-cidr $GKE_SERVICE_CIDR
+       --zone $GKE_ZONE --enable-ip-alias
     ```
 
 2. Access your cluster
