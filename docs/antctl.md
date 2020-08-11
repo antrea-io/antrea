@@ -20,6 +20,7 @@ running in two different modes:
   - [Dumping Pod network interface information](#dumping-pod-network-interface-information)
   - [Dumping OVS flows](#dumping-ovs-flows)
   - [OVS packet tracing](#ovs-packet-tracing)
+  - [Traceflow](#traceflow)
 
 ## Installation
 
@@ -312,4 +313,35 @@ result: |
   Final flow: unchanged
   Megaflow: recirc_id=0x54,eth,ip,in_port=1,nw_frag=no
   Datapath actions: 3
+```
+
+### Traceflow
+
+`antctl traceflow` command is used to start a traceflow and retrieve its result. After the
+result is collected, the traceflow will be deleted. Users can also create a traceflow with
+`kubectl`, but `antctl traceflow` offers a simpler approach.
+
+The required options for this command
+are `source` and `destination`, which consist of namespace and pod, service or IP. The command supports
+yaml and json output. If users want a non blocking operation, an option: `--wait=false` can
+be added to start the traceflow without waiting for result. Then, the deletion operation
+will not be conducted. Besides, users can specify header protocol (ICMP, TCP and UDP) and
+source/destination ports.
+
+e.g.
+```bash
+$ antctl traceflow -S busybox0 -D busybox1
+name: default-busybox0-to-default-busybox1-fpllngzi
+phase: Succeeded
+source: default/busybox0
+destination: default/busybox1
+results:
+- node: antrea-linux-testbed7-1
+  timestamp: 1596435607
+  observations:
+  - component: SpoofGuard
+    action: Forwarded
+  - component: Forwarding
+    componentInfo: Output
+    action: Delivered
 ```
