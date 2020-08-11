@@ -25,7 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
-// InitializeConnTrackDumper initialize the ConnTrackDumper interface for different OS and datapath types.
+// InitializeConnTrackDumper initializes the ConnTrackDumper interface for different OS and datapath types.
 func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsctlClient ovsctl.OVSCtlClient, ovsDatapathType string) ConnTrackDumper {
 	var connTrackDumper ConnTrackDumper
 	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
@@ -60,6 +60,7 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 		// Conntrack flows will be different for Pod-to-Service flows w/ Antrea-proxy. This implementation will be simpler, when the
 		// Antrea proxy is supported.
 		if serviceCIDR.Contains(srcIP) || serviceCIDR.Contains(dstIP) {
+			klog.V(4).Infof("Detected a flow with Cluster IP :%v", conn)
 			continue
 		}
 		filteredConns = append(filteredConns, conn)

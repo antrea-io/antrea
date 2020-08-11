@@ -91,34 +91,49 @@ func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint) *fl
 	}
 }
 
-// CheckAndDoExport enables us to export flow records periodically at a given flow export frequency.
-func (exp *flowExporter) CheckAndDoExport(collector net.Addr, pollDone chan struct{}) {
-	// Number of pollDone signals received or poll cycles should be equal to export frequency before starting the export cycle.
-	// This is necessary because IPFIX collector computes throughput based on flow records received interval.
-	<-pollDone
-	exp.pollCycle++
-	if exp.pollCycle%exp.exportFrequency == 0 {
-		if exp.process == nil {
-			err := exp.initFlowExporter(collector)
-			if err != nil {
-				klog.Errorf("Error when initializing flow exporter: %v", err)
-				return
+// DoExport enables us to export flow records periodically at a given flow export frequency.
+func (exp *flowExporter) Export(collector net.Addr, stopCh <-chan struct{}, pollDone <-chan struct{}) {
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-pollDone:
+			// Number of pollDone signals received or poll cycles should be equal to export frequency before starting
+			// the export cycle. This is necessary because IPFIX collector computes throughput based on flow records received interval.
+			exp.pollCycle++
+			if exp.pollCycle%exp.exportFrequency == 0 {
+				// Retry to connect to IPFIX collector if the exporting process gets reset
+				if exp.process == nil {
+					err := exp.initFlowExporter(collector)
+					if err != nil {
+						klog.Errorf("Error when initializing flow exporter: %v", err)
+						// There could be other errors while initializing flow exporter other than connecting to IPFIX collector,
+						// therefore closing the connection and resetting the process.
+						if exp.process != nil {
+							exp.process.CloseConnToCollector()
+							exp.process = nil
+						}
+						return
+					}
+				}
+				// Build and send flow records to IPFIX collector.
+				exp.flowRecords.BuildFlowRecords()
+				err := exp.sendFlowRecords()
+				if err != nil {
+					klog.Errorf("Error when sending flow records: %v", err)
+					// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
+					// to IPFIX collector and retry in the next export cycle to reinitialize the connection and send flow records.
+					exp.process.CloseConnToCollector()
+					exp.process = nil
+					return
+				}
+
+				exp.pollCycle = 0
+				klog.V(2).Infof("Successfully exported IPFIX flow records")
 			}
 		}
-		exp.flowRecords.BuildFlowRecords()
-		err := exp.sendFlowRecords()
-		if err != nil {
-			klog.Errorf("Error when sending flow records: %v", err)
-			// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
-			// to IPFIX collector and retry in the next export cycle to reinitialize the connection and send flow records.
-			exp.process.CloseConnToCollector()
-			exp.process = nil
-		}
-		exp.pollCycle = 0
-		klog.V(2).Infof("Successfully exported IPFIX flow records")
 	}
 
-	return
 }
 
 func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
