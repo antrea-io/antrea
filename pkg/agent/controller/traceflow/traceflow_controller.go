@@ -26,7 +26,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -38,6 +40,7 @@ import (
 	clientsetversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	opsinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/ops/v1alpha1"
 	opslisters "github.com/vmware-tanzu/antrea/pkg/client/listers/ops/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -65,6 +68,8 @@ const (
 // the switch for traceflow request.
 type Controller struct {
 	kubeClient             clientset.Interface
+	serviceLister          corelisters.ServiceLister
+	serviceListerSynced    cache.InformerSynced
 	traceflowClient        clientsetversioned.Interface
 	traceflowInformer      opsinformers.TraceflowInformer
 	traceflowLister        opslisters.TraceflowLister
@@ -85,6 +90,7 @@ type Controller struct {
 // events.
 func NewTraceflowController(
 	kubeClient clientset.Interface,
+	informerFactory informers.SharedInformerFactory,
 	traceflowClient clientsetversioned.Interface,
 	traceflowInformer opsinformers.TraceflowInformer,
 	client openflow.Client,
@@ -118,6 +124,11 @@ func NewTraceflowController(
 	)
 	// Register packetInHandler
 	c.ofClient.RegisterPacketInHandler("traceflow", c)
+	// Add serviceLister if AntreaProxy enabled
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		c.serviceLister = informerFactory.Core().V1().Services().Lister()
+		c.serviceListerSynced = informerFactory.Core().V1().Services().Informer().HasSynced
+	}
 	return c
 }
 
@@ -135,6 +146,12 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer klog.Infof("Shutting down %s", controllerName)
 
 	klog.Infof("Waiting for caches to sync for %s", controllerName)
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		if !cache.WaitForCacheSync(stopCh, c.serviceListerSynced) {
+			klog.Errorf("Unable to sync service cache for %s", controllerName)
+			return
+		}
+	}
 	if !cache.WaitForCacheSync(stopCh, c.traceflowListerSynced) {
 		klog.Errorf("Unable to sync caches for %s", controllerName)
 		return
@@ -244,14 +261,18 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 // startTraceflow deploys OVS flow entries for Traceflow and inject packet if current Node
 // is Sender Node.
 func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) error {
-	// Deploy flow entries for traceflow
-	klog.V(2).Infof("Deploy flow entries for Traceflow %s", tf.Name)
-	err := c.ofClient.InstallTraceflowFlows(tf.Status.DataplaneTag)
+	err := c.validateTraceflow(tf)
 	defer func() {
 		if err != nil {
-			c.errorTraceflowCRD(tf, fmt.Sprintf("Node: %s, error: %+v", tf.Name, err))
+			c.errorTraceflowCRD(tf, fmt.Sprintf("Node: %s, error: %+v", c.nodeConfig.Name, err))
 		}
 	}()
+	if err != nil {
+		return err
+	}
+	// Deploy flow entries for traceflow
+	klog.V(2).Infof("Deploy flow entries for Traceflow %s", tf.Name)
+	err = c.ofClient.InstallTraceflowFlows(tf.Status.DataplaneTag)
 	if err != nil {
 		return err
 	}
@@ -266,6 +287,13 @@ func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) error {
 	}
 	err = c.injectPacket(tf)
 	return err
+}
+
+func (c *Controller) validateTraceflow(tf *opsv1alpha1.Traceflow) error {
+	if tf.Spec.Destination.Service != "" && !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		return errors.New("using Service destination requires AntreaProxy feature enabled")
+	}
+	return nil
 }
 
 func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
@@ -285,7 +313,7 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		if hasInterface {
 			dstMAC = dstPodInterface.MAC.String()
 		}
-	} else {
+	} else if tf.Spec.Destination.Pod != "" {
 		dstPodInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Destination.Pod, tf.Spec.Destination.Namespace)
 		if len(dstPodInterfaces) > 0 {
 			dstMAC = dstPodInterfaces[0].MAC.String()
@@ -299,11 +327,18 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 			dstIP = dstPod.Status.PodIP
 			dstNodeIP = dstPod.Status.HostIP
 		}
+	} else if tf.Spec.Destination.Service != "" {
+		dstSvc, err := c.serviceLister.Services(tf.Spec.Destination.Namespace).Get(tf.Spec.Destination.Service)
+		if err != nil {
+			return err
+		}
+		dstIP = dstSvc.Spec.ClusterIP
 	}
-	if dstNodeIP != "" {
+	// Check encap status if no dstMAC found which means the destination is Service or the destination Pod/IP is not on local Node.
+	if dstMAC == "" {
 		peerIP := net.ParseIP(dstNodeIP)
-		if c.networkConfig.TunnelType == ovsconfig.GeneveTunnel && peerIP != nil && c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(peerIP, c.nodeConfig.NodeIPAddr) {
-			// Wait a small period for other Nodes.
+		if c.networkConfig.TunnelType == ovsconfig.GeneveTunnel && (tf.Spec.Destination.Pod == "" || c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(peerIP, c.nodeConfig.NodeIPAddr)) {
+			// If the destination is Service/IP or the packet will be encapsulated to remote Node, wait a small period for other Nodes.
 			time.Sleep(time.Duration(injectPacketDelay) * time.Second)
 		} else {
 			// Inter-node traceflow is only available when the packet is encapsulated in Geneve tunnel.

@@ -512,12 +512,19 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 // avoid unexpected packet drop in Traceflow.
 func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cookie.Category) binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	return connectionTrackStateTable.BuildFlow(priorityNormal+2).
+	flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow+2).
 		MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
 		SetHardTimeout(300).
-		Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
+		Cookie(c.cookieAllocator.Request(category).Raw())
+	if c.enableProxy {
+		flowBuilder = flowBuilder.
+			Action().ResubmitToTable(sessionAffinityTable).
+			Action().ResubmitToTable(serviceLBTable)
+	} else {
+		flowBuilder = flowBuilder.
+			Action().ResubmitToTable(connectionTrackStateTable.GetNext())
+	}
+	return flowBuilder.Done()
 }
 
 // ctRewriteDstMACFlow rewrites the destination MAC with local host gateway MAC if the packets has set ct_mark but not sent from the host gateway.

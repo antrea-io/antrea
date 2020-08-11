@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/contiv/libOpenflow/openflow13"
+	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/ofnet/ofctrl"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -98,6 +99,27 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		ob.Action = opsv1alpha1.Received
 		ob.ComponentInfo = openflow.GetFlowTableName(openflow.ClassifierTable)
 		obs = append(obs, *ob)
+	}
+
+	// Collect Service DNAT.
+	if pktIn.Data.Ethertype == 0x800 {
+		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
+		if !ok {
+			return nil, nil, errors.New("invalid traceflow IPv4 packet")
+		}
+		ctNwDst, err := getInfoInCtNwDstField(matchers)
+		if err != nil {
+			return nil, nil, err
+		}
+		ipDst := ipPacket.NWDst.String()
+		if ctNwDst != "" && ipDst != ctNwDst {
+			ob := &opsv1alpha1.Observation{
+				Component:       opsv1alpha1.LB,
+				Action:          opsv1alpha1.Forwarded,
+				TranslatedDstIP: ipDst,
+			}
+			obs = append(obs, *ob)
+		}
 	}
 
 	// Collect egress conjunctionID and get NetworkPolicy from cache.
@@ -191,6 +213,18 @@ func getInfoInTunnelDst(regMatch *ofctrl.MatchField) (string, error) {
 	regValue, ok := regMatch.GetValue().(net.IP)
 	if !ok {
 		return "", errors.New("tunnel destination value cannot be got")
+	}
+	return regValue.String(), nil
+}
+
+func getInfoInCtNwDstField(matchers *ofctrl.Matchers) (string, error) {
+	match := matchers.GetMatchByName("NXM_NX_CT_NW_DST")
+	if match == nil {
+		return "", nil
+	}
+	regValue, ok := match.GetValue().(net.IP)
+	if !ok {
+		return "", errors.New("packet-in conntrack IP destination value cannot be retrieved from metadata")
 	}
 	return regValue.String(), nil
 }

@@ -138,6 +138,7 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		traceflowController = traceflow.NewTraceflowController(
 			k8sClient,
+			informerFactory,
 			crdClient,
 			traceflowInformer,
 			ofClient,

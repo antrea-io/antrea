@@ -18,13 +18,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -48,6 +51,9 @@ const (
 	// dataplaneTag=15 is reserved.
 	minTagNum uint8 = 1
 	maxTagNum uint8 = 14
+
+	// PodIP index name for Pod cache.
+	podIPIndex = "podIP"
 )
 
 var (
@@ -58,6 +64,7 @@ var (
 // Controller is for traceflow.
 type Controller struct {
 	client                 versioned.Interface
+	podInformer            coreinformers.PodInformer
 	traceflowInformer      opsinformers.TraceflowInformer
 	traceflowLister        opslisters.TraceflowLister
 	traceflowListerSynced  cache.InformerSynced
@@ -66,10 +73,11 @@ type Controller struct {
 	runningTraceflows      map[uint8]string // tag->traceflowName if tf.Status.Phase is Running.
 }
 
-// NewTraceflowController creates a new traceflow controller.
-func NewTraceflowController(client versioned.Interface, traceflowInformer opsinformers.TraceflowInformer) *Controller {
+// NewTraceflowController creates a new traceflow controller and adds podIP indexer to podInformer.
+func NewTraceflowController(client versioned.Interface, podInformer coreinformers.PodInformer, traceflowInformer opsinformers.TraceflowInformer) *Controller {
 	c := &Controller{
 		client:                client,
+		podInformer:           podInformer,
 		traceflowInformer:     traceflowInformer,
 		traceflowLister:       traceflowInformer.Lister(),
 		traceflowListerSynced: traceflowInformer.Informer().HasSynced,
@@ -84,7 +92,21 @@ func NewTraceflowController(client versioned.Interface, traceflowInformer opsinf
 		},
 		resyncPeriod,
 	)
+	// Add IP-Pod index. Each Pod has only 1 IP, the extra overhead is constant and acceptable.
+	// @tnqn evaluated the performance without/with IP index is 3us vs 4us per pod, i.e. 300ms vs 400ms for 100k Pods.
+	podInformer.Informer().AddIndexers(cache.Indexers{podIPIndex: podIPIndexFunc})
 	return c
+}
+
+func podIPIndexFunc(obj interface{}) ([]string, error) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil, fmt.Errorf("obj is not pod: %+v", obj)
+	}
+	if pod.Status.PodIP != "" && pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
+		return []string{pod.Status.PodIP}, nil
+	}
+	return nil, nil
 }
 
 // enqueueTraceflow adds an object to the controller work queue.
@@ -224,13 +246,27 @@ func (c *Controller) checkTraceflowStatus(tf *opsv1alpha1.Traceflow) (retry bool
 	retry = false
 	sender := false
 	receiver := false
-	for _, nodeResult := range tf.Status.Results {
-		for _, ob := range nodeResult.Observations {
+	for i, nodeResult := range tf.Status.Results {
+		for j, ob := range nodeResult.Observations {
 			if ob.Component == opsv1alpha1.SpoofGuard {
 				sender = true
 			}
 			if ob.Action == opsv1alpha1.Delivered || ob.Action == opsv1alpha1.Dropped {
 				receiver = true
+			}
+			if ob.TranslatedDstIP != "" {
+				// Add Pod ns/name to observation if TranslatedDstIP (a.k.a. Service Endpoint address) is Pod IP.
+				pods, err := c.podInformer.Informer().GetIndexer().ByIndex("podIP", ob.TranslatedDstIP)
+				if err != nil {
+					klog.Infof("Unable to find Pod from IP, error: %+v", err)
+				} else if len(pods) > 0 {
+					pod, ok := pods[0].(*corev1.Pod)
+					if !ok {
+						klog.Warningf("Invalid Pod obj in cache")
+					} else {
+						tf.Status.Results[i].Observations[j].Pod = fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+					}
+				}
 			}
 		}
 	}
