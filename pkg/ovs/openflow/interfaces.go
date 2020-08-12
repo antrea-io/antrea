@@ -226,6 +226,8 @@ type FlowBuilder interface {
 	MatchTCPDstPort(port uint16) FlowBuilder
 	MatchUDPDstPort(port uint16) FlowBuilder
 	MatchSCTPDstPort(port uint16) FlowBuilder
+	MatchICMPv6Type(icmp6Type byte) FlowBuilder
+	MatchICMPv6Code(icmp6Code byte) FlowBuilder
 	MatchTunMetadata(index int, data uint32) FlowBuilder
 	// MatchCTSrcIP matches the source IPv4 address of the connection tracker original direction tuple.
 	MatchCTSrcIP(ip net.IP) FlowBuilder
