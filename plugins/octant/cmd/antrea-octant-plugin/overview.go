@@ -30,13 +30,13 @@ const (
 type getTableFunc func(request service.Request) *component.Table
 
 // overviewHandler handlers the layout of Antrea Overview page.
-func overviewHandler(request service.Request) (component.ContentResponse, error) {
+func (p *antreaOctantPlugin) overviewHandler(request service.Request) (component.ContentResponse, error) {
 	layout := flexlayout.New()
 	listSection := layout.AddSection()
 	handlers := []getTableFunc{
-		getControllerTable,
-		getAgentTable,
-		getTfTable,
+		p.getControllerTable,
+		p.getAgentTable,
+		p.getTfTable,
 	}
 	resp := component.NewContentResponse(component.TitleFromString(overviewTitle))
 	err := listSection.Add(component.NewMarkdownText("## "+antreaTitle), component.WidthFull)

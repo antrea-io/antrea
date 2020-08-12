@@ -75,7 +75,7 @@ func createClusterWithDefaultStyle(graph *cgraph.Graph, name string) *cgraph.Gra
 	return cluster
 }
 
-func isSender(result opsv1alpha1.NodeResult) bool {
+func isSender(result *opsv1alpha1.NodeResult) bool {
 	if len(result.Observations) == 0 {
 		return false
 	}
@@ -85,7 +85,7 @@ func isSender(result opsv1alpha1.NodeResult) bool {
 	return true
 }
 
-func isReceiver(result opsv1alpha1.NodeResult) bool {
+func isReceiver(result *opsv1alpha1.NodeResult) bool {
 	if len(result.Observations) == 0 {
 		return false
 	}
@@ -95,9 +95,9 @@ func isReceiver(result opsv1alpha1.NodeResult) bool {
 	return true
 }
 
-func getNodeResult(tf *opsv1alpha1.Traceflow, fn func(result opsv1alpha1.NodeResult) bool) *opsv1alpha1.NodeResult {
+func getNodeResult(tf *opsv1alpha1.Traceflow, fn func(result *opsv1alpha1.NodeResult) bool) *opsv1alpha1.NodeResult {
 	for _, result := range tf.Status.Results {
-		if fn(result) {
+		if fn(&result) {
 			return &result
 		}
 	}
@@ -115,7 +115,29 @@ func getDstNodeName(tf *opsv1alpha1.Traceflow) string {
 	if len(tf.Spec.Destination.Namespace) > 0 && len(tf.Spec.Destination.Pod) > 0 {
 		return tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Pod
 	}
+	if len(tf.Spec.Destination.Namespace) > 0 && len(tf.Spec.Destination.Service) > 0 {
+		return tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Service
+	}
+	if len(tf.Spec.Destination.IP) > 0 {
+		return tf.Spec.Destination.IP
+	}
 	return ""
+}
+
+// getTraceflowMessage gets the shown message string in traceflow graph.
+func getTraceflowMessage(o *opsv1alpha1.Observation) string {
+	str := string(o.Component)
+	if len(o.ComponentInfo) > 0 {
+		str += "\n" + o.ComponentInfo
+	}
+	str += "\n" + string(o.Action)
+	if o.Component == opsv1alpha1.NetworkPolicy && len(o.NetworkPolicy) > 0 {
+		str += "\nNetpol: " + o.NetworkPolicy
+	}
+	if o.Action != opsv1alpha1.Dropped && len(o.TunnelDstIP) > 0 {
+		str += "\nTo: " + o.TunnelDstIP
+	}
+	return str
 }
 
 // In Graphviz, clusters are surrounded by a pair of "{}" with string "subgraph ClusterName" before them.
@@ -226,23 +248,14 @@ func genSubGraph(graph *cgraph.Graph, result opsv1alpha1.NodeResult, firstNodeNa
 			}
 		}
 		// Set the pattern of node.
-		labelStr := string(o.Component)
-		if len(o.ComponentInfo) > 0 {
-			labelStr += "\n" + o.ComponentInfo
-		}
-		labelStr += "\n" + string(o.Action)
-		if o.Component == opsv1alpha1.NetworkPolicy && len(o.NetworkPolicy) > 0 {
-			labelStr += "\nNetpol: " + o.NetworkPolicy
-		}
 		if o.Action == opsv1alpha1.Dropped {
 			node.SetColor(fireBrick)
 			node.SetFillColor(mistyRose)
 		} else {
 			node.SetFillColor(gainsboro)
-			if len(o.TunnelDstIP) > 0 {
-				labelStr += "\nTo: " + o.TunnelDstIP
-			}
 		}
+		// Set the message shown inside node.
+		labelStr := getTraceflowMessage(&o)
 		node.SetLabel(labelStr)
 	}
 	return nodes
@@ -260,7 +273,7 @@ func GenGraph(tf *opsv1alpha1.Traceflow) string {
 
 	senderRst := getNodeResult(tf, isSender)
 	receiverRst := getNodeResult(tf, isReceiver)
-	if senderRst == nil || tf.Status.Phase != opsv1alpha1.Succeeded || len(senderRst.Observations) == 0 {
+	if tf == nil || senderRst == nil || tf.Status.Phase != opsv1alpha1.Succeeded || len(senderRst.Observations) == 0 {
 		return genOutput(g, graph, true)
 	}
 

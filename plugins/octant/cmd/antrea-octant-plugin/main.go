@@ -30,11 +30,6 @@ import (
 
 var (
 	pluginName = "antrea-octant-plugin"
-	client     *clientset.Clientset
-	graph      = ""
-	lastTf     = opsv1alpha1.Traceflow{
-		ObjectMeta: v1.ObjectMeta{Name: ""},
-	}
 )
 
 const (
@@ -42,19 +37,36 @@ const (
 	title      = "Antrea"
 )
 
-func main() {
-	// Remove the prefix from the go logger since Octant will print logs with timestamps.
-	log.SetPrefix("")
+type antreaOctantPlugin struct {
+	client *clientset.Clientset
+	graph  string
+	lastTf *opsv1alpha1.Traceflow
+}
 
+func newAntreaOctantPlugin() *antreaOctantPlugin {
 	// Create a k8s client.
 	config, err := clientcmd.BuildConfigFromFlags("", os.Getenv(kubeConfig))
 	if err != nil {
 		log.Fatalf("Failed to build kubeConfig %v", err)
 	}
-	client, err = clientset.NewForConfig(config)
+	client, err := clientset.NewForConfig(config)
 	if err != nil {
 		log.Fatalf("Failed to create K8s client for %s: %v", pluginName, err)
 	}
+
+	return &antreaOctantPlugin{
+		client: client,
+		graph:  "",
+		lastTf: &opsv1alpha1.Traceflow{
+			ObjectMeta: v1.ObjectMeta{Name: ""},
+		},
+	}
+}
+
+func main() {
+	// Remove the prefix from the go logger since Octant will print logs with timestamps.
+	log.SetPrefix("")
+	a := newAntreaOctantPlugin()
 
 	capabilities := &plugin.Capabilities{
 		ActionNames: []string{addTfAction, showGraphAction},
@@ -63,8 +75,8 @@ func main() {
 
 	// Set up navigation services
 	options := []service.PluginOption{
-		service.WithNavigation(handleNavigation, initRoutes),
-		service.WithActionHandler(actionHandler),
+		service.WithNavigation(a.handleNavigation, a.initRoutes),
+		service.WithActionHandler(a.actionHandler),
 	}
 
 	// Register this plugin.
@@ -78,7 +90,7 @@ func main() {
 }
 
 // handleNavigation generates contents displayed on navigation bar and their paths.
-func handleNavigation(request *service.NavigationRequest) (navigation.Navigation, error) {
+func (p *antreaOctantPlugin) handleNavigation(request *service.NavigationRequest) (navigation.Navigation, error) {
 	return navigation.Navigation{
 		Title: title,
 		Path:  request.GeneratePath(),
@@ -109,17 +121,17 @@ func handleNavigation(request *service.NavigationRequest) (navigation.Navigation
 }
 
 // initRoutes routes for Antrea plugin.
-func initRoutes(router *service.Router) {
+func (p *antreaOctantPlugin) initRoutes(router *service.Router) {
 	// Click on the plugin icon or navigation child named Overview to display all Antrea information.
-	router.HandleFunc("", overviewHandler)
-	router.HandleFunc("/components/overview", overviewHandler)
+	router.HandleFunc("", p.overviewHandler)
+	router.HandleFunc("/components/overview", p.overviewHandler)
 
 	// Click on navigation child named Controller Info to display Controller information.
-	router.HandleFunc("/components/controller", controllerHandler)
+	router.HandleFunc("/components/controller", p.controllerHandler)
 
 	// Click on navigation child named Agent Info to display Agent information.
-	router.HandleFunc("/components/agent", agentHandler)
+	router.HandleFunc("/components/agent", p.agentHandler)
 
 	// Click on navigation child named "Antrea Traceflow"/"Tracelist" to display Antrea Traceflow information.
-	router.HandleFunc("/components/traceflow", traceflowHandler)
+	router.HandleFunc("/components/traceflow", p.traceflowHandler)
 }
