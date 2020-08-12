@@ -10,7 +10,7 @@ require (
 )
 
 replace (
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200601065543-2c7a62482f16
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200728094531-d5b4d75f2cc3
 	github.com/vmware-tanzu/antrea => ../../
 	// Octant v0.13.1 and Antrea use different versions of github.com/googleapis/gnostic.
 	// Octant v0.13.1 uses v0.4.1 and Antrea uses v0.1.0.
