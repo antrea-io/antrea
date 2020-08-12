@@ -171,12 +171,13 @@ precedence (lowest priority number value) is enforced first. Within this policy,
 rules are enforced in the order in which they are set. For example, consider the
 following:
 
-- CNP1{priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
-- CNP2{priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
+- CNP1{tier: Application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
+- CNP2{tier: Application, priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
+- CNP3{tier: Emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
 
 This translates to the following order:
-- Ingress rules: ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
-- Egress rules: er1.1 -> er1.2 -> er2.1 -> er2.2
+- Ingress rules: ir3.1 > ir3.2 > ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
+- Egress rules: er3.1 > er3.2 > er1.1 -> er1.2 -> er2.1 -> er2.2
 
 Once a rule is matched, it is executed based on the action set. If none of the
 CNP rules match, the packet is then enforced for rules created for K8s NP.
