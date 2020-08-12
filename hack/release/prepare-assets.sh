@@ -59,6 +59,9 @@ for build in "${ANTREA_BUILDS[@]}"; do
     BINDIR="$OUTPUT_DIR" make antrea-octant-plugin-release && cd ../..
 done
 
+BINDIR="$OUTPUT_DIR" make windows-bin
+sed "s/AntreaVersion=\"latest\"/AntreaVersion=\"$VERSION\"/" ./hack/windows/Start.ps1 > "$OUTPUT_DIR"/Start.ps1
+
 export IMG_TAG=$VERSION
 
 export IMG_NAME=antrea/antrea-ubuntu
