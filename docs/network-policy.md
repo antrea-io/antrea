@@ -1,4 +1,53 @@
-# Cluster Network Policy
+# Antrea Network Policies
+
+## Summary
+
+Antrea supports standard K8s NetworkPolicies to secure traffic between Pods. These
+NetworkPolicies are written from an application developer's perspective, hence they
+lack the ability to gain a finer-grained control over the security policies that
+a cluster administrator would require. This document describes a few new CRDs
+supported by Antrea to provide the administrator with more control over
+security within the cluster, and which are meant to co-exist with and complement the
+K8s NetworkPolicy.
+
+## Tier
+
+Antrea supports grouping Antrea NetworkPolicies together in a tiered fashion
+to provide a hierarchy of security policies. This is achieved by setting the `tier`
+field when defining Antrea NetworkPolicies (e.g. a ClusterNetworkPolicy object) to
+the appropriate tier name. Each tier has a priority associated with it, which
+determines its relative order among all tiers.
+
+**Note**: K8s NetworkPolicies will be enforced once all tiers have been enforced.
+
+### Static tiers
+
+Currently, we support 5 static tiers in Antrea. They are as follows in the
+relative order of precedence:
+
+```
+    Emergency > SecurityOps > NetworkOps > Platform > Application  
+```
+
+Thus, all ClusterNetworkPolicies associated with "Emergency" tier will be
+enforced before any other ClusterNetworkPolicy associated with any other tier,
+until a match occurs, in which case the policy rule's `action` will be
+applied. The "Application" tier carries the lowest precedence, and any
+ClusterNetworkPolicy without a `tier` name set in its spec will be
+associated with the "Application" tier. Even though the policies associated
+with the "Application" tier carry the lowest precedence amongst all the tiers,
+they are still enforced before K8s NetworkPolicies. Thus, admin created tiered
+policies have a higher precedence over developer-created K8s NetworkPolicies.
+
+
+### Tier CRDs
+
+Although static tiers provide a way to organize security policies for different
+use cases, they are not flexible i.e. admin cannot add/delete a new tier at
+will. This can be made possible by the introduction of Tier as CRDs. Tier CRDs
+will be available soon and will replace the existing static tiers.
+
+## Cluster Network Policy
 
 ClusterNetworkPolicy is a specification of how workloads within a cluster
 communicate with each other and other external endpoints.
@@ -6,7 +55,7 @@ The ClusterNetworkPolicy is supposed to aid cluster admins to configure
 the security policy for the cluster, unlike K8s NetworkPolicy, which is
 aimed towards developers to secure their apps and affects Pods within the
 Namespace in which the K8s NetworkPolicy is created.
-Rules belonging to ClusterNetworkPolicies are evaluated before any rule
+Rules belonging to ClusterNetworkPolicies are enforced before any rule
 belonging to a K8s NetworkPolicy.
 
 **Note**: ClusterNetworkPolicy is currently in "Alpha" stage. In order to
@@ -31,6 +80,7 @@ metadata:
   name: test-cnp
 spec:
     priority: 5
+    tier: SecurityOps
     appliedTo:
       - podSelector:
           matchLabels:
@@ -72,7 +122,7 @@ which the policy applies to. Pods can be selected cluster-wide using
 selected by the namespaceSelector will be selected. Specific Pods from
 specific Namespaces can be selected by providing both a `podSelector` and a
 `namespaceSelector` in the same `appliedTo` entry.
-IPBlock is not allowed to be set in the `appliedTo` field.
+IPBlock cannot be set in the `appliedTo` field.
 In the example, the policy applies to Pods, which either match the labels
 "role=db" in all the Namespaces, or are from Namespaces which match the
 labels "env=prod".
@@ -81,9 +131,14 @@ labels "env=prod".
 among all ClusterNetworkPolicies in the given cluster. This field is mandatory.
 A lower priority value indicates higher precedence. Priority values can range
 from 1.0 to 10000.0.
-**Note**: Policies with the same priorities will be evaluated
+**Note**: Policies with the same priorities will be enforced
 indeterministically. Users should therefore take care to use priorities to
 ensure the behavior they expect.
+
+**tier**: The `tier` field associates a CNP to an existing tier. As of now, the
+`tier` field can be set with "Emergency", "SecurityOps", "NetworkOps",
+"Platform" or "Application" as value. If not set, the CNP is associated with
+the lowest priority "Application" tier.
 
 **ingress**: Each ClusterNetworkPolicy may consist of zero or more ordered
 set of ingress rules. Each rule, depending on the `action` field of the rule,
@@ -93,7 +148,7 @@ single port, from one of two sources: the first specified by a `podSelector`
 and the second specified by a combination of a `podSelector` and a
 `namespaceSelector`.
 **Note**: The order in which the ingress rules are set matter, i.e. rules will be
-evaluated in the order in which they are written.
+enforced in the order in which they are written.
 
 **egress**: Each ClusterNetworkPolicy may consist of zero or more ordered set of
 egress rules. Each rule, depending on the `action` field of the rule, allows
@@ -101,25 +156,31 @@ or drops traffic which matches both the `to` and `ports` sections. The example
 policy contains a single rule, which drops matched traffic on a single port,
 to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
 **Note**: The order in which the egress rules are set matter, i.e. rules will be
-evaluated in the order in which they are written.
+enforced in the order in which they are written.
 
-## Rule evaluation based on priorities
+## Rule enforcement based on priorities
 
-Rules belonging to Cluster NetworkPolicy CRDs are associated with various
-priorities, such as the `priority` at the CNP level and the priority at rule
-level. Overall, Cluster Policy with highest precedence (lowest priority number
-value) is evaluated first. Within this policy, rules are evaluated in the order
-in which they are set. For example, consider the following:
+With the introduction of tiers, ClusterNetworkPolicies are first enforced
+based on the tier to which they are associated with. i.e. all CNP belonging
+to the "Emergency" tier are enforced first, followed by policies associated with
+the "SecurityOps" tier and so on, until the "Application" tier policies are
+enforced. Within a tier, rules belonging to Cluster NetworkPolicy CRDs are
+associated with various priorities, such as the `priority` at the CNP level and
+the priority at the rule level. Overall, the Cluster Policy with the highest
+precedence (lowest priority number value) is enforced first. Within this policy,
+rules are enforced in the order in which they are set. For example, consider the
+following:
 
-- CNP1{priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
-- CNP2{priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
+- CNP1{tier: Application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
+- CNP2{tier: Application, priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
+- CNP3{tier: Emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
 
 This translates to the following order:
-- Ingress rules: ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
-- Egress rules: er1.1 -> er1.2 -> er2.1 -> er2.2
+- Ingress rules: ir3.1 > ir3.2 > ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
+- Egress rules: er3.1 > er3.2 > er1.1 -> er1.2 -> er2.1 -> er2.2
 
 Once a rule is matched, it is executed based on the action set. If none of the
-CNP rules match, the packet is then evaluated for rules created for K8s NP.
+CNP rules match, the packet is then enforced for rules created for K8s NP.
 Hence, CNP take precedence over K8s NP.
 
 ## Behavior of `to` and `from` selectors
@@ -157,5 +218,5 @@ ephemeral and unpredictable.
 ## Notes
 
 - The v1alpha1 CNP CRD supports up to 10000 unique priority at policy level. In
-  order to reduce churn in the agent, it is recommended to set the priority
+  order to reduce the churn in the agent, it is recommended to set the priority
   within the range 1.0 to 100.0.
