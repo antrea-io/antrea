@@ -17,6 +17,7 @@ package types
 import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
 type AddressCategory uint8
@@ -49,6 +50,7 @@ type PolicyRule struct {
 	Action          *secv1alpha1.RuleAction
 	Priority        *uint16
 	FlowID          uint32
+	TableID         binding.TableIDType
 	PolicyName      string
 	PolicyNamespace string
 }
@@ -58,10 +60,20 @@ func (r *PolicyRule) IsAntreaNetworkPolicyRule() bool {
 	return r.Priority != nil
 }
 
-// Priority is a struct that is composed of CNP priority, rule priority and
-// tier/category priority in the future. It is used as the basic unit for
-// priority sorting.
+// Priority is a struct that is composed of Antrea NetworkPolicy priority, rule priority and Tier priority.
+// It is used as the basic unit for priority sorting.
 type Priority struct {
+	TierPriority   v1beta1.TierPriority
 	PolicyPriority float64
 	RulePriority   int32
+}
+
+func (p *Priority) Less(p2 Priority) bool {
+	if p.TierPriority == p2.TierPriority {
+		if p.PolicyPriority == p2.PolicyPriority {
+			return p.RulePriority > p2.RulePriority
+		}
+		return p.PolicyPriority > p2.PolicyPriority
+	}
+	return p.TierPriority > p2.TierPriority
 }

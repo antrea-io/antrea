@@ -434,17 +434,17 @@ func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 }
 
 // ReassignFlowPriorities mocks base method
-func (m *MockClient) ReassignFlowPriorities(arg0 map[uint16]uint16) error {
+func (m *MockClient) ReassignFlowPriorities(arg0 map[uint16]uint16, arg1 openflow.TableIDType) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReassignFlowPriorities", arg0)
+	ret := m.ctrl.Call(m, "ReassignFlowPriorities", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ReassignFlowPriorities indicates an expected call of ReassignFlowPriorities
-func (mr *MockClientMockRecorder) ReassignFlowPriorities(arg0 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) ReassignFlowPriorities(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignFlowPriorities", reflect.TypeOf((*MockClient)(nil).ReassignFlowPriorities), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignFlowPriorities", reflect.TypeOf((*MockClient)(nil).ReassignFlowPriorities), arg0, arg1)
 }
 
 // RegisterPacketInHandler mocks base method

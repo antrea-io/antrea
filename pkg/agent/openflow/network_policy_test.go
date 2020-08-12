@@ -128,6 +128,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		Action:          &defaultAction,
 		Priority:        nil,
 		FlowID:          ruleID1,
+		TableID:         EgressRuleTable,
 		PolicyName:      "np1",
 		PolicyNamespace: "ns1",
 	}
@@ -155,6 +156,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		Action:          &defaultAction,
 		To:              parseAddresses([]string{"0.0.0.0/0"}),
 		FlowID:          ruleID2,
+		TableID:         EgressRuleTable,
 		PolicyName:      "np1",
 		PolicyNamespace: "ns1",
 	}
@@ -193,6 +195,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		Action:          &defaultAction,
 		Service:         []v1beta1.Service{npPort1, npPort2},
 		FlowID:          ruleID3,
+		TableID:         EgressRuleTable,
 		PolicyName:      "np1",
 		PolicyNamespace: "ns1",
 	}
@@ -252,9 +255,23 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 		Action:          &defaultAction,
 		To:              parseAddresses([]string{"0.0.0.0/0"}),
 		FlowID:          ruleID1,
+		TableID:         EgressRuleTable,
 		PolicyName:      "np1",
 		PolicyNamespace: "ns1",
 	}
+	ruleID2 := uint32(20)
+	rule2 := &types.PolicyRule{
+		Direction:       v1beta1.DirectionOut,
+		From:            parseAddresses([]string{"192.168.1.60"}),
+		Action:          &defaultAction,
+		Priority:        &priorityRule2,
+		To:              parseAddresses([]string{"192.168.1.70"}),
+		FlowID:          ruleID2,
+		TableID:         ApplicationEgressRuleTable,
+		PolicyName:      "np2",
+		PolicyNamespace: "ns1",
+	}
+
 	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
 	ruleFlowBuilder := newMockRuleFlowBuilder(ctrl)
 	outTable.EXPECT().BuildFlow(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
@@ -273,18 +290,6 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 	assert.Equal(t, 2, getChangedFlowCount(dropFlows1))
 	assert.Equal(t, 3, getChangedFlowCount(matchFlows1))
 	assert.Equal(t, 3, getChangedFlowOPCount(matchFlows1, insertion))
-
-	ruleID2 := uint32(20)
-	rule2 := &types.PolicyRule{
-		Direction:       v1beta1.DirectionOut,
-		From:            parseAddresses([]string{"192.168.1.60"}),
-		Action:          &defaultAction,
-		Priority:        &priorityRule2,
-		To:              parseAddresses([]string{"192.168.1.70"}),
-		FlowID:          ruleID2,
-		PolicyName:      "np2",
-		PolicyNamespace: "ns1",
-	}
 
 	conj2 := &policyRuleConjunction{id: ruleID2}
 	conj2.calculateClauses(rule2, c)
@@ -519,16 +524,16 @@ func prepareClient(ctrl *gomock.Controller) *client {
 	)
 	bridge := mocks.NewMockBridge(ctrl)
 	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	cnpOutTable = createMockTable(ctrl, cnpEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
+	cnpOutTable = createMockTable(ctrl, ApplicationEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
 	outTable = createMockTable(ctrl, EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext)
 	outDropTable = createMockTable(ctrl, EgressDefaultTable, l3ForwardingTable, binding.TableMissActionNext)
 	outAllowTable = createMockTable(ctrl, l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext)
 	c = &client{
 		pipeline: map[binding.TableIDType]binding.Table{
-			cnpEgressRuleTable: cnpOutTable,
-			EgressRuleTable:    outTable,
-			EgressDefaultTable: outDropTable,
-			l3ForwardingTable:  outAllowTable,
+			ApplicationEgressRuleTable: cnpOutTable,
+			EgressRuleTable:            outTable,
+			EgressDefaultTable:         outDropTable,
+			l3ForwardingTable:          outAllowTable,
 		},
 		policyCache:              policyCache,
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
