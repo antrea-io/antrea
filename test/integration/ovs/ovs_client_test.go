@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -206,6 +207,57 @@ func TestOVSOtherConfig(t *testing.T) {
 	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
 	require.Nil(t, err, "Error when getting OVS other_config")
 	require.Equal(t, map[string]string{"foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
+}
+
+func TestTunnelOptionCsum(t *testing.T) {
+	testCases := map[string]struct {
+		initialCsum bool
+		updatedCsum bool
+	}{
+		"initial false, kept false": {
+			initialCsum: false,
+			updatedCsum: false,
+		},
+		"initial false, updated to true": {
+			initialCsum: false,
+			updatedCsum: true,
+		},
+		"initial true, kept true": {
+			initialCsum: true,
+			updatedCsum: true,
+		},
+		"initial true, updated to false": {
+			initialCsum: true,
+			updatedCsum: false,
+		},
+	}
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			data := &testData{}
+			data.setup(t)
+			defer data.teardown(t)
+
+			name := "vxlan0"
+			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, testCase.initialCsum, "", "", "", nil)
+			require.Nil(t, err, "Error when creating tunnel port")
+			options, err := data.br.GetInterfaceOptions(name)
+			require.Nil(t, err, "Error when getting interface options")
+			actualInitialCsum, _ := strconv.ParseBool(options["csum"])
+			require.Equal(t, testCase.initialCsum, actualInitialCsum)
+
+			updatedOptions := map[string]interface{}{}
+			for k, v := range options {
+				updatedOptions[k] = v
+			}
+			updatedOptions["csum"] = strconv.FormatBool(testCase.updatedCsum)
+			err = data.br.SetInterfaceOptions(name, updatedOptions)
+			require.Nil(t, err, "Error when setting interface options")
+			options, err = data.br.GetInterfaceOptions(name)
+			require.Nil(t, err, "Error when getting interface options")
+			actualCsum, _ := strconv.ParseBool(options["csum"])
+			require.Equal(t, testCase.updatedCsum, actualCsum)
+		})
+	}
 }
 
 func deleteAllPorts(t *testing.T, br *ovsconfig.OVSBridge) {

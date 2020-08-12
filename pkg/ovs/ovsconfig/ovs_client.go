@@ -372,7 +372,7 @@ func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, extern
 // the bridge.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 func (br *OVSBridge) CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32) (string, Error) {
-	return br.createTunnelPort(name, tunnelType, ofPortRequest, "", "", "", nil)
+	return br.createTunnelPort(name, tunnelType, ofPortRequest, false, "", "", "", nil)
 }
 
 // CreateTunnelPortExt creates a tunnel port with the specified name and type
@@ -389,6 +389,7 @@ func (br *OVSBridge) CreateTunnelPortExt(
 	name string,
 	tunnelType TunnelType,
 	ofPortRequest int32,
+	csum bool,
 	localIP string,
 	remoteIP string,
 	psk string,
@@ -396,13 +397,14 @@ func (br *OVSBridge) CreateTunnelPortExt(
 	if psk != "" && remoteIP == "" {
 		return "", newInvalidArgumentsError("IPSec tunnel can not be flow based. remoteIP must be set")
 	}
-	return br.createTunnelPort(name, tunnelType, ofPortRequest, localIP, remoteIP, psk, externalIDs)
+	return br.createTunnelPort(name, tunnelType, ofPortRequest, csum, localIP, remoteIP, psk, externalIDs)
 }
 
 func (br *OVSBridge) createTunnelPort(
 	name string,
 	tunnelType TunnelType,
 	ofPortRequest int32,
+	csum bool,
 	localIP string,
 	remoteIP string,
 	psk string,
@@ -415,7 +417,7 @@ func (br *OVSBridge) createTunnelPort(
 		return "", newInvalidArgumentsError(fmt.Sprint("invalid ofPortRequest value: ", ofPortRequest))
 	}
 
-	options := make(map[string]interface{}, 2)
+	options := make(map[string]interface{}, 3)
 	if remoteIP != "" {
 		options["remote_ip"] = remoteIP
 	} else {
@@ -430,20 +432,63 @@ func (br *OVSBridge) createTunnelPort(
 	if psk != "" {
 		options["psk"] = psk
 	}
+	if csum {
+		options["csum"] = "true"
+	}
 
 	return br.createPort(name, name, string(tunnelType), ofPortRequest, externalIDs, options)
 }
 
-// ParseTunnelInterfaceOptions reads remote IP and IPSec PSK from the tunnel
-// interface options and returns them.
-func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string) {
+// GetInterfaceOptions returns the options of the provided interface.
+func (br *OVSBridge) GetInterfaceOptions(name string) (map[string]string, Error) {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Select(dbtransaction.Select{
+		Table:   "Interface",
+		Where:   [][]interface{}{{"name", "==", name}},
+		Columns: []string{"options"},
+	})
+
+	res, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return nil, NewTransactionError(err, temporary)
+	}
+
+	optionsRes := res[0].Rows[0].(map[string]interface{})["options"].([]interface{})
+	return buildMapFromOVSDBMap(optionsRes), nil
+}
+
+// SetInterfaceOptions sets the specified options of the provided interface.
+func (br *OVSBridge) SetInterfaceOptions(name string, options map[string]interface{}) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+
+	tx.Update(dbtransaction.Update{
+		Table: "Interface",
+		Where: [][]interface{}{{"name", "==", name}},
+		Row: map[string]interface{}{
+			"options": helpers.MakeOVSDBMap(options),
+		},
+	})
+
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}
+
+// ParseTunnelInterfaceOptions reads remote IP, local IP, IPSec PSK, and csum
+// from the tunnel interface options and returns them.
+func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string, bool) {
 	if portData.Options == nil {
-		return nil, nil, ""
+		return nil, nil, "", false
 	}
 
 	var ok bool
 	var remoteIPStr, localIPStr, psk string
 	var remoteIP, localIP net.IP
+	var csum bool
 
 	if remoteIPStr, ok = portData.Options["remote_ip"]; ok {
 		if remoteIPStr != "flow" {
@@ -455,7 +500,10 @@ func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string)
 	}
 
 	psk = portData.Options["psk"]
-	return remoteIP, localIP, psk
+	if csumStr, ok := portData.Options["csum"]; ok {
+		csum, _ = strconv.ParseBool(csumStr)
+	}
+	return remoteIP, localIP, psk, csum
 }
 
 // CreateUplinkPort creates uplink port.

@@ -489,12 +489,23 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		localIPStr = localIP.String()
 	}
 
+	// Enabling UDP checksum can greatly improve the performance for Geneve and
+	// VXLAN tunnels by triggering GRO on the receiver.
+	shouldEnableCsum := i.networkConfig.TunnelType == ovsconfig.GeneveTunnel || i.networkConfig.TunnelType == ovsconfig.VXLANTunnel
+
 	// Check the default tunnel port.
 	if portExists {
 		if i.networkConfig.TrafficEncapMode.SupportsEncap() &&
 			tunnelIface.TunnelInterfaceConfig.Type == i.networkConfig.TunnelType &&
 			tunnelIface.TunnelInterfaceConfig.LocalIP.Equal(localIP) {
 			klog.V(2).Infof("Tunnel port %s already exists on OVS bridge", tunnelPortName)
+			// This could happen when upgrading from previous versions that didn't set it.
+			if shouldEnableCsum && !tunnelIface.TunnelInterfaceConfig.Csum {
+				if err := i.enableTunnelCsum(tunnelPortName); err != nil {
+					return fmt.Errorf("failed to enable csum for tunnel port %s: %v", tunnelPortName, err)
+				}
+				tunnelIface.TunnelInterfaceConfig.Csum = true
+			}
 			return nil
 		}
 
@@ -518,16 +529,30 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 			tunnelPortName = defaultTunInterfaceName
 			i.nodeConfig.DefaultTunName = tunnelPortName
 		}
-		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, localIPStr, "", "", nil)
+		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, shouldEnableCsum, localIPStr, "", "", nil)
 		if err != nil {
 			klog.Errorf("Failed to create tunnel port %s type %s on OVS bridge: %v", tunnelPortName, i.networkConfig.TunnelType, err)
 			return err
 		}
-		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType, localIP)
+		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType, localIP, shouldEnableCsum)
 		tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: tunnelPortUUID, OFPort: config.DefaultTunOFPort}
 		i.ifaceStore.AddInterface(tunnelIface)
 	}
 	return nil
+}
+
+func (i *Initializer) enableTunnelCsum(tunnelPortName string) error {
+	options, err := i.ovsBridgeClient.GetInterfaceOptions(tunnelPortName)
+	if err != nil {
+		return fmt.Errorf("error getting interface options: %w", err)
+	}
+
+	updatedOptions := make(map[string]interface{})
+	for k, v := range options {
+		updatedOptions[k] = v
+	}
+	updatedOptions["csum"] = "true"
+	return i.ovsBridgeClient.SetInterfaceOptions(tunnelPortName, updatedOptions)
 }
 
 // initNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
