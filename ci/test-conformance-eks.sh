@@ -168,37 +168,9 @@ function deliver_antrea_to_eks() {
 
     echo "=== Configuring Antrea for cluster ==="
 
-    # EKS service CIDR is currently assigned by AWS,
-    # either from 172.20.0.0/16 or 10.100.0.0/16 depending on the range of VPC
-    # https://forums.aws.amazon.com/thread.jspa?messageID=859958
-    k8s_svc_addr=$(kubectl get svc -A | grep kubernetes | awk '{print $4}')
-
-    if [[ $k8s_svc_addr == 10.100.* ]]; then
-    	 k8s_svc_cidr='10.100.0.0/16'
-    elif [[ $k8s_svc_addr == 172.20.* ]]; then
-    	 k8s_svc_cidr='172.20.0.0/16'
-    else
-    	 echo "Cannot determine EKS serviceCIDR!"
-         exit 1
-    fi
-
-    set +e
-    worker_node_ip_1=$(kubectl get nodes -o wide | sed -n '2 p' | awk '{print $7}')
-    node_mtu=$(ssh -i $SSH_PRIVATE_KEY_PATH -o StrictHostKeyChecking=no -l "ec2-user" $worker_node_ip_1 \
-      'export PATH=$PATH:/usr/sbin; ip a | grep -E eth0.*mtu | cut -d " " -f5')
-    if [[ -z ${node_mtu} ]]; then
-         echo "Cannot determine node MTU!"
-         exit 1
-    fi
-
-    sed -i "s|#defaultMTU: 1450|defaultMTU: ${node_mtu}|g"  ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
-    sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: ${k8s_svc_cidr}|g"  ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
-    echo "defaultMTU set as ${node_mtu}"
-    echo "seviceCIDR set as ${k8s_svc_cidr}"
+    kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks-node-init.yml
 
     kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
-    set -e
-
     kubectl rollout status --timeout=2m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=2m daemonset/antrea-agent -n kube-system
 
@@ -230,8 +202,9 @@ function run_conformance() {
 
     if [[ "$TEST_FAILURE" == false ]]; then
         echo "=== SUCCESS !!! ==="
+    else
+        echo "=== FAILURE !!! ==="
     fi
-    echo "=== FAILURE !!! ==="
 }
 
 function cleanup_cluster() {
