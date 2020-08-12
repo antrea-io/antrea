@@ -29,8 +29,10 @@ limitations under the License.
 // limitations under the License.
 
 Modifies:
-- Remove interface "Provider"
-- Remove import "k8s.io/kubernetes/pkg/proxy/config"
+- Replace import "k8s.io/kubernetes/pkg/proxy/config" with "github.com/vmware-tanzu/antrea/third_party/proxy/config"
+- Remove config.EndpointSliceHandler, config.NodeHandler from Provider interface type
+- Remove NodeHandler, EndpointSliceHandler, Sync() from Provider interface
+- Add Run(), GetServiceByIP() to Provider interface
 */
 
 package proxy
@@ -41,7 +43,22 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/vmware-tanzu/antrea/third_party/proxy/config"
 )
+
+// Provider is the interface provided by proxier implementations.
+type Provider interface {
+	config.EndpointsHandler
+	config.ServiceHandler
+
+	// SyncLoop runs periodic work.
+	// This is expected to run as a goroutine or as the main loop of the app.
+	// It does not return.
+	SyncLoop()
+	Run(stopCh <-chan struct{})
+	GetServiceByIP(serviceStr string) (ServicePortName, bool)
+}
 
 // ServicePortName carries a namespace + name + portname.  This is the unique
 // identifier for a load-balanced service.

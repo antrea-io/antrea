@@ -1705,6 +1705,20 @@ func (mr *MockFlowBuilderMockRecorder) MatchTunMetadata(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunMetadata", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunMetadata), arg0, arg1)
 }
 
+// MatchXXReg mocks base method
+func (m *MockFlowBuilder) MatchXXReg(arg0 int, arg1 []byte) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchXXReg", arg0, arg1)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchXXReg indicates an expected call of MatchXXReg
+func (mr *MockFlowBuilderMockRecorder) MatchXXReg(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchXXReg", reflect.TypeOf((*MockFlowBuilder)(nil).MatchXXReg), arg0, arg1)
+}
+
 // SetHardTimeout mocks base method
 func (m *MockFlowBuilder) SetHardTimeout(arg0 uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()

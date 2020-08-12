@@ -68,6 +68,7 @@ const (
 	NxmFieldReg         = "NXM_NX_REG"
 	NxmFieldTunMetadata = "NXM_NX_TUN_METADATA"
 	NxmFieldIPToS       = "NXM_OF_IP_TOS"
+	NxmFieldXXReg       = "NXM_NX_XXREG"
 )
 
 const (
@@ -203,6 +204,7 @@ type FlowBuilder interface {
 	MatchPriority(uint16) FlowBuilder
 	MatchProtocol(name Protocol) FlowBuilder
 	MatchReg(regID int, data uint32) FlowBuilder
+	MatchXXReg(regID int, data []byte) FlowBuilder
 	MatchRegRange(regID int, data uint32, rng Range) FlowBuilder
 	MatchInPort(inPort uint32) FlowBuilder
 	MatchDstIP(ip net.IP) FlowBuilder
@@ -253,16 +255,20 @@ type FlowBuilder interface {
 
 type LearnAction interface {
 	DeleteLearned() LearnAction
-	MatchEthernetProtocolIP() LearnAction
+	MatchEthernetProtocolIP(isIPv6 bool) LearnAction
 	MatchTransportDst(protocol Protocol) LearnAction
 	MatchLearnedTCPDstPort() LearnAction
 	MatchLearnedUDPDstPort() LearnAction
 	MatchLearnedSCTPDstPort() LearnAction
+	MatchLearnedTCPv6DstPort() LearnAction
+	MatchLearnedUDPv6DstPort() LearnAction
+	MatchLearnedSCTPv6DstPort() LearnAction
 	MatchLearnedSrcIP() LearnAction
 	MatchLearnedDstIP() LearnAction
 	MatchReg(regID int, data uint32, rng Range) LearnAction
 	LoadReg(regID int, data uint32, rng Range) LearnAction
 	LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
+	LoadXXRegToXXReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
 	SetDstMAC(mac net.HardwareAddr) LearnAction
 	Done() FlowBuilder
 }
@@ -276,6 +282,7 @@ type Group interface {
 type BucketBuilder interface {
 	Weight(val uint16) BucketBuilder
 	LoadReg(regID int, data uint32) BucketBuilder
+	LoadXXReg(regID int, data []byte) BucketBuilder
 	LoadRegRange(regID int, data uint32, rng Range) BucketBuilder
 	ResubmitToTable(tableID TableIDType) BucketBuilder
 	Done() Group
