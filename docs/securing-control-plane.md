@@ -156,3 +156,6 @@ re-distributing the latest CA certificate (if applicable).
 
 If you are using cert-manager to issue the certificate, it will renew the
 certificate before expiry and update the Secret automatically.
+
+If you are using certificates signed by Antrea, Antrea will rotate the
+certificate automatically before expiration.
