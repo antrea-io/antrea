@@ -38,11 +38,13 @@ exploration.
 ## Deployment Steps
 To create all the necessary resources in the `elk-flow-collector` namespace
 and get everything up-and-running, run:
+
 ```shell
 kubectl create namespace elk-flow-collector
 kubectl create configmap logstash-configmap -n elk-flow-collector --from-file=build/yamls/elk-flow-collector/logstash/
 kubectl apply -f build/yamls/elk-flow-collector/elk-flow-collector.yml -n elk-flow-collector
 ```
+
 Kibana dashboard is exposed as a Nodeport Service, which can be accessed via
 `http://[NodeIP]: 30007`
 
@@ -91,8 +93,8 @@ for filters.
 Visualization Flow Record Dashboard">
 
 ### Node Throughput
-Node Throughput dashboard shows the visualization of inter-Node and 
-intra-Node traffic by aggregating all the Pod traffic per Node.
+Node Throughput dashboard shows the visualization of inter-node and 
+intra-node traffic by aggregating all the pod traffic per node.
 
 <img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-node-1.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
