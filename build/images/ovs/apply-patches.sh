@@ -73,6 +73,11 @@ curl https://github.com/openvswitch/ovs/commit/3c18bb0fe9f23308061217f72e2245f0e
 curl https://github.com/openvswitch/ovs/commit/fe175ac17352ceb2dbc9958112b4b1bc114d82f0.patch | \
     git apply
 
+# The OVS ovs-monitor-ipsec script has a Python3 shebang but still includes some Python2-specific code.
+# Until the patch which fixes the script is merged upstream, we apply it here, or Antrea IPsec support will be broken.
+curl https://github.com/lzhecheng/ovs/commit/869b06356e389079861962160e864df609d033e5.patch | \
+    git apply
+
 # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
 # does not seem to be in the Python path in Ubuntu 20.04. There may be a better way to do this,
 # but this seems like an acceptable workaround.
