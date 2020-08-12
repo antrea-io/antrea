@@ -58,6 +58,9 @@ type TunnelInterfaceConfig struct {
 	// IP address of the remote Node.
 	RemoteIP net.IP
 	PSK      string
+	// Whether options:csum is set for this tunnel interface.
+	// If true, encapsulation header UDP checksums will be computed on outgoing packets.
+	Csum bool
 }
 
 type InterfaceConfig struct {
@@ -117,8 +120,8 @@ func NewGatewayInterface(gatewayName string) *InterfaceConfig {
 
 // NewTunnelInterface creates InterfaceConfig for the default tunnel port
 // interface.
-func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, localIP net.IP) *InterfaceConfig {
-	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, LocalIP: localIP}
+func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, localIP net.IP, csum bool) *InterfaceConfig {
+	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, LocalIP: localIP, Csum: csum}
 	return &InterfaceConfig{InterfaceName: tunnelName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
 }
 
