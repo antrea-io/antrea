@@ -26,7 +26,7 @@ import (
 // installLoadBalancerServiceFlows install OpenFlow entries for LoadBalancer Service.
 // The rules for traffic from local Pod to LoadBalancer Service are same with rules for Cluster Service.
 // For the LoadBalancer Service traffic from outside, kube-proxy will handle it.
-func (p *Proxier) installLoadBalancerServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
+func (p *proxier) installLoadBalancerServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
 	if err := p.ofClient.InstallServiceFlows(groupID, svcIP, svcPort, protocol, affinityTimeout); err != nil {
 		klog.Errorf("Error when installing LoadBalancer Service flows: %v", err)
 		return err

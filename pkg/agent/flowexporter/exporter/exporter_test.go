@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -146,6 +147,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 	for i, ie := range AntreaInfoElements {
 		elemList[i+len(IANAInfoElements)+len(IANAReverseInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
 	}
+
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
 	mockDataRec := ipfixtest.NewMockIPFIXRecord(ctrl)
 	flowExp := &flowExporter{
@@ -165,13 +167,15 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 			mockDataRec.EXPECT().AddInfoElement(ie, time.Time{}.Unix()).Return(tempBytes, nil)
 		case "sourceIPv4Address", "destinationIPv4Address":
 			mockDataRec.EXPECT().AddInfoElement(ie, nil).Return(tempBytes, nil)
+		case "destinationClusterIP":
+			mockDataRec.EXPECT().AddInfoElement(ie, net.IP{0, 0, 0, 0}).Return(tempBytes, nil)
 		case "sourceTransportPort", "destinationTransportPort":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint16(0)).Return(tempBytes, nil)
 		case "protocolIdentifier":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint8(0)).Return(tempBytes, nil)
 		case "packetTotalCount", "octetTotalCount", "packetDeltaCount", "octetDeltaCount", "reverse_PacketTotalCount", "reverse_OctetTotalCount", "reverse_PacketDeltaCount", "reverse_OctetDeltaCount":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint64(0)).Return(tempBytes, nil)
-		case "sourcePodName", "sourcePodNamespace", "sourceNodeName", "destinationPodName", "destinationPodNamespace", "destinationNodeName":
+		case "sourcePodName", "sourcePodNamespace", "sourceNodeName", "destinationPodName", "destinationPodNamespace", "destinationNodeName", "destinationServicePortName":
 			mockDataRec.EXPECT().AddInfoElement(ie, "").Return(tempBytes, nil)
 		}
 	}

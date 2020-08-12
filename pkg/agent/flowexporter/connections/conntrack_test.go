@@ -38,25 +38,25 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	// Create flows for test
 	tuple, revTuple := makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
 	antreaFlow := &flowexporter.Connection{
-		TupleOrig:  *tuple,
-		TupleReply: *revTuple,
+		TupleOrig:  tuple,
+		TupleReply: revTuple,
 		Zone:       openflow.CtZone,
 	}
 	tuple, revTuple = makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{100, 50, 25, 5}, 6, 60001, 200)
 	antreaServiceFlow := &flowexporter.Connection{
-		TupleOrig:  *tuple,
-		TupleReply: *revTuple,
+		TupleOrig:  tuple,
+		TupleReply: revTuple,
 		Zone:       openflow.CtZone,
 	}
 	tuple, revTuple = makeTuple(&net.IP{5, 6, 7, 8}, &net.IP{8, 7, 6, 5}, 6, 60001, 200)
 	antreaGWFlow := &flowexporter.Connection{
-		TupleOrig:  *tuple,
-		TupleReply: *revTuple,
+		TupleOrig:  tuple,
+		TupleReply: revTuple,
 		Zone:       openflow.CtZone,
 	}
 	nonAntreaFlow := &flowexporter.Connection{
-		TupleOrig:  *tuple,
-		TupleReply: *revTuple,
+		TupleOrig:  tuple,
+		TupleReply: revTuple,
 		Zone:       100,
 	}
 	testFlows := []*flowexporter.Connection{antreaFlow, antreaServiceFlow, antreaGWFlow, nonAntreaFlow}
