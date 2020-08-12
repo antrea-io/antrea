@@ -486,7 +486,7 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlowBuilder.EXPECT().Action().Return(ruleAction).AnyTimes()
 	ruleFlow = mocks.NewMockFlow(ctrl)
 	ruleFlowBuilder.EXPECT().Done().Return(ruleFlow).AnyTimes()
-	ruleFlow.EXPECT().CopyToBuilder(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	ruleFlow.EXPECT().CopyToBuilder(gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlow.EXPECT().FlowPriority().Return(uint16(priorityNormal)).AnyTimes()
 	ruleFlow.EXPECT().MatchString().Return("").AnyTimes()
 	return ruleFlowBuilder

@@ -262,7 +262,7 @@ func (ctx *conjMatchFlowContext) createOrUpdateConjunctiveMatchFlow(actions []*c
 	}
 
 	// Modify the existing Openflow entry and reset the actions.
-	flowBuilder := ctx.flow.CopyToBuilder(0)
+	flowBuilder := ctx.flow.CopyToBuilder(0, false)
 	for _, act := range actions {
 		flowBuilder.Action().Conjunction(act.conjID, act.clauseID, act.nClause)
 	}
@@ -1182,9 +1182,7 @@ func (c *client) getMatchFlowUpdates(conj *policyRuleConjunction, newPriority ui
 	for _, c := range allClause {
 		for _, ctx := range c.matches {
 			f := ctx.flow
-			updatedFlow := f.ToBuilder().
-				MatchPriority(newPriority).
-				Done()
+			updatedFlow := f.CopyToBuilder(newPriority, true).Done()
 			add = append(add, updatedFlow)
 			del = append(del, f)
 		}
@@ -1247,9 +1245,7 @@ func (c *client) updateConjunctionMatchFlows(conj *policyRuleConjunction, newPri
 		for i, ctx := range clause.matches {
 			delete(c.globalConjMatchFlowCache, ctx.generateGlobalMapKey())
 			f := ctx.flow
-			updatedFlow := f.ToBuilder().
-				MatchPriority(newPriority).
-				Done()
+			updatedFlow := f.CopyToBuilder(newPriority, true).Done()
 			clause.matches[i].flow = updatedFlow
 			clause.matches[i].priority = &newPriority
 		}
@@ -1279,10 +1275,7 @@ func (c *client) calculateFlowUpdates(updates map[uint16]uint16, table binding.T
 				if flowPriority == original {
 					// The OF flow was created at the priority which need to be re-installed
 					// at the NewPriority now
-					updatedFlow := actionFlow.
-						ToBuilder().
-						MatchPriority(newPriority).
-						Done()
+					updatedFlow := actionFlow.CopyToBuilder(newPriority, true).Done()
 					addFlows = append(addFlows, updatedFlow)
 					delFlows = append(delFlows, actionFlow)
 					// Store the actionFlow update to the policyRuleConjunction and update all
