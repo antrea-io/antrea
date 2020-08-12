@@ -91,7 +91,9 @@ func run(o *Options) error {
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, features.DefaultFeatureGate.Enabled(features.AntreaProxy))
+	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
+		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
+		features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy))
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)

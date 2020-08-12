@@ -307,8 +307,8 @@ func testCNPDropEgress(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// testCNPPriorityOverride tests priority overriding in three CNPs. Those three CNPs are applied in the
-// reverse order in terms of priority, and each controls a smaller set of traffic patterns.
+// testCNPPriorityOverride tests priority overriding in three CNPs. Those three CNPs are applied in a specific order to
+// test priority reassignment, and each controls a smaller set of traffic patterns as priority increases.
 func testCNPPriorityOverride(t *testing.T) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("cnp-priority1").
@@ -336,27 +336,120 @@ func testCNPPriorityOverride(t *testing.T) {
 	builder3.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, secv1alpha1.RuleActionDrop)
 
-	reachabilityBothCNP := NewReachability(allPods, true)
-	reachabilityBothCNP.Expect(Pod("z/a"), Pod("x/b"), false)
-	reachabilityBothCNP.Expect(Pod("z/a"), Pod("x/c"), false)
-	reachabilityBothCNP.Expect(Pod("z/b"), Pod("x/a"), false)
-	reachabilityBothCNP.Expect(Pod("z/b"), Pod("x/b"), false)
-	reachabilityBothCNP.Expect(Pod("z/b"), Pod("x/c"), false)
-	reachabilityBothCNP.Expect(Pod("z/c"), Pod("x/b"), false)
-	reachabilityBothCNP.Expect(Pod("z/c"), Pod("x/c"), false)
+	reachabilityTwoCNPs := NewReachability(allPods, true)
+	reachabilityTwoCNPs.Expect(Pod("z/a"), Pod("x/b"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/a"), Pod("x/c"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/b"), Pod("x/b"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/b"), Pod("x/c"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/c"), Pod("x/b"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/c"), Pod("x/c"), false)
 
-	// Create the CNPs in reverse priority order to make sure that priority re-assignments work as expected.
-	testStep := []*TestStep{
+	reachabilityAllCNPs := NewReachability(allPods, true)
+	reachabilityAllCNPs.Expect(Pod("z/a"), Pod("x/b"), false)
+	reachabilityAllCNPs.Expect(Pod("z/a"), Pod("x/c"), false)
+	reachabilityAllCNPs.Expect(Pod("z/b"), Pod("x/a"), false)
+	reachabilityAllCNPs.Expect(Pod("z/b"), Pod("x/b"), false)
+	reachabilityAllCNPs.Expect(Pod("z/b"), Pod("x/c"), false)
+	reachabilityAllCNPs.Expect(Pod("z/c"), Pod("x/b"), false)
+	reachabilityAllCNPs.Expect(Pod("z/c"), Pod("x/c"), false)
+
+	testStepTwoCNP := []*TestStep{
 		{
-			"Both CNP",
-			reachabilityBothCNP,
-			[]*secv1alpha1.ClusterNetworkPolicy{builder3.Get(), builder2.Get(), builder1.Get()},
+			"Two CNPs with different priorities",
+			reachabilityTwoCNPs,
+			[]*secv1alpha1.ClusterNetworkPolicy{builder3.Get(), builder2.Get()},
+			80,
+			0,
+		},
+	}
+	// Create the CNPs in specific order to make sure that priority re-assignments work as expected.
+	testStepAll := []*TestStep{
+		{
+			"All three CNPs",
+			reachabilityAllCNPs,
+			[]*secv1alpha1.ClusterNetworkPolicy{builder3.Get(), builder1.Get(), builder2.Get()},
 			80,
 			0,
 		},
 	}
 	testCase := []*TestCase{
-		{"CNP PriorityOverride", testStep},
+		{"CNP PriorityOverride Intermediate", testStepTwoCNP},
+		{"CNP PriorityOverride All", testStepAll},
+	}
+	executeTests(t, testCase)
+}
+
+// testCNPTierOverride tests tier priority overriding in three CNPs.
+// Each CNP controls a smaller set of traffic patterns as tier priority increases.
+func testCNPTierOverride(t *testing.T) {
+	builder1 := &ClusterNetworkPolicySpecBuilder{}
+	builder1 = builder1.SetName("cnp-tier-emergency").
+		SetTier("Emergency").
+		SetPriority(1).
+		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
+	podZBIP, _ := podIPs["z/b"]
+	cidr := podZBIP + "/32"
+	// Highest priority tier. Drops traffic from z/b to x/a.
+	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, &cidr, nil, nil,
+		nil, nil, secv1alpha1.RuleActionDrop)
+
+	builder2 := &ClusterNetworkPolicySpecBuilder{}
+	builder2 = builder2.SetName("cnp-tier-securityops").
+		SetTier("SecurityOps").
+		SetPriority(1).
+		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
+	// Medium priority tier. Allows traffic from z to x/a.
+	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
+		nil, nil, secv1alpha1.RuleActionAllow)
+
+	builder3 := &ClusterNetworkPolicySpecBuilder{}
+	builder3 = builder3.SetName("cnp-tier-application").
+		SetTier("Application").
+		SetPriority(1).
+		SetAppliedToGroup(nil, map[string]string{"ns": "x"}, nil, nil)
+	// Lowest priority tier. Drops traffic from z to x.
+	builder3.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
+		nil, nil, secv1alpha1.RuleActionDrop)
+
+	reachabilityTwoCNPs := NewReachability(allPods, true)
+	reachabilityTwoCNPs.Expect(Pod("z/a"), Pod("x/b"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/a"), Pod("x/c"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/b"), Pod("x/b"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/b"), Pod("x/c"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/c"), Pod("x/b"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/c"), Pod("x/c"), false)
+
+	reachabilityAllCNPs := NewReachability(allPods, true)
+	reachabilityAllCNPs.Expect(Pod("z/a"), Pod("x/b"), false)
+	reachabilityAllCNPs.Expect(Pod("z/a"), Pod("x/c"), false)
+	reachabilityAllCNPs.Expect(Pod("z/b"), Pod("x/a"), false)
+	reachabilityAllCNPs.Expect(Pod("z/b"), Pod("x/b"), false)
+	reachabilityAllCNPs.Expect(Pod("z/b"), Pod("x/c"), false)
+	reachabilityAllCNPs.Expect(Pod("z/c"), Pod("x/b"), false)
+	reachabilityAllCNPs.Expect(Pod("z/c"), Pod("x/c"), false)
+
+	testStepTwoCNP := []*TestStep{
+		{
+			"Two CNPs with different tier priorities",
+			reachabilityTwoCNPs,
+			[]*secv1alpha1.ClusterNetworkPolicy{builder3.Get(), builder2.Get()},
+			80,
+			0,
+		},
+	}
+	// Create the CNPs in specific order to make sure that priority re-assignments work as expected.
+	testStepAll := []*TestStep{
+		{
+			"All three CNPs",
+			reachabilityAllCNPs,
+			[]*secv1alpha1.ClusterNetworkPolicy{builder3.Get(), builder1.Get(), builder2.Get()},
+			80,
+			0,
+		},
+	}
+	testCase := []*TestCase{
+		{"CNP TierOverride Intermediate", testStepTwoCNP},
+		{"CNP TierOverride All", testStepAll},
 	}
 	executeTests(t, testCase)
 }
@@ -545,6 +638,7 @@ func TestClusterNetworkPolicy(t *testing.T) {
 		t.Run("Case=CNPAllowNoDefaultIsolation", func(t *testing.T) { testCNPAllowNoDefaultIsolation(t) })
 		t.Run("Case=CNPDropEgress", func(t *testing.T) { testCNPDropEgress(t) })
 		t.Run("Case=CNPPrioirtyOverride", func(t *testing.T) { testCNPPriorityOverride(t) })
+		t.Run("Case=CNPTierOverride", func(t *testing.T) { testCNPTierOverride(t) })
 		t.Run("Case=CNPPriorityConflictingRule", func(t *testing.T) { testCNPPriorityConflictingRule(t) })
 		t.Run("Case=CNPRulePriority", func(t *testing.T) { testCNPRulePrioirty(t) })
 	})

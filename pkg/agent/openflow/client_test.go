@@ -88,7 +88,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
@@ -116,7 +116,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
@@ -157,7 +157,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
@@ -191,7 +191,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.nodeConfig = &config.NodeConfig{}
