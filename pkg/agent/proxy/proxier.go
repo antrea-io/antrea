@@ -38,8 +38,15 @@ const (
 	componentName = "antrea-agent-proxy"
 )
 
+var _ Proxier = new(proxier)
+
+type Proxier interface {
+	Run(stopCh <-chan struct{})
+	GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool)
+}
+
 // TODO: Add metrics
-type Proxier struct {
+type proxier struct {
 	once            sync.Once
 	endpointsConfig *config.EndpointsConfig
 	serviceConfig   *config.ServiceConfig
@@ -60,6 +67,10 @@ type Proxier struct {
 	// endpointInstalledMap stores endpoints we actually installed.
 	endpointInstalledMap map[k8sproxy.ServicePortName]map[string]struct{}
 	groupCounter         types.GroupCounter
+	// serviceStringMap provides map from serviceString(ClusterIP:Port/Proto) to ServicePortName.
+	serviceStringMap map[string]k8sproxy.ServicePortName
+	// serviceStringMapMutex protects serviceStringMap object.
+	serviceStringMapMutex sync.Mutex
 
 	runner       *k8sproxy.BoundedFrequencyRunner
 	stopChan     <-chan struct{}
@@ -67,11 +78,11 @@ type Proxier struct {
 	ofClient     openflow.Client
 }
 
-func (p *Proxier) isInitialized() bool {
+func (p *proxier) isInitialized() bool {
 	return p.endpointsChanges.Synced() && p.serviceChanges.Synced()
 }
 
-func (p *Proxier) removeStaleServices() {
+func (p *proxier) removeStaleServices() {
 	for svcPortName, svcPort := range p.serviceInstalledMap {
 		if _, ok := p.serviceMap[svcPortName]; ok {
 			continue
@@ -101,11 +112,12 @@ func (p *Proxier) removeStaleServices() {
 			continue
 		}
 		delete(p.serviceInstalledMap, svcPortName)
+		p.deleteServiceByIP(svcInfo.String())
 		p.groupCounter.Recycle(svcPortName)
 	}
 }
 
-func (p *Proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
+func (p *proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
 	for svcPortName, endpoints := range staleEndpoints {
 		bindingProtocol := binding.ProtocolTCP
 		if svcPortName.Protocol == corev1.ProtocolUDP {
@@ -128,7 +140,7 @@ func (p *Proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortNa
 	}
 }
 
-func (p *Proxier) installServices() {
+func (p *proxier) installServices() {
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
 		groupID, _ := p.groupCounter.Get(svcPortName)
@@ -185,13 +197,14 @@ func (p *Proxier) installServices() {
 			}
 		}
 		p.serviceInstalledMap[svcPortName] = svcPort
+		p.addServiceByIP(svcInfo.String(), svcPortName)
 	}
 }
 
 // syncProxyRulesMutex applies current changes in change trackers and then updates
 // flows for services and endpoints. It will abort if either endpoints or services
 // resources is not synced.
-func (p *Proxier) syncProxyRules() {
+func (p *proxier) syncProxyRules() {
 	p.syncProxyRulesMutex.Lock()
 	defer p.syncProxyRulesMutex.Unlock()
 
@@ -212,53 +225,75 @@ func (p *Proxier) syncProxyRules() {
 	p.installServices()
 }
 
-func (p *Proxier) SyncLoop() {
+func (p *proxier) SyncLoop() {
 	p.runner.Loop(p.stopChan)
 }
 
-func (p *Proxier) OnEndpointsAdd(endpoints *corev1.Endpoints) {
+func (p *proxier) OnEndpointsAdd(endpoints *corev1.Endpoints) {
 	p.OnEndpointsUpdate(nil, endpoints)
 }
 
-func (p *Proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
+func (p *proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
 	if p.endpointsChanges.OnEndpointUpdate(oldEndpoints, endpoints) && p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
-func (p *Proxier) OnEndpointsDelete(endpoints *corev1.Endpoints) {
+func (p *proxier) OnEndpointsDelete(endpoints *corev1.Endpoints) {
 	p.OnEndpointsUpdate(endpoints, nil)
 }
 
-func (p *Proxier) OnEndpointsSynced() {
+func (p *proxier) OnEndpointsSynced() {
 	p.endpointsChanges.OnEndpointsSynced()
 	if p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
-func (p *Proxier) OnServiceAdd(service *corev1.Service) {
+func (p *proxier) OnServiceAdd(service *corev1.Service) {
 	p.OnServiceUpdate(nil, service)
 }
 
-func (p *Proxier) OnServiceUpdate(oldService, service *corev1.Service) {
+func (p *proxier) OnServiceUpdate(oldService, service *corev1.Service) {
 	if p.serviceChanges.OnServiceUpdate(oldService, service) && p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
-func (p *Proxier) OnServiceDelete(service *corev1.Service) {
+func (p *proxier) OnServiceDelete(service *corev1.Service) {
 	p.OnServiceUpdate(service, nil)
 }
 
-func (p *Proxier) OnServiceSynced() {
+func (p *proxier) OnServiceSynced() {
 	p.serviceChanges.OnServiceSynced()
 	if p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
-func (p *Proxier) Run(stopCh <-chan struct{}) {
+func (p *proxier) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool) {
+	p.serviceStringMapMutex.Lock()
+	defer p.serviceStringMapMutex.Unlock()
+
+	serviceInfo, exists := p.serviceStringMap[serviceStr]
+	return serviceInfo, exists
+}
+
+func (p *proxier) addServiceByIP(serviceStr string, servicePortName k8sproxy.ServicePortName) {
+	p.serviceStringMapMutex.Lock()
+	defer p.serviceStringMapMutex.Unlock()
+
+	p.serviceStringMap[serviceStr] = servicePortName
+}
+
+func (p *proxier) deleteServiceByIP(serviceStr string) {
+	p.serviceStringMapMutex.Lock()
+	defer p.serviceStringMapMutex.Unlock()
+
+	delete(p.serviceStringMap, serviceStr)
+}
+
+func (p *proxier) Run(stopCh <-chan struct{}) {
 	p.once.Do(func() {
 		go p.serviceConfig.Run(stopCh)
 		go p.endpointsConfig.Run(stopCh)
@@ -267,12 +302,12 @@ func (p *Proxier) Run(stopCh <-chan struct{}) {
 	})
 }
 
-func New(hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) *Proxier {
+func New(hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
 	)
-	p := &Proxier{
+	p := &proxier{
 		endpointsConfig:      config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:        config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
 		endpointsChanges:     newEndpointsChangesTracker(hostname),
@@ -281,6 +316,7 @@ func New(hostname string, informerFactory informers.SharedInformerFactory, ofCli
 		serviceInstalledMap:  k8sproxy.ServiceMap{},
 		endpointInstalledMap: map[k8sproxy.ServicePortName]map[string]struct{}{},
 		endpointsMap:         types.EndpointsMap{},
+		serviceStringMap:     map[string]k8sproxy.ServicePortName{},
 		groupCounter:         types.NewGroupCounter(),
 		ofClient:             ofClient,
 	}

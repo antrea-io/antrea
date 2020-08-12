@@ -16,30 +16,43 @@ package connections
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 )
 
-type ConnectionStore struct {
-	connections  map[flowexporter.ConnectionKey]flowexporter.Connection
-	connDumper   ConnTrackDumper
-	ifaceStore   interfacestore.InterfaceStore
-	pollInterval time.Duration
-	mutex        sync.Mutex
+var serviceProtocolMap = map[uint8]corev1.Protocol{
+	6:   corev1.ProtocolTCP,
+	17:  corev1.ProtocolUDP,
+	132: corev1.ProtocolSCTP,
 }
 
-func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, pollInterval time.Duration) *ConnectionStore {
+type ConnectionStore struct {
+	connections   map[flowexporter.ConnectionKey]flowexporter.Connection
+	connDumper    ConnTrackDumper
+	ifaceStore    interfacestore.InterfaceStore
+	serviceCIDR   *net.IPNet
+	antreaProxier proxy.Proxier
+	pollInterval  time.Duration
+	mutex         sync.Mutex
+}
+
+func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, serviceCIDR *net.IPNet, proxier proxy.Proxier, pollInterval time.Duration) *ConnectionStore {
 	return &ConnectionStore{
-		connections:  make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		connDumper:   connTrackDumper,
-		ifaceStore:   ifaceStore,
-		pollInterval: pollInterval,
+		connections:   make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		connDumper:    connTrackDumper,
+		ifaceStore:    ifaceStore,
+		serviceCIDR:   serviceCIDR,
+		antreaProxier: proxier,
+		pollInterval:  pollInterval,
 	}
 }
 
@@ -91,6 +104,7 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		cs.connections[connKey] = *existingConn
 		klog.V(4).Infof("Antrea flow updated: %v", existingConn)
 	} else {
+		// sourceIP/destinationIP are mapped only to local pods and not remote pods.
 		var srcFound, dstFound bool
 		sIface, srcFound := cs.ifaceStore.GetInterfaceByIP(conn.TupleOrig.SourceAddress.String())
 		dIface, dstFound := cs.ifaceStore.GetInterfaceByIP(conn.TupleReply.SourceAddress.String())
@@ -112,6 +126,26 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		// TODO: Remove this when network policy rule ID are added to flow records.
 		if !srcFound && dstFound {
 			conn.DoExport = false
+		}
+
+		// Process Pod-to-Service flows when Antrea Proxy is enabled.
+		if cs.antreaProxier != nil {
+			if cs.serviceCIDR.Contains(conn.TupleOrig.DestinationAddress) {
+				clusterIP := conn.TupleOrig.DestinationAddress.String()
+				svcPort := conn.TupleOrig.DestinationPort
+				protocol, err := lookupServiceProtocol(conn.TupleOrig.Protocol)
+				if err != nil {
+					klog.Warningf("Could not retrieve Service protocol: %v", err)
+				} else {
+					serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
+					servicePortName, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
+					if !exists {
+						klog.Warningf("Could not retrieve the Service info from antrea-agent-proxier for the serviceStr: %s", serviceStr)
+					} else {
+						conn.DestinationServicePortName = servicePortName.String()
+					}
+				}
+			}
 		}
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
@@ -183,4 +217,13 @@ func (cs *ConnectionStore) DeleteConnectionByKey(connKey flowexporter.Connection
 	delete(cs.connections, connKey)
 
 	return nil
+}
+
+// LookupServiceProtocol returns the corresponding Service protocol string for a given protocol identifier
+func lookupServiceProtocol(protoID uint8) (corev1.Protocol, error) {
+	serviceProto, found := serviceProtocolMap[protoID]
+	if !found {
+		return "", fmt.Errorf("unknown protocol identifier: %d", protoID)
+	}
+	return serviceProto, nil
 }

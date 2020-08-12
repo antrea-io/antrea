@@ -37,7 +37,7 @@ func makeNamespaceName(namespace, name string) apimachinerytypes.NamespacedName 
 	return apimachinerytypes.NamespacedName{Namespace: namespace, Name: name}
 }
 
-func makeServiceMap(proxier *Proxier, allServices ...*corev1.Service) {
+func makeServiceMap(proxier *proxier, allServices ...*corev1.Service) {
 	for i := range allServices {
 		proxier.serviceChanges.OnServiceUpdate(nil, allServices[i])
 	}
@@ -58,7 +58,7 @@ func makeTestService(namespace, name string, svcFunc func(*corev1.Service)) *cor
 	return svc
 }
 
-func makeEndpointsMap(proxier *Proxier, allEndpoints ...*corev1.Endpoints) {
+func makeEndpointsMap(proxier *proxier, allEndpoints ...*corev1.Endpoints) {
 	for i := range allEndpoints {
 		proxier.endpointsChanges.OnEndpointUpdate(nil, allEndpoints[i])
 	}
@@ -76,14 +76,14 @@ func makeTestEndpoints(namespace, name string, eptFunc func(*corev1.Endpoints)) 
 	return ept
 }
 
-func NewFakeProxier(ofClient openflow.Client) *Proxier {
+func NewFakeProxier(ofClient openflow.Client) *proxier {
 	hostname := "localhost"
 	eventBroadcaster := record.NewBroadcaster()
 	recorder := eventBroadcaster.NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
 	)
-	p := &Proxier{
+	p := &proxier{
 		endpointsChanges:     newEndpointsChangesTracker(hostname),
 		serviceChanges:       newServiceChangesTracker(recorder),
 		serviceMap:           k8sproxy.ServiceMap{},
@@ -92,6 +92,7 @@ func NewFakeProxier(ofClient openflow.Client) *Proxier {
 		endpointsMap:         types.EndpointsMap{},
 		groupCounter:         types.NewGroupCounter(),
 		ofClient:             ofClient,
+		serviceStringMap:     map[string]k8sproxy.ServicePortName{},
 	}
 	return p
 }

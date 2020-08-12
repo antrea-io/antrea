@@ -162,7 +162,7 @@ func run(o *Options) error {
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
 	}
-	var proxier *proxy.Proxier
+	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
 	}
@@ -247,6 +247,8 @@ func run(o *Options) error {
 		connStore := connections.NewConnectionStore(
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, agentQuerier.GetOVSCtlClient(), o.config.OVSDatapathType),
 			ifaceStore,
+			serviceCIDRNet,
+			proxier,
 			o.pollInterval)
 		pollDone := make(chan struct{})
 		go connStore.Run(stopCh, pollDone)

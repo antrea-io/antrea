@@ -51,10 +51,11 @@ type Connection struct {
 	OriginalPackets, OriginalBytes uint64
 	ReversePackets, ReverseBytes   uint64
 	// Fields specific to Antrea
-	SourcePodNamespace      string
-	SourcePodName           string
-	DestinationPodNamespace string
-	DestinationPodName      string
+	SourcePodNamespace         string
+	SourcePodName              string
+	DestinationPodNamespace    string
+	DestinationPodName         string
+	DestinationServicePortName string
 }
 
 type FlowRecord struct {
