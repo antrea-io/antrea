@@ -1,5 +1,18 @@
 # Antrea Network Policies
 
+## Table of Contents
+
+- [Summary](#summary)
+- [Tier](#tier)
+  - [Static Tiers](#static-tiers)
+  - [Tier CRDs](#tier-crds)
+- [ClusterNetworkPolicy](#clusternetworkpolicy)
+  - [The ClusterNetworkPolicy resource](#the-clusternetworkpolicy-resource)
+  - [Rule enforcement based on priorities](#rule-enforcement-based-on-priorities)
+  - [Behavior of to and from selectors](#behavior-of-to-and-from-selectors)
+  - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
+- [Notes](#notes)
+
 ## Summary
 
 Antrea supports standard K8s NetworkPolicies to secure traffic between Pods. These
@@ -47,7 +60,7 @@ use cases, they are not flexible i.e. admin cannot add/delete a new tier at
 will. This can be made possible by the introduction of Tier as CRDs. Tier CRDs
 will be available soon and will replace the existing static tiers.
 
-## Cluster Network Policy
+## ClusterNetworkPolicy
 
 ClusterNetworkPolicy is a specification of how workloads within a cluster
 communicate with each other and other external endpoints.
@@ -59,8 +72,8 @@ Rules belonging to ClusterNetworkPolicies are enforced before any rule
 belonging to a K8s NetworkPolicy.
 
 **Note**: ClusterNetworkPolicy is currently in "Alpha" stage. In order to
-enable them, edit the Controller configuration in the `antrea` ConfigMap
-as follows:
+enable them, edit the Controller and Agent configuration in the `antrea`
+ConfigMap as follows:
 ```yaml
    antrea-controller.conf: |
      featureGates:
@@ -69,8 +82,16 @@ as follows:
        # entire cluster.
        ClusterNetworkPolicy: true
 ```
+```yaml
+   antrea-agent.conf: |
+     featureGates:
+       # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy
+       # for cluster admins to define security policies which apply to the
+       # entire cluster.
+       ClusterNetworkPolicy: true
+```
 
-## The ClusterNetworkPolicy resource
+### The ClusterNetworkPolicy resource
 
 An example ClusterNetworkPolicy might look like this:
 ```
@@ -158,7 +179,7 @@ to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
 **Note**: The order in which the egress rules are set matter, i.e. rules will be
 enforced in the order in which they are written.
 
-## Rule enforcement based on priorities
+### Rule enforcement based on priorities
 
 With the introduction of tiers, ClusterNetworkPolicies are first enforced
 based on the tier to which they are associated with. i.e. all CNP belonging
@@ -183,7 +204,7 @@ Once a rule is matched, it is executed based on the action set. If none of the
 CNP rules match, the packet is then enforced for rules created for K8s NP.
 Hence, CNP take precedence over K8s NP.
 
-## Behavior of `to` and `from` selectors
+### Behavior of `to` and `from` selectors
 
 There are four kinds of selectors that can be specified in an ingress `from`
 section or egress `to` section:
@@ -202,7 +223,7 @@ particular Namespaces.
 or `egress` "destinations". These should be cluster-external IPs, since Pod IPs are
 ephemeral and unpredictable.
 
-## Key differences from K8s NetworkPolicy
+### Key differences from K8s NetworkPolicy
 
 - ClusterNetworkPolicy is at the cluster scope, hence a `podSelector` without any
   `namespaceSelector` selects Pods from all Namespaces.
