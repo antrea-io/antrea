@@ -15,6 +15,7 @@
 package types
 
 import (
+	"github.com/vmware-tanzu/antrea/third_party/proxy/config"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -54,3 +55,16 @@ func NewEndpointInfo(baseInfo *k8sproxy.BaseEndpointInfo) k8sproxy.Endpoint {
 }
 
 type EndpointsMap map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint
+
+// Provider is the interface provided by proxier implementations.
+type Provider interface {
+	config.EndpointsHandler
+	config.ServiceHandler
+
+	// SyncLoop runs periodic work.
+	// This is expected to run as a goroutine or as the main loop of the app.
+	// It does not return.
+	SyncLoop()
+	Run(stopCh <-chan struct{})
+	GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool)
+}

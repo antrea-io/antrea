@@ -38,6 +38,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -162,9 +163,13 @@ func run(o *Options) error {
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
 	}
-	var proxier proxy.Proxier
+	var proxier types.Provider
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
+		if features.DefaultFeatureGate.Enabled(features.IPv6DualStack) {
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
+		} else {
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
+		}
 	}
 	cniServer := cniserver.New(
 		o.config.CNISocket,
@@ -224,7 +229,7 @@ func run(o *Options) error {
 	go agentMonitor.Run(stopCh)
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		go proxier.Run(stopCh)
+		proxier.Run(stopCh)
 	}
 
 	apiServer, err := apiserver.New(

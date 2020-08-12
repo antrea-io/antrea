@@ -26,7 +26,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
+	proxytypes "github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 )
 
 var serviceProtocolMap = map[uint8]corev1.Protocol{
@@ -40,12 +40,12 @@ type ConnectionStore struct {
 	connDumper    ConnTrackDumper
 	ifaceStore    interfacestore.InterfaceStore
 	serviceCIDR   *net.IPNet
-	antreaProxier proxy.Proxier
+	antreaProxier proxytypes.Provider
 	pollInterval  time.Duration
 	mutex         sync.Mutex
 }
 
-func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, serviceCIDR *net.IPNet, proxier proxy.Proxier, pollInterval time.Duration) *ConnectionStore {
+func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, serviceCIDR *net.IPNet, proxier proxytypes.Provider, pollInterval time.Duration) *ConnectionStore {
 	return &ConnectionStore{
 		connections:   make(map[flowexporter.ConnectionKey]flowexporter.Connection),
 		connDumper:    connTrackDumper,

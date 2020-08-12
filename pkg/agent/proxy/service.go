@@ -31,8 +31,7 @@ type serviceChangesTracker struct {
 	initialized bool
 }
 
-func newServiceChangesTracker(recorder record.EventRecorder) *serviceChangesTracker {
-	enableIPV6 := false
+func newServiceChangesTracker(recorder record.EventRecorder, enableIPV6 bool) *serviceChangesTracker {
 	return &serviceChangesTracker{tracker: k8sproxy.NewServiceChangeTracker(types.NewServiceInfo, &enableIPV6, recorder)}
 }
 

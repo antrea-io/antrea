@@ -38,12 +38,8 @@ const (
 	componentName = "antrea-agent-proxy"
 )
 
-var _ Proxier = new(proxier)
-
-type Proxier interface {
-	Run(stopCh <-chan struct{})
-	GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool)
-}
+// Proxier implements proxy.Provider
+var _ types.Provider = &proxier{}
 
 // TODO: Add metrics
 type proxier struct {
@@ -302,7 +298,11 @@ func (p *proxier) Run(stopCh <-chan struct{}) {
 	})
 }
 
-func New(hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) *proxier {
+func NewProxier(
+	hostname string,
+	informerFactory informers.SharedInformerFactory,
+	ofClient openflow.Client,
+	enableIPV6 bool) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
@@ -311,7 +311,7 @@ func New(hostname string, informerFactory informers.SharedInformerFactory, ofCli
 		endpointsConfig:      config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:        config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
 		endpointsChanges:     newEndpointsChangesTracker(hostname),
-		serviceChanges:       newServiceChangesTracker(recorder),
+		serviceChanges:       newServiceChangesTracker(recorder, enableIPV6),
 		serviceMap:           k8sproxy.ServiceMap{},
 		serviceInstalledMap:  k8sproxy.ServiceMap{},
 		endpointInstalledMap: map[k8sproxy.ServicePortName]map[string]struct{}{},
@@ -324,4 +324,21 @@ func New(hostname string, informerFactory informers.SharedInformerFactory, ofCli
 	p.endpointsConfig.RegisterEventHandler(p)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, 0, 30*time.Second, -1)
 	return p
+}
+
+func NewDualStackProxier(
+	hostname string,
+	informerFactory informers.SharedInformerFactory,
+	ofClient openflow.Client) types.Provider {
+
+	// Create an ipv4 instance of the single-stack proxier
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false)
+
+	// Create an ipv6 instance of the single-stack proxier
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true)
+
+	// Return a meta-proxier that dispatch calls between the two
+	// single-stack proxier instances
+	metaProxier := NewMetaProxier(ipv4Proxier, ipv6Proxier)
+	return metaProxier
 }

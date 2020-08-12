@@ -29,8 +29,8 @@ limitations under the License.
 // limitations under the License.
 
 Modifies:
-- Remove interface "Provider"
-- Remove import "k8s.io/kubernetes/pkg/proxy/config"
+- Replace import "k8s.io/kubernetes/pkg/proxy/config" with "github.com/vmware-tanzu/antrea/third_party/proxy/config"
+- Remove config.EndpointSliceHandler, config.NodeHandler from Provider interface type
 */
 
 package proxy
