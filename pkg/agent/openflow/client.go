@@ -473,10 +473,11 @@ func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMA
 func (c *client) InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
 	flows := []binding.Flow{
 		c.gatewayClassifierFlow(gatewayOFPort, cookie.Default),
-		c.gatewayIPSpoofGuardFlow(gatewayOFPort, cookie.Default),
 		c.ctRewriteDstMACFlow(gatewayMAC, cookie.Default),
 		c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default),
 	}
+	hasIPv6Addr := util.ContainIPv6Addr(gatewayAddrs)
+	flows = append(flows, c.gatewayIPSpoofGuardFlows(gatewayOFPort, hasIPv6Addr, cookie.Default)...)
 
 	// Add ARP SpoofGuard flow for local gateway interface.
 	gwIPv4 := util.GetIPv4Addr(gatewayAddrs)
@@ -524,7 +525,10 @@ func (c *client) initialize() error {
 	if err := c.ofEntryOperations.Add(c.arpNormalFlow(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install arp normal flow: %v", err)
 	}
-	if err := c.ofEntryOperations.Add(c.l2ForwardOutputFlow(cookie.Default)); err != nil {
+	if err := c.ofEntryOperations.AddAll(c.ipv6Flows(cookie.Default)); err != nil {
+		return fmt.Errorf("failed to install ipv6 flows: %v", err)
+	}
+	if err := c.ofEntryOperations.AddAll(c.l2ForwardOutputFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install L2 forward output flows: %v", err)
 	}
 	if err := c.ofEntryOperations.AddAll(c.connectionTrackFlows(cookie.Default)); err != nil {
