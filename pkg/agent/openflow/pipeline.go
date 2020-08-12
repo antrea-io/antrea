@@ -40,6 +40,7 @@ const (
 	uplinkTable                 binding.TableIDType = 5
 	spoofGuardTable             binding.TableIDType = 10
 	arpResponderTable           binding.TableIDType = 20
+	ipv6Table                   binding.TableIDType = 21
 	serviceHairpinTable         binding.TableIDType = 29
 	conntrackTable              binding.TableIDType = 30
 	conntrackStateTable         binding.TableIDType = 31
@@ -85,6 +86,11 @@ const (
 	markTrafficFromGateway = 1
 	markTrafficFromLocal   = 2
 	markTrafficFromUplink  = 4
+
+	// IPv6 multicast prefix
+	ipv6MulticastAddr = "FF00::/8"
+	// IPv6 link-local prefix
+	ipv6LinkLocalAddr = "FE80::/10"
 )
 
 var (
@@ -108,6 +114,7 @@ var (
 		{uplinkTable, "Uplink"},
 		{spoofGuardTable, "SpoofGuard"},
 		{arpResponderTable, "ARPResponder"},
+		{ipv6Table, "IPv6"},
 		{serviceHairpinTable, "ServiceHairpin"},
 		{conntrackTable, "ConntrackZone"},
 		{conntrackStateTable, "ConntrackState"},
@@ -219,7 +226,8 @@ const (
 	// the selection result needs to be cached.
 	marksRegServiceNeedLearn uint32 = 0b011
 
-	CtZone = 0xfff0
+	CtZone   = 0xfff0
+	CtZoneV6 = 0xffe6
 
 	portFoundMark    = 0b1
 	snatRequiredMark = 0b1
@@ -540,6 +548,10 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Action().CT(false, connectionTrackTable.GetNext(), CtZone).CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
+			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+				Action().CT(false, connectionTrackTable.GetNext(), CtZoneV6).CTDone().
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
 		)
 	}
 	return append(flows,
@@ -555,6 +567,11 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 			Action().Drop().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
+		connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIPv6).
+			MatchCTStateInv(true).MatchCTStateTrk(true).
+			Action().Drop().
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
 		connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
@@ -564,6 +581,11 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 		connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
 			Action().CT(true, connectionTrackCommitTable.GetNext(), CtZone).CTDone().
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIPv6).
+			MatchCTStateNew(true).MatchCTStateTrk(true).
+			Action().CT(true, connectionTrackCommitTable.GetNext(), CtZoneV6).CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	)
@@ -627,15 +649,6 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, categ
 		Done()
 }
 
-// l2ForwardOutputFlow generates the flow that outputs packets to OVS port after L2 forwarding calculation.
-func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
-	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
-}
-
 // traceflowL2ForwardOutputFlow generates Traceflow specific flow that outputs traceflow packets to OVS port and Antrea
 // Agent after L2forwarding calculation.
 func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cookie.Category) binding.Flow {
@@ -661,6 +674,24 @@ func (c *client) l2ForwardOutputServiceHairpinFlow() binding.Flow {
 		Action().OutputInPort().
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
+}
+
+// l2ForwardOutputFlows generates the flow that outputs packets to OVS port after L2 forwarding calculation.
+func (c *client) l2ForwardOutputFlows(category cookie.Category) []binding.Flow {
+	var flows []binding.Flow
+	flows = append(flows,
+		c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+			Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+			Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+	)
+	return flows
 }
 
 // l3FlowsToPod generates the flow to rewrite MAC if the packet is received from tunnel port and destined for local Pods.
@@ -820,14 +851,23 @@ func (c *client) podIPSpoofGuardFlow(ifIPs []net.IP, ifMAC net.HardwareAddr, ifO
 	var flows []binding.Flow
 	for _, ifIP := range ifIPs {
 		ipProtocol := parseIPProtocol(ifIP)
-		flow := ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
-			MatchInPort(ifOFPort).
-			MatchSrcMAC(ifMAC).
-			MatchSrcIP(ifIP).
-			Action().GotoTable(ipSpoofGuardTable.GetNext()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done()
-		flows = append(flows, flow)
+		if ipProtocol == binding.ProtocolIP {
+			flows = append(flows, ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
+				MatchInPort(ifOFPort).
+				MatchSrcMAC(ifMAC).
+				MatchSrcIP(ifIP).
+				Action().GotoTable(ipSpoofGuardTable.GetNext()).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done())
+		} else if ipProtocol == binding.ProtocolIPv6 {
+			flows = append(flows, ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
+				MatchInPort(ifOFPort).
+				MatchSrcMAC(ifMAC).
+				MatchSrcIP(ifIP).
+				Action().GotoTable(ipv6Table).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done())
+		}
 	}
 	return flows
 }
@@ -876,17 +916,6 @@ func (c *client) arpSpoofGuardFlow(ifIP net.IP, ifMAC net.HardwareAddr, ifOFPort
 		Done()
 }
 
-// gatewayIPSpoofGuardFlow generates the flow to skip spoof guard checking for traffic sent from gateway interface.
-func (c *client) gatewayIPSpoofGuardFlow(gatewayOFPort uint32, category cookie.Category) binding.Flow {
-	ipPipeline := c.pipeline
-	ipSpoofGuardTable := ipPipeline[spoofGuardTable]
-	return ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchInPort(gatewayOFPort).
-		Action().GotoTable(ipSpoofGuardTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
-}
-
 // sessionAffinityReselectFlow generates the flow which resubmits the service accessing
 // packet back to serviceLBTable if there is no endpointDNAT flow matched. This
 // case will occur if an Endpoint is removed and is the learned Endpoint
@@ -898,6 +927,26 @@ func (c *client) sessionAffinityReselectFlow() binding.Flow {
 		Action().ResubmitToTable(serviceLBTable).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
+}
+
+// gatewayIPSpoofGuardFlow generates the flow to skip spoof guard checking for traffic sent from gateway interface.
+func (c *client) gatewayIPSpoofGuardFlows(gatewayOFPort uint32, hasIPv6Addr bool, category cookie.Category) []binding.Flow {
+	ipPipeline := c.pipeline
+	ipSpoofGuardTable := ipPipeline[spoofGuardTable]
+	var flows []binding.Flow
+	flows = append(flows, ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		MatchInPort(gatewayOFPort).
+		Action().GotoTable(ipSpoofGuardTable.GetNext()).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done())
+	if hasIPv6Addr {
+		flows = append(flows, ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+			MatchInPort(gatewayOFPort).
+			Action().GotoTable(ipv6Table).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
+	}
+	return flows
 }
 
 // serviceCIDRDNATFlow generates flows to match dst IP in service CIDR and output to host gateway interface directly.
@@ -973,6 +1022,47 @@ func (c *client) dropRuleMetricFlow(conjunctionID uint32, ingress bool) binding.
 		Action().Drop().
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 		Done()
+}
+
+// ipv6Flows generates the flows to allow IPv6 packets from link-local addresses and
+// handle multicast packets, Neighbor Solicitation and ND Advertisement packets properly.
+func (c *client) ipv6Flows(category cookie.Category) []binding.Flow {
+	var flows []binding.Flow
+	// TODO: Remove the flag after finishing Antrea Proxy changes
+	if !c.enableProxy {
+		_, ipv6LinkLocalIpnet, _ := net.ParseCIDR(ipv6LinkLocalAddr)
+		_, ipv6MulticastIpnet, _ := net.ParseCIDR(ipv6MulticastAddr)
+		flows = append(flows,
+			// Allow IPv6 packets (e.g. Multicast Listener Report Message V2) which are sent from link-local addresses in spoofGuardTable,
+			// so that these packets will not be dropped.
+			c.pipeline[spoofGuardTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+				MatchSrcIPNet(*ipv6LinkLocalIpnet).
+				Action().GotoTable(ipv6Table).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
+			// Handle IPv6 Neighbor Solicitation and Neighbor Advertisement as a regular L2 learning Switch by using normal.
+			c.pipeline[ipv6Table].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolICMPv6).
+				MatchICMPv6Type(135).
+				MatchICMPv6Code(0).
+				Action().Normal().
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
+			c.pipeline[ipv6Table].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolICMPv6).
+				MatchICMPv6Type(136).
+				MatchICMPv6Code(0).
+				Action().Normal().
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
+			// Handle IPv6 multicast packets as a regular L2 learning Switch by using normal.
+			// It is used to ensure that all kinds of IPv6 multicast packets are properly handled (e.g. Multicast Listener Report Message V2).
+			c.pipeline[ipv6Table].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+				MatchDstIPNet(*ipv6MulticastIpnet).
+				Action().Normal().
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
+		)
+	}
+	return flows
 }
 
 // conjunctionActionFlow generates the flow to jump to a specific table if policyRuleConjunction ID is matched. Priority of
@@ -1458,6 +1548,7 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 			uplinkTable:           bridge.CreateTable(uplinkTable, spoofGuardTable, binding.TableMissActionNone),
 			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop),
 			arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
+			ipv6Table:             bridge.CreateTable(ipv6Table, serviceHairpinTable, binding.TableMissActionNext),
 			serviceHairpinTable:   bridge.CreateTable(serviceHairpinTable, conntrackTable, binding.TableMissActionNext),
 			conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
 			conntrackStateTable:   bridge.CreateTable(conntrackStateTable, endpointDNATTable, binding.TableMissActionNext),
@@ -1478,15 +1569,17 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 		}
 	} else {
 		pipeline = map[binding.TableIDType]binding.Table{
-			ClassifierTable:     bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
-			spoofGuardTable:     bridge.CreateTable(spoofGuardTable, conntrackTable, binding.TableMissActionDrop),
-			arpResponderTable:   bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
-			conntrackTable:      bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
-			conntrackStateTable: bridge.CreateTable(conntrackStateTable, dnatTable, binding.TableMissActionNext),
-			dnatTable:           bridge.CreateTable(dnatTable, egressEntryTable, binding.TableMissActionNext),
-			EgressRuleTable:     bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
+			ClassifierTable:       bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
+			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, conntrackTable, binding.TableMissActionDrop),
+			arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
+			ipv6Table:             bridge.CreateTable(ipv6Table, conntrackTable, binding.TableMissActionNext),
+			conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
+			conntrackStateTable:   bridge.CreateTable(conntrackStateTable, dnatTable, binding.TableMissActionNext),
+			dnatTable:             bridge.CreateTable(dnatTable, egressEntryTable, binding.TableMissActionNext),
+			EgressRuleTable:       bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
 			EgressDefaultTable:  bridge.CreateTable(EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext),
-			EgressMetricTable:   bridge.CreateTable(EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext), l3ForwardingTable: bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+			EgressMetricTable:   bridge.CreateTable(EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext),
+			l3ForwardingTable: bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
 			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, IngressEntryTable, binding.TableMissActionNext),
 			IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
 			IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, IngressMetricTable, binding.TableMissActionNext),
