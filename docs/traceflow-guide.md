@@ -3,14 +3,15 @@
 Antrea supports using Traceflow for network diagnosis: it generates tracing requests for traffic going through
 Antrea-managed Pod network. Creating a new Traceflow CRD triggers the Traceflow module to inject packet into OVS,
 provide various observation points along the packet's path and populate these observations into the status field of
-the Traceflow CRD. Users can start a new trace simply from either Kubectl or Antrea-Octant-Plugin and view Traceflow
-result via CRD or UI graph. We will also provide a corresponding Antctl command to start a new trace in the near future.
+the Traceflow CRD. Users can start a new trace simply from Kubectl, Antctl or Antrea-Octant-Plugin and view Traceflow
+result via CRD, Antctl or UI graph.
 
 ## Table of Contents
 
 - [Prerequisites](#Prerequisites)
 - [Start a New Trace](#Start-a-New-Trace)
   - [Using kubectl and YAML file](#using-kubectl-and-YAML-file)
+  - [Using antctl and spec config](#using-antctl-and-spec-config)
   - [Using Octant with antrea-octant-plugin](#Using-Octant-with-antrea-octant-plugin)
 - [View Traceflow Result and Graph](#View-Traceflow-Result-and-Graph)
 - [View Traceflow CRDs](#View-Traceflow-CRDs)
@@ -30,10 +31,11 @@ You need to switch on traceflow from featureGates defined in antrea.yml for both
 For antrea-octant-plugin installation, please refer to [antrea-octant-installation](/docs/octant-plugin-installation.md).
 
 ## Start a New Trace
-You can choose to use either Kubectl together with YAML file or Octant UI to start a new trace.
-If you use Kubectl to start a new trace, you can provide the following information which will be used to build the trace packet:
+You can choose to use Kubectl together with YAML file, Antctl with spec information or Octant UI to start a new trace.
+
+If you use Kubectl or Antctl to start a new trace, you can provide the following information which will be used to build the trace packet:
 * source Pod
-* destination Pod or destination IP address
+* destination Pod, Service or destination IP address
 * transport protocol (TCP/UDP/ICMP)
 * transport ports
 
@@ -66,6 +68,10 @@ spec:
 ```
 The CRD above starts a new trace from port 10000 of source Pod named `tcp-sts-0` to port 80
 of destination Pod named `tcp-sts-2` using TCP protocol.
+
+### Using-antctl-and-spec-config
+
+Please refer to the corresponding [Antctl page](https://github.com/vmware-tanzu/antrea/blob/master/docs/antctl.md#traceflow).
 
 ### Using Octant with antrea-octant-plugin
 
