@@ -134,11 +134,16 @@ func (f *ofFlow) CopyToBuilder(priority uint16) FlowBuilder {
 
 // ToBuilder returns a new FlowBuilder with all the contents of the original Flow.
 func (f *ofFlow) ToBuilder() FlowBuilder {
-	// TODO: use exported fields from ofFlow and remove nolint:govet
-	flow := *f.Flow //nolint:govet
+	flow := &ofctrl.Flow{
+		Table:      f.Flow.Table,
+		CookieID:   f.Flow.CookieID,
+		CookieMask: f.Flow.CookieMask,
+		Match:      f.Flow.Match,
+	}
+	f.Flow.CopyActionsToNewFlow(flow)
 	newFlow := ofFlow{
 		table:    f.table,
-		Flow:     &flow,
+		Flow:     flow,
 		matchers: f.matchers,
 		protocol: f.protocol,
 	}
