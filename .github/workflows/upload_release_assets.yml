@@ -160,3 +160,30 @@ jobs:
         asset_path: ./assets/antrea-windows.yml
         asset_name: antrea-windows.yml
         asset_content_type: application/octet-stream
+    - name: Upload antrea-agent-windows-x86_64.exe
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./assets/antrea-agent.exe
+          asset_name: antrea-agent-windows-x86_64.exe
+          asset_content_type: application/octet-stream
+    - name: Upload antrea-cni-windows-x86_64.exe
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./assets/antrea-cni.exe
+          asset_name: antrea-cni-windows-x86_64.exe
+          asset_content_type: application/octet-stream
+    - name: Upload Start.ps1
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./assets/Start.ps1
+          asset_name: Start.ps1
+          asset_content_type: application/octet-stream
