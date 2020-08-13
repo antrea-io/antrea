@@ -19,9 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -30,11 +28,9 @@ import (
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
@@ -59,7 +55,7 @@ var protocols = map[string]int32{
 	"udp":  17,
 }
 
-// Response is the response of antctl traceflow.
+// Response is the response of antctl Traceflow.
 type Response struct {
 	Name        string                  `json:"name" yaml:"name"`                                   // Traceflow name
 	Phase       v1alpha1.TraceflowPhase `json:"phase,omitempty" yaml:"phase,omitempty"`             // Traceflow phase
@@ -72,15 +68,15 @@ func init() {
 	Command = &cobra.Command{
 		Use:     "traceflow",
 		Short:   "Start a Traceflows",
-		Long:    "Start a Traceflows from one pod to another pod/service/IP.",
+		Long:    "Start a Traceflows from one Pod to another Pod/Service/IP.",
 		Aliases: []string{"tf", "traceflows"},
-		Example: `  Start a Traceflow from busybox0 to busybox1, both pods are in namespace default
+		Example: `  Start a Traceflow from busybox0 to busybox1, both Pods are in Namespace default
   $antctl traceflow -S busybox0 -D busybox1
-  Start a Traceflow from busybox0 to destination IP, source is in namespace default
+  Start a Traceflow from busybox0 to destination IP, source is in Namespace default
   $antctl traceflow -S busybox0 -D 123.123.123.123
-  Start a Traceflow from busybox0 to destination service, source and destination are in namespace default
+  Start a Traceflow from busybox0 to destination Service, source and destination are in Namespace default
   $antctl traceflow -S busybox0 -D svc0
-  Start a Traceflow from busybox0 in namespace ns0 to busybox1 in namespace ns1, output type is json
+  Start a Traceflow from busybox0 in Namespace ns0 to busybox1 in Namespace ns1, output type is json
   $antctl traceflow -S ns0/busybox0 -D ns1/busybox1 -o json
   Start a Traceflow from busybox0 to busybox1, with TCP header and 80 as destination port
   $antctl traceflow -S busybox0 -D busybox1 -f tcp,tcp_dst=80
@@ -88,11 +84,11 @@ func init() {
 		RunE: runE,
 	}
 
-	Command.Flags().StringVarP(&option.source, "source", "S", "", "source of the traceflow: namespace/pod or pod")
-	Command.Flags().StringVarP(&option.destination, "destination", "D", "", "destination of the traceflow: namespace/pod, pod, namespace/service, service or IP")
+	Command.Flags().StringVarP(&option.source, "source", "S", "", "source of the Traceflow: Namespace/Pod or Pod")
+	Command.Flags().StringVarP(&option.destination, "destination", "D", "", "destination of the Traceflow: Namespace/Pod, Pod, Namespace/Service, Service or IP")
 	Command.Flags().StringVarP(&option.outputType, "output", "o", "yaml", "output type: yaml (default), json")
 	Command.Flags().BoolVarP(&option.waiting, "wait", "", true, "if false, command returns without retrieving results")
-	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the traceflow packet")
+	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the Traceflow packet")
 }
 
 func runE(cmd *cobra.Command, _ []string) error {
@@ -109,7 +105,6 @@ func runE(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	setupKubeconfig(kubeconfig, &v1alpha1.SchemeGroupVersion)
 
 	k8sclient, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
@@ -122,18 +117,18 @@ func runE(cmd *cobra.Command, _ []string) error {
 
 	tf, err := newTraceflow(k8sclient)
 	if err != nil {
-		return fmt.Errorf("error when filling up traceflow config: %w", err)
+		return fmt.Errorf("error when filling up Traceflow config: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if _, err = client.OpsV1alpha1().Traceflows().Create(ctx, tf, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("error when creating traceflow, is traceflow feature gate enabled? %w", err)
+		return fmt.Errorf("error when creating Traceflow, is Traceflow feature gate enabled? %w", err)
 	}
 	defer func() {
 		if option.waiting {
 			if err = client.OpsV1alpha1().Traceflows().Delete(context.TODO(), tf.Name, metav1.DeleteOptions{}); err != nil {
-				klog.Errorf("error when deleting traceflow: %+v", err)
+				klog.Errorf("error when deleting Traceflow: %+v", err)
 			}
 		}
 	}()
@@ -155,19 +150,10 @@ func runE(cmd *cobra.Command, _ []string) error {
 		}
 		return true, nil
 	}); err != nil {
-		return fmt.Errorf("error when retrieving traceflow: %w", err)
+		return fmt.Errorf("error when retrieving Traceflow: %w", err)
 	}
 
 	return nil
-}
-
-func setupKubeconfig(kubeconfig *rest.Config, groupVersion *schema.GroupVersion) {
-	kubeconfig.APIPath = "/apis"
-	kubeconfig.GroupVersion = groupVersion
-	kubeconfig.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
-	kubeconfig.Insecure = true
-	kubeconfig.CAFile = ""
-	kubeconfig.CAData = nil
 }
 
 func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
@@ -181,7 +167,7 @@ func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
 		src.Namespace = split[0]
 		src.Pod = split[1]
 	} else {
-		return nil, fmt.Errorf("source should be in the format of namespace/pod or pod")
+		return nil, fmt.Errorf("source should be in the format of Namespace/Pod or Pod")
 	}
 
 	var dst v1alpha1.Destination
@@ -201,10 +187,10 @@ func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
 			dst.Namespace = split[0]
 			dest = split[1]
 		} else {
-			return nil, fmt.Errorf("destination should be in the format of namespace/pod, pod, namespace/service or service")
+			return nil, fmt.Errorf("destination should be in the format of Namespace/Pod, Pod, Namespace/Service or Service")
 		}
 		if isPod, err = dstIsPod(client, dst.Namespace, dest); err != nil {
-			return nil, fmt.Errorf("failed to check if destination is pod or service: %w", err)
+			return nil, fmt.Errorf("failed to check if destination is Pod or Service: %w", err)
 		}
 		if isPod {
 			dst.Pod = dest
@@ -248,75 +234,62 @@ func dstIsPod(client kubernetes.Interface, ns string, name string) (bool, error)
 
 func parseFlow() (*v1alpha1.Packet, error) {
 	cleanFlow := strings.ReplaceAll(option.flow, " ", "")
-	pkt := new(v1alpha1.Packet)
+	fields, err := getPortFields(cleanFlow)
+	if err != nil {
+		return nil, fmt.Errorf("error when parsing the flow: %w", err)
+	}
 
-	for _, v := range strings.Split(cleanFlow, ",") {
-		n, ok := protocols[v]
-		if ok {
-			(*pkt).IPHeader.Protocol = n
+	pkt := new(v1alpha1.Packet)
+	for k, v := range protocols {
+		if _, ok := fields[k]; ok {
+			pkt.IPHeader.Protocol = v
 			break
 		}
 	}
 
-	r, ok, err := getFieldPortValue(cleanFlow, "tcp_src")
-	if err != nil {
-		return nil, fmt.Errorf("error when get tcp_src value: %w", err)
+	if r, ok := fields["tcp_src"]; ok {
+		pkt.TransportHeader.TCP = new(v1alpha1.TCPHeader)
+		pkt.TransportHeader.TCP.SrcPort = int32(r)
 	}
-	if ok {
-		if (*pkt).TransportHeader.TCP == nil {
-			(*pkt).TransportHeader.TCP = new(v1alpha1.TCPHeader)
+	if r, ok := fields["tcp_dst"]; ok {
+		if pkt.TransportHeader.TCP == nil {
+			pkt.TransportHeader.TCP = new(v1alpha1.TCPHeader)
 		}
-		(*pkt).TransportHeader.TCP.SrcPort = int32(r)
+		pkt.TransportHeader.TCP.DstPort = int32(r)
 	}
-	r, ok, err = getFieldPortValue(cleanFlow, "tcp_dst")
-	if err != nil {
-		return nil, fmt.Errorf("error when get tcp_dst value: %w", err)
+	if r, ok := fields["udp_src"]; ok {
+		pkt.TransportHeader.UDP = new(v1alpha1.UDPHeader)
+		pkt.TransportHeader.UDP.SrcPort = int32(r)
 	}
-	if ok {
-		if (*pkt).TransportHeader.TCP == nil {
-			(*pkt).TransportHeader.TCP = new(v1alpha1.TCPHeader)
+	if r, ok := fields["udp_dst"]; ok {
+		if pkt.TransportHeader.UDP == nil {
+			pkt.TransportHeader.UDP = new(v1alpha1.UDPHeader)
 		}
-		(*pkt).TransportHeader.TCP.DstPort = int32(r)
-	}
-	r, ok, err = getFieldPortValue(cleanFlow, "udp_src")
-	if err != nil {
-		return nil, fmt.Errorf("error when get udp_src value: %w", err)
-	}
-	if ok {
-		if (*pkt).TransportHeader.UDP == nil {
-			(*pkt).TransportHeader.UDP = new(v1alpha1.UDPHeader)
-		}
-		(*pkt).TransportHeader.UDP.SrcPort = int32(r)
-	}
-	r, ok, err = getFieldPortValue(cleanFlow, "udp_dst")
-	if err != nil {
-		return nil, fmt.Errorf("error when get udp_dst value: %w", err)
-	}
-	if ok {
-		if (*pkt).TransportHeader.UDP == nil {
-			(*pkt).TransportHeader.UDP = new(v1alpha1.UDPHeader)
-		}
-		(*pkt).TransportHeader.UDP.DstPort = int32(r)
+		pkt.TransportHeader.UDP.DstPort = int32(r)
 	}
 
 	return pkt, nil
 }
 
-func getFieldPortValue(cleanFlow string, f string) (int, bool, error) {
+func getPortFields(cleanFlow string) (map[string]int, error) {
+	fields := map[string]int{}
 	for _, v := range strings.Split(cleanFlow, ",") {
-		m, err := regexp.MatchString(fmt.Sprintf("%s=[0-9]+", f), v)
-		if err != nil {
-			return 0, false, err
-		}
-		if m {
-			r, err := strconv.Atoi(v[len(f)+1:])
+		kv := strings.Split(v, "=")
+		if len(kv) == 2 && len(kv[0]) != 0 && len(kv[1]) != 0 {
+			r, err := strconv.Atoi(kv[1])
 			if err != nil {
-				return 0, false, err
+				return nil, err
 			}
-			return r, true, nil
+			fields[kv[0]] = r
+		} else if len(kv) == 1 {
+			if len(kv[0]) != 0 {
+				fields[v] = 0
+			}
+		} else {
+			return nil, fmt.Errorf("%s is not valid in flow", v)
 		}
 	}
-	return 0, false, nil
+	return fields, nil
 }
 
 func output(tf *v1alpha1.Traceflow) error {
@@ -343,7 +316,7 @@ func output(tf *v1alpha1.Traceflow) error {
 			return fmt.Errorf("error when converting output to yaml: %w", err)
 		}
 	} else {
-		return fmt.Errorf("output types are yaml and json")
+		return fmt.Errorf("output types should be yaml or json")
 	}
 	return nil
 }
@@ -374,11 +347,5 @@ func getTFName(prefix string) string {
 	if !option.waiting {
 		return prefix
 	}
-	var lettersAndDigits = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-	b := make([]rune, 8)
-	for i := range b {
-		randIdx := rand.Intn(len(lettersAndDigits))
-		b[i] = lettersAndDigits[randIdx]
-	}
-	return fmt.Sprintf("%s-%s", prefix, string(b))
+	return fmt.Sprintf("%s-%s", prefix, rand.String(8))
 }

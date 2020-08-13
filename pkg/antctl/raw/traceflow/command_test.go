@@ -22,15 +22,52 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 )
 
+// TestGetPortFields tests if a flow can be turned into a map.
+func TestGetPortFields(t *testing.T) {
+	tcs := []struct {
+		flow     string
+		success  bool
+		expected map[string]int
+	}{
+		{
+			flow:    "a=1,b",
+			success: true,
+			expected: map[string]int{
+				"a": 1,
+				"b": 0,
+			},
+		},
+		{
+			flow:     "a=",
+			success:  false,
+			expected: nil,
+		},
+		{
+			flow:     "=1",
+			success:  false,
+			expected: nil,
+		},
+	}
+
+	for _, tc := range tcs {
+		m, err := getPortFields(tc.flow)
+		if err != nil {
+			if tc.success {
+				t.Errorf("error when running getPortFields(): %+v", err)
+			}
+		} else {
+			assert.Equal(t, tc.expected, m)
+		}
+	}
+}
+
 // TestParseFlow tests if a flow can be parsed correctly.
 func TestParseFlow(t *testing.T) {
-	type testcase struct {
+	tcs := []struct {
 		flow     string
 		success  bool
 		expected *v1alpha1.Traceflow
-	}
-
-	tcs := []testcase{
+	}{
 		{
 			flow:    "udp,udp_src=1234,udp_dst=4321",
 			success: true,
@@ -91,51 +128,7 @@ func TestParseFlow(t *testing.T) {
 				t.Errorf("error when running parseFlow(): %w", err)
 			}
 		} else {
-			assert.Equal(t, *pkt, tc.expected.Spec.Packet)
-		}
-	}
-}
-
-// TestGetFieldPortValue tests if corresponding value can be got of a key in a string.
-func TestGetFieldPortValue(t *testing.T) {
-	type testcase struct {
-		flow     string
-		field    string
-		expected int
-		success  bool
-	}
-
-	tcs := []testcase{
-		{
-			flow:     "ab=1,abc=2",
-			field:    "abc",
-			expected: 2,
-			success:  true,
-		},
-		{
-			flow:     "ab=1,abc=2",
-			field:    "ab",
-			expected: 1,
-			success:  true,
-		},
-		{
-			flow:     "ab=1,abc=2",
-			field:    "a",
-			expected: 0,
-			success:  false,
-		},
-	}
-
-	for _, tc := range tcs {
-		n, ok, err := getFieldPortValue(tc.flow, tc.field)
-		if err != nil {
-			t.Errorf("testcase error: %v", tc)
-		}
-		if tc.success {
-			assert.Equal(t, ok, true)
-			assert.Equal(t, tc.expected, n)
-		} else {
-			assert.Equal(t, ok, false)
+			assert.Equal(t, tc.expected.Spec.Packet, *pkt)
 		}
 	}
 }
