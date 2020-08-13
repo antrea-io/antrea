@@ -241,10 +241,9 @@ steps. And then run the following commands in powershell.
 ```
 mkdir c:\k\antrea
 cd c:\k\antrea
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Start.ps1
+curl.exe -LO https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/Start.ps1
 # $KubeConfigPath is the path of kubeconfig file
-# $AntreaVersion is the version of Antrea
-./Start.ps1 -kubeconfig $KubeConfigPath -AntreaVersion $AntreaVersion
+./Start.ps1 -kubeconfig $KubeConfigPath
 ``` 
 
 > Note: Some features such as supportbundle collection are not supported in this
