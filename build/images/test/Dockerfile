@@ -4,7 +4,7 @@ LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image for antrea integration tests."
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends iproute2 iptables ipset make wget gcc libc6-dev ca-certificates && \
+    apt-get install -y --no-install-recommends iproute2 iptables ipset make wget gcc libc6-dev ca-certificates git && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/*
 
 ENV GO_VERSION=1.13.12
