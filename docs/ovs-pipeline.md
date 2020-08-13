@@ -413,17 +413,6 @@ id 2, which goes to [L3ForwardingTable]. Otherwise, go to the table correspondin
 to the next tier in precedence, or in the case of the Application tier (lowest
 precedence), go to the [EgressRuleTable].
 
-If the `conjunction` action is matched, packets are "allowed" or "dropped"
-based on the `action` field of the CNP rule. If allowed, they are forwarded
-directly to [L3ForwardingTable]. Other packets go to [EgressRuleTable] to be
-evaluated for K8s NetworkPolicy egress rules. After a connection is
-established, its following packets go straight to [L3ForwardingTable], with no
-other match required (see flow 1 above, which has the highest priority),
-ensuring efficiency as packets from same connections are not matched twice. In
-particular, this ensures that reply traffic is never dropped because of a CNP
-rule. However, this also means that ongoing connections are not affected if the
-Cluster NetworkPolicies are updated.
-
 Unlike the default of K8s NetworkPolicies, ClusterNetworkPolicy has no such
 default rules. Hence, they are evaluated as-is, and there is no need for a
 CnpEgressDefaultTable.
@@ -626,14 +615,7 @@ correspond to IP addresses {10.10.1.6}), and the destination TCP port
 is in the set {80}, then use `conjunction` action with id 1, which drops the
 packet. Otherwise, go to the next CnpIngressRuleTable belonging to the next
 tier in precedence, or in the case of the Application tier (lowest precedence),
-go to the [IngressRuleTable]. One notable difference is how we use OF ports
-to identify the destination of the traffic, while we use IP addresses in
-[CnpEgressRuleTables] to identify the source of the traffic. We do this as
-an increased security measure in case a local Pod is misbehaving and trying
-to access another local Pod using the correct destination MAC address but a
-different destination IP address to bypass an egress CNP rule. This is also
-why the CNP ingress rules are enforced after the egress port has been
-determined.
+go to the [IngressRuleTable].
 
 As seen in [CnpEgressRuleTables], the default action is to evaluate K8s Network
 Policy [IngressRuleTable] and a CnpIngressDefaultTable does not exist.
