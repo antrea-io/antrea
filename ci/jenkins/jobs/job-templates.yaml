@@ -18,8 +18,7 @@
     publishers: '{publishers}'
     scm:
     - git:
-        branches:
-          - ${{sha1}}
+        branches: '{branches}'
         credentials-id: '{git_credentials_id}'
         name: origin
         refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
