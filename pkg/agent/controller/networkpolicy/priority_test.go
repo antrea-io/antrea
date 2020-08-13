@@ -275,3 +275,64 @@ func TestRegisterPrioritiesAndRelease(t *testing.T) {
 	assert.Equalf(t, expectedPriorityMap, pa.priorityMap, "Got priorityMap %v, expected %v", pa.priorityMap, expectedPriorityMap)
 	assert.Equalf(t, expectedSorted, pa.sortedOFPriorities, "Got sortedOFPriorities %v, expected %v", pa.sortedOFPriorities, expectedSorted)
 }
+
+func TestRevertUpdates(t *testing.T) {
+	tests := []struct {
+		name                string
+		argsPriorities      []types.Priority
+		argsOFPriorities    []uint16
+		updatesToBeReverted map[uint16]uint16
+		expectedPriorityMap map[types.Priority]uint16
+		expectedOFMap       map[uint16]types.Priority
+		expectedSorted      []uint16
+	}{
+		{
+			"single-update-up",
+			[]types.Priority{p1121, p1122, p1131},
+			[]uint16{10000, 9999, 9998},
+			map[uint16]uint16{9999: 10000},
+			map[types.Priority]uint16{p1121: 9999, p1131: 9998},
+			map[uint16]types.Priority{9999: p1121, 9998: p1131},
+			[]uint16{9998, 9999},
+		},
+		{
+			"multiple-updates-up",
+			[]types.Priority{p1121, p1122, p1131, p1132},
+			[]uint16{10000, 9999, 9998, 9997},
+			map[uint16]uint16{9997: 9998, 9998: 9999, 9999: 10000},
+			map[types.Priority]uint16{p1121: 9999, p1122: 9998, p1131: 9997},
+			map[uint16]types.Priority{9999: p1121, 9998: p1122, 9997: p1131},
+			[]uint16{9997, 9998, 9999},
+		},
+		{
+			"single-update-down",
+			[]types.Priority{p1121, p1122, p1131},
+			[]uint16{10000, 9999, 9998},
+			map[uint16]uint16{9999: 9998},
+			map[types.Priority]uint16{p1121: 10000, p1131: 9999},
+			map[uint16]types.Priority{10000: p1121, 9999: p1131},
+			[]uint16{9999, 10000},
+		},
+		{
+			"multiple-updates-down",
+			[]types.Priority{p1121, p1122, p1131, p1132},
+			[]uint16{10000, 9999, 9998, 9997},
+			map[uint16]uint16{10000: 9999, 9999: 9998, 9998: 9997},
+			map[types.Priority]uint16{p1122: 10000, p1131: 9999, p1132: 9998},
+			map[uint16]types.Priority{10000: p1122, 9999: p1131, 9998: p1132},
+			[]uint16{9998, 9999, 10000},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pa := newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
+			for i := 0; i < len(tt.argsPriorities); i++ {
+				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
+			}
+			pa.RevertReassignments(tt.updatesToBeReverted)
+			assert.Equalf(t, tt.expectedPriorityMap, pa.priorityMap, "Got priorityMap %v, expected %v", pa.priorityMap, tt.expectedPriorityMap)
+			assert.Equalf(t, tt.expectedOFMap, pa.ofPriorityMap, "Got ofPriorityMap %v, expected %v", pa.ofPriorityMap, tt.expectedOFMap)
+			assert.Equalf(t, tt.expectedSorted, pa.sortedOFPriorities, "Got sortedOFPriorities %v, expected %v", pa.sortedOFPriorities, tt.expectedSorted)
+		})
+	}
+}

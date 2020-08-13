@@ -281,3 +281,44 @@ func (pa *priorityAssigner) Release(ofPriority uint16) {
 	idxToDel := sort.Search(len(pa.sortedOFPriorities), func(i int) bool { return ofPriority <= pa.sortedOFPriorities[i] })
 	pa.sortedOFPriorities = append(pa.sortedOFPriorities[:idxToDel], pa.sortedOFPriorities[idxToDel+1:]...)
 }
+
+// RevertReassignments reverts priority updates previously computed by the priorityAssigner,
+// if the reassignments failed at the OVS level. Note that it assumes the priortiy updates in
+// the input is not empty and consecutive，e.g. { 100: 99, 99: 98, 98: 97 }
+func (pa *priorityAssigner) RevertReassignments(updates map[uint16]uint16) {
+	siftedUp := false
+	originals := make([]uint16, len(updates))
+	idx := 0
+	for original, updated := range updates {
+		// Use any one of the map entries to determine if the original update was from a siftUp or siftDown operation.
+		if idx == 0 && updated > original {
+			siftedUp = true
+		}
+		originals[idx] = original
+		idx++
+	}
+	// If the original operation was siftUp, the priority reversion should start from the lowest priority
+	// updates and work up to the highest priority updates, in order. For reverting siftDown, the rollback
+	// will start from highest priority updates instead. This is to ensure that the reversions are always
+	// executed in the reverse order of the original siftUp or siftDown operations.
+	if siftedUp {
+		sort.Slice(originals, func(i, j int) bool { return originals[i] <= originals[j] })
+	} else {
+		sort.Slice(originals, func(i, j int) bool { return originals[i] >= originals[j] })
+	}
+	// The Priority corresponding to the first ofPriority in the sorted original ofPriorities is always
+	// the newly inserted Priority that now needs to be discarded. We do not release its ofPriority however,
+	// since the ofPriority will still be occupied after the reversion.
+	delete(pa.priorityMap, pa.ofPriorityMap[originals[0]])
+	for _, original := range originals {
+		updated := updates[original]
+		p := pa.ofPriorityMap[updated]
+		if _, exists := updates[updated]; !exists {
+			// If the updated ofPriority does not belong to the original ofPriorities, then it was allocated
+			// because of the reassignment and now needs to be released.
+			pa.Release(updated)
+		}
+		pa.ofPriorityMap[original] = p
+		pa.priorityMap[p] = original
+	}
+}
