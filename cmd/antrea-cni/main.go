@@ -21,13 +21,8 @@ import (
 	cniversion "github.com/containernetworking/cni/pkg/version"
 
 	"github.com/vmware-tanzu/antrea/pkg/cni"
-	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
-
-func init() {
-	log.InitKlog()
-}
 
 func main() {
 	skel.PluginMain(

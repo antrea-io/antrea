@@ -22,7 +22,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"k8s.io/component-base/logs"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl"
 	"github.com/vmware-tanzu/antrea/pkg/log"
@@ -38,21 +37,20 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	// prevent any unexpected output at beginning
-	log.InitKlog()
 	log.Klogv2Flags.Set("logtostderr", "false")
 	log.Klogv2Flags.Set("v", "0")
 	pflag.CommandLine.MarkHidden("log-flush-frequency")
 }
 
 func main() {
-	logs.InitLogs()
-	defer logs.FlushLogs()
+	log.InitKlog()
+	defer log.FlushKlog()
 
 	rand.Seed(time.Now().UTC().UnixNano())
 	antctl.CommandList.ApplyToRootCommand(rootCmd)
 	err := rootCmd.Execute()
 	if err != nil {
-		logs.FlushLogs()
+		log.FlushKlog()
 		os.Exit(1)
 	}
 }
