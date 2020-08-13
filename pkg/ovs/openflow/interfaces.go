@@ -152,11 +152,10 @@ type Flow interface {
 	// Returns the flow priority associated with OFEntry
 	FlowPriority() uint16
 	MatchString() string
-	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow, but does not copy the actions. It
-	// resets the priority of the new FlowBuilder if the provided value is not 0.
-	CopyToBuilder(priority uint16) FlowBuilder
-	// ToBuilder returns a new FlowBuilder with all the contents of the original Flow
-	ToBuilder() FlowBuilder
+	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow.
+	// It copies the original actions of the Flow only if copyActions is set to true, and
+	// resets the priority in the new FlowBuilder if the provided priority is not 0.
+	CopyToBuilder(priority uint16, copyActions bool) FlowBuilder
 }
 
 type Action interface {

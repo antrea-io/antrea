@@ -739,7 +739,7 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 		if ctx.dropFlow != nil {
 			flows = append(
 				flows,
-				ctx.dropFlow.CopyToBuilder(priorityNormal+2).
+				ctx.dropFlow.CopyToBuilder(priorityNormal+2, false).
 					MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
 					SetHardTimeout(300).
 					Action().SendToController(1).

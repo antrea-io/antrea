@@ -406,17 +406,17 @@ func (mr *MockFlowMockRecorder) Add() *gomock.Call {
 }
 
 // CopyToBuilder mocks base method
-func (m *MockFlow) CopyToBuilder(arg0 uint16) openflow.FlowBuilder {
+func (m *MockFlow) CopyToBuilder(arg0 uint16, arg1 bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CopyToBuilder", arg0)
+	ret := m.ctrl.Call(m, "CopyToBuilder", arg0, arg1)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // CopyToBuilder indicates an expected call of CopyToBuilder
-func (mr *MockFlowMockRecorder) CopyToBuilder(arg0 interface{}) *gomock.Call {
+func (mr *MockFlowMockRecorder) CopyToBuilder(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyToBuilder", reflect.TypeOf((*MockFlow)(nil).CopyToBuilder), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyToBuilder", reflect.TypeOf((*MockFlow)(nil).CopyToBuilder), arg0, arg1)
 }
 
 // Delete mocks base method
@@ -514,20 +514,6 @@ func (m *MockFlow) Reset() {
 func (mr *MockFlowMockRecorder) Reset() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockFlow)(nil).Reset))
-}
-
-// ToBuilder mocks base method
-func (m *MockFlow) ToBuilder() openflow.FlowBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ToBuilder")
-	ret0, _ := ret[0].(openflow.FlowBuilder)
-	return ret0
-}
-
-// ToBuilder indicates an expected call of ToBuilder
-func (mr *MockFlowMockRecorder) ToBuilder() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToBuilder", reflect.TypeOf((*MockFlow)(nil).ToBuilder))
 }
 
 // Type mocks base method

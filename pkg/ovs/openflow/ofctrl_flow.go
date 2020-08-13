@@ -111,34 +111,26 @@ func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMess
 }
 
 // CopyToBuilder returns a new FlowBuilder that copies the table, protocols,
-// matches, and CookieID of the Flow, but does not copy the actions,
-// and other private status fields of the ofctrl.Flow, e.g. "realized" and
-// "isInstalled". Reset the priority in the new FlowBuilder if it is provided.
-func (f *ofFlow) CopyToBuilder(priority uint16) FlowBuilder {
-	newFlow := ofFlow{
-		table: f.table,
-		Flow: &ofctrl.Flow{
-			Table:      f.Flow.Table,
-			CookieID:   f.Flow.CookieID,
-			CookieMask: f.Flow.CookieMask,
-			Match:      f.Flow.Match,
-		},
-		matchers: f.matchers,
-		protocol: f.protocol,
+// matches, and CookieID of the Flow, but does not copy private status fields
+// of the ofctrl.Flow, e.g. "realized" and "isInstalled". It copies the
+// original actions of the Flow only if copyActions is set to true, and
+// resets the priority in the new FlowBuilder if it is provided.
+func (f *ofFlow) CopyToBuilder(priority uint16, copyActions bool) FlowBuilder {
+	flow := &ofctrl.Flow{
+		Table:      f.Flow.Table,
+		CookieID:   f.Flow.CookieID,
+		CookieMask: f.Flow.CookieMask,
+		Match:      f.Flow.Match,
+	}
+	if copyActions {
+		f.Flow.CopyActionsToNewFlow(flow)
 	}
 	if priority > 0 {
-		newFlow.Flow.Match.Priority = priority
+		flow.Match.Priority = priority
 	}
-	return &ofFlowBuilder{newFlow}
-}
-
-// ToBuilder returns a new FlowBuilder with all the contents of the original Flow.
-func (f *ofFlow) ToBuilder() FlowBuilder {
-	// TODO: use exported fields from ofFlow and remove nolint:govet
-	flow := *f.Flow //nolint:govet
 	newFlow := ofFlow{
 		table:    f.table,
-		Flow:     &flow,
+		Flow:     flow,
 		matchers: f.matchers,
 		protocol: f.protocol,
 	}
