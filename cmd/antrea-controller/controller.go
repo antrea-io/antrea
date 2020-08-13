@@ -118,6 +118,7 @@ func run(o *Options) error {
 		client,
 		aggregatorClient,
 		o.config.SelfSignedCert,
+		o.config.CertRotateDuration,
 		o.config.APIPort,
 		addressGroupStore,
 		appliedToGroupStore,
@@ -171,6 +172,7 @@ func createAPIServerConfig(kubeconfig string,
 	client clientset.Interface,
 	aggregatorClient aggregatorclientset.Interface,
 	selfSignedCert bool,
+	certRotateDuration time.Duration,
 	bindPort int,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
@@ -182,7 +184,7 @@ func createAPIServerConfig(kubeconfig string,
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz")
 
-	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, secureServing)
+	caCertController, err := certificate.ApplyServerCert(selfSignedCert, certRotateDuration, client, aggregatorClient, secureServing)
 	if err != nil {
 		return nil, fmt.Errorf("error applying server cert: %v", err)
 	}

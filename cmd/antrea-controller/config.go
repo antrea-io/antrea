@@ -15,6 +15,8 @@
 package main
 
 import (
+	"time"
+
 	componentbaseconfig "k8s.io/component-base/config"
 )
 
@@ -39,4 +41,9 @@ type ControllerConfig struct {
 	// antrea-controller container.
 	// Defaults to true.
 	SelfSignedCert bool `yaml:"selfSignedCert,omitempty"`
+	// Indicates how long an auto-generated certificate is used until its rotated.
+	// Ignored if SelfSignedCert is false. If the certificate expiry period is less than
+	// this value, it is ignored.
+	// Defaults to the number of hours in a year.
+	CertRotateDuration time.Duration `yaml:"certRotateDuration,omitempty"`
 }

@@ -184,7 +184,7 @@ func TestApplyServerCert(t *testing.T) {
 
 			clientset := fakeclientset.NewSimpleClientset()
 			aggregatorClientset := fakeaggregatorclientset.NewSimpleClientset()
-			got, err := ApplyServerCert(tt.selfSignedCert, clientset, aggregatorClientset, secureServing)
+			got, err := ApplyServerCert(tt.selfSignedCert, 8760*time.Hour, clientset, aggregatorClientset, secureServing)
 
 			if err != nil || tt.wantErr {
 				if (err != nil) != tt.wantErr {

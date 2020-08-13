@@ -73,7 +73,7 @@ func GetAntreaServerNames() []string {
 	return []string{antreaServerName}
 }
 
-func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregatorClient clientset.Interface,
+func ApplyServerCert(selfSignedCert bool, userRotateDuration time.Duration, client kubernetes.Interface, aggregatorClient clientset.Interface,
 	secureServing *options.SecureServingOptionsWithLoopback) (*CACertController, error) {
 	var err error
 	var caContentProvider dynamiccertificates.CAContentProvider
@@ -115,7 +115,12 @@ func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregato
 	caCertController := newCACertController(caContentProvider, client, aggregatorClient)
 
 	if selfSignedCert {
-		go rotateSelfSignedCertificates(caCertController, secureServing, maxRotateDuration)
+		rotateDuration := userRotateDuration
+		if maxRotateDuration < rotateDuration {
+			rotateDuration = maxRotateDuration
+		}
+
+		go rotateSelfSignedCertificates(caCertController, secureServing, rotateDuration)
 	}
 
 	return caCertController, nil

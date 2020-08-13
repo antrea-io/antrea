@@ -158,4 +158,5 @@ If you are using cert-manager to issue the certificate, it will renew the
 certificate before expiry and update the Secret automatically.
 
 If you are using certificates signed by Antrea, Antrea will rotate the
-certificate automatically before expiration.
+certificate automatically before expiration. A rotation duration can
+be provided to force the certificate to be rotated prior to the expiry.

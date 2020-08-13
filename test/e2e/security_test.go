@@ -106,12 +106,12 @@ func TestUserProvidedCert(t *testing.T) {
 	// Create/update the secret and restart antrea-controller, then verify apiserver and its clients are using the
 	// provided certificate.
 	certPem, _ := genCertKeyAndUpdateSecret()
-	testCert(t, data, string(certPem), true)
+	testCert(t, data, string(certPem), true, false)
 
 	// Update the secret and do not restart antrea-controller, then verify apiserver and its clients are using the
 	// new certificate.
 	certPem, _ = genCertKeyAndUpdateSecret()
-	testCert(t, data, string(certPem), false)
+	testCert(t, data, string(certPem), false, false)
 }
 
 // TestSelfSignedCert tests the selfSignedCert=true case.
@@ -122,15 +122,42 @@ func TestSelfSignedCert(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	testCert(t, data, "", true)
+	testCert(t, data, "", true, false)
+}
+
+func TestCertRotation(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	// Re-configure antrea-controller to rotate cert every 1m15s.
+	// Note antrea-controller must be restarted to take effect.
+	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		t.Fatalf("Failed to get ConfigMap: %v", err)
+	}
+	antreaControllerConf, _ := configMap.Data["antrea-controller.conf"]
+	antreaControllerConf = strings.Replace(antreaControllerConf, "#certRotateDuration: 8760h", "certRotateDuration: 1m15s", 1)
+	configMap.Data["antrea-controller.conf"] = antreaControllerConf
+	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("Failed to update ConfigMap %s: %v", configMap.Name, err)
+	}
+
+	caBundle := testCert(t, data, "", true, true)
+
+	time.Sleep(time.Minute + time.Second*15)
+	testCert(t, data, caBundle, false, true)
 }
 
 // testCert optionally restarts antrea-controller, then checks:
-// 1. The CA bundle published in antrea-ca ConfigMap matches expectedCABundle if provided.
-// 1. The CA bundle published in antrea-ca ConfigMap can be used to verify antrea-controller's serving cert.
-// 2. The CA bundle in Antrea APIServices match the one in antrea-ca ConfigMap.
-// 3. All antrea-agents can use the CA bundle to verify antrea-controller's serving cert.
-func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod bool) {
+// 1. The CA bundle published in antrea-ca ConfigMap matches testCABundle if provided.
+// 1a. If certificate rotation is being tested, tests if the CA bundle does not match the test bundle.
+// 2. The CA bundle published in antrea-ca ConfigMap can be used to verify antrea-controller's serving cert.
+// 3. The CA bundle in Antrea APIServices match the one in antrea-ca ConfigMap.
+// 4. All antrea-agents can use the CA bundle to verify antrea-controller's serving cert.
+func testCert(t *testing.T, data *TestData, testCABundle string, restartPod bool, certificateRotation bool) string {
 	var antreaController *v1.Pod
 	var err error
 	// We expect the CA to be published very soon after antrea-controller restarts, while it may take up to 2 minutes
@@ -163,10 +190,18 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 			return false, nil
 		}
 
-		if expectedCABundle != "" && expectedCABundle != caBundle {
-			t.Log("CA bundle doesn't match the expected one, retrying")
-			return false, nil
+		if !certificateRotation {
+			if testCABundle != "" && testCABundle != caBundle {
+				t.Log("CA bundle doesn't match the test one, retrying")
+				return false, nil
+			}
+		} else {
+			if testCABundle != "" && testCABundle == caBundle {
+				t.Log("CA bundle still matches the test one, retrying")
+				return false, nil
+			}
 		}
+
 		clientConfig := restclient.Config{
 			TLSClientConfig: restclient.TLSClientConfig{
 				Insecure:   false,
@@ -231,4 +266,6 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	}); err != nil {
 		t.Fatalf("Didn't get connections from all %d antrea-agents: %v", clusterInfo.numNodes, err)
 	}
+
+	return caBundle
 }

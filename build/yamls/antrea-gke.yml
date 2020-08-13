@@ -986,12 +986,18 @@ data:
     # And the Secret must be mounted to directory "/var/run/antrea/antrea-controller-tls" of the
     # antrea-controller container.
     #selfSignedCert: true
+
+    # Indicates how long an auto-generated certificate is used until its rotated.
+    # Ignored if SelfSignedCert is false. If the certificate expiry period is less than
+    # this value, it is ignored.
+    # Defaults to the number of hours in a year.
+    #certRotateDuration: 8760h
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-f72hcg8m78
+  name: antrea-config-6fmt4g4284
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1097,7 +1103,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-f72hcg8m78
+          name: antrea-config-6fmt4g4284
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1312,7 +1318,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-f72hcg8m78
+          name: antrea-config-6fmt4g4284
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

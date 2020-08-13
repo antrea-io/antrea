@@ -17,6 +17,7 @@ package main
 import (
 	"errors"
 	"io/ioutil"
+	"time"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
@@ -71,7 +72,8 @@ func (o *Options) loadConfigFromFile(file string) (*ControllerConfig, error) {
 	}
 
 	c := ControllerConfig{
-		SelfSignedCert: true,
+		SelfSignedCert:     true,
+		CertRotateDuration: 24 * 365 * time.Hour,
 	}
 	err = yaml.UnmarshalStrict(data, &c)
 	if err != nil {
