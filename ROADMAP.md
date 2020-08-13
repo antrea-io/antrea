@@ -11,28 +11,53 @@ features. Reach us through Issues, Slack and / or Google Group!
 # Planned Features
 The following features are considered for the near future:
 
-* **Windows Kubernetes Node**
-Support Windows Kubernetes Nodes. At the moment Antrea supports only Linux Nodes.
+* **Windows support improvements**
+Antrea [supports Windows K8s Node](/docs/windows.md) since version 0.7.0.
+However, a few features like network flow export are not supported for Windows
+Node yet. We will continue to add more features for Windows, and improve Antrea
+Agent and OVS installation on Windows Nodes.
 
 * **IPv6 Pod network**
 Support IPv6 and IPv4/IPv6 dual-stack for Pod network. Right now Antrea supports
 only IPv4.
 
-* **Network and NetworkPolicy troubleshooting**
-We want to focus on troubleshooting, and will add more mechanisms to simplify
-troubleshooting Antrea network and the NetworkPolicy implementation.
+* **Antrea NetworkPolicy**
+Antrea has started adding support for [Antrea native NetworkPolicy](/docs/network-policy.md)
+in addition to K8s NetworkPolicy since version 0.8.0. We already support
+ClusterNetworkPolicy and tiering, and will continue to add more NetworkPolicy
+extensions, like traffic logging, policy statistics, policy realization status,
+more matching criteria and actions, and external endpoints.
 
-* **Prometheus integration**
-Export metrics to [Prometheus](https://prometheus.io) from both Antrea Controller and Agents.
+* **Network diagnostics and observability**
+Network diagnostics and observability is one area we want to focus on. Antrea
+already implements some useful features on this front, including [Octant UI
+plugin](/docs/octant-plugin-installation.md), [CLI](/docs/antctl.md),
+[Traceflow](/docs/traceflow-guide.md), [network flow export and visualization](/docs/network-flow-visibility.md),
+[Prometheus metrics](/docs/prometheus-integration.md), [OVS flow dumping](/docs/antctl.md#dumping-ovs-flows)
+and [packet tracing](/docs/antctl.md#ovs-packet-tracing). We will continue to
+enhance existing features and add new features to help diagnose K8s networking
+and NetworkPolicy implementation, and to provide good visibility into the Antrea
+network.
 
-* **Kubernetes Service by OVS**
-Implement Kubernetes ClusterIP Services with OVS. Right now Antrea relies on
-`kube-proxy` to serve ClusterIP Services. The OVS implementation could perform
-better than the `kube-proxy` iptables mode.
+* **Flexible IPAM**
+So far Antrea leverages K8s NodeIPAM for IPAM which allocates a single subnet
+for each K8s Node. In future, Antrea will implement its own IPAM, and support
+more IPAM strategies besides subnet per Node, like IP pool per Node or
+per Namespace.
 
-* **Export OVS flow information**
-Export OVS flow information using protocols like IPFix, NetFlow, sFlow. This is
-for enabling visibility into the Antrea network from a flow analyzer.
+* **Egress policy**
+Egress policy is to control the egress Nodes and SNAT IPs of traffic from Pods
+to external network. For example, a user can request a dedicated SNAT IP per
+Namespace, or for a particular set of Pods or Services. This feature is very
+useful for services in the Node or external network to identify the source of
+Pod traffic based on SNAT IP and enforce specific policies on the traffic. Also
+check the [egress policy proposal](https://github.com/vmware-tanzu/antrea/issues/667)
+to learn more.
+
+* **NFV and Telco use cases**
+We plan to explore and provide support for NFV and Telco use cases. Will support
+Multus integration, Pod interfaces on SRIOV devices, and Network Service
+Chaining.
 
 * **NetworkPolicy scale and performance tests**
 Evaluate and benchmark the NetworkPolicy implementation performance at a large
@@ -41,7 +66,3 @@ OVS datapath performance.
 
 * **OVS with DPDK or AF_XDP**
 Leverage OVS with DPDK or AF_XDP for high performance.
-
-* **OVS hardware offloading**
-Enable hardware acceleration of the NICs that support OVS offloading.
-
