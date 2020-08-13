@@ -379,7 +379,7 @@ load-balancing / DNAT on traffic destined to services.
 
 ### CnpEgressRuleTables (45-49)
 
-For these tables, you will need to keep mind the CNP [specification](#antrea-network-policy-crd-implementation)
+For these tables, you will need to keep in mind the CNP [specification](#antrea-network-policy-crd-implementation)
 that we are using.
 
 These tables are used to implement the egress rules across all ClusterNetworkPolicies.
@@ -410,7 +410,7 @@ The above example flows read as follow: if the source IP address is in set
 {10.10.1.6}, and the destination IP address is in the set {10.10.1.8}, and the
 destination TCP port is in the set {53}, then use the `conjunction` action with
 id 2, which goes to [L3ForwardingTable]. Otherwise, go to the table corresponding
-to the next tier in precedence, or in case of the Application tier (last in
+to the next tier in precedence, or in the case of the Application tier (lowest
 precedence), go to the [EgressRuleTable].
 
 If the `conjunction` action is matched, packets are "allowed" or "dropped"
@@ -590,7 +590,7 @@ need to support more cases for L2 multicast / broadcast traffic.
 
 ### CnpIngressRuleTables (85-89)
 
-These tables are very similar to [CnpEgressRuleTables], but implements the ingress
+These tables are very similar to [CnpEgressRuleTables], but implement the ingress
 rules of the CNP. Depending on the tier to which the CNP belongs to, the rules will
 be installed in a table corresponding to that tier. The ingress CNP table to tier
 mappings is as follows:
@@ -603,7 +603,7 @@ mappings is as follows:
 5. Application tier -> ApplicationIngressRuleTable(89)
 ```
 
-Again for this table, you will need to keep mind the CNP
+Again for this table, you will need to keep in mind the CNP
 [specification](#antrea-network-policy-crd-implementation) that we are using.
 Since the example CNP resides in the Application tier, if you dump the flows
 for table 89, you should see something like this:
@@ -625,7 +625,7 @@ The rest of the flows read as follows: if the source IP address is in set
 correspond to IP addresses {10.10.1.6}), and the destination TCP port
 is in the set {80}, then use `conjunction` action with id 1, which drops the
 packet. Otherwise, go to the next CnpIngressRuleTable belonging to the next
-tier in precedence, or in case of the Application tier (last in precedence),
+tier in precedence, or in the case of the Application tier (lowest precedence),
 go to the [IngressRuleTable]. One notable difference is how we use OF ports
 to identify the destination of the traffic, while we use IP addresses in
 [CnpEgressRuleTables] to identify the source of the traffic. We do this as
