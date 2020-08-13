@@ -24,7 +24,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"

@@ -27,7 +27,7 @@ import (
 	"github.com/Microsoft/hcsshim"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"

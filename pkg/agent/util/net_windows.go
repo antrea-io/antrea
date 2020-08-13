@@ -28,7 +28,7 @@ import (
 	ps "github.com/benmoss/go-powershell"
 	"github.com/benmoss/go-powershell/backend"
 	"github.com/containernetworking/plugins/pkg/ip"
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 )
 
 const (

@@ -18,7 +18,7 @@ import (
 	"os"
 	"strconv"
 
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 )
 
 // nodeNameEnvKey is environment variable.

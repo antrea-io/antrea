@@ -20,7 +20,7 @@ import (
 	"net"
 
 	"github.com/contiv/ofnet/ofctrl"
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"

@@ -53,10 +53,9 @@ require (
 	k8s.io/client-go v0.18.4
 	k8s.io/component-base v0.18.4
 	k8s.io/klog v1.0.0
-	k8s.io/klog/v2 v2.0.0
 	k8s.io/kube-aggregator v0.18.4
 	k8s.io/kube-openapi v0.0.0-20200410145947-61e04a5be9a6
-	k8s.io/utils v0.0.0-20200414100711-2df71ebbae66
+	k8s.io/utils v0.0.0-20200410111917-5770800c2500
 )
 
 replace (
