@@ -413,6 +413,10 @@ id 2, which goes to [L3ForwardingTable]. Otherwise, go to the table correspondin
 to the next tier in precedence, or in the case of the Application tier (lowest
 precedence), go to the [EgressRuleTable].
 
+If the `conjunction` action is matched, packets are "allowed" or "dropped"
+based on the `action` field of the CNP rule. If allowed, they follow a similar
+path as described in the following [EgressRuleTable] section.
+
 Unlike the default of K8s NetworkPolicies, ClusterNetworkPolicy has no such
 default rules. Hence, they are evaluated as-is, and there is no need for a
 CnpEgressDefaultTable.
@@ -615,7 +619,10 @@ correspond to IP addresses {10.10.1.6}), and the destination TCP port
 is in the set {80}, then use `conjunction` action with id 1, which drops the
 packet. Otherwise, go to the next CnpIngressRuleTable belonging to the next
 tier in precedence, or in the case of the Application tier (lowest precedence),
-go to the [IngressRuleTable].
+go to the [IngressRuleTable]. One notable difference is how we use OF ports to
+identify the destination of the traffic, while we use IP addresses in
+[CnpEgressRuleTable] to identify the source of the traffic. More details
+regarding this can be found in the following [IngressRuleTable] section.
 
 As seen in [CnpEgressRuleTables], the default action is to evaluate K8s Network
 Policy [IngressRuleTable] and a CnpIngressDefaultTable does not exist.
