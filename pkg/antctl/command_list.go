@@ -15,16 +15,16 @@
 package antctl
 
 import (
+	"flag"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
-	"github.com/vmware-tanzu/antrea/pkg/log"
 )
 
 // commandList organizes commands definitions.
@@ -73,12 +73,12 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
 		if err != nil {
 			return err
 		}
-		err = log.Klogv2Flags.Set("logtostderr", fmt.Sprint(enableVerbose))
+		err = flag.Set("logtostderr", fmt.Sprint(enableVerbose))
 		if err != nil {
 			return err
 		}
 		if enableVerbose {
-			err := log.Klogv2Flags.Set("v", fmt.Sprint(math.MaxInt32))
+			err := flag.Set("v", fmt.Sprint(math.MaxInt32))
 			if err != nil {
 				return err
 			}

@@ -23,7 +23,7 @@ import (
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/dbtransaction"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/helpers"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 )
 
 const defaultOVSDBFile = "db.sock"

@@ -19,7 +19,7 @@ import (
 	"math"
 	"sort"
 
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 )

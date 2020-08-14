@@ -15,6 +15,7 @@
 package main
 
 import (
+	"flag"
 	"math/rand"
 	"os"
 	"path"
@@ -25,7 +26,6 @@ import (
 	"k8s.io/component-base/logs"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl"
-	"github.com/vmware-tanzu/antrea/pkg/log"
 )
 
 var commandName = path.Base(os.Args[0])
@@ -38,9 +38,8 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	// prevent any unexpected output at beginning
-	log.InitKlog()
-	log.Klogv2Flags.Set("logtostderr", "false")
-	log.Klogv2Flags.Set("v", "0")
+	flag.Set("logtostderr", "false")
+	flag.Set("v", "0")
 	pflag.CommandLine.MarkHidden("log-flush-frequency")
 }
 

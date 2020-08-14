@@ -699,6 +699,7 @@ k8s.io/kube-openapi v0.0.0-20200403204345-e1beb1bd0f35/go.mod h1:NwPpO8COeh/j9Q9
 k8s.io/metrics v0.19.0-alpha.3 h1:yaNKYWeDbSsbqrahEoTC3uToQ1vQrsTTRCU5yN+8zzw=
 k8s.io/metrics v0.19.0-alpha.3/go.mod h1:Hz5d4337SWr2LZAlD63I6Paz+zMclbjAxPS0cb4HFts=
 k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89/go.mod h1:sZAwmy6armz5eXlNoLmJcl4F1QuKu7sr+mFQ0byX7Ew=
+k8s.io/utils v0.0.0-20200410111917-5770800c2500/go.mod h1:sZAwmy6armz5eXlNoLmJcl4F1QuKu7sr+mFQ0byX7Ew=
 k8s.io/utils v0.0.0-20200414100711-2df71ebbae66 h1:Ly1Oxdu5p5ZFmiVT71LFgeZETvMfZ1iBIGeOenT2JeM=
 k8s.io/utils v0.0.0-20200414100711-2df71ebbae66/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 rsc.io/quote/v3 v3.1.0/go.mod h1:yEA65RcK8LyAZtP9Kv3t0HmxON59tX3rD+tICJqUlj0=

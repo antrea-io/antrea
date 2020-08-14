@@ -38,7 +38,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 
 	agentapiserver "github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
