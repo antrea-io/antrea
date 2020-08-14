@@ -36,6 +36,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `AntreaProxy`           | Agent              | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                | Must be enabled for Windows. |
 | `ClusterNetworkPolicy`  | Controller         | `false` | Alpha | v0.8.0        | N/A          | N/A        | No                 |       |
 | `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                |       |
+| `FlowExporter`          | Agent              | `false` | Alpha | v0.9.0        | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -81,3 +82,15 @@ We are currently working on adding documentation for this feature.
 This feature can only be used in "encap" mode when the Geneve tunnel type is
 being used. Note that this is the default configuration for both Linux and
 Windows.
+
+### Flow Exporter
+
+`Flow Exporter` is a feature that runs as part of the Antrea Agent, and enables
+network flow visibility into a Kubernetes cluster. Flow exporter sends
+IPFIX flow records that are built from observed connections in Conntrack module
+to a flow collector. Refer to this [document](network-flow-visibility.md) for more information.
+
+#### Requirements for this Feature
+
+This feature is currently only supported for Nodes running Linux.
+Windows support will be added in the future.
