@@ -23,7 +23,7 @@ import (
 	"github.com/rakelkar/gonetsh/netroute"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
