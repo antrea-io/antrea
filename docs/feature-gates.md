@@ -34,7 +34,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | Feature Name            | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
 | ----------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | ----- |
 | `AntreaProxy`           | Agent              | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                | Must be enabled for Windows. |
-| `ClusterNetworkPolicy`  | Controller         | `false` | Alpha | v0.8.0        | N/A          | N/A        | No                 |       |
+| `ClusterNetworkPolicy`  | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                |       |
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9.0        | N/A          | N/A        | Yes                |       |
 
@@ -73,9 +73,9 @@ None
 `Traceflow` enables a CRD API for Antrea that supports generating tracing
 requests for traffic going through the Antrea-managed Pod network. This is
 useful for troubleshooting connectivity issues, e.g. determining if a
-NetworkPolicy is responsible for traffic drops between two Pods.
+NetworkPolicy is responsible for traffic drops between two Pods. Refer to
+this [document](traceflow-guide.md) for more information.
 
-We are currently working on adding documentation for this feature.
 
 #### Requirements for this Feature
 
