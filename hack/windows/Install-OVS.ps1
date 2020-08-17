@@ -8,8 +8,8 @@ $ErrorActionPreference = "Stop"
 # TODO: set up HTTPS so that the archive can be downloaded securely. In the
 # meantime, we use a SHA256 hash to ensure that the downloaded archive is
 # correct.
-$OVSDownloadURL = "http://downloads.antrea.io/ovs/ovs-2.13.1-win64.zip"
-$OVSPublishedHash = '7E8364D684CC37417D70281354AA55987F52F143BF2DA162B6728A24E6B67546'
+$OVSDownloadURL = "http://downloads.antrea.io/ovs/ovs-2.13.1-antrea.1-win64.zip"
+$OVSPublishedHash = '83AA08526D947B08A952339B849441D4896AAB7437B4101CFBCE1130888FF459'
 $OVSDownloadDir = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition)
 $InstallLog = "$OVSDownloadDir\install.log"
 $OVSZip = "$OVSDownloadDir\ovs-win64.zip"
