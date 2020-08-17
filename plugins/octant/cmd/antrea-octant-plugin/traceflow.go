@@ -277,7 +277,11 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 			log.Printf("Deleted traceflow CRD \"%s\" successfully after %.0f seconds", tfName, age.Seconds())
 		}(tf.Name)
 		p.lastTf = tf
-		p.graph = graphviz.GenGraph(p.lastTf)
+		p.graph, err = graphviz.GenGraph(p.lastTf)
+		if err != nil {
+			log.Printf("Failed to generate traceflow graph \"%s\", err: %s", tfName, err)
+			return nil
+		}
 		return nil
 	case showGraphAction:
 		name, err := request.Payload.String(traceNameCol)
@@ -294,7 +298,11 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		}
 		log.Printf("Get traceflow CRD \"%s\" successfully, Traceflow Results: %+v", name, tf)
 		p.lastTf = tf
-		p.graph = graphviz.GenGraph(p.lastTf)
+		p.graph, err = graphviz.GenGraph(p.lastTf)
+		if err != nil {
+			log.Printf("Failed to generate traceflow graph \"%s\", err: %s", name, err)
+			return nil
+		}
 		return nil
 	default:
 		log.Fatalf("Failed to find defined handler after receiving action request for %s", pluginName)
@@ -374,11 +382,19 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 		tf, err := p.client.OpsV1alpha1().Traceflows().Get(ctx, p.lastTf.Name, v1.GetOptions{})
 		if err != nil {
 			log.Printf("Failed to get latest CRD, using traceflow results cache, last traceflow name: %s, err: %s", p.lastTf.Name, err)
-			p.graph = graphviz.GenGraph(p.lastTf)
+			p.graph, err = graphviz.GenGraph(p.lastTf)
+			if err != nil {
+				log.Printf("Failed to generate traceflow graph \"%s\", err: %s", p.lastTf.Name, err)
+				return component.EmptyContentResponse, nil
+			}
 			log.Printf("Generated content from CRD cache successfully, last traceflow name: %s", p.lastTf.Name)
 		} else {
 			p.lastTf = tf
-			p.graph = graphviz.GenGraph(p.lastTf)
+			p.graph, err = graphviz.GenGraph(p.lastTf)
+			if err != nil {
+				log.Printf("Failed to generate traceflow graph \"%s\", err: %s", p.lastTf.Name, err)
+				return component.EmptyContentResponse, nil
+			}
 			log.Printf("Generated content from latest CRD successfully, last traceflow name %s", p.lastTf.Name)
 		}
 		log.Printf("Traceflow Results: %+v", p.lastTf)

@@ -15,27 +15,26 @@
 package graphviz
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
-	"log"
+	"strconv"
 	"strings"
 
-	"github.com/goccy/go-graphviz"
-	"github.com/goccy/go-graphviz/cgraph"
+	"github.com/awalterschulze/gographviz"
 
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 )
 
 const (
-	darkRed    = "#B20000"
-	mistyRose  = "#EDD5D5"
-	fireBrick  = "#B22222"
-	ghostWhite = "#F8F8FF"
-	gainsboro  = "#DCDCDC"
-	lightGrey  = "#C8C8C8"
-	silver     = "#C0C0C0"
-	grey       = "#808080"
-	dimGrey    = "#696969"
+	darkRed    = `"#B20000"`
+	mistyRose  = `"#EDD5D5"`
+	fireBrick  = `"#B22222"`
+	ghostWhite = `"#F8F8FF"`
+	gainsboro  = `"#DCDCDC"`
+	lightGrey  = `"#C8C8C8"`
+	silver     = `"#C0C0C0"`
+	grey       = `"#808080"`
+	dimGrey    = `"#696969"`
 )
 
 var (
@@ -43,36 +42,68 @@ var (
 	clusterDstName = "cluster_destination"
 )
 
-func createNodeWithDefaultStyle(graph *cgraph.Graph, name string) *cgraph.Node {
-	node, _ := graph.CreateNode(name)
-	node.SetShape(cgraph.BoxShape)
-	node.SetStyle(cgraph.RoundedNodeStyle + "," + cgraph.FilledNodeStyle + "," + cgraph.SolidNodeStyle)
-	node.SetColor(dimGrey)
-	return node
+// createDirectedEdgeWithDefaultStyle creates a node with default style (usually used to represent a component in traceflow) .
+func createNodeWithDefaultStyle(graph *gographviz.Graph, parentGraph string, name string) (*gographviz.Node, error) {
+	err := graph.AddNode(parentGraph, name, map[string]string{
+		"shape": "box",
+		"style": `"rounded,filled,solid"`,
+		"color": dimGrey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return graph.Nodes.Lookup[name], nil
 }
 
+// createEndpointNodeWithDefaultStyle creates an endpoint node with default style.
 // EndpointNode is the the type of node for endpoints in networks like the sender and the receiver.
-func createEndpointNodeWithDefaultStyle(graph *cgraph.Graph, name string) *cgraph.Node {
-	node, _ := graph.CreateNode(name)
-	node.SetColor(grey)
-	node.SetFillColor(lightGrey)
-	node.SetStyle(cgraph.FilledNodeStyle + "," + cgraph.BoldNodeStyle)
-	return node
+func createEndpointNodeWithDefaultStyle(graph *gographviz.Graph, parentGraph string, name string) (*gographviz.Node, error) {
+	err := graph.AddNode(parentGraph, name, map[string]string{
+		"style":     `"filled,bold"`,
+		"color":     grey,
+		"fillcolor": lightGrey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return graph.Nodes.Lookup[name], nil
 }
 
-func createEdgeWithDefaultStyle(graph *cgraph.Graph, name string, start *cgraph.Node, end *cgraph.Node) *cgraph.Edge {
-	edge, _ := graph.CreateEdge(name, start, end)
-	edge.SetPenWidth(2.0)
-	edge.SetColor(silver)
-	return edge
+// createDirectedEdgeWithDefaultStyle creates a directed edge with default style.
+// It is allowed to create duplicate edges.
+func createDirectedEdgeWithDefaultStyle(graph *gographviz.Graph, start *gographviz.Node, end *gographviz.Node, isForwardDir bool) (*gographviz.Edge, error) {
+	err := graph.AddEdge(start.Name, end.Name, true, map[string]string{
+		"penwidth": "2.0",
+		"color":    silver,
+	})
+	if err != nil {
+		return nil, err
+	}
+	edges := graph.Edges.SrcToDsts[start.Name][end.Name]
+	if len(edges) == 0 {
+		return nil, errors.New(fmt.Sprintf("Failed to create a new edge between node %s and node %s", start.Name, end.Name))
+	}
+	edge := edges[len(edges)-1]
+	if isForwardDir {
+		edge.Attrs[gographviz.Dir] = "forward"
+	} else {
+		edge.Attrs[gographviz.Dir] = "back"
+	}
+	return edge, nil
 }
 
+// createDirectedEdgeWithDefaultStyle creates a cluster with default style.
 // In Graphviz, cluster is a subgraph which is surrounded by a rectangle and the nodes belonging to the cluster are drawn together.
-func createClusterWithDefaultStyle(graph *cgraph.Graph, name string) *cgraph.Graph {
-	cluster := graph.SubGraph(name, 1)
-	cluster.SetBackgroundColor(ghostWhite)
-	cluster.SetStyle(cgraph.FilledGraphStyle + "," + cgraph.BoldGraphStyle)
-	return cluster
+// In traceflow, a cluster is usually used to represent a K8s node.
+func createClusterWithDefaultStyle(graph *gographviz.Graph, name string) (*gographviz.SubGraph, error) {
+	err := graph.AddSubGraph(graph.Name, name, map[string]string{
+		"style":   `"filled,bold"`,
+		"bgcolor": ghostWhite,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return graph.SubGraphs.SubGraphs[name], nil
 }
 
 func isSender(result *opsv1alpha1.NodeResult) bool {
@@ -95,6 +126,14 @@ func isReceiver(result *opsv1alpha1.NodeResult) bool {
 	return true
 }
 
+// In DOT language, some symbols are used to parse the Graphviz DOT language, including but not limited to ",", "/", "#", etc.
+// All Graphviz attributes are specified by name-value pairs. If the value string contains such symbols, we need to add a pair
+// of quotation marks to prevent them from being used for parsing the DOT language.
+// More details about DOT language can be seen at: https://graphviz.org/doc/info/lang.html.
+func getWrappedStr(str string) string {
+	return `"` + str + `"`
+}
+
 func getNodeResult(tf *opsv1alpha1.Traceflow, fn func(result *opsv1alpha1.NodeResult) bool) *opsv1alpha1.NodeResult {
 	for _, result := range tf.Status.Results {
 		if fn(&result) {
@@ -106,20 +145,20 @@ func getNodeResult(tf *opsv1alpha1.Traceflow, fn func(result *opsv1alpha1.NodeRe
 
 func getSrcNodeName(tf *opsv1alpha1.Traceflow) string {
 	if len(tf.Spec.Source.Namespace) > 0 && len(tf.Spec.Source.Pod) > 0 {
-		return tf.Spec.Source.Namespace + "/" + tf.Spec.Source.Pod
+		return getWrappedStr(tf.Spec.Source.Namespace + "/" + tf.Spec.Source.Pod)
 	}
 	return ""
 }
 
 func getDstNodeName(tf *opsv1alpha1.Traceflow) string {
 	if len(tf.Spec.Destination.Namespace) > 0 && len(tf.Spec.Destination.Pod) > 0 {
-		return tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Pod
+		return getWrappedStr(tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Pod)
 	}
 	if len(tf.Spec.Destination.Namespace) > 0 && len(tf.Spec.Destination.Service) > 0 {
-		return tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Service
+		return getWrappedStr(tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Service)
 	}
 	if len(tf.Spec.Destination.IP) > 0 {
-		return tf.Spec.Destination.IP
+		return getWrappedStr(tf.Spec.Destination.IP)
 	}
 	return ""
 }
@@ -166,19 +205,8 @@ func findClusterString(graphStr string, clusterName string) (startIndex int, end
 	return startIndex, endIndex + 1
 }
 
-func genOutput(g *graphviz.Graphviz, graph *cgraph.Graph, isSingleCluster bool) string {
-	var buf bytes.Buffer
-	if err := g.Render(graph, "dot", &buf); err != nil {
-		log.Fatal(err)
-	}
-	if err := graph.Close(); err != nil {
-		log.Fatal(err)
-	}
-	if err := g.Close(); err != nil {
-		log.Fatal(err)
-	}
-
-	str := buf.String()
+func genOutput(graph *gographviz.Graph, isSingleCluster bool) string {
+	str := graph.String()
 	if isSingleCluster {
 		return str
 	}
@@ -191,35 +219,35 @@ func genOutput(g *graphviz.Graphviz, graph *cgraph.Graph, isSingleCluster bool) 
 	return str
 }
 
-func genSubGraph(graph *cgraph.Graph, result opsv1alpha1.NodeResult, firstNodeName string, dir cgraph.DirType, addNodeNum int) []*cgraph.Node {
-	var nodes []*cgraph.Node
+func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *opsv1alpha1.NodeResult,
+	endpointNodeName string, isForwardDir bool, addNodeNum int) ([]*gographviz.Node, error) {
+	var nodes []*gographviz.Node
 
 	// Show the name of cluster.
 	if len(result.Node) > 0 {
-		graph.SetLabel(result.Node)
-		if dir == cgraph.ForwardDir {
-			graph.SetLabelJust(cgraph.LeftJust)
+		cluster.Attrs[gographviz.Label] = getWrappedStr(result.Node)
+		if isForwardDir {
+			cluster.Attrs[gographviz.LabelJust] = "l"
 		} else {
-			graph.SetLabelJust(cgraph.RightJust)
+			cluster.Attrs[gographviz.LabelJust] = "r"
 		}
 	}
 
 	// Construct the first node. Show it only if we know the name of it.
-	node := createEndpointNodeWithDefaultStyle(graph, firstNodeName)
+	node, err := createEndpointNodeWithDefaultStyle(graph, cluster.Name, endpointNodeName)
+	if err != nil {
+		return nil, err
+	}
 	nodes = append(nodes, node)
-	if len(firstNodeName) > 0 {
-		node.SetColor(grey)
-		node.SetFillColor(lightGrey)
-		node.SetStyle(cgraph.BoldNodeStyle + "," + cgraph.FilledNodeStyle)
-	} else {
-		node.SetStyle("invis")
+	if len(endpointNodeName) == 0 {
+		node.Attrs[gographviz.Style] = `"invis"`
 	}
 
 	// Reorder the observations according to the direction of edges.
 	// Before that, deep copy observations to prevent possible risks of the original traceflow being modified.
 	obs := make([]opsv1alpha1.Observation, len(result.Observations))
 	copy(obs, result.Observations)
-	if dir == cgraph.BackDir {
+	if !isForwardDir {
 		for i := len(obs)/2 - 1; i >= 0; i-- {
 			opp := len(obs) - 1 - i
 			obs[i], obs[opp] = obs[opp], obs[i]
@@ -229,77 +257,103 @@ func genSubGraph(graph *cgraph.Graph, result opsv1alpha1.NodeResult, firstNodeNa
 	// Draw the actual observations of traceflow.
 	for _, o := range obs {
 		// Construct node and edge.
-		nodeName := fmt.Sprintf("%s_%d", graph.Name(), len(nodes))
-		node := createNodeWithDefaultStyle(graph, nodeName)
-		node.SetLabel(string(o.Component))
+		nodeName := fmt.Sprintf("%s_%d", cluster.Name, len(nodes))
+		node, err := createNodeWithDefaultStyle(graph, cluster.Name, nodeName)
+		if err != nil {
+			return nil, err
+		}
+		node.Attrs[gographviz.Label] = getWrappedStr(string(o.Component))
 		nodes = append(nodes, node)
 		if len(nodes) > 1 {
-			edgeName := fmt.Sprintf("%s_%d", graph.Name(), len(nodes))
-			edge := createEdgeWithDefaultStyle(graph, edgeName, nodes[len(nodes)-2], nodes[len(nodes)-1])
-			edge.SetDir(dir)
+			edge, err := createDirectedEdgeWithDefaultStyle(graph, nodes[len(nodes)-2], nodes[len(nodes)-1], isForwardDir)
+			if err != nil {
+				return nil, err
+			}
 			// Make the graph centered by adjusting the length of edge between the first two nodes.
 			if len(nodes) == 2 {
-				edge.SetMinLen(1 + addNodeNum)
+				edge.Attrs[gographviz.MinLen] = strconv.Itoa(1 + addNodeNum)
 			} else {
-				edge.SetMinLen(1)
+				edge.Attrs[gographviz.MinLen] = "1"
 			}
-			if o.Action == opsv1alpha1.Dropped && dir == cgraph.BackDir {
-				edge.SetStyle("invis")
+			if o.Action == opsv1alpha1.Dropped && !isForwardDir {
+				edge.Attrs[gographviz.Style] = `"invis"`
 			}
 		}
 		// Set the pattern of node.
 		if o.Action == opsv1alpha1.Dropped {
-			node.SetColor(fireBrick)
-			node.SetFillColor(mistyRose)
+			node.Attrs[gographviz.Color] = fireBrick
+			node.Attrs[gographviz.FillColor] = mistyRose
 		} else {
-			node.SetFillColor(gainsboro)
+			node.Attrs[gographviz.FillColor] = gainsboro
 		}
 		// Set the message shown inside node.
 		labelStr := getTraceflowMessage(&o)
-		node.SetLabel(labelStr)
+		node.Attrs[gographviz.Label] = getWrappedStr(labelStr)
 	}
-	return nodes
+	return nodes, nil
 }
 
-func GenGraph(tf *opsv1alpha1.Traceflow) string {
-	g := graphviz.New()
-	graph, err := g.Graph()
-	if err != nil {
-		log.Fatal(err)
+func GenGraph(tf *opsv1alpha1.Traceflow) (string, error) {
+	g, _ := gographviz.ParseString(`digraph G {}`)
+	graph := gographviz.NewGraph()
+	if err := gographviz.Analyse(g, graph); err != nil {
+		return "", err
 	}
-	graph.SetCenter(true)
-	graph.SetLabel(tf.Name)
-	graph.SetLabelLocation(cgraph.TopLocation)
+	graph.Attrs[gographviz.Center] = "true"
+	graph.Attrs[gographviz.Label] = getWrappedStr(tf.Name)
+	graph.Attrs[gographviz.LabelLOC] = "t"
+	err := graph.SetDir(true)
+	if err != nil {
+		return "", err
+	}
 
 	senderRst := getNodeResult(tf, isSender)
 	receiverRst := getNodeResult(tf, isReceiver)
 	if tf == nil || senderRst == nil || tf.Status.Phase != opsv1alpha1.Succeeded || len(senderRst.Observations) == 0 {
-		return genOutput(g, graph, true)
+		return genOutput(graph, true), nil
 	}
 
-	cluster1 := createClusterWithDefaultStyle(graph, clusterSrcName)
+	cluster1, err := createClusterWithDefaultStyle(graph, clusterSrcName)
+	if err != nil {
+		return "", err
+	}
 	// Handle single node traceflow.
 	if receiverRst == nil {
-		nodes := genSubGraph(cluster1, *senderRst, getSrcNodeName(tf), cgraph.ForwardDir, 0)
+		nodes, err := genSubGraph(graph, cluster1, senderRst, getSrcNodeName(tf), true, 0)
+		if err != nil {
+			return "", err
+		}
 		// Draw the destination pod and involved edge.
-		edgeName := fmt.Sprintf("%s_%d", cluster1.Name(), len(senderRst.Observations))
 		if len(nodes) == 0 {
-			return genOutput(g, graph, true)
+			return genOutput(graph, true), nil
 		}
 		switch senderRst.Observations[len(senderRst.Observations)-1].Action {
 		// If the last action of the sender is FORWARDED,
 		// then the packet has been sent out by sender, implying that there is a disconnection.
 		case opsv1alpha1.Forwarded:
-			lastNode := createEndpointNodeWithDefaultStyle(graph, getDstNodeName(tf))
-			edge, _ := graph.CreateEdge(edgeName, nodes[len(nodes)-1], lastNode)
-			edge.SetColor(darkRed)
-			edge.SetPenWidth(2.0)
-			edge.SetStyle(cgraph.DashedEdgeStyle)
+			lastNode, err := createEndpointNodeWithDefaultStyle(graph, graph.Name, getDstNodeName(tf))
+			if err != nil {
+				return "", err
+			}
+			err = graph.AddEdge(nodes[len(nodes)-1].Name, lastNode.Name, true, map[string]string{
+				"penwidth": "2.0",
+				"color":    darkRed,
+				"style":    `"dashed"`,
+			})
+			if err != nil {
+				return "", err
+			}
 		case opsv1alpha1.Delivered:
-			lastNode := createEndpointNodeWithDefaultStyle(cluster1, getDstNodeName(tf))
-			createEdgeWithDefaultStyle(cluster1, edgeName, nodes[len(nodes)-1], lastNode)
+			lastNode, err := createEndpointNodeWithDefaultStyle(graph, cluster1.Name, getDstNodeName(tf))
+			if err != nil {
+				return "", err
+			}
+			_, err = createDirectedEdgeWithDefaultStyle(graph, nodes[len(nodes)-1], lastNode, true)
+			if err != nil {
+				return "", err
+			}
 		}
-		return genOutput(g, graph, true)
+		return genOutput(graph, true), nil
 	}
 
 	// Make the graph centered by balancing the difference of node numbers on two sides with the length of first edge.
@@ -311,17 +365,29 @@ func GenGraph(tf *opsv1alpha1.Traceflow) string {
 	}
 
 	// Draw the nodes for the sender.
-	nodes1 := genSubGraph(cluster1, *senderRst, getSrcNodeName(tf), cgraph.ForwardDir, nodeNum-len(senderRst.Observations))
+	nodes1, err := genSubGraph(graph, cluster1, senderRst, getSrcNodeName(tf), true, nodeNum-len(senderRst.Observations))
+	if err != nil {
+		return "", err
+	}
 
 	// Draw the nodes for the receiver.
-	cluster2 := createClusterWithDefaultStyle(graph, clusterDstName)
-	nodes2 := genSubGraph(cluster2, *receiverRst, getDstNodeName(tf), cgraph.BackDir, nodeNum-len(receiverRst.Observations))
+	cluster2, err := createClusterWithDefaultStyle(graph, clusterDstName)
+	if err != nil {
+		return "", err
+	}
+	nodes2, err := genSubGraph(graph, cluster2, receiverRst, getDstNodeName(tf), false, nodeNum-len(receiverRst.Observations))
+	if err != nil {
+		return "", err
+	}
 
 	// Draw the cross-cluster edge.
 	if len(nodes1) > 0 && len(nodes2) > 0 {
-		edge := createEdgeWithDefaultStyle(graph, "cross_node", nodes1[len(nodes1)-1], nodes2[len(nodes2)-1])
-		edge.SetConstraint(false)
+		edge, err := createDirectedEdgeWithDefaultStyle(graph, nodes1[len(nodes1)-1], nodes2[len(nodes2)-1], true)
+		if err != nil {
+			return "", err
+		}
+		edge.Attrs[gographviz.Constraint] = "false"
 	}
 
-	return genOutput(g, graph, false)
+	return genOutput(graph, false), nil
 }
