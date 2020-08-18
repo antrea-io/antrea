@@ -68,11 +68,11 @@ Antrea currently supports the following features:
 
 * IPv4 overlay network for a Kubernetes cluster. Geneve, VXLAN, GRE, or STT can
 be used as the encapsulation protocol.
-* [Kubernetes Network Policies](https://kubernetes.ioconcepts/services-networking/network-policies)
+* [Kubernetes Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies)
 implementation.
 * [Octant](https://github.com/vmware-tanzu/octant) UI plugin for monitoring
 Antrea components, which publish runtime information as
-[CRDs](https://kubernetes.ioconcepts/extend-kubernetes/api-extension/custom-resources/).
+[CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
 * [IPsec encyption](ipsec-tunnel.md) of GRE tunnel traffic.
 
 ## Roadmap

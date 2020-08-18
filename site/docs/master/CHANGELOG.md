@@ -289,10 +289,10 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 - Monitoring [CRDs] published by both the Antrea Agent and Controller to expose monitoring information. [Alpha]
 - [Octant] plugin for visualizing the monitoring CRDs published by the Antrea Agent and Controller. [Alpha]
 
-[CRDs]: https://kubernetes.ioconcepts/extend-kubernetes/api-extension/custom-resources/
+[CRDs]: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/
 [CNI spec]: https://github.com/containernetworking/cni/blob/spec-v0.4.0/SPEC.md
-[default policies]: https://kubernetes.ioconcepts/services-networking/network-policies/#default-policies
-[Kubernetes Network Policies]: https://kubernetes.ioconcepts/services-networking/network-policies/
+[default policies]: https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-policies
+[Kubernetes Network Policies]: https://kubernetes.io/docs/concepts/services-networking/network-policies/
 [libOpenflow]: https://github.com/contiv/libOpenflow
 [Octant]: https://github.com/vmware-tanzu/octant
 [EKS]: https://aws.amazon.com/eks/
