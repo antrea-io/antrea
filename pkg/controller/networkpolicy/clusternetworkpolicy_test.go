@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -31,32 +30,46 @@ import (
 )
 
 func TestToAntreaServicesForCRD(t *testing.T) {
-	tcpProto := v1.ProtocolTCP
-	portNum := intstr.FromInt(80)
 	tables := []struct {
-		ports     []secv1alpha1.NetworkPolicyPort
-		expValues []networking.Service
+		ports              []secv1alpha1.NetworkPolicyPort
+		expServices        []networking.Service
+		expNamedPortExists bool
 	}{
 		{
-			getCNPPorts(tcpProto),
-			[]networking.Service{
+			ports: []secv1alpha1.NetworkPolicyPort{
 				{
-					Protocol: toAntreaProtocol(&tcpProto),
-					Port:     &portNum,
+					Protocol: &k8sProtocolTCP,
+					Port:     &int80,
 				},
 			},
+			expServices: []networking.Service{
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					Port:     &int80,
+				},
+			},
+			expNamedPortExists: false,
+		},
+		{
+			ports: []secv1alpha1.NetworkPolicyPort{
+				{
+					Protocol: &k8sProtocolTCP,
+					Port:     &strHTTP,
+				},
+			},
+			expServices: []networking.Service{
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					Port:     &strHTTP,
+				},
+			},
+			expNamedPortExists: true,
 		},
 	}
 	for _, table := range tables {
-		services := toAntreaServicesForCRD(table.ports)
-		service := services[0]
-		expValue := table.expValues[0]
-		if *service.Protocol != *expValue.Protocol {
-			t.Errorf("Unexpected Antrea Protocol in Antrea Service. Expected %v, got %v", *expValue.Protocol, *service.Protocol)
-		}
-		if *service.Port != *expValue.Port {
-			t.Errorf("Unexpected Antrea Port in Antrea Service. Expected %v, got %v", *expValue.Port, *service.Port)
-		}
+		services, namedPortExist := toAntreaServicesForCRD(table.ports)
+		assert.Equal(t, table.expServices, services)
+		assert.Equal(t, table.expNamedPortExists, namedPortExist)
 	}
 }
 
@@ -123,10 +136,11 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	matchAllPodsPeer := matchAllPeer
 	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll).NormalizedName)}
 	tests := []struct {
-		name      string
-		inPeers   []secv1alpha1.NetworkPolicyPeer
-		outPeer   networking.NetworkPolicyPeer
-		direction networking.Direction
+		name            string
+		inPeers         []secv1alpha1.NetworkPolicyPeer
+		outPeer         networking.NetworkPolicyPeer
+		direction       networking.Direction
+		namedPortExists bool
 	}{
 		{
 			name: "pod-ns-selector-peer-ingress",
@@ -205,16 +219,23 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			direction: networking.DirectionIn,
 		},
 		{
-			name:      "empty-peer-egress",
+			name:            "empty-peer-egress-with-named-port",
+			inPeers:         []secv1alpha1.NetworkPolicyPeer{},
+			outPeer:         matchAllPodsPeer,
+			direction:       networking.DirectionOut,
+			namedPortExists: true,
+		},
+		{
+			name:      "empty-peer-egress-without-named-port",
 			inPeers:   []secv1alpha1.NetworkPolicyPeer{},
-			outPeer:   matchAllPodsPeer,
+			outPeer:   matchAllPeer,
 			direction: networking.DirectionOut,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, npc := newController()
-			actualPeer := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction)
+			actualPeer := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction, tt.namedPortExists)
 			if !reflect.DeepEqual(tt.outPeer.AddressGroups, (*actualPeer).AddressGroups) {
 				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, (*actualPeer).AddressGroups)
 			}
@@ -980,14 +1001,4 @@ func getCNP() *secv1alpha1.ClusterNetworkPolicy {
 	}
 	return npObj
 
-}
-
-func getCNPPorts(proto v1.Protocol) []secv1alpha1.NetworkPolicyPort {
-	portNum := intstr.FromInt(80)
-	port := secv1alpha1.NetworkPolicyPort{
-		Protocol: &proto,
-		Port:     &portNum,
-	}
-	ports := []secv1alpha1.NetworkPolicyPort{port}
-	return ports
 }
