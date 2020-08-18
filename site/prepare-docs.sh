@@ -10,8 +10,8 @@ ROOT_DOCS=( README CONTRIBUTING CODE_OF_CONDUCT CHANGELOG ROADMAP )
 
 for doc in "${ROOT_DOCS[@]}"; do
     cp -f ../../../${doc}.md .
-    sed -i.bak 's/\/docs\///g' ${doc}.md
-    sed -i.bak 's/docs\///g' ${doc}.md
+    sed -i.bak '/https:\/\/kubernetes.io\/docs\//! s/\/docs\///g' ${doc}.md
+    sed -i.bak '/https:\/\/kubernetes.io\/docs\//! s/docs\///g' ${doc}.md
     rm -f ${doc}.md.bak
 done
 
