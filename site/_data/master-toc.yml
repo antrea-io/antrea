@@ -11,10 +11,6 @@ toc:
         url: /manual-installation
       - page: Configuration
         url: /configuration
-      - page: Contributing
-        url: /contributing
-      - page: Code of Conduct
-        url: /code_of_conduct
   - title: Cloud Deployment
     subfolderitems:
       - page: Cloud Overview
@@ -68,3 +64,13 @@ toc:
         url: /issue-management
       - page: GitHub Labels
         url: /github-labels
+  - title: Project Information
+    subfolderitems: 
+    - page: Contributing to Antrea
+      url: /contributing
+    - page: Roadmap
+      url: /roadmap
+    - page: Change Log
+      url: /changelog
+    - page: Code of Conduct
+      url: /code_of_conduct
