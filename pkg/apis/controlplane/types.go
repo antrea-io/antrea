@@ -147,10 +147,6 @@ type AddressGroupList struct {
 	Items []AddressGroup
 }
 
-// TierPriority specifies the relative ordering among Tiers. A lower
-// TierPriority indicates higher precedence.
-type TierPriority uint32
-
 type NetworkPolicyType string
 
 const (
@@ -184,7 +180,7 @@ type NetworkPolicy struct {
 	Priority *float64
 	// TierPriority represents the priority of the Tier associated with this NetworkPolicy.
 	// The TierPriority will remain nil for K8s NetworkPolicy.
-	TierPriority *TierPriority
+	TierPriority *uint32
 	// Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
 	SourceRef *NetworkPolicyReference
 }
