@@ -319,12 +319,12 @@ var CommandList = &commandList{
 			commandGroup:        flat,
 			transformedResponse: reflect.TypeOf(ovstracing.Response{}),
 		},
-		{
+		{ // TODO: implement as a "rawCommand" (see supportbundle) so that the command can be run out-of-cluster
 			use:     "endpoint",
 			aliases: []string{"endpoints"},
 			short:   "Filter network policies relevant to an endpoint.",
 			long:    "Filter network policies relevant to an endpoint into three categories: network policies which apply to the endpoint and policies which select the endpoint in an ingress and/or egress rule.",
-			example: `  Query network policies given pod and namespace
+			example: `  Query network policies given Pod and Namespace
   $ antctl query endpoint -p pod1 -n ns1
 `,
 			commandGroup: query,
@@ -334,12 +334,12 @@ var CommandList = &commandList{
 					params: []flagInfo{
 						{
 							name:      "namespace",
-							usage:     "Namespace of the endpoint (required)",
+							usage:     "Namespace of the endpoint (defaults to 'default')",
 							shorthand: "n",
 						},
 						{
 							name:      "pod",
-							usage:     "Name of a local Pod (required)",
+							usage:     "Name of a Pod endpoint",
 							shorthand: "p",
 						},
 					},

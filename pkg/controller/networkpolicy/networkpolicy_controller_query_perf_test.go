@@ -93,7 +93,7 @@ func testQueryEndpoint(t *testing.T, maxExecutionTime time.Duration, namespaces 
 	}()
 	// create controller
 	objs := toRunTimeObjects(namespaces, networkPolicies, pods)
-	querier := makeControllerAndEndpointQueryReplier(objs...)
+	querier := makeControllerAndEndpointQuerier(objs...)
 	// Everything is ready, now start timing.
 	start := time.Now()
 	// track execution time by calling query endpoint 1000 times on random pods
@@ -119,28 +119,3 @@ NAMESPACES   PODS    NETWORK-POLICIES    TIME(s)    MEMORY(M)
 %-12d %-7d %-19d %-10.2f %-12d 
 `, len(namespaces), len(pods), len(networkPolicies), float64(executionTime)/float64(time.Second), maxAlloc/1024/1024)
 }
-
-/*
-Note, this is performance data relevant to a previous implementation of QueryNetworkPolicy
-
-Without indexing
-
-query
-100k policies and 100k pods with 1 applied policy per pod takes 16++ seconds for 100 queries (2341++M max heap)
-10k policies and 10k pods with each policy applied to all pods takes 80++ seconds for 10 queries (1038++M max heap)
-
-init
-100k policies and 100k pods with 1 applied policy per pod takes 12++ seconds (1555++M max heap)
-10k policies and 10k pods with each policy applied to all pods takes 7++ seconds (1138++M max heap)
-
-
-With indexing
-
-query
-100k policies and 100k pods with 1 applied policy per pod takes .1 seconds for 1000 queries (2793M max heap)
-10k policies and 10k pods with each policy applied to all pods takes 13 seconds for 1000 queries (1092M max heap)
-
-init
-100k policies and 100k pods with 1 applied policy per pod takes 13 seconds (1849M max heap)
-10k policies and 10k pods with each policy applied to all pods takes 11 seconds (1185M max heap)
-*/

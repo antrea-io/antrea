@@ -151,6 +151,22 @@ specified local Pod using this `antctl` command:
 antctl get networkpolicy -p pod -n namespace
 ```
 
+#### Mapping endpoints to NetworkPolicies
+
+`antctl` supports mapping a specific Pod to the NetworkPolicies which "select"
+this Pod, either because they apply to the Pod directly or because one of their
+policy rules selects the Pod.
+
+```bash
+antctl query endpoint -p pod [-n namespace]
+```
+
+If no Namespace is provided with `-n`, the command will default to the "default"
+Namespace.
+
+This command only works in "controller mode" and **as of now it can only be run
+from inside the Antrea Controller Pod, and not from out-of-cluster**.
+
 ### Dumping Pod network interface information
 
 `antctl` agent command `get podinterface` (or `get pi`) can dump network

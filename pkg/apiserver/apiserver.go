@@ -59,12 +59,12 @@ func init() {
 
 // ExtraConfig holds custom apiserver config.
 type ExtraConfig struct {
-	addressGroupStore    storage.Interface
-	appliedToGroupStore  storage.Interface
-	networkPolicyStore   storage.Interface
-	controllerQuerier    querier.ControllerQuerier
-	endpointQueryReplier *networkquery.EndpointQueryReplier
-	caCertController     *certificate.CACertController
+	addressGroupStore   storage.Interface
+	appliedToGroupStore storage.Interface
+	networkPolicyStore  storage.Interface
+	controllerQuerier   querier.ControllerQuerier
+	endpointQuerier     networkquery.EndpointQuerier
+	caCertController    *certificate.CACertController
 }
 
 // Config defines the config for Antrea apiserver.
@@ -99,16 +99,16 @@ func NewConfig(
 	addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface,
 	caCertController *certificate.CACertController,
 	controllerQuerier querier.ControllerQuerier,
-	endpointQueryReplier *networkquery.EndpointQueryReplier) *Config {
+	endpointQuerier networkquery.EndpointQuerier) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
-			addressGroupStore:    addressGroupStore,
-			appliedToGroupStore:  appliedToGroupStore,
-			networkPolicyStore:   networkPolicyStore,
-			caCertController:     caCertController,
-			controllerQuerier:    controllerQuerier,
-			endpointQueryReplier: endpointQueryReplier,
+			addressGroupStore:   addressGroupStore,
+			appliedToGroupStore: appliedToGroupStore,
+			networkPolicyStore:  networkPolicyStore,
+			caCertController:    caCertController,
+			controllerQuerier:   controllerQuerier,
+			endpointQuerier:     endpointQuerier,
 		},
 	}
 }
@@ -142,7 +142,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	return nil
 }
 
-func installHandlers(eq networkquery.EndpointQueryReplier, s *genericapiserver.GenericAPIServer) {
+func installHandlers(eq networkquery.EndpointQuerier, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(eq))
 }
 
@@ -161,7 +161,7 @@ func (c completedConfig) New() (*APIServer, error) {
 		return nil, err
 	}
 
-	installHandlers(*c.extraConfig.endpointQueryReplier, s.GenericAPIServer)
+	installHandlers(c.extraConfig.endpointQuerier, s.GenericAPIServer)
 
 	return s, nil
 }
