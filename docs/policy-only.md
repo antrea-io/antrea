@@ -29,11 +29,12 @@ When the container runtime instantiates a Pod, it first calls the primary CNI to
 IP, route table, DNS etc, and then connects Pod to host network with a PtP device such as a 
 veth-pair. When Antrea is chained with this primary CNI, container runtime then calls
 Antrea Agent, and the Antrea Agent attaches Pod's PtP device to the OVS bridge, and moves the host
-route to the Pod to local host gateway(``antrea-gw0``) interface from the PtP device. This is
+route to the Pod to local host gateway(`antrea-gw0`) interface from the PtP device. This is
 illustrated by the diagram on the right.
 
 Antrea needs to satisfy that 
-1. All IP packets, sent on ``antrea-gw0`` in the host network, are received by the Pods exactly the same
+
+1. All IP packets, sent on `antrea-gw0` in the host network, are received by the Pods exactly the same
 as if the OVS bridge had not been inserted. 
 1. All IP packets, sent by Pods, are received by other Pods or the host network exactly
 the same as if OVS bridge had not been inserted.
@@ -41,11 +42,11 @@ the same as if OVS bridge had not been inserted.
 
 To satisfy the above requirements, Antrea needs no knowledge of Pod's network configurations nor
 of underlying CNI network, it simply needs to program the following OVS flows on the OVS bridge:
+
 1. A default ARP responder flow that answers any ARP request. Its sole purpose is so that a Pod can
 resolve its neighbors, and the Pod therefore can generate traffic to these neighbors.
 1. A L3 flow for each local Pod that routes IP packets to that Pod if packets' destination IP
  matches that of the Pod.
-1. A L3 fow that routes all other IP packets to host network via ``antrea-gw0
-`` interface.
+1. A L3 flow that routes all other IP packets to host network via `antrea-gw0` interface.
 
 These flows together handle all Pod traffic patterns.
