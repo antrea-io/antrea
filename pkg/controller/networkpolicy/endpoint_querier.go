@@ -19,7 +19,6 @@
 package networkpolicy
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
@@ -27,21 +26,24 @@ import (
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
+// EndpointQuerier handles requests for antctl query
 type EndpointQuerier interface {
+	// QueryNetworkPolicies returns the list of NetworkPolicies which apply to the provided Pod,
+	// along with the list NetworkPolicies which select the provided Pod in one of their policy
+	// rules (ingress or egress).
 	QueryNetworkPolicies(namespace string, podName string) (*EndpointQueryResponse, error)
 }
 
-// EndpointQueryReplier is responsible for handling query requests from antctl query
-type EndpointQueryReplier struct {
+// endpointQuerier implements the EndpointQuerier interface
+type endpointQuerier struct {
 	networkPolicyController *NetworkPolicyController
 }
 
-// EndpointQueryResponse is the reply struct for QueryNetworkPolicies
+// EndpointQueryResponse is the reply struct for anctl endpoint queries
 type EndpointQueryResponse struct {
 	Endpoints []Endpoint `json:"endpoints,omitempty"`
 }
 
-// Endpoint holds response information for an endpoint following a query
 type Endpoint struct {
 	Namespace string   `json:"namespace,omitempty"`
 	Name      string   `json:"name,omitempty"`
@@ -55,10 +57,8 @@ type PolicyRef struct {
 	UID       types.UID `json:"uid,omitempty"`
 }
 
-// Policy holds network policy information to be relayed to client following query endpoint
 type Policy struct {
 	PolicyRef
-	selector metav1.LabelSelector `json:"selector,omitempty"`
 }
 
 type Rule struct {
@@ -67,19 +67,20 @@ type Rule struct {
 	RuleIndex int                         `json:"ruleindex,omitempty"`
 }
 
-// NewEndpointQueryReplier returns a new *NewEndpointQueryReplier.
-func NewEndpointQueryReplier(networkPolicyController *NetworkPolicyController) *EndpointQueryReplier {
-	n := &EndpointQueryReplier{
+// NewEndpointQuerier returns a new *endpointQuerier.
+func NewEndpointQuerier(networkPolicyController *NetworkPolicyController) *endpointQuerier {
+	n := &endpointQuerier{
 		networkPolicyController: networkPolicyController,
 	}
 	return n
 }
 
-// QueryNetworkPolicies returns kubernetes network policy references relevant to the selected network endpoint. Relevant
-// policies fall into three categories: applied policies (Policies in Endpoint type) are policies which directly apply to
-// an endpoint, egress and ingress rules (Rules in Endpoint type) are policies which reference the endpoint in an ingress/
-// egress rule respectively.
-func (eq EndpointQueryReplier) QueryNetworkPolicies(namespace string, podName string) (*EndpointQueryResponse, error) {
+// QueryNetworkPolicies returns kubernetes network policy references relevant to the selected
+// network endpoint. Relevant policies fall into three categories: applied policies (Policies in
+// Endpoint type) are policies which directly apply to an endpoint, egress and ingress rules (Rules
+// in Endpoint type) are policies which reference the endpoint in an ingress/egress rule
+// respectively.
+func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string) (*EndpointQueryResponse, error) {
 	// check if namespace and podName select an existing pod
 	pod, err := eq.networkPolicyController.podInformer.Lister().Pods(namespace).Get(podName)
 	if err != nil {
@@ -98,9 +99,17 @@ func (eq EndpointQueryReplier) QueryNetworkPolicies(namespace string, podName st
 	if err != nil {
 		return nil, err
 	}
+	// We iterate over all AppliedToGroups (same for AddressGroups below). This is acceptable
+	// since this implementation only supports user queries (in particular through antctl) and
+	// should resturn within a reasonable amount of time. We experimented with adding Pod
+	// Indexers to the AppliedToGroup and AddressGroup stores, but we felt that this use case
+	// did not justify the memory overhead. If we can find another use for the Indexers as part
+	// of the NetworkPolicy Controller implementation, we may consider adding them back.
 	for appliedToGroupKey := range appliedToGroupKeys {
-		policies, err := eq.networkPolicyController.internalNetworkPolicyStore.GetByIndex(store.AppliedToGroupIndex,
-			appliedToGroupKey)
+		policies, err := eq.networkPolicyController.internalNetworkPolicyStore.GetByIndex(
+			store.AppliedToGroupIndex,
+			appliedToGroupKey,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -114,25 +123,35 @@ func (eq EndpointQueryReplier) QueryNetworkPolicies(namespace string, podName st
 		return nil, err
 	}
 	for addressGroupKey := range addressGroupKeys {
-		addressGroup, found, err := eq.networkPolicyController.addressGroupStore.Get(addressGroupKey)
+		addressGroup, found, _ := eq.networkPolicyController.addressGroupStore.Get(addressGroupKey)
 		if !found {
 			continue
 		}
-		policies, err := eq.networkPolicyController.internalNetworkPolicyStore.GetByIndex(store.AddressGroupIndex,
-			addressGroupKey)
+		policies, err := eq.networkPolicyController.internalNetworkPolicyStore.GetByIndex(
+			store.AddressGroupIndex,
+			addressGroupKey,
+		)
 		if err != nil {
 			return nil, err
 		}
 		for _, policy := range policies {
-			for i, rule := range policy.(*antreatypes.NetworkPolicy).Rules {
+			egressIndex := 0
+			ingressIndex := 0
+			for _, rule := range policy.(*antreatypes.NetworkPolicy).Rules {
 				for _, addressGroupTrial := range rule.To.AddressGroups {
 					if addressGroupTrial == string(addressGroup.(*antreatypes.AddressGroup).UID) {
-						egress = append(egress, &ruleTemp{policy: policy.(*antreatypes.NetworkPolicy), index: i})
+						egress = append(egress, &ruleTemp{policy: policy.(*antreatypes.NetworkPolicy), index: egressIndex})
+						egressIndex++
+						// an AddressGroup can only be referenced in a rule once
+						break
 					}
 				}
 				for _, addressGroupTrial := range rule.From.AddressGroups {
 					if addressGroupTrial == string(addressGroup.(*antreatypes.AddressGroup).UID) {
-						ingress = append(ingress, &ruleTemp{policy: policy.(*antreatypes.NetworkPolicy), index: i})
+						ingress = append(ingress, &ruleTemp{policy: policy.(*antreatypes.NetworkPolicy), index: ingressIndex})
+						ingressIndex++
+						// an AddressGroup can only be referenced in a rule once
+						break
 					}
 				}
 			}

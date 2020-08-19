@@ -86,8 +86,8 @@ var groupCommands = map[commandGroup]*cobra.Command{
 	},
 	query: {
 		Use:   "query",
-		Short: "List relevant resources to an endpoint",
-		Long:  "List relevant resources to an endpoint",
+		Short: "Execute a user-provided query",
+		Long:  "Execute a user-provided query",
 	},
 }
 

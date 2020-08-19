@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -48,9 +48,9 @@ var alwaysReady = func() bool { return true }
 const informerDefaultResync time.Duration = 30 * time.Second
 
 var (
-	k8sProtocolUDP  = v1.ProtocolUDP
-	k8sProtocolTCP  = v1.ProtocolTCP
-	k8sProtocolSCTP = v1.ProtocolSCTP
+	k8sProtocolUDP  = corev1.ProtocolUDP
+	k8sProtocolTCP  = corev1.ProtocolTCP
+	k8sProtocolSCTP = corev1.ProtocolSCTP
 
 	protocolTCP = networking.ProtocolTCP
 
@@ -845,30 +845,30 @@ func TestAddPod(t *testing.T) {
 	}
 	tests := []struct {
 		name                 string
-		addedPod             *v1.Pod
+		addedPod             *corev1.Pod
 		appGroupMatch        bool
 		inAddressGroupMatch  bool
 		outAddressGroupMatch bool
 	}{
 		{
 			name: "not-match-spec-podselector-match-labels",
-			addedPod: &v1.Pod{
+			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "podA",
 					Namespace: "nsA",
 					Labels:    map[string]string{"group": "appliedTo"},
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
 						Name: "container-1",
 					}},
 					NodeName: "nodeA",
 				},
-				Status: v1.PodStatus{
-					Conditions: []v1.PodCondition{
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
 						{
-							Type:   v1.PodReady,
-							Status: v1.ConditionTrue,
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
 						},
 					},
 					PodIP: "1.2.3.4",
@@ -880,23 +880,23 @@ func TestAddPod(t *testing.T) {
 		},
 		{
 			name: "not-match-spec-podselector-match-exprs",
-			addedPod: &v1.Pod{
+			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "podA",
 					Namespace: "nsA",
 					Labels:    map[string]string{"role": "db"},
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
 						Name: "container-1",
 					}},
 					NodeName: "nodeA",
 				},
-				Status: v1.PodStatus{
-					Conditions: []v1.PodCondition{
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
 						{
-							Type:   v1.PodReady,
-							Status: v1.ConditionTrue,
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
 						},
 					},
 					PodIP: "1.2.3.4",
@@ -908,7 +908,7 @@ func TestAddPod(t *testing.T) {
 		},
 		{
 			name: "match-spec-podselector",
-			addedPod: &v1.Pod{
+			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "podA",
 					Namespace: "nsA",
@@ -917,17 +917,17 @@ func TestAddPod(t *testing.T) {
 						"group": "appliedTo",
 					},
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
 						Name: "container-1",
 					}},
 					NodeName: "nodeA",
 				},
-				Status: v1.PodStatus{
-					Conditions: []v1.PodCondition{
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
 						{
-							Type:   v1.PodReady,
-							Status: v1.ConditionTrue,
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
 						},
 					},
 					PodIP: "1.2.3.4",
@@ -939,23 +939,23 @@ func TestAddPod(t *testing.T) {
 		},
 		{
 			name: "match-ingress-podselector",
-			addedPod: &v1.Pod{
+			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "podA",
 					Namespace: "nsA",
 					Labels:    map[string]string{"inGroup": "inAddress"},
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
 						Name: "container-1",
 					}},
 					NodeName: "nodeA",
 				},
-				Status: v1.PodStatus{
-					Conditions: []v1.PodCondition{
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
 						{
-							Type:   v1.PodReady,
-							Status: v1.ConditionTrue,
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
 						},
 					},
 					PodIP: "1.2.3.4",
@@ -967,23 +967,23 @@ func TestAddPod(t *testing.T) {
 		},
 		{
 			name: "match-egress-podselector",
-			addedPod: &v1.Pod{
+			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "podA",
 					Namespace: "nsA",
 					Labels:    map[string]string{"outGroup": "outAddress"},
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
 						Name: "container-1",
 					}},
 					NodeName: "nodeA",
 				},
-				Status: v1.PodStatus{
-					Conditions: []v1.PodCondition{
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
 						{
-							Type:   v1.PodReady,
-							Status: v1.ConditionTrue,
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
 						},
 					},
 					PodIP: "1.2.3.4",
@@ -995,7 +995,7 @@ func TestAddPod(t *testing.T) {
 		},
 		{
 			name: "match-all-selectors",
-			addedPod: &v1.Pod{
+			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "podA",
 					Namespace: "nsA",
@@ -1006,17 +1006,17 @@ func TestAddPod(t *testing.T) {
 						"outGroup": "outAddress",
 					},
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
 						Name: "container-1",
 					}},
 					NodeName: "nodeA",
 				},
-				Status: v1.PodStatus{
-					Conditions: []v1.PodCondition{
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
 						{
-							Type:   v1.PodReady,
-							Status: v1.ConditionTrue,
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
 						},
 					},
 					PodIP: "1.2.3.4",
@@ -1028,23 +1028,23 @@ func TestAddPod(t *testing.T) {
 		},
 		{
 			name: "match-spec-podselector-no-podip",
-			addedPod: &v1.Pod{
+			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "podA",
 					Namespace: "nsA",
 					Labels:    map[string]string{"group": "appliedTo"},
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
 						Name: "container-1",
 					}},
 					NodeName: "nodeA",
 				},
-				Status: v1.PodStatus{
-					Conditions: []v1.PodCondition{
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
 						{
-							Type:   v1.PodReady,
-							Status: v1.ConditionTrue,
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
 						},
 					},
 				},
@@ -1055,23 +1055,23 @@ func TestAddPod(t *testing.T) {
 		},
 		{
 			name: "match-rule-podselector-no-ip",
-			addedPod: &v1.Pod{
+			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "podA",
 					Namespace: "nsA",
 					Labels:    map[string]string{"inGroup": "inAddress"},
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
 						Name: "container-1",
 					}},
 					NodeName: "nodeA",
 				},
-				Status: v1.PodStatus{
-					Conditions: []v1.PodCondition{
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
 						{
-							Type:   v1.PodReady,
-							Status: v1.ConditionTrue,
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
 						},
 					},
 				},
@@ -1082,23 +1082,23 @@ func TestAddPod(t *testing.T) {
 		},
 		{
 			name: "no-match-spec-podselector",
-			addedPod: &v1.Pod{
+			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "podA",
 					Namespace: "nsA",
 					Labels:    map[string]string{"group": "none"},
 				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
 						Name: "container-1",
 					}},
 					NodeName: "nodeA",
 				},
-				Status: v1.PodStatus{
-					Conditions: []v1.PodCondition{
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
 						{
-							Type:   v1.PodReady,
-							Status: v1.ConditionTrue,
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
 						},
 					},
 					PodIP: "1.2.3.4",
@@ -1132,10 +1132,7 @@ func TestAddPod(t *testing.T) {
 			} else {
 				assert.Len(t, podsAdded, 0, "expected Pod not to match AppliedToGroup")
 			}
-			memberPod := &networking.GroupMemberPod{
-				IP:  ipStrToIPAddress("1.2.3.4"),
-				Pod: &networking.PodReference{Name: "podA", Namespace: "nsA"},
-			}
+			memberPod := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod))
 		})
@@ -1249,13 +1246,13 @@ func TestAddNamespace(t *testing.T) {
 	}
 	tests := []struct {
 		name                 string
-		addedNamespace       *v1.Namespace
+		addedNamespace       *corev1.Namespace
 		inAddressGroupMatch  bool
 		outAddressGroupMatch bool
 	}{
 		{
 			name: "match-namespace-ingress-rule",
-			addedNamespace: &v1.Namespace{
+			addedNamespace: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "nsA",
 					Labels: map[string]string{"inGroup": "inAddress"},
@@ -1266,7 +1263,7 @@ func TestAddNamespace(t *testing.T) {
 		},
 		{
 			name: "match-namespace-egress-rule",
-			addedNamespace: &v1.Namespace{
+			addedNamespace: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "nsA",
 					Labels: map[string]string{"outGroup": "outAddress"},
@@ -1277,7 +1274,7 @@ func TestAddNamespace(t *testing.T) {
 		},
 		{
 			name: "match-namespace-all",
-			addedNamespace: &v1.Namespace{
+			addedNamespace: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "nsA",
 					Labels: map[string]string{
@@ -1291,7 +1288,7 @@ func TestAddNamespace(t *testing.T) {
 		},
 		{
 			name: "match-namespace-none",
-			addedNamespace: &v1.Namespace{
+			addedNamespace: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "nsA",
 					Labels: map[string]string{"group": "none"},
@@ -1318,14 +1315,8 @@ func TestAddNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			memberPod1 := &networking.GroupMemberPod{
-				IP:  ipStrToIPAddress("1.2.3.4"),
-				Pod: &networking.PodReference{Name: "p1", Namespace: "nsA"},
-			}
-			memberPod2 := &networking.GroupMemberPod{
-				IP:  ipStrToIPAddress("2.2.3.4"),
-				Pod: &networking.PodReference{Name: "p2", Namespace: "nsA"},
-			}
+			memberPod1 := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
+			memberPod2 := &networking.GroupMemberPod{IP: ipStrToIPAddress("2.2.3.4")}
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod1))
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod2))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod1))
@@ -1371,13 +1362,13 @@ func TestDeleteNamespace(t *testing.T) {
 	}
 	tests := []struct {
 		name                 string
-		deletedNamespace     *v1.Namespace
+		deletedNamespace     *corev1.Namespace
 		inAddressGroupMatch  bool
 		outAddressGroupMatch bool
 	}{
 		{
 			name: "match-namespace-ingress-rule",
-			deletedNamespace: &v1.Namespace{
+			deletedNamespace: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "nsA",
 					Labels: map[string]string{"inGroup": "inAddress"},
@@ -1388,7 +1379,7 @@ func TestDeleteNamespace(t *testing.T) {
 		},
 		{
 			name: "match-namespace-egress-rule",
-			deletedNamespace: &v1.Namespace{
+			deletedNamespace: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "nsA",
 					Labels: map[string]string{"outGroup": "outAddress"},
@@ -1399,7 +1390,7 @@ func TestDeleteNamespace(t *testing.T) {
 		},
 		{
 			name: "match-namespace-all",
-			deletedNamespace: &v1.Namespace{
+			deletedNamespace: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "nsA",
 					Labels: map[string]string{
@@ -1413,7 +1404,7 @@ func TestDeleteNamespace(t *testing.T) {
 		},
 		{
 			name: "match-namespace-none",
-			deletedNamespace: &v1.Namespace{
+			deletedNamespace: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "nsA",
 					Labels: map[string]string{"group": "none"},
@@ -1612,7 +1603,7 @@ func TestGenerateNormalizedName(t *testing.T) {
 
 func TestToAntreaProtocol(t *testing.T) {
 	tables := []struct {
-		proto            *v1.Protocol
+		proto            *corev1.Protocol
 		expInternalProto networking.Protocol
 	}{
 		{nil, networking.ProtocolTCP},
@@ -2123,7 +2114,7 @@ func TestPodToMemberPod(t *testing.T) {
 	unNamedPod := getPod("", "", "", "", false)
 	tests := []struct {
 		name         string
-		inputPod     *v1.Pod
+		inputPod     *corev1.Pod
 		expMemberPod networking.GroupMemberPod
 		includeIP    bool
 		includeRef   bool
@@ -2346,7 +2337,7 @@ func TestDeleteFinalStateUnknownPod(t *testing.T) {
 func TestDeleteFinalStateUnknownNamespace(t *testing.T) {
 	_, c := newController()
 	c.heartbeatCh = make(chan heartbeat, 2)
-	ns := &v1.Namespace{
+	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "nsA",
 		},
@@ -2417,7 +2408,7 @@ func getK8sNetworkPolicyObj() *networkingv1.NetworkPolicy {
 	return npObj
 }
 
-func getPod(name, ns, nodeName, podIP string, namedPort bool) *v1.Pod {
+func getPod(name, ns, nodeName, podIP string, namedPort bool) *corev1.Pod {
 	if name == "" {
 		name = "testPod"
 	}
@@ -2430,30 +2421,30 @@ func getPod(name, ns, nodeName, podIP string, namedPort bool) *v1.Pod {
 	if podIP == "" {
 		podIP = "1.2.3.4"
 	}
-	ctrPort := v1.ContainerPort{
+	ctrPort := corev1.ContainerPort{
 		ContainerPort: 80,
 		Protocol:      "tcp",
 	}
 	if namedPort {
 		ctrPort.Name = "http"
 	}
-	return &v1.Pod{
+	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: ns,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
 				Name:  "container-1",
-				Ports: []v1.ContainerPort{ctrPort},
+				Ports: []corev1.ContainerPort{ctrPort},
 			}},
 			NodeName: nodeName,
 		},
-		Status: v1.PodStatus{
-			Conditions: []v1.PodCondition{
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
 				{
-					Type:   v1.PodReady,
-					Status: v1.ConditionTrue,
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
 				},
 			},
 			PodIP: podIP,
