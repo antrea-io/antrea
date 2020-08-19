@@ -72,6 +72,7 @@
             - builder-list-tests:
                 org_repo: '{org_repo}'
           trigger_phrase: null
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
           admin_list: []
           org_list: []
@@ -126,6 +127,8 @@
           builders:
           - builder-integration
           trigger_phrase: null
+          white_list_target_branches:
+          - ipv6
           allow_whitelist_orgs_as_admins: false
           admin_list: []
           org_list: []
@@ -165,6 +168,7 @@
           builders:
             - builder-pending-label
           trigger_phrase: null
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
           admin_list: []
           org_list: []
@@ -192,6 +196,7 @@
             - builder-e2e
             - builder-workload-cluster-cleanup
           trigger_phrase: ^(?!Thanks for your PR).*/test-(e2e|all).*
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
@@ -232,6 +237,7 @@
           only_trigger_phrase: true
           trigger_permit_all: false
           trigger_phrase: ^(?!Thanks for your PR).*/skip-(e2e|all).*
+          white_list_target_branches: []
           status_context: jenkins-e2e
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
@@ -250,6 +256,7 @@
           builders:
             - builder-pending-label
           trigger_phrase: null
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
           admin_list: []
           org_list: []
@@ -280,6 +287,7 @@
                 skip_regex: '\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]'
             - builder-workload-cluster-cleanup
           trigger_phrase: ^(?!Thanks for your PR).*/test-(conformance|all).*
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
@@ -320,6 +328,7 @@
           only_trigger_phrase: true
           trigger_permit_all: false
           trigger_phrase: ^(?!Thanks for your PR).*/skip-(conformance|all).*
+          white_list_target_branches: []
           status_context: jenkins-conformance
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
@@ -344,6 +353,7 @@
                 skip_regex: ''
             - builder-workload-cluster-cleanup
           trigger_phrase: .*/test-(whole-conformance).*
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
@@ -384,6 +394,7 @@
           only_trigger_phrase: true
           trigger_permit_all: false
           trigger_phrase: .*/skip-(whole-conformance).*
+          white_list_target_branches: []
           status_context: jenkins-whole-conformance
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
@@ -402,6 +413,7 @@
           builders:
             - builder-pending-label
           trigger_phrase: null
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
           admin_list: []
           org_list: []
@@ -432,6 +444,7 @@
                 skip_regex: 'SKIP_NO_TESTCASE'
             - builder-workload-cluster-cleanup
           trigger_phrase: ^(?!Thanks for your PR).*/test-(networkpolicy|all).*
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
@@ -472,6 +485,7 @@
           only_trigger_phrase: true
           trigger_permit_all: false
           trigger_phrase: ^(?!Thanks for your PR).*/skip-(networkpolicy|all).*
+          white_list_target_branches: []
           status_context: jenkins-networkpolicy
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
