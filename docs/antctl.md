@@ -12,6 +12,7 @@ running in two different modes:
 
 ## Table of Contents
 
+<<<<<<< HEAD
 - [Installation](#installation)
 - [Usage](#usage)
   - [Collecting support information](#collecting-support-information)
@@ -21,6 +22,18 @@ running in two different modes:
   - [Dumping OVS flows](#dumping-ovs-flows)
   - [OVS packet tracing](#ovs-packet-tracing)
   - [Traceflow](#traceflow)
+=======
+- [Antctl](#antctl)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Usage](#usage)
+    - [Collecting support information](#collecting-support-information)
+    - [`controllerinfo` and `agentinfo` commands](#controllerinfo-and-agentinfo-commands)
+    - [NetworkPolicy commands](#networkpolicy-commands)
+    - [Dumping Pod network interface information](#dumping-pod-network-interface-information)
+    - [Dumping OVS flows](#dumping-ovs-flows)
+    - [OVS packet tracing](#ovs-packet-tracing)
+>>>>>>> 20a514be374e60734d7ed8d9fd8c8239856f76c5
 
 ## Installation
 

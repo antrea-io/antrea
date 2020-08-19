@@ -43,7 +43,7 @@ The Antrea community welcomes new contributors. We are waiting for your PRs!
 [Code of Conduct](CODE_OF_CONDUCT.md).
 * Check out the Antrea [Contributor Guide](CONTRIBUTING.md) for information
 about setting up your development environment and our contribution workflow.
-* Learn about Antrea's [Architecture and design](/docs/architecture.md).
+* Learn about Antrea's [Architecture and design](docs/architecture.md).
 Your feedback is more than welcome!
 * Check out [Open Issues](https://github.com/vmware-tanzu/antrea/issues).
 * Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
@@ -73,7 +73,7 @@ implementation.
 * [Octant](https://github.com/vmware-tanzu/octant) UI plugin for monitoring
 Antrea components, which publish runtime information as
 [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
-* [IPsec encyption](/docs/ipsec-tunnel.md) of GRE tunnel traffic.
+* [IPsec encyption](docs/ipsec-tunnel.md) of GRE tunnel traffic.
 
 ## Roadmap
 

@@ -11,6 +11,7 @@ Some experimental features can be enabled / disabled using [Feature Gates](featu
 
 ## Unreleased
 
+<<<<<<< HEAD
 ## 0.9.0 - 2020-08-13
 
 ### Added
@@ -77,6 +78,8 @@ Some experimental features can be enabled / disabled using [Feature Gates](featu
 
 ## 0.8.1 - 2020-07-09
 
+=======
+>>>>>>> 20a514be374e60734d7ed8d9fd8c8239856f76c5
 ## 0.8.0 - 2020-07-02
 
 ### Added
@@ -364,6 +367,7 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [EKS]: https://aws.amazon.com/eks/
 [GKE]: https://cloud.google.com/kubernetes-engine
 [Antrea Windows documentation]: https://github.com/vmware-tanzu/antrea/blob/masterwindows.md
+<<<<<<< HEAD
 [OVS pipeline documentation]: https://github.com/vmware-tanzu/antrea/blob/masterovs-pipeline.md
 [OVS hardware offload]: https://github.com/vmware-tanzu/antrea/blob/masterovs-offload.md
 [AKS]: https://azure.microsoft.com/en-us/services/kubernetes-service/
@@ -371,6 +375,9 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [Elastic Stack]: https://www.elastic.co/elastic-stack
 
 [@AbdYsn]: https://github.com/AbdYsn
+=======
+
+>>>>>>> 20a514be374e60734d7ed8d9fd8c8239856f76c5
 [@abhiraut]: https://github.com/abhiraut
 [@alex-vmw]: https://github.com/alex-vmw
 [@antoninbas]: https://github.com/antoninbas
@@ -378,16 +385,25 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [@gran-vmv]: https://github.com/gran-vmv
 [@jianjuns]: https://github.com/jianjuns
 [@lzhecheng]: https://github.com/lzhecheng
+<<<<<<< HEAD
 [@MatthewHinton56]: https://github.com/MatthewHinton56
+=======
+>>>>>>> 20a514be374e60734d7ed8d9fd8c8239856f76c5
 [@mengdie-song]: https://github.com/mengdie-song
 [@moshe010]: https://github.com/moshe010
 [@reachjainrahul]: https://github.com/reachjainrahul
 [@ruicao93]: https://github.com/ruicao93
+<<<<<<< HEAD
 [@srikartati]: https://github.com/srikartati
 [@suwang48404]: https://github.com/suwang48404
+=======
+>>>>>>> 20a514be374e60734d7ed8d9fd8c8239856f76c5
 [@tnqn]: https://github.com/tnqn
 [@weiqiangt]: https://github.com/weiqiangt
 [@wenyingd]: https://github.com/wenyingd
 [@yktsubo]: https://github.com/yktsubo
 [@ZhangYW18]: https://github.com/ZhangYW18
+<<<<<<< HEAD
 [@zyiou]: https://github.com/zyiou
+=======
+>>>>>>> 20a514be374e60734d7ed8d9fd8c8239856f76c5
