@@ -12,7 +12,7 @@ When using `kubeadm` to create the Kubernetes cluster, passing
 `--pod-network-cidr=<CIDR Range for Pods>` to `kubeadm init` will enable
 `NodeIpamController`. Clusters created with kubeadm will always have
 `CNI` plugins enabled. Refer to
-[Creating a cluster with kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm)
+[Creating a cluster with kubeadm](https://kubernetes.iosetup/production-environment/tools/kubeadm/create-cluster-kubeadm)
 for more information about setting up a Kubernetes cluster with `kubeadm`.
 
 When the cluster is deployed by other means then:
@@ -67,7 +67,7 @@ kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/bu
 ```
 
 If you want to add Windows Nodes to your cluster, please refer to the
-installation instructions in [windows.md](/docs/windows.md).
+installation instructions in [windows.md](windows.md).
 
 Antrea supports some experimental features that can be enabled or disabled,
 please refer to the [Feature Gates documentation](feature-gates.md) for more
@@ -104,7 +104,7 @@ ip link delete flannel cni0` **on each Node**.
 Antrea Agent Pods. If you have any other DaemonSet-managed Pods (besides the
 Antrea ones and system ones such as kube-proxy), they will be ignored and will
 not be drained from the Node. Refer to the [Kubernetes
-documentation](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/)
+documentation](https://kubernetes.iotasks/administer-cluster/safely-drain-node/)
 for more information. Alternatively, you can also restart all the Pods yourself,
 or simply reboot your Nodes.
 
@@ -125,18 +125,18 @@ please refer to this [guide](kind.md).
 Antrea can be deployed in NetworkPolicy only mode to an EKS cluster or a GKE
 cluster, and enforce NetworkPolicies for the cluster.
 
-* To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
-* To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
+* To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](eks-installation.md).
+* To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](gke-installation.md).
 
 ### Deploying Antrea with IPsec Encryption
 
 Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
-IPsec encryption enabled, please refer to this [guide](/docs/ipsec-tunnel.md).
+IPsec encryption enabled, please refer to this [guide](ipsec-tunnel.md).
 
 ### Deploying Antrea with Custom Certificates
 
 By default, Antrea generates the certificates needed for itself to run. To
-provide your own certificates, please refer to [Securing Control Plane](/docs/securing-control-plane.md).
+provide your own certificates, please refer to [Securing Control Plane](securing-control-plane.md).
 
 ### Antctl: Installation and Usage
 

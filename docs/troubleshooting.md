@@ -165,5 +165,5 @@ ovs-ofctl show unix:/var/run/antrea/openvswitch/br-int.mgmt
 Agent, which can print the runtime information of `antrea-controller` and
 `antrea-agent`, dump NetworkPolicy objects, dump Pod network interface
 information on a Node, dump Antrea OVS flows, and perform OVS packet tracing.
-Refer to the [`antctl` guide](/docs/antctl.md#usage) to learn how to use these
+Refer to the [`antctl` guide](antctl.md#usage) to learn how to use these
 commands.
