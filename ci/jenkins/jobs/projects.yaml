@@ -38,6 +38,23 @@
           publishers:
           - email:
               recipients: projectantrea-dev@googlegroups.com
+      - '{name}-{test_name}-for-period':
+          test_name: daily-elk-flow-collector-validate
+          node: 'antrea-test-node'
+          description: 'This is for validating the elk flow collector manifest daily.'
+          builders:
+            - builder-workload-cluster-setup
+            - builder-prepare-antrea
+            - builder-elk-flow-collector
+            - builder-workload-cluster-cleanup
+          branches:
+          - '*/master'
+          included_regions: []
+          cron: 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers:
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
       - '{name}-{test_name}-for-gc':
           test_name: workload-cluster
           node: 'antrea-test-node'

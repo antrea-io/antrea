@@ -413,3 +413,12 @@
           done
 
           kubectl delete ns antrea-test || true
+
+- builder:
+    name: builder-elk-flow-collector
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          source /home/ubuntu/.bashrc
+          ./ci/test-elk-flow-collector.sh
