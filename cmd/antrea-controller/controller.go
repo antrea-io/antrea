@@ -101,7 +101,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore)
 
-	endpointQueryReplier := networkpolicy.NewEndpointQueryReplier(networkPolicyController)
+	endpointQuerier := networkpolicy.NewEndpointQuerier(networkPolicyController)
 
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
@@ -121,7 +121,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		controllerQuerier,
-		endpointQueryReplier,
+		endpointQuerier,
 		o.config.EnablePrometheusMetrics)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
@@ -168,7 +168,7 @@ func createAPIServerConfig(kubeconfig string,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
-	endpointQueryReplier *networkpolicy.EndpointQueryReplier,
+	endpointQuerier networkpolicy.EndpointQuerier,
 	enableMetrics bool) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
@@ -218,5 +218,5 @@ func createAPIServerConfig(kubeconfig string,
 		networkPolicyStore,
 		caCertController,
 		controllerQuerier,
-		endpointQueryReplier), nil
+		endpointQuerier), nil
 }

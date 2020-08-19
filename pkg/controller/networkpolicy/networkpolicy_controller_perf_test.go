@@ -168,8 +168,8 @@ func TestInitXLargeScaleWithOneNamespace(t *testing.T) {
 		pods := []*corev1.Pod{
 			{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod1" + uid, UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-1": "scale-1"}},
-				Spec:       v1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     v1.PodStatus{PodIP: getRandomIP()},
+				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
+				Status:     corev1.PodStatus{PodIP: getRandomIP()},
 			},
 		}
 		return namespaces, networkPolicies, pods
