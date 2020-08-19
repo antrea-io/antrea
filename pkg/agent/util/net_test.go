@@ -17,6 +17,7 @@ package util
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -60,4 +61,33 @@ func TestGetDefaultLocalNodeAddr(t *testing.T) {
 		t.Error(err)
 	}
 	t.Logf("IP obtained %s, %v", ip, dev)
+}
+
+func TestGetIPv6Addr(t *testing.T) {
+	type args struct {
+		ips []net.IP
+	}
+	tests := []struct {
+		name string
+		args args
+		want net.IP
+	}{
+		{
+			name: "no IPv6",
+			args: args{ips: []net.IP{net.ParseIP("1.2.3.4")}},
+			want: nil,
+		},
+		{
+			name: "has IPv6",
+			args: args{ips: []net.IP{net.ParseIP("1.2.3.4"), net.ParseIP("aaaa::")}},
+			want: net.ParseIP("aaaa::"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GetIPv6Addr(tt.args.ips); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetIPv6Addr() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

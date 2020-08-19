@@ -129,6 +129,16 @@ spec:
                           type: integer
                         flags:
                           type: integer
+                    ipv6Header:
+                      type: object
+                      properties:
+                        srcIP:
+                          type: string
+                          format: ipv6
+                        nextHeader:
+                          type: integer
+                        hopLimit:
+                          type: integer
                     transportHeader:
                       type: object
                       properties:
@@ -155,6 +165,8 @@ spec:
                               type: integer
                             flags:
                               type: integer
+                  not:
+                    required: ["ipHeader", "ipv6Header"]
             status:
               type: object
               properties:

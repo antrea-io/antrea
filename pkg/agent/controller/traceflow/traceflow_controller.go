@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/contiv/libOpenflow/protocol"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -36,6 +37,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 	clientsetversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	opsinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/ops/v1alpha1"
@@ -319,8 +321,19 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	c.injectedTagsMutex.Unlock()
 
 	// Calculate destination MAC/IP.
+	isIPv6 := tf.Spec.Packet.IPv6Header != nil
+	srcIP := ""
 	dstMAC := ""
 	dstIP := tf.Spec.Destination.IP
+	if isIPv6 {
+		srcIP = podInterfaces[0].GetIPv6Addr().String()
+	} else {
+		srcIP = podInterfaces[0].GetIPv4Addr().String()
+	}
+	if err := validateIPVersion(srcIP, isIPv6); err != nil {
+		return err
+	}
+
 	dstNodeIP := ""
 	if dstIP != "" {
 		dstPodInterface, hasInterface := c.interfaceStore.GetInterfaceByIP(dstIP)
@@ -331,14 +344,26 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		dstPodInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Destination.Pod, tf.Spec.Destination.Namespace)
 		if len(dstPodInterfaces) > 0 {
 			dstMAC = dstPodInterfaces[0].MAC.String()
-			dstIP = dstPodInterfaces[0].GetIPv4Addr().String()
+			if isIPv6 {
+				dstIP = dstPodInterfaces[0].GetIPv6Addr().String()
+			} else {
+				dstIP = dstPodInterfaces[0].GetIPv4Addr().String()
+			}
 		} else {
 			dstPod, err := c.kubeClient.CoreV1().Pods(tf.Spec.Destination.Namespace).Get(context.TODO(), tf.Spec.Destination.Pod, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
 			// dstMAC is "" here, will be set to Gateway MAC in ofClient.SendTraceflowPacket
-			dstIP = dstPod.Status.PodIP
+			podIPs := make([]net.IP, len(dstPod.Status.PodIPs))
+			for i, ip := range dstPod.Status.PodIPs {
+				podIPs[i] = net.ParseIP(ip.IP)
+			}
+			if isIPv6 {
+				dstIP = util.GetIPv6Addr(podIPs).String()
+			} else {
+				dstIP = util.GetIPv4Addr(podIPs).String()
+			}
 			dstNodeIP = dstPod.Status.HostIP
 		}
 	} else if tf.Spec.Destination.Service != "" {
@@ -348,6 +373,10 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		}
 		dstIP = dstSvc.Spec.ClusterIP
 	}
+	if err := validateIPVersion(dstIP, isIPv6); err != nil {
+		return err
+	}
+
 	// Check encap status if no dstMAC found which means the destination is Service or the destination Pod/IP is not on local Node.
 	if dstMAC == "" {
 		peerIP := net.ParseIP(dstNodeIP)
@@ -361,10 +390,26 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		}
 	}
 
-	// Protocol is 0 (IPv6 Hop-by-Hop Option) if not set in CRD, which is not supported by Traceflow
-	// Use Protocol=1 (ICMP) as default.
-	if tf.Spec.Packet.IPHeader.Protocol == 0 {
-		tf.Spec.Packet.IPHeader.Protocol = 1
+	var IPProtocol uint8
+	var TTL uint8
+	var IPFlags uint16
+	if isIPv6 {
+		if tf.Spec.Packet.IPv6Header.NextHeader == nil {
+			IPProtocol = protocol.Type_IPv6ICMP
+		} else {
+			IPProtocol = uint8(*tf.Spec.Packet.IPv6Header.NextHeader)
+		}
+		TTL = uint8(tf.Spec.Packet.IPv6Header.HopLimit)
+		IPFlags = 0
+	} else {
+		IPProtocol = uint8(tf.Spec.Packet.IPHeader.Protocol)
+		// Protocol is 0 (IPv6 Hop-by-Hop Option) if not set in CRD, which is not supported by Traceflow
+		// Use Protocol=1 (ICMP) as default.
+		if IPProtocol == 0 {
+			IPProtocol = protocol.Type_ICMP
+		}
+		TTL = uint8(tf.Spec.Packet.IPHeader.TTL)
+		IPFlags = uint16(tf.Spec.Packet.IPHeader.Flags)
 	}
 	TCPSrcPort := uint16(0)
 	TCPDstPort := uint16(0)
@@ -390,11 +435,11 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		tf.Status.DataplaneTag,
 		podInterfaces[0].MAC.String(),
 		dstMAC,
-		podInterfaces[0].GetIPv4Addr().String(),
+		srcIP,
 		dstIP,
-		uint8(tf.Spec.Packet.IPHeader.Protocol),
-		uint8(tf.Spec.Packet.IPHeader.TTL),
-		uint16(tf.Spec.Packet.IPHeader.Flags),
+		IPProtocol,
+		TTL,
+		IPFlags,
 		TCPSrcPort,
 		TCPDstPort,
 		TCPFlags,
@@ -466,4 +511,21 @@ func (c *Controller) GetRunningTraceflowCRD(tag uint8) (*opsv1alpha1.Traceflow, 
 		return c.traceflowLister.Get(traceflowName)
 	}
 	return nil, errors.New(fmt.Sprintf("traceflow with the data plane tag %d doesn't exist", tag))
+}
+
+func validateIPVersion(ip string, isIPv6 bool) error {
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return errors.New(fmt.Sprintf("invalid ip string %s", ip))
+	}
+	if isIPv6 {
+		if parsedIP.To4() != nil {
+			return errors.New(fmt.Sprintf("expect IPv6, but got IPv4 %s", ip))
+		}
+	} else {
+		if parsedIP.To4() == nil {
+			return errors.New(fmt.Sprintf("expect IPv4, but got IPv6 %s", ip))
+		}
+	}
+	return nil
 }

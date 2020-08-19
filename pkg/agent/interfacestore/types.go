@@ -143,3 +143,7 @@ func NewUplinkInterface(uplinkName string) *InterfaceConfig {
 func (c *InterfaceConfig) GetIPv4Addr() net.IP {
 	return util.GetIPv4Addr(c.IPs)
 }
+
+func (c *InterfaceConfig) GetIPv6Addr() net.IP {
+	return util.GetIPv6Addr(c.IPs)
+}

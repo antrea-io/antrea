@@ -706,21 +706,35 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, categ
 		Done()
 }
 
-// traceflowL2ForwardOutputFlow generates Traceflow specific flow that outputs traceflow packets to OVS port and Antrea
+// traceflowL2ForwardOutputFlows generates Traceflow specific flows that outputs traceflow packets to OVS port and Antrea
 // Agent after L2forwarding calculation.
-func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cookie.Category) binding.Flow {
+func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cookie.Category) []binding.Flow {
+	var flows []binding.Flow
 	regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
 	tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
-	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
-		MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
-		SetHardTimeout(300).
-		MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().MoveRange(regName, tunMetadataName, OfTraceflowMarkRange, OfTraceflowMarkRange).
-		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
-		Action().SendToController(1).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
+	flows = append(flows,
+		c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
+			MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
+			SetHardTimeout(300).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+			Action().MoveRange(regName, tunMetadataName, OfTraceflowMarkRange, OfTraceflowMarkRange).
+			Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
+			Action().SendToController(1).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
+			MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
+			SetHardTimeout(300).
+			MatchProtocol(binding.ProtocolIPv6).
+			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+			Action().MoveRange(regName, tunMetadataName, OfTraceflowMarkRange, OfTraceflowMarkRange).
+			Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
+			Action().SendToController(1).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+	)
+	return flows
 }
 
 // l2ForwardOutputServiceHairpinFlow uses in_port action for Service

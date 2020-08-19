@@ -16,10 +16,12 @@ package traceflow
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -156,4 +158,73 @@ func newCRDClientset() *fakeversioned.Clientset {
 	}))
 
 	return client
+}
+
+func Test_podIPsIndexFunc(t *testing.T) {
+	type args struct {
+		obj interface{}
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:    "invalid input",
+			args:    args{obj: &struct{}{}},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "nil IPs",
+			args:    args{obj: &corev1.Pod{}},
+			want:    nil,
+			wantErr: false,
+		},
+		{
+			name:    "zero IPs",
+			args:    args{obj: &corev1.Pod{Status: corev1.PodStatus{PodIPs: []corev1.PodIP{}}}},
+			want:    nil,
+			wantErr: false,
+		},
+		{
+			name: "PodFailed with podIPs",
+			args: args{
+				obj: &corev1.Pod{
+					Status: corev1.PodStatus{
+						PodIPs: []corev1.PodIP{{IP: "1.2.3.4"}, {IP: "aaaa::bbbb"}},
+						Phase:  corev1.PodFailed,
+					},
+				},
+			},
+			want:    nil,
+			wantErr: false,
+		},
+		{
+			name: "PodRunning with podIPs",
+			args: args{
+				obj: &corev1.Pod{
+					Status: corev1.PodStatus{
+						PodIPs: []corev1.PodIP{{IP: "1.2.3.4"}, {IP: "aaaa::bbbb"}},
+						Phase:  corev1.PodRunning,
+					},
+				},
+			},
+			want:    []string{"1.2.3.4", "aaaa::bbbb"},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := podIPsIndexFunc(tt.args.obj)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("podIPsIndexFunc() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("podIPsIndexFunc() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

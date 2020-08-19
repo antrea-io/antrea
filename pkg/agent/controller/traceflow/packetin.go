@@ -103,24 +103,39 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	}
 
 	// Collect Service DNAT.
-	if pktIn.Data.Ethertype == 0x800 {
+	ctNwDst := ""
+	ipDst := ""
+	switch pktIn.Data.Ethertype {
+	case protocol.IPv4_MSG:
 		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
 		if !ok {
 			return nil, nil, errors.New("invalid traceflow IPv4 packet")
 		}
-		ctNwDst, err := getInfoInCtNwDstField(matchers)
+		ctNwDst, err = getInfoInCtNwDstField(matchers)
 		if err != nil {
 			return nil, nil, err
 		}
-		ipDst := ipPacket.NWDst.String()
-		if ctNwDst != "" && ipDst != ctNwDst {
-			ob := &opsv1alpha1.Observation{
-				Component:       opsv1alpha1.LB,
-				Action:          opsv1alpha1.Forwarded,
-				TranslatedDstIP: ipDst,
-			}
-			obs = append(obs, *ob)
+		ipDst = ipPacket.NWDst.String()
+	case protocol.IPv6_MSG:
+		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv6)
+		if !ok {
+			return nil, nil, errors.New("invalid traceflow IPv6 packet")
 		}
+		ctNwDst, err = getInfoInCtIPv6DstField(matchers)
+		if err != nil {
+			return nil, nil, err
+		}
+		ipDst = ipPacket.NWDst.String()
+	default:
+		return nil, nil, errors.New("unsupported traceflow packet")
+	}
+	if ctNwDst != "" && ipDst != ctNwDst {
+		ob := &opsv1alpha1.Observation{
+			Component:       opsv1alpha1.LB,
+			Action:          opsv1alpha1.Forwarded,
+			TranslatedDstIP: ipDst,
+		}
+		obs = append(obs, *ob)
 	}
 
 	// Collect egress conjunctionID and get NetworkPolicy from cache.
@@ -170,7 +185,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	if tableID == uint8(openflow.L2ForwardingOutTable) {
 		ob := new(opsv1alpha1.Observation)
 		tunnelDstIP := ""
-		if match = getMatchTunnelDstField(matchers); match != nil {
+		isIPv6 := c.nodeConfig.NodeIPAddr.IP.To4() == nil
+		if match = getMatchTunnelDstField(matchers, isIPv6); match != nil {
 			tunnelDstIP, err = getInfoInTunnelDst(match)
 			if err != nil {
 				return nil, nil, err
@@ -195,7 +211,10 @@ func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchFie
 	return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_REG%d", regNum))
 }
 
-func getMatchTunnelDstField(matchers *ofctrl.Matchers) *ofctrl.MatchField {
+func getMatchTunnelDstField(matchers *ofctrl.Matchers, isIPv6 bool) *ofctrl.MatchField {
+	if isIPv6 {
+		return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_TUN_IPV6_DST"))
+	}
 	return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_TUN_IPV4_DST"))
 }
 
@@ -226,6 +245,18 @@ func getInfoInCtNwDstField(matchers *ofctrl.Matchers) (string, error) {
 	regValue, ok := match.GetValue().(net.IP)
 	if !ok {
 		return "", errors.New("packet-in conntrack IP destination value cannot be retrieved from metadata")
+	}
+	return regValue.String(), nil
+}
+
+func getInfoInCtIPv6DstField(matchers *ofctrl.Matchers) (string, error) {
+	match := matchers.GetMatchByName("NXM_NX_CT_IPV6_DST")
+	if match == nil {
+		return "", nil
+	}
+	regValue, ok := match.GetValue().(net.IP)
+	if !ok {
+		return "", errors.New("packet-in conntrack IPv6 destination value cannot be retrieved from metadata")
 	}
 	return regValue.String(), nil
 }

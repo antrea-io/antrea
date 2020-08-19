@@ -62,9 +62,13 @@ require (
 )
 
 replace (
+	// TODO: remove this change when PR merged into original repo
+	github.com/contiv/libOpenflow => github.com/gran-vmv/libOpenflow v0.0.0-20201015032231-2aeeb5d94ccb
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200911061943-57045ae085da
+	// TODO: remove this change when PR merged into original repo
+	// github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200911061943-57045ae085da
+	github.com/contiv/ofnet => github.com/gran-vmv/ofnet v0.0.0-20201015063621-7090cb431952
 	// fake.NewSimpleClientset is quite slow when it's initialized with massive objects due to
 	// https://github.com/kubernetes/kubernetes/issues/89574. It takes more than tens of minutes to
 	// init a fake client with 200k objects, which makes it hard to run the NetworkPolicy scale test.
