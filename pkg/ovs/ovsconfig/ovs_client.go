@@ -574,9 +574,10 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 }
 
 // GetOFPort retrieves the ofport value of an interface given the interface name.
-// The function will invoke OVSDB "wait" operation with 1 second timeout to wait
-// the ofport is set on the interface, and so could be blocked for 1 second. If
-// the "wait" operation timeout, value 0 will be returned.
+// The function will invoke OVSDB "wait" operation with 5 seconds timeout to
+// wait the ofport is set on the interface, and so could be blocked for 5
+// seconds. If the "wait" operation times out or the interface is not found, or
+// the ofport is invalid, value 0 and an error will be returned.
 func (br *OVSBridge) GetOFPort(ifName string) (int32, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 
@@ -606,6 +607,10 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, Error) {
 		return 0, NewTransactionError(fmt.Errorf("interface %s not found", ifName), false)
 	}
 	ofport := int32(res[1].Rows[0].(map[string]interface{})["ofport"].(float64))
+	// ofport value -1 means that the interface could not be created due to an error.
+	if ofport <= 0 {
+		return 0, NewTransactionError(fmt.Errorf("invalid ofport %d", ofport), false)
+	}
 	return ofport, nil
 }
 
