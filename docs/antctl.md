@@ -177,7 +177,7 @@ antctl get ovsflows -T table
 
 An OVS flow table can be specified using the table name or the table number.
 `antctl get ovsflow --help` lists all Antrea flow tables. For more information
-about Antrea OVS pipeline and flows, please refer to the [OVS pipeline doc](/docs/ovs-pipeline.md).
+about Antrea OVS pipeline and flows, please refer to the [OVS pipeline doc](ovs-pipeline.md).
 
 Example outputs of dumping Pod and NetworkPolicy OVS flows:
 
@@ -329,6 +329,7 @@ will not be conducted. Besides, users can specify header protocol (ICMP, TCP and
 source/destination ports.
 
 e.g.
+
 ```bash
 $ antctl traceflow -S busybox0 -D busybox1
 name: default-busybox0-to-default-busybox1-fpllngzi

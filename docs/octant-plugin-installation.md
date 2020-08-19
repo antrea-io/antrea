@@ -123,6 +123,7 @@ based on your environment and move the binary to OCTANT_PLUGIN_PATH.
 Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):80.
 
 Note:
+
 1.  If you deploy Octant and the Antrea UI as a process, you cannot access the Traceflow UI for now when following the
 steps listed above (at least until the v0.9.0 release). However, you can still build the binary yourself with
 the command below, with the remaining steps being almost the same as the ones above.
@@ -132,4 +133,3 @@ the command below, with the remaining steps being almost the same as the ones ab
     cd plugins/octant
     make antrea-octant-plugin
     ```
-

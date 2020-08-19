@@ -67,7 +67,7 @@ kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/bu
 ```
 
 If you want to add Windows Nodes to your cluster, please refer to the
-installation instructions in [windows.md](/docs/windows.md).
+installation instructions in [windows.md](windows.md).
 
 Antrea supports some experimental features that can be enabled or disabled,
 please refer to the [Feature Gates documentation](feature-gates.md) for more
@@ -125,18 +125,18 @@ please refer to this [guide](kind.md).
 Antrea can be deployed in NetworkPolicy only mode to an EKS cluster or a GKE
 cluster, and enforce NetworkPolicies for the cluster.
 
-* To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
-* To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
+* To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](eks-installation.md).
+* To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](gke-installation.md).
 
 ### Deploying Antrea with IPsec Encryption
 
 Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
-IPsec encryption enabled, please refer to this [guide](/docs/ipsec-tunnel.md).
+IPsec encryption enabled, please refer to this [guide](ipsec-tunnel.md).
 
 ### Deploying Antrea with Custom Certificates
 
 By default, Antrea generates the certificates needed for itself to run. To
-provide your own certificates, please refer to [Securing Control Plane](/docs/securing-control-plane.md).
+provide your own certificates, please refer to [Securing Control Plane](securing-control-plane.md).
 
 ### Antctl: Installation and Usage
 

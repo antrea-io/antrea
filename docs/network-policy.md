@@ -198,6 +198,7 @@ following:
 - CNP3{tier: Emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
 
 This translates to the following order:
+
 - Ingress rules: ir3.1 > ir3.2 > ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
 - Egress rules: er3.1 > er3.2 > er1.1 -> er1.2 -> er2.1 -> er2.2
 
