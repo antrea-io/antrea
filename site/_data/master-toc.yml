@@ -18,8 +18,7 @@ toc:
       - page: EKS Installation
         url: /eks-installation
       - page: AKS Installation
-        url: https://github.com/Azure/aks-engine/tree/master/examples/networkplugin
-        external: true
+        url: /aks-installation
       - page: GKE Installation (Alpha)
         url: /gke-installation
       - page: Running Antrea In Policy Only Mode
@@ -46,6 +45,12 @@ toc:
         url: /os-issues
       - page: OVS Pipeline
         url: /ovs-pipeline
+      - page: OVS Offload
+        url: /ovs-offload
+      - page: Traceflow Guide
+        url: /traceflow-guide
+      - page: Network Flow Visibility
+        url: /network-flow-visibility
       - page: Feature Gates
         url: /feature-gates
   - title: Windows

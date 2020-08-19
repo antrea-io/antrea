@@ -6,7 +6,7 @@ description: Validate your Kubernetes configuration
 url: https://github.com/vmware-tanzu/antrea
 logo: antrea-logo.svg
 twitter:
-  username: projectoctant
+  username: projectantrea
   card: summary
 vm_logo: vm-logo.png
 gh_repo: https://github.com/vmware-tanzu/antrea
@@ -60,15 +60,13 @@ page_gen:
     dir: docs
 
 collections:
-  - contributors
   - features
   - presentations
 
-versioning: true
-latest: v0.7.0
+versioning: false
+latest: master
 versions:
-- master 
-- v0.7.0
+- master
 
 # Build settings
 permalink: :title/

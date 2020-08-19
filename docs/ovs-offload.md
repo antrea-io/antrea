@@ -76,6 +76,7 @@ ethtool -K enp3s0f0 hw-tc-offload on
 
 Bind the VFs to the driver
 
+
 ```
 echo 0000:03:00.2 > /sys/bus/pci/drivers/mlx5_core/bind
 echo 0000:03:00.3 > /sys/bus/pci/drivers/mlx5_core/bind
@@ -165,9 +166,11 @@ spec:
 ## Verify Hardware-Offloads is Working
 
 Run iperf3 server on POD 1
+
 ```
 kubectl exec -it ovs-offload-pod1 -- iperf3 -s
 ```
+
 Run iperf3 client on POD 2
 
 ```
@@ -175,6 +178,7 @@ kubectl exec -it ovs-offload-pod2 -- iperf3 -c 192.168.1.17 -t 100
 ```
 
 Check traffic on the VF representor port. Verify only TCP connection establishment appears
+
 ```
 tcpdump -i mofed-te-b5583b tcp
 listening on mofed-te-b5583b, link-type EN10MB (Ethernet), capture size 262144 bytes
@@ -190,6 +194,7 @@ listening on mofed-te-b5583b, link-type EN10MB (Ethernet), capture size 262144 b
 ```
 
 Check datapath rules are offloaded
+
 ```
 ovs-appctl dpctl/dump-flows --names type=offloaded
 recirc_id(0),in_port(eth0),eth(src=16:fd:c6:0b:60:52),eth_type(0x0800),ipv4(src=192.168.1.17,frag=no), packets:2235857, bytes:147599302, used:0.550s, actions:ct(zone=65520),recirc(0x18)

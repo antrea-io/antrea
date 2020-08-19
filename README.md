@@ -1,4 +1,4 @@
-![Antrea Logo](/docs/assets/logo/antrea_logo.svg)
+![Antrea Logo](docs/assets/logo/antrea_logo.svg)
 
 ![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vmware-tanzu/antrea)](https://goreportcard.com/report/github.com/vmware-tanzu/antrea)
@@ -13,7 +13,7 @@ security services for a Kubernetes cluster, leveraging
 [Open vSwitch](https://www.openvswitch.org/) as the networking data plane.
 
 <p align="center">
-<img src="/docs/assets/antrea_overview.svg.png" width="500" alt="Antrea Overview">
+<img src="docs/assets/antrea_overview.svg.png" width="500" alt="Antrea Overview">
 </p>
 
 Open vSwitch is a widely adopted high-performance programmable virtual
@@ -33,7 +33,7 @@ Antrea has been tested with Kubernetes clusters running version 1.16 or later.
 ## Getting Started
 
 Getting started with Antrea is very simple, and takes only a few minutes.
-See how it's done in the [Getting started](/docs/getting-started.md) document.
+See how it's done in the [Getting started](docs/getting-started.md) document.
 
 ## Contributing
 

@@ -213,8 +213,10 @@ be used).
 This table prevents IP and ARP
 [spoofing](https://en.wikipedia.org/wiki/Spoofing_attack) from local Pods. For
 each Pod (as identified by the ingress port), we ensure that:
+
  * for IP traffic, the source IP and MAC addresses are correct, i.e. match the
  values configured on the interface when Antrea set-up networking for the Pod.
+
  * for ARP traffic, the advertised IP and MAC addresses are correct, i.e. match
  the values configured on the interface when Antrea set-up networking for the
  Pod.
@@ -395,6 +397,7 @@ These tables are used to implement the egress rules across all ClusterNetworkPol
 Depending on the tier to which the CNP belongs to, the rules will be installed
 in a table corresponding to that tier. The egress CNP table to tier mappings is as
 follows:
+
 ```
 1. Emergency tier -> EmergencyEgressRuleTable(45)
 2. SecurityOps tier -> SecurityOpsEgressRuleTable(46)
@@ -404,6 +407,7 @@ follows:
 ```
 Since the example CNP resides in the Application tier, if you dump the flows for
 table 49, you should see something like this:
+
 ```
 1. table=49, priority=64990,ct_state=-new+est,ip actions=resubmit(,70)
 2. table=49, priority=11800,conj_id=2,ip actions=load:0x2->NXM_NX_REG6[],resubmit(,70)
@@ -615,6 +619,7 @@ Again for this table, you will need to keep in mind the CNP
 [specification](#antrea-network-policy-crd-implementation) that we are using.
 Since the example CNP resides in the Application tier, if you dump the flows
 for table 89, you should see something like this:
+
 ```
 1. table=89, priority=64990,ct_state=-new+est,ip actions=resubmit(,105)
 2. table=89, priority=11800,conj_id=1,ip actions=drop

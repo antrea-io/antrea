@@ -74,6 +74,7 @@ belonging to a K8s NetworkPolicy.
 **Note**: ClusterNetworkPolicy is currently in "Alpha" stage. In order to
 enable them, edit the Controller and Agent configuration in the `antrea`
 ConfigMap as follows:
+
 ```yaml
    antrea-controller.conf: |
      featureGates:
@@ -82,6 +83,7 @@ ConfigMap as follows:
        # entire cluster.
        ClusterNetworkPolicy: true
 ```
+
 ```yaml
    antrea-agent.conf: |
      featureGates:

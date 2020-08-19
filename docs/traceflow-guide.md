@@ -18,6 +18,7 @@ result via CRD, Antctl or UI graph.
 
 ## Prerequisites
 You need to switch on traceflow from featureGates defined in antrea.yml for both Controller and Agent.
+
 ```yaml
   antrea-controller.conf: |
     featureGates:
@@ -28,12 +29,14 @@ You need to switch on traceflow from featureGates defined in antrea.yml for both
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
       Traceflow: true
 ```
+
 For antrea-octant-plugin installation, please refer to [antrea-octant-installation](/docs/octant-plugin-installation.md).
 
 ## Start a New Trace
 You can choose to use Kubectl together with YAML file, Antctl with spec information or Octant UI to start a new trace.
 
 If you use Kubectl or Antctl to start a new trace, you can provide the following information which will be used to build the trace packet:
+
 * source Pod
 * destination Pod, Service or destination IP address
 * transport protocol (TCP/UDP/ICMP)
@@ -45,6 +48,7 @@ destination IPs and Service names.
 ### Using kubectl and YAML file
 You can start a new trace by creating Traceflow CRD via Kubectl and a YAML file which contains the essential
 configuration of Traceflow CRD. An example YAML file of Traceflow CRD might look like this:
+
 ```yaml
 apiVersion: ops.antrea.tanzu.vmware.com/v1alpha1
 kind: Traceflow
@@ -66,6 +70,7 @@ spec:
         srcPort: 10000 # Source port needs to be set when Protocol is TCP/UDP.
         dstPort: 80 # Destination port needs to be set when Protocol is TCP/UDP.
 ```
+
 The CRD above starts a new trace from port 10000 of source Pod named `tcp-sts-0` to port 80
 of destination Pod named `tcp-sts-2` using TCP protocol.
 

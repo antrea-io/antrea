@@ -12,9 +12,6 @@ NetworkPolicy in that CNI's environment using Open VSwitch(OVS).
 
 
 !["Antrea Switched CNI"](assets/policy-only-cni.svg)
-=======
-!["Antrea Switched CNI"](assets/policy-only-cni.svg)
->>>>>>> Updated docs for v0.8.2 release.
 
 The above diagram depicts a routed CNI network topology on the left, and what it looks like 
 after Antrea inserts the OVS bridge into the data path.

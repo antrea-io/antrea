@@ -123,16 +123,12 @@ based on your environment and move the binary to OCTANT_PLUGIN_PATH.
 Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):80.
 
 Note:
-<<<<<<< HEAD
-1.  If you deploy Octant and the Antrea UI as a process, you cannot access the Traceflow UI for now when following the
-=======
 
 1. In Antrea v0.8.1, the Traceflow UI is a separate Octant plugin called antrea-traceflow-plugin.
 Starting with v0.9.0, the Traceflow UI will be merged into antrea-octant-plugin. When deploying Octant as a Pod using
 image antrea/octant-antrea-ubuntu:v0.8.1, you already have access to the alpha version of the Traceflow UI.
 
 2. If you deploy Octant and the Antrea UI as a process, you cannot access the Traceflow UI for now when following the
->>>>>>> Cleanup
 steps listed above (at least until the v0.9.0 release). However, you can still build the binary yourself with
 the command below, with the remaining steps being almost the same as the ones above.
 
