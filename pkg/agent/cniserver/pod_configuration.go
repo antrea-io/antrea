@@ -104,28 +104,23 @@ func newPodConfigurator(
 	}, nil
 }
 
-func findContainerIPConfig(ips []*current.IPConfig) (*current.IPConfig, error) {
-	for _, ipc := range ips {
-		if ipc.Version == "4" {
-			return ipc, nil
-		}
+func parseContainerIPs(ipcs []*current.IPConfig) ([]net.IP, error) {
+	var ips []net.IP
+	for _, ipc := range ipcs {
+		ips = append(ips, ipc.Address.IP)
 	}
-	return nil, fmt.Errorf("failed to find a valid IP address")
-}
-
-func parseContainerIP(ips []*current.IPConfig) (net.IP, error) {
-	ipc, err := findContainerIPConfig(ips)
-	if err == nil {
-		return ipc.Address.IP, nil
+	if len(ips) > 0 {
+		return ips, nil
+	} else {
+		return nil, fmt.Errorf("failed to find a valid IP address")
 	}
-	return nil, fmt.Errorf("failed to find a valid IP address")
 }
 
 func buildContainerConfig(
 	interfaceName, containerID, podName, podNamespace string,
 	containerIface *current.Interface,
 	ips []*current.IPConfig) *interfacestore.InterfaceConfig {
-	containerIP, err := parseContainerIP(ips)
+	containerIPs, err := parseContainerIPs(ips)
 	if err != nil {
 		klog.Errorf("Failed to find container %s IP", containerID)
 	}
@@ -137,7 +132,7 @@ func buildContainerConfig(
 		podName,
 		podNamespace,
 		containerMAC,
-		[]net.IP{containerIP})
+		containerIPs)
 }
 
 // BuildOVSPortExternalIDs parses OVS port external_ids from InterfaceConfig.

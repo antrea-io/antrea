@@ -45,8 +45,9 @@ const (
 type GatewayConfig struct {
 	// Name is the name of host gateway, e.g. antrea-gw0.
 	Name string
-	IPs  []net.IP
-	MAC  net.HardwareAddr
+	// TODO: Separate IPs into two IP fields, one IPv4 field and one IPv6 field.
+	IPs []net.IP
+	MAC net.HardwareAddr
 	// LinkIndex is the link index of host gateway.
 	LinkIndex int
 }
