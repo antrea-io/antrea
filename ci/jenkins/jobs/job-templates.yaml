@@ -36,7 +36,7 @@
         org-list: '{org_list}'
         permit-all: '{trigger_permit_all}'
         trigger-phrase: '{trigger_phrase}'
-        white-list-target-branches: []
+        white-list-target-branches: '{white_list_target_branches}'
         white-list: '{white_list}'
         status-context: '{status_context}'
         status-url: '{status_url}'
