@@ -1,4 +1,4 @@
-![Antrea Logo](/docs/assets/logo/antrea_logo.svg)
+![Antrea Logo](assets/logo/antrea_logo.svg)
 
 ![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vmware-tanzu/antrea)](https://goreportcard.com/report/github.com/vmware-tanzu/antrea)
@@ -12,9 +12,7 @@ to be Kubernetes native. It operates at Layer3/4 to provide networking and
 security services for a Kubernetes cluster, leveraging
 [Open vSwitch](https://www.openvswitch.org/) as the networking data plane.
 
-<p align="center">
-<img src="/docs/assets/antrea_overview.svg.png" width="500" alt="Antrea Overview">
-</p>
+![Antrea Overview](assets/antrea_overview.svg.png)
 
 Open vSwitch is a widely adopted high-performance programmable virtual
 switch; Antrea leverages it to implement Pod networking and security features.
