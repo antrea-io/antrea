@@ -285,11 +285,40 @@ func (pa *priorityAssigner) GetOFPriority(p types.Priority) (*uint16, map[uint16
 }
 
 // RegisterPriorities registers a list of Priorities to be created with the priorityAssigner.
-// It is used to populate the priorityMap in case of batch rule adds.
+// It is used to populate the priorityMap in case of batch rule adds. Note that this function assumes
+// that the pa.ofPriorityMap is empty at the time when it is called.
 func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) error {
-	for _, p := range priorities {
-		if _, _, _, err := pa.GetOFPriority(p); err != nil {
-			return err
+	sort.Sort(types.ByPriority(priorities))
+	// Remove any duplicated Priority in the sorted slice.
+	if len(priorities) > 1 {
+		j := 1
+		for i := 1; i < len(priorities); i++ {
+			if !priorities[i].Equals(priorities[i-1]) {
+				priorities[j] = priorities[i]
+				j++
+			}
+		}
+		priorities = priorities[0:j]
+	}
+	if uint16(len(priorities)) > PriorityTopCNP-PriorityBottomCNP+1 {
+		return fmt.Errorf("number of priorities to register is greater than available OpenFlow priorties on the table")
+	}
+	for i := len(priorities) - 1; i >= 0; i-- {
+		insertionPoint, _ := pa.getInsertionPoint(priorities[i])
+		if insertionPoint-PriorityBottomCNP <= uint16(i) {
+			// There are just enough or not enough vacant ofPriorities (from insertionPoint to PriorityBottomCNP)
+			// to register the remaining Priorities. All ofPriorities from PriorityBottomCNP to
+			// (PriorityBottomCNP + numRemainingPriorities) will be occupied to register the
+			// remaining Priorities starting from this Priority.
+			priorities = priorities[:i+1]
+			for j := 0; j < len(priorities); j++ {
+				pa.updatePriorityAssignment(PriorityBottomCNP+uint16(j), priorities[j])
+			}
+			break
+		} else {
+			// There are enough vacant ofPriorities (from insertionPoint to PriorityBottomCNP) to register the
+			// remaining Priorities. Hence the Priority at index i can be safely put at insertionPoint.
+			pa.updatePriorityAssignment(insertionPoint, priorities[i])
 		}
 	}
 	return nil

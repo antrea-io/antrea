@@ -170,7 +170,7 @@ func TestGetInsertionPoint(t *testing.T) {
 			}
 			got, occupied := pa.getInsertionPoint(tt.insertingPriority)
 			assert.Equalf(t, tt.expectInsertionPoint, got, "Got unexpected insertion point")
-			assert.Equalf(t, tt.expectOccupied, occupied, "Insertion point occupied status in unexpected")
+			assert.Equalf(t, tt.expectOccupied, occupied, "Insertion point occupied status is unexpected")
 		})
 	}
 }
@@ -336,4 +336,23 @@ func TestRevertUpdates(t *testing.T) {
 			assert.Equalf(t, tt.originalSorted, pa.sortedOFPriorities, "Got unexpected sortedOFPriorities")
 		})
 	}
+}
+
+func generatePriorities(start, end int32) []types.Priority {
+	priorities := make([]types.Priority, end-start+1)
+	for i := start; i <= end; i++ {
+		priorities[i-start] = types.Priority{TierPriority: 1, PolicyPriority: 5, RulePriority: i - start}
+	}
+	return priorities
+}
+
+func TestRegisterAllOFPriorities(t *testing.T) {
+	pa := newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
+	maxPriorities := generatePriorities(int32(PriorityBottomCNP), int32(PriorityTopCNP))
+	err := pa.RegisterPriorities(maxPriorities)
+	assert.Equalf(t, nil, err, "Error occurred in registering max number of allowed priorities")
+
+	extraPriority := types.Priority{TierPriority: 1, PolicyPriority: 5, RulePriority: int32(PriorityTopCNP) - int32(PriorityBottomCNP) + 1}
+	_, _, _, err = pa.GetOFPriority(extraPriority)
+	assert.Errorf(t, err, "Error should be raised after max number of priorities are registered")
 }
