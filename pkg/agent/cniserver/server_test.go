@@ -62,7 +62,8 @@ var dns = []string{"192.168.100.1"}
 var ips = []string{"10.1.2.100/24,10.1.2.1,4"}
 var args = cniservertest.GenerateCNIArgs(testPodName, testPodNamespace, testPodInfraContainerID)
 var testNodeConfig *config.NodeConfig
-var gwIP net.IP
+var gwIPv4 net.IP
+var gwIPv6 net.IP
 
 func TestLoadNetConfig(t *testing.T) {
 	assert := assert.New(t)
@@ -83,12 +84,20 @@ func TestLoadNetConfig(t *testing.T) {
 	assert.Equal(networkCfg.Name, netCfg.Name)
 	assert.Equal(networkCfg.IPAM.Type, netCfg.IPAM.Type)
 	assert.Equal(
-		netCfg.IPAM.Subnet, testNodeConfig.PodIPv4CIDR.String(),
-		"Network configuration (PodCIDRs) was not updated",
+		netCfg.IPAM.Ranges[0][0].Subnet, testNodeConfig.PodIPv4CIDR.String(),
+		"Network configuration (PodIPv4CIDR) was not updated",
 	)
 	assert.Equal(
-		netCfg.IPAM.Gateway, testNodeConfig.GatewayConfig.IPs[0].String(),
+		netCfg.IPAM.Ranges[0][0].Gateway, testNodeConfig.GatewayConfig.IPs[0].String(),
 		"Network configuration (Gateway IP) was not updated",
+	)
+	assert.Equal(
+		netCfg.IPAM.Ranges[1][0].Subnet, testNodeConfig.PodIPv6CIDR.String(),
+		"Network configuration (PodIPv6CIDR) was not updated",
+	)
+	assert.Equal(
+		netCfg.IPAM.Ranges[1][0].Gateway, testNodeConfig.GatewayConfig.IPs[1].String(),
+		"Network configuration (Gateway IPv6) was not updated",
 	)
 }
 
@@ -337,25 +346,24 @@ func TestParsePrevResultFromRequest(t *testing.T) {
 func TestUpdateResultIfaceConfig(t *testing.T) {
 	require := require.New(t)
 
-	// TODO: it may be better to have a v4 address and a v6 address, as the IPAM plugin will not
-	// return a Result with 2 v4 addresses.
-	testIps := []string{"10.1.2.100/24, ,4", "192.168.1.100/24, 192.168.2.253, 4"}
+	testIps := []string{"192.168.1.100/24, , 4", "fd74:ca9b:172:18::8/64, , 6"}
 
-	require.Equal(gwIP, testNodeConfig.GatewayConfig.IPs[0])
+	require.Equal(gwIPv4, testNodeConfig.GatewayConfig.IPs[0])
+	require.Equal(gwIPv6, testNodeConfig.GatewayConfig.IPs[1])
 
 	t.Run("Gateways updated", func(t *testing.T) {
 		assert := assert.New(t)
 
 		result := ipamtest.GenerateIPAMResult(supportedCNIVersion, testIps, routes, dns)
-		updateResultIfaceConfig(result, gwIP)
+		updateResultIfaceConfig(result, []net.IP{gwIPv4, gwIPv6})
 
 		assert.Len(result.IPs, 2, "Failed to construct result")
 		for _, ipc := range result.IPs {
 			switch ipc.Address.IP.String() {
-			case "10.1.2.100":
-				assert.Equal("10.1.2.1", ipc.Gateway.String())
 			case "192.168.1.100":
-				assert.Equal("192.168.2.253", ipc.Gateway.String())
+				assert.Equal("192.168.1.1", ipc.Gateway.String())
+			case "fd74:ca9b:172:18::8":
+				assert.Equal("fd74:ca9b:172:18::1", ipc.Gateway.String())
 			default:
 				t.Errorf("Unexpected IP address in CNI result")
 			}
@@ -365,17 +373,19 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 	t.Run("Default route added", func(t *testing.T) {
 		emptyRoutes := []string{}
 		result := ipamtest.GenerateIPAMResult(supportedCNIVersion, testIps, emptyRoutes, dns)
-		updateResultIfaceConfig(result, gwIP)
+		updateResultIfaceConfig(result, []net.IP{gwIPv4, gwIPv6})
 		require.NotEmpty(t, result.Routes)
-		defaultRoute := func() *cnitypes.Route {
-			for _, route := range result.Routes {
-				if route.Dst.String() == "0.0.0.0/0" {
-					return route
-				}
+		require.Equal(2, len(result.Routes))
+		for _, route := range result.Routes {
+			switch route.Dst.String() {
+			case "0.0.0.0/0":
+				require.Equal("192.168.1.1", route.GW.String())
+			case "::/0":
+				require.Equal("fd74:ca9b:172:18::1", route.GW.String())
+			default:
+				t.Errorf("Unexpected Route in CNI result")
 			}
-			return nil
-		}()
-		assert.NotNil(t, defaultRoute.GW)
+		}
 	})
 }
 
@@ -601,9 +611,11 @@ func generateUUID(t *testing.T) string {
 
 func init() {
 	nodeName := "node1"
-	gwIP = net.ParseIP("192.168.1.1")
-	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
+	gwIPv4 = net.ParseIP("192.168.1.1")
+	gwIPv6 = net.ParseIP("fd74:ca9b:172:18::1")
+	_, nodePodCIDRv4, _ := net.ParseCIDR("192.168.1.0/24")
+	_, nodePodCIDRv6, _ := net.ParseCIDR("fd74:ca9b:172:18::/64")
 	gwMAC, _ := net.ParseMAC("00:00:00:00:00:01")
-	gateway := &config.GatewayConfig{Name: "", IPs: []net.IP{gwIP}, MAC: gwMAC}
-	testNodeConfig = &config.NodeConfig{Name: nodeName, PodIPv4CIDR: nodePodCIDR, GatewayConfig: gateway}
+	gateway := &config.GatewayConfig{Name: "", IPs: []net.IP{gwIPv4, gwIPv6}, MAC: gwMAC}
+	testNodeConfig = &config.NodeConfig{Name: nodeName, PodIPv4CIDR: nodePodCIDRv4, PodIPv6CIDR: nodePodCIDRv6, GatewayConfig: gateway}
 }
