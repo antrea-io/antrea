@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
@@ -135,18 +136,23 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 	n.deleteDereferencedAddressGroups(oldInternalNP)
 }
 
-// toAntreaServicesForCRD converts a secv1alpha1.NetworkPolicyPort object to an
-// Antrea Service object.
-func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) []networking.Service {
+// toAntreaServicesForCRD converts a slice of secv1alpha1.NetworkPolicyPort
+// objects to a slice of Antrea Service objects. A bool is returned along with
+// the Service objects to indicate whether any named port exists.
+func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) ([]networking.Service, bool) {
 	var antreaServices []networking.Service
+	var namedPortExists bool
 	for _, npPort := range npPorts {
+		if npPort.Port != nil && npPort.Port.Type == intstr.String {
+			namedPortExists = true
+		}
 		antreaService := networking.Service{
 			Protocol: toAntreaProtocol(npPort.Protocol),
 			Port:     npPort.Port,
 		}
 		antreaServices = append(antreaServices, antreaService)
 	}
-	return antreaServices
+	return antreaServices, namedPortExists
 }
 
 // toAntreaIPBlockForCRD converts a secv1alpha1.IPBlock to an Antrea IPBlock.
@@ -174,24 +180,23 @@ func getTierPriority(tier string) networking.TierPriority {
 	return tierPriorityMap[tier]
 }
 
-func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer, cnp *secv1alpha1.ClusterNetworkPolicy, dir networking.Direction) *networking.NetworkPolicyPeer {
+func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer, cnp *secv1alpha1.ClusterNetworkPolicy, dir networking.Direction, namedPortExists bool) *networking.NetworkPolicyPeer {
 	var addressGroups []string
 	// Empty NetworkPolicyPeer is supposed to match all addresses.
 	// It's treated as an IPBlock "0.0.0.0/0".
 	if len(peers) == 0 {
-		// For an ingress Peer, skip adding the AddressGroup matching all Pods
-		// because in case of ingress Rule, the named Port resolution happens on
-		// Pods in AppliedToGroup.
-		if dir == networking.DirectionIn {
+		// For an egress Peer that specifies any named ports, it creates or
+		// reuses the AddressGroup matching all Pods in all Namespaces and
+		// appends the AddressGroup UID to the returned Peer such that it can be
+		// used to resolve the named ports.
+		// For other cases it uses the IPBlock "0.0.0.0/0" to avoid the overhead
+		// of handling member updates of the AddressGroup.
+		if dir == networking.DirectionIn || !namedPortExists {
 			return &matchAllPeer
 		}
-		// For an egress Peer, create an AddressGroup matching all Pods in all
-		// Namespaces such that it can be used to resolve named Ports. This
-		// AddressGroup is set in the NetworkPolicyPeer of matchAllPeer.
 		allPodsGroupUID := n.createAddressGroupForCRD(matchAllPodsPeerCrd, cnp)
 		podsPeer := matchAllPeer
-		addressGroups = append(addressGroups, allPodsGroupUID)
-		podsPeer.AddressGroups = addressGroups
+		podsPeer.AddressGroups = append(addressGroups, allPodsGroupUID)
 		return &podsPeer
 	}
 	var ipBlocks []networking.IPBlock
@@ -253,10 +258,11 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	// Compute NetworkPolicyRule for Egress Rule.
 	for idx, ingressRule := range cnp.Spec.Ingress {
 		// Set default action to ALLOW to allow traffic.
+		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports)
 		rules = append(rules, networking.NetworkPolicyRule{
 			Direction: networking.DirectionIn,
-			From:      *n.toAntreaPeerForCRD(ingressRule.From, cnp, networking.DirectionIn),
-			Services:  toAntreaServicesForCRD(ingressRule.Ports),
+			From:      *n.toAntreaPeerForCRD(ingressRule.From, cnp, networking.DirectionIn, namedPortExists),
+			Services:  services,
 			Action:    ingressRule.Action,
 			Priority:  int32(idx),
 		})
@@ -264,10 +270,11 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	// Compute NetworkPolicyRule for Egress Rule.
 	for idx, egressRule := range cnp.Spec.Egress {
 		// Set default action to ALLOW to allow traffic.
+		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports)
 		rules = append(rules, networking.NetworkPolicyRule{
 			Direction: networking.DirectionOut,
-			To:        *n.toAntreaPeerForCRD(egressRule.To, cnp, networking.DirectionOut),
-			Services:  toAntreaServicesForCRD(egressRule.Ports),
+			To:        *n.toAntreaPeerForCRD(egressRule.To, cnp, networking.DirectionOut, namedPortExists),
+			Services:  services,
 			Action:    egressRule.Action,
 			Priority:  int32(idx),
 		})
