@@ -229,7 +229,7 @@ func (pa *priorityAssigner) siftPrioritiesUp(insertionPoint, nextVacant uint16, 
 		for original := insertionPoint; original < nextVacant; original++ {
 			updated := original + 1
 			p := pa.ofPriorityMap[updated]
-			// nextVacant was allocated because of the reassignment and needs to be released in reversion.
+			// nextVacant was allocated because of the reassignment and needs to be released when reverting.
 			if updated == nextVacant {
 				pa.Release(updated)
 			}
@@ -259,7 +259,7 @@ func (pa *priorityAssigner) siftPrioritiesDown(insertionPoint, lastVacant uint16
 		for original := insertionPoint; original > lastVacant; original-- {
 			updated := original - 1
 			p := pa.ofPriorityMap[updated]
-			// lastVacant was allocated because of the reassignment and needs to be released in reversion.
+			// lastVacant was allocated because of the reassignment and needs to be released when reverting.
 			if updated == lastVacant {
 				pa.Release(updated)
 			}

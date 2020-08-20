@@ -70,9 +70,9 @@ func TestUpdatePriorityAssignment(t *testing.T) {
 			for i := 0; i < len(tt.argsPriorities); i++ {
 				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
 			}
-			assert.Equalf(t, tt.expectedPriorityMap, pa.priorityMap, "Got priorityMap %v, expected %v", pa.priorityMap, tt.expectedPriorityMap)
-			assert.Equalf(t, tt.expectedOFMap, pa.ofPriorityMap, "Got ofPriorityMap %v, expected %v", pa.ofPriorityMap, tt.expectedOFMap)
-			assert.Equalf(t, tt.expectedSorted, pa.sortedOFPriorities, "Got sortedOFPriorities %v, expected %v", pa.sortedOFPriorities, tt.expectedSorted)
+			assert.Equalf(t, tt.expectedPriorityMap, pa.priorityMap, "Got unexpected priorityMap")
+			assert.Equalf(t, tt.expectedOFMap, pa.ofPriorityMap, "Got unexpected ofPriorityMap")
+			assert.Equalf(t, tt.expectedSorted, pa.sortedOFPriorities, "Got unexpected sortedOFPriorities")
 		})
 	}
 }
@@ -169,8 +169,8 @@ func TestGetInsertionPoint(t *testing.T) {
 				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
 			}
 			got, occupied := pa.getInsertionPoint(tt.insertingPriority)
-			assert.Equalf(t, tt.expectInsertionPoint, got, "Got insertion point %v, expected %v", got, tt.expectInsertionPoint)
-			assert.Equalf(t, tt.expectOccupied, occupied, "Got insertion point occupied %v, expected %v", got, tt.expectOccupied)
+			assert.Equalf(t, tt.expectInsertionPoint, got, "Got unexpected insertion point")
+			assert.Equalf(t, tt.expectOccupied, occupied, "Insertion point occupied status in unexpected")
 		})
 	}
 }
@@ -242,10 +242,8 @@ func TestReassignPriorities(t *testing.T) {
 			for i := 0; i < len(tt.insertingPriorities); i++ {
 				got, updates, _, err := pa.reassignPriorities(tt.insertionPoints[i], tt.insertingPriorities[i])
 				assert.Equalf(t, err, nil, "Error occurred in reassigning priorities")
-				assert.Equalf(t, tt.expectedAssigned[i], *got, "Got %v for priority %v, expected %v",
-					got, tt.insertingPriorities[i], tt.expectedAssigned[i])
-				assert.Equalf(t, tt.expectedUpdates[i], updates, "Got updates %v for priority %v, expected %v",
-					updates, tt.insertingPriorities[i], tt.expectedUpdates[i])
+				assert.Equalf(t, tt.expectedAssigned[i], *got, "Got unexpected assigned priority")
+				assert.Equalf(t, tt.expectedUpdates[i], updates, "Got unexpected priority updates")
 			}
 		})
 	}
@@ -260,7 +258,7 @@ func TestRegisterPrioritiesAndRelease(t *testing.T) {
 	expectedOFMap := map[uint16]types.Priority{
 		64360: p110, 64359: p1120, 64358: p1121, 64357: p1130, 64356: p1140, 64355: p1141, 64354: p1160,
 	}
-	assert.Equalf(t, expectedOFMap, pa.ofPriorityMap, "Got ofPriorityMap %v, expected %v", pa.ofPriorityMap, expectedOFMap)
+	assert.Equalf(t, expectedOFMap, pa.ofPriorityMap, "Got unexpected ofPriorityMap")
 
 	pa.Release(64359)
 	pa.Release(64356)
@@ -272,9 +270,9 @@ func TestRegisterPrioritiesAndRelease(t *testing.T) {
 		p110: 64360, p1121: 64358, p1130: 64357, p1141: 64355,
 	}
 	expectedSorted := []uint16{64355, 64357, 64358, 64360}
-	assert.Equalf(t, expectedOFMap, pa.ofPriorityMap, "Got ofPriorityMap %v, expected %v", pa.ofPriorityMap, expectedOFMap)
-	assert.Equalf(t, expectedPriorityMap, pa.priorityMap, "Got priorityMap %v, expected %v", pa.priorityMap, expectedPriorityMap)
-	assert.Equalf(t, expectedSorted, pa.sortedOFPriorities, "Got sortedOFPriorities %v, expected %v", pa.sortedOFPriorities, expectedSorted)
+	assert.Equalf(t, expectedOFMap, pa.ofPriorityMap, "Got unexpected priorityMap")
+	assert.Equalf(t, expectedPriorityMap, pa.priorityMap, "Got unexpected ofPriorityMap")
+	assert.Equalf(t, expectedSorted, pa.sortedOFPriorities, "Got unexpected sortedOFPriorities")
 }
 
 func TestRevertUpdates(t *testing.T) {
@@ -333,9 +331,9 @@ func TestRevertUpdates(t *testing.T) {
 			}
 			_, _, revertFunc, _ := pa.GetOFPriority(tt.extraPriority)
 			revertFunc()
-			assert.Equalf(t, tt.originalPriorityMap, pa.priorityMap, "Got priorityMap %v, expected %v", pa.priorityMap, tt.originalPriorityMap)
-			assert.Equalf(t, tt.originalOFMap, pa.ofPriorityMap, "Got ofPriorityMap %v, expected %v", pa.ofPriorityMap, tt.originalOFMap)
-			assert.Equalf(t, tt.originalSorted, pa.sortedOFPriorities, "Got sortedOFPriorities %v, expected %v", pa.sortedOFPriorities, tt.originalSorted)
+			assert.Equalf(t, tt.originalPriorityMap, pa.priorityMap, "Got unexpected priorityMap")
+			assert.Equalf(t, tt.originalOFMap, pa.ofPriorityMap, "Got unexpected ofPriorityMap")
+			assert.Equalf(t, tt.originalSorted, pa.sortedOFPriorities, "Got unexpected sortedOFPriorities")
 		})
 	}
 }
