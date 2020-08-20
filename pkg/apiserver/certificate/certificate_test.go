@@ -174,7 +174,7 @@ func TestApplyServerCert(t *testing.T) {
 			}
 
 			if tt.testRotate {
-				globalMaxRotateDuration = 2 * time.Second
+				maxRotateDuration = 2 * time.Second
 			}
 
 			clientset := fakeclientset.NewSimpleClientset()
