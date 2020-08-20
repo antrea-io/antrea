@@ -259,7 +259,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 		PolicyPriority: *rule.PolicyPriority,
 		RulePriority:   rule.Priority,
 	}
-	ofPriority, priorityUpdates, err := pa.assigner.GetOFPriority(p)
+	ofPriority, priorityUpdates, revertFunc, err := pa.assigner.GetOFPriority(p)
 	if err != nil {
 		return nil, err
 	}
@@ -267,8 +267,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 	if len(priorityUpdates) > 0 {
 		err := r.ofClient.ReassignFlowPriorities(priorityUpdates, table)
 		if err != nil {
-			// TODO: revert the priorityUpdates in priorityMap if err occurred here.
-			pa.assigner.Release(*ofPriority)
+			revertFunc()
 			return nil, err
 		}
 	}

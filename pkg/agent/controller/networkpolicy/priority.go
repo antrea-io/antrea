@@ -190,7 +190,7 @@ Loop:
 // reassignPriorities re-arranges current Priority mappings to make place for the inserting Priority. It sifts
 // existing priorties up or down based on cost (how many priorities it needs to move). siftPrioritiesDown is used
 // as a tie-breaker. An error should only be returned if all the available ofPriorities in the table are occupied.
-func (pa *priorityAssigner) reassignPriorities(insertionPoint uint16, p types.Priority) (*uint16, map[uint16]uint16, error) {
+func (pa *priorityAssigner) reassignPriorities(insertionPoint uint16, p types.Priority) (*uint16, map[uint16]uint16, func(), error) {
 	nextVacant, lastVacant := pa.getNextVacantOFPriority(insertionPoint), pa.getLastVacantOFPriority(insertionPoint)
 	switch {
 	case (insertionPoint == PriorityBottomCNP || lastVacant == nil) && nextVacant != nil:
@@ -206,16 +206,16 @@ func (pa *priorityAssigner) reassignPriorities(insertionPoint uint16, p types.Pr
 			return pa.siftPrioritiesDown(insertionPoint-uint16(1), *lastVacant, p)
 		}
 	default:
-		return nil, map[uint16]uint16{}, fmt.Errorf("no available Openflow priority left to insert priority %v", p)
+		return nil, map[uint16]uint16{}, nil, fmt.Errorf("no available Openflow priority left to insert priority %v", p)
 	}
 }
 
 // siftPrioritiesUp moves all consecutive occupied ofPriorities and corresponding Priorities up by one ofPriority,
 // starting from the insertionPoint. It also assigns the freed ofPriority to the input Priority.
-func (pa *priorityAssigner) siftPrioritiesUp(insertionPoint, nextVacant uint16, p types.Priority) (*uint16, map[uint16]uint16, error) {
+func (pa *priorityAssigner) siftPrioritiesUp(insertionPoint, nextVacant uint16, p types.Priority) (*uint16, map[uint16]uint16, func(), error) {
 	priorityReassignments := map[uint16]uint16{}
 	if insertionPoint >= nextVacant {
-		return nil, priorityReassignments, fmt.Errorf("failed to determine the range for sifting priorities up")
+		return nil, priorityReassignments, nil, fmt.Errorf("failed to determine the range for sifting priorities up")
 	}
 	for i := nextVacant; i > insertionPoint; i-- {
 		p, _ := pa.ofPriorityMap[i-1]
@@ -224,15 +224,28 @@ func (pa *priorityAssigner) siftPrioritiesUp(insertionPoint, nextVacant uint16, 
 		klog.V(4).Infof("Original priority %v now needs to be re-assigned %v", i-1, i)
 	}
 	pa.updatePriorityAssignment(insertionPoint, p)
-	return &insertionPoint, priorityReassignments, nil
+	revertFunc := func() {
+		delete(pa.priorityMap, p)
+		for original := insertionPoint; original < nextVacant; original++ {
+			updated := original + 1
+			p := pa.ofPriorityMap[updated]
+			// nextVacant was allocated because of the reassignment and needs to be released when reverting.
+			if updated == nextVacant {
+				pa.Release(updated)
+			}
+			pa.ofPriorityMap[original] = p
+			pa.priorityMap[p] = original
+		}
+	}
+	return &insertionPoint, priorityReassignments, revertFunc, nil
 }
 
 // siftPrioritiesDown moves all consecutive occupied ofPriorities and corresponding Priorities down by one ofPriority,
 // starting from the insertionPoint. It also assigns the freed ofPriority to the input Priority.
-func (pa *priorityAssigner) siftPrioritiesDown(insertionPoint, lastVacant uint16, p types.Priority) (*uint16, map[uint16]uint16, error) {
+func (pa *priorityAssigner) siftPrioritiesDown(insertionPoint, lastVacant uint16, p types.Priority) (*uint16, map[uint16]uint16, func(), error) {
 	priorityReassignments := map[uint16]uint16{}
 	if insertionPoint <= lastVacant {
-		return nil, priorityReassignments, fmt.Errorf("failed to determine the range for sifting priorities down")
+		return nil, priorityReassignments, nil, fmt.Errorf("failed to determine the range for sifting priorities down")
 	}
 	for i := lastVacant; i < insertionPoint; i++ {
 		p, _ := pa.ofPriorityMap[i+1]
@@ -241,28 +254,41 @@ func (pa *priorityAssigner) siftPrioritiesDown(insertionPoint, lastVacant uint16
 		klog.V(4).Infof("Original priority %v now needs to be re-assigned %v", i+1, i)
 	}
 	pa.updatePriorityAssignment(insertionPoint, p)
-	return &insertionPoint, priorityReassignments, nil
+	revertFunc := func() {
+		delete(pa.priorityMap, p)
+		for original := insertionPoint; original > lastVacant; original-- {
+			updated := original - 1
+			p := pa.ofPriorityMap[updated]
+			// lastVacant was allocated because of the reassignment and needs to be released when reverting.
+			if updated == lastVacant {
+				pa.Release(updated)
+			}
+			pa.ofPriorityMap[original] = p
+			pa.priorityMap[p] = original
+		}
+	}
+	return &insertionPoint, priorityReassignments, revertFunc, nil
 }
 
 // GetOFPriority retrieves the OFPriority for the input Priority to be installed,
 // and returns installed priorities that need to be re-assigned if necessary.
-func (pa *priorityAssigner) GetOFPriority(p types.Priority) (*uint16, map[uint16]uint16, error) {
+func (pa *priorityAssigner) GetOFPriority(p types.Priority) (*uint16, map[uint16]uint16, func(), error) {
 	if ofPriority, exists := pa.priorityMap[p]; exists {
-		return &ofPriority, nil, nil
+		return &ofPriority, nil, nil, nil
 	}
 	insertionPoint, occupied := pa.getInsertionPoint(p)
 	if insertionPoint == PriorityBottomCNP || insertionPoint > PriorityTopCNP || occupied {
 		return pa.reassignPriorities(insertionPoint, p)
 	}
 	pa.updatePriorityAssignment(insertionPoint, p)
-	return &insertionPoint, nil, nil
+	return &insertionPoint, nil, nil, nil
 }
 
 // RegisterPriorities registers a list of Priorities to be created with the priorityAssigner.
 // It is used to populate the priorityMap in case of batch rule adds.
 func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) error {
 	for _, p := range priorities {
-		if _, _, err := pa.GetOFPriority(p); err != nil {
+		if _, _, _, err := pa.GetOFPriority(p); err != nil {
 			return err
 		}
 	}
