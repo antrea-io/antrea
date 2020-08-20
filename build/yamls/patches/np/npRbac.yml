@@ -2,6 +2,8 @@
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
+  labels:
+    app: antrea
   name: antrea-controller
 rules:
   - apiGroups:
@@ -104,6 +106,16 @@ rules:
       - list
       - update
       - patch
+      - create
+      - delete
+  - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
+      - networkpolicies
+    verbs:
+      - get
+      - watch
+      - list
   - apiGroups:
       - core.antrea.tanzu.vmware.com
     resources:

@@ -112,6 +112,14 @@ rules:
       - patch
       - create
       - delete
+  - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
+      - networkpolicies
+    verbs:
+      - get
+      - watch
+      - list
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1

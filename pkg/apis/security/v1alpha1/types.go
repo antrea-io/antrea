@@ -15,12 +15,15 @@
 package v1alpha1
 
 import (
-	"strings"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
+
+type NetworkPolicyType interface {
+	GetName() string
+	GetNamespace() string
+}
 
 // +genclient
 // +genclient:noStatus
@@ -33,6 +36,14 @@ type NetworkPolicy struct {
 
 	// Specification of the desired behavior of NetworkPolicy.
 	Spec NetworkPolicySpec `json:"spec"`
+}
+
+func (np NetworkPolicy) GetName() string {
+	return np.Name
+}
+
+func (np NetworkPolicy) GetNamespace() string {
+	return np.Namespace
 }
 
 // NetworkPolicySpec defines the desired state for NetworkPolicy.
@@ -134,12 +145,6 @@ type NetworkPolicyPort struct {
 // RuleAction describes the action to be applied on traffic matching a rule.
 type RuleAction string
 
-// ToUpper returns a RuleAction type in uppercase.
-func (a *RuleAction) ToUpper() RuleAction {
-	aStr := string(*a)
-	return RuleAction(strings.ToUpper(aStr))
-}
-
 const (
 	// RuleActionAllow describes that rule matching traffic must be allowed.
 	RuleActionAllow RuleAction = "Allow"
@@ -169,6 +174,14 @@ type ClusterNetworkPolicy struct {
 
 	// Specification of the desired behavior of ClusterNetworkPolicy.
 	Spec ClusterNetworkPolicySpec `json:"spec"`
+}
+
+func (cnp *ClusterNetworkPolicy) GetName() string {
+	return cnp.Name
+}
+
+func (cnp *ClusterNetworkPolicy) GetNamespace() string {
+	return cnp.Namespace
 }
 
 // ClusterNetworkPolicySpec defines the desired state for ClusterNetworkPolicy.

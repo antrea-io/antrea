@@ -15,9 +15,6 @@
 package networkpolicy
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
@@ -27,12 +24,6 @@ import (
 )
 
 var (
-	// matchAllPodsPeerCrd is a secv1alpha1.NetworkPolicyPeer matching all
-	// Pods from all Namespaces.
-	matchAllPodsPeerCrd = secv1alpha1.NetworkPolicyPeer{
-		NamespaceSelector: &metav1.LabelSelector{},
-	}
-
 	// tierPriorityMap maintains a map of the Tier name to it's priority.
 	tierPriorityMap = map[string]networking.TierPriority{
 		"Emergency":   antreatypes.TierEmergency,
@@ -136,40 +127,6 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 	n.deleteDereferencedAddressGroups(oldInternalNP)
 }
 
-// toAntreaServicesForCRD converts a slice of secv1alpha1.NetworkPolicyPort
-// objects to a slice of Antrea Service objects. A bool is returned along with
-// the Service objects to indicate whether any named port exists.
-func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) ([]networking.Service, bool) {
-	var antreaServices []networking.Service
-	var namedPortExists bool
-	for _, npPort := range npPorts {
-		if npPort.Port != nil && npPort.Port.Type == intstr.String {
-			namedPortExists = true
-		}
-		antreaService := networking.Service{
-			Protocol: toAntreaProtocol(npPort.Protocol),
-			Port:     npPort.Port,
-		}
-		antreaServices = append(antreaServices, antreaService)
-	}
-	return antreaServices, namedPortExists
-}
-
-// toAntreaIPBlockForCRD converts a secv1alpha1.IPBlock to an Antrea IPBlock.
-func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*networking.IPBlock, error) {
-	// Convert the allowed IPBlock to networkpolicy.IPNet.
-	ipNet, err := cidrStrToIPNet(ipBlock.CIDR)
-	if err != nil {
-		return nil, err
-	}
-	antreaIPBlock := &networking.IPBlock{
-		CIDR: *ipNet,
-		// secv1alpha.IPBlock does not have the Except slices.
-		Except: []networking.IPNet{},
-	}
-	return antreaIPBlock, nil
-}
-
 // getTierPriority retrieves the priority associated with the input Tier name.
 // If the Tier name is empty, by default, the lowest priority Application Tier
 // is returned.
@@ -178,67 +135,6 @@ func getTierPriority(tier string) networking.TierPriority {
 		return antreatypes.TierApplication
 	}
 	return tierPriorityMap[tier]
-}
-
-func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer, cnp *secv1alpha1.ClusterNetworkPolicy, dir networking.Direction, namedPortExists bool) *networking.NetworkPolicyPeer {
-	var addressGroups []string
-	// Empty NetworkPolicyPeer is supposed to match all addresses.
-	// It's treated as an IPBlock "0.0.0.0/0".
-	if len(peers) == 0 {
-		// For an egress Peer that specifies any named ports, it creates or
-		// reuses the AddressGroup matching all Pods in all Namespaces and
-		// appends the AddressGroup UID to the returned Peer such that it can be
-		// used to resolve the named ports.
-		// For other cases it uses the IPBlock "0.0.0.0/0" to avoid the overhead
-		// of handling member updates of the AddressGroup.
-		if dir == networking.DirectionIn || !namedPortExists {
-			return &matchAllPeer
-		}
-		allPodsGroupUID := n.createAddressGroupForCRD(matchAllPodsPeerCrd, cnp)
-		podsPeer := matchAllPeer
-		podsPeer.AddressGroups = append(addressGroups, allPodsGroupUID)
-		return &podsPeer
-	}
-	var ipBlocks []networking.IPBlock
-	for _, peer := range peers {
-		// A secv1alpha1.NetworkPolicyPeer will either have an IPBlock or a
-		// podSelector and/or namespaceSelector set.
-		if peer.IPBlock != nil {
-			ipBlock, err := toAntreaIPBlockForCRD(peer.IPBlock)
-			if err != nil {
-				klog.Errorf("Failure processing ClusterNetworkPolicy %s IPBlock %v: %v", cnp.Name, peer.IPBlock, err)
-				continue
-			}
-			ipBlocks = append(ipBlocks, *ipBlock)
-		} else {
-			normalizedUID := n.createAddressGroupForCRD(peer, cnp)
-			addressGroups = append(addressGroups, normalizedUID)
-		}
-	}
-	return &networking.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
-}
-
-// createAddressGroupForCRD creates an AddressGroup object corresponding to a
-// secv1alpha1.NetworkPolicyPeer object in Cluster NetworkPolicyRule. This
-// function simply creates the object without actually populating the
-// PodAddresses as the affected Pods are calculated during sync process.
-func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.NetworkPolicyPeer, np *secv1alpha1.ClusterNetworkPolicy) string {
-	groupSelector := toGroupSelector("", peer.PodSelector, peer.NamespaceSelector)
-	normalizedUID := getNormalizedUID(groupSelector.NormalizedName)
-	// Get or create an AddressGroup for the generated UID.
-	_, found, _ := n.addressGroupStore.Get(normalizedUID)
-	if found {
-		return normalizedUID
-	}
-	// Create an AddressGroup object per Peer object.
-	addressGroup := &antreatypes.AddressGroup{
-		UID:      types.UID(normalizedUID),
-		Name:     normalizedUID,
-		Selector: *groupSelector,
-	}
-	klog.V(2).Infof("Creating new AddressGroup %s with selector (%s)", addressGroup.Name, addressGroup.Selector.NormalizedName)
-	n.addressGroupStore.Create(addressGroup)
-	return normalizedUID
 }
 
 // processClusterNetworkPolicy creates an internal NetworkPolicy instance

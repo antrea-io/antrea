@@ -985,14 +985,21 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	defer klog.Info("Shutting down NetworkPolicy controller")
 
 	klog.Info("Waiting for caches to sync for NetworkPolicy controller")
-	if !cache.WaitForCacheSync(stopCh, n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced, n.anpListerSynced) {
+	if !cache.WaitForCacheSync(stopCh, n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced) {
 		klog.Error("Unable to sync caches for NetworkPolicy controller")
 		return
 	}
-	// Only wait for CNPListerSynced when ClusterNetworkPolicy feature gate is enabled.
+	// Only wait for cnpListerSynced when ClusterNetworkPolicy feature gate is enabled.
 	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
 		if !cache.WaitForCacheSync(stopCh, n.cnpListerSynced) {
 			klog.Error("Unable to sync CNP caches for NetworkPolicy controller")
+			return
+		}
+	}
+	// Only wait for anpListerSynced when AntreaNetworkPolicy feature gate is enabled.
+	if features.DefaultFeatureGate.Enabled(features.AntreaNetworkPolicy) {
+		if !cache.WaitForCacheSync(stopCh, n.anpListerSynced) {
+			klog.Error("Unable to sync ANP caches for NetworkPolicy controller")
 			return
 		}
 	}
