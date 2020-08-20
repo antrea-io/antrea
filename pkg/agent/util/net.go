@@ -17,6 +17,7 @@ package util
 import (
 	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -26,6 +27,9 @@ const (
 	interfaceNameLength   = 15
 	interfacePrefixLength = 8
 	interfaceKeyLength    = interfaceNameLength - (interfacePrefixLength + 1)
+
+	FamilyIPv4 uint8 = 4
+	FamilyIPv6 uint8 = 6
 )
 
 func generateInterfaceName(key string, name string, useHead bool) string {
@@ -135,4 +139,22 @@ func ContainIPv6Addr(ips []net.IP) bool {
 		}
 	}
 	return false
+}
+
+func GetIPWithFamily(ips []net.IP, addrFamily uint8) (net.IP, error) {
+	if addrFamily == FamilyIPv6 {
+		for _, ip := range ips {
+			if ip.To4() == nil {
+				return ip, nil
+			}
+		}
+		return nil, errors.New("no IP found with the specified AddressFamily")
+	} else {
+		for _, ip := range ips {
+			if ip.To4() != nil {
+				return ip, nil
+			}
+		}
+		return nil, errors.New("no IP found with the specified AddressFamily")
+	}
 }
