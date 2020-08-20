@@ -47,6 +47,19 @@ var alwaysReady = func() bool { return true }
 
 const informerDefaultResync time.Duration = 30 * time.Second
 
+var (
+	k8sProtocolUDP  = v1.ProtocolUDP
+	k8sProtocolTCP  = v1.ProtocolTCP
+	k8sProtocolSCTP = v1.ProtocolSCTP
+
+	protocolTCP = networking.ProtocolTCP
+
+	int80 = intstr.FromInt(80)
+	int81 = intstr.FromInt(81)
+
+	strHTTP = intstr.FromString("http")
+)
+
 type networkPolicyController struct {
 	*NetworkPolicyController
 	podStore                   cache.Store
@@ -114,9 +127,6 @@ func newClientset(objects ...runtime.Object) *fake.Clientset {
 }
 
 func TestAddNetworkPolicy(t *testing.T) {
-	protocolTCP := networking.ProtocolTCP
-	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
-	int80, int81 := intstr.FromInt(80), intstr.FromInt(81)
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
@@ -157,7 +167,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 			expAddressGroups:   0,
 		},
 		{
-			name: "default-allow-egress",
+			name: "default-allow-egress-without-named-port",
 			inputPolicy: &networkingv1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npB", UID: "uidB"},
 				Spec: networkingv1.NetworkPolicySpec{
@@ -172,10 +182,50 @@ func TestAddNetworkPolicy(t *testing.T) {
 				Namespace: "nsA",
 				Rules: []networking.NetworkPolicyRule{{
 					Direction: networking.DirectionOut,
-					To:        matchAllPeerEgress,
+					To:        matchAllPeer,
 					Services:  nil,
 					Priority:  defaultRulePriority,
 					Action:    &defaultAction,
+				}},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   0,
+		},
+		{
+			name: "default-allow-egress-with-named-port",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npB", UID: "uidB"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+					Egress: []networkingv1.NetworkPolicyEgressRule{
+						{
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: &k8sProtocolTCP,
+									Port:     &strHTTP,
+								},
+							},
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:       "uidB",
+				Name:      "npB",
+				Namespace: "nsA",
+				Rules: []networking.NetworkPolicyRule{{
+					Direction: networking.DirectionOut,
+					To:        matchAllPeerEgress,
+					Services: []networking.Service{
+						{
+							Protocol: &protocolTCP,
+							Port:     &strHTTP,
+						},
+					},
+					Priority: defaultRulePriority,
+					Action:   &defaultAction,
 				}},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
 			},
@@ -234,7 +284,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 						{
 							Ports: []networkingv1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []networkingv1.NetworkPolicyPeer{
@@ -249,7 +299,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 						{
 							Ports: []networkingv1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							To: []networkingv1.NetworkPolicyPeer{
@@ -311,7 +361,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 						{
 							Ports: []networkingv1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []networkingv1.NetworkPolicyPeer{
@@ -323,7 +373,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 						{
 							Ports: []networkingv1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							From: []networkingv1.NetworkPolicyPeer{
@@ -1552,17 +1602,14 @@ func TestGenerateNormalizedName(t *testing.T) {
 }
 
 func TestToAntreaProtocol(t *testing.T) {
-	udpProto := v1.ProtocolUDP
-	tcpProto := v1.ProtocolTCP
-	sctpProto := v1.ProtocolSCTP
 	tables := []struct {
 		proto            *v1.Protocol
 		expInternalProto networking.Protocol
 	}{
 		{nil, networking.ProtocolTCP},
-		{&udpProto, networking.ProtocolUDP},
-		{&tcpProto, networking.ProtocolTCP},
-		{&sctpProto, networking.ProtocolSCTP},
+		{&k8sProtocolUDP, networking.ProtocolUDP},
+		{&k8sProtocolTCP, networking.ProtocolTCP},
+		{&k8sProtocolSCTP, networking.ProtocolSCTP},
 	}
 	for _, table := range tables {
 		protocol := toAntreaProtocol(table.proto)
@@ -1573,32 +1620,46 @@ func TestToAntreaProtocol(t *testing.T) {
 }
 
 func TestToAntreaServices(t *testing.T) {
-	tcpProto := v1.ProtocolTCP
-	portNum := intstr.FromInt(80)
 	tables := []struct {
-		ports     []networkingv1.NetworkPolicyPort
-		expValues []networking.Service
+		ports              []networkingv1.NetworkPolicyPort
+		expSedrvices       []networking.Service
+		expNamedPortExists bool
 	}{
 		{
-			getK8sNetworkPolicyPorts(tcpProto),
-			[]networking.Service{
+			ports: []networkingv1.NetworkPolicyPort{
 				{
-					Protocol: toAntreaProtocol(&tcpProto),
-					Port:     &portNum,
+					Protocol: &k8sProtocolTCP,
+					Port:     &int80,
 				},
 			},
+			expSedrvices: []networking.Service{
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					Port:     &int80,
+				},
+			},
+			expNamedPortExists: false,
+		},
+		{
+			ports: []networkingv1.NetworkPolicyPort{
+				{
+					Protocol: &k8sProtocolTCP,
+					Port:     &strHTTP,
+				},
+			},
+			expSedrvices: []networking.Service{
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					Port:     &strHTTP,
+				},
+			},
+			expNamedPortExists: true,
 		},
 	}
 	for _, table := range tables {
-		services := toAntreaServices(table.ports)
-		service := services[0]
-		expValue := table.expValues[0]
-		if *service.Protocol != *expValue.Protocol {
-			t.Errorf("Unexpected Antrea Protocol in Antrea Service. Expected %v, got %v", *expValue.Protocol, *service.Protocol)
-		}
-		if *service.Port != *expValue.Port {
-			t.Errorf("Unexpected Antrea Port in Antrea Service. Expected %v, got %v", *expValue.Port, *service.Port)
-		}
+		services, namedPortExist := toAntreaServices(table.ports)
+		assert.Equal(t, table.expSedrvices, services)
+		assert.Equal(t, table.expNamedPortExists, namedPortExist)
 	}
 }
 
@@ -1673,10 +1734,11 @@ func TestToAntreaPeer(t *testing.T) {
 	matchAllPodsPeer := matchAllPeer
 	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll).NormalizedName)}
 	tests := []struct {
-		name      string
-		inPeers   []networkingv1.NetworkPolicyPeer
-		outPeer   networking.NetworkPolicyPeer
-		direction networking.Direction
+		name           string
+		inPeers        []networkingv1.NetworkPolicyPeer
+		outPeer        networking.NetworkPolicyPeer
+		direction      networking.Direction
+		namedPortExist bool
 	}{
 		{
 			name: "pod-ns-selector-peer-ingress",
@@ -1789,16 +1851,23 @@ func TestToAntreaPeer(t *testing.T) {
 			direction: networking.DirectionIn,
 		},
 		{
-			name:      "empty-peer-egress",
+			name:           "empty-peer-egress-with-named-port",
+			inPeers:        []networkingv1.NetworkPolicyPeer{},
+			outPeer:        matchAllPodsPeer,
+			direction:      networking.DirectionOut,
+			namedPortExist: true,
+		},
+		{
+			name:      "empty-peer-egress-without-named-port",
 			inPeers:   []networkingv1.NetworkPolicyPeer{},
-			outPeer:   matchAllPodsPeer,
+			outPeer:   matchAllPeer,
 			direction: networking.DirectionOut,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, npc := newController()
-			actualPeer := npc.toAntreaPeer(tt.inPeers, testNPObj, tt.direction)
+			actualPeer := npc.toAntreaPeer(tt.inPeers, testNPObj, tt.direction, tt.namedPortExist)
 			if !reflect.DeepEqual(tt.outPeer.AddressGroups, (*actualPeer).AddressGroups) {
 				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, (*actualPeer).AddressGroups)
 			}
@@ -1815,8 +1884,6 @@ func TestToAntreaPeer(t *testing.T) {
 }
 
 func TestProcessNetworkPolicy(t *testing.T) {
-	protocolTCP := networking.ProtocolTCP
-	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
@@ -1882,7 +1949,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						{
 							Ports: []networkingv1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []networkingv1.NetworkPolicyPeer{
@@ -1897,7 +1964,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						{
 							Ports: []networkingv1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							To: []networkingv1.NetworkPolicyPeer{
@@ -1923,7 +1990,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr80,
+								Port:     &int80,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -1937,7 +2004,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr81,
+								Port:     &int81,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -1959,7 +2026,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						{
 							Ports: []networkingv1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []networkingv1.NetworkPolicyPeer{
@@ -1971,7 +2038,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						{
 							Ports: []networkingv1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							From: []networkingv1.NetworkPolicyPeer{
@@ -1996,7 +2063,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr80,
+								Port:     &int80,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -2010,7 +2077,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []networking.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr81,
+								Port:     &int81,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -2304,17 +2371,6 @@ func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
 	assert.True(t, ok, "Missing event on channel")
 	_, ok = <-c.heartbeatCh
 	assert.True(t, ok, "Missing event on channel")
-}
-
-// util functions for testing.
-func getK8sNetworkPolicyPorts(proto v1.Protocol) []networkingv1.NetworkPolicyPort {
-	portNum := intstr.FromInt(80)
-	port := networkingv1.NetworkPolicyPort{
-		Protocol: &proto,
-		Port:     &portNum,
-	}
-	ports := []networkingv1.NetworkPolicyPort{port}
-	return ports
 }
 
 func getK8sNetworkPolicyObj() *networkingv1.NetworkPolicy {

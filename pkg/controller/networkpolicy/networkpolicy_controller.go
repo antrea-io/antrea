@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -474,18 +475,23 @@ func toAntreaProtocol(npProtocol *v1.Protocol) *networking.Protocol {
 	return &internalProtocol
 }
 
-// toAntreaServices converts a networkingv1.NetworkPolicyPort object to an
-// Antrea Service object.
-func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) []networking.Service {
+// toAntreaServices converts a slice of networkingv1.NetworkPolicyPort objects
+// to a slice of Antrea Service objects. A bool is returned along with the
+// Service objects to indicate whether any named port exists.
+func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) ([]networking.Service, bool) {
 	var antreaServices []networking.Service
+	var namedPortExists bool
 	for _, npPort := range npPorts {
+		if npPort.Port != nil && npPort.Port.Type == intstr.String {
+			namedPortExists = true
+		}
 		antreaService := networking.Service{
 			Protocol: toAntreaProtocol(npPort.Protocol),
 			Port:     npPort.Port,
 		}
 		antreaServices = append(antreaServices, antreaService)
 	}
-	return antreaServices
+	return antreaServices, namedPortExists
 }
 
 // toAntreaIPBlock converts a networkingv1.IPBlock to an Antrea IPBlock.
@@ -524,10 +530,11 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for _, ingressRule := range np.Spec.Ingress {
 		ingressRuleExists = true
+		services, namedPortExists := toAntreaServices(ingressRule.Ports)
 		rules = append(rules, networking.NetworkPolicyRule{
 			Direction: networking.DirectionIn,
-			From:      *n.toAntreaPeer(ingressRule.From, np, networking.DirectionIn),
-			Services:  toAntreaServices(ingressRule.Ports),
+			From:      *n.toAntreaPeer(ingressRule.From, np, networking.DirectionIn, namedPortExists),
+			Services:  services,
 			Priority:  defaultRulePriority,
 			Action:    &defaultAction,
 		})
@@ -535,10 +542,11 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	// Compute NetworkPolicyRule for Egress Rule.
 	for _, egressRule := range np.Spec.Egress {
 		egressRuleExists = true
+		services, namedPortExists := toAntreaServices(egressRule.Ports)
 		rules = append(rules, networking.NetworkPolicyRule{
 			Direction: networking.DirectionOut,
-			To:        *n.toAntreaPeer(egressRule.To, np, networking.DirectionOut),
-			Services:  toAntreaServices(egressRule.Ports),
+			To:        *n.toAntreaPeer(egressRule.To, np, networking.DirectionOut, namedPortExists),
+			Services:  services,
 			Priority:  defaultRulePriority,
 			Action:    &defaultAction,
 		})
@@ -575,25 +583,24 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	return internalNetworkPolicy
 }
 
-func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy, dir networking.Direction) *networking.NetworkPolicyPeer {
+func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy, dir networking.Direction, namedPortExists bool) *networking.NetworkPolicyPeer {
 	var addressGroups []string
 	// Empty NetworkPolicyPeer is supposed to match all addresses.
 	// See https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-allow-all-ingress-traffic.
 	// It's treated as an IPBlock "0.0.0.0/0".
 	if len(peers) == 0 {
-		// For an ingress Peer, skip adding the AddressGroup matching all Pods
-		// because in case of ingress Rule, the named Port resolution happens on
-		// Pods in AppliedToGroup.
-		if dir == networking.DirectionIn {
+		// For an egress Peer that specifies any named ports, it creates or
+		// reuses the AddressGroup matching all Pods in all Namespaces and
+		// appends the AddressGroup UID to the returned Peer such that it can be
+		// used to resolve the named ports.
+		// For other cases it uses the IPBlock "0.0.0.0/0" to avoid the overhead
+		// of handling member updates of the AddressGroup.
+		if dir == networking.DirectionIn || !namedPortExists {
 			return &matchAllPeer
 		}
-		// For an egress Peer, create an AddressGroup matching all Pods in all
-		// Namespaces such that it can be used to resolve named Ports. This
-		// AddressGroup is set in the NetworkPolicyPeer of matchAllPeer.
 		allPodsGroupUID := n.createAddressGroup(matchAllPodsPeer, np)
 		podsPeer := matchAllPeer
-		addressGroups = append(addressGroups, allPodsGroupUID)
-		podsPeer.AddressGroups = addressGroups
+		podsPeer.AddressGroups = append(addressGroups, allPodsGroupUID)
 		return &podsPeer
 	}
 	var ipBlocks []networking.IPBlock
