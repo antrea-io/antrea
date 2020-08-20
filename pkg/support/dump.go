@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime/pprof"
 	"strings"
 
 	"github.com/spf13/afero"
@@ -41,6 +42,8 @@ type AgentDumper interface {
 	// DumpNetworkPolicyResources should create files that contains networkpolicy
 	// resources on the agent Pod under the base dir.
 	DumpNetworkPolicyResources(basedir string) error
+	// DumpHeapPprof should create a pprof file of heap usage of the agent.
+	DumpHeapPprof(basedir string) error
 }
 
 // ControllerDumper is the interface for dumping runtime information of the
@@ -55,6 +58,17 @@ type ControllerDumper interface {
 	// DumpNetworkPolicyResources should create files that contains networkpolicy
 	// resources on the controller Pod under the base dir.
 	DumpNetworkPolicyResources(basedir string) error
+	// DumpHeapPprof should create a pprof file of the heap usage of the controller.
+	DumpHeapPprof(basedir string) error
+}
+
+func DumpHeapPprof(fs afero.Fs, basedir string) error {
+	f, err := fs.Create(filepath.Join(basedir, "memprofile"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return pprof.WriteHeapProfile(f)
 }
 
 func dumpAntctlGet(fs afero.Fs, executor exec.Interface, name, basedir string) error {
@@ -140,6 +154,10 @@ func (d *controllerDumper) DumpLog(basedir string) error {
 	return fileCopy(d.fs, path.Join(basedir, "logs", "controller"), logDir, "antrea-controller")
 }
 
+func (d *controllerDumper) DumpHeapPprof(basedir string) error {
+	return DumpHeapPprof(d.fs, basedir)
+}
+
 func NewControllerDumper(fs afero.Fs, executor exec.Interface) ControllerDumper {
 	return &controllerDumper{
 		fs:       fs,
@@ -198,6 +216,10 @@ func (d *agentDumper) DumpFlows(basedir string) error {
 		return fmt.Errorf("error when creating flows output file: %w", err)
 	}
 	return nil
+}
+
+func (d *agentDumper) DumpHeapPprof(basedir string) error {
+	return DumpHeapPprof(d.fs, basedir)
 }
 
 func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier) AgentDumper {
