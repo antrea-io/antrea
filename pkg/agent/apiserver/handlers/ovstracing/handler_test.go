@@ -46,7 +46,7 @@ var (
 	testNodeConfig = &config.NodeConfig{
 		GatewayConfig: &config.GatewayConfig{
 			Name: "antrea-gw0",
-			IPs:  []net.IP{net.ParseIP("10.1.1.1")},
+			IPv4: net.ParseIP("10.1.1.1"),
 			MAC:  gatewayMAC},
 	}
 
