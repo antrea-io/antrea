@@ -293,13 +293,12 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 	require.Nilf(t, err, "Failed to create %s port: %s", ifType, err)
 
 	ofPort, err := br.GetOFPort(name)
-	require.Nilf(t, err, "Failed to get ofport for %s port: %s", ifType, err)
 	if ifType != "" {
+		require.NoErrorf(t, err, "Failed to get ofport for %s port: %s", ifType, err)
 		assert.Equal(t, ofPortRequest, ofPort, "ofport does not match the requested value for %s port", ifType)
 		ofPortRequest++
 	} else {
-		// -1 will be assigned to a port without a valid interface backing.
-		assert.Equal(t, int32(-1), ofPort)
+		require.Error(t, err, "GetOFPort should return an error for a port without a valid interface backing")
 	}
 
 	port, err := br.GetPortData(uuid, ifName)
@@ -308,7 +307,9 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 
 	assert.Equal(t, name, port.Name)
 	assert.Equal(t, ifName, port.IFName)
-	assert.Equal(t, ofPort, port.OFPort)
+	if ifType != "" {
+		assert.Equal(t, ofPort, port.OFPort)
+	}
 
 	for k, v := range externalIDs {
 		rv, ok := port.ExternalIDs[k]
