@@ -1249,12 +1249,13 @@ func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPor
 func (c *client) endpointDNATFlow(endpointIP net.IP, endpointPort uint16, protocol binding.Protocol) binding.Flow {
 	ipVal := binary.BigEndian.Uint32(endpointIP)
 	unionVal := (marksRegServiceSelected << endpointPortRegRange.Length()) + uint32(endpointPort)
-	return c.pipeline[endpointDNATTable].BuildFlow(priorityNormal).
+	table := c.pipeline[endpointDNATTable]
+	return table.BuildFlow(priorityNormal).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		MatchProtocol(protocol).
 		MatchReg(int(endpointIPReg), ipVal).
 		MatchRegRange(int(endpointPortReg), unionVal, binding.Range{0, 18}).
-		Action().CT(true, EgressRuleTable, CtZone).
+		Action().CT(true, table.GetNext(), CtZone).
 		DNAT(
 			&binding.IPRange{StartIP: endpointIP, EndIP: endpointIP},
 			&binding.PortRange{StartPort: endpointPort, EndPort: endpointPort},
