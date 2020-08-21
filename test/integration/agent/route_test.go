@@ -60,7 +60,7 @@ var (
 	gwIP              = net.ParseIP("10.10.10.1")
 	gwMAC, _          = net.ParseMAC("12:34:56:78:bb:cc")
 	gwName            = "antrea-gw0"
-	gwConfig          = &config.GatewayConfig{IPs: []net.IP{gwIP}, MAC: gwMAC, Name: gwName}
+	gwConfig          = &config.GatewayConfig{IPv4: gwIP, MAC: gwMAC, Name: gwName}
 	nodeConfig        = &config.NodeConfig{
 		Name:          "test",
 		PodIPv4CIDR:   podCIDR,
