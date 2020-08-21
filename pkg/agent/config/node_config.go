@@ -45,15 +45,16 @@ const (
 type GatewayConfig struct {
 	// Name is the name of host gateway, e.g. antrea-gw0.
 	Name string
-	// TODO: Separate IPs into two IP fields, one IPv4 field and one IPv6 field.
-	IPs []net.IP
-	MAC net.HardwareAddr
+
+	IPv4 net.IP
+	IPv6 net.IP
+	MAC  net.HardwareAddr
 	// LinkIndex is the link index of host gateway.
 	LinkIndex int
 }
 
 func (g *GatewayConfig) String() string {
-	return fmt.Sprintf("Name %s: IP %s, MAC %s", g.Name, g.IPs, g.MAC)
+	return fmt.Sprintf("Name %s: IPv4 %s, IPv6 %s, MAC %s", g.Name, g.IPv4, g.IPv6, g.MAC)
 }
 
 type AdapterNetConfig struct {
