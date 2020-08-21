@@ -445,7 +445,12 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 	gatewayIface.MAC = gwMAC
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// Assign IP to gw as required by SpoofGuard.
-		i.nodeConfig.GatewayConfig.IPs = []net.IP{i.nodeConfig.NodeIPAddr.IP}
+		// NodeIPAddr can be either IPv4 or IPv6.
+		if i.nodeConfig.NodeIPAddr.IP.To4() != nil {
+			i.nodeConfig.GatewayConfig.IPv4 = i.nodeConfig.NodeIPAddr.IP
+		} else {
+			i.nodeConfig.GatewayConfig.IPv6 = i.nodeConfig.NodeIPAddr.IP
+		}
 		gatewayIface.IPs = []net.IP{i.nodeConfig.NodeIPAddr.IP}
 		// No need to assign local CIDR to gw0 because local CIDR is not managed by Antrea
 		return nil
@@ -757,8 +762,12 @@ func (i *Initializer) allocateGatewayAddress(localSubnet *net.IPNet, gatewayIfac
 	if err := util.ConfigureLinkAddress(i.nodeConfig.GatewayConfig.LinkIndex, gwIP); err != nil {
 		return err
 	}
+	if gwIP.IP.To4() != nil {
+		i.nodeConfig.GatewayConfig.IPv4 = gwIP.IP
+	} else {
+		i.nodeConfig.GatewayConfig.IPv6 = gwIP.IP
+	}
 
-	i.nodeConfig.GatewayConfig.IPs = append(i.nodeConfig.GatewayConfig.IPs, gwIP.IP)
 	gatewayIface.IPs = append(gatewayIface.IPs, gwIP.IP)
 	return nil
 }
