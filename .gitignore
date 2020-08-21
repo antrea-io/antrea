@@ -2,6 +2,7 @@ bin
 .mockgen
 .cache
 .golangci-bin
+.coverage/
 
 .DS_Store
 
