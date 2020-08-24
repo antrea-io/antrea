@@ -72,24 +72,26 @@ var (
 
 // Initialize Prometheus metrics collection.
 func InitializePrometheusMetrics() {
+	klog.Info("Initializing prometheus metrics")
+
 	nodeName, err := env.GetNodeName()
 	if err != nil {
 		klog.Errorf("Failed to retrieve controller K8S node name: %v", err)
 	}
-
-	klog.Info("Initializing prometheus metrics")
-	gaugeHost := metrics.NewGauge(&metrics.GaugeOpts{
-		Name:           "antrea_controller_runtime_info",
-		Help:           "Antrea controller runtime info, defined as labels. The value of the gauge is always set to 1.",
-		ConstLabels:    metrics.Labels{"k8s_nodename": nodeName, "k8s_podname": env.GetPodName()},
-		StabilityLevel: metrics.STABLE,
+	deprecatedGaugeHost := metrics.NewGauge(&metrics.GaugeOpts{
+		Name:              "antrea_controller_runtime_info",
+		Help:              "Antrea controller runtime info (Deprecated since Antrea 0.10.0), defined as labels. The value of the gauge is always set to 1.",
+		ConstLabels:       metrics.Labels{"k8s_nodename": nodeName, "k8s_podname": env.GetPodName()},
+		StabilityLevel:    metrics.STABLE,
+		DeprecatedVersion: "0.10.0",
 	})
-	if err = legacyregistry.Register(gaugeHost); err != nil {
+	if err = legacyregistry.Register(deprecatedGaugeHost); err != nil {
 		klog.Errorf("Failed to register antrea_controller_runtime_info with Prometheus: %s", err.Error())
 	}
 	// This must be after registering the metrics.Gauge as it is lazily instantiated
 	// and will not measure anything unless the collector is first registered.
-	gaugeHost.Set(1)
+	deprecatedGaugeHost.Set(1)
+
 	if err := legacyregistry.Register(OpsAppliedToGroupProcessed); err != nil {
 		klog.Errorf("Failed to register antrea_controller_applied_to_group_processed with Prometheus: %s", err.Error())
 	}
