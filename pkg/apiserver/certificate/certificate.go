@@ -15,9 +15,15 @@
 package certificate
 
 import (
+	"bytes"
+	cryptorand "crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"net"
 	"os"
 	"path"
@@ -27,6 +33,8 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/kubernetes"
+	certutil "k8s.io/client-go/util/cert"
+	"k8s.io/client-go/util/keyutil"
 	"k8s.io/klog"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
@@ -44,6 +52,9 @@ var (
 	// maxRotateDuration ensures that if a self-signed certificate has a really long expiration (N years), we still attempt to rotate it
 	// within a reasonable time, in this case one year. maxRotateDuration is also used to force certificate rotation in unit tests.
 	maxRotateDuration = time.Hour * (24 * 365)
+
+	caDERBytes []byte
+	caKey      *rsa.PrivateKey
 )
 
 const (
@@ -75,6 +86,11 @@ func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregato
 	var err error
 	var caContentProvider dynamiccertificates.CAContentProvider
 	if selfSignedCert {
+		err = generateCACertificate()
+		if err != nil {
+			return nil, fmt.Errorf("error creating CA certificate for self-signing: %v", err)
+		}
+
 		caContentProvider, err = generateSelfSignedCertificate(secureServing)
 		if err != nil {
 			return nil, fmt.Errorf("error creating self-signed CA certificate: %v", err)
@@ -127,9 +143,24 @@ func generateSelfSignedCertificate(secureServing *options.SecureServingOptionsWi
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = "antrea-controller"
 
-	if err := secureServing.MaybeDefaultWithSelfSignedCerts("antrea", GetAntreaServerNames(), []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
-		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
+	alternateDNS := GetAntreaServerNames()
+	alternateIPs := []net.IP{net.ParseIP("127.0.0.1")}
+
+	if secureServing.BindAddress.IsUnspecified() {
+		alternateDNS = append(alternateDNS, "localhost")
+	} else {
+		alternateIPs = append(alternateIPs, secureServing.BindAddress)
 	}
+	var cert, key []byte
+	if cert, key, err = generateNewCertificate(alternateIPs, alternateDNS); err != nil {
+		return nil, fmt.Errorf("unable to generate self signed cert: %v", err)
+	}
+
+	secureServing.ServerCert.GeneratedCert, err = dynamiccertificates.NewStaticCertKeyContent("Generated self signed cert", cert, key)
+	if err != nil {
+		return nil, err
+	}
+	klog.Infof("Generated self-signed cert in-memory")
 
 	certPEMBlock, _ := secureServing.ServerCert.GeneratedCert.CurrentCertKeyContent()
 	caContentProvider, err = dynamiccertificates.NewStaticCAContent("self-signed cert", certPEMBlock)
@@ -178,6 +209,9 @@ func rotateSelfSignedCertificates(c *CACertController, secureServing *options.Se
 			klog.Errorf("error reading expiration date of cert: %v", err)
 			return
 		}
+
+		klog.Infof("Certificate will be rotated at %v", time.Now().Add(rotationDuration))
+
 		time.Sleep(rotationDuration)
 
 		klog.Infof("Rotating self signed certificate")
@@ -189,4 +223,94 @@ func rotateSelfSignedCertificates(c *CACertController, secureServing *options.Se
 		}
 		c.UpdateCertificate(caContentProvider)
 	}
+}
+
+func generateCACertificate() error {
+	validFrom := time.Now().Add(-time.Hour) // valid an hour earlier to avoid flakes due to clock skew
+	maxAge := time.Hour * 24 * 365 * 100    // The certificate authority will last a hundred years.
+
+	var err error
+	caKey, err = rsa.GenerateKey(cryptorand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+
+	caTemplate := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			CommonName: fmt.Sprintf("antrea-ca@%d", time.Now().Unix()),
+		},
+		NotBefore: validFrom,
+		NotAfter:  validFrom.Add(maxAge),
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	caDERBytes, err = x509.CreateCertificate(cryptorand.Reader, &caTemplate, &caTemplate, &caKey.PublicKey, caKey)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func generateNewCertificate(alternateIPs []net.IP, alternateDNS []string) ([]byte, []byte, error) {
+	caCertificate, err := x509.ParseCertificate(caDERBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	priv, err := rsa.GenerateKey(cryptorand.Reader, 2048)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	validFrom := time.Now().Add(-time.Hour) // valid an hour earlier to avoid flakes due to clock skew
+	maxAge := time.Hour * 24 * 365
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject: pkix.Name{
+			CommonName: fmt.Sprintf("antrea@%d", time.Now().Unix()),
+		},
+		NotBefore: validFrom,
+		NotAfter:  validFrom.Add(maxAge),
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	if ip := net.ParseIP("antrea"); ip != nil {
+		template.IPAddresses = append(template.IPAddresses, ip)
+	} else {
+		template.DNSNames = append(template.DNSNames, "antrea")
+	}
+
+	template.IPAddresses = append(template.IPAddresses, alternateIPs...)
+	template.DNSNames = append(template.DNSNames, alternateDNS...)
+
+	derBytes, err := x509.CreateCertificate(cryptorand.Reader, &template, caCertificate, &priv.PublicKey, caKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Generate cert, followed by ca
+	certBuffer := bytes.Buffer{}
+	if err := pem.Encode(&certBuffer, &pem.Block{Type: certutil.CertificateBlockType, Bytes: derBytes}); err != nil {
+		return nil, nil, err
+	}
+	if err := pem.Encode(&certBuffer, &pem.Block{Type: certutil.CertificateBlockType, Bytes: caDERBytes}); err != nil {
+		return nil, nil, err
+	}
+
+	// Generate key
+	keyBuffer := bytes.Buffer{}
+	if err := pem.Encode(&keyBuffer, &pem.Block{Type: keyutil.RSAPrivateKeyBlockType, Bytes: x509.MarshalPKCS1PrivateKey(priv)}); err != nil {
+		return nil, nil, err
+	}
+
+	return certBuffer.Bytes(), keyBuffer.Bytes(), nil
 }
