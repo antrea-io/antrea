@@ -88,6 +88,7 @@ type testConfig struct {
 
 func TestConnectivityFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
+	metrics.MetricCategoriesMap[metrics.OVSMetrics] = true
 	metrics.InitializeOVSMetrics()
 
 	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
@@ -307,6 +308,7 @@ func testUninstallPodFlows(t *testing.T, config *testConfig) {
 
 func TestNetworkPolicyFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
+	metrics.MetricCategoriesMap[metrics.OVSMetrics] = true
 	metrics.InitializeOVSMetrics()
 
 	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)

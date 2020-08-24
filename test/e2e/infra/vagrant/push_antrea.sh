@@ -39,7 +39,10 @@ cp "${ANTREA_BASE_YML}" "${ANTREA_YML}"
 
 if [ "$RUN_PROMETHEUS" == "true" ]; then
     # Prepare Antrea yamls
+    # Enable Antrea Controller Prometheus metrics
     sed -i.bak -E 's|#enablePrometheusMetrics: false|enablePrometheusMetrics: true|g' "${ANTREA_YML}"
+    # Enable Antrea Agent Prometheus metrics
+    sed -i.bak -E 's|#  AllMetrics: false|  AllMetrics: true|g' "${ANTREA_YML}"
     echo "---" >> "${ANTREA_YML}"
     cat "${ANTREA_PROMETHEUS_YML}" >> "${ANTREA_YML}"
 fi

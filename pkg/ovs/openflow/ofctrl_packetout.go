@@ -289,6 +289,6 @@ func checksum(data []byte) uint16 {
 	if length > 0 {
 		sum += uint32(data[index])
 	}
-	sum += (sum >> 16)
+	sum += sum >> 16
 	return uint16(^sum)
 }

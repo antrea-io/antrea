@@ -83,9 +83,11 @@ type AgentConfig struct {
 	// APIPort is the port for the antrea-agent APIServer to serve on.
 	// Defaults to 10350.
 	APIPort int `yaml:"apiPort,omitempty"`
-	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
-	// Defaults to false.
-	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// EnablePrometheusMetrics is a map of metric categories to bool flags that enables or disables those metrics exposure.
+	// Following are the categories: AllMetrics, PodMetrics, NetworkPolicyMetrics, OVSMetrics, and ConnectionMetrics.
+	// All metrics can be enabled by enabling AllMetrics.
+	// Defaults all categories to false.
+	EnablePrometheusMetrics map[string]bool `yaml:"enablePrometheusMetrics,omitempty"`
 	// Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also
 	// enables the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge. If no L4 transport proto
 	// is given, we consider tcp as default.

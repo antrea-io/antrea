@@ -300,13 +300,19 @@ func (c *client) Add(flow binding.Flow) error {
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
+		}
 	}()
 	if err := c.bridge.AddFlowsInBundle([]binding.Flow{flow}, nil, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
+		}
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
+	if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+		metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
+	}
 	return nil
 }
 
@@ -314,13 +320,19 @@ func (c *client) Modify(flow binding.Flow) error {
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("modify").Observe(float64(d.Milliseconds()))
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsLatency.WithLabelValues("modify").Observe(float64(d.Milliseconds()))
+		}
 	}()
 	if err := c.bridge.AddFlowsInBundle(nil, []binding.Flow{flow}, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("modify").Inc()
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsErrorCount.WithLabelValues("modify").Inc()
+		}
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("modify").Inc()
+	if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+		metrics.OVSFlowOpsCount.WithLabelValues("modify").Inc()
+	}
 	return nil
 }
 
@@ -328,13 +340,19 @@ func (c *client) Delete(flow binding.Flow) error {
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
+		}
 	}()
 	if err := c.bridge.AddFlowsInBundle(nil, nil, []binding.Flow{flow}); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
+		}
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
+	if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+		metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
+	}
 	return nil
 }
 
@@ -342,13 +360,19 @@ func (c *client) AddAll(flows []binding.Flow) error {
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
+		}
 	}()
 	if err := c.bridge.AddFlowsInBundle(flows, nil, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
+		}
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
+	if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+		metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
+	}
 	return nil
 }
 
@@ -356,13 +380,19 @@ func (c *client) DeleteAll(flows []binding.Flow) error {
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
+		}
 	}()
 	if err := c.bridge.AddFlowsInBundle(nil, nil, flows); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
+		}
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
+	if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+		metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
+	}
 	return nil
 }
 
@@ -370,13 +400,19 @@ func (c *client) AddOFEntries(ofEntries []binding.OFEntry) error {
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
+		}
 	}()
 	if err := c.bridge.AddOFEntriesInBundle(ofEntries, nil, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
+		}
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
+	if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+		metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
+	}
 	return nil
 }
 
@@ -384,13 +420,19 @@ func (c *client) DeleteOFEntries(ofEntries []binding.OFEntry) error {
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
+		}
 	}()
 	if err := c.bridge.AddOFEntriesInBundle(nil, nil, ofEntries); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
+		if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+			metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
+		}
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
+	if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+		metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
+	}
 	return nil
 }
 

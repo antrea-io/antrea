@@ -815,7 +815,7 @@ func ipsToOFAddresses(ips sets.String) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	from := make([]types.Address, 0, len(ips))
 	for ip := range ips {
-		from = append(from, openflow.NewIPAddress(net.ParseIP((ip))))
+		from = append(from, openflow.NewIPAddress(net.ParseIP(ip)))
 	}
 	return from
 }

@@ -702,8 +702,9 @@ func TestAntreaServerFunc(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if strings.Contains(tc.name, "Prometheus") {
+			if tc.validateMetrics {
 				// Initialize pod metrics
+				metrics.MetricCategoriesMap[metrics.PodMetrics] = true
 				metrics.InitializePodMetrics()
 			}
 			setup()

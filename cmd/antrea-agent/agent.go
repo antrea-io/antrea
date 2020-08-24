@@ -75,8 +75,8 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating Antrea client: %v", err)
 	}
 
-	// Register Antrea Agent metrics if EnablePrometheusMetrics is set
-	if o.config.EnablePrometheusMetrics {
+	// Initialize Prometheus metrics listener if at least one of the categories in enablePrometheusMetrics is set.
+	if o.enableMetrics {
 		metrics.InitializePrometheusMetrics()
 	}
 
@@ -231,7 +231,7 @@ func run(o *Options) error {
 		agentQuerier,
 		networkPolicyController,
 		o.config.APIPort,
-		o.config.EnablePrometheusMetrics,
+		o.enableMetrics,
 		o.config.ClientConnection.Kubeconfig)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)

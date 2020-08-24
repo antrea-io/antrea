@@ -70,7 +70,9 @@ func (c *interfaceCache) Initialize(interfaces []*InterfaceConfig) {
 	for _, intf := range interfaces {
 		c.cache.Add(intf)
 		if intf.Type == ContainerInterface {
-			metrics.PodCount.Inc()
+			if metrics.MetricCategoriesMap[metrics.PodMetrics] {
+				metrics.PodCount.Inc()
+			}
 		}
 	}
 }
@@ -99,7 +101,9 @@ func (c *interfaceCache) AddInterface(interfaceConfig *InterfaceConfig) {
 	c.cache.Add(interfaceConfig)
 
 	if interfaceConfig.Type == ContainerInterface {
-		metrics.PodCount.Inc()
+		if metrics.MetricCategoriesMap[metrics.PodMetrics] {
+			metrics.PodCount.Inc()
+		}
 	}
 }
 
@@ -110,7 +114,9 @@ func (c *interfaceCache) DeleteInterface(interfaceConfig *InterfaceConfig) {
 	c.cache.Delete(interfaceConfig)
 
 	if interfaceConfig.Type == ContainerInterface {
-		metrics.PodCount.Dec()
+		if metrics.MetricCategoriesMap[metrics.PodMetrics] {
+			metrics.PodCount.Dec()
+		}
 	}
 }
 

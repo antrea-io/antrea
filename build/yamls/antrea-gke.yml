@@ -735,8 +735,18 @@ data:
     # `antrea-agent` container must be set to the same value.
     #apiPort: 10350
 
-    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
-    #enablePrometheusMetrics: false
+    # EnablePrometheusMetrics is a map of metric categories to bool flags that enables or disables those metrics exposure.
+    enablePrometheusMetrics:
+    # Metrics in all below categories can be enabled or disabled through AllMetrics.
+    #  AllMetrics: false
+    # Metrics related to Pods. They can be enabled or disabled through PodMetrics.
+    #  PodMetrics: false
+    # Metrics related to Network Policies. They can be enabled or disabled through NetworkPolicyMetrics.
+    #  NetworkPolicyMetrics: false
+    # Metrics related to OVS switch. They can be enabled or disabled through OVSMetrics.
+    #  OVSMetrics: false
+    # Metrics related to connections when FlowExporter feature is enabled. They can be enabled or disabled through ConnectionMetrics.
+    #  ConnectionMetrics: false
 
     # Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also enables
     # the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge. If no L4 transport proto is given,
@@ -800,7 +810,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-khb8f44hh6
+  name: antrea-config-kh4t2fmkd9
   namespace: kube-system
 ---
 apiVersion: v1
@@ -906,7 +916,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-khb8f44hh6
+          name: antrea-config-kh4t2fmkd9
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1121,7 +1131,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-khb8f44hh6
+          name: antrea-config-kh4t2fmkd9
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

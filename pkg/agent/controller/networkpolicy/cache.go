@@ -597,7 +597,9 @@ func (c *ruleCache) AddNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 
 func (c *ruleCache) addNetworkPolicyLocked(policy *v1beta1.NetworkPolicy) error {
 	c.policyMap[string(policy.UID)] = &types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name}
-	metrics.NetworkPolicyCount.Inc()
+	if metrics.MetricCategoriesMap[metrics.NetworkPolicyMetrics] {
+		metrics.NetworkPolicyCount.Inc()
+	}
 	return c.UpdateNetworkPolicy(policy)
 }
 
@@ -620,10 +622,12 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 			// If rule doesn't exist, add it to cache, mark it as dirty.
 			c.rules.Add(r)
 			// Count up antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
-			if r.Direction == v1beta1.DirectionIn {
-				metrics.IngressNetworkPolicyRuleCount.Inc()
-			} else {
-				metrics.EgressNetworkPolicyRuleCount.Inc()
+			if metrics.MetricCategoriesMap[metrics.NetworkPolicyMetrics] {
+				if r.Direction == v1beta1.DirectionIn {
+					metrics.IngressNetworkPolicyRuleCount.Inc()
+				} else {
+					metrics.EgressNetworkPolicyRuleCount.Inc()
+				}
 			}
 			c.dirtyRuleHandler(r.ID)
 		}
@@ -633,10 +637,12 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 	for ruleID, r := range ruleByID {
 		c.rules.Delete(r)
 		// Count down antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
-		if r.(*rule).Direction == v1beta1.DirectionIn {
-			metrics.IngressNetworkPolicyRuleCount.Dec()
-		} else {
-			metrics.EgressNetworkPolicyRuleCount.Dec()
+		if metrics.MetricCategoriesMap[metrics.NetworkPolicyMetrics] {
+			if r.(*rule).Direction == v1beta1.DirectionIn {
+				metrics.IngressNetworkPolicyRuleCount.Dec()
+			} else {
+				metrics.EgressNetworkPolicyRuleCount.Dec()
+			}
 		}
 		c.dirtyRuleHandler(ruleID)
 	}
@@ -658,15 +664,19 @@ func (c *ruleCache) deleteNetworkPolicyLocked(uid string) error {
 	for _, r := range existingRules {
 		ruleID := r.(*rule).ID
 		// Count down antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
-		if r.(*rule).Direction == v1beta1.DirectionIn {
-			metrics.IngressNetworkPolicyRuleCount.Dec()
-		} else {
-			metrics.EgressNetworkPolicyRuleCount.Dec()
+		if metrics.MetricCategoriesMap[metrics.NetworkPolicyMetrics] {
+			if r.(*rule).Direction == v1beta1.DirectionIn {
+				metrics.IngressNetworkPolicyRuleCount.Dec()
+			} else {
+				metrics.EgressNetworkPolicyRuleCount.Dec()
+			}
 		}
 		c.rules.Delete(r)
 		c.dirtyRuleHandler(ruleID)
 	}
-	metrics.NetworkPolicyCount.Dec()
+	if metrics.MetricCategoriesMap[metrics.NetworkPolicyMetrics] {
+		metrics.NetworkPolicyCount.Dec()
+	}
 	return nil
 }
 

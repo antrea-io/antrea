@@ -24,6 +24,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
@@ -90,6 +91,11 @@ func (ct *connTrackOvsCtl) ovsAppctlDumpConnections(zoneFilter uint16) ([]*flowe
 			antreaConns = append(antreaConns, conn)
 		}
 	}
+
+	if metrics.MetricCategoriesMap[metrics.ConnectionMetrics] {
+		metrics.TotalConnectionCount.Set(float64(len(outputFlow)))
+	}
+
 	klog.V(2).Infof("FlowExporter considered flows in conntrack: %d", len(antreaConns))
 	return antreaConns, nil
 }

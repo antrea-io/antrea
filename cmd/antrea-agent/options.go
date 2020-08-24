@@ -25,6 +25,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/apis"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/features"
@@ -46,6 +47,8 @@ type Options struct {
 	configFile string
 	// The configuration object
 	config *AgentConfig
+	// The flag to enable prometheus metrics listener.
+	enableMetrics bool
 	// IPFIX flow collector
 	flowCollector net.Addr
 	// Flow exporter poll interval
@@ -73,6 +76,7 @@ func (o *Options) complete(args []string) error {
 		o.config = c
 	}
 	o.setDefaults()
+	o.enableMetrics = metrics.SetMetricCategoriesMap(o.config.EnablePrometheusMetrics)
 	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
 }
 

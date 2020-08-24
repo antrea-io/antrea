@@ -45,7 +45,7 @@ import (
 
 var alwaysReady = func() bool { return true }
 
-const informerDefaultResync time.Duration = 30 * time.Second
+const informerDefaultResync = 30 * time.Second
 
 var (
 	k8sProtocolUDP  = corev1.ProtocolUDP

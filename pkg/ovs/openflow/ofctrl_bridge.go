@@ -63,11 +63,12 @@ func (t *ofTable) UpdateStatus(flowCountDelta int) {
 	} else {
 		t.flowCount += uint(flowCountDelta)
 	}
-
-	metrics.OVSTotalFlowCount.Add(float64(flowCountDelta))
-	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Add(float64(flowCountDelta))
-
 	t.updateTime = time.Now()
+
+	if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+		metrics.OVSTotalFlowCount.Add(float64(flowCountDelta))
+		metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Add(float64(flowCountDelta))
+	}
 }
 
 func (t *ofTable) ResetStatus() {
@@ -75,10 +76,11 @@ func (t *ofTable) ResetStatus() {
 	defer t.Unlock()
 
 	t.flowCount = 0
-
-	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Set(0)
-
 	t.updateTime = time.Now()
+
+	if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+		metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Set(0)
+	}
 }
 
 // BuildFlow returns FlowBuilder object to help construct Openflow entry.
@@ -259,7 +261,9 @@ func (b *OFBridge) initialize() {
 		table.ResetStatus()
 	}
 
-	metrics.OVSTotalFlowCount.Set(0)
+	if metrics.MetricCategoriesMap[metrics.OVSMetrics] {
+		metrics.OVSTotalFlowCount.Set(0)
+	}
 }
 
 // Connect initiates the connection to the OFSwitch, and initializes ofTables after connected.

@@ -24,6 +24,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
 )
 
@@ -68,6 +69,11 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 		klog.Errorf("Error when dumping flows from conntrack: %v", err)
 		return nil, err
 	}
+
+	if metrics.MetricCategoriesMap[metrics.ConnectionMetrics] {
+		metrics.TotalConnectionCount.Set(float64(len(conns)))
+	}
+
 	filteredConns := filterAntreaConns(conns, ct.nodeConfig, ct.serviceCIDR, zoneFilter)
 	klog.V(2).Infof("No. of flow exporter considered flows in Antrea zoneID: %d", len(filteredConns))
 
@@ -103,9 +109,7 @@ func (nfct *netFilterConnTrack) DumpFilter(filter conntrack.Filter) ([]*flowexpo
 	for i, conn := range conns {
 		antreaConns[i] = netlinkFlowToAntreaConnection(&conn)
 	}
-
 	klog.V(2).Infof("Finished dumping -- total no. of flows in conntrack: %d", len(antreaConns))
-
 	nfct.netlinkConn.Close()
 	return antreaConns, nil
 }

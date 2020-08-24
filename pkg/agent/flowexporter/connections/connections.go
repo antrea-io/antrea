@@ -25,6 +25,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 )
@@ -147,6 +148,11 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 				}
 			}
 		}
+
+		if metrics.MetricCategoriesMap[metrics.ConnectionMetrics] {
+			metrics.AntreaConnectionCount.Inc()
+		}
+
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
 		cs.connections[connKey] = *conn
@@ -215,6 +221,10 @@ func (cs *ConnectionStore) DeleteConnectionByKey(connKey flowexporter.Connection
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 	delete(cs.connections, connKey)
+
+	if metrics.MetricCategoriesMap[metrics.ConnectionMetrics] {
+		metrics.AntreaConnectionCount.Dec()
+	}
 
 	return nil
 }
