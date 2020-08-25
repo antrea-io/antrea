@@ -56,8 +56,6 @@ type proxier struct {
 	// have been synced, syncProxyRules will start syncing rules to OVS.
 	endpointsChanges *endpointsChangesTracker
 	serviceChanges   *serviceChangesTracker
-	// syncProxyRulesMutex protects internal caches and states.
-	syncProxyRulesMutex sync.Mutex
 	// serviceMap stores services we expect to be installed.
 	serviceMap k8sproxy.ServiceMap
 	// serviceInstalledMap stores services we actually installed.
@@ -201,13 +199,13 @@ func (p *proxier) installServices() {
 	}
 }
 
-// syncProxyRulesMutex applies current changes in change trackers and then updates
+// syncProxyRules applies current changes in change trackers and then updates
 // flows for services and endpoints. It will abort if either endpoints or services
-// resources is not synced.
+// resources is not synced. syncProxyRules is only called through the Run method
+// of the runner object, and all calls are serialized. Since this method is the
+// only one accessing internal state (e.g. serviceMap), no synchronization
+// mechanism, such as a mutex, is required.
 func (p *proxier) syncProxyRules() {
-	p.syncProxyRulesMutex.Lock()
-	defer p.syncProxyRulesMutex.Unlock()
-
 	start := time.Now()
 	defer func() {
 		klog.V(4).Infof("syncProxyRules took %v", time.Since(start))
