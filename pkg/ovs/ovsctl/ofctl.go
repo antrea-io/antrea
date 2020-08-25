@@ -87,6 +87,37 @@ func (c *ovsCtlClient) DumpGroups(args ...string) ([][]string, error) {
 	return groupList, nil
 }
 
+func (c *ovsCtlClient) DumpPortsDesc() ([][]string, error) {
+	portsDescDump, err := c.RunOfctlCmd("dump-ports-desc")
+	if err != nil {
+		return nil, err
+	}
+	portsDescStr := strings.TrimSpace(string(portsDescDump))
+	scanner := bufio.NewScanner(strings.NewReader(portsDescStr))
+	scanner.Split(bufio.ScanLines)
+	// Skip the first line.
+	scanner.Scan()
+
+	rawPortDescItems := make([][]string, 0)
+	var portItem []string
+	for scanner.Scan() {
+		str := scanner.Text()
+		// If the line starts with a port number, it should be the first line of an OF port. There should be some
+		// subsequent lines to describe the status of the current port, which start with multiple while-spaces.
+		if len(str) > 2 && string(str[1]) != " " {
+			if len(portItem) > 0 {
+				rawPortDescItems = append(rawPortDescItems, portItem)
+			}
+			portItem = nil
+		}
+		portItem = append(portItem, scanner.Text())
+	}
+	if len(portItem) > 0 {
+		rawPortDescItems = append(rawPortDescItems, portItem)
+	}
+	return rawPortDescItems, nil
+}
+
 func (c *ovsCtlClient) SetPortNoFlood(ofport int) error {
 	cmdStr := fmt.Sprintf("ovs-ofctl mod-port %s %d no-flood", c.bridge, ofport)
 	return getOVSCommand(cmdStr).Run()

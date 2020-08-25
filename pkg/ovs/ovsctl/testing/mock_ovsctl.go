@@ -101,6 +101,21 @@ func (mr *MockOVSCtlClientMockRecorder) DumpMatchedFlow(arg0 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpMatchedFlow", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpMatchedFlow), arg0)
 }
 
+// DumpPortsDesc mocks base method
+func (m *MockOVSCtlClient) DumpPortsDesc() ([][]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DumpPortsDesc")
+	ret0, _ := ret[0].([][]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DumpPortsDesc indicates an expected call of DumpPortsDesc
+func (mr *MockOVSCtlClientMockRecorder) DumpPortsDesc() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpPortsDesc", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpPortsDesc))
+}
+
 // DumpTableFlows mocks base method
 func (m *MockOVSCtlClient) DumpTableFlows(arg0 byte) ([]string, error) {
 	m.ctrl.T.Helper()

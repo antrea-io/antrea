@@ -259,6 +259,7 @@ func (r *supportBundleREST) collectAgent(ctx context.Context) (*systemv1beta1.Su
 		dumper.DumpNetworkPolicyResources,
 		dumper.DumpAgentInfo,
 		dumper.DumpHeapPprof,
+		dumper.DumpOVSPorts,
 	)
 }
 

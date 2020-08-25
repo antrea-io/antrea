@@ -41,6 +41,8 @@ type OVSCtlClient interface {
 	DumpTableFlows(table uint8) ([]string, error)
 	// DumpGroups returns OpenFlow groups of the bridge.
 	DumpGroups(args ...string) ([][]string, error)
+	// DumpPortsDesc returns OpenFlow ports descriptions of the bridge.
+	DumpPortsDesc() ([][]string, error)
 	// RunOfctlCmd executes "ovs-ofctl" command and returns the outputs.
 	RunOfctlCmd(cmd string, args ...string) ([]byte, error)
 	// SetPortNoFlood sets the given port with config "no-flood". This configuration must work with OpenFlow10.
