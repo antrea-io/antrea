@@ -42,6 +42,8 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 * Jenkins jobs validator [gated check-in]: this job only executes for PRs that include changes to
   [ci/jenkins/jobs](/ci/jenkins/jobs). It validates the syntax of the jenkins jobs'
   configuration.
+* Jenkins Windows OVS validator: this job only executes for PRs that include changes to [hack/windows/Install-OVS.ps1](hack/windows/Install-OVS.ps1). It validates
+  if Windows OVS can be installed correctly.
 * [EKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)
   community tests on EKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above, as well as "NodePort" (See [#690](https://github.com/vmware-tanzu/antrea/issues/690)).\
   Current test environment matrix:

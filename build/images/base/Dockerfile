@@ -1,4 +1,4 @@
-ARG OVS_VERSION=2.13.1
+ARG OVS_VERSION=2.14.0
 FROM ubuntu:20.04 as cni-binaries
 
 RUN apt-get update && \
