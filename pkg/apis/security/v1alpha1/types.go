@@ -20,11 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-type NetworkPolicyType interface {
-	GetName() string
-	GetNamespace() string
-}
-
 // +genclient
 // +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -36,14 +31,6 @@ type NetworkPolicy struct {
 
 	// Specification of the desired behavior of NetworkPolicy.
 	Spec NetworkPolicySpec `json:"spec"`
-}
-
-func (np NetworkPolicy) GetName() string {
-	return np.Name
-}
-
-func (np NetworkPolicy) GetNamespace() string {
-	return np.Namespace
 }
 
 // NetworkPolicySpec defines the desired state for NetworkPolicy.
@@ -174,14 +161,6 @@ type ClusterNetworkPolicy struct {
 
 	// Specification of the desired behavior of ClusterNetworkPolicy.
 	Spec ClusterNetworkPolicySpec `json:"spec"`
-}
-
-func (cnp *ClusterNetworkPolicy) GetName() string {
-	return cnp.Name
-}
-
-func (cnp *ClusterNetworkPolicy) GetNamespace() string {
-	return cnp.Namespace
 }
 
 // ClusterNetworkPolicySpec defines the desired state for ClusterNetworkPolicy.

@@ -498,5 +498,7 @@ spec:
                           type: string
                         port:
                           x-kubernetes-int-or-string: true
+                        name:
+                          type: string
             externalNode:
               type: string

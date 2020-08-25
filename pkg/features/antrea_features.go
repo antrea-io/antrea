@@ -30,7 +30,7 @@ const (
 	// MyFeature featuregate.Feature = "MyFeature"
 
 	// alpha: v0.8
-	// Allows to apply cluster-wide NetworkPolicies.
+	// Allows to apply ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
 	AntreaPolicy featuregate.Feature = "AntreaPolicy"
 
 	// alpha: v0.8

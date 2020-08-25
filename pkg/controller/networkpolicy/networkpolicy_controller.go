@@ -134,10 +134,10 @@ type NetworkPolicyController struct {
 	cnpListerSynced cache.InformerSynced
 
 	anpInformer secinformers.NetworkPolicyInformer
-	// anpLister is able to list/get Antrea NetworkPolicies and is populated by the shared informer passed to
+	// anpLister is able to list/get AntreaNetworkPolicies and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
 	anpLister seclisters.NetworkPolicyLister
-	// anpListerSynced is a function which returns true if the Antrea NetworkPolicies shared informer has been synced at least once.
+	// anpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
 	anpListerSynced cache.InformerSynced
 
 	// addressGroupStore is the storage where the populated Address Groups are stored.

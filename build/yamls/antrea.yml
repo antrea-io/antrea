@@ -204,6 +204,8 @@ spec:
                   ports:
                     items:
                       properties:
+                        name:
+                          type: string
                         port:
                           x-kubernetes-int-or-string: true
                         protocol:
@@ -773,14 +775,6 @@ rules:
   - patch
   - create
   - delete
-- apiGroups:
-  - core.antrea.tanzu.vmware.com
-  resources:
-  - externalentities
-  verbs:
-  - get
-  - watch
-  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -850,7 +844,7 @@ data:
     #  Traceflow: false
 
     # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
-    # to define security policies which apply to the entire cluster, and AppNetworkPolicy
+    # to define security policies which apply to the entire cluster, and AntreaNetworkPolicy
     # feature that supports priorities, rule actions and externalEntities in the future.
     #  AntreaPolicy: false
 
@@ -947,7 +941,7 @@ data:
     #  Traceflow: false
 
     # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
-    # to define security policies which apply to the entire cluster, and AppNetworkPolicy
+    # to define security policies which apply to the entire cluster, and AntreaNetworkPolicy
     # feature that supports priorities, rule actions and externalEntities in the future.
     #  AntreaPolicy: false
 
@@ -972,7 +966,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-8d27b9ctdb
+  name: antrea-config-2dk8dfmgdk
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1078,7 +1072,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-8d27b9ctdb
+          name: antrea-config-2dk8dfmgdk
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1293,7 +1287,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-8d27b9ctdb
+          name: antrea-config-2dk8dfmgdk
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

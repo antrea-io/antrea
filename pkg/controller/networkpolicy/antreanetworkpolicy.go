@@ -23,12 +23,12 @@ import (
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
-// addANP receives Antrea NetworkPolicy ADD events and creates resources
+// addANP receives AntreaNetworkPolicy ADD events and creates resources
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) addANP(obj interface{}) {
 	defer n.heartbeat("addANP")
 	np := obj.(*secv1alpha1.NetworkPolicy)
-	klog.Infof("Processing Antrea NetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
+	klog.Infof("Processing AntreaNetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
 	// Create an internal NetworkPolicy object corresponding to this
 	// NetworkPolicy and enqueue task to internal NetworkPolicy Workqueue.
 	internalNP := n.processAntreaNetworkPolicy(np)
@@ -38,12 +38,12 @@ func (n *NetworkPolicyController) addANP(obj interface{}) {
 	n.enqueueInternalNetworkPolicy(key)
 }
 
-// updateANP receives Antrea NetworkPolicy UPDATE events and updates resources
+// updateANP receives AntreaNetworkPolicy UPDATE events and updates resources
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) updateANP(old, cur interface{}) {
 	defer n.heartbeat("updateANP")
 	curNP := cur.(*secv1alpha1.NetworkPolicy)
-	klog.Infof("Processing Antrea NetworkPolicy %s/%s UPDATE event", curNP.Namespace, curNP.Name)
+	klog.Infof("Processing AntreaNetworkPolicy %s/%s UPDATE event", curNP.Namespace, curNP.Name)
 	// Update an internal NetworkPolicy, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processAntreaNetworkPolicy(curNP)
@@ -83,31 +83,31 @@ func (n *NetworkPolicyController) updateANP(old, cur interface{}) {
 	n.deleteDereferencedAddressGroups(oldInternalNP)
 }
 
-// deleteANP receives Antrea NetworkPolicy DELETED events and deletes resources
+// deleteANP receives AntreaNetworkPolicy DELETED events and deletes resources
 // which can be consumed by agents to delete corresponding rules on the Nodes.
 func (n *NetworkPolicyController) deleteANP(old interface{}) {
 	np, ok := old.(*secv1alpha1.NetworkPolicy)
 	if !ok {
 		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Error decoding object when deleting Antrea NetworkPolicy, invalid type: %v", old)
+			klog.Errorf("Error decoding object when deleting AntreaNetworkPolicy, invalid type: %v", old)
 			return
 		}
 		np, ok = tombstone.Obj.(*secv1alpha1.NetworkPolicy)
 		if !ok {
-			klog.Errorf("Error decoding object tombstone when deleting Antrea NetworkPolicy, invalid type: %v", tombstone.Obj)
+			klog.Errorf("Error decoding object tombstone when deleting AntreaNetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
 		}
 	}
 	defer n.heartbeat("deleteANP")
-	klog.Infof("Processing Antrea NetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
+	klog.Infof("Processing AntreaNetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
 	key, _ := keyFunc(np)
 	oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
 	oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
 	klog.V(4).Infof("Old internal NetworkPolicy %#v", oldInternalNP)
 	err := n.internalNetworkPolicyStore.Delete(key)
 	if err != nil {
-		klog.Errorf("Error deleting internal NetworkPolicy during Antrea NetworkPolicy %s delete: %v", np.Name, err)
+		klog.Errorf("Error deleting internal NetworkPolicy during AntreaNetworkPolicy %s delete: %v", np.Name, err)
 		return
 	}
 	for _, atg := range oldInternalNP.AppliedToGroups {
@@ -125,7 +125,7 @@ func (n *NetworkPolicyController) deleteANP(old interface{}) {
 func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.NetworkPolicy) *antreatypes.NetworkPolicy {
 	appliedToGroupNames := make([]string, 0, len(np.Spec.AppliedTo))
 	// Create AppliedToGroup for each AppliedTo present in
-	// Antrea NetworkPolicy spec.
+	// AntreaNetworkPolicy spec.
 	for _, at := range np.Spec.AppliedTo {
 		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup(np.Namespace, at.PodSelector, at.NamespaceSelector))
 	}

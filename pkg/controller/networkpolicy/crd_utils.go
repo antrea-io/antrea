@@ -68,7 +68,7 @@ func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*networking.IPBlock, e
 }
 
 func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer,
-	np secv1alpha1.NetworkPolicyType, dir networking.Direction, namedPortExists bool) *networking.NetworkPolicyPeer {
+	np metav1.Object, dir networking.Direction, namedPortExists bool) *networking.NetworkPolicyPeer {
 	var addressGroups []string
 	// Empty NetworkPolicyPeer is supposed to match all addresses.
 	// It's treated as an IPBlock "0.0.0.0/0".
@@ -110,7 +110,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 // secv1alpha1.NetworkPolicyPeer object in Antrea NetworkPolicyRule. This
 // function simply creates the object without actually populating the
 // PodAddresses as the affected Pods are calculated during sync process.
-func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.NetworkPolicyPeer, np secv1alpha1.NetworkPolicyType) string {
+func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.NetworkPolicyPeer, np metav1.Object) string {
 	groupSelector := toGroupSelector(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector)
 	normalizedUID := getNormalizedUID(groupSelector.NormalizedName)
 	// Get or create an AddressGroup for the generated UID.
