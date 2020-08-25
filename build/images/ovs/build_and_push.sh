@@ -24,7 +24,7 @@ function echoerr {
 }
 
 if [ -z "$OVS_VERSION" ]; then
-    echoerr "The OVS_VERSION env variable must be set to a valid value (e.g. 2.13.1)"
+    echoerr "The OVS_VERSION env variable must be set to a valid value (e.g. 2.14.0)"
     exit 1
 fi
 
