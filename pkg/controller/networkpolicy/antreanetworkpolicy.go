@@ -99,15 +99,15 @@ func (n *NetworkPolicyController) deleteANP(old interface{}) {
 			return
 		}
 	}
-	defer n.heartbeat("deleteNP")
+	defer n.heartbeat("deleteANP")
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
 	key, _ := keyFunc(np)
 	oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
 	oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
-	klog.Infof("Old internal NetworkPolicy %#v", oldInternalNP)
+	klog.V(4).Infof("Old internal NetworkPolicy %#v", oldInternalNP)
 	err := n.internalNetworkPolicyStore.Delete(key)
 	if err != nil {
-		klog.Errorf("Error deleting internal NetworkPolicy during NetworkPolicy %s delete: %v", np.Name, err)
+		klog.Errorf("Error deleting internal NetworkPolicy during Antrea NetworkPolicy %s delete: %v", np.Name, err)
 		return
 	}
 	for _, atg := range oldInternalNP.AppliedToGroups {

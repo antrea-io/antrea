@@ -95,6 +95,7 @@ rules:
       - security.antrea.tanzu.vmware.com
     resources:
       - clusternetworkpolicies
+      - networkpolicies
     verbs:
       - get
       - watch
@@ -113,9 +114,9 @@ rules:
       - create
       - delete
   - apiGroups:
-      - security.antrea.tanzu.vmware.com
+      - core.antrea.tanzu.vmware.com
     resources:
-      - networkpolicies
+      - externalentities
     verbs:
       - get
       - watch

@@ -29,7 +29,6 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --proxy                       Generate a manifest with Antrea proxy enabled
         --np                          Generate a manifest with ClusterNetworkPolicy and AntreaNetworkPolicy feature gate enabled
-        --core-crd                    Generate a manifest with ExternalEntity CRD enabled
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --help, -h                    Print this message and exit
@@ -54,7 +53,6 @@ KIND=false
 IPSEC=false
 PROXY=false
 NP=false
-CORE_CRD=false
 KEEP=false
 ENCAP_MODE=""
 CLOUD=""
@@ -91,10 +89,6 @@ case $key in
     ;;
     --np)
     NP=true
-    shift
-    ;;
-    --core-crd)
-    CORE_CRD=true
     shift
     ;;
     --keep)
@@ -186,10 +180,8 @@ if $PROXY; then
 fi
 
 if $NP; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  ClusterNetworkPolicy: true/" antrea-controller.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  ClusterNetworkPolicy: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaNetworkPolicy: true/" antrea-controller.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaNetworkPolicy: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-controller.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then
@@ -221,20 +213,6 @@ if $IPSEC; then
     # add an environment variable to the antrea-agent container for passing the PSK to Agent.
     $KUSTOMIZE edit add patch pskEnv.yml
     BASE=../ipsec
-    cd ..
-fi
-
-if $CORE_CRD; then
-    mkdir np && cd np
-    cp ../../patches/np/npRbac.yml .
-    cp ../../base/core-crds.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    # add RBAC to antrea-controller for ExternalEntity CRD access.
-    $KUSTOMIZE edit add patch npRbac.yml
-    # create ExternalEntity related CRDs.
-    $KUSTOMIZE edit add resource core-crds.yml
-    BASE=../np
     cd ..
 fi
 

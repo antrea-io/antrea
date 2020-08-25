@@ -228,11 +228,14 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		},
 		resyncPeriod,
 	)
-	// Register Informer and add handlers for ClusterNetworkPolicy events only if the feature is enabled.
-	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		n.cnpInformer = cnpInformer
 		n.cnpLister = cnpInformer.Lister()
 		n.cnpListerSynced = cnpInformer.Informer().HasSynced
+		n.anpInformer = anpInformer
+		n.anpLister = anpInformer.Lister()
+		n.anpListerSynced = anpInformer.Informer().HasSynced
 		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addCNP,
@@ -241,12 +244,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			},
 			resyncPeriod,
 		)
-	}
-	// Register Informer and add handlers for AntreaNetworkPolicy events only if the feature is enabled.
-	if features.DefaultFeatureGate.Enabled(features.AntreaNetworkPolicy) {
-		n.anpInformer = anpInformer
-		n.anpLister = anpInformer.Lister()
-		n.anpListerSynced = anpInformer.Informer().HasSynced
 		anpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addANP,
@@ -989,15 +986,12 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 		klog.Error("Unable to sync caches for NetworkPolicy controller")
 		return
 	}
-	// Only wait for cnpListerSynced when ClusterNetworkPolicy feature gate is enabled.
-	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+	// Only wait for cnpListerSynced and anpListerSynced when AntreaPolicy feature gate is enabled.
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		if !cache.WaitForCacheSync(stopCh, n.cnpListerSynced) {
 			klog.Error("Unable to sync CNP caches for NetworkPolicy controller")
 			return
 		}
-	}
-	// Only wait for anpListerSynced when AntreaNetworkPolicy feature gate is enabled.
-	if features.DefaultFeatureGate.Enabled(features.AntreaNetworkPolicy) {
 		if !cache.WaitForCacheSync(stopCh, n.anpListerSynced) {
 			klog.Error("Unable to sync ANP caches for NetworkPolicy controller")
 			return
