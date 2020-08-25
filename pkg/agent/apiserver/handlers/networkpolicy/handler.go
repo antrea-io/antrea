@@ -19,7 +19,7 @@ import (
 	"net/http"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 )
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
@@ -49,11 +49,11 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(pod, ns)
 			if len(interfaces) > 0 {
 				nps := npq.GetAppliedNetworkPolicies(pod, ns)
-				obj = networkingv1beta1.NetworkPolicyList{Items: nps}
+				obj = cpv1beta1.NetworkPolicyList{Items: nps}
 			}
 		} else {
 			nps := npq.GetNetworkPolicies(ns)
-			obj = networkingv1beta1.NetworkPolicyList{Items: nps}
+			obj = cpv1beta1.NetworkPolicyList{Items: nps}
 		}
 
 		if obj == nil {

@@ -19,7 +19,7 @@ package fake
 import (
 	"context"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,12 +29,12 @@ import (
 
 // FakeAppliedToGroups implements AppliedToGroupInterface
 type FakeAppliedToGroups struct {
-	Fake *FakeNetworkingV1beta1
+	Fake *FakeControlplaneV1beta1
 }
 
-var appliedtogroupsResource = schema.GroupVersionResource{Group: "networking.antrea.tanzu.vmware.com", Version: "v1beta1", Resource: "appliedtogroups"}
+var appliedtogroupsResource = schema.GroupVersionResource{Group: "controlplane.antrea.tanzu.vmware.com", Version: "v1beta1", Resource: "appliedtogroups"}
 
-var appliedtogroupsKind = schema.GroupVersionKind{Group: "networking.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "AppliedToGroup"}
+var appliedtogroupsKind = schema.GroupVersionKind{Group: "controlplane.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "AppliedToGroup"}
 
 // Get takes name of the appliedToGroup, and returns the corresponding appliedToGroup object, and an error if there is any.
 func (c *FakeAppliedToGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.AppliedToGroup, err error) {

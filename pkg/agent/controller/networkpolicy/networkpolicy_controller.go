@@ -31,7 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 )
 
 const (
@@ -106,7 +106,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if err != nil {
 				return nil, err
 			}
-			return antreaClient.NetworkingV1beta1().NetworkPolicies("").Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta1().NetworkPolicies("").Watch(context.TODO(), options)
 		},
 		AddFunc: func(obj runtime.Object) error {
 			policy, ok := obj.(*v1beta1.NetworkPolicy)
@@ -158,7 +158,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if err != nil {
 				return nil, err
 			}
-			return antreaClient.NetworkingV1beta1().AppliedToGroups().Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta1().AppliedToGroups().Watch(context.TODO(), options)
 		},
 		AddFunc: func(obj runtime.Object) error {
 			group, ok := obj.(*v1beta1.AppliedToGroup)
@@ -207,7 +207,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if err != nil {
 				return nil, err
 			}
-			return antreaClient.NetworkingV1beta1().AddressGroups().Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta1().AddressGroups().Watch(context.TODO(), options)
 		},
 		AddFunc: func(obj runtime.Object) error {
 			group, ok := obj.(*v1beta1.AddressGroup)

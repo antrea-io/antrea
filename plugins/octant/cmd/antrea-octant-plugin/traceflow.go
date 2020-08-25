@@ -332,7 +332,7 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 	// Construct the available values of protocols.
 	protocolSelect := make([]component.InputChoice, len(opsv1alpha1.SupportedProtocols))
 	i := 0
-	for p, _ := range opsv1alpha1.SupportedProtocols {
+	for p := range opsv1alpha1.SupportedProtocols {
 		protocolSelect[i] = component.InputChoice{
 			Label:   p,
 			Value:   p,

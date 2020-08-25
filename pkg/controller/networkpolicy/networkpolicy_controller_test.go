@@ -35,7 +35,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
@@ -52,7 +52,7 @@ var (
 	k8sProtocolTCP  = corev1.ProtocolTCP
 	k8sProtocolSCTP = corev1.ProtocolSCTP
 
-	protocolTCP = networking.ProtocolTCP
+	protocolTCP = controlplane.ProtocolTCP
 
 	int80 = intstr.FromInt(80)
 	int81 = intstr.FromInt(81)
@@ -155,8 +155,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{{
-					Direction: networking.DirectionIn,
+				Rules: []controlplane.NetworkPolicyRule{{
+					Direction: controlplane.DirectionIn,
 					From:      matchAllPeer,
 					Services:  nil,
 					Priority:  defaultRulePriority,
@@ -181,8 +181,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidB",
 				Name:      "npB",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{{
-					Direction: networking.DirectionOut,
+				Rules: []controlplane.NetworkPolicyRule{{
+					Direction: controlplane.DirectionOut,
 					To:        matchAllPeer,
 					Services:  nil,
 					Priority:  defaultRulePriority,
@@ -216,10 +216,10 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidB",
 				Name:      "npB",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{{
-					Direction: networking.DirectionOut,
+				Rules: []controlplane.NetworkPolicyRule{{
+					Direction: controlplane.DirectionOut,
 					To:        matchAllPeerEgress,
-					Services: []networking.Service{
+					Services: []controlplane.Service{
 						{
 							Protocol: &protocolTCP,
 							Port:     &strHTTP,
@@ -246,7 +246,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidC",
 				Name:      "npC",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					denyAllIngressRule,
 				},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
@@ -267,7 +267,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidD",
 				Name:      "npD",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					denyAllEgressRule,
 				},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
@@ -317,13 +317,13 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidE",
 				Name:      "npE",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -333,11 +333,11 @@ func TestAddNetworkPolicy(t *testing.T) {
 						Action:   &defaultAction,
 					},
 					{
-						Direction: networking.DirectionOut,
-						To: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int81,
@@ -390,13 +390,13 @@ func TestAddNetworkPolicy(t *testing.T) {
 				UID:       "uidF",
 				Name:      "npF",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -406,11 +406,11 @@ func TestAddNetworkPolicy(t *testing.T) {
 						Action:   &defaultAction,
 					},
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", nil, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int81,
@@ -540,18 +540,18 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
 						Priority: defaultRulePriority,
 						Action:   &defaultAction,
 					},
 					{
-						Direction: networking.DirectionOut,
-						To: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
 						},
 						Priority: defaultRulePriority,
@@ -585,10 +585,10 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionOut,
-						To: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
 						Priority: defaultRulePriority,
@@ -622,10 +622,10 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
 						Priority: defaultRulePriority,
@@ -649,7 +649,7 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:             "uidA",
 				Name:            "npA",
 				Namespace:       "nsA",
-				Rules:           []networking.NetworkPolicyRule{},
+				Rules:           []controlplane.NetworkPolicyRule{},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
@@ -693,26 +693,26 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
 						Priority: defaultRulePriority,
 						Action:   &defaultAction,
 					},
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorA).NormalizedName)},
 						},
 						Priority: defaultRulePriority,
 						Action:   &defaultAction,
 					},
 					{
-						Direction: networking.DirectionOut,
-						To: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
 						},
 						Priority: defaultRulePriority,
@@ -755,18 +755,18 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
 						Priority: defaultRulePriority,
 						Action:   &defaultAction,
 					},
 					{
-						Direction: networking.DirectionOut,
-						To: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil).NormalizedName)},
 						},
 						Priority: defaultRulePriority,
@@ -1133,7 +1133,7 @@ func TestAddPod(t *testing.T) {
 			} else {
 				assert.Len(t, podsAdded, 0, "expected Pod not to match AppliedToGroup")
 			}
-			memberPod := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
+			memberPod := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod))
 		})
@@ -1206,7 +1206,7 @@ func TestDeletePod(t *testing.T) {
 	updatedAddrGroupObj, _, _ := npc.addressGroupStore.Get(addrGroup.Name)
 	updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
 	// Ensure Pod2 IP is removed from AddressGroup.
-	memberPod2 := &networking.GroupMemberPod{IP: ipStrToIPAddress(p2IP)}
+	memberPod2 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress(p2IP)}
 	assert.False(t, updatedAddrGroup.Pods.Has(memberPod2))
 }
 
@@ -1316,8 +1316,8 @@ func TestAddNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			memberPod1 := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
-			memberPod2 := &networking.GroupMemberPod{IP: ipStrToIPAddress("2.2.3.4")}
+			memberPod1 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
+			memberPod2 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("2.2.3.4")}
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod1))
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod2))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod1))
@@ -1438,8 +1438,8 @@ func TestDeleteNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			memberPod1 := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.1.1.1")}
-			memberPod2 := &networking.GroupMemberPod{IP: ipStrToIPAddress("1.1.1.2")}
+			memberPod1 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.1.1.1")}
+			memberPod2 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.1.1.2")}
 			if tt.inAddressGroupMatch {
 				assert.False(t, updatedInAddrGroup.Pods.Has(memberPod1))
 				assert.False(t, updatedInAddrGroup.Pods.Has(memberPod2))
@@ -1605,12 +1605,12 @@ func TestGenerateNormalizedName(t *testing.T) {
 func TestToAntreaProtocol(t *testing.T) {
 	tables := []struct {
 		proto            *corev1.Protocol
-		expInternalProto networking.Protocol
+		expInternalProto controlplane.Protocol
 	}{
-		{nil, networking.ProtocolTCP},
-		{&k8sProtocolUDP, networking.ProtocolUDP},
-		{&k8sProtocolTCP, networking.ProtocolTCP},
-		{&k8sProtocolSCTP, networking.ProtocolSCTP},
+		{nil, controlplane.ProtocolTCP},
+		{&k8sProtocolUDP, controlplane.ProtocolUDP},
+		{&k8sProtocolTCP, controlplane.ProtocolTCP},
+		{&k8sProtocolSCTP, controlplane.ProtocolSCTP},
 	}
 	for _, table := range tables {
 		protocol := toAntreaProtocol(table.proto)
@@ -1623,7 +1623,7 @@ func TestToAntreaProtocol(t *testing.T) {
 func TestToAntreaServices(t *testing.T) {
 	tables := []struct {
 		ports              []networkingv1.NetworkPolicyPort
-		expSedrvices       []networking.Service
+		expSedrvices       []controlplane.Service
 		expNamedPortExists bool
 	}{
 		{
@@ -1633,7 +1633,7 @@ func TestToAntreaServices(t *testing.T) {
 					Port:     &int80,
 				},
 			},
-			expSedrvices: []networking.Service{
+			expSedrvices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
 					Port:     &int80,
@@ -1648,7 +1648,7 @@ func TestToAntreaServices(t *testing.T) {
 					Port:     &strHTTP,
 				},
 			},
-			expSedrvices: []networking.Service{
+			expSedrvices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
 					Port:     &strHTTP,
@@ -1665,20 +1665,20 @@ func TestToAntreaServices(t *testing.T) {
 }
 
 func TestToAntreaIPBlock(t *testing.T) {
-	expIPNet := networking.IPNet{
+	expIPNet := controlplane.IPNet{
 		IP:           ipStrToIPAddress("10.0.0.0"),
 		PrefixLength: 24,
 	}
 	tables := []struct {
 		ipBlock  *networkingv1.IPBlock
-		expValue networking.IPBlock
+		expValue controlplane.IPBlock
 		err      error
 	}{
 		{
 			&networkingv1.IPBlock{
 				CIDR: "10.0.0.0/24",
 			},
-			networking.IPBlock{
+			controlplane.IPBlock{
 				CIDR: expIPNet,
 			},
 			nil,
@@ -1687,7 +1687,7 @@ func TestToAntreaIPBlock(t *testing.T) {
 			&networkingv1.IPBlock{
 				CIDR: "10.0.0.0",
 			},
-			networking.IPBlock{},
+			controlplane.IPBlock{},
 			fmt.Errorf("invalid format for IPBlock CIDR: 10.0.0.0"),
 		},
 	}
@@ -1737,8 +1737,8 @@ func TestToAntreaPeer(t *testing.T) {
 	tests := []struct {
 		name           string
 		inPeers        []networkingv1.NetworkPolicyPeer
-		outPeer        networking.NetworkPolicyPeer
-		direction      networking.Direction
+		outPeer        controlplane.NetworkPolicyPeer
+		direction      controlplane.Direction
 		namedPortExist bool
 	}{
 		{
@@ -1752,13 +1752,13 @@ func TestToAntreaPeer(t *testing.T) {
 					PodSelector: &selectorC,
 				},
 			},
-			outPeer: networking.NetworkPolicyPeer{
+			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
 					getNormalizedUID(toGroupSelector("nsA", &selectorA, &selectorB).NormalizedName),
 					getNormalizedUID(toGroupSelector("nsA", &selectorC, nil).NormalizedName),
 				},
 			},
-			direction: networking.DirectionIn,
+			direction: controlplane.DirectionIn,
 		},
 		{
 			name: "pod-ns-selector-peer-egress",
@@ -1771,13 +1771,13 @@ func TestToAntreaPeer(t *testing.T) {
 					PodSelector: &selectorC,
 				},
 			},
-			outPeer: networking.NetworkPolicyPeer{
+			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
 					getNormalizedUID(toGroupSelector("nsA", &selectorA, &selectorB).NormalizedName),
 					getNormalizedUID(toGroupSelector("nsA", &selectorC, nil).NormalizedName),
 				},
 			},
-			direction: networking.DirectionOut,
+			direction: controlplane.DirectionOut,
 		},
 		{
 			name: "ipblock-selector-peer-ingress",
@@ -1786,14 +1786,14 @@ func TestToAntreaPeer(t *testing.T) {
 					IPBlock: &selectorIP,
 				},
 			},
-			outPeer: networking.NetworkPolicyPeer{
-				IPBlocks: []networking.IPBlock{
+			outPeer: controlplane.NetworkPolicyPeer{
+				IPBlocks: []controlplane.IPBlock{
 					{
 						CIDR: *cidrIPNet,
 					},
 				},
 			},
-			direction: networking.DirectionIn,
+			direction: controlplane.DirectionIn,
 		},
 		{
 			name: "ipblock-selector-peer-egress",
@@ -1802,14 +1802,14 @@ func TestToAntreaPeer(t *testing.T) {
 					IPBlock: &selectorIP,
 				},
 			},
-			outPeer: networking.NetworkPolicyPeer{
-				IPBlocks: []networking.IPBlock{
+			outPeer: controlplane.NetworkPolicyPeer{
+				IPBlocks: []controlplane.IPBlock{
 					{
 						CIDR: *cidrIPNet,
 					},
 				},
 			},
-			direction: networking.DirectionOut,
+			direction: controlplane.DirectionOut,
 		},
 		{
 			name: "ipblock-with-exc-selector-peer-ingress",
@@ -1818,15 +1818,15 @@ func TestToAntreaPeer(t *testing.T) {
 					IPBlock: &selectorIPAndExc,
 				},
 			},
-			outPeer: networking.NetworkPolicyPeer{
-				IPBlocks: []networking.IPBlock{
+			outPeer: controlplane.NetworkPolicyPeer{
+				IPBlocks: []controlplane.IPBlock{
 					{
 						CIDR:   *cidrIPNet,
-						Except: []networking.IPNet{*exc1Net, *exc2Net},
+						Except: []controlplane.IPNet{*exc1Net, *exc2Net},
 					},
 				},
 			},
-			direction: networking.DirectionIn,
+			direction: controlplane.DirectionIn,
 		},
 		{
 			name: "ipblock-with-exc-selector-peer-egress",
@@ -1835,34 +1835,34 @@ func TestToAntreaPeer(t *testing.T) {
 					IPBlock: &selectorIPAndExc,
 				},
 			},
-			outPeer: networking.NetworkPolicyPeer{
-				IPBlocks: []networking.IPBlock{
+			outPeer: controlplane.NetworkPolicyPeer{
+				IPBlocks: []controlplane.IPBlock{
 					{
 						CIDR:   *cidrIPNet,
-						Except: []networking.IPNet{*exc1Net, *exc2Net},
+						Except: []controlplane.IPNet{*exc1Net, *exc2Net},
 					},
 				},
 			},
-			direction: networking.DirectionOut,
+			direction: controlplane.DirectionOut,
 		},
 		{
 			name:      "empty-peer-ingress",
 			inPeers:   []networkingv1.NetworkPolicyPeer{},
 			outPeer:   matchAllPeer,
-			direction: networking.DirectionIn,
+			direction: controlplane.DirectionIn,
 		},
 		{
 			name:           "empty-peer-egress-with-named-port",
 			inPeers:        []networkingv1.NetworkPolicyPeer{},
 			outPeer:        matchAllPodsPeer,
-			direction:      networking.DirectionOut,
+			direction:      controlplane.DirectionOut,
 			namedPortExist: true,
 		},
 		{
 			name:      "empty-peer-egress-without-named-port",
 			inPeers:   []networkingv1.NetworkPolicyPeer{},
 			outPeer:   matchAllPeer,
-			direction: networking.DirectionOut,
+			direction: controlplane.DirectionOut,
 		},
 	}
 	for _, tt := range tests {
@@ -1909,8 +1909,8 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{{
-					Direction: networking.DirectionIn,
+				Rules: []controlplane.NetworkPolicyRule{{
+					Direction: controlplane.DirectionIn,
 					From:      matchAllPeer,
 					Services:  nil,
 					Priority:  defaultRulePriority,
@@ -1934,7 +1934,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				UID:             "uidA",
 				Name:            "npA",
 				Namespace:       "nsA",
-				Rules:           []networking.NetworkPolicyRule{denyAllEgressRule},
+				Rules:           []controlplane.NetworkPolicyRule{denyAllEgressRule},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &metav1.LabelSelector{}, nil).NormalizedName)},
 			},
 			expectedAppliedToGroups: 1,
@@ -1982,13 +1982,13 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -1998,11 +1998,11 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Action:   &defaultAction,
 					},
 					{
-						Direction: networking.DirectionOut,
-						To: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int81,
@@ -2055,13 +2055,13 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				UID:       "uidA",
 				Name:      "npA",
 				Namespace: "nsA",
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -2071,11 +2071,11 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Action:   &defaultAction,
 					},
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", nil, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int81,
@@ -2116,7 +2116,7 @@ func TestPodToMemberPod(t *testing.T) {
 	tests := []struct {
 		name         string
 		inputPod     *corev1.Pod
-		expMemberPod networking.GroupMemberPod
+		expMemberPod controlplane.GroupMemberPod
 		includeIP    bool
 		includeRef   bool
 		namedPort    bool
@@ -2124,13 +2124,13 @@ func TestPodToMemberPod(t *testing.T) {
 		{
 			name:     "namedport-pod-with-ip-ref",
 			inputPod: namedPod,
-			expMemberPod: networking.GroupMemberPod{
+			expMemberPod: controlplane.GroupMemberPod{
 				IP: ipStrToIPAddress(namedPod.Status.PodIP),
-				Pod: &networking.PodReference{
+				Pod: &controlplane.PodReference{
 					Name:      namedPod.Name,
 					Namespace: namedPod.Namespace,
 				},
-				Ports: []networking.NamedPort{
+				Ports: []controlplane.NamedPort{
 					{
 						Port:     80,
 						Name:     "http",
@@ -2145,9 +2145,9 @@ func TestPodToMemberPod(t *testing.T) {
 		{
 			name:     "namedport-pod-with-ip",
 			inputPod: namedPod,
-			expMemberPod: networking.GroupMemberPod{
+			expMemberPod: controlplane.GroupMemberPod{
 				IP: ipStrToIPAddress(namedPod.Status.PodIP),
-				Ports: []networking.NamedPort{
+				Ports: []controlplane.NamedPort{
 					{
 						Port:     80,
 						Name:     "http",
@@ -2162,12 +2162,12 @@ func TestPodToMemberPod(t *testing.T) {
 		{
 			name:     "namedport-pod-with-ref",
 			inputPod: namedPod,
-			expMemberPod: networking.GroupMemberPod{
-				Pod: &networking.PodReference{
+			expMemberPod: controlplane.GroupMemberPod{
+				Pod: &controlplane.PodReference{
 					Name:      namedPod.Name,
 					Namespace: namedPod.Namespace,
 				},
-				Ports: []networking.NamedPort{
+				Ports: []controlplane.NamedPort{
 					{
 						Port:     80,
 						Name:     "http",
@@ -2182,8 +2182,8 @@ func TestPodToMemberPod(t *testing.T) {
 		{
 			name:     "unnamedport-pod-with-ref",
 			inputPod: unNamedPod,
-			expMemberPod: networking.GroupMemberPod{
-				Pod: &networking.PodReference{
+			expMemberPod: controlplane.GroupMemberPod{
+				Pod: &controlplane.PodReference{
 					Name:      unNamedPod.Name,
 					Namespace: unNamedPod.Namespace,
 				},
@@ -2195,7 +2195,7 @@ func TestPodToMemberPod(t *testing.T) {
 		{
 			name:     "unnamedport-pod-with-ip",
 			inputPod: unNamedPod,
-			expMemberPod: networking.GroupMemberPod{
+			expMemberPod: controlplane.GroupMemberPod{
 				IP: ipStrToIPAddress(unNamedPod.Status.PodIP),
 			},
 			includeIP:  true,
@@ -2205,13 +2205,13 @@ func TestPodToMemberPod(t *testing.T) {
 		{
 			name:     "unnamedport-pod-with-ip-ref",
 			inputPod: unNamedPod,
-			expMemberPod: networking.GroupMemberPod{
+			expMemberPod: controlplane.GroupMemberPod{
 				IP: ipStrToIPAddress(unNamedPod.Status.PodIP),
-				Pod: &networking.PodReference{
+				Pod: &controlplane.PodReference{
 					Name:      unNamedPod.Name,
 					Namespace: unNamedPod.Namespace,
 				},
-				Ports: []networking.NamedPort{
+				Ports: []controlplane.NamedPort{
 					{
 						Port:     80,
 						Name:     "http",
@@ -2258,12 +2258,12 @@ func TestCIDRStrToIPNet(t *testing.T) {
 	tests := []struct {
 		name string
 		inC  string
-		expC *networking.IPNet
+		expC *controlplane.IPNet
 	}{
 		{
 			name: "cidr-valid",
 			inC:  "10.0.0.0/16",
-			expC: &networking.IPNet{
+			expC: &controlplane.IPNet{
 				IP:           ipStrToIPAddress("10.0.0.0"),
 				PrefixLength: int32(16),
 			},
@@ -2296,12 +2296,12 @@ func TestIPStrToIPAddress(t *testing.T) {
 	tests := []struct {
 		name  string
 		ipStr string
-		expIP networking.IPAddress
+		expIP controlplane.IPAddress
 	}{
 		{
 			name:  "str-ip-valid",
 			ipStr: ip1,
-			expIP: networking.IPAddress(expIP1),
+			expIP: controlplane.IPAddress(expIP1),
 		},
 		{
 			name:  "str-ip-invalid",
@@ -2454,7 +2454,7 @@ func getPod(name, ns, nodeName, podIP string, namedPort bool) *corev1.Pod {
 }
 
 // compareIPBlocks is a util function to compare the contents of two IPBlocks.
-func compareIPBlocks(ipb1, ipb2 *networking.IPBlock) bool {
+func compareIPBlocks(ipb1, ipb2 *controlplane.IPBlock) bool {
 	if ipb1 == nil && ipb2 == nil {
 		return true
 	}
@@ -2480,7 +2480,7 @@ func compareIPBlocks(ipb1, ipb2 *networking.IPBlock) bool {
 }
 
 // compareIPNet is a util function to compare the contents of two IPNets.
-func compareIPNet(ipn1, ipn2 networking.IPNet) bool {
+func compareIPNet(ipn1, ipn2 controlplane.IPNet) bool {
 	if bytes.Compare(ipn1.IP, ipn2.IP) != 0 {
 		return false
 	}

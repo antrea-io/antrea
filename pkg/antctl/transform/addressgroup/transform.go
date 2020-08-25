@@ -20,7 +20,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 )
 
 type Response struct {
@@ -29,7 +29,7 @@ type Response struct {
 }
 
 func listTransform(l interface{}) (interface{}, error) {
-	groups := l.(*networkingv1beta1.AddressGroupList)
+	groups := l.(*cpv1beta1.AddressGroupList)
 	result := []interface{}{}
 	for _, item := range groups.Items {
 		o, _ := objectTransform(&item)
@@ -39,7 +39,7 @@ func listTransform(l interface{}) (interface{}, error) {
 }
 
 func objectTransform(o interface{}) (interface{}, error) {
-	group := o.(*networkingv1beta1.AddressGroup)
+	group := o.(*cpv1beta1.AddressGroup)
 	var pods []common.GroupMemberPod
 	for _, pod := range group.Pods {
 		pods = append(pods, common.GroupMemberPodTransform(pod))
@@ -49,8 +49,8 @@ func objectTransform(o interface{}) (interface{}, error) {
 
 func Transform(reader io.Reader, single bool) (interface{}, error) {
 	return transform.GenericFactory(
-		reflect.TypeOf(networkingv1beta1.AddressGroup{}),
-		reflect.TypeOf(networkingv1beta1.AddressGroupList{}),
+		reflect.TypeOf(cpv1beta1.AddressGroup{}),
+		reflect.TypeOf(cpv1beta1.AddressGroupList{}),
 		objectTransform,
 		listTransform,
 	)(reader, single)

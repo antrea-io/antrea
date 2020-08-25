@@ -25,7 +25,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -52,11 +52,11 @@ func NewREST(networkPolicyStore storage.Interface) *REST {
 }
 
 func (r *REST) New() runtime.Object {
-	return &networking.NetworkPolicy{}
+	return &controlplane.NetworkPolicy{}
 }
 
 func (r *REST) NewList() runtime.Object {
-	return &networking.NetworkPolicyList{}
+	return &controlplane.NetworkPolicyList{}
 }
 
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
@@ -70,9 +70,9 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 		return nil, errors.NewInternalError(err)
 	}
 	if !exists {
-		return nil, errors.NewNotFound(networking.Resource("networkpolicy"), name)
+		return nil, errors.NewNotFound(controlplane.Resource("networkpolicy"), name)
 	}
-	obj := new(networking.NetworkPolicy)
+	obj := new(controlplane.NetworkPolicy)
 	store.ToNetworkPolicyMsg(networkPolicy.(*types.NetworkPolicy), obj, true)
 	return obj, nil
 }
@@ -80,10 +80,10 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	ns, namespaceScoped := request.NamespaceFrom(ctx)
 	networkPolicies := r.networkPolicyStore.List()
-	list := new(networking.NetworkPolicyList)
+	list := new(controlplane.NetworkPolicyList)
 	for i := range networkPolicies {
 		if !namespaceScoped || len(ns) == 0 || networkPolicies[i].(*types.NetworkPolicy).Namespace == ns {
-			policy := networking.NetworkPolicy{}
+			policy := controlplane.NetworkPolicy{}
 			store.ToNetworkPolicyMsg(networkPolicies[i].(*types.NetworkPolicy), &policy, true)
 			list.Items = append(list.Items, policy)
 		}
@@ -108,5 +108,5 @@ func (r *REST) Watch(ctx context.Context, options *internalversion.ListOptions) 
 }
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	return rest.NewDefaultTableConvertor(networking.Resource("networkpolicy")).ConvertToTable(ctx, obj, tableOptions)
+	return rest.NewDefaultTableConvertor(controlplane.Resource("networkpolicy")).ConvertToTable(ctx, obj, tableOptions)
 }

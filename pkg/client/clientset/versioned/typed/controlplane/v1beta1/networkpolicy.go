@@ -20,7 +20,7 @@ import (
 	"context"
 	"time"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	scheme "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -48,7 +48,7 @@ type networkPolicies struct {
 }
 
 // newNetworkPolicies returns a NetworkPolicies
-func newNetworkPolicies(c *NetworkingV1beta1Client, namespace string) *networkPolicies {
+func newNetworkPolicies(c *ControlplaneV1beta1Client, namespace string) *networkPolicies {
 	return &networkPolicies{
 		client: c.RESTClient(),
 		ns:     namespace,

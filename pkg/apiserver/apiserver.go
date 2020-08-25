@@ -24,8 +24,8 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
-	networkinginstall "github.com/vmware-tanzu/antrea/pkg/apis/networking/install"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	cpinstall "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/install"
 	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
 	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
@@ -51,7 +51,7 @@ var (
 )
 
 func init() {
-	networkinginstall.Install(Scheme)
+	cpinstall.Install(Scheme)
 	systeminstall.Install(Scheme)
 	// We need to add the options to empty v1, see sample-apiserver/pkg/apiserver/apiserver.go.
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
@@ -118,12 +118,12 @@ func (c *Config) Complete(informers informers.SharedInformerFactory) completedCo
 }
 
 func installAPIGroup(s *APIServer, c completedConfig) error {
-	networkingGroup := genericapiserver.NewDefaultAPIGroupInfo(networking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	networkingStorage := map[string]rest.Storage{}
-	networkingStorage["addressgroups"] = addressgroup.NewREST(c.extraConfig.addressGroupStore)
-	networkingStorage["appliedtogroups"] = appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
-	networkingStorage["networkpolicies"] = networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
-	networkingGroup.VersionedResourcesStorageMap["v1beta1"] = networkingStorage
+	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	cpStorage := map[string]rest.Storage{}
+	cpStorage["addressgroups"] = addressgroup.NewREST(c.extraConfig.addressGroupStore)
+	cpStorage["appliedtogroups"] = appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
+	cpStorage["networkpolicies"] = networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
+	cpGroup.VersionedResourcesStorageMap["v1beta1"] = cpStorage
 
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	systemStorage := map[string]rest.Storage{}
@@ -133,7 +133,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	systemStorage["supportbundles/download"] = bundleStorage.Download
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
 
-	groups := []*genericapiserver.APIGroupInfo{&networkingGroup, &systemGroup}
+	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &systemGroup}
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
 			return err

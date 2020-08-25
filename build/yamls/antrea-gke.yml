@@ -563,7 +563,7 @@ metadata:
   name: antctl
 rules:
 - apiGroups:
-  - networking.antrea.tanzu.vmware.com
+  - controlplane.antrea.tanzu.vmware.com
   resources:
   - networkpolicies
   - appliedtogroups
@@ -637,7 +637,7 @@ rules:
   - update
   - delete
 - apiGroups:
-  - networking.antrea.tanzu.vmware.com
+  - controlplane.antrea.tanzu.vmware.com
   resources:
   - networkpolicies
   - appliedtogroups
@@ -768,7 +768,7 @@ rules:
   - apiregistration.k8s.io
   resourceNames:
   - v1beta1.system.antrea.tanzu.vmware.com
-  - v1beta1.networking.antrea.tanzu.vmware.com
+  - v1beta1.controlplane.antrea.tanzu.vmware.com
   resources:
   - apiservices
   verbs:
@@ -1110,9 +1110,9 @@ kind: APIService
 metadata:
   labels:
     app: antrea
-  name: v1beta1.networking.antrea.tanzu.vmware.com
+  name: v1beta1.controlplane.antrea.tanzu.vmware.com
 spec:
-  group: networking.antrea.tanzu.vmware.com
+  group: controlplane.antrea.tanzu.vmware.com
   groupPriorityMinimum: 100
   service:
     name: antrea

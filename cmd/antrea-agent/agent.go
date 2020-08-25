@@ -40,7 +40,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"

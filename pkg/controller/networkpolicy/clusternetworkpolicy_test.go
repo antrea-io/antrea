@@ -22,7 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
@@ -31,7 +31,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
 	appTier := antreatypes.TierApplication
 	allowAction := secv1alpha1.RuleActionAllow
-	protocolTCP := networking.ProtocolTCP
+	protocolTCP := controlplane.ProtocolTCP
 	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
@@ -92,13 +92,13 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &appTier,
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &intstr80,
@@ -108,11 +108,11 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Action:   &allowAction,
 					},
 					{
-						Direction: networking.DirectionOut,
-						To: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &intstr81,
@@ -172,13 +172,13 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &appTier,
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, nil).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &intstr80,
@@ -188,11 +188,11 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Action:   &allowAction,
 					},
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &intstr81,
@@ -235,7 +235,7 @@ func TestAddCNP(t *testing.T) {
 	platformTier := antreatypes.TierPlatform
 	emergencyTier := antreatypes.TierEmergency
 	allowAction := secv1alpha1.RuleActionAllow
-	protocolTCP := networking.ProtocolTCP
+	protocolTCP := controlplane.ProtocolTCP
 	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
 	int80, int81 := intstr.FromInt(80), intstr.FromInt(81)
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
@@ -285,13 +285,13 @@ func TestAddCNP(t *testing.T) {
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &appTier,
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -340,13 +340,13 @@ func TestAddCNP(t *testing.T) {
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &secOpsTier,
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -395,13 +395,13 @@ func TestAddCNP(t *testing.T) {
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &netOpsTier,
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -450,13 +450,13 @@ func TestAddCNP(t *testing.T) {
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &emergencyTier,
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -505,13 +505,13 @@ func TestAddCNP(t *testing.T) {
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &platformTier,
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -575,13 +575,13 @@ func TestAddCNP(t *testing.T) {
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &appTier,
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -591,11 +591,11 @@ func TestAddCNP(t *testing.T) {
 						Action:   &allowAction,
 					},
 					{
-						Direction: networking.DirectionOut,
-						To: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int81,
@@ -655,13 +655,13 @@ func TestAddCNP(t *testing.T) {
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &appTier,
-				Rules: []networking.NetworkPolicyRule{
+				Rules: []controlplane.NetworkPolicyRule{
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, nil).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int80,
@@ -671,11 +671,11 @@ func TestAddCNP(t *testing.T) {
 						Action:   &allowAction,
 					},
 					{
-						Direction: networking.DirectionIn,
-						From: networking.NetworkPolicyPeer{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorC).NormalizedName)},
 						},
-						Services: []networking.Service{
+						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
 								Port:     &int81,

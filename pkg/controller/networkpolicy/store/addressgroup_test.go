@@ -26,13 +26,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
-func newAddressGroupMember(ip string) *networking.GroupMemberPod {
-	return &networking.GroupMemberPod{IP: networking.IPAddress(net.ParseIP(ip))}
+func newAddressGroupMember(ip string) *controlplane.GroupMemberPod {
+	return &controlplane.GroupMemberPod{IP: controlplane.IPAddress(net.ParseIP(ip))}
 }
 
 func TestWatchAddressGroupEvent(t *testing.T) {
@@ -50,24 +50,24 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				store.Create(&types.AddressGroup{
 					Name:     "foo",
 					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
+					Pods:     controlplane.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
 				})
 				store.Update(&types.AddressGroup{
 					Name:     "foo",
 					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("3.3.3.3")),
+					Pods:     controlplane.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("3.3.3.3")),
 				})
 			},
 			expected: []watch.Event{
 				{Type: watch.Bookmark, Object: nil},
-				{Type: watch.Added, Object: &networking.AddressGroup{
+				{Type: watch.Added, Object: &controlplane.AddressGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-					Pods:       []networking.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
+					Pods:       []controlplane.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
 				}},
-				{Type: watch.Modified, Object: &networking.AddressGroupPatch{
+				{Type: watch.Modified, Object: &controlplane.AddressGroupPatch{
 					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
-					AddedPods:   []networking.GroupMemberPod{*newAddressGroupMember("3.3.3.3")},
-					RemovedPods: []networking.GroupMemberPod{*newAddressGroupMember("2.2.2.2")},
+					AddedPods:   []controlplane.GroupMemberPod{*newAddressGroupMember("3.3.3.3")},
+					RemovedPods: []controlplane.GroupMemberPod{*newAddressGroupMember("2.2.2.2")},
 				}},
 			},
 		},
@@ -79,39 +79,39 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				store.Create(&types.AddressGroup{
 					Name:     "foo",
 					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
+					Pods:     controlplane.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
 				})
 				// This should be seen as an added event as it makes foo span node3 for the first time.
 				store.Update(&types.AddressGroup{
 					Name:     "foo",
 					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
-					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
+					Pods:     controlplane.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
 				})
 				// This should be seen as a modified event as it updates addressGroups of node3.
 				store.Update(&types.AddressGroup{
 					Name:     "foo",
 					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
-					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("3.3.3.3")),
+					Pods:     controlplane.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("3.3.3.3")),
 				})
 				// This should be seen as a deleted event as it makes foo not span node3 any more.
 				store.Update(&types.AddressGroup{
 					Name:     "foo",
 					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1")},
-					Pods:     networking.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("3.3.3.3")),
+					Pods:     controlplane.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("3.3.3.3")),
 				})
 			},
 			expected: []watch.Event{
 				{Type: watch.Bookmark, Object: nil},
-				{Type: watch.Added, Object: &networking.AddressGroup{
+				{Type: watch.Added, Object: &controlplane.AddressGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-					Pods:       []networking.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
+					Pods:       []controlplane.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
 				}},
-				{Type: watch.Modified, Object: &networking.AddressGroupPatch{
+				{Type: watch.Modified, Object: &controlplane.AddressGroupPatch{
 					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
-					AddedPods:   []networking.GroupMemberPod{*newAddressGroupMember("3.3.3.3")},
-					RemovedPods: []networking.GroupMemberPod{*newAddressGroupMember("2.2.2.2")},
+					AddedPods:   []controlplane.GroupMemberPod{*newAddressGroupMember("3.3.3.3")},
+					RemovedPods: []controlplane.GroupMemberPod{*newAddressGroupMember("2.2.2.2")},
 				}},
-				{Type: watch.Deleted, Object: &networking.AddressGroup{
+				{Type: watch.Deleted, Object: &controlplane.AddressGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 				}},
 			},
@@ -133,8 +133,8 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				}
 				switch actualEvent.Type {
 				case watch.Added, watch.Deleted:
-					actualObj := actualEvent.Object.(*networking.AddressGroup)
-					expectedObj := expectedEvent.Object.(*networking.AddressGroup)
+					actualObj := actualEvent.Object.(*controlplane.AddressGroup)
+					expectedObj := expectedEvent.Object.(*controlplane.AddressGroup)
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}
@@ -142,8 +142,8 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 						t.Errorf("Expected IPAddresses %v, got %v", expectedObj.Pods, actualObj.Pods)
 					}
 				case watch.Modified:
-					actualObj := actualEvent.Object.(*networking.AddressGroupPatch)
-					expectedObj := expectedEvent.Object.(*networking.AddressGroupPatch)
+					actualObj := actualEvent.Object.(*controlplane.AddressGroupPatch)
+					expectedObj := expectedEvent.Object.(*controlplane.AddressGroupPatch)
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}

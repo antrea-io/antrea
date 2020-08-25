@@ -39,7 +39,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )

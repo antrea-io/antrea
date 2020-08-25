@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -56,7 +56,7 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isI
 		return nil
 	case currObjSelected && !prevObjSelected:
 		// Watcher was not interested in that object but is now, an added event will be generated.
-		obj := new(networking.AppliedToGroup)
+		obj := new(controlplane.AppliedToGroup)
 		if nodeSpecified {
 			ToAppliedToGroupMsg(event.CurrGroup, obj, true, &nodeName)
 		} else {
@@ -65,20 +65,20 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isI
 		return &watch.Event{Type: watch.Added, Object: obj}
 	case currObjSelected && prevObjSelected:
 		// Watcher was and is interested in that object, a modified event will be generated.
-		obj := new(networking.AppliedToGroupPatch)
+		obj := new(controlplane.AppliedToGroupPatch)
 		obj.UID = event.CurrGroup.UID
 		obj.Name = event.CurrGroup.Name
 
-		var currPods, prevPods networking.GroupMemberPodSet
+		var currPods, prevPods controlplane.GroupMemberPodSet
 		if nodeSpecified {
 			currPods = event.CurrGroup.PodsByNode[nodeName]
 			prevPods = event.PrevGroup.PodsByNode[nodeName]
 		} else {
-			currPods = networking.GroupMemberPodSet{}
+			currPods = controlplane.GroupMemberPodSet{}
 			for _, pods := range event.CurrGroup.PodsByNode {
 				currPods = currPods.Union(pods)
 			}
-			prevPods = networking.GroupMemberPodSet{}
+			prevPods = controlplane.GroupMemberPodSet{}
 			for _, pods := range event.PrevGroup.PodsByNode {
 				prevPods = prevPods.Union(pods)
 			}
@@ -96,7 +96,7 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isI
 		return &watch.Event{Type: watch.Modified, Object: obj}
 	case !currObjSelected && prevObjSelected:
 		// Watcher was interested in that object but is not interested now, a deleted event will be generated.
-		obj := new(networking.AppliedToGroup)
+		obj := new(controlplane.AppliedToGroup)
 		if nodeSpecified {
 			ToAppliedToGroupMsg(event.PrevGroup, obj, false, &nodeName)
 		} else {
@@ -134,7 +134,7 @@ func genAppliedToGroupEvent(key string, prevObj, currObj interface{}, rv uint64)
 // ToAppliedToGroupMsg converts the stored AppliedToGroup to its message form.
 // If includeBody is true, Pods will be copied.
 // If nodeName is provided, only Pods that hosted by the Node will be copied.
-func ToAppliedToGroupMsg(in *types.AppliedToGroup, out *networking.AppliedToGroup, includeBody bool, nodeName *string) {
+func ToAppliedToGroupMsg(in *types.AppliedToGroup, out *controlplane.AppliedToGroup, includeBody bool, nodeName *string) {
 	out.Name = in.Name
 	out.UID = in.UID
 	if !includeBody || in.PodsByNode == nil {
@@ -175,5 +175,5 @@ func NewAppliedToGroupStore() storage.Interface {
 			return []string{atg.Selector.Namespace}, nil
 		},
 	}
-	return ram.NewStore(AppliedToGroupKeyFunc, indexers, genAppliedToGroupEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(networking.AppliedToGroup) })
+	return ram.NewStore(AppliedToGroupKeyFunc, indexers, genAppliedToGroupEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(controlplane.AppliedToGroup) })
 }

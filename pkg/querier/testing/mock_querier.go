@@ -21,7 +21,7 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	reflect "reflect"
 )
 
