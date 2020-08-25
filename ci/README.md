@@ -13,23 +13,23 @@ tests.
 
 We run 4 different categories of tests as part of CI:
  * **unit tests**: most Go packages for Antrea include some unit tests written
-   using the [Go `testing`] package. Unit tests typically rely on mock testing
+   using the Go [`testing`] package. Unit tests typically rely on mock testing
    to isolate the package being tested, and abstract platform-specific
-   functionality hidden behing interfaces. When adding a new package or
+   functionality hidden behind interfaces. When adding a new package or
    modifying an existing one, add the appropriate unit tests.
  * **integration tests**: these tests are located under [test/integration] and
-   are also written using the [Go `testing`] package. Unlike unit tests, they
+   are also written using the Go [`testing`] package. Unlike unit tests, they
    typically exercise multiple Go packages to ensure that they are working
    correctly together. In the case of Antrea, integration tests may create an
    actual OVS bridge, which is why they depend on the OVS daemons running, and
-   are typically run inside a Docker image, even on Linux. Write integrations
+   are typically run inside a Docker image, even on Linux. Write integration
    tests when you require an actual OVS bridge or you need access to
    platform-specific utilities.
  * **end-to-end (e2e) tests**: these tests are located under [test/e2e] and are
-   also written using the [Go `testing`] package. Unlike the two previous test
+   also written using the Go [`testing`] package. Unlike the two previous test
    categories, these assume that Antrea is running on an actual cluster and
-   require a kubeconfig file as well as SSH access to the cluster
-   Nodes. Instructions on how to run these tests, including how to setup a local
+   require a kubeconfig file as well as SSH access to the cluster Nodes.
+   Instructions on how to run these tests, including how to setup a local
    Kubernetes cluster, can be found in [test/e2e/README.md]. Typical use cases
    for e2e tests include: validate the Antrea manifest and ensure Antrea
    components can be deployed successfully, check end-to-end connectivity for
@@ -57,7 +57,7 @@ run them locally:
 [Jenkins]: /ci/jenkins/README.md
 [Kind]: https://kind.sigs.k8s.io/
 [upstream Kubernetes]: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-testing/e2e-tests.md
-[Go `testing`]: https://golang.org/pkg/testing/
+[`testing`]: https://golang.org/pkg/testing/
 [Github Actions]: https://github.com/features/actions
 
 ## Go linters
