@@ -59,24 +59,29 @@ func TestPodAssignIP(t *testing.T) {
 	defer deletePodWrapper(t, data, podName)
 
 	t.Logf("Checking Pod networking")
-	if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
+	if podIPs, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
 		t.Errorf("Error when waiting for Pod IP: %v", err)
 	} else {
-		t.Logf("Pod IP is '%s'", podIP)
-		var isValid bool
-		var err error
-		if net.ParseIP(podIP).To4() != nil {
-			isValid, err = validatePodIP(clusterInfo.podV4NetworkCIDR, podIP)
-		} else {
-			isValid, err = validatePodIP(clusterInfo.podV6NetworkCIDR, podIP)
+		if clusterInfo.podV4NetworkCIDR != "" {
+			checkPodIP(t, clusterInfo.podV4NetworkCIDR, podIPs.ipv4)
 		}
-		if err != nil {
-			t.Errorf("Error when trying to validate Pod IP: %v", err)
-		} else if !isValid {
-			t.Errorf("Pod IP is not in the expected Pod Network CIDR")
-		} else {
-			t.Logf("Pod IP is valid!")
+		if clusterInfo.podV6NetworkCIDR != "" {
+			checkPodIP(t, clusterInfo.podV6NetworkCIDR, podIPs.ipv6)
 		}
+	}
+}
+
+// checkPodIP verifies that the given IP is a valid address, and checks it is in the provided Pod Network CIDR.
+func checkPodIP(t *testing.T, podNetworkCIDR string, podIP *net.IP) {
+	t.Logf("Pod IP is '%s'", podIP.String())
+	isValid, err := validatePodIP(podNetworkCIDR, *podIP)
+
+	if err != nil {
+		t.Errorf("Error when trying to validate Pod IP: %v", err)
+	} else if !isValid {
+		t.Errorf("Pod IP is not in the expected Pod Network CIDR")
+	} else {
+		t.Logf("Pod IP is valid!")
 	}
 }
 
@@ -223,7 +228,7 @@ func TestIPAMRestart(t *testing.T) {
 	podName1 := randName("test-pod-")
 	podName2 := randName("test-pod-")
 	pods := make([]string, 0, 2)
-	var podIP1, podIP2 string
+	var podIP1, podIP2 *PodIPs
 
 	defer func() {
 		for _, pod := range pods {
@@ -231,15 +236,15 @@ func TestIPAMRestart(t *testing.T) {
 		}
 	}()
 
-	createPodAndGetIP := func(podName string) (string, error) {
+	createPodAndGetIP := func(podName string) (*PodIPs, error) {
 		t.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
 		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
 			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
-			return "", err
+			return nil, err
 		}
 		pods = append(pods, podName)
-		if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
-			return "", err
+		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
+			return nil, err
 		} else {
 			return podIP, nil
 		}
@@ -248,7 +253,7 @@ func TestIPAMRestart(t *testing.T) {
 	if podIP1, err = createPodAndGetIP(podName1); err != nil {
 		t.Fatalf("Failed to retrieve IP for Pod '%s': %v", podName1, err)
 	}
-	t.Logf("Pod '%s' has IP address %s", podName1, podIP1)
+	t.Logf("Pod '%s' has IP address %v", podName1, podIP1)
 
 	t.Logf("Restarting antrea-agent on Node '%s'", nodeName)
 	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
@@ -263,10 +268,10 @@ func TestIPAMRestart(t *testing.T) {
 	if podIP2, err = createPodAndGetIP(podName2); err != nil {
 		t.Fatalf("Failed to retrieve IP for Pod '%s': %v", podName2, err)
 	}
-	t.Logf("Pod '%s' has IP address %s", podName2, podIP2)
+	t.Logf("Pod '%s' has IP addresses %v", podName2, podIP2)
 
-	if podIP1 == podIP2 {
-		t.Errorf("Pods '%s' and '%s' were assigned the same IP %s", podName1, podName2, podIP1)
+	if podIP1.hasSameIP(podIP2) {
+		t.Errorf("Pods '%s' and '%s' were assigned the same IP %v", podName1, podName2, podIP1)
 	}
 }
 
@@ -641,6 +646,7 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 // There might be ARP packets other than GARP sent if there is any unintentional
 // traffic. So we just check the number of ARP packets is greater than 3.
 func TestGratuitousARP(t *testing.T) {
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -661,7 +667,7 @@ func TestGratuitousARP(t *testing.T) {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
 
-	podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace)
+	podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
 	}
@@ -670,7 +676,7 @@ func TestGratuitousARP(t *testing.T) {
 	// be sent 100ms after processing CNI ADD request.
 	time.Sleep(100 * time.Millisecond)
 
-	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=10,arp,arp_spa=%s", podIP)}
+	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=10,arp,arp_spa=%s", podIP.ipv4.String())}
 	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 	if err != nil {
 		t.Fatalf("Error when querying openflow: %v", err)

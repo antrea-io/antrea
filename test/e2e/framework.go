@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -104,6 +105,25 @@ type TestData struct {
 	aggregatorClient aggregatorclientset.Interface
 	securityClient   secv1alpha1.SecurityV1alpha1Interface
 	crdClient        crdclientset.Interface
+}
+
+type PodIPs struct {
+	ipv4      *net.IP
+	ipv6      *net.IP
+	ipStrings []string
+}
+
+func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
+	if len(p.ipStrings) == 0 && len(p1.ipStrings) == 0 {
+		return true
+	}
+	if p.ipv4 != nil && p1.ipv4 != nil && p.ipv4.Equal(*(p1.ipv4)) {
+		return true
+	}
+	if p.ipv6 != nil && p1.ipv6 != nil && p.ipv6.Equal(*(p1.ipv6)) {
+		return true
+	}
+	return false
 }
 
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
@@ -702,22 +722,73 @@ func (data *TestData) podWaitForRunning(timeout time.Duration, name, namespace s
 	return err
 }
 
-// podWaitForIP polls the K8s apiserver until the specified Pod is in the "running" state (or until
-// the provided timeout expires). The function then returns the IP address assigned to the Pod.
-func (data *TestData) podWaitForIP(timeout time.Duration, name, namespace string) (string, error) {
+// podWaitForIPs polls the K8s apiserver until the specified Pod is in the "running" state (or until
+// the provided timeout expires). The function then returns the IP addresses assigned to the Pod. If the
+// Pod is not using "hostNetwork", the function also checks that an IP address exists in each required
+// Address Family in the cluster.
+func (data *TestData) podWaitForIPs(timeout time.Duration, name, namespace string) (*PodIPs, error) {
 	pod, err := data.podWaitFor(timeout, name, namespace, func(pod *corev1.Pod) (bool, error) {
 		return pod.Status.Phase == corev1.PodRunning, nil
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	// According to the K8s API documentation (https://godoc.org/k8s.io/api/core/v1#PodStatus),
 	// the PodIP field should only be empty if the Pod has not yet been scheduled, and "running"
 	// implies scheduled.
 	if pod.Status.PodIP == "" {
-		return "", fmt.Errorf("pod is running but has no assigned IP, which should never happen")
+		return nil, fmt.Errorf("Pod is running but has no assigned IP, which should never happen")
 	}
-	return pod.Status.PodIP, nil
+	podIPStrings := sets.NewString(pod.Status.PodIP)
+	for _, podIP := range pod.Status.PodIPs {
+		ipStr := strings.TrimSpace(podIP.IP)
+		if ipStr != "" {
+			podIPStrings.Insert(ipStr)
+		}
+	}
+	ips, err := parsePodIPs(podIPStrings)
+	if err != nil {
+		return nil, err
+	}
+
+	if !pod.Spec.HostNetwork {
+		if clusterInfo.podV4NetworkCIDR != "" && ips.ipv4 == nil {
+			return nil, fmt.Errorf("no IPv4 address is assigned while cluster was configured with IPv4 Pod CIDR %s", clusterInfo.podV4NetworkCIDR)
+		}
+		if clusterInfo.podV6NetworkCIDR != "" && ips.ipv6 == nil {
+			return nil, fmt.Errorf("no IPv6 address is assigned while cluster was configured with IPv6 Pod CIDR %s", clusterInfo.podV6NetworkCIDR)
+		}
+	}
+	return ips, nil
+}
+
+func parsePodIPs(podIPStrings sets.String) (*PodIPs, error) {
+	ips := new(PodIPs)
+	for idx := range podIPStrings.List() {
+		ipStr := podIPStrings.List()[idx]
+		ip := net.ParseIP(ipStr)
+		if ip.To4() != nil {
+			if ips.ipv4 != nil && ipStr != ips.ipv4.String() {
+				return nil, fmt.Errorf("Pod is assigned multiple IPv4 addresses: %s and %s", ips.ipv4.String(), ipStr)
+			}
+			if ips.ipv4 == nil {
+				ips.ipv4 = &ip
+				ips.ipStrings = append(ips.ipStrings, ipStr)
+			}
+		} else {
+			if ips.ipv6 != nil && ipStr != ips.ipv6.String() {
+				return nil, fmt.Errorf("Pod is assigned multiple IPv6 addresses: %s and %s", ips.ipv6.String(), ipStr)
+			}
+			if ips.ipv6 == nil {
+				ips.ipv6 = &ip
+				ips.ipStrings = append(ips.ipStrings, ipStr)
+			}
+		}
+	}
+	if len(ips.ipStrings) == 0 {
+		return nil, fmt.Errorf("pod is running but has no assigned IP, which should never happen")
+	}
+	return ips, nil
 }
 
 // deleteAntreaAgentOnNode deletes the antrea-agent Pod on a specific Node and measure how long it
@@ -877,11 +948,7 @@ func (data *TestData) restartAntreaAgentPods(timeout time.Duration) error {
 }
 
 // validatePodIP checks that the provided IP address is in the Pod Network CIDR for the cluster.
-func validatePodIP(podNetworkCIDR, podIP string) (bool, error) {
-	ip := net.ParseIP(podIP)
-	if ip == nil {
-		return false, fmt.Errorf("'%s' is not a valid IP address", podIP)
-	}
+func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 	_, cidr, err := net.ParseCIDR(podNetworkCIDR)
 	if err != nil {
 		return false, fmt.Errorf("podNetworkCIDR '%s' is not a valid CIDR", podNetworkCIDR)
@@ -1073,24 +1140,37 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	return sent, received, loss, nil
 }
 
-func (data *TestData) runPingCommandFromTestPod(podName string, targetIP string, count int) error {
+func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *PodIPs, count int) error {
 	var cmd []string
-	if net.ParseIP(targetIP).To4() != nil {
-		cmd = []string{"ping", "-c", strconv.Itoa(count), targetIP}
-	} else {
-		cmd = []string{"ping", "-6", "-c", strconv.Itoa(count), targetIP}
+	if targetPodIPs.ipv4 != nil {
+		cmd = []string{"ping", "-c", strconv.Itoa(count), targetPodIPs.ipv4.String()}
+		if _, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd); err != nil {
+			return err
+		}
 	}
-	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
-	return err
+	if targetPodIPs.ipv6 != nil {
+		cmd = []string{"ping", "-6", "-c", strconv.Itoa(count), targetPodIPs.ipv6.String()}
+		if _, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (data *TestData) runNetcatCommandFromTestPod(podName string, server string, port int) error {
+	var cmdStr string
 	// Retrying several times to avoid flakes as the test may involve DNS (coredns) and Service/Endpoints (kube-proxy).
+	if net.ParseIP(server).To4() != nil {
+		cmdStr = fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 %s %d && exit 0 || sleep 1; done; exit 1",
+			server, port)
+	} else {
+		cmdStr = fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 -6 %s %d && exit 0 || sleep 1; done; exit 1",
+			server, port)
+	}
 	cmd := []string{
 		"/bin/sh",
 		"-c",
-		fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 %s %d && exit 0 || sleep 1; done; exit 1",
-			server, port),
+		cmdStr,
 	}
 	stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
 	if err == nil {
