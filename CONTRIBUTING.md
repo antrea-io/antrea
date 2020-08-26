@@ -14,7 +14,6 @@ to effectively get it merged upstream.
     - [Getting reviewers](#getting-reviewers)
     - [Building and testing your change](#building-and-testing-your-change)
     - [CI testing](#ci-testing)
-    - [Running the end-to-end tests](#running-the-end-to-end-tests)
     - [Reverting a commit](#reverting-a-commit)
   - [Issue and PR Management](#issue-and-pr-management)
     - [Filing An Issue](#filing-an-issue)
@@ -117,9 +116,16 @@ fork. Once a PR is ready to merge, squash any *fix review feedback, typo*
 and *merged* sorts of commits.
 
 To make it easier for reviewers to review your PR, consider the following:
-1. Follow the golang [coding conventions](https://github.com/golang/go/wiki/CodeReviewComments)
-2. Follow [git commit](https://chris.beams.io/posts/git-commit/) guidelines.
-3. Follow [logging](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md) guidelines.
+1. Follow the golang [coding conventions](https://github.com/golang/go/wiki/CodeReviewComments).
+2. Format your code with `make golangci-fix`; if the [linters](ci/README.md) flag an issue that
+   cannot be fixed automatically, an error message will be displayed so you can address the issue.
+3. Follow [git commit](https://chris.beams.io/posts/git-commit/) guidelines.
+4. Follow [logging](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md) guidelines.
+
+If your PR fixes a bug or implements a new feature, add the appropriate test
+cases to our [automated test suite](ci/README.md) to guarantee enough
+coverage. A PR that makes significant code changes without contributing new test
+cases will be flagged by reviewers and will not be accepted.
 
 ### Building and testing your change
 
@@ -130,7 +136,7 @@ do:
 2. Run `make`
 
 The second step will compile the Antrea code in a `golang` container, and build
-a `Ubuntu 18.04` Docker image that includes all the generated binaries. [`Docker`](https://docs.docker.com/install)
+a `Ubuntu 20.04` Docker image that includes all the generated binaries. [`Docker`](https://docs.docker.com/install)
 must be installed on your local machine in advance.
 
 Alternatively, you can build the Antrea code in your local Go environment. The
@@ -149,13 +155,6 @@ To develop locally, you can follow these steps:
 
 For more information about the tests we run as part of CI, please refer to
 [ci/README.md](ci/README.md).
-
-### Running the end-to-end tests
-
-In addition to the unit tests, we provide a suite of end-to-end tests, which
-require a running Kubernetes cluster. Instructions on how to run these tests,
-including how to setup a local Kubernetes cluster, can be found in
-[test/e2e/README.md](test/e2e/README.md).
 
 ### Reverting a commit
 
