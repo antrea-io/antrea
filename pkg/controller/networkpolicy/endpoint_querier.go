@@ -95,7 +95,7 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 	ingress := make([]*ruleTemp, 0)
 	egress := make([]*ruleTemp, 0)
 	// get all appliedToGroups using filter, then get applied policies using appliedToGroup
-	appliedToGroupKeys := eq.networkPolicyController.filterAppliedToGroupsForPod(pod)
+	appliedToGroupKeys := eq.networkPolicyController.filterAppliedToGroupsForPodOrExternalEntity(pod)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 		}
 	}
 	// get all addressGroups using filter, then get ingress and egress policies using addressGroup
-	addressGroupKeys := eq.networkPolicyController.filterAddressGroupsForPod(pod)
+	addressGroupKeys := eq.networkPolicyController.filterAddressGroupsForPodOrExternalEntity(pod)
 	if err != nil {
 		return nil, err
 	}

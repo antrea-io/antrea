@@ -30,12 +30,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
@@ -1449,6 +1451,110 @@ func TestDeleteNamespace(t *testing.T) {
 				assert.False(t, updatedOutAddrGroup.Pods.Has(memberPod1))
 				assert.False(t, updatedOutAddrGroup.Pods.Has(memberPod2))
 			}
+		})
+	}
+}
+
+func TestFilterAddressGroupsForPodOrExternalEntity(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"purpose": "test-select"},
+	}
+	eeSelectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"platform": "aws"},
+	}
+	ns1 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "ns1",
+			Labels: map[string]string{"purpose": "test-select"},
+		},
+	}
+	ns2 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "ns2",
+		},
+	}
+	addrGrp1 := &antreatypes.AddressGroup{
+		UID:      "uid1",
+		Name:     "AddrGrp1",
+		Selector: *toGroupSelector("ns1", &selectorSpec, nil, nil),
+	}
+	addrGrp2 := &antreatypes.AddressGroup{
+		UID:      "uid2",
+		Name:     "AddrGrp2",
+		Selector: *toGroupSelector("ns1", nil, nil, &eeSelectorSpec),
+	}
+	addrGrp3 := &antreatypes.AddressGroup{
+		UID:      "uid3",
+		Name:     "AddrGrp3",
+		Selector: *toGroupSelector("", nil, &selectorSpec, nil),
+	}
+	addrGrp4 := &antreatypes.AddressGroup{
+		UID:      "uid4",
+		Name:     "AddrGrp4",
+		Selector: *toGroupSelector("", &selectorSpec, &selectorSpec, nil),
+	}
+
+	pod1 := getPod("pod1", "ns1", "node1", "1.1.1.1", false)
+	pod1.Labels = map[string]string{"purpose": "test-select"}
+	pod2 := getPod("pod2", "ns1", "node1", "1.1.1.2", false)
+	pod3 := getPod("pod3", "ns2", "node1", "1.1.1.3", false)
+	ee1 := &v1alpha1.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ee1",
+			Namespace: "ns1",
+			Labels:    map[string]string{"platform": "aws"},
+		},
+	}
+	ee2 := &v1alpha1.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ee2",
+			Namespace: "ns1",
+			Labels:    map[string]string{"platform": "gke"},
+		},
+	}
+	tests := []struct {
+		name           string
+		toMatch        metav1.Object
+		expectedGroups sets.String
+	}{
+		{
+			"pod-match-selector-match-ns",
+			pod1,
+			sets.NewString("AddrGrp1", "AddrGrp3", "AddrGrp4"),
+		},
+		{
+			"pod-unmatch-selector-match-ns",
+			pod2,
+			sets.NewString("AddrGrp3"),
+		},
+		{
+			"pod-unmatch-selector-unmatch-ns",
+			pod3,
+			sets.String{},
+		},
+		{
+			"externalEntity-match-selector-match-ns",
+			ee1,
+			sets.NewString("AddrGrp2", "AddrGrp3"),
+		},
+		{
+			"externalEntity-unmatch-selector-match-ns",
+			ee2,
+			sets.NewString("AddrGrp3"),
+		},
+	}
+	_, npc := newController()
+	npc.addressGroupStore.Create(addrGrp1)
+	npc.addressGroupStore.Create(addrGrp2)
+	npc.addressGroupStore.Create(addrGrp3)
+	npc.addressGroupStore.Create(addrGrp4)
+	npc.namespaceStore.Add(ns1)
+	npc.namespaceStore.Add(ns2)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expectedGroups, npc.filterAddressGroupsForPodOrExternalEntity(tt.toMatch),
+				"Filtered AddressGroup does not match expectation")
 		})
 	}
 }

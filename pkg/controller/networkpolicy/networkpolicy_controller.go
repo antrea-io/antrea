@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	uuid "github.com/satori/go.uuid"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -384,94 +385,57 @@ func (n *NetworkPolicyController) createAppliedToGroup(npNsName string, pSel, nS
 	return appliedToGroupUID
 }
 
-// labelsMatchGroupSelector matches a Pod's labels to the
+// labelsMatchGroupSelector matches a ExternalEntity or Pod's labels to the
 // GroupSelector object and returns true, if and only if the labels
 // match any of the selector criteria present in the GroupSelector.
-func (n *NetworkPolicyController) labelsMatchGroupSelector(pod *v1.Pod, podNS *v1.Namespace, sel *antreatypes.GroupSelector) bool {
+func (n *NetworkPolicyController) labelsMatchGroupSelector(obj metav1.Object, ns *v1.Namespace, sel *antreatypes.GroupSelector) bool {
+	objSelector := sel.PodSelector
+	if _, ok := obj.(*v1alpha1.ExternalEntity); ok {
+		objSelector = sel.ExternalEntitySelector
+	}
 	if sel.Namespace != "" {
-		if sel.Namespace != pod.Namespace {
-			// Pods must be matched within the same Namespace.
+		if sel.Namespace != obj.GetNamespace() {
+			// Pods or ExternalEntities must be matched within the same Namespace.
 			return false
 		}
-		if sel.PodSelector != nil && sel.PodSelector.Matches(labels.Set(pod.Labels)) {
-			// podSelector matches the Pod's labels.
+		if objSelector != nil && objSelector.Matches(labels.Set(obj.GetLabels())) {
+			// podSelector or externalEntitySelector matches the ExternalEntity or Pod's labels.
 			return true
 		}
-		// podSelector does not match the Pod's labels.
+		// selector does not match the ExternalEntity or Pod's labels.
 		return false
-	} else if sel.NamespaceSelector != nil && sel.PodSelector != nil {
-		// Pod event may arrive before Pod's Namespace event. In this case, we must
-		// ensure that the Pod Namespace is not nil.
-		if podNS == nil || !sel.NamespaceSelector.Matches(labels.Set(podNS.Labels)) {
+	} else if sel.NamespaceSelector != nil && objSelector != nil {
+		// Pod or ExternalEntity event may arrive before Namespace event. In this case, we must
+		// ensure that the Namespace is not nil.
+		if ns == nil || !sel.NamespaceSelector.Matches(labels.Set(ns.Labels)) {
 			// Pod's Namespace do not match namespaceSelector.
 			return false
 		}
-		if sel.PodSelector != nil && !sel.PodSelector.Matches(labels.Set(pod.Labels)) {
-			// Pod's Namespace matches namespaceSelector but Pod's labels do not match
-			// the podSelector.
+		if !objSelector.Matches(labels.Set(obj.GetLabels())) {
+			// ExternalEntity or Pod's Namespace matches namespaceSelector but
+			// labels do not match the podSelector or externalEntitySelector.
 			return false
 		}
-		// Pod's Namespace matches namespaceSelector and Pod's labels matches
-		// podSelector.
+		// ExternalEntity or Pod's Namespace matches namespaceSelector and labels matches
+		// podSelector or externalEntitySelector.
 		return true
-	} else if sel.NamespaceSelector != nil && sel.ExternalEntitySelector == nil {
+	} else if sel.NamespaceSelector != nil && sel.ExternalEntitySelector == nil && sel.PodSelector == nil {
 		// Selector only has a NamespaceSelector.
-		// Pod event may arrive before Pod's Namespace event. In this case, we must
-		// ensure that the Pod Namespace is not nil.
-		if podNS == nil || !sel.NamespaceSelector.Matches(labels.Set(podNS.Labels)) {
+		// Pod or ExternalEntity event may arrive before Namespace event. In this case, we must
+		// ensure that the Namespace is not nil.
+		if ns == nil || !sel.NamespaceSelector.Matches(labels.Set(ns.Labels)) {
 			// Namespace labels do not match namespaceSelector.
 			return false
 		}
 		// Namespace labels match namespaceSelector.
 		return true
-	} else if sel.PodSelector != nil {
-		// Selector only has a PodSelector and no sel.Namespace. Pods must be matched
-		// from all Namespaces.
-		if !sel.PodSelector.Matches(labels.Set(pod.Labels)) {
-			// pod labels do not match PodSelector.
+	} else if objSelector != nil {
+		// Selector only has a PodSelector/ExternalEntitySelector and no sel.Namespace.
+		// Pods/ExternalEntities must be matched from all Namespaces.
+		if !sel.PodSelector.Matches(labels.Set(obj.GetLabels())) {
+			// pod/ee labels do not match PodSelector/ExternalEntitySelector.
 			return false
 		}
-		return true
-	}
-	return false
-}
-
-func (n *NetworkPolicyController) eeLabelsMatchGroupSelector(ee *v1alpha1.ExternalEntity, eeNS *v1.Namespace, sel *antreatypes.GroupSelector) bool {
-	if sel.Namespace != "" {
-		if sel.Namespace != ee.Namespace {
-			// ExternalEntitys must be matched within the same Namespace.
-			return false
-		}
-		if sel.ExternalEntitySelector != nil && sel.ExternalEntitySelector.Matches(labels.Set(ee.Labels)) {
-			// externalEntitySelector matches the Pod's labels.
-			return true
-		}
-		// externalEntitySelector does not match the Pod's labels.
-		return false
-	} else if sel.NamespaceSelector != nil && sel.ExternalEntitySelector != nil {
-		// ExternalEntity event may arrive before ExternalEntity's Namespace event. In this case, we must
-		// ensure that the ExternalEntity Namespace is not nil.
-		if eeNS == nil || !sel.NamespaceSelector.Matches(labels.Set(eeNS.Labels)) {
-			// ExternalEntity's Namespace do not match namespaceSelector.
-			return false
-		}
-		if sel.ExternalEntitySelector != nil && !sel.ExternalEntitySelector.Matches(labels.Set(ee.Labels)) {
-			// ExternalEntity's Namespace matches namespaceSelector but ExternalEntity's labels do not match
-			// the ExternalEntitySelector.
-			return false
-		}
-		// ExternalEntity's Namespace matches namespaceSelector and ExternalEntity's labels matches
-		// externalEntitySelector.
-		return true
-	} else if sel.NamespaceSelector != nil && sel.PodSelector == nil {
-		// Selector only has a NamespaceSelector.
-		// ExternalEntity event may arrive before ExternalEntity's Namespace event. In this case, we must
-		// ensure that the ExternalEntity Namespace is not nil.
-		if eeNS == nil || !sel.NamespaceSelector.Matches(labels.Set(eeNS.Labels)) {
-			// Namespace labels do not match namespaceSelector.
-			return false
-		}
-		// Namespace labels match namespaceSelector.
 		return true
 	}
 	return false
@@ -494,71 +458,39 @@ func (n *NetworkPolicyController) filterAddressGroupsForNamespace(namespace *v1.
 	return matchingKeys
 }
 
-// filterAddressGroupsForPod computes a list of AddressGroup keys which
-// match the Pod's labels.
-func (n *NetworkPolicyController) filterAddressGroupsForPod(pod *v1.Pod) sets.String {
+// filterAddressGroupsForPodOrExternalEntity computes a list of AddressGroup keys which
+// match the ExternalEntity or Pod's labels.
+func (n *NetworkPolicyController) filterAddressGroupsForPodOrExternalEntity(obj metav1.Object) sets.String {
 	matchingKeySet := sets.String{}
-	// AddressGroups that are in this namespace or that are cluster scoped can possibly select this Pod.
-	localAddressGroups, _ := n.addressGroupStore.GetByIndex(cache.NamespaceIndex, pod.Namespace)
+	// AddressGroups that are in this namespace or that are cluster scoped can possibly select this Pod/ExternalEntity.
+	localAddressGroups, _ := n.addressGroupStore.GetByIndex(cache.NamespaceIndex, obj.GetNamespace())
 	clusterScopedAddressGroups, _ := n.addressGroupStore.GetByIndex(cache.NamespaceIndex, "")
-	podNS, _ := n.namespaceLister.Get(pod.Namespace)
+	ns, _ := n.namespaceLister.Get(obj.GetNamespace())
 	for _, group := range append(localAddressGroups, clusterScopedAddressGroups...) {
 		addrGroup := group.(*antreatypes.AddressGroup)
-		if n.labelsMatchGroupSelector(pod, podNS, &addrGroup.Selector) {
+		if n.labelsMatchGroupSelector(obj, ns, &addrGroup.Selector) {
 			matchingKeySet.Insert(addrGroup.Name)
-			klog.V(2).Infof("Pod %s/%s matched AddressGroup %s", pod.Namespace, pod.Name, addrGroup.Name)
+			klog.V(2).Infof("%s/%s matched AddressGroup %s", obj.GetNamespace(), obj.GetName(), addrGroup.Name)
 		}
 	}
 	return matchingKeySet
 }
 
-// filterAppliedToGroupsForPod computes a list of AppliedToGroup keys which
-// match the Pod's labels.
-func (n *NetworkPolicyController) filterAppliedToGroupsForPod(pod *v1.Pod) sets.String {
+// filterAppliedToGroupsForPodOrExternalEntity computes a list of AppliedToGroup keys which
+// match the ExternalEntity or Pod's labels.
+func (n *NetworkPolicyController) filterAppliedToGroupsForPodOrExternalEntity(obj metav1.Object) sets.String {
 	matchingKeySet := sets.String{}
 	// Get appliedToGroups from the namespace level
-	appliedToGroups, _ := n.appliedToGroupStore.GetByIndex(cache.NamespaceIndex, pod.Namespace)
+	appliedToGroups, _ := n.appliedToGroupStore.GetByIndex(cache.NamespaceIndex, obj.GetNamespace())
 	// Get appliedToGroups from the cluster level
 	clusterATGroups, _ := n.appliedToGroupStore.GetByIndex(cache.NamespaceIndex, "")
 	appliedToGroups = append(appliedToGroups, clusterATGroups...)
-	podNS, _ := n.namespaceLister.Get(pod.Namespace)
+	ns, _ := n.namespaceLister.Get(obj.GetNamespace())
 	for _, group := range appliedToGroups {
 		appGroup := group.(*antreatypes.AppliedToGroup)
-		if n.labelsMatchGroupSelector(pod, podNS, &appGroup.Selector) {
+		if n.labelsMatchGroupSelector(obj, ns, &appGroup.Selector) {
 			matchingKeySet.Insert(appGroup.Name)
-			klog.V(2).Infof("Pod %s/%s matched AppliedToGroup %s", pod.Namespace, pod.Name, appGroup.Name)
-		}
-	}
-	return matchingKeySet
-}
-
-// TODO: consider unifying with filterAppliedToGroupsForPod
-func (n *NetworkPolicyController) filterAppliedToGroupsForExternalEntity(ee *v1alpha1.ExternalEntity) sets.String {
-	matchingKeySet := sets.String{}
-	appliedToGroups, _ := n.appliedToGroupStore.GetByIndex(cache.NamespaceIndex, ee.Namespace)
-	eeNS, _ := n.namespaceLister.Get(ee.Namespace)
-	for _, group := range appliedToGroups {
-		appGroup := group.(*antreatypes.AppliedToGroup)
-		if n.eeLabelsMatchGroupSelector(ee, eeNS, &appGroup.Selector) {
-			matchingKeySet.Insert(appGroup.Name)
-			klog.V(2).Infof("ExternalEntity %s/%s matched AppliedToGroup %s", ee.Namespace, ee.Name, appGroup.Name)
-		}
-	}
-	return matchingKeySet
-}
-
-// TODO: consider unifying with filterAddressToGroupsForPod
-func (n *NetworkPolicyController) filterAddressGroupsForExternalEntity(ee *v1alpha1.ExternalEntity) sets.String {
-	matchingKeySet := sets.String{}
-	// AddressGroups that are in this namespace or that are cluster scoped can possibly select this ExternalEntity.
-	localAddressGroups, _ := n.addressGroupStore.GetByIndex(cache.NamespaceIndex, ee.Namespace)
-	clusterScopedAddressGroups, _ := n.addressGroupStore.GetByIndex(cache.NamespaceIndex, "")
-	eeNS, _ := n.namespaceLister.Get(ee.Namespace)
-	for _, group := range append(localAddressGroups, clusterScopedAddressGroups...) {
-		addrGroup := group.(*antreatypes.AddressGroup)
-		if n.eeLabelsMatchGroupSelector(ee, eeNS, &addrGroup.Selector) {
-			matchingKeySet.Insert(addrGroup.Name)
-			klog.V(2).Infof("ExternalEntity %s/%s matched AddressGroup %s", ee.Namespace, ee.Name, addrGroup.Name)
+			klog.V(2).Infof("%s/%s matched AppliedToGroup %s", obj.GetNamespace(), obj.GetName(), appGroup.Name)
 		}
 	}
 	return matchingKeySet
@@ -850,9 +782,9 @@ func (n *NetworkPolicyController) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	klog.V(2).Infof("Processing Pod %s/%s ADD event, labels: %v", pod.Namespace, pod.Name, pod.Labels)
 	// Find all AppliedToGroup keys which match the Pod's labels.
-	appliedToGroupKeySet := n.filterAppliedToGroupsForPod(pod)
+	appliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(pod)
 	// Find all AddressGroup keys which match the Pod's labels.
-	addressGroupKeySet := n.filterAddressGroupsForPod(pod)
+	addressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(pod)
 	// Enqueue groups to their respective queues for group processing.
 	for group := range appliedToGroupKeySet {
 		n.enqueueAppliedToGroup(group)
@@ -878,11 +810,11 @@ func (n *NetworkPolicyController) updatePod(oldObj, curObj interface{}) {
 		return
 	}
 	// Find groups matching the old Pod's labels.
-	oldAddressGroupKeySet := n.filterAddressGroupsForPod(oldPod)
-	oldAppliedToGroupKeySet := n.filterAppliedToGroupsForPod(oldPod)
+	oldAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(oldPod)
+	oldAppliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(oldPod)
 	// Find groups matching the new Pod's labels.
-	curAppliedToGroupKeySet := n.filterAppliedToGroupsForPod(curPod)
-	curAddressGroupKeySet := n.filterAddressGroupsForPod(curPod)
+	curAppliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(curPod)
+	curAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(curPod)
 	// Create set to hold the group keys to enqueue.
 	var appliedToGroupKeys sets.String
 	var addressGroupKeys sets.String
@@ -932,9 +864,9 @@ func (n *NetworkPolicyController) deletePod(old interface{}) {
 
 	klog.V(2).Infof("Processing Pod %s/%s DELETE event, labels: %v", pod.Namespace, pod.Name, pod.Labels)
 	// Find all AppliedToGroup keys which match the Pod's labels.
-	appliedToGroupKeys := n.filterAppliedToGroupsForPod(pod)
+	appliedToGroupKeys := n.filterAppliedToGroupsForPodOrExternalEntity(pod)
 	// Find all AddressGroup keys which match the Pod's labels.
-	addressGroupKeys := n.filterAddressGroupsForPod(pod)
+	addressGroupKeys := n.filterAddressGroupsForPodOrExternalEntity(pod)
 	// Enqueue groups to their respective queues for group processing.
 	for group := range appliedToGroupKeys {
 		n.enqueueAppliedToGroup(group)
@@ -951,9 +883,9 @@ func (n *NetworkPolicyController) addExternalEntity(obj interface{}) {
 	ee := obj.(*v1alpha1.ExternalEntity)
 	klog.V(2).Infof("Processing External Entity %s/%s ADD event, labels: %v", ee.Namespace, ee.Name, ee.Labels)
 	// Find all AppliedToGroup keys which match the ExternalEntity's labels.
-	appliedToGroupKeySet := n.filterAppliedToGroupsForExternalEntity(ee)
+	appliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(ee)
 	// Find all AddressGroup keys which match the ExternalEntity's labels.
-	addressGroupKeySet := n.filterAddressGroupsForExternalEntity(ee)
+	addressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(ee)
 	// Enqueue groups to their respective queues for group processing.
 	for group := range appliedToGroupKeySet {
 		n.enqueueAppliedToGroup(group)
@@ -970,38 +902,39 @@ func (n *NetworkPolicyController) updateExternalEntity(oldObj, curObj interface{
 	defer n.heartbeat("updateExternalEntity")
 	oldEE := oldObj.(*v1alpha1.ExternalEntity)
 	curEE := curObj.(*v1alpha1.ExternalEntity)
-	klog.V(2).Infof("Processing Pod %s/%s UPDATE event, labels: %v", curEE.Namespace, curEE.Name, curEE.Labels)
+	klog.V(2).Infof("Processing ExternalEntity %s/%s UPDATE event, labels: %v", curEE.Namespace, curEE.Name, curEE.Labels)
 	// No need to trigger processing of groups if there is no change in the
 	// Pod labels or Pods Node or Pods IP.
 	labelsEqual := labels.Equals(labels.Set(oldEE.Labels), labels.Set(curEE.Labels))
-	// TODO: Add util function to detect endpoint updates
-	if labelsEqual && oldEE.Spec.ExternalNode == curEE.Spec.ExternalNode {
-		klog.V(4).Infof("No change in Pod %s/%s. Skipping NetworkPolicy evaluation.", curEE.Namespace, curEE.Name)
+	// TODO: Right now two ExternalEntities are only considered equal if the list of Endpoints and
+	//  all NamedPorts in each Endpoint are of the exact order. This constraint might be too strict.
+	if labelsEqual && cmp.Equal(oldEE.Spec, curEE.Spec) {
+		klog.V(4).Infof("No change in ExternalEntity %s/%s. Skipping NetworkPolicy evaluation.", curEE.Namespace, curEE.Name)
 		return
 	}
-	// Find groups matching the old Pod's labels.
-	oldAddressGroupKeySet := n.filterAddressGroupsForExternalEntity(oldEE)
-	oldAppliedToGroupKeySet := n.filterAppliedToGroupsForExternalEntity(oldEE)
-	// Find groups matching the new Pod's labels.
-	curAppliedToGroupKeySet := n.filterAppliedToGroupsForExternalEntity(curEE)
-	curAddressGroupKeySet := n.filterAddressGroupsForExternalEntity(curEE)
+	// Find groups matching the old ExternalEntity's labels.
+	oldAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(oldEE)
+	oldAppliedToGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(oldEE)
+	// Find groups matching the new ExternalEntity's labels.
+	curAppliedToGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(curEE)
+	curAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(curEE)
 	// Create set to hold the group keys to enqueue.
 	var appliedToGroupKeys sets.String
 	var addressGroupKeys sets.String
-	// AppliedToGroup keys must be enqueued only if the Pod's Node or IP has changed or
-	// if Pod's label change causes it to match new Groups.
-	// TODO: Add util function to detect endpoint updates
-	if oldEE.Spec.ExternalNode != curEE.Spec.ExternalNode {
+	// AppliedToGroup keys must be enqueued only if the ExternalEntity's spec has changed or
+	// if ExternalEntity's label change causes it to match new Groups.
+	if !cmp.Equal(oldEE.Spec, curEE.Spec) {
 		appliedToGroupKeys = oldAppliedToGroupKeySet.Union(curAppliedToGroupKeySet)
 	} else if !labelsEqual {
 		// No need to enqueue common AppliedToGroups as they already have latest Pod
 		// information.
 		appliedToGroupKeys = oldAppliedToGroupKeySet.Difference(curAppliedToGroupKeySet).Union(curAppliedToGroupKeySet.Difference(oldAppliedToGroupKeySet))
 	}
-	// AddressGroup keys must be enqueued only if the Pod's IP has changed or
-	// if Pod's label change causes it to match new Groups.
-	// TODO: Add util function to detect endpoint updates
-	if !labelsEqual {
+	// AddressGroup keys must be enqueued only if the ExternalEntity's spec has changed or
+	// if ExternalEntity's label change causes it to match new Groups.
+	if !cmp.Equal(oldEE.Spec, curEE.Spec) {
+		addressGroupKeys = oldAddressGroupKeySet.Union(curAddressGroupKeySet)
+	} else if !labelsEqual {
 		// No need to enqueue common AddressGroups as they already have latest Pod
 		// information.
 		addressGroupKeys = oldAddressGroupKeySet.Difference(curAddressGroupKeySet).Union(curAddressGroupKeySet.Difference(oldAddressGroupKeySet))
@@ -1034,9 +967,9 @@ func (n *NetworkPolicyController) deleteExternalEntity(old interface{}) {
 
 	klog.V(2).Infof("Processing ExternalEntity %s/%s DELETE event, labels: %v", ee.Namespace, ee.Name, ee.Labels)
 	// Find all AppliedToGroup keys which match the Pod's labels.
-	appliedToGroupKeys := n.filterAppliedToGroupsForExternalEntity(ee)
+	appliedToGroupKeys := n.filterAddressGroupsForPodOrExternalEntity(ee)
 	// Find all AddressGroup keys which match the Pod's labels.
-	addressGroupKeys := n.filterAddressGroupsForExternalEntity(ee)
+	addressGroupKeys := n.filterAddressGroupsForPodOrExternalEntity(ee)
 	// Enqueue groups to their respective queues for group processing.
 	for group := range appliedToGroupKeys {
 		n.enqueueAppliedToGroup(group)
