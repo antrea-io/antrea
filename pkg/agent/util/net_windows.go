@@ -225,6 +225,11 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 }
 
 func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
+	if gwIPNet.IP.To4() == nil {
+		klog.Warningf("Windows only supports IPv4 addresses. Skip this address %s", gwIPNet.String())
+		return nil
+	}
+
 	iface, _ := net.InterfaceByIndex(idx)
 	gwIP := gwIPNet.IP
 	name := iface.Name
