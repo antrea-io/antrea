@@ -127,6 +127,7 @@ func TestTraceflow(t *testing.T) {
 						TransportHeader: v1alpha1.TransportHeader{
 							TCP: &v1alpha1.TCPHeader{
 								DstPort: 80,
+								Flags:   2,
 							},
 						},
 					},
@@ -177,6 +178,7 @@ func TestTraceflow(t *testing.T) {
 						TransportHeader: v1alpha1.TransportHeader{
 							TCP: &v1alpha1.TCPHeader{
 								DstPort: 80,
+								Flags:   2,
 							},
 						},
 					},
@@ -425,26 +427,26 @@ func TestTraceflow(t *testing.T) {
 					return
 				}
 				if len(tc.expectedResults) == 1 {
-					if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0], t); err != nil {
+					if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0]); err != nil {
 						t.Fatal(err)
 						return
 					}
 				} else {
 					if tf.Status.Results[0].Observations[0].Component == v1alpha1.SpoofGuard {
-						if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0], t); err != nil {
+						if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0]); err != nil {
 							t.Fatal(err)
 							return
 						}
-						if err = compareObservations(tc.expectedResults[1], tf.Status.Results[1], t); err != nil {
+						if err = compareObservations(tc.expectedResults[1], tf.Status.Results[1]); err != nil {
 							t.Fatal(err)
 							return
 						}
 					} else {
-						if err = compareObservations(tc.expectedResults[0], tf.Status.Results[1], t); err != nil {
+						if err = compareObservations(tc.expectedResults[0], tf.Status.Results[1]); err != nil {
 							t.Fatal(err)
 							return
 						}
-						if err = compareObservations(tc.expectedResults[1], tf.Status.Results[0], t); err != nil {
+						if err = compareObservations(tc.expectedResults[1], tf.Status.Results[0]); err != nil {
 							t.Fatal(err)
 							return
 						}
@@ -503,7 +505,7 @@ func (data *TestData) enableTraceflow(t *testing.T) error {
 }
 
 // compareObservations compares expected results and actual results.
-func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResult, t *testing.T) error {
+func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResult) error {
 	if expected.Node != actual.Node {
 		return fmt.Errorf("NodeResult should be on %s, but is on %s", expected.Node, actual.Node)
 	}
