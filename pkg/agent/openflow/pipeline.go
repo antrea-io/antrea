@@ -801,7 +801,8 @@ func (c *client) l3FwdFlowToRemote(
 	tunnelPeer net.IP,
 	tunOFPort uint32,
 	category cookie.Category) binding.Flow {
-	return c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+	ipProto := parseIPProtocol(peerSubnet.IP)
+	return c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).MatchProtocol(ipProto).
 		MatchDstIPNet(peerSubnet).
 		Action().DecTTL().
 		// Rewrite src MAC to local gateway MAC and rewrite dst MAC to virtual MAC.
@@ -825,8 +826,9 @@ func (c *client) l3FwdFlowToRemoteViaGW(
 	localGatewayMAC net.HardwareAddr,
 	peerSubnet net.IPNet,
 	category cookie.Category) binding.Flow {
+	ipProto := parseIPProtocol(peerSubnet.IP)
 	l3FwdTable := c.pipeline[l3ForwardingTable]
-	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProto).
 		MatchDstIPNet(peerSubnet).
 		Action().DecTTL().
 		Action().SetDstMAC(localGatewayMAC).
