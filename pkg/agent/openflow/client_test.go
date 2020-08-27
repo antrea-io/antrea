@@ -43,9 +43,12 @@ var bridgeMgmtAddr = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeN
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	hostName := cacheKey
 	gwMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:FF")
-	gwIP, IPNet, _ := net.ParseCIDR("10.0.1.1/24")
+	gwIP, ipNet, _ := net.ParseCIDR("10.0.1.1/24")
 	peerNodeIP := net.ParseIP("192.168.1.1")
-	err := ofClient.InstallNodeFlows(hostName, gwMAC, *IPNet, gwIP, peerNodeIP, config.DefaultTunOFPort, 0)
+	peerConfig := map[*net.IPNet]net.IP{
+		ipNet: gwIP,
+	}
+	err := ofClient.InstallNodeFlows(hostName, gwMAC, peerConfig, peerNodeIP, config.DefaultTunOFPort, 0)
 	client := ofClient.(*client)
 	fCacheI, ok := client.nodeFlowCache.Load(hostName)
 	if ok {

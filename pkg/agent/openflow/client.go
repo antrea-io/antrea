@@ -71,8 +71,8 @@ type Client interface {
 	InstallNodeFlows(
 		hostname string,
 		localGatewayMAC net.HardwareAddr,
-		peerPodCIDR net.IPNet,
-		peerGatewayIP, tunnelPeerIP net.IP,
+		peerConfigs map[*net.IPNet]net.IP,
+		tunnelPeerIP net.IP,
 		tunOFPort, ipsecTunOFPort uint32) error
 
 	// UninstallNodeFlows removes the connection to the remote Node specified with the
@@ -285,20 +285,27 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 
 func (c *client) InstallNodeFlows(hostname string,
 	localGatewayMAC net.HardwareAddr,
-	peerPodCIDR net.IPNet,
-	peerGatewayIP, tunnelPeerIP net.IP,
+	peerConfigs map[*net.IPNet]net.IP,
+	tunnelPeerIP net.IP,
 	tunOFPort, ipsecTunOFPort uint32) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
-	flows := []binding.Flow{
-		c.arpResponderFlow(peerGatewayIP, cookie.Node),
+	var flows []binding.Flow
+
+	for peerPodCIDR, peerGatewayIP := range peerConfigs {
+		if peerGatewayIP.To4() != nil {
+			// Since broadcast is not supported in IPv6, ARP should happen only with IPv4 address, and ARP responder flows
+			// only work for IPv4 addresses.
+			flows = append(flows, c.arpResponderFlow(peerGatewayIP, cookie.Node))
+		}
+		if c.encapMode.NeedsEncapToPeer(tunnelPeerIP, c.nodeConfig.NodeIPAddr) {
+			flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, *peerPodCIDR, tunnelPeerIP, tunOFPort, cookie.Node))
+		} else {
+			flows = append(flows, c.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR, cookie.Node))
+		}
 	}
-	if c.encapMode.NeedsEncapToPeer(tunnelPeerIP, c.nodeConfig.NodeIPAddr) {
-		flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerIP, tunOFPort, cookie.Node))
-	} else {
-		flows = append(flows, c.l3FwdFlowToRemoteViaGW(localGatewayMAC, peerPodCIDR, cookie.Node))
-	}
+
 	if ipsecTunOFPort != 0 {
 		// When IPSec tunnel is enabled, packets received from the remote Node are
 		// input from the Node's IPSec tunnel port, not the default tunnel port. So,
