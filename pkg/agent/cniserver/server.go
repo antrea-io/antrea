@@ -358,12 +358,12 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		// Rollback to delete configurations once ADD is failure.
 		if !success {
 			if isInfraContainer {
-				klog.Warningf("CmdAdd has failed, and try to rollback")
+				klog.Warningf("CmdAdd has failed with containerID %s, and try to rollback", cniConfig.ContainerId)
 				if _, err := s.CmdDel(ctx, request); err != nil {
 					klog.Warningf("Failed to rollback after CNI add failure: %v", err)
 				}
 			} else {
-				klog.Warningf("CmdAdd has failed")
+				klog.Warningf("CmdAdd has failed with containerID: %s", cniConfig.ContainerId)
 			}
 		}
 	}()
@@ -425,7 +425,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 
 	var resultBytes bytes.Buffer
 	_ = result.PrintTo(&resultBytes)
-	klog.Infof("CmdAdd succeeded")
+	klog.Infof("CmdAdd succeeded with containerID %s", cniConfig.ContainerId)
 	// mark success as true to avoid rollback
 	success = true
 	return &cnipb.CniCmdResponse{CniResult: resultBytes.Bytes()}, nil

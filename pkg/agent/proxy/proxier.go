@@ -173,16 +173,19 @@ func (p *proxier) installServices() {
 			klog.Errorf("Error when installing Endpoints flows: %v", err)
 			continue
 		}
+		klog.Infof("Installed flows for Endpoints %v in Service %s", endpointUpdateList, svcPortName)
 		err := p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, endpointUpdateList)
 		if err != nil {
 			klog.Errorf("Error when installing Endpoints groups: %v", err)
 			p.endpointInstalledMap[svcPortName] = nil
 			continue
 		}
+		klog.Infof("Installed groups with ID %d for Service %s", groupID, svcPortName)
 		if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
 			klog.Errorf("Error when installing Service flows: %v", err)
 			continue
 		}
+		klog.Infof("Installed flows for Service %s", svcPortName)
 		// Install OpenFlow entries for the ingress IPs of LoadBalancer Service.
 		// The LoadBalancer Service should can be accessed from Pod, Node and
 		// external host.
