@@ -157,11 +157,16 @@ func TestApplyServerCert(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var err error
 			certDir, err = ioutil.TempDir("", "antrea-tls-test")
-			certReadyTimeout = 100 * time.Millisecond
 			if err != nil {
 				t.Fatalf("Unable to create temporary directory: %v", err)
 			}
 			defer os.RemoveAll(certDir)
+			selfSignedCertDir, err = ioutil.TempDir("", "antrea-self-signed")
+			if err != nil {
+				t.Fatalf("Unable to create temporary directory: %v", err)
+			}
+			defer os.RemoveAll(selfSignedCertDir)
+			certReadyTimeout = 100 * time.Millisecond
 			secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 			if tt.tlsCert != nil {
 				certutil.WriteCert(path.Join(certDir, TLSCertFile), tt.tlsCert)
@@ -203,9 +208,9 @@ func TestApplyServerCert(t *testing.T) {
 				assert.Equal(t, genericoptions.CertKey{CertFile: certDir + "/tls.crt", KeyFile: certDir + "/tls.key"}, secureServing.ServerCert.CertKey, "CertKey doesn't match")
 			}
 			if tt.wantGeneratedCert {
-				assert.NotNil(t, secureServing.ServerCert.GeneratedCert)
+				assert.Equal(t, genericoptions.CertKey{CertFile: selfSignedCertDir + "/antrea-controller.crt", KeyFile: selfSignedCertDir + "/antrea-controller.key"}, secureServing.ServerCert.CertKey, "SelfSigned certs not generated")
 			} else {
-				assert.Nil(t, secureServing.ServerCert.GeneratedCert)
+				assert.NotEqual(t, genericoptions.CertKey{CertFile: selfSignedCertDir + "/antrea-controller.crt", KeyFile: selfSignedCertDir + "/antrea-controller.key"}, secureServing.ServerCert.CertKey, "SelfSigned certs generated erroneously")
 			}
 			if tt.wantCACert != nil {
 				assert.Equal(t, tt.wantCACert, got.caContentProvider.CurrentCABundleContent(), "CA cert doesn't match")

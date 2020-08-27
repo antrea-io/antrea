@@ -15,8 +15,6 @@
 package certificate
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"os"
@@ -27,6 +25,8 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/kubernetes"
+	certutil "k8s.io/client-go/util/cert"
+	"k8s.io/client-go/util/keyutil"
 	"k8s.io/klog"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
@@ -36,6 +36,9 @@ import (
 var (
 	// certDir is the directory that the TLS Secret should be mounted to. Declaring it as a variable for testing.
 	certDir = "/var/run/antrea/antrea-controller-tls"
+
+	// selfSignedCertDir is the dir Antrea self signed certificates are created in.
+	selfSignedCertDir = "/var/run/antrea/antrea-controller-self-signed"
 	// certReadyTimeout is the timeout we will wait for the TLS Secret being ready. Declaring it as a variable for testing.
 	certReadyTimeout = 2 * time.Minute
 
@@ -123,16 +126,15 @@ func generateSelfSignedCertificate(secureServing *options.SecureServingOptionsWi
 	var err error
 	var caContentProvider dynamiccertificates.CAContentProvider
 
-	// Set the PairName but leave certificate directory blank to generate in-memory by default.
-	secureServing.ServerCert.CertDirectory = ""
+	// Set the PairName and CertDirectory to generate the certificate files.
+	secureServing.ServerCert.CertDirectory = selfSignedCertDir
 	secureServing.ServerCert.PairName = "antrea-controller"
 
 	if err := secureServing.MaybeDefaultWithSelfSignedCerts("antrea", GetAntreaServerNames(), []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 
-	certPEMBlock, _ := secureServing.ServerCert.GeneratedCert.CurrentCertKeyContent()
-	caContentProvider, err = dynamiccertificates.NewStaticCAContent("self-signed cert", certPEMBlock)
+	caContentProvider, err = dynamiccertificates.NewDynamicCAContentFromFile("self-signed cert", secureServing.ServerCert.CertKey.CertFile)
 	if err != nil {
 		return nil, fmt.Errorf("error reading self-signed CA certificate: %v", err)
 	}
@@ -145,20 +147,15 @@ func generateSelfSignedCertificate(secureServing *options.SecureServingOptionsWi
 // Also can be used to pass a user provided rotation window.
 func nextRotationDuration(secureServing *options.SecureServingOptionsWithLoopback,
 	maxRotateDuration time.Duration) (time.Duration, error) {
-	pemCert, pemKey := secureServing.ServerCert.GeneratedCert.CurrentCertKeyContent()
-	cert, err := tls.X509KeyPair(pemCert, pemKey)
-	if err != nil {
-		return time.Duration(0), fmt.Errorf("error parsing generated certificate: %v", err)
-	}
 
-	x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+	x509Cert, err := certutil.CertsFromFile(secureServing.ServerCert.CertKey.CertFile)
 	if err != nil {
 		return time.Duration(0), fmt.Errorf("error parsing generated certificate: %v", err)
 	}
 
 	// Attempt to rotate the certificate at the half-way point of expiration.
 	// Unless the halfway point is longer than maxRotateDuration
-	duration := x509Cert.NotAfter.Sub(time.Now()) / 2
+	duration := x509Cert[0].NotAfter.Sub(time.Now()) / 2
 
 	waitDuration := duration
 	if maxRotateDuration < waitDuration {
@@ -178,15 +175,35 @@ func rotateSelfSignedCertificates(c *CACertController, secureServing *options.Se
 			klog.Errorf("error reading expiration date of cert: %v", err)
 			return
 		}
+
+		klog.Infof("Certificate will be rotated at %v", time.Now().Add(rotationDuration))
+
 		time.Sleep(rotationDuration)
 
 		klog.Infof("Rotating self signed certificate")
 
-		caContentProvider, err := generateSelfSignedCertificate(secureServing)
+		err = generateNewServingCertificate(secureServing)
 		if err != nil {
 			klog.Errorf("error generating new cert: %v", err)
 			return
 		}
-		c.UpdateCertificate(caContentProvider)
+		c.UpdateCertificate()
 	}
+}
+
+func generateNewServingCertificate(secureServing *options.SecureServingOptionsWithLoopback) error {
+	cert, key, err := certutil.GenerateSelfSignedCertKeyWithFixtures("antrea", []net.IP{net.ParseIP("127.0.0.1")}, GetAntreaServerNames(), secureServing.ServerCert.FixtureDirectory)
+	if err != nil {
+		return fmt.Errorf("unable to generate self signed cert: %v", err)
+	}
+
+	if err := certutil.WriteCert(secureServing.ServerCert.CertKey.CertFile, cert); err != nil {
+		return err
+	}
+	if err := keyutil.WriteKey(secureServing.ServerCert.CertKey.KeyFile, key); err != nil {
+		return err
+	}
+	klog.Infof("Generated self-signed cert (%s, %s)", secureServing.ServerCert.CertKey.CertFile, secureServing.ServerCert.CertKey.KeyFile)
+
+	return nil
 }
