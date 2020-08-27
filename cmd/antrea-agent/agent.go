@@ -150,7 +150,8 @@ func run(o *Options) error {
 			ovsBridgeClient,
 			ifaceStore,
 			networkConfig,
-			nodeConfig)
+			nodeConfig,
+			serviceCIDRNet)
 	}
 
 	// podUpdates is a channel for receiving Pod updates from CNIServer and

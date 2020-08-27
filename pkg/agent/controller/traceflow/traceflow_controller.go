@@ -79,6 +79,7 @@ type Controller struct {
 	interfaceStore         interfacestore.InterfaceStore
 	networkConfig          *config.NetworkConfig
 	nodeConfig             *config.NodeConfig
+	serviceCIDR            *net.IPNet // K8s Service ClusterIP CIDR
 	queue                  workqueue.RateLimitingInterface
 	runningTraceflowsMutex sync.RWMutex
 	runningTraceflows      map[uint8]string // tag->traceflowName if tf.Status.Phase is Running.
@@ -97,7 +98,8 @@ func NewTraceflowController(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
-	nodeConfig *config.NodeConfig) *Controller {
+	nodeConfig *config.NodeConfig,
+	serviceCIDR *net.IPNet) *Controller {
 	c := &Controller{
 		kubeClient:            kubeClient,
 		traceflowClient:       traceflowClient,
@@ -109,6 +111,7 @@ func NewTraceflowController(
 		interfaceStore:        interfaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,
+		serviceCIDR:           serviceCIDR,
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "traceflow"),
 		runningTraceflows:     make(map[uint8]string),
 		injectedTags:          make(map[uint8]string)}
@@ -292,6 +295,17 @@ func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) error {
 func (c *Controller) validateTraceflow(tf *opsv1alpha1.Traceflow) error {
 	if tf.Spec.Destination.Service != "" && !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		return errors.New("using Service destination requires AntreaProxy feature enabled")
+	}
+	if tf.Spec.Destination.IP != "" {
+		destIP := net.ParseIP(tf.Spec.Destination.IP)
+		if destIP == nil {
+			return fmt.Errorf("destination IP is not valid: %s", tf.Spec.Destination.IP)
+		}
+		// When AntreaProxy is enabled, serviceCIDR is not required and may be set to a
+		// default value which does not match the cluster configuration.
+		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) && c.serviceCIDR.Contains(destIP) {
+			return errors.New("using ClusterIP destination requires AntreaProxy feature enabled")
+		}
 	}
 	return nil
 }
