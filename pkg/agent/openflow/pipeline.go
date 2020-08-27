@@ -1315,7 +1315,7 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 // policyConjKeyFuncKeyFunc knows how to get key of a *policyRuleConjunction.
 func policyConjKeyFunc(obj interface{}) (string, error) {
 	conj := obj.(*policyRuleConjunction)
-	return string(conj.id), nil
+	return fmt.Sprint(conj.id), nil
 }
 
 // priorityIndexFunc knows how to get priority of actionFlows in a *policyRuleConjunction.
