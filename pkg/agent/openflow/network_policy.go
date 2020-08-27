@@ -988,7 +988,7 @@ func (c *policyRuleConjunction) getAllFlowKeys() []string {
 }
 
 func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction {
-	conj, found, _ := c.policyCache.GetByKey(string(ruleID))
+	conj, found, _ := c.policyCache.GetByKey(fmt.Sprint(ruleID))
 	if !found {
 		return nil
 	}
@@ -1305,7 +1305,7 @@ func (c *client) ReassignFlowPriorities(updates map[uint16]uint16, table binding
 		return err
 	}
 	for conjID, actionUpdates := range conjFlowUpdates {
-		originalConj, _, _ := c.policyCache.GetByKey(string(conjID))
+		originalConj, _, _ := c.policyCache.GetByKey(fmt.Sprint(conjID))
 		conj := originalConj.(*policyRuleConjunction)
 		updatedConj := c.updateConjunctionActionFlows(conj, actionUpdates)
 		c.updateConjunctionMatchFlows(updatedConj, actionUpdates.newPriority)
