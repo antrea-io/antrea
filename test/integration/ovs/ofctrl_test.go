@@ -832,6 +832,8 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	_, AllIPs, _ := net.ParseCIDR("0.0.0.0/0")
 	_, conjSrcIPNet, _ := net.ParseCIDR("192.168.3.0/24")
 	gwMACData, _ := strconv.ParseUint(strings.Replace(gwMAC.String(), ":", "", -1), 16, 64)
+	_, peerSubnetIPv6, _ := net.ParseCIDR("fd74:ca9b:172:21::/64")
+	tunnelPeerIPv6 := net.ParseIP("20:ca9b:172:35::3")
 	flows = append(flows,
 		table.BuildFlow(priorityNormal-10).
 			Cookie(getCookieID()).
@@ -936,6 +938,15 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Action().SetTunnelDst(tunnelPeer).
 			Action().GotoTable(table.GetNext()).
 			Done(),
+		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+			Cookie(getCookieID()).
+			MatchDstIPNet(*peerSubnetIPv6).
+			Action().DecTTL().
+			Action().SetSrcMAC(gwMAC).
+			Action().SetDstMAC(vMAC).
+			Action().SetTunnelDst(tunnelPeerIPv6).
+			Action().GotoTable(table.GetNext()).
+			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchDstIP(gwIP).
@@ -999,6 +1010,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		&ExpectFlow{"priority=190,ct_state=+new+trk,ip", fmt.Sprintf("ct(commit,table=%d,zone=65520)", table.GetNext())},
 		&ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,nw_dst=192.168.2.0/24", fmt.Sprintf("dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:10.1.1.2->tun_dst,%s", gotoTableAction)},
+		&ExpectFlow{"priority=200,ipv6,ipv6_dst=fd74:ca9b:172:21::/64", fmt.Sprintf("dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:20:ca9b:172:35::3->tun_ipv6_dst,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,nw_dst=192.168.1.1", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_dst,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,dl_dst=aa:aa:aa:aa:aa:13", fmt.Sprintf("load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,reg0=0x10000/0x10000", "output:NXM_NX_REG1[]"},
