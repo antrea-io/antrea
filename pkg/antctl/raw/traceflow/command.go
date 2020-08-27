@@ -75,7 +75,7 @@ func init() {
   Start a Traceflow from busybox0 to destination IP, source is in Namespace default
   $antctl traceflow -S busybox0 -D 123.123.123.123
   Start a Traceflow from busybox0 to destination Service, source and destination are in Namespace default
-  $antctl traceflow -S busybox0 -D svc0
+  $antctl traceflow -S busybox0 -D svc0 -f tcp,tcp_dst=80,tcp_flags=2
   Start a Traceflow from busybox0 in Namespace ns0 to busybox1 in Namespace ns1, output type is json
   $antctl traceflow -S ns0/busybox0 -D ns1/busybox1 -o json
   Start a Traceflow from busybox0 to busybox1, with TCP header and 80 as destination port
@@ -88,7 +88,7 @@ func init() {
 	Command.Flags().StringVarP(&option.destination, "destination", "D", "", "destination of the Traceflow: Namespace/Pod, Pod, Namespace/Service, Service or IP")
 	Command.Flags().StringVarP(&option.outputType, "output", "o", "yaml", "output type: yaml (default), json")
 	Command.Flags().BoolVarP(&option.waiting, "wait", "", true, "if false, command returns without retrieving results")
-	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the Traceflow packet")
+	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the Traceflow packet, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst")
 }
 
 func runE(cmd *cobra.Command, _ []string) error {
@@ -256,6 +256,12 @@ func parseFlow() (*v1alpha1.Packet, error) {
 			pkt.TransportHeader.TCP = new(v1alpha1.TCPHeader)
 		}
 		pkt.TransportHeader.TCP.DstPort = int32(r)
+	}
+	if r, ok := fields["tcp_flags"]; ok {
+		if pkt.TransportHeader.TCP == nil {
+			pkt.TransportHeader.TCP = new(v1alpha1.TCPHeader)
+		}
+		pkt.TransportHeader.TCP.Flags = int32(r)
 	}
 	if r, ok := fields["udp_src"]; ok {
 		pkt.TransportHeader.UDP = new(v1alpha1.UDPHeader)
