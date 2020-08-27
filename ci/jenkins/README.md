@@ -58,7 +58,7 @@ should be deleted. This ensures that all tests are run on a clean testbed.
     
   |  K8s Version   |     Node OS     | VPC Native Mode (on by default) |  Status  |
   | :------------: | :-------------: | :-----------------------------: |:-------: |
-  | 1.16.11-gke.5  |     Ubuntu      |  On                             |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)|
+  | 1.16.13-gke.1  |     Ubuntu      |  On                             |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)|
   
 * [AKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)
   community tests on AKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
