@@ -148,13 +148,13 @@ func GetIPWithFamily(ips []net.IP, addrFamily uint8) (net.IP, error) {
 				return ip, nil
 			}
 		}
-		return nil, errors.New("no IP found with the specified AddressFamily")
+		return nil, errors.New("no IP found with IPv6 AddressFamily")
 	} else {
 		for _, ip := range ips {
 			if ip.To4() != nil {
 				return ip, nil
 			}
 		}
-		return nil, errors.New("no IP found with the specified AddressFamily")
+		return nil, errors.New("no IP found with IPv4 AddressFamily")
 	}
 }
