@@ -401,3 +401,82 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	assert.Containsf(t, output, ipAddr.String(), output)
 	_ = netlink.LinkDel(gwLink)
 }
+
+func TestIPv6RoutesAndNeighbors(t *testing.T) {
+	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
+		// test changes file system, routing table. Run in contain only
+		t.Skipf("Skip test runs only in container")
+	}
+
+	gwLink := createDummyGW(t)
+	defer netlink.LinkDel(gwLink)
+
+	routeClient, err := route.NewClient(serviceCIDR, config.TrafficEncapModeEncap)
+	assert.Nil(t, err)
+	_, ipv6Subnet, _ := net.ParseCIDR("fd74:ca9b:172:19::/64")
+	gwIPv6 := net.ParseIP("fd74:ca9b:172:19::1")
+	dualGWConfig := &config.GatewayConfig{IPv4: gwIP, IPv6: gwIPv6, MAC: gwMAC, Name: gwName, LinkIndex: gwLink.Attrs().Index}
+	dualNodeConfig := &config.NodeConfig{
+		Name:          "test",
+		PodIPv4CIDR:   podCIDR,
+		PodIPv6CIDR:   ipv6Subnet,
+		NodeIPAddr:    nodeIP,
+		GatewayConfig: dualGWConfig,
+	}
+	err = routeClient.Initialize(dualNodeConfig)
+	assert.Nil(t, err)
+
+	tcs := []struct {
+		// variations
+		peerCIDR string
+		// expectations
+		uplink netlink.Link
+	}{
+		{peerCIDR: "10.10.20.0/24", uplink: gwLink},
+		{peerCIDR: "fd74:ca9b:172:18::/64", uplink: gwLink},
+	}
+
+	for _, tc := range tcs {
+		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
+		nhCIDRIP := ip.NextIP(peerCIDR.IP)
+		if err := routeClient.AddRoutes(peerCIDR, localPeerIP, nhCIDRIP); err != nil {
+			t.Errorf("route add failed with err %v", err)
+		}
+
+		link := tc.uplink
+		nhIP := nhCIDRIP
+		var expRouteStr, ipRoute, expNeighStr, ipNeigh string
+		if nhIP.To4() != nil {
+			onlink := "onlink"
+			expRouteStr = fmt.Sprintf("%s via %s dev %s %s", peerCIDR, nhIP, link.Attrs().Name, onlink)
+			ipRoute, _ = ExecOutputTrim(fmt.Sprintf("ip route show | grep %s", tc.peerCIDR))
+		} else {
+			expRouteStr = fmt.Sprintf("%s via %s dev %s", peerCIDR, nhIP, link.Attrs().Name)
+			ipRoute, _ = ExecOutputTrim(fmt.Sprintf("ip -6 route show | grep %s", tc.peerCIDR))
+			expNeighStr = fmt.Sprintf("%s dev %s lladdr aa:bb:cc:dd:ee:ff PERMANENT", nhIP, link.Attrs().Name)
+			ipNeigh, _ = ExecOutputTrim(fmt.Sprintf("ip -6 neighbor show | grep %s", nhIP))
+		}
+		expRouteStr = strings.Join(strings.Fields(expRouteStr), "")
+		if len(ipRoute) > len(expRouteStr) {
+			ipRoute = ipRoute[:len(expRouteStr)]
+		}
+		if !assert.Equal(t, expRouteStr, ipRoute) {
+			t.Errorf("mismatch route")
+		}
+		if expNeighStr != "" {
+			expNeighStr = strings.Join(strings.Fields(expNeighStr), "")
+			if len(ipNeigh) > len(expNeighStr) {
+				ipNeigh = ipNeigh[:len(expNeighStr)]
+			}
+			if !assert.Equal(t, expNeighStr, ipNeigh) {
+				t.Errorf("mismatch IPv6 Neighbor")
+			}
+		}
+		if err := routeClient.DeleteRoutes(peerCIDR); err != nil {
+			t.Errorf("route delete failed with err %v", err)
+		}
+		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", peerCIDR))
+		assert.NoError(t, err)
+		assert.Equal(t, "", output, "expected no routes to %s", peerCIDR)
+	}
+}
