@@ -295,8 +295,12 @@ func (c *client) InstallNodeFlows(hostname string,
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
-	flows := []binding.Flow{
-		c.arpResponderFlow(peerGatewayIP, cookie.Node),
+	var flows []binding.Flow
+
+	if peerGatewayIP.To4() != nil {
+		// Since broadcast is not supported in IPv6, ARP should happen only with IPv4 address, and ARP responder flows
+		// only work for IPv4 addresses.
+		flows = append(flows, c.arpResponderFlow(peerGatewayIP, cookie.Node))
 	}
 	if c.encapMode.NeedsEncapToPeer(tunnelPeerIP, c.nodeConfig.NodeIPAddr) {
 		flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, peerPodCIDR, tunnelPeerIP, tunOFPort, cookie.Node))
