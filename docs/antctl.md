@@ -341,8 +341,8 @@ The required options for this command
 are `source` and `destination`, which consist of namespace and pod, service or IP. The command supports
 yaml and json output. If users want a non blocking operation, an option: `--wait=false` can
 be added to start the traceflow without waiting for result. Then, the deletion operation
-will not be conducted. Besides, users can specify header protocol (ICMP, TCP and UDP) and
-source/destination ports.
+will not be conducted. Besides, users can specify header protocol (ICMP, TCP and UDP),
+source/destination ports and TCP flags.
 
 e.g.
 ```bash

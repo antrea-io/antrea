@@ -304,7 +304,7 @@ var CommandList = &commandList{
 						},
 						{
 							name:      "destination",
-							usage:     "Destination of the packet. Can be an OVS port name, or a (local or remote) Pod or a Service (specified by <Namespace>/<name>), or an IP address. If specified, the destination's IP address (the ClusterIP for a Service) will be used as the tacing packet's destination IP address, and the 'nw_dst' field should not be added in the 'flow' argument.",
+							usage:     "Destination of the packet. Can be an OVS port name, or a (local or remote) Pod or a Service (specified by <Namespace>/<name>). If there are both a Pod and a Service matching the destination name in a Namespace, the Pod will be set as the destination. It can also be an IP address. If specified, the destination's IP address (the ClusterIP for a Service) will be used as the tacing packet's destination IP address, and the 'nw_dst' field should not be added in the 'flow' argument.",
 							shorthand: "D",
 						},
 						{
