@@ -89,22 +89,20 @@ func newCACertController(caContentProvider dynamiccertificates.CAContentProvider
 	return c
 }
 
-// UpdateCertificate updates the certificate to a new one. Used to rotate statically signed certificates before they
-// expire.
-func (c *CACertController) UpdateCertificate(caContentProvider dynamiccertificates.CAContentProvider) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+func (c *CACertController) UpdateCertificate() error {
+	if controller, ok := c.caContentProvider.(dynamiccertificates.ControllerRunner); ok {
+		if err := controller.RunOnce(); err != nil {
+			klog.Warningf("Updating of CA content failed: %v", err)
+			c.Enqueue()
+			return err
+		}
+	}
 
-	c.caContentProvider = caContentProvider
-
-	// Need to trigger a sync.
-	c.Enqueue()
+	return nil
 }
 
 // getCertificate exposes the certificate for testing.
 func (c *CACertController) getCertificate() []byte {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
 	return c.caContentProvider.CurrentCABundleContent()
 }
 
@@ -115,11 +113,7 @@ func (c *CACertController) Enqueue() {
 }
 
 func (c *CACertController) syncCACert() error {
-	caCert := func() []byte {
-		c.mutex.RLock()
-		defer c.mutex.RUnlock()
-		return c.caContentProvider.CurrentCABundleContent()
-	}()
+	caCert := c.caContentProvider.CurrentCABundleContent()
 
 	if err := c.syncConfigMap(caCert); err != nil {
 		return err
