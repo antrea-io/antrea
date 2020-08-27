@@ -11,6 +11,15 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.9.2 - 2020-08-27
+
+### Fixed
+
+- Fix incorrect conversion from unsigned integer to string when indexing the flows responsible for the implementation of a NetworkPolicy rule by their conjunction ID / rule ID; this issue could have caused incorrect NetworkPolicy enforcement when a large number of rules are applied to a Node. ([#1161](https://github.com/vmware-tanzu/antrea/pull/1161), [@weiqiangt])
+- Fix self-signed certificate rotation in the Antrea Controller: after rotation (at half the expiration time), the new certificate was distributed to clients while the Controller apiserver kept using the old certificate. ([#1154](https://github.com/vmware-tanzu/antrea/pull/1154), [@MatthewHinton56])
+- Support setting TCP flags when initiating a Traceflow request from antctl; for Pod-to-Service trace packets, the SYN flag must be set. ([#1128](https://github.com/vmware-tanzu/antrea/pull/1128), [@lzhecheng])
+- Generate correct filename for support bundle archive temporary file: on Windows the name included an asterisk which is invalid. ([#1150](https://github.com/vmware-tanzu/antrea/pull/1150), [@weiqiangt]) [Windows]
+
 ## 0.9.1 - 2020-08-21
 
 ### Changed
