@@ -123,7 +123,7 @@
           node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
           branches:
-          - ipv6
+          - ${{sha1}}
           builders:
           - builder-integration
           trigger_phrase: null
