@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -43,6 +44,8 @@ const (
 	// Antrea managed ipset.
 	// antreaPodIPSet contains all Pod CIDRs of this cluster.
 	antreaPodIPSet = "ANTREA-POD-IP"
+	// antreaPodIP6Set contains all IPv6 Pod CIDRs of this cluster.
+	antreaPodIP6Set = "ANTREA-POD-IP6"
 
 	// Antrea managed iptables chains.
 	antreaForwardChain     = "ANTREA-FORWARD"
@@ -55,6 +58,12 @@ const (
 // Client implements Interface.
 var _ Interface = &Client{}
 
+var (
+	// globalVMAC is used in the IPv6 neighbor configuration to advertise ND solicitation for the IPv6 address of the
+	// host gateway interface on other Nodes.
+	globalVMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
+)
+
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
 type Client struct {
 	nodeConfig    *config.NodeConfig
@@ -64,6 +73,8 @@ type Client struct {
 	ipt           *iptables.Client
 	// nodeRoutes caches ip routes to remote Pods. It's a map of podCIDR to routes.
 	nodeRoutes sync.Map
+	// nodeNeighbors caches IPv6 Neighbors to remote host gateway
+	nodeNeighbors sync.Map
 }
 
 // NewClient returns a route client.
@@ -125,14 +136,30 @@ func (c *Client) initIPSet() error {
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		return nil
 	}
-	if err := ipset.CreateIPSet(antreaPodIPSet, ipset.HashNet); err != nil {
+	if err := ipset.CreateIPSet(antreaPodIPSet, ipset.HashNet, false); err != nil {
 		return err
 	}
-	// Ensure its own PodCIDR is in it.
-	if err := ipset.AddEntry(antreaPodIPSet, c.nodeConfig.PodIPv4CIDR.String()); err != nil {
+	if err := ipset.CreateIPSet(antreaPodIP6Set, ipset.HashNet, true); err != nil {
 		return err
+	}
+
+	// Loop all valid PodCIDR and add into the corresponding ipset.
+	for _, podCIDR := range []*net.IPNet{c.nodeConfig.PodIPv4CIDR, c.nodeConfig.PodIPv6CIDR} {
+		if podCIDR != nil {
+			ipsetName := getIPSetName(podCIDR.IP)
+			if err := ipset.AddEntry(ipsetName, podCIDR.String()); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
+}
+
+func getIPSetName(ip net.IP) string {
+	if ip.To4() == nil {
+		return antreaPodIP6Set
+	}
+	return antreaPodIPSet
 }
 
 // writeEKSMangleRule writes an additional iptables mangle rule to the
@@ -161,6 +188,9 @@ func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
 // initIPTables ensure that the iptables infrastructure we use is set up.
 // It's idempotent and can safely be called on every startup.
 func (c *Client) initIPTables() error {
+	if c.nodeConfig.PodIPv6CIDR != nil {
+		c.ipt.SetIPv6Supported(true)
+	}
 	// Create the antrea managed chains and link them to built-in chains.
 	// We cannot use iptables-restore for these jump rules because there
 	// are non antrea managed rules in built-in chains.
@@ -181,6 +211,27 @@ func (c *Client) initIPTables() error {
 		}
 	}
 
+	// Use iptables-restore to configure IPv4 settings.
+	if c.nodeConfig.PodIPv4CIDR != nil {
+		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR, antreaPodIPSet)
+		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
+		if err := c.ipt.Restore(iptablesData.Bytes(), false, false); err != nil {
+			return err
+		}
+	}
+
+	// Use ip6tables-restore to configure IPv6 settings.
+	if c.nodeConfig.PodIPv6CIDR != nil {
+		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR, antreaPodIP6Set)
+		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
+		if err := c.ipt.Restore(iptablesData.Bytes(), false, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string) *bytes.Buffer {
 	// Create required rules in the antrea chains.
 	// Use iptables-restore as it flushes the involved chains and creates the desired rules
 	// with a single call, instead of string matching to clean up stale rules.
@@ -252,17 +303,12 @@ func (c *Client) initIPTables() error {
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: masquerade pod to external packets"`,
-			"-s", c.nodeConfig.PodIPv4CIDR.String(), "-m", "set", "!", "--match-set", antreaPodIPSet, "dst",
+			"-s", podCIDR.String(), "-m", "set", "!", "--match-set", podIPSet, "dst",
 			"-j", iptables.MasqueradeTarget,
 		}...)
 	}
 	writeLine(iptablesData, "COMMIT")
-
-	// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
-	if err := c.ipt.Restore(iptablesData.Bytes(), false); err != nil {
-		return err
-	}
-	return nil
+	return iptablesData
 }
 
 func (c *Client) initIPRoutes() error {
@@ -281,26 +327,28 @@ func (c *Client) initIPRoutes() error {
 func (c *Client) Reconcile(podCIDRs []string) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 
-	// Remove orphaned podCIDRs from antreaPodIPSet.
-	entries, err := ipset.ListEntries(antreaPodIPSet)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if desiredPodCIDRs.Has(entry) {
-			continue
-		}
-		klog.Infof("Deleting orphaned PodIP %s from ipset and route table", entry)
-		if err := ipset.DelEntry(antreaPodIPSet, entry); err != nil {
-			return err
-		}
-		_, cidr, err := net.ParseCIDR(entry)
+	// Remove orphaned podCIDRs from ipset.
+	for _, ipsetName := range []string{antreaPodIPSet, antreaPodIP6Set} {
+		entries, err := ipset.ListEntries(ipsetName)
 		if err != nil {
 			return err
 		}
-		route := &netlink.Route{Dst: cidr}
-		if err := netlink.RouteDel(route); err != nil && err != unix.ESRCH {
-			return err
+		for _, entry := range entries {
+			if desiredPodCIDRs.Has(entry) {
+				continue
+			}
+			klog.Infof("Deleting orphaned PodIP %s from ipset and route table", entry)
+			if err := ipset.DelEntry(ipsetName, entry); err != nil {
+				return err
+			}
+			_, cidr, err := net.ParseCIDR(entry)
+			if err != nil {
+				return err
+			}
+			route := &netlink.Route{Dst: cidr}
+			if err := netlink.RouteDel(route); err != nil && err != unix.ESRCH {
+				return err
+			}
 		}
 	}
 
@@ -322,6 +370,27 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 			return err
 		}
 	}
+
+	// Remove any unknown IPv6 neighbors on antrea-gw0.
+	desiredGWs := getIPv6Gateways(podCIDRs)
+	// Return immediately if there is no IPv6 gateway address configured on the Nodes.
+	if desiredGWs.Len() == 0 {
+		return nil
+	}
+	// Remove orphaned IPv6 Neighbors from host network.
+	actualNeighbors, err := c.listIPv6NeighborsOnGateway()
+	if err != nil {
+		return err
+	}
+	for neighIP, actualNeigh := range actualNeighbors {
+		if desiredGWs.Has(neighIP) {
+			continue
+		}
+		klog.V(4).Infof("Deleting orphaned IPv6 neighbor %v", actualNeigh)
+		if err := netlink.NeighDel(actualNeigh); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -329,22 +398,72 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 func (c *Client) listIPRoutesOnGW() ([]netlink.Route, error) {
 	filter := &netlink.Route{
 		LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex}
-	return netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_OIF)
+	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_OIF)
+	if err != nil {
+		return nil, err
+	}
+	ipv6Routes, err := netlink.RouteListFiltered(netlink.FAMILY_V6, filter, netlink.RT_FILTER_OIF)
+	if err != nil {
+		return nil, err
+	}
+	routes = append(routes, ipv6Routes...)
+	return routes, nil
+}
+
+// getIPv6Gateways returns the IPv6 gateway addresses of the given CIDRs.
+func getIPv6Gateways(podCIDRs []string) sets.String {
+	ipv6GWs := sets.NewString()
+	for _, podCIDR := range podCIDRs {
+		peerPodCIDRAddr, _, _ := net.ParseCIDR(podCIDR)
+		if peerPodCIDRAddr.To4() != nil {
+			continue
+		}
+		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
+		ipv6GWs.Insert(peerGatewayIP.String())
+	}
+	return ipv6GWs
+}
+
+func (c *Client) listIPv6NeighborsOnGateway() (map[string]*netlink.Neigh, error) {
+	neighs, err := netlink.NeighList(c.nodeConfig.GatewayConfig.LinkIndex, netlink.FAMILY_V6)
+	if err != nil {
+		return nil, err
+	}
+	neighMap := make(map[string]*netlink.Neigh)
+	for i := range neighs {
+		if neighs[i].IP == nil {
+			continue
+		}
+		neighMap[neighs[i].IP.String()] = &neighs[i]
+	}
+	return neighMap, nil
 }
 
 // AddRoutes adds routes to a new podCIDR. It overrides the routes if they already exist.
 func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeIP, nodeGwIP net.IP) error {
 	podCIDRStr := podCIDR.String()
+	ipsetName := getIPSetName(podCIDR.IP)
 	// Add this podCIDR to antreaPodIPSet so that packets to them won't be masqueraded when they leave the host.
-	if err := ipset.AddEntry(antreaPodIPSet, podCIDRStr); err != nil {
+	if err := ipset.AddEntry(ipsetName, podCIDRStr); err != nil {
 		return err
 	}
 	// Install routes to this Node.
 	route := &netlink.Route{
 		Dst: podCIDR,
 	}
+	var routes []*netlink.Route
 	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
-		route.Flags = int(netlink.FLAG_ONLINK)
+		if podCIDR.IP.To4() == nil {
+			// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
+			routes = []*netlink.Route{
+				{
+					Dst:       &net.IPNet{IP: nodeGwIP, Mask: net.IPMask{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
+					LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+				},
+			}
+		} else {
+			route.Flags = int(netlink.FLAG_ONLINK)
+		}
 		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
 		route.Gw = nodeGwIP
 	} else if !c.networkConfig.TrafficEncapMode.NeedsRoutingToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
@@ -354,31 +473,61 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeIP, nodeGwIP net.IP) error {
 		// NoEncap traffic to Node on the same subnet. It is handled by host default route.
 		return nil
 	}
-	if err := netlink.RouteReplace(route); err != nil {
-		return fmt.Errorf("failed to install route to peer %s with netlink: %v", nodeIP, err)
+	routes = append(routes, route)
+
+	for _, route := range routes {
+		if err := netlink.RouteReplace(route); err != nil {
+			return fmt.Errorf("failed to install route to peer %s with netlink: %v", nodeIP, err)
+		}
 	}
-	c.nodeRoutes.Store(podCIDRStr, route)
+
+	if podCIDR.IP.To4() == nil {
+		// Add IPv6 neighbor if the given podCIDR is using IPv6 address.
+		neigh := &netlink.Neigh{
+			LinkIndex:    c.nodeConfig.GatewayConfig.LinkIndex,
+			Family:       netlink.FAMILY_V6,
+			State:        netlink.NUD_PERMANENT,
+			IP:           nodeGwIP,
+			HardwareAddr: globalVMAC,
+		}
+		if err := netlink.NeighSet(neigh); err != nil {
+			return fmt.Errorf("failed to add neigh %v to gw %s: %v", neigh, c.nodeConfig.GatewayConfig.Name, err)
+		}
+		c.nodeNeighbors.Store(podCIDRStr, neigh)
+	}
+
+	c.nodeRoutes.Store(podCIDRStr, routes)
 	return nil
 }
 
 // DeleteRoutes deletes routes to a PodCIDR. It does nothing if the routes doesn't exist.
 func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	podCIDRStr := podCIDR.String()
+	ipsetName := getIPSetName(podCIDR.IP)
 	// Delete this podCIDR from antreaPodIPSet as the CIDR is no longer for Pods.
-	if err := ipset.DelEntry(antreaPodIPSet, podCIDRStr); err != nil {
+	if err := ipset.DelEntry(ipsetName, podCIDRStr); err != nil {
 		return err
 	}
 
-	i, exists := c.nodeRoutes.Load(podCIDRStr)
-	if !exists {
-		return nil
+	routes, exists := c.nodeRoutes.Load(podCIDRStr)
+	if exists {
+		for _, r := range routes.([]*netlink.Route) {
+			klog.V(4).Infof("Deleting route %v", r)
+			if err := netlink.RouteDel(r); err != nil && err != unix.ESRCH {
+				return err
+			}
+		}
+		c.nodeRoutes.Delete(podCIDRStr)
 	}
-	r := i.(*netlink.Route)
-	klog.V(4).Infof("Deleting route %v", r)
-	if err := netlink.RouteDel(r); err != nil && err != unix.ESRCH {
-		return err
+	if podCIDR.IP.To4() == nil {
+		neigh, exists := c.nodeNeighbors.Load(podCIDRStr)
+		if exists {
+			if err := netlink.NeighDel(neigh.(*netlink.Neigh)); err != nil {
+				return err
+			}
+			c.nodeNeighbors.Delete(podCIDRStr)
+		}
 	}
-	c.nodeRoutes.Delete(podCIDRStr)
 	return nil
 }
 
@@ -404,32 +553,37 @@ func (c *Client) MigrateRoutesToGw(linkName string) error {
 		return fmt.Errorf("failed to get link %s: %w", linkName, err)
 	}
 
-	// Swap route first then address, otherwise route gets removed when address is removed.
-	routes, err := netlink.RouteList(link, netlink.FAMILY_V4)
-	if err != nil {
-		return fmt.Errorf("failed to get routes for link %s: %w", linkName, err)
-	}
-	for i := range routes {
-		route := routes[i]
-		route.LinkIndex = gwLink.Attrs().Index
-		if err = netlink.RouteReplace(&route); err != nil {
-			return fmt.Errorf("failed to add route %v to link %s: %w", &route, gwLink.Attrs().Name, err)
+	for _, family := range []int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
+		// Swap route first then address, otherwise route gets removed when address is removed.
+		routes, err := netlink.RouteList(link, family)
+		if err != nil {
+			return fmt.Errorf("failed to get routes for link %s: %w", linkName, err)
 		}
-	}
+		for i := range routes {
+			route := routes[i]
+			route.LinkIndex = gwLink.Attrs().Index
+			if err = netlink.RouteReplace(&route); err != nil {
+				return fmt.Errorf("failed to add route %v to link %s: %w", &route, gwLink.Attrs().Name, err)
+			}
+		}
 
-	// Swap address if any.
-	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
-	if err != nil {
-		return fmt.Errorf("failed to get addresses for %s: %w", linkName, err)
-	}
-	for i := range addrs {
-		addr := addrs[i]
-		if err = netlink.AddrDel(link, &addr); err != nil {
-			klog.Errorf("failed to delete addr %v from %s: %v", addr, link, err)
+		// Swap address if any.
+		addrs, err := netlink.AddrList(link, family)
+		if err != nil {
+			return fmt.Errorf("failed to get addresses for %s: %w", linkName, err)
 		}
-		tmpAddr := &netlink.Addr{IPNet: addr.IPNet}
-		if err = netlink.AddrReplace(gwLink, tmpAddr); err != nil {
-			return fmt.Errorf("failed to add addr %v to gw %s: %w", addr, gwLink.Attrs().Name, err)
+		for i := range addrs {
+			addr := addrs[i]
+			if addr.IP.IsLinkLocalMulticast() || addr.IP.IsLinkLocalUnicast() {
+				continue
+			}
+			if err = netlink.AddrDel(link, &addr); err != nil {
+				klog.Errorf("failed to delete addr %v from %s: %v", addr, link, err)
+			}
+			tmpAddr := &netlink.Addr{IPNet: addr.IPNet}
+			if err = netlink.AddrReplace(gwLink, tmpAddr); err != nil {
+				return fmt.Errorf("failed to add addr %v to gw %s: %w", addr, gwLink.Attrs().Name, err)
+			}
 		}
 	}
 	return nil
