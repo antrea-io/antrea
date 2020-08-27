@@ -14,6 +14,7 @@ require (
 	github.com/cenkalti/hub v1.0.1 // indirect
 	github.com/cenkalti/rpc2 v0.0.0-20180727162946-9642ea02d0aa // indirect
 	github.com/cheggaaa/pb/v3 v3.0.4
+	github.com/confluentinc/bincover v0.0.0-20200910210245-839e88185831
 	github.com/containernetworking/cni v0.7.1
 	github.com/containernetworking/plugins v0.8.2-0.20190724153215-ded2f1757770
 	github.com/contiv/libOpenflow v0.0.0-20200728044739-7c6534390721

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -61,8 +63,15 @@ const (
 	agentContainerName   string = "antrea-agent"
 	antreaYML            string = "antrea.yml"
 	antreaIPSecYML       string = "antrea-ipsec.yml"
+	antreaCovYML         string = "antrea-coverage.yml"
+	antreaIPSecCovYML    string = "antrea-ipsec-coverage.yml"
 	defaultBridgeName    string = "br-int"
 	monitoringNamespace  string = "monitoring"
+
+	antreaControllerCovBinary string = "antrea-controller-coverage"
+	antreaAgentCovBinary      string = "antrea-agent-coverage"
+	antreaControllerCovFile   string = "antrea-controller.cov.out"
+	antreaAgentCovFile        string = "antrea-agent.cov.out"
 
 	nameSuffixLength int = 8
 )
@@ -88,6 +97,8 @@ type TestOptions struct {
 	logsExportDir       string
 	logsExportOnSuccess bool
 	withBench           bool
+	enableCoverage      bool
+	coverageDir         string
 }
 
 var testOptions TestOptions
@@ -102,6 +113,8 @@ type TestData struct {
 	securityClient   secv1alpha1.SecurityV1alpha1Interface
 	crdClient        crdclientset.Interface
 }
+
+var testData *TestData
 
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
 // (including if idx is 0, which is reserved for the master Node)
@@ -154,12 +167,6 @@ func RunCommandOnNode(nodeName string, cmd string) (code int, stdout string, std
 }
 
 func collectClusterInfo() error {
-	// first create client set
-	testData := &TestData{}
-	if err := testData.createClient(); err != nil {
-		return err
-	}
-
 	// retrieve Node information
 	nodes, err := testData.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -299,11 +306,17 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) e
 
 // deployAntrea deploys Antrea with the standard manifest.
 func (data *TestData) deployAntrea() error {
+	if testOptions.enableCoverage {
+		return data.deployAntreaCommon(antreaCovYML, "")
+	}
 	return data.deployAntreaCommon(antreaYML, "")
 }
 
 // deployAntreaIPSec deploys Antrea with IPSec tunnel enabled.
 func (data *TestData) deployAntreaIPSec() error {
+	if testOptions.enableCoverage {
+		return data.deployAntreaCommon(antreaIPSecCovYML, "")
+	}
 	return data.deployAntreaCommon(antreaIPSecYML, "")
 }
 
@@ -466,6 +479,9 @@ func (data *TestData) createClient() error {
 // that the DaemonSet does not exist any more. This function is a no-op if the Antrea DaemonSet does
 // not exist at the time the function is called.
 func (data *TestData) deleteAntrea(timeout time.Duration) error {
+	if testOptions.enableCoverage {
+		data.gracefulExitAntreaAgent(testOptions.coverageDir, "all")
+	}
 	var gracePeriodSeconds int64 = 5
 	// Foreground deletion policy ensures that by the time the DaemonSet is deleted, there are
 	// no Antrea Pods left.
@@ -687,6 +703,9 @@ func (data *TestData) podWaitForIP(timeout time.Duration, name, namespace string
 // takes for the Pod not to be visible to the client any more. It also waits for a new antrea-agent
 // Pod to be running on the Node.
 func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSeconds int64, timeout time.Duration) (time.Duration, error) {
+	if testOptions.enableCoverage {
+		data.gracefulExitAntreaAgent(testOptions.coverageDir, nodeName)
+	}
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea,component=antrea-agent",
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
@@ -785,6 +804,9 @@ func (data *TestData) getAntreaController() (*corev1.Pod, error) {
 // restartAntreaControllerPod deletes the antrea-controller Pod to force it to be re-scheduled. It then waits
 // for the new Pod to become available, and returns it.
 func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1.Pod, error) {
+	if testOptions.enableCoverage {
+		data.gracefulExitAntreaController(testOptions.coverageDir)
+	}
 	var gracePeriodSeconds int64 = 1
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
@@ -825,6 +847,9 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1
 // restartAntreaAgentPods deletes all the antrea-agent Pods to force them to be re-scheduled. It
 // then waits for the new Pods to become available.
 func (data *TestData) restartAntreaAgentPods(timeout time.Duration) error {
+	if testOptions.enableCoverage {
+		data.gracefulExitAntreaAgent(testOptions.coverageDir, "all")
+	}
 	var gracePeriodSeconds int64 = 1
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
@@ -1150,5 +1175,111 @@ func (data *TestData) mutateAntreaConfigMap(mutatingFunc func(data map[string]st
 			return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
 		}
 	}
+	return nil
+}
+
+// gracefulExitAntreaController copies the Antrea controller binary coverage data file out before terminating the Pod
+func (data *TestData) gracefulExitAntreaController(covDir string) error {
+	antreaController, err := data.getAntreaController()
+	if err != nil {
+		return fmt.Errorf("error when getting antrea-controller Pod: %v", err)
+	}
+	podName := antreaController.Name
+	cmds := []string{"pgrep", "-f", antreaControllerCovBinary, "-P", "1"}
+	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, "antrea-controller", cmds)
+	if err != nil {
+		return fmt.Errorf("error when getting pid of '%s': <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
+	}
+	cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
+
+	_, stderr, err = data.runCommandFromPod(antreaNamespace, podName, "antrea-controller", cmds)
+	if err != nil {
+		return fmt.Errorf("error when sending SIGINT signal to '%s': <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
+	}
+	err = data.copyPodFiles(podName, "antrea-controller", antreaNamespace, antreaControllerCovFile, covDir)
+
+	if err != nil {
+		return fmt.Errorf("error when graceful exit Antrea controller: copy pod files out, error:%v", err)
+	}
+
+	return nil
+}
+
+// gracefulExitAntreaAgent copies the Antrea agent binary coverage data file out before terminating the Pod
+func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) error {
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=antrea,component=antrea-agent",
+	}
+	if nodeName != "all" {
+		listOptions.FieldSelector = fmt.Sprintf("spec.nodeName=%s", nodeName)
+	}
+
+	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
+	if err != nil {
+		return fmt.Errorf("failed to list antrea-agent pods: %v", err)
+	}
+	for _, pod := range pods.Items {
+		podName := pod.Name
+		cmds := []string{"pgrep", "-f", antreaAgentCovBinary, "-P", "1"}
+		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
+		if err != nil {
+			return fmt.Errorf("error when getting pid of '%s': <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
+		}
+		cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
+		_, stderr, err = data.runCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
+		if err != nil {
+			return fmt.Errorf("error when sending SIGINT signal to '%s': <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
+		}
+		err = data.copyPodFiles(podName, "antrea-agent", antreaNamespace, antreaAgentCovFile, covDir)
+
+		if err != nil {
+			return fmt.Errorf("error when graceful exit Antrea agent: copy pod files out, error:%v", err)
+		}
+	}
+	return nil
+}
+
+// gracefulExitAntreaAgent copies the Antrea agent binary coverage data file out before terminating the Pod
+func (data *TestData) copyPodFiles(podName string, containerName string, nsName string, fileName string, covDir string) error {
+	fmt.Printf("Copying file %s from pod %s podName to '%s'", fileName, podName, covDir)
+
+	// getPodWriter creates the file with name podName-suffix. It returns nil if the
+	// file cannot be created. File must be closed by the caller.
+	getPodWriter := func(podName, suffix string) *os.File {
+		covFile := filepath.Join(covDir, fmt.Sprintf("%s-%s", podName, suffix))
+		f, err := os.Create(covFile)
+		if err != nil {
+			_ = fmt.Errorf("error when creating coverage file '%s': '%v'", covFile, err)
+			return nil
+		}
+		return f
+	}
+
+	// runKubectl runs the provided kubectl command on the master Node and returns the
+	// output. It returns an empty string in case of error.
+	runKubectl := func(cmd string) string {
+		rc, stdout, _, err := RunCommandOnNode(masterNodeName(), cmd)
+		if err != nil || rc != 0 {
+			_ = fmt.Errorf("error when running this kubectl command on master Node: %s", cmd)
+			return ""
+		}
+		return stdout
+	}
+
+	// dump the file from Antrea Pods to disk.
+	// a filepath-friendly timestamp format.
+	const timeFormat = "Jan02-15-04-05"
+	timeStamp := time.Now().Format(timeFormat)
+	w := getPodWriter(podName, timeStamp)
+	if w == nil {
+		return nil
+	}
+	defer w.Close()
+	cmd := fmt.Sprintf("kubectl exec -i %s -c %s -n %s -- cat %s", podName, containerName, nsName, fileName)
+	stdout := runKubectl(cmd)
+	if stdout == "" {
+		return nil
+	}
+	w.WriteString(stdout)
 	return nil
 }

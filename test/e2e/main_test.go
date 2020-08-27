@@ -56,6 +56,23 @@ func (tOptions *TestOptions) setupLogging() func() {
 	return func() {}
 }
 
+// setupCoverage checks if the directory provided by the user exists.
+func (tOptions *TestOptions) setupCoverage() func() {
+	if tOptions.coverageDir != "" {
+		fInfo, err := os.Stat(tOptions.coverageDir)
+		if err != nil {
+			log.Fatalf("Cannot stat provided directory '%s': %v", tOptions.coverageDir, err)
+		}
+		if !fInfo.Mode().IsDir() {
+			log.Fatalf("'%s' is not a valid directory", tOptions.coverageDir)
+		}
+
+	}
+	// no-op cleanup function
+	return func() {}
+
+}
+
 // testMain is meant to be called by TestMain and enables the use of defer statements.
 func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.providerName, "provider", "vagrant", "K8s test cluster provider")
@@ -63,6 +80,8 @@ func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.logsExportDir, "logs-export-dir", "", "Export directory for test logs")
 	flag.BoolVar(&testOptions.logsExportOnSuccess, "logs-export-on-success", false, "Export logs even when a test is successful")
 	flag.BoolVar(&testOptions.withBench, "benchtest", false, "Run tests include benchmark tests")
+	flag.BoolVar(&testOptions.enableCoverage, "coverage", false, "Run tests and measure coverage")
+	flag.StringVar(&testOptions.coverageDir, "coverage-dir", "", "Directory for coverage data files")
 	flag.Parse()
 
 	if err := initProvider(); err != nil {
@@ -72,6 +91,12 @@ func testMain(m *testing.M) int {
 	cleanupLogging := testOptions.setupLogging()
 	defer cleanupLogging()
 
+	testData = &TestData{}
+	log.Println("Creating K8s clientset")
+	if err := testData.createClient(); err != nil {
+		log.Fatalf("Error when creating K8s clientset: %v", err)
+		return 1
+	}
 	log.Println("Collecting information about K8s cluster")
 	if err := collectClusterInfo(); err != nil {
 		log.Fatalf("Error when collecting information about K8s cluster: %v", err)
@@ -81,7 +106,22 @@ func testMain(m *testing.M) int {
 	}
 
 	rand.Seed(time.Now().UnixNano())
-	return m.Run()
+	defer testOptions.setupCoverage()
+	defer gracefulExitAntrea(testData)
+	ret := m.Run()
+	return ret
+}
+
+func gracefulExitAntrea(testData *TestData) {
+	if testOptions.enableCoverage {
+		if err := testData.gracefulExitAntreaController(testOptions.coverageDir); err != nil {
+			log.Fatalf("Error when gracefully exit antrea controller: %v", err)
+		}
+		if err := testData.gracefulExitAntreaAgent(testOptions.coverageDir, "all"); err != nil {
+			log.Fatalf("Error when gracefully exit antrea agent: %v", err)
+		}
+
+	}
 }
 
 func TestMain(m *testing.M) {

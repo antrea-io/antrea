@@ -29,6 +29,7 @@ MODE="report"
 RUN_GARBAGE_COLLECTION=false
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
+COVERAGE=false
 TESTCASE=""
 SECRET_EXIST=false
 TEST_FAILURE=false
@@ -36,7 +37,7 @@ CLUSTER_READY=false
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|whole-conformance|networkpolicy>]
-                  [--garbage-collection] [--setup-only] [--cleanup-only]
+                  [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage]
 
 Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, whole Conformance & Network Policy).
 
@@ -47,7 +48,8 @@ Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, whole Conf
         --testcase               The testcase to run: e2e, conformance, whole-conformance or networkpolicy.
         --garbage-collection     Do garbage collection to clean up some unused testbeds.
         --setup-only             Only perform setting up the cluster and run test.
-        --cleanup-only           Only perform cleaning up the cluster."
+        --cleanup-only           Only perform cleaning up the cluster.
+        --coverage               Run e2e with coverage."
 
 function print_usage {
     echoerr "$_usage"
@@ -92,6 +94,10 @@ case $key in
     ;;
     --cleanup-only)
     RUN_CLEANUP_ONLY=true
+    shift
+    ;;
+    --coverage)
+    COVERAGE=true
     shift
     ;;
     -h|--help)
@@ -228,7 +234,11 @@ function deliver_antrea {
     cd $GIT_CHECKOUT_DIR
     for i in `seq 2`
     do
-        VERSION="$CLUSTER" make && break
+        if [[ "$COVERAGE" == true ]]; then
+            VERSION="$CLUSTER" make build-ubuntu-coverage && break
+        else
+            VERSION="$CLUSTER" make && break
+        fi
     done
     cd ci/jenkins
 
@@ -236,27 +246,41 @@ function deliver_antrea {
         echo "=== Antrea Image build failed ==="
         exit 1
     fi
+    
+    antrea_yml="antrea.yml"
+    if [[ "$COVERAGE" == true ]]; then
+        make manifest-coverage -C $GIT_CHECKOUT_DIR
+        antrea_yml="antrea-coverage.yml"
+    fi
 
-    sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
+    sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
 
     # Configure and append antrea-prometheus.yml to antrea.yml
-    sed -i "s|#enablePrometheusMetrics: false|enablePrometheusMetrics: true|g" $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
-    echo "---" >> $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
-    cat $GIT_CHECKOUT_DIR/build/yamls/antrea-prometheus.yml >> $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
+    sed -i "s|#enablePrometheusMetrics: false|enablePrometheusMetrics: true|g" $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
+    echo "---" >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
+    cat $GIT_CHECKOUT_DIR/build/yamls/antrea-prometheus.yml >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml 
 
     echo "====== Delivering Antrea to all the Nodes ======"
     export KUBECONFIG=${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig
     DOCKER_IMG_VERSION=$CLUSTER
-
-    docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+   
+    if [[ "$COVERAGE" == true ]]; then
+        docker save -o antrea-ubuntu-coverage.tar antrea/antrea-ubuntu-coverage:${DOCKER_IMG_VERSION}
+    else 
+        docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+    fi
 
     kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}' | while read master_ip; do
         scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${master_ip}:~
     done
 
     kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-        rsync -avr --progress --inplace -e "ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" antrea-ubuntu.tar capv@${IP}:/home/capv/antrea-ubuntu.tar
-        ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/antrea-ubuntu.tar ; sudo ctr -n=k8s.io images tag docker.io/antrea/antrea-ubuntu:${DOCKER_IMG_VERSION} docker.io/antrea/antrea-ubuntu:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi" || true
+        antrea_image="antrea-ubuntu"
+        if [[ "$COVERAGE" == true ]]; then
+            antrea_image="antrea-ubuntu-coverage"
+        fi
+        rsync -avr --progress --inplace -e "ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" $antrea_image.tar capv@${IP}:/home/capv/$antrea_image.tar
+        ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $antrea_image | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/$antrea_image.tar ; sudo ctr -n=k8s.io images tag docker.io/antrea/$antrea_image:${DOCKER_IMG_VERSION} docker.io/antrea/$antrea_image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi" || true
     done
 }
 
@@ -301,7 +325,13 @@ function run_e2e {
 
     set +e
     mkdir -p ${GIT_CHECKOUT_DIR}/antrea-test-logs
-    go test -v -timeout=50m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus
+    if [[ "$COVERAGE" == true ]]; then
+        rm -rf ${GIT_CHECKOUT_DIR}/e2e-coverage
+        mkdir -p ${GIT_CHECKOUT_DIR}/e2e-coverage
+        go test -v -timeout=50m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage
+    else
+        go test -v -timeout=50m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus
+    fi
 
     test_rc=$?
     set -e
@@ -314,6 +344,12 @@ function run_e2e {
     echo "=== TEST SUCCESS !!! ==="
 
     tar -zcf ${GIT_CHECKOUT_DIR}/antrea-test-logs.tar.gz ${GIT_CHECKOUT_DIR}/antrea-test-logs
+
+    if [[ "$COVERAGE" == true ]]; then
+        tar -zcf ${GIT_CHECKOUT_DIR}/e2e-coverage.tar.gz ${GIT_CHECKOUT_DIR}/e2e-coverage
+        export CODECOV_TOKEN="a2b1c854-8627-4747-89cb-c312da33227d"
+        curl -s https://codecov.io/bash | bash -s -- -c -F jenkins-e2e -f '*antrea*' -s ${GIT_CHECKOUT_DIR}/e2e-coverage
+    fi
 }
 
 function run_conformance {
