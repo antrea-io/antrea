@@ -132,6 +132,12 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating API server: %v", err)
 	}
+
+	err = apiserver.CleanupDeprecatedAPIServices(aggregatorClient)
+	if err != nil {
+		return fmt.Errorf("failed to clean up the deprecated APIServices: %v", err)
+	}
+
 	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.

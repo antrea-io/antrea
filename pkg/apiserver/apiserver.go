@@ -15,6 +15,9 @@
 package apiserver
 
 import (
+	"context"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -23,6 +26,7 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
+	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	cpinstall "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/install"
@@ -164,4 +168,26 @@ func (c completedConfig) New() (*APIServer, error) {
 	installHandlers(c.extraConfig.endpointQuerier, s.GenericAPIServer)
 
 	return s, nil
+}
+
+// CleanupDeprecatedAPIServices deletes the registered APIService resources for
+// the deprecated Antrea API groups.
+func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
+	// The APIService of a deprecated API group should be added to the slice.
+	// After Antrea upgrades from an old version to a new version that
+	// deprecates a registered APIService, the APIService should be deleted,
+	// otherwise K8s will fail to delete an existing Namespace.
+	// Also check: https://github.com/vmware-tanzu/antrea/issues/494
+	deprecatedAPIServices := []string{
+		"v1beta1.networking.antrea.tanzu.vmware.com",
+	}
+	for _, as := range deprecatedAPIServices {
+		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})
+		if err == nil {
+			klog.Infof("Deleted the deprecated APIService %s", as)
+		} else if !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
 }

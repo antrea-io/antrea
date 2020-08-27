@@ -775,6 +775,14 @@ rules:
   - get
   - update
 - apiGroups:
+  - apiregistration.k8s.io
+  resourceNames:
+  - v1beta1.networking.antrea.tanzu.vmware.com
+  resources:
+  - apiservices
+  verbs:
+  - delete
+- apiGroups:
   - security.antrea.tanzu.vmware.com
   resources:
   - clusternetworkpolicies
