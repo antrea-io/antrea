@@ -621,7 +621,11 @@ func (i *Initializer) initNodeLocalConfig() error {
 		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
 		return err
 	}
-	i.nodeConfig.PodIPv4CIDR = localSubnet
+	if localSubnet.IP.To4() != nil {
+		i.nodeConfig.PodIPv4CIDR = localSubnet
+	} else {
+		i.nodeConfig.PodIPv6CIDR = localSubnet
+	}
 	return nil
 }
 
