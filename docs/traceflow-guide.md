@@ -17,7 +17,11 @@ result via CRD, Antctl or UI graph.
 - [View Traceflow CRDs](#View-Traceflow-CRDs)
 
 ## Prerequisites
-You need to switch on traceflow from featureGates defined in antrea.yml for both Controller and Agent.
+You need to enable Traceflow from the featureGates map defined in antrea.yml for
+both Controller and Agent. In order to use a Service as the destination in
+traces, you also need to ensure [AntreaProxy](feature-gates.md) is enabled in
+the Agent configuration:
+
 ```yaml
   antrea-controller.conf: |
     featureGates:
@@ -27,24 +31,27 @@ You need to switch on traceflow from featureGates defined in antrea.yml for both
     featureGates:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
       Traceflow: true
+    # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
+    # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
+    # Service traffic.
+      AntreaProxy: true
 ```
+
 For antrea-octant-plugin installation, please refer to [antrea-octant-installation](/docs/octant-plugin-installation.md).
 
 ## Start a New Trace
 You can choose to use Kubectl together with YAML file, Antctl with spec information or Octant UI to start a new trace.
 
-If you use Kubectl or Antctl to start a new trace, you can provide the following information which will be used to build the trace packet:
+When starting a new trace, you can provide the following information which will be used to build the trace packet:
 * source Pod
 * destination Pod, Service or destination IP address
 * transport protocol (TCP/UDP/ICMP)
 * transport ports
 
-If you use the UI to start a new trace, we currently only support Pods as the destination, but will soon support
-destination IPs and Service names.
-
 ### Using kubectl and YAML file
 You can start a new trace by creating Traceflow CRD via Kubectl and a YAML file which contains the essential
 configuration of Traceflow CRD. An example YAML file of Traceflow CRD might look like this:
+
 ```yaml
 apiVersion: ops.antrea.tanzu.vmware.com/v1alpha1
 kind: Traceflow
@@ -57,7 +64,7 @@ spec:
   destination:
     namespace: default
     pod: tcp-sts-2
-#   ip: IP can also be marked as destination, but namespace/pod and ip are mutually exclusive.
+    # destination can also be an IP address ('ip' field) or a Service name ('service' field); the 3 choices are mutually exclusive.
   packet:
     ipHeader:
       protocol: 6 # Protocol here can be 6 (TCP), 17 (UDP) or 1 (ICMP), default value is 1 (ICMP)
@@ -66,6 +73,7 @@ spec:
         srcPort: 10000 # Source port needs to be set when Protocol is TCP/UDP.
         dstPort: 80 # Destination port needs to be set when Protocol is TCP/UDP.
 ```
+
 The CRD above starts a new trace from port 10000 of source Pod named `tcp-sts-0` to port 80
 of destination Pod named `tcp-sts-2` using TCP protocol.
 
@@ -75,7 +83,7 @@ Please refer to the corresponding [Antctl page](https://github.com/vmware-tanzu/
 
 ### Using Octant with antrea-octant-plugin
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/tf_create.png" width="600" alt="Start a New Trace">
+<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/tf_create.1.png" width="600" alt="Start a New Trace">
 
 From Octant dashboard, you need to click on left navigation bar named "Antrea" and then
 choose category named "Traceflow" to lead you to the Traceflow UI displayed on the right side.
