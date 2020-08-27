@@ -127,16 +127,6 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 	n.deleteDereferencedAddressGroups(oldInternalNP)
 }
 
-// getTierPriority retrieves the priority associated with the input Tier name.
-// If the Tier name is empty, by default, the lowest priority Application Tier
-// is returned.
-func getTierPriority(tier string) networking.TierPriority {
-	if tier == "" {
-		return antreatypes.TierApplication
-	}
-	return tierPriorityMap[tier]
-}
-
 // processClusterNetworkPolicy creates an internal NetworkPolicy instance
 // corresponding to the secv1alpha1.ClusterNetworkPolicy object. This method
 // does not commit the internal NetworkPolicy in store, instead returns an

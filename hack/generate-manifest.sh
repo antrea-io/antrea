@@ -28,7 +28,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --proxy                       Generate a manifest with Antrea proxy enabled
-        --np                          Generate a manifest with ClusterNetworkPolicy and AntreaNetworkPolicy features enabled
+        --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --help, -h                    Print this message and exit

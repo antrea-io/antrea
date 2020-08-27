@@ -529,7 +529,7 @@ func TestAddCNP(t *testing.T) {
 		{
 			name: "rules-with-same-selectors",
 			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "npE", UID: "uidE"},
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpF", UID: "uidF"},
 				Spec: secv1alpha1.ClusterNetworkPolicySpec{
 					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
@@ -570,8 +570,8 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidE",
-				Name:         "npE",
+				UID:          "uidF",
+				Name:         "cnpF",
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &appTier,
@@ -613,7 +613,7 @@ func TestAddCNP(t *testing.T) {
 		{
 			name: "rules-with-different-selectors",
 			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "npF", UID: "uidF"},
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpG", UID: "uidG"},
 				Spec: secv1alpha1.ClusterNetworkPolicySpec{
 					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
@@ -650,8 +650,8 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidF",
-				Name:         "npF",
+				UID:          "uidG",
+				Name:         "cnpG",
 				Namespace:    "",
 				Priority:     &p10,
 				TierPriority: &appTier,

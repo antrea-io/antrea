@@ -22,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
@@ -156,6 +157,7 @@ func TestGetNetworkPolicyByIndex(t *testing.T) {
 	policy1 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
+		UID:       apitypes.UID("uid-1"),
 		Rules: []networking.NetworkPolicyRule{{
 			Direction: networking.DirectionIn,
 			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
@@ -166,6 +168,7 @@ func TestGetNetworkPolicyByIndex(t *testing.T) {
 	policy2 := &types.NetworkPolicy{
 		Namespace: "foo2",
 		Name:      "bar2",
+		UID:       apitypes.UID("uid-2"),
 		Rules: []networking.NetworkPolicyRule{{
 			Direction: networking.DirectionIn,
 			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},

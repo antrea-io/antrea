@@ -59,10 +59,10 @@ kernel version must be >= 4.6 (as opposed to >= 4.4 without this feature).
 
 ### AntreaPolicy
 
-`AntreaPolicy` enables ClusterNetworkPolicy and AntreaNetworkPolicy CRDs to be
-handled by Antrea. `ClusterNetworkPolicy` is an Antrea-specific extension to K8s
+`AntreaPolicy` enables Antrea ClusterNetworkPolicy and Antrea NetworkPolicy CRDs to be
+handled by Antrea controller. `ClusterNetworkPolicy` is an Antrea-specific extension to K8s
 NetworkPolicies, which enables cluster admins to define security policies which
-apply to the entire cluster. `AntreaNetworkPolicy` also complements K8s NetworkPolicies
+apply to the entire cluster. `Antrea NetworkPolicy` also complements K8s NetworkPolicies
 by supporting policy priorities and rule actions.
 Refer to this [document](network-policy.md) for more information.
 

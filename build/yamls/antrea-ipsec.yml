@@ -230,12 +230,25 @@ metadata:
     app: antrea
   name: networkpolicies.security.antrea.tanzu.vmware.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.tier
+    description: The Tier to which this Antrea NetworkPolicy belongs to.
+    name: Tier
+    type: string
+  - JSONPath: .spec.priority
+    description: The Priority of this Antrea NetworkPolicy relative to other policies.
+    format: float
+    name: Priority
+    type: number
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
   group: security.antrea.tanzu.vmware.com
   names:
     kind: NetworkPolicy
     plural: networkpolicies
     shortNames:
-    - anp
+    - netpol
     singular: networkpolicy
   preserveUnknownFields: false
   scope: Namespaced
@@ -325,6 +338,14 @@ spec:
               maximum: 10000
               minimum: 1
               type: number
+            tier:
+              enum:
+              - Emergency
+              - SecurityOps
+              - NetworkOps
+              - Platform
+              - Application
+              type: string
           required:
           - appliedTo
           - priority
@@ -843,8 +864,8 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
 
-    # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
-    # to define security policies which apply to the entire cluster, and AntreaNetworkPolicy
+    # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
+    # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
     # feature that supports priorities, rule actions and externalEntities in the future.
     #  AntreaPolicy: false
 
@@ -940,8 +961,8 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
 
-    # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
-    # to define security policies which apply to the entire cluster, and AntreaNetworkPolicy
+    # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
+    # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
     # feature that supports priorities, rule actions and externalEntities in the future.
     #  AntreaPolicy: false
 
@@ -966,7 +987,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-hbhcc557f7
+  name: antrea-config-b8c78852mt
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1081,7 +1102,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-hbhcc557f7
+          name: antrea-config-b8c78852mt
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1331,7 +1352,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-hbhcc557f7
+          name: antrea-config-b8c78852mt
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -128,3 +128,13 @@ func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.Netw
 	n.addressGroupStore.Create(addressGroup)
 	return normalizedUID
 }
+
+// getTierPriority retrieves the priority associated with the input Tier name.
+// If the Tier name is empty, by default, the lowest priority Application Tier
+// is returned.
+func getTierPriority(tier string) networking.TierPriority {
+	if tier == "" {
+		return antreatypes.TierApplication
+	}
+	return tierPriorityMap[tier]
+}

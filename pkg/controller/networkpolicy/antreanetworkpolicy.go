@@ -28,7 +28,7 @@ import (
 func (n *NetworkPolicyController) addANP(obj interface{}) {
 	defer n.heartbeat("addANP")
 	np := obj.(*secv1alpha1.NetworkPolicy)
-	klog.Infof("Processing AntreaNetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
+	klog.Infof("Processing Antrea NetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
 	// Create an internal NetworkPolicy object corresponding to this
 	// NetworkPolicy and enqueue task to internal NetworkPolicy Workqueue.
 	internalNP := n.processAntreaNetworkPolicy(np)
@@ -43,7 +43,7 @@ func (n *NetworkPolicyController) addANP(obj interface{}) {
 func (n *NetworkPolicyController) updateANP(old, cur interface{}) {
 	defer n.heartbeat("updateANP")
 	curNP := cur.(*secv1alpha1.NetworkPolicy)
-	klog.Infof("Processing AntreaNetworkPolicy %s/%s UPDATE event", curNP.Namespace, curNP.Name)
+	klog.Infof("Processing Antrea NetworkPolicy %s/%s UPDATE event", curNP.Namespace, curNP.Name)
 	// Update an internal NetworkPolicy, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processAntreaNetworkPolicy(curNP)
@@ -90,24 +90,24 @@ func (n *NetworkPolicyController) deleteANP(old interface{}) {
 	if !ok {
 		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Error decoding object when deleting AntreaNetworkPolicy, invalid type: %v", old)
+			klog.Errorf("Error decoding object when deleting Antrea NetworkPolicy, invalid type: %v", old)
 			return
 		}
 		np, ok = tombstone.Obj.(*secv1alpha1.NetworkPolicy)
 		if !ok {
-			klog.Errorf("Error decoding object tombstone when deleting AntreaNetworkPolicy, invalid type: %v", tombstone.Obj)
+			klog.Errorf("Error decoding object tombstone when deleting Antrea NetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
 		}
 	}
 	defer n.heartbeat("deleteANP")
-	klog.Infof("Processing AntreaNetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
+	klog.Infof("Processing Antrea NetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
 	key, _ := keyFunc(np)
 	oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
 	oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
 	klog.V(4).Infof("Old internal NetworkPolicy %#v", oldInternalNP)
 	err := n.internalNetworkPolicyStore.Delete(key)
 	if err != nil {
-		klog.Errorf("Error deleting internal NetworkPolicy during AntreaNetworkPolicy %s delete: %v", np.Name, err)
+		klog.Errorf("Error deleting internal NetworkPolicy during Antrea NetworkPolicy %s delete: %v", np.Name, err)
 		return
 	}
 	for _, atg := range oldInternalNP.AppliedToGroups {
@@ -154,6 +154,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 			Priority:  int32(idx),
 		})
 	}
+	tierPriority := getTierPriority(np.Spec.Tier)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
 		Name:            np.Name,
 		Namespace:       np.Namespace,
@@ -161,6 +162,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 		AppliedToGroups: appliedToGroupNames,
 		Rules:           rules,
 		Priority:        &np.Spec.Priority,
+		TierPriority:    &tierPriority,
 	}
 	return internalNetworkPolicy
 }

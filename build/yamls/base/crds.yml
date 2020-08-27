@@ -353,9 +353,22 @@ spec:
     singular: networkpolicy
     kind: NetworkPolicy
     shortNames:
-      - anp
+      - netpol
   # Prune any unknown fields
   preserveUnknownFields: false
+  additionalPrinterColumns:
+    - name: Tier
+      type: string
+      description: The Tier to which this Antrea NetworkPolicy belongs to.
+      JSONPath: .spec.tier
+    - name: Priority
+      type: number
+      format: float
+      description: The Priority of this Antrea NetworkPolicy relative to other policies.
+      JSONPath: .spec.priority
+    - name: Age
+      type: date
+      JSONPath: .metadata.creationTimestamp
   validation:
     openAPIV3Schema:
       type: object
@@ -367,6 +380,9 @@ spec:
             - priority
           type: object
           properties:
+            tier:
+              type: string
+              enum: ['Emergency', 'SecurityOps', 'NetworkOps', 'Platform', 'Application']
             priority:
               type: number
               format: float
