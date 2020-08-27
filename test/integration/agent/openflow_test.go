@@ -111,6 +111,7 @@ func TestConnectivityFlows(t *testing.T) {
 		testUninstallPodFlows,
 		testUninstallNodeFlows,
 		testExternalFlows,
+		testHandleUnsupportedPacketFlows,
 	} {
 		f(t, config)
 	}
@@ -198,6 +199,15 @@ func testExternalFlows(t *testing.T, config *testConfig) {
 		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
 	}
 	for _, tableFlow := range prepareExternalFlows(nodeIP, localSubnet) {
+		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
+	}
+}
+
+func testHandleUnsupportedPacketFlows(t *testing.T, config *testConfig) {
+	if err := c.HandleUnsupportedPacketFlows(config1.UplinkOFPort, config1.BridgeOFPort); err != nil {
+		t.Errorf("Failed to install OpenFlow entries to handle the packets OVS conntrack not supported: %v", err)
+	}
+	for _, tableFlow := range prepareHandleUnsupportedPacketFlows() {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -930,6 +940,28 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 				{
 					MatchStr: "priority=200,ip,reg0=0x20000/0x20000",
 					ActStr:   fmt.Sprintf("output:%d", config1.HostGatewayOFPort),
+				},
+			},
+		},
+	}
+}
+
+func prepareHandleUnsupportedPacketFlows() []expectTableFlows {
+	return []expectTableFlows{
+		{
+			uint8(5),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					MatchStr: fmt.Sprintf("priority=210,igmp"),
+					ActStr:   "LOCAL",
+				},
+			},
+		},
+		{
+			uint8(30),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					MatchStr: "priority=210,igmp,reg0=0x2/0xffff", ActStr: "NORMAL",
 				},
 			},
 		},

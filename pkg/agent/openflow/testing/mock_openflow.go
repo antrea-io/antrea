@@ -194,6 +194,20 @@ func (mr *MockClientMockRecorder) GetTunnelVirtualMAC() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTunnelVirtualMAC", reflect.TypeOf((*MockClient)(nil).GetTunnelVirtualMAC))
 }
 
+// HandleUnsupportedPacketFlows mocks base method
+func (m *MockClient) HandleUnsupportedPacketFlows(arg0, arg1 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HandleUnsupportedPacketFlows", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// HandleUnsupportedPacketFlows indicates an expected call of HandleUnsupportedPacketFlows
+func (mr *MockClientMockRecorder) HandleUnsupportedPacketFlows(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleUnsupportedPacketFlows", reflect.TypeOf((*MockClient)(nil).HandleUnsupportedPacketFlows), arg0, arg1)
+}
+
 // InitialTLVMap mocks base method
 func (m *MockClient) InitialTLVMap() error {
 	m.ctrl.T.Helper()

@@ -1312,6 +1312,24 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 	return group
 }
 
+// forwardIGMPPacketFlows outputs or forwards the IGMP packet before entering conntrack.
+func (c *client) forwardIGMPPacketFlows(uplinkPort uint32, bridgeLocalPort uint32, category cookie.Category) []binding.Flow {
+	flows := []binding.Flow{
+		// Output the IGMP packet to the bridge interface directly if it enters OVS from the uplink interface.
+		c.pipeline[uplinkTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIGMP).
+			Action().Output(int(bridgeLocalPort)).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Forward the IGMP packet normally	if it enters OVS from local Pod.
+		c.pipeline[conntrackTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIGMP).
+			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
+			Action().Normal().
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+	}
+	return flows
+}
+
 // policyConjKeyFuncKeyFunc knows how to get key of a *policyRuleConjunction.
 func policyConjKeyFunc(obj interface{}) (string, error) {
 	conj := obj.(*policyRuleConjunction)

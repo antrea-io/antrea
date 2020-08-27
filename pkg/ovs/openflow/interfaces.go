@@ -41,6 +41,7 @@ const (
 	ProtocolUDP  Protocol = "udp"
 	ProtocolSCTP Protocol = "sctp"
 	ProtocolICMP Protocol = "icmp"
+	ProtocolIGMP Protocol = "igmp"
 )
 
 const (

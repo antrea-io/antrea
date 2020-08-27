@@ -47,6 +47,9 @@ type Client interface {
 	// host networking. These flows are only needed on windows platform.
 	InstallBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32) error
 
+	// HandleUnsupportedPacketFlows installs OpenFlow flows to process the OVS conntrack unsupported packets.
+	HandleUnsupportedPacketFlows(uplinkPort uint32, bridgeLocalPort uint32) error
+
 	// InstallClusterServiceCIDRFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once with
 	// the Cluster Service CIDR as a parameter.
@@ -496,11 +499,19 @@ func (c *client) InstallDefaultTunnelFlows(tunnelOFPort uint32) error {
 
 func (c *client) InstallBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32) error {
 	flows := c.hostBridgeUplinkFlows(uplinkPort, bridgeLocalPort, cookie.Default)
-	c.hostNetworkingFlows = flows
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
 	c.hostNetworkingFlows = flows
+	return nil
+}
+
+func (c *client) HandleUnsupportedPacketFlows(uplinkPort uint32, bridgeLocalPort uint32) error {
+	flows := c.forwardIGMPPacketFlows(uplinkPort, bridgeLocalPort, cookie.Default)
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
+		return err
+	}
+	c.hostNetworkingFlows = append(c.hostNetworkingFlows, flows...)
 	return nil
 }
 

@@ -192,6 +192,10 @@ func (i *Initializer) initHostNetworkFlows() error {
 	if err := i.ofClient.InstallBridgeUplinkFlows(config.UplinkOFPort, config.BridgeOFPort); err != nil {
 		return err
 	}
+
+	if err := i.ofClient.HandleUnsupportedPacketFlows(config.UplinkOFPort, config.BridgeOFPort); err != nil {
+		return err
+	}
 	return nil
 }
 
