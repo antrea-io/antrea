@@ -16,7 +16,9 @@ package podinterface
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
+	"strings"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
@@ -40,12 +42,20 @@ func generateResponse(i *interfacestore.InterfaceConfig) Response {
 		PodName:       i.ContainerInterfaceConfig.PodName,
 		PodNamespace:  i.ContainerInterfaceConfig.PodNamespace,
 		InterfaceName: i.InterfaceName,
-		IP:            i.GetIPv4Addr().String(),
+		IP:            getPodIPsStr(i.IPs),
 		MAC:           i.MAC.String(),
 		PortUUID:      i.OVSPortConfig.PortUUID,
 		OFPort:        i.OVSPortConfig.OFPort,
 		ContainerID:   i.ContainerInterfaceConfig.ContainerID,
 	}
+}
+
+func getPodIPsStr(ips []net.IP) string {
+	ipStrs := make([]string, len(ips))
+	for i := range ips {
+		ipStrs[i] = ips[i].String()
+	}
+	return strings.Join(ipStrs, ", ")
 }
 
 // HandleFunc returns the function which can handle queries issued by the pod-interface command,

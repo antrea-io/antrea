@@ -299,7 +299,7 @@ var CommandList = &commandList{
 						},
 						{
 							name:      "source",
-							usage:     "Source of the packet. Can be an OVS port name, or a (local or remote) Pod (specified by <Namespace>/<name>), or an IP address. If specified, the source's IP addresss will be used as the tracing packet's source IP address, and the 'nw_src' field should not be added in the 'flow' argument.",
+							usage:     "Source of the packet. Can be an OVS port name, or a (local or remote) Pod (specified by <Namespace>/<name>), or an IP address. If specified, the source's IP address will be used as the tracing packet's source IP address, and the 'nw_src'/'ipv6_src' field should not be added in the 'flow' argument.",
 							shorthand: "S",
 						},
 						{
@@ -311,6 +311,11 @@ var CommandList = &commandList{
 							name:      "flow",
 							usage:     "Specify the flow (packet headers) of the tracing packet. Check the flow syntax descriptions in ovs-ofctl(8) manpage.",
 							shorthand: "f",
+						},
+						{
+							name:      "addressFamily",
+							usage:     "Specify the address family fo the packet. Can be 4 (IPv4) or 6 (IPv6). If not specified, the addressFamily will be automatically figured out based on the 'flow'. If no IP address or address family is given in the 'flow', IPv4 is used by default.",
+							shorthand: "F",
 						},
 					},
 					outputType: single,
