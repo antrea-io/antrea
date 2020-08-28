@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package
-// +k8s:protobuf-gen=package
-// +k8s:conversion-gen=github.com/vmware-tanzu/antrea/pkg/apis/networking
-// +groupName=networking.antrea.tanzu.vmware.com
+// +groupName=controlplane.antrea.tanzu.vmware.com
 
-// Package v1beta1 is the v1beta1 version of the Antrea NetworkPolicy API messages.
-package v1beta1
+// Package controlplane contains the latest (or "internal") version of the Antrea
+// NetworkPolicy API messages. This is the API messages as represented in memory.
+// The contract presented to clients is located in the versioned packages,
+// which are sub-directories. The first one is "v1beta1".
+// The messages are generated based on the stored NetworkPolicy objects, i.e.
+// the objects defined in antrea/pkg/controller/types/networkpolicy.go.
+package controlplane

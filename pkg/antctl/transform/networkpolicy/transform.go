@@ -22,7 +22,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/rule"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 )
 
 type Response struct {
@@ -33,7 +33,7 @@ type Response struct {
 }
 
 func objectTransform(o interface{}) (interface{}, error) {
-	policy := o.(*networkingv1beta1.NetworkPolicy)
+	policy := o.(*cpv1beta1.NetworkPolicy)
 	rules, _ := rule.ObjectTransform(&policy.Rules)
 	if policy.AppliedToGroups == nil {
 		policy.AppliedToGroups = []string{}
@@ -47,7 +47,7 @@ func objectTransform(o interface{}) (interface{}, error) {
 }
 
 func listTransform(l interface{}) (interface{}, error) {
-	policyList := l.(*networkingv1beta1.NetworkPolicyList)
+	policyList := l.(*cpv1beta1.NetworkPolicyList)
 	result := []Response{}
 	for _, item := range policyList.Items {
 		o, _ := objectTransform(&item)
@@ -58,8 +58,8 @@ func listTransform(l interface{}) (interface{}, error) {
 
 func Transform(reader io.Reader, single bool) (interface{}, error) {
 	return transform.GenericFactory(
-		reflect.TypeOf(networkingv1beta1.NetworkPolicy{}),
-		reflect.TypeOf(networkingv1beta1.NetworkPolicyList{}),
+		reflect.TypeOf(cpv1beta1.NetworkPolicy{}),
+		reflect.TypeOf(cpv1beta1.NetworkPolicyList{}),
 		objectTransform,
 		listTransform,
 	)(reader, single)

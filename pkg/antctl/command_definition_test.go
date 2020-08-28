@@ -39,7 +39,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/rule"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 )
 
 type Foobar struct {
@@ -205,11 +205,11 @@ GroupName2 <NONE>
 			rawResponseData: appliedtogroup.Response{
 				Name: "GroupName",
 				Pods: []common.GroupMemberPod{
-					{Pod: &networkingv1beta1.PodReference{
+					{Pod: &cpv1beta1.PodReference{
 						Name:      "nginx-6db489d4b7-324rc",
 						Namespace: "PodNamespace",
 					}},
-					{Pod: &networkingv1beta1.PodReference{
+					{Pod: &cpv1beta1.PodReference{
 						Name:      "nginx-6db489d4b7-vgv7v",
 						Namespace: "PodNamespace",
 					}},

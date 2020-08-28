@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -41,10 +41,10 @@ type networkPolicyEvent struct {
 	// The previous version of the stored NetworkPolicy.
 	PrevPolicy *types.NetworkPolicy
 	// The current version of the transferred NetworkPolicy, which will be used in Added and Modified events.
-	CurrObject *networking.NetworkPolicy
+	CurrObject *controlplane.NetworkPolicy
 	// The previous version of the transferred NetworkPolicy, which will be used in Deleted events.
 	// Note that only metadata will be set in Deleted events for efficiency.
-	PrevObject *networking.NetworkPolicy
+	PrevObject *controlplane.NetworkPolicy
 	// The key of this NetworkPolicy.
 	Key             string
 	ResourceVersion uint64
@@ -87,13 +87,13 @@ func genNetworkPolicyEvent(key string, prevObj, currObj interface{}, rv uint64) 
 
 	if prevObj != nil {
 		event.PrevPolicy = prevObj.(*types.NetworkPolicy)
-		event.PrevObject = new(networking.NetworkPolicy)
+		event.PrevObject = new(controlplane.NetworkPolicy)
 		ToNetworkPolicyMsg(event.PrevPolicy, event.PrevObject, false)
 	}
 
 	if currObj != nil {
 		event.CurrPolicy = currObj.(*types.NetworkPolicy)
-		event.CurrObject = new(networking.NetworkPolicy)
+		event.CurrObject = new(controlplane.NetworkPolicy)
 		ToNetworkPolicyMsg(event.CurrPolicy, event.CurrObject, true)
 	}
 
@@ -102,7 +102,7 @@ func genNetworkPolicyEvent(key string, prevObj, currObj interface{}, rv uint64) 
 
 // ToNetworkPolicyMsg converts the stored NetworkPolicy to its message form.
 // If includeBody is true, Rules and AppliedToGroups will be copied.
-func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *networking.NetworkPolicy, includeBody bool) {
+func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *controlplane.NetworkPolicy, includeBody bool) {
 	out.Namespace = in.Namespace
 	out.Name = in.Name
 	out.UID = in.UID
@@ -151,14 +151,14 @@ func NewNetworkPolicyStore() storage.Interface {
 				return []string{}, nil
 			}
 			for _, rule := range fp.Rules {
-				if rule.Direction == networking.DirectionIn {
+				if rule.Direction == controlplane.DirectionIn {
 					groupNames = append(groupNames, rule.From.AddressGroups...)
-				} else if rule.Direction == networking.DirectionOut {
+				} else if rule.Direction == controlplane.DirectionOut {
 					groupNames = append(groupNames, rule.To.AddressGroups...)
 				}
 			}
 			return groupNames, nil
 		},
 	}
-	return ram.NewStore(NetworkPolicyKeyFunc, indexers, genNetworkPolicyEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(networking.NetworkPolicy) })
+	return ram.NewStore(NetworkPolicyKeyFunc, indexers, genNetworkPolicyEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(controlplane.NetworkPolicy) })
 }

@@ -12,19 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package install
+// +k8s:openapi-gen=true
+// +k8s:deepcopy-gen=package
+// +k8s:protobuf-gen=package
+// +k8s:conversion-gen=github.com/vmware-tanzu/antrea/pkg/apis/controlplane
+// +groupName=controlplane.antrea.tanzu.vmware.com
 
-import (
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
-)
-
-// Install registers the API group and adds types to a scheme
-func Install(scheme *runtime.Scheme) {
-	utilruntime.Must(networking.AddToScheme(scheme))
-	utilruntime.Must(v1beta1.AddToScheme(scheme))
-	utilruntime.Must(scheme.SetVersionPriority(v1beta1.SchemeGroupVersion))
-}
+// Package v1beta1 is the v1beta1 version of the Antrea NetworkPolicy API messages.
+package v1beta1

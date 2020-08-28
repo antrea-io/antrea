@@ -18,7 +18,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
@@ -42,7 +42,7 @@ func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {
 				return
 			}
 		} else {
-			obj = networkingv1beta1.AddressGroupList{Items: groups}
+			obj = cpv1beta1.AddressGroupList{Items: groups}
 		}
 		if err := json.NewEncoder(w).Encode(obj); err != nil {
 			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
