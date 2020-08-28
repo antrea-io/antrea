@@ -7,6 +7,7 @@ require (
 	github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5
 	github.com/Microsoft/hcsshim v0.8.9
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20200116135253-9bbdfadcd881
+	github.com/awalterschulze/gographviz v2.0.1+incompatible
 	github.com/benmoss/go-powershell v0.0.0-20190925205200-09527df358ca
 	github.com/blang/semver v3.5.0+incompatible
 	github.com/cenk/hub v1.0.1 // indirect
@@ -21,7 +22,6 @@ require (
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
 	github.com/go-openapi/spec v0.19.3
-	github.com/goccy/go-graphviz v0.0.5
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/mock v1.4.3
 	github.com/golang/protobuf v1.3.2
