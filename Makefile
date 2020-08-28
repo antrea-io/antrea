@@ -35,6 +35,9 @@ antrea-controller:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-controller
 
+.PHONY: .coverage
+.coverage:
+	mkdir -p $(CURDIR)/.coverage
 
 .PHONY: antrea-cni
 antrea-cni:
@@ -103,7 +106,7 @@ docker-test-unit: $(DOCKER_CACHE)
 	@chmod -R 0755 $<
 
 .PHONY: docker-test-integration
-docker-test-integration:
+docker-test-integration: .coverage
 	@echo "===> Building Antrea Integration Test Docker image <==="
 	@docker build --pull -t antrea/test -f build/images/test/Dockerfile .
 	@docker run --privileged --rm \
@@ -113,6 +116,7 @@ docker-test-integration:
 		-w /usr/src/github.com/vmware-tanzu/antrea \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
+		-v $(CURDIR)/.coverage:/usr/src/github.com/vmware-tanzu/antrea/.coverage \
 		-v $(CURDIR):/usr/src/github.com/vmware-tanzu/antrea:ro \
 		antrea/test test-integration $(USERID) $(GRPID)
 
@@ -142,10 +146,10 @@ antctl-release:
 	@$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
 
 .PHONY: .linux-test-unit
-.linux-test-unit:
+.linux-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -race -cover github.com/vmware-tanzu/antrea/pkg/...
+	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover github.com/vmware-tanzu/antrea/pkg/...
 
 .PHONY: tidy
 tidy:
@@ -155,11 +159,11 @@ tidy:
 	@cd plugins/octant && $(GO) mod tidy
 
 .PHONY: .linux-test-integration
-.linux-test-integration:
+.linux-test-integration: .coverage
 	@echo
 	@echo "==> Running integration tests <=="
 	@echo "SOME TESTS WILL FAIL IF NOT RUN AS ROOT!"
-	$(GO) test github.com/vmware-tanzu/antrea/test/integration/...
+	$(GO) test -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -coverprofile=.coverage/coverage-integration.txt -covermode=atomic -cover github.com/vmware-tanzu/antrea/test/integration/...
 
 test-tidy:
 	@echo
@@ -201,6 +205,7 @@ clean:
 	@rm -rf $(BINDIR)
 	@rm -rf $(DOCKER_CACHE)
 	@rm -rf .golangci-bin
+	@rm -rf .coverage
 
 .PHONY: codegen
 codegen:
