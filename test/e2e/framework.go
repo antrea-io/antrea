@@ -82,11 +82,12 @@ type ClusterNode struct {
 }
 
 type ClusterInfo struct {
-	numWorkerNodes int
-	numNodes       int
-	podNetworkCIDR string
-	masterNodeName string
-	nodes          map[int]ClusterNode
+	numWorkerNodes   int
+	numNodes         int
+	podV4NetworkCIDR string
+	podV6NetworkCIDR string
+	masterNodeName   string
+	nodes            map[int]ClusterNode
 }
 
 var clusterInfo ClusterInfo
@@ -212,7 +213,32 @@ func collectClusterInfo() error {
 		if matches := re.FindStringSubmatch(stdout); len(matches) == 0 {
 			return fmt.Errorf("cannot retrieve cluster CIDR, unexpected kubectl output: %s", stdout)
 		} else {
-			clusterInfo.podNetworkCIDR = matches[1]
+			cidrs := strings.Split(matches[1], ",")
+			if len(cidrs) == 1 {
+				_, cidr, err := net.ParseCIDR(cidrs[0])
+				if err != nil {
+					return fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+				}
+				if cidr.IP.To4() != nil {
+					clusterInfo.podV4NetworkCIDR = cidrs[0]
+				} else {
+					clusterInfo.podV6NetworkCIDR = cidrs[0]
+				}
+			} else if len(cidrs) == 2 {
+				_, cidr, err := net.ParseCIDR(cidrs[0])
+				if err != nil {
+					return fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+				}
+				if cidr.IP.To4() != nil {
+					clusterInfo.podV4NetworkCIDR = cidrs[0]
+					clusterInfo.podV6NetworkCIDR = cidrs[1]
+				} else {
+					clusterInfo.podV4NetworkCIDR = cidrs[1]
+					clusterInfo.podV6NetworkCIDR = cidrs[0]
+				}
+			} else {
+				return fmt.Errorf("unexpected cluster CIDR: %s", matches[1])
+			}
 		}
 		return nil
 	}(); err != nil {
@@ -1069,7 +1095,12 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 }
 
 func (data *TestData) runPingCommandFromTestPod(podName string, targetIP string, count int) error {
-	cmd := []string{"ping", "-c", strconv.Itoa(count), targetIP}
+	var cmd []string
+	if net.ParseIP(targetIP).To4() != nil {
+		cmd = []string{"ping", "-c", strconv.Itoa(count), targetIP}
+	} else {
+		cmd = []string{"ping", "-6", "-c", strconv.Itoa(count), targetIP}
+	}
 	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
 	return err
 }
