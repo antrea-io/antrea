@@ -133,6 +133,13 @@ type NetworkPolicyController struct {
 	// cnpListerSynced is a function which returns true if the ClusterNetworkPolicies shared informer has been synced at least once.
 	cnpListerSynced cache.InformerSynced
 
+	anpInformer secinformers.NetworkPolicyInformer
+	// anpLister is able to list/get AntreaNetworkPolicies and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	anpLister seclisters.NetworkPolicyLister
+	// anpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
+	anpListerSynced cache.InformerSynced
+
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
 	// appliedToGroupStore is the storage where the populated AppliedTo Groups are stored.
@@ -171,6 +178,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	namespaceInformer coreinformers.NamespaceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	cnpInformer secinformers.ClusterNetworkPolicyInformer,
+	anpInformer secinformers.NetworkPolicyInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface) *NetworkPolicyController {
@@ -220,16 +228,27 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		},
 		resyncPeriod,
 	)
-	// Register Informer and add handlers for ClusterNetworkPolicy events only if the feature is enabled.
-	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		n.cnpInformer = cnpInformer
 		n.cnpLister = cnpInformer.Lister()
 		n.cnpListerSynced = cnpInformer.Informer().HasSynced
+		n.anpInformer = anpInformer
+		n.anpLister = anpInformer.Lister()
+		n.anpListerSynced = anpInformer.Informer().HasSynced
 		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addCNP,
 				UpdateFunc: n.updateCNP,
 				DeleteFunc: n.deleteCNP,
+			},
+			resyncPeriod,
+		)
+		anpInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addANP,
+				UpdateFunc: n.updateANP,
+				DeleteFunc: n.deleteANP,
 			},
 			resyncPeriod,
 		)
@@ -967,10 +986,14 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 		klog.Error("Unable to sync caches for NetworkPolicy controller")
 		return
 	}
-	// Only wait for CNPListerSynced when ClusterNetworkPolicy feature gate is enabled.
-	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+	// Only wait for cnpListerSynced and anpListerSynced when AntreaPolicy feature gate is enabled.
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		if !cache.WaitForCacheSync(stopCh, n.cnpListerSynced) {
 			klog.Error("Unable to sync CNP caches for NetworkPolicy controller")
+			return
+		}
+		if !cache.WaitForCacheSync(stopCh, n.anpListerSynced) {
+			klog.Error("Unable to sync ANP caches for NetworkPolicy controller")
 			return
 		}
 	}

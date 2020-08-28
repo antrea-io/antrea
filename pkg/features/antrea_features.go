@@ -30,8 +30,8 @@ const (
 	// MyFeature featuregate.Feature = "MyFeature"
 
 	// alpha: v0.8
-	// Allows to apply cluster-wide NetworkPolicies.
-	ClusterNetworkPolicy featuregate.Feature = "ClusterNetworkPolicy"
+	// Allows to apply ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
+	AntreaPolicy featuregate.Feature = "AntreaPolicy"
 
 	// alpha: v0.8
 	// Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
@@ -60,10 +60,10 @@ var (
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
 	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-		ClusterNetworkPolicy: {Default: false, PreRelease: featuregate.Alpha},
-		AntreaProxy:          {Default: false, PreRelease: featuregate.Alpha},
-		Traceflow:            {Default: false, PreRelease: featuregate.Alpha},
-		FlowExporter:         {Default: false, PreRelease: featuregate.Alpha},
+		AntreaPolicy: {Default: false, PreRelease: featuregate.Alpha},
+		AntreaProxy:  {Default: false, PreRelease: featuregate.Alpha},
+		Traceflow:    {Default: false, PreRelease: featuregate.Alpha},
+		FlowExporter: {Default: false, PreRelease: featuregate.Alpha},
 	}
 )
 

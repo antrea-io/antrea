@@ -113,7 +113,7 @@ func NewTraceflowController(
 		runningTraceflows:     make(map[uint8]string),
 		injectedTags:          make(map[uint8]string)}
 
-	// Add handlers for ClusterNetworkPolicy events.
+	// Add handlers for Traceflow events.
 	traceflowInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    c.addTraceflow,
