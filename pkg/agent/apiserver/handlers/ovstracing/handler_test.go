@@ -55,7 +55,7 @@ var (
 	inPodInterface   = &interfacestore.InterfaceConfig{
 		Type:          interfacestore.ContainerInterface,
 		InterfaceName: "inPod",
-		IPs:           []net.IP{net.ParseIP("10.1.1.11")},
+		IPs:           []net.IP{net.ParseIP("10.1.1.11"), net.ParseIP("2001:0db8::ff00:42:11")},
 		MAC:           podMAC,
 	}
 	srcPodInterface = &interfacestore.InterfaceConfig{
@@ -67,7 +67,7 @@ var (
 	dstPodInterface = &interfacestore.InterfaceConfig{
 		Type:          interfacestore.ContainerInterface,
 		InterfaceName: "dstPod",
-		IPs:           []net.IP{net.ParseIP("10.1.1.13")},
+		IPs:           []net.IP{net.ParseIP("10.1.1.13"), net.ParseIP("2001:0db8::ff00:42:13")},
 		MAC:           podMAC,
 	}
 )
@@ -107,7 +107,7 @@ func TestPodFlows(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			test:           "IPv6 source",
+			test:           "IPv6 source conflict",
 			query:          "?source=2001:0db8:0000:0000:0000:ff00:0042:8329",
 			expectedStatus: http.StatusBadRequest,
 		},
@@ -149,6 +149,13 @@ func TestPodFlows(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
+			test:           "Non-existing source IPv6 address",
+			port:           "srcPod",
+			query:          "?addressFamily=6&&source=srcNS/srcPod&&destination=dstNS/dstPod",
+			calledTrace:    false,
+			expectedStatus: http.StatusNotFound,
+		},
+		{
 			test:           "Default command",
 			calledTrace:    true,
 			expectedStatus: http.StatusOK,
@@ -157,6 +164,13 @@ func TestPodFlows(t *testing.T) {
 			test:           "Pod-to-Pod traffic",
 			port:           "pod",
 			query:          "?port=inNS/inPod&&destination=dstNS/dstPod",
+			calledTrace:    true,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			test:           "Pod-to-Pod IPv6 traffic",
+			port:           "pod",
+			query:          "?addressFamily=6&&port=inNS/inPod&&destination=dstNS/dstPod",
 			calledTrace:    true,
 			expectedStatus: http.StatusOK,
 		},
@@ -186,6 +200,8 @@ func TestPodFlows(t *testing.T) {
 			q.EXPECT().GetInterfaceStore().Return(i).Times(1)
 			if tc.port == "pod" {
 				i.EXPECT().GetContainerInterfacesByPod("inPod", "inNS").Return(nil).Times(1)
+			} else if tc.port == "srcPod" {
+				i.EXPECT().GetContainerInterfacesByPod("srcPod", "srcNS").Return([]*interfacestore.InterfaceConfig{srcPodInterface}).Times(1)
 			} else {
 				i.EXPECT().GetInterfaceByName(tc.port).Return(nil, false).Times(1)
 			}
