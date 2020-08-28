@@ -18,6 +18,7 @@ import (
 	"context"
 	"log"
 	"strconv"
+	"strings"
 
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
 	"github.com/vmware-tanzu/octant/pkg/view/component"
@@ -100,7 +101,7 @@ func (p *antreaOctantPlugin) getAgentTable(request service.Request) *component.T
 				"/overview/namespace/"+agent.PodRef.Namespace+"/workloads/pods/"+agent.PodRef.Name),
 			nodeCol: component.NewLink(agent.NodeRef.Name, agent.NodeRef.Name,
 				"/cluster-overview/nodes/"+agent.NodeRef.Name),
-			subnetCol: component.NewText(agent.NodeSubnet[0]),
+			subnetCol: component.NewText(strings.Join(agent.NodeSubnet, ", ")),
 			bridgeCol: component.NewText(agent.OVSInfo.BridgeName),
 			podNumCol: component.NewText(strconv.Itoa(int(agent.LocalPodNum))),
 			clusterInfoCrdCol: component.NewLink(agent.Name, agent.Name,
