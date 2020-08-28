@@ -17,6 +17,7 @@ package ovsctl
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"strings"
 )
 
@@ -24,12 +25,12 @@ import (
 const exitCodeCommandNotFound = 127
 
 var (
-	ipAndNWProtos = []string{"ip", "icmp", "tcp", "udp", "sctp"}
+	IPAndNWProtos = []string{"ip", "icmp", "tcp", "udp", "sctp", "ipv6", "icmp6", "tcp6", "udp6", "sctp6"}
 	// Some typical non-IP packet types.
 	// "dl_type=0x0800" can be used to indicate an IP packet too, but as it is not
 	// a common way, here we simply assume "dl_type=" is used for non-IP types
 	// only.
-	nonIPDLTypes = []string{"arp", "rarp", "ip6", "dl_type="}
+	nonIPDLTypes = []string{"arp", "rarp", "dl_type="}
 )
 
 type ovsCtlClient struct {
@@ -53,7 +54,7 @@ func newExecError(err error, errorOutput string) *ExecError {
 }
 
 func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
-	var inPort, nwSrc, nwDst, dlSrc, dlDst, ip, nwTTL string
+	var inPort, nwSrc, nwDst, dlSrc, dlDst, ipKey, nwTTL string
 
 	if strings.Contains(req.Flow, "in_port=") {
 		if !req.AllowOverrideInPort {
@@ -75,18 +76,22 @@ func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
 	}
 
 	if req.SrcIP != nil {
-		if strings.Contains(req.Flow, "nw_src=") {
-			return "", newBadRequestError("duplicated 'nw_src' in flow")
+		var nwSrcKey string
+		ipKey, nwSrcKey = getNwSrcKey(req.SrcIP)
+		if strings.Contains(req.Flow, fmt.Sprintf("%s=", nwSrcKey)) {
+			return "", newBadRequestError(fmt.Sprintf("duplicated '%s' in flow", nwSrcKey))
 		} else {
-			nwSrc = fmt.Sprintf("nw_src=%s,", req.SrcIP.String())
+			nwSrc = fmt.Sprintf("%s=%s,", nwSrcKey, req.SrcIP.String())
 		}
 	}
 	if req.DstIP != nil {
+		var nwDstKey string
+		ipKey, nwDstKey = getNwDstKey(req.DstIP)
 		// Do not allow overriding destination IP.
-		if strings.Contains(req.Flow, "nw_dst=") {
-			return "", newBadRequestError("duplicated 'nw_dst' in flow")
+		if strings.Contains(req.Flow, fmt.Sprintf("%s=", nwDstKey)) {
+			return "", newBadRequestError(fmt.Sprintf("duplicated '%s' in flow", nwDstKey))
 		} else {
-			nwDst = fmt.Sprintf("nw_dst=%s,", req.DstIP.String())
+			nwDst = fmt.Sprintf("%s=%s,", nwDstKey, req.DstIP.String())
 		}
 	}
 
@@ -98,13 +103,11 @@ func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
 		dlDst = fmt.Sprintf("dl_dst=%s,", req.DstMAC.String())
 	}
 	if !nonIP && (nwSrc != "" || nwDst != "") {
-		// Set DL type to IPv4.
-		ip = "ip,"
-		for _, s := range ipAndNWProtos {
+		for _, s := range IPAndNWProtos {
 			if strings.Contains(req.Flow, s) {
-				// IP or IP protocol is already specified in flow. No need to add "ip" in
+				// IP or IP protocol is already specified in flow. No need to add "ip"/"ipv6" in
 				// flow.
-				ip = ""
+				ipKey = ""
 				break
 			}
 		}
@@ -115,9 +118,27 @@ func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
 	}
 
 	// "ip" or IP protocol must be set before "nw_ttl", "nw_src", "nw_dst", and
-	// "tp_port".
-	flow := inPort + dlSrc + dlDst + ip + req.Flow + "," + nwTTL + nwSrc + nwDst
+	// "tp_port". For IPv6 packet, "ipv6" is required as a precondition.
+	flow := inPort + dlSrc + dlDst + ipKey + req.Flow + "," + nwTTL + nwSrc + nwDst
 	return c.runTracing(flow)
+}
+
+// getNwSrcKey returns keys of IP address family and IP source which are supported in ovs-appctl command according
+// to the given IP.
+func getNwSrcKey(ip net.IP) (string, string) {
+	if ip.To4() != nil {
+		return "ip", "nw_src"
+	} else {
+		return "ipv6", "ipv6_src"
+	}
+}
+
+func getNwDstKey(ip net.IP) (string, string) {
+	if ip.To4() != nil {
+		return "ip", "nw_dst"
+	} else {
+		return "ipv6", "ipv6_dst"
+	}
 }
 
 func (c *ovsCtlClient) runTracing(flow string) (string, error) {
