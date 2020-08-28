@@ -18,14 +18,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
 var (
 	// tierPriorityMap maintains a map of the Tier name to it's priority.
-	tierPriorityMap = map[string]networking.TierPriority{
+	tierPriorityMap = map[string]controlplane.TierPriority{
 		"Emergency":   antreatypes.TierEmergency,
 		"SecurityOps": antreatypes.TierSecurityOps,
 		"NetworkOps":  antreatypes.TierNetworkOps,
@@ -140,14 +140,14 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	for _, at := range cnp.Spec.AppliedTo {
 		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector))
 	}
-	rules := make([]networking.NetworkPolicyRule, 0, len(cnp.Spec.Ingress)+len(cnp.Spec.Egress))
+	rules := make([]controlplane.NetworkPolicyRule, 0, len(cnp.Spec.Ingress)+len(cnp.Spec.Egress))
 	// Compute NetworkPolicyRule for Egress Rule.
 	for idx, ingressRule := range cnp.Spec.Ingress {
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports)
-		rules = append(rules, networking.NetworkPolicyRule{
-			Direction: networking.DirectionIn,
-			From:      *n.toAntreaPeerForCRD(ingressRule.From, cnp, networking.DirectionIn, namedPortExists),
+		rules = append(rules, controlplane.NetworkPolicyRule{
+			Direction: controlplane.DirectionIn,
+			From:      *n.toAntreaPeerForCRD(ingressRule.From, cnp, controlplane.DirectionIn, namedPortExists),
 			Services:  services,
 			Action:    ingressRule.Action,
 			Priority:  int32(idx),
@@ -157,9 +157,9 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	for idx, egressRule := range cnp.Spec.Egress {
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports)
-		rules = append(rules, networking.NetworkPolicyRule{
-			Direction: networking.DirectionOut,
-			To:        *n.toAntreaPeerForCRD(egressRule.To, cnp, networking.DirectionOut, namedPortExists),
+		rules = append(rules, controlplane.NetworkPolicyRule{
+			Direction: controlplane.DirectionOut,
+			To:        *n.toAntreaPeerForCRD(egressRule.To, cnp, controlplane.DirectionOut, namedPortExists),
 			Services:  services,
 			Action:    egressRule.Action,
 			Priority:  int32(idx),

@@ -45,7 +45,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
@@ -82,17 +82,17 @@ var (
 	uuidNamespace = uuid.FromStringOrNil("5a5e7dd9-e3fb-49bb-b263-9bab25c95841")
 
 	// matchAllPeer is a NetworkPolicyPeer matching all source/destination IP addresses.
-	matchAllPeer = networking.NetworkPolicyPeer{
-		IPBlocks: []networking.IPBlock{{CIDR: networking.IPNet{IP: networking.IPAddress(net.IPv4zero), PrefixLength: 0}}},
+	matchAllPeer = controlplane.NetworkPolicyPeer{
+		IPBlocks: []controlplane.IPBlock{{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv4zero), PrefixLength: 0}}},
 	}
 	// matchAllPodsPeer is a networkingv1.NetworkPolicyPeer matching all Pods from all Namespaces.
 	matchAllPodsPeer = networkingv1.NetworkPolicyPeer{
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
 	// denyAllIngressRule is a NetworkPolicyRule which denies all ingress traffic.
-	denyAllIngressRule = networking.NetworkPolicyRule{Direction: networking.DirectionIn}
+	denyAllIngressRule = controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}
 	// denyAllEgressRule is a NetworkPolicyRule which denies all egress traffic.
-	denyAllEgressRule = networking.NetworkPolicyRule{Direction: networking.DirectionOut}
+	denyAllEgressRule = controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}
 	// defaultAction is a RuleAction which sets the default Action for the NetworkPolicy rule.
 	defaultAction = secv1alpha1.RuleActionAllow
 )
@@ -485,11 +485,11 @@ func (n *NetworkPolicyController) createAddressGroup(peer networkingv1.NetworkPo
 }
 
 // toAntreaProtocol converts a v1.Protocol object to an Antrea Protocol object.
-func toAntreaProtocol(npProtocol *v1.Protocol) *networking.Protocol {
+func toAntreaProtocol(npProtocol *v1.Protocol) *controlplane.Protocol {
 	// If Protocol is unset, it must default to TCP protocol.
-	internalProtocol := networking.ProtocolTCP
+	internalProtocol := controlplane.ProtocolTCP
 	if npProtocol != nil {
-		internalProtocol = networking.Protocol(*npProtocol)
+		internalProtocol = controlplane.Protocol(*npProtocol)
 	}
 	return &internalProtocol
 }
@@ -497,14 +497,14 @@ func toAntreaProtocol(npProtocol *v1.Protocol) *networking.Protocol {
 // toAntreaServices converts a slice of networkingv1.NetworkPolicyPort objects
 // to a slice of Antrea Service objects. A bool is returned along with the
 // Service objects to indicate whether any named port exists.
-func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) ([]networking.Service, bool) {
-	var antreaServices []networking.Service
+func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) ([]controlplane.Service, bool) {
+	var antreaServices []controlplane.Service
 	var namedPortExists bool
 	for _, npPort := range npPorts {
 		if npPort.Port != nil && npPort.Port.Type == intstr.String {
 			namedPortExists = true
 		}
-		antreaService := networking.Service{
+		antreaService := controlplane.Service{
 			Protocol: toAntreaProtocol(npPort.Protocol),
 			Port:     npPort.Port,
 		}
@@ -514,13 +514,13 @@ func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) ([]networking.Se
 }
 
 // toAntreaIPBlock converts a networkingv1.IPBlock to an Antrea IPBlock.
-func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networking.IPBlock, error) {
+func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*controlplane.IPBlock, error) {
 	// Convert the allowed IPBlock to networkpolicy.IPNet.
 	ipNet, err := cidrStrToIPNet(ipBlock.CIDR)
 	if err != nil {
 		return nil, err
 	}
-	exceptNets := []networking.IPNet{}
+	exceptNets := []controlplane.IPNet{}
 	for _, exc := range ipBlock.Except {
 		// Convert the except IPBlock to networkpolicy.IPNet.
 		exceptNet, err := cidrStrToIPNet(exc)
@@ -529,7 +529,7 @@ func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networking.IPBlock, error)
 		}
 		exceptNets = append(exceptNets, *exceptNet)
 	}
-	antreaIPBlock := &networking.IPBlock{
+	antreaIPBlock := &controlplane.IPBlock{
 		CIDR:   *ipNet,
 		Except: exceptNets,
 	}
@@ -544,15 +544,15 @@ func toAntreaIPBlock(ipBlock *networkingv1.IPBlock) (*networking.IPBlock, error)
 func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkPolicy) *antreatypes.NetworkPolicy {
 	appliedToGroupKey := n.createAppliedToGroup(np.Namespace, &np.Spec.PodSelector, nil)
 	appliedToGroupNames := []string{appliedToGroupKey}
-	rules := make([]networking.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
+	rules := make([]controlplane.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
 	var ingressRuleExists, egressRuleExists bool
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for _, ingressRule := range np.Spec.Ingress {
 		ingressRuleExists = true
 		services, namedPortExists := toAntreaServices(ingressRule.Ports)
-		rules = append(rules, networking.NetworkPolicyRule{
-			Direction: networking.DirectionIn,
-			From:      *n.toAntreaPeer(ingressRule.From, np, networking.DirectionIn, namedPortExists),
+		rules = append(rules, controlplane.NetworkPolicyRule{
+			Direction: controlplane.DirectionIn,
+			From:      *n.toAntreaPeer(ingressRule.From, np, controlplane.DirectionIn, namedPortExists),
 			Services:  services,
 			Priority:  defaultRulePriority,
 			Action:    &defaultAction,
@@ -562,9 +562,9 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	for _, egressRule := range np.Spec.Egress {
 		egressRuleExists = true
 		services, namedPortExists := toAntreaServices(egressRule.Ports)
-		rules = append(rules, networking.NetworkPolicyRule{
-			Direction: networking.DirectionOut,
-			To:        *n.toAntreaPeer(egressRule.To, np, networking.DirectionOut, namedPortExists),
+		rules = append(rules, controlplane.NetworkPolicyRule{
+			Direction: controlplane.DirectionOut,
+			To:        *n.toAntreaPeer(egressRule.To, np, controlplane.DirectionOut, namedPortExists),
 			Services:  services,
 			Priority:  defaultRulePriority,
 			Action:    &defaultAction,
@@ -602,7 +602,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	return internalNetworkPolicy
 }
 
-func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy, dir networking.Direction, namedPortExists bool) *networking.NetworkPolicyPeer {
+func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy, dir controlplane.Direction, namedPortExists bool) *controlplane.NetworkPolicyPeer {
 	var addressGroups []string
 	// Empty NetworkPolicyPeer is supposed to match all addresses.
 	// See https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-allow-all-ingress-traffic.
@@ -614,7 +614,7 @@ func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolic
 		// used to resolve the named ports.
 		// For other cases it uses the IPBlock "0.0.0.0/0" to avoid the overhead
 		// of handling member updates of the AddressGroup.
-		if dir == networking.DirectionIn || !namedPortExists {
+		if dir == controlplane.DirectionIn || !namedPortExists {
 			return &matchAllPeer
 		}
 		allPodsGroupUID := n.createAddressGroup(matchAllPodsPeer, np)
@@ -622,9 +622,9 @@ func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolic
 		podsPeer.AddressGroups = append(addressGroups, allPodsGroupUID)
 		return &podsPeer
 	}
-	var ipBlocks []networking.IPBlock
+	var ipBlocks []controlplane.IPBlock
 	for _, peer := range peers {
-		// A networking.NetworkPolicyPeer will either have an IPBlock or a
+		// A controlplane.NetworkPolicyPeer will either have an IPBlock or a
 		// podSelector and/or namespaceSelector set.
 		if peer.IPBlock != nil {
 			ipBlock, err := toAntreaIPBlock(peer.IPBlock)
@@ -638,7 +638,7 @@ func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolic
 			addressGroups = append(addressGroups, normalizedUID)
 		}
 	}
-	return &networking.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
+	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
 }
 
 // addNetworkPolicy receives NetworkPolicy ADD events and creates resources
@@ -1172,7 +1172,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 		// from all Namespaces.
 		pods, _ = n.podLister.Pods("").List(groupSelector.PodSelector)
 	}
-	podSet := networking.GroupMemberPodSet{}
+	podSet := controlplane.GroupMemberPodSet{}
 	for _, pod := range pods {
 		if pod.Status.PodIP == "" {
 			// No need to insert Pod IPAddress when it is unset.
@@ -1193,19 +1193,19 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 }
 
 // podToMemberPod is util function to convert a Pod to a GroupMemberPod type.
-// A networking.NamedPort item will be set in the GroupMemberPod, only if the
+// A controlplane.NamedPort item will be set in the GroupMemberPod, only if the
 // Pod contains a Port with the name field set. Depending on the input, the
 // Pod IP and/or PodReference will also be set.
-func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *networking.GroupMemberPod {
-	memberPod := &networking.GroupMemberPod{}
+func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *controlplane.GroupMemberPod {
+	memberPod := &controlplane.GroupMemberPod{}
 	for _, container := range pod.Spec.Containers {
 		for _, port := range container.Ports {
 			// Only include container ports with name set.
 			if port.Name != "" {
-				memberPod.Ports = append(memberPod.Ports, networking.NamedPort{
+				memberPod.Ports = append(memberPod.Ports, controlplane.NamedPort{
 					Port:     port.ContainerPort,
 					Name:     port.Name,
-					Protocol: networking.Protocol(port.Protocol),
+					Protocol: controlplane.Protocol(port.Protocol),
 				})
 			}
 		}
@@ -1216,7 +1216,7 @@ func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *networking.Grou
 	}
 
 	if includePodRef {
-		podRef := networking.PodReference{
+		podRef := controlplane.PodReference{
 			Name:      pod.Name,
 			Namespace: pod.Namespace,
 		}
@@ -1236,7 +1236,7 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		metrics.DurationAppliedToGroupSyncing.Observe(float64(d.Milliseconds()))
 		klog.V(2).Infof("Finished syncing AppliedToGroup %s. (%v)", key, d)
 	}()
-	podSetByNode := make(map[string]networking.GroupMemberPodSet)
+	podSetByNode := make(map[string]controlplane.GroupMemberPodSet)
 	var pods []*v1.Pod
 	appGroupNodeNames := sets.String{}
 	appliedToGroupObj, found, _ := n.appliedToGroupStore.Get(key)
@@ -1277,7 +1277,7 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		scheduledPodNum++
 		podSet := podSetByNode[pod.Spec.NodeName]
 		if podSet == nil {
-			podSet = networking.GroupMemberPodSet{}
+			podSet = controlplane.GroupMemberPodSet{}
 		}
 		podSet.Insert(podToMemberPod(pod, false, true))
 		// Update the Pod references by Node.
@@ -1381,14 +1381,14 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 	return nil
 }
 
-// ipStrToIPAddress converts an IP string to a networking.IPAddress.
+// ipStrToIPAddress converts an IP string to a controlplane.IPAddress.
 // nil will returned if the IP string is not valid.
-func ipStrToIPAddress(ip string) networking.IPAddress {
-	return networking.IPAddress(net.ParseIP(ip))
+func ipStrToIPAddress(ip string) controlplane.IPAddress {
+	return controlplane.IPAddress(net.ParseIP(ip))
 }
 
-// cidrStrToIPNet converts a CIDR (eg. 10.0.0.0/16) to a *networking.IPNet.
-func cidrStrToIPNet(cidr string) (*networking.IPNet, error) {
+// cidrStrToIPNet converts a CIDR (eg. 10.0.0.0/16) to a *controlplane.IPNet.
+func cidrStrToIPNet(cidr string) (*controlplane.IPNet, error) {
 	// Split the cidr to retrieve the IP and prefix.
 	s := strings.Split(cidr, "/")
 	if len(s) != 2 {
@@ -1399,7 +1399,7 @@ func cidrStrToIPNet(cidr string) (*networking.IPNet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid prefix length: %s", s[1])
 	}
-	ipNet := &networking.IPNet{
+	ipNet := &controlplane.IPNet{
 		IP:           ipStrToIPAddress(s[0]),
 		PrefixLength: int32(prefixLen64),
 	}

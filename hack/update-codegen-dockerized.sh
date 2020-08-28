@@ -30,7 +30,7 @@ $GOPATH/bin/client-gen \
   --clientset-name versioned \
   --input-base "${ANTREA_PKG}/pkg/apis/" \
   --input "clusterinformation/v1beta1" \
-  --input "networking/v1beta1" \
+  --input "controlplane/v1beta1" \
   --input "system/v1beta1" \
   --input "security/v1alpha1" \
   --input "core/v1alpha1" \
@@ -56,8 +56,8 @@ $GOPATH/bin/informer-gen \
 
 $GOPATH/bin/deepcopy-gen \
   --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/networking" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/core/v1alpha1" \
@@ -66,12 +66,12 @@ $GOPATH/bin/deepcopy-gen \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/conversion-gen  \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1,${ANTREA_PKG}/pkg/apis/networking/" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta1,${ANTREA_PKG}/pkg/apis/controlplane/" \
   -O zz_generated.conversion \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/openapi-gen  \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
   --input-dirs "k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/util/intstr" \
@@ -118,7 +118,7 @@ git checkout HEAD -- hack/boilerplate/license_header.raw.txt
 go mod vendor
 $GOPATH/bin/go-to-protobuf \
   --proto-import vendor \
-  --packages "${ANTREA_PKG}/pkg/apis/networking/v1beta1" \
+  --packages "${ANTREA_PKG}/pkg/apis/controlplane/v1beta1" \
   --go-header-file hack/boilerplate/license_header.go.txt
 # Clean up vendor directory.
 rm -rf vendor

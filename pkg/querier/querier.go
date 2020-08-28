@@ -17,7 +17,7 @@ package querier
 import (
 	v1 "k8s.io/api/core/v1"
 
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
@@ -31,11 +31,11 @@ type NetworkPolicyInfoQuerier interface {
 type AgentNetworkPolicyInfoQuerier interface {
 	NetworkPolicyInfoQuerier
 	GetControllerConnectionStatus() bool
-	GetNetworkPolicies(namespace string) []networkingv1beta1.NetworkPolicy
-	GetAddressGroups() []networkingv1beta1.AddressGroup
-	GetAppliedToGroups() []networkingv1beta1.AppliedToGroup
-	GetNetworkPolicy(npName, npNamespace string) *networkingv1beta1.NetworkPolicy
-	GetAppliedNetworkPolicies(pod, namespace string) []networkingv1beta1.NetworkPolicy
+	GetNetworkPolicies(namespace string) []cpv1beta1.NetworkPolicy
+	GetAddressGroups() []cpv1beta1.AddressGroup
+	GetAppliedToGroups() []cpv1beta1.AppliedToGroup
+	GetNetworkPolicy(npName, npNamespace string) *cpv1beta1.NetworkPolicy
+	GetAppliedNetworkPolicies(pod, namespace string) []cpv1beta1.NetworkPolicy
 }
 
 type ControllerNetworkPolicyInfoQuerier interface {

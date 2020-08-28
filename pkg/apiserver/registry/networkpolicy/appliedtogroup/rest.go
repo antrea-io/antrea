@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -50,11 +50,11 @@ func NewREST(appliedToGroupStore storage.Interface) *REST {
 }
 
 func (r *REST) New() runtime.Object {
-	return &networking.AppliedToGroup{}
+	return &controlplane.AppliedToGroup{}
 }
 
 func (r *REST) NewList() runtime.Object {
-	return &networking.AppliedToGroupList{}
+	return &controlplane.AppliedToGroupList{}
 }
 
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
@@ -63,17 +63,17 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 		return nil, errors.NewInternalError(err)
 	}
 	if !exists {
-		return nil, errors.NewNotFound(networking.Resource("appliedtogroup"), name)
+		return nil, errors.NewNotFound(controlplane.Resource("appliedtogroup"), name)
 	}
-	obj := new(networking.AppliedToGroup)
+	obj := new(controlplane.AppliedToGroup)
 	store.ToAppliedToGroupMsg(appliedToGroup.(*types.AppliedToGroup), obj, true, nil)
 	return obj, nil
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	appliedToGroups := r.appliedToGroupStore.List()
-	list := new(networking.AppliedToGroupList)
-	list.Items = make([]networking.AppliedToGroup, len(appliedToGroups))
+	list := new(controlplane.AppliedToGroupList)
+	list.Items = make([]controlplane.AppliedToGroup, len(appliedToGroups))
 	for i := range appliedToGroups {
 		store.ToAppliedToGroupMsg(appliedToGroups[i].(*types.AppliedToGroup), &list.Items[i], true, nil)
 	}
@@ -90,5 +90,5 @@ func (r *REST) Watch(ctx context.Context, options *internalversion.ListOptions) 
 }
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	return rest.NewDefaultTableConvertor(networking.Resource("appliedtogroup")).ConvertToTable(ctx, obj, tableOptions)
+	return rest.NewDefaultTableConvertor(controlplane.Resource("appliedtogroup")).ConvertToTable(ctx, obj, tableOptions)
 }
