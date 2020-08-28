@@ -63,8 +63,9 @@ type AgentConfig struct {
 	// as /host/proc in the antrea-agent container). When running antrea-agent as a process,
 	// hostProcPathPrefix should be set to "/" in the YAML config.
 	HostProcPathPrefix string `yaml:"hostProcPathPrefix,omitempty"`
-	// CIDR Range for services in cluster. It's required to support egress network policy, should
-	// be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
+	// ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
+	// set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
+	// AntreaProxy is enabled, this parameter is not needed and will be ignored if provided.
 	// Default is 10.96.0.0/12
 	ServiceCIDR string `yaml:"serviceCIDR,omitempty"`
 	// Whether or not to enable IPSec (ESP) encryption for Pod traffic across Nodes. IPSec encryption

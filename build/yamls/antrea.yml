@@ -911,8 +911,9 @@ data:
     # for the GRE tunnel type.
     #enableIPSecTunnel: false
 
-    # CIDR Range for services in cluster. It's required to support egress network policy, should
-    # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
+    # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
+    # set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
+    # AntreaProxy is enabled, this parameter is not needed and will be ignored if provided.
     #serviceCIDR: 10.96.0.0/12
 
     # Determines how traffic is encapsulated. It has the following options
@@ -995,7 +996,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-5g6h28c5m5
+  name: antrea-config-64fmb8kc28
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1101,7 +1102,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-5g6h28c5m5
+          name: antrea-config-64fmb8kc28
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1316,7 +1317,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-5g6h28c5m5
+          name: antrea-config-64fmb8kc28
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -192,6 +192,16 @@ if [[ $TUN_TYPE != "geneve" ]]; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: $TUN_TYPE/" antrea-agent.conf
 fi
 
+if [[ $CLOUD != "" ]]; then
+    # Delete the serviceCIDR parameter for the cloud (AKS, EKS, GKE) deployment yamls, because
+    # AntreaProxy is always enabled for the cloud managed K8s clusters, and the serviceCIDR
+    # parameter is not needed in this case.
+    # delete all blank lines after "#serviceCIDR:"
+    sed -i.bak '/#serviceCIDR:/,/^$/{/^$/d;}' antrea-agent.conf
+    # delete lines from "# ClusterIP CIDR range for Services" to "#serviceCIDR:"
+    sed -i.bak '/# ClusterIP CIDR range for Services/,/#serviceCIDR:/d' antrea-agent.conf
+fi
+
 # unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,
 # which is why we use a template kustomization file.
 sed -e "s/<AGENT_CONF_FILE>/antrea-agent.conf/; s/<CONTROLLER_CONF_FILE>/antrea-controller.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
