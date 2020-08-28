@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 )
 
 // SpanMeta describes the span information of an object.
@@ -38,7 +38,7 @@ func (meta *SpanMeta) Has(nodeName string) bool {
 }
 
 const (
-	TierEmergency networking.TierPriority = iota + 1
+	TierEmergency controlplane.TierPriority = iota + 1
 	TierSecurityOps
 	TierNetworkOps
 	TierPlatform
@@ -73,7 +73,7 @@ type AppliedToGroup struct {
 	// PodsByNode is a mapping from nodeName to a set of Pods on the Node.
 	// It will be converted to a slice of GroupMemberPod for transferring according
 	// to client's selection.
-	PodsByNode map[string]networking.GroupMemberPodSet
+	PodsByNode map[string]controlplane.GroupMemberPodSet
 }
 
 // AddressGroup describes a set of addresses used as source or destination of Network Policy rules.
@@ -88,7 +88,7 @@ type AddressGroup struct {
 	// Pods is a set of Pods selected by this group.
 	// It will be converted to a slice of GroupMemberPod for transferring according
 	// to client's selection.
-	Pods networking.GroupMemberPodSet
+	Pods controlplane.GroupMemberPodSet
 }
 
 // NetworkPolicy describes what network traffic is allowed for a set of Pods.
@@ -105,10 +105,10 @@ type NetworkPolicy struct {
 	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
 	Priority *float64
 	// Rules is a list of rules to be applied to the selected Pods.
-	Rules []networking.NetworkPolicyRule
+	Rules []controlplane.NetworkPolicyRule
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
 	AppliedToGroups []string
 	// TierPriority represents the priority of the Tier associated with this Network
 	// Policy.
-	TierPriority *networking.TierPriority
+	TierPriority *controlplane.TierPriority
 }

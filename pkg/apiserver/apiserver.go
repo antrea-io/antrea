@@ -15,6 +15,9 @@
 package apiserver
 
 import (
+	"context"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -23,9 +26,10 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
+	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
-	networkinginstall "github.com/vmware-tanzu/antrea/pkg/apis/networking/install"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	cpinstall "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/install"
 	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
 	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
@@ -51,7 +55,7 @@ var (
 )
 
 func init() {
-	networkinginstall.Install(Scheme)
+	cpinstall.Install(Scheme)
 	systeminstall.Install(Scheme)
 	// We need to add the options to empty v1, see sample-apiserver/pkg/apiserver/apiserver.go.
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
@@ -118,12 +122,12 @@ func (c *Config) Complete(informers informers.SharedInformerFactory) completedCo
 }
 
 func installAPIGroup(s *APIServer, c completedConfig) error {
-	networkingGroup := genericapiserver.NewDefaultAPIGroupInfo(networking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	networkingStorage := map[string]rest.Storage{}
-	networkingStorage["addressgroups"] = addressgroup.NewREST(c.extraConfig.addressGroupStore)
-	networkingStorage["appliedtogroups"] = appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
-	networkingStorage["networkpolicies"] = networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
-	networkingGroup.VersionedResourcesStorageMap["v1beta1"] = networkingStorage
+	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	cpStorage := map[string]rest.Storage{}
+	cpStorage["addressgroups"] = addressgroup.NewREST(c.extraConfig.addressGroupStore)
+	cpStorage["appliedtogroups"] = appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
+	cpStorage["networkpolicies"] = networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
+	cpGroup.VersionedResourcesStorageMap["v1beta1"] = cpStorage
 
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	systemStorage := map[string]rest.Storage{}
@@ -133,7 +137,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	systemStorage["supportbundles/download"] = bundleStorage.Download
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
 
-	groups := []*genericapiserver.APIGroupInfo{&networkingGroup, &systemGroup}
+	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &systemGroup}
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
 			return err
@@ -164,4 +168,26 @@ func (c completedConfig) New() (*APIServer, error) {
 	installHandlers(c.extraConfig.endpointQuerier, s.GenericAPIServer)
 
 	return s, nil
+}
+
+// CleanupDeprecatedAPIServices deletes the registered APIService resources for
+// the deprecated Antrea API groups.
+func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
+	// The APIService of a deprecated API group should be added to the slice.
+	// After Antrea upgrades from an old version to a new version that
+	// deprecates a registered APIService, the APIService should be deleted,
+	// otherwise K8s will fail to delete an existing Namespace.
+	// Also check: https://github.com/vmware-tanzu/antrea/issues/494
+	deprecatedAPIServices := []string{
+		"v1beta1.networking.antrea.tanzu.vmware.com",
+	}
+	for _, as := range deprecatedAPIServices {
+		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})
+		if err == nil {
+			klog.Infof("Deleted the deprecated APIService %s", as)
+		} else if !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
 }

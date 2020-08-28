@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,37 +17,37 @@
 package v1beta1
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
-type NetworkingV1beta1Interface interface {
+type ControlplaneV1beta1Interface interface {
 	RESTClient() rest.Interface
 	AddressGroupsGetter
 	AppliedToGroupsGetter
 	NetworkPoliciesGetter
 }
 
-// NetworkingV1beta1Client is used to interact with features provided by the networking.antrea.tanzu.vmware.com group.
-type NetworkingV1beta1Client struct {
+// ControlplaneV1beta1Client is used to interact with features provided by the controlplane.antrea.tanzu.vmware.com group.
+type ControlplaneV1beta1Client struct {
 	restClient rest.Interface
 }
 
-func (c *NetworkingV1beta1Client) AddressGroups() AddressGroupInterface {
+func (c *ControlplaneV1beta1Client) AddressGroups() AddressGroupInterface {
 	return newAddressGroups(c)
 }
 
-func (c *NetworkingV1beta1Client) AppliedToGroups() AppliedToGroupInterface {
+func (c *ControlplaneV1beta1Client) AppliedToGroups() AppliedToGroupInterface {
 	return newAppliedToGroups(c)
 }
 
-func (c *NetworkingV1beta1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {
+func (c *ControlplaneV1beta1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {
 	return newNetworkPolicies(c, namespace)
 }
 
-// NewForConfig creates a new NetworkingV1beta1Client for the given config.
-func NewForConfig(c *rest.Config) (*NetworkingV1beta1Client, error) {
+// NewForConfig creates a new ControlplaneV1beta1Client for the given config.
+func NewForConfig(c *rest.Config) (*ControlplaneV1beta1Client, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -56,12 +56,12 @@ func NewForConfig(c *rest.Config) (*NetworkingV1beta1Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &NetworkingV1beta1Client{client}, nil
+	return &ControlplaneV1beta1Client{client}, nil
 }
 
-// NewForConfigOrDie creates a new NetworkingV1beta1Client for the given config and
+// NewForConfigOrDie creates a new ControlplaneV1beta1Client for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *NetworkingV1beta1Client {
+func NewForConfigOrDie(c *rest.Config) *ControlplaneV1beta1Client {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -69,9 +69,9 @@ func NewForConfigOrDie(c *rest.Config) *NetworkingV1beta1Client {
 	return client
 }
 
-// New creates a new NetworkingV1beta1Client for the given RESTClient.
-func New(c rest.Interface) *NetworkingV1beta1Client {
-	return &NetworkingV1beta1Client{c}
+// New creates a new ControlplaneV1beta1Client for the given RESTClient.
+func New(c rest.Interface) *ControlplaneV1beta1Client {
+	return &ControlplaneV1beta1Client{c}
 }
 
 func setConfigDefaults(config *rest.Config) error {
@@ -89,7 +89,7 @@ func setConfigDefaults(config *rest.Config) error {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *NetworkingV1beta1Client) RESTClient() rest.Interface {
+func (c *ControlplaneV1beta1Client) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}

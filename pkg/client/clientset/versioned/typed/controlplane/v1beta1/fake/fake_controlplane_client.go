@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,30 +17,30 @@
 package fake
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
 
-type FakeNetworkingV1beta1 struct {
+type FakeControlplaneV1beta1 struct {
 	*testing.Fake
 }
 
-func (c *FakeNetworkingV1beta1) AddressGroups() v1beta1.AddressGroupInterface {
+func (c *FakeControlplaneV1beta1) AddressGroups() v1beta1.AddressGroupInterface {
 	return &FakeAddressGroups{c}
 }
 
-func (c *FakeNetworkingV1beta1) AppliedToGroups() v1beta1.AppliedToGroupInterface {
+func (c *FakeControlplaneV1beta1) AppliedToGroups() v1beta1.AppliedToGroupInterface {
 	return &FakeAppliedToGroups{c}
 }
 
-func (c *FakeNetworkingV1beta1) NetworkPolicies(namespace string) v1beta1.NetworkPolicyInterface {
+func (c *FakeControlplaneV1beta1) NetworkPolicies(namespace string) v1beta1.NetworkPolicyInterface {
 	return &FakeNetworkPolicies{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeNetworkingV1beta1) RESTClient() rest.Interface {
+func (c *FakeControlplaneV1beta1) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }

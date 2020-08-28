@@ -38,7 +38,7 @@ rules:
       - update
       - delete
   - apiGroups:
-      - networking.antrea.tanzu.vmware.com
+      - controlplane.antrea.tanzu.vmware.com
     resources:
       - networkpolicies
       - appliedtogroups

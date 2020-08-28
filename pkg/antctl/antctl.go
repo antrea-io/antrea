@@ -30,7 +30,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/version"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	controllerinforest "github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
@@ -77,7 +77,7 @@ var CommandList = &commandList{
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &networkingv1beta1.NetworkPolicyVersionResource,
+					groupVersionResource: &cpv1beta1.NetworkPolicyVersionResource,
 					resourceName:         "",
 					namespaced:           true,
 				},
@@ -116,7 +116,7 @@ var CommandList = &commandList{
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &networkingv1beta1.AppliedToGroupVersionResource,
+					groupVersionResource: &cpv1beta1.AppliedToGroupVersionResource,
 				},
 				addonTransform: appliedtogroup.Transform,
 			},
@@ -143,7 +143,7 @@ var CommandList = &commandList{
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &networkingv1beta1.AddressGroupVersionResource,
+					groupVersionResource: &cpv1beta1.AddressGroupVersionResource,
 				},
 				addonTransform: addressgroup.Transform,
 			},

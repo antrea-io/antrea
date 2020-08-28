@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
@@ -36,14 +36,14 @@ var (
 // toAntreaServicesForCRD converts a slice of secv1alpha1.NetworkPolicyPort
 // objects to a slice of Antrea Service objects. A bool is returned along with
 // the Service objects to indicate whether any named port exists.
-func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) ([]networking.Service, bool) {
-	var antreaServices []networking.Service
+func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) ([]controlplane.Service, bool) {
+	var antreaServices []controlplane.Service
 	var namedPortExists bool
 	for _, npPort := range npPorts {
 		if npPort.Port != nil && npPort.Port.Type == intstr.String {
 			namedPortExists = true
 		}
-		antreaService := networking.Service{
+		antreaService := controlplane.Service{
 			Protocol: toAntreaProtocol(npPort.Protocol),
 			Port:     npPort.Port,
 		}
@@ -53,22 +53,22 @@ func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) ([]networki
 }
 
 // toAntreaIPBlockForCRD converts a secv1alpha1.IPBlock to an Antrea IPBlock.
-func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*networking.IPBlock, error) {
+func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*controlplane.IPBlock, error) {
 	// Convert the allowed IPBlock to networkpolicy.IPNet.
 	ipNet, err := cidrStrToIPNet(ipBlock.CIDR)
 	if err != nil {
 		return nil, err
 	}
-	antreaIPBlock := &networking.IPBlock{
+	antreaIPBlock := &controlplane.IPBlock{
 		CIDR: *ipNet,
 		// secv1alpha.IPBlock does not have the Except slices.
-		Except: []networking.IPNet{},
+		Except: []controlplane.IPNet{},
 	}
 	return antreaIPBlock, nil
 }
 
 func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer,
-	np metav1.Object, dir networking.Direction, namedPortExists bool) *networking.NetworkPolicyPeer {
+	np metav1.Object, dir controlplane.Direction, namedPortExists bool) *controlplane.NetworkPolicyPeer {
 	var addressGroups []string
 	// Empty NetworkPolicyPeer is supposed to match all addresses.
 	// It's treated as an IPBlock "0.0.0.0/0".
@@ -79,7 +79,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 		// used to resolve the named ports.
 		// For other cases it uses the IPBlock "0.0.0.0/0" to avoid the overhead
 		// of handling member updates of the AddressGroup.
-		if dir == networking.DirectionIn || !namedPortExists {
+		if dir == controlplane.DirectionIn || !namedPortExists {
 			return &matchAllPeer
 		}
 		allPodsGroupUID := n.createAddressGroupForCRD(matchAllPodsPeerCrd, np)
@@ -87,7 +87,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 		podsPeer.AddressGroups = append(addressGroups, allPodsGroupUID)
 		return &podsPeer
 	}
-	var ipBlocks []networking.IPBlock
+	var ipBlocks []controlplane.IPBlock
 	for _, peer := range peers {
 		// A secv1alpha1.NetworkPolicyPeer will either have an IPBlock or a
 		// podSelector and/or namespaceSelector set.
@@ -103,7 +103,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 			addressGroups = append(addressGroups, normalizedUID)
 		}
 	}
-	return &networking.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
+	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
 }
 
 // createAddressGroupForCRD creates an AddressGroup object corresponding to a
@@ -132,7 +132,7 @@ func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.Netw
 // getTierPriority retrieves the priority associated with the input Tier name.
 // If the Tier name is empty, by default, the lowest priority Application Tier
 // is returned.
-func getTierPriority(tier string) networking.TierPriority {
+func getTierPriority(tier string) controlplane.TierPriority {
 	if tier == "" {
 		return antreatypes.TierApplication
 	}

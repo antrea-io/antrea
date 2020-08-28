@@ -20,44 +20,44 @@ import (
 	"context"
 	"time"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	scheme "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
 )
 
-// AddressGroupsGetter has a method to return a AddressGroupInterface.
+// AppliedToGroupsGetter has a method to return a AppliedToGroupInterface.
 // A group's client should implement this interface.
-type AddressGroupsGetter interface {
-	AddressGroups() AddressGroupInterface
+type AppliedToGroupsGetter interface {
+	AppliedToGroups() AppliedToGroupInterface
 }
 
-// AddressGroupInterface has methods to work with AddressGroup resources.
-type AddressGroupInterface interface {
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.AddressGroup, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1beta1.AddressGroupList, error)
+// AppliedToGroupInterface has methods to work with AppliedToGroup resources.
+type AppliedToGroupInterface interface {
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.AppliedToGroup, error)
+	List(ctx context.Context, opts v1.ListOptions) (*v1beta1.AppliedToGroupList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	AddressGroupExpansion
+	AppliedToGroupExpansion
 }
 
-// addressGroups implements AddressGroupInterface
-type addressGroups struct {
+// appliedToGroups implements AppliedToGroupInterface
+type appliedToGroups struct {
 	client rest.Interface
 }
 
-// newAddressGroups returns a AddressGroups
-func newAddressGroups(c *NetworkingV1beta1Client) *addressGroups {
-	return &addressGroups{
+// newAppliedToGroups returns a AppliedToGroups
+func newAppliedToGroups(c *ControlplaneV1beta1Client) *appliedToGroups {
+	return &appliedToGroups{
 		client: c.RESTClient(),
 	}
 }
 
-// Get takes name of the addressGroup, and returns the corresponding addressGroup object, and an error if there is any.
-func (c *addressGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.AddressGroup, err error) {
-	result = &v1beta1.AddressGroup{}
+// Get takes name of the appliedToGroup, and returns the corresponding appliedToGroup object, and an error if there is any.
+func (c *appliedToGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.AppliedToGroup, err error) {
+	result = &v1beta1.AppliedToGroup{}
 	err = c.client.Get().
-		Resource("addressgroups").
+		Resource("appliedtogroups").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
 		Do(ctx).
@@ -65,15 +65,15 @@ func (c *addressGroups) Get(ctx context.Context, name string, options v1.GetOpti
 	return
 }
 
-// List takes label and field selectors, and returns the list of AddressGroups that match those selectors.
-func (c *addressGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.AddressGroupList, err error) {
+// List takes label and field selectors, and returns the list of AppliedToGroups that match those selectors.
+func (c *appliedToGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.AppliedToGroupList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
 	}
-	result = &v1beta1.AddressGroupList{}
+	result = &v1beta1.AppliedToGroupList{}
 	err = c.client.Get().
-		Resource("addressgroups").
+		Resource("appliedtogroups").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
 		Do(ctx).
@@ -81,15 +81,15 @@ func (c *addressGroups) List(ctx context.Context, opts v1.ListOptions) (result *
 	return
 }
 
-// Watch returns a watch.Interface that watches the requested addressGroups.
-func (c *addressGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
+// Watch returns a watch.Interface that watches the requested appliedToGroups.
+func (c *appliedToGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
 	}
 	opts.Watch = true
 	return c.client.Get().
-		Resource("addressgroups").
+		Resource("appliedtogroups").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
 		Watch(ctx)

@@ -23,14 +23,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 func TestToAntreaServicesForCRD(t *testing.T) {
 	tables := []struct {
 		ports              []secv1alpha1.NetworkPolicyPort
-		expServices        []networking.Service
+		expServices        []controlplane.Service
 		expNamedPortExists bool
 	}{
 		{
@@ -40,7 +40,7 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 					Port:     &int80,
 				},
 			},
-			expServices: []networking.Service{
+			expServices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
 					Port:     &int80,
@@ -55,7 +55,7 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 					Port:     &strHTTP,
 				},
 			},
-			expServices: []networking.Service{
+			expServices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
 					Port:     &strHTTP,
@@ -72,20 +72,20 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 }
 
 func TestToAntreaIPBlockForCRD(t *testing.T) {
-	expIPNet := networking.IPNet{
+	expIPNet := controlplane.IPNet{
 		IP:           ipStrToIPAddress("10.0.0.0"),
 		PrefixLength: 24,
 	}
 	tables := []struct {
 		ipBlock  *secv1alpha1.IPBlock
-		expValue networking.IPBlock
+		expValue controlplane.IPBlock
 		err      error
 	}{
 		{
 			&secv1alpha1.IPBlock{
 				CIDR: "10.0.0.0/24",
 			},
-			networking.IPBlock{
+			controlplane.IPBlock{
 				CIDR: expIPNet,
 			},
 			nil,
@@ -94,7 +94,7 @@ func TestToAntreaIPBlockForCRD(t *testing.T) {
 			&secv1alpha1.IPBlock{
 				CIDR: "10.0.0.0",
 			},
-			networking.IPBlock{},
+			controlplane.IPBlock{},
 			fmt.Errorf("invalid format for IPBlock CIDR: 10.0.0.0"),
 		},
 	}
@@ -136,8 +136,8 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	tests := []struct {
 		name            string
 		inPeers         []secv1alpha1.NetworkPolicyPeer
-		outPeer         networking.NetworkPolicyPeer
-		direction       networking.Direction
+		outPeer         controlplane.NetworkPolicyPeer
+		direction       controlplane.Direction
 		namedPortExists bool
 	}{
 		{
@@ -151,13 +151,13 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 					PodSelector: &selectorC,
 				},
 			},
-			outPeer: networking.NetworkPolicyPeer{
+			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
 					getNormalizedUID(toGroupSelector("", &selectorA, &selectorB).NormalizedName),
 					getNormalizedUID(toGroupSelector("", &selectorC, nil).NormalizedName),
 				},
 			},
-			direction: networking.DirectionIn,
+			direction: controlplane.DirectionIn,
 		},
 		{
 			name: "pod-ns-selector-peer-egress",
@@ -170,13 +170,13 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 					PodSelector: &selectorC,
 				},
 			},
-			outPeer: networking.NetworkPolicyPeer{
+			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
 					getNormalizedUID(toGroupSelector("", &selectorA, &selectorB).NormalizedName),
 					getNormalizedUID(toGroupSelector("", &selectorC, nil).NormalizedName),
 				},
 			},
-			direction: networking.DirectionOut,
+			direction: controlplane.DirectionOut,
 		},
 		{
 			name: "ipblock-selector-peer-ingress",
@@ -185,14 +185,14 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 					IPBlock: &selectorIP,
 				},
 			},
-			outPeer: networking.NetworkPolicyPeer{
-				IPBlocks: []networking.IPBlock{
+			outPeer: controlplane.NetworkPolicyPeer{
+				IPBlocks: []controlplane.IPBlock{
 					{
 						CIDR: *cidrIPNet,
 					},
 				},
 			},
-			direction: networking.DirectionIn,
+			direction: controlplane.DirectionIn,
 		},
 		{
 			name: "ipblock-selector-peer-egress",
@@ -201,33 +201,33 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 					IPBlock: &selectorIP,
 				},
 			},
-			outPeer: networking.NetworkPolicyPeer{
-				IPBlocks: []networking.IPBlock{
+			outPeer: controlplane.NetworkPolicyPeer{
+				IPBlocks: []controlplane.IPBlock{
 					{
 						CIDR: *cidrIPNet,
 					},
 				},
 			},
-			direction: networking.DirectionOut,
+			direction: controlplane.DirectionOut,
 		},
 		{
 			name:      "empty-peer-ingress",
 			inPeers:   []secv1alpha1.NetworkPolicyPeer{},
 			outPeer:   matchAllPeer,
-			direction: networking.DirectionIn,
+			direction: controlplane.DirectionIn,
 		},
 		{
 			name:            "empty-peer-egress-with-named-port",
 			inPeers:         []secv1alpha1.NetworkPolicyPeer{},
 			outPeer:         matchAllPodsPeer,
-			direction:       networking.DirectionOut,
+			direction:       controlplane.DirectionOut,
 			namedPortExists: true,
 		},
 		{
 			name:      "empty-peer-egress-without-named-port",
 			inPeers:   []secv1alpha1.NetworkPolicyPeer{},
 			outPeer:   matchAllPeer,
-			direction: networking.DirectionOut,
+			direction: controlplane.DirectionOut,
 		},
 	}
 	for _, tt := range tests {

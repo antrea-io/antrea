@@ -20,7 +20,7 @@ import (
 	"net"
 	"sort"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 )
 
 const (

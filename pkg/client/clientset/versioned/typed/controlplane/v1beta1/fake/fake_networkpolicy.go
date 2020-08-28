@@ -19,7 +19,7 @@ package fake
 import (
 	"context"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,13 +29,13 @@ import (
 
 // FakeNetworkPolicies implements NetworkPolicyInterface
 type FakeNetworkPolicies struct {
-	Fake *FakeNetworkingV1beta1
+	Fake *FakeControlplaneV1beta1
 	ns   string
 }
 
-var networkpoliciesResource = schema.GroupVersionResource{Group: "networking.antrea.tanzu.vmware.com", Version: "v1beta1", Resource: "networkpolicies"}
+var networkpoliciesResource = schema.GroupVersionResource{Group: "controlplane.antrea.tanzu.vmware.com", Version: "v1beta1", Resource: "networkpolicies"}
 
-var networkpoliciesKind = schema.GroupVersionKind{Group: "networking.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "NetworkPolicy"}
+var networkpoliciesKind = schema.GroupVersionKind{Group: "controlplane.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "NetworkPolicy"}
 
 // Get takes name of the networkPolicy, and returns the corresponding networkPolicy object, and an error if there is any.
 func (c *FakeNetworkPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.NetworkPolicy, err error) {

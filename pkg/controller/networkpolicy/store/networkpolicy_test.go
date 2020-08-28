@@ -26,22 +26,22 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
 func TestWatchNetworkPolicyEvent(t *testing.T) {
-	protocolTCP := networking.ProtocolTCP
+	protocolTCP := controlplane.ProtocolTCP
 	policyV1 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
 		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-		Rules: []networking.NetworkPolicyRule{{
-			Direction: networking.DirectionIn,
-			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-			To:        networking.NetworkPolicyPeer{},
-			Services:  []networking.Service{{Protocol: &protocolTCP}},
+		Rules: []controlplane.NetworkPolicyRule{{
+			Direction: controlplane.DirectionIn,
+			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+			To:        controlplane.NetworkPolicyPeer{},
+			Services:  []controlplane.Service{{Protocol: &protocolTCP}},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
@@ -49,11 +49,11 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 		Namespace: "foo",
 		Name:      "bar",
 		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
-		Rules: []networking.NetworkPolicyRule{{
-			Direction: networking.DirectionIn,
-			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-			To:        networking.NetworkPolicyPeer{},
-			Services:  []networking.Service{{Protocol: &protocolTCP}},
+		Rules: []controlplane.NetworkPolicyRule{{
+			Direction: controlplane.DirectionIn,
+			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+			To:        controlplane.NetworkPolicyPeer{},
+			Services:  []controlplane.Service{{Protocol: &protocolTCP}},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
@@ -61,11 +61,11 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 		Namespace: "foo",
 		Name:      "bar",
 		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
-		Rules: []networking.NetworkPolicyRule{{
-			Direction: networking.DirectionIn,
-			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
-			To:        networking.NetworkPolicyPeer{},
-			Services:  []networking.Service{{Protocol: &protocolTCP}},
+		Rules: []controlplane.NetworkPolicyRule{{
+			Direction: controlplane.DirectionIn,
+			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
+			To:        controlplane.NetworkPolicyPeer{},
+			Services:  []controlplane.Service{{Protocol: &protocolTCP}},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
@@ -85,13 +85,13 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV2)
 			},
 			expected: []watch.Event{
-				{Type: watch.Bookmark, Object: &networking.NetworkPolicy{}},
-				{Type: watch.Added, Object: &networking.NetworkPolicy{
+				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
+				{Type: watch.Added, Object: &controlplane.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV1.Rules,
 					AppliedToGroups: policyV1.AppliedToGroups,
 				}},
-				{Type: watch.Modified, Object: &networking.NetworkPolicy{
+				{Type: watch.Modified, Object: &controlplane.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
@@ -112,18 +112,18 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV1)
 			},
 			expected: []watch.Event{
-				{Type: watch.Bookmark, Object: &networking.NetworkPolicy{}},
-				{Type: watch.Added, Object: &networking.NetworkPolicy{
+				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
+				{Type: watch.Added, Object: &controlplane.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
 				}},
-				{Type: watch.Modified, Object: &networking.NetworkPolicy{
+				{Type: watch.Modified, Object: &controlplane.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 					Rules:           policyV3.Rules,
 					AppliedToGroups: policyV3.AppliedToGroups,
 				}},
-				{Type: watch.Deleted, Object: &networking.NetworkPolicy{
+				{Type: watch.Deleted, Object: &controlplane.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
 				}},
 			},
@@ -158,10 +158,10 @@ func TestGetNetworkPolicyByIndex(t *testing.T) {
 		Namespace: "foo",
 		Name:      "bar",
 		UID:       apitypes.UID("uid-1"),
-		Rules: []networking.NetworkPolicyRule{{
-			Direction: networking.DirectionIn,
-			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-			To:        networking.NetworkPolicyPeer{},
+		Rules: []controlplane.NetworkPolicyRule{{
+			Direction: controlplane.DirectionIn,
+			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+			To:        controlplane.NetworkPolicyPeer{},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
@@ -169,10 +169,10 @@ func TestGetNetworkPolicyByIndex(t *testing.T) {
 		Namespace: "foo2",
 		Name:      "bar2",
 		UID:       apitypes.UID("uid-2"),
-		Rules: []networking.NetworkPolicyRule{{
-			Direction: networking.DirectionIn,
-			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},
-			To:        networking.NetworkPolicyPeer{},
+		Rules: []controlplane.NetworkPolicyRule{{
+			Direction: controlplane.DirectionIn,
+			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},
+			To:        controlplane.NetworkPolicyPeer{},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1", "appliedToGroup2"},
 	}
