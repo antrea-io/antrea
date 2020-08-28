@@ -101,7 +101,12 @@ func testMain(m *testing.M) int {
 	if err := collectClusterInfo(); err != nil {
 		log.Fatalf("Error when collecting information about K8s cluster: %v", err)
 	} else {
-		log.Printf("Pod network: '%s'", clusterInfo.podNetworkCIDR)
+		if clusterInfo.podV4NetworkCIDR != "" {
+			log.Printf("Pod IPv4 network: '%s'", clusterInfo.podV4NetworkCIDR)
+		}
+		if clusterInfo.podV6NetworkCIDR != "" {
+			log.Printf("Pod IPv6 network: '%s'", clusterInfo.podV6NetworkCIDR)
+		}
 		log.Printf("Num nodes: %d", clusterInfo.numNodes)
 	}
 
