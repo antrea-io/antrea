@@ -24,6 +24,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
 )
@@ -86,6 +87,7 @@ var policies = []*networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-ingress-egress",
 			Namespace: "testNamespace",
+			UID:       types.UID("uid-1"),
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
@@ -123,6 +125,7 @@ var policies = []*networkingv1.NetworkPolicy{
 	{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default-deny-egress",
+			UID:  types.UID("uid-2"),
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{

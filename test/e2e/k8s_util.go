@@ -277,6 +277,43 @@ func (k *KubernetesUtils) CreateOrUpdateCNP(cnp *secv1alpha1.ClusterNetworkPolic
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterNetworkPolicy %s", cnp.Name)
 }
 
+// CleanANPs is a convenience function for deleting Antrea NetworkPolicies before startup of any new test.
+func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
+	for _, ns := range namespaces {
+		l, err := k.securityClient.NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "unable to list Antrea NetworkPolicies in ns %s", ns)
+		}
+		for _, anp := range l.Items {
+			log.Infof("deleting Antrea NetworkPolicies %s in ns %s", anp.Name, ns)
+			err = k.securityClient.NetworkPolicies(anp.Namespace).Delete(context.TODO(), anp.Name, metav1.DeleteOptions{})
+			if err != nil {
+				return errors.Wrapf(err, "unable to delete Antrea NetworkPolicy %s", anp.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// CreateOrUpdateCNP is a convenience function for updating/creating Antrea NetworkPolicies.
+func (k *KubernetesUtils) CreateOrUpdateANP(anp *secv1alpha1.NetworkPolicy) (*secv1alpha1.NetworkPolicy, error) {
+	log.Infof("creating/updating Antrea NetworkPolicy %s", anp.Name)
+	cnpReturned, err := k.securityClient.NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
+	if err != nil {
+		log.Debugf("creating Antrea NetworkPolicy %s", anp.Name)
+		anp, err = k.securityClient.NetworkPolicies(anp.Namespace).Create(context.TODO(), anp, metav1.CreateOptions{})
+		if err != nil {
+			log.Debugf("unable to create Antrea NetworkPolicy: %s", err)
+		}
+		return anp, err
+	} else if cnpReturned.Name != "" {
+		log.Debugf("Antrea NetworkPolicy with name %s already exists, updating", anp.Name)
+		anp, err = k.securityClient.NetworkPolicies(anp.Namespace).Update(context.TODO(), anp, metav1.UpdateOptions{})
+		return anp, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", anp.Name)
+}
+
 func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string, error) {
 	log.Infof("waiting for pod %s/%s", ns, pod)
 	for {

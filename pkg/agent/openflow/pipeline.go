@@ -263,7 +263,7 @@ type flowCategoryCache struct {
 
 type client struct {
 	enableProxy                                   bool
-	enableAntreaNetworkPolicy                     bool
+	enableAntreaPolicy                            bool
 	roundInfo                                     types.RoundInfo
 	cookieAllocator                               cookie.Allocator
 	bridge                                        binding.Bridge
@@ -935,7 +935,7 @@ func (c *client) establishedConnectionFlows(category cookie.Category) (flows []b
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 	allEstFlows := []binding.Flow{egressEstFlow, ingressEstFlow}
-	if !c.enableAntreaNetworkPolicy {
+	if !c.enableAntreaPolicy {
 		return allEstFlows
 	}
 	cnpFlows := make([]binding.Flow, len(GetCNPEgressTables())+len(GetCNPIngressTables()))
@@ -1390,7 +1390,7 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaNP bool) Client {
+func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -1398,7 +1398,7 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaNP bool) Cl
 	)
 	c := &client{
 		bridge:                   bridge,
-		pipeline:                 generatePipeline(bridge, enableProxy, enableAntreaNP),
+		pipeline:                 generatePipeline(bridge, enableProxy, enableAntreaPolicy),
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),
 		serviceFlowCache:         newFlowCategoryCache(),
@@ -1409,6 +1409,6 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaNP bool) Cl
 	}
 	c.ofEntryOperations = c
 	c.enableProxy = enableProxy
-	c.enableAntreaNetworkPolicy = enableAntreaNP
+	c.enableAntreaPolicy = enableAntreaPolicy
 	return c
 }

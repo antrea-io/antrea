@@ -177,6 +177,190 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
+  name: externalentities.core.antrea.tanzu.vmware.com
+spec:
+  group: core.antrea.tanzu.vmware.com
+  names:
+    kind: ExternalEntity
+    plural: externalentities
+    shortNames:
+    - ee
+    singular: externalentity
+  preserveUnknownFields: false
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            endpoints:
+              items:
+                properties:
+                  ip:
+                    format: ipv4
+                    type: string
+                  name:
+                    type: string
+                  ports:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        port:
+                          x-kubernetes-int-or-string: true
+                        protocol:
+                          type: string
+                      type: object
+                    type: array
+                type: object
+              type: array
+            externalNode:
+              type: string
+          type: object
+      type: object
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: networkpolicies.security.antrea.tanzu.vmware.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.tier
+    description: The Tier to which this Antrea NetworkPolicy belongs to.
+    name: Tier
+    type: string
+  - JSONPath: .spec.priority
+    description: The Priority of this Antrea NetworkPolicy relative to other policies.
+    format: float
+    name: Priority
+    type: number
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: security.antrea.tanzu.vmware.com
+  names:
+    kind: NetworkPolicy
+    plural: networkpolicies
+    shortNames:
+    - netpol
+    singular: networkpolicy
+  preserveUnknownFields: false
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            appliedTo:
+              items:
+                properties:
+                  podSelector:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+              type: array
+            egress:
+              items:
+                properties:
+                  action:
+                    pattern: \bAllow|\bDrop
+                    type: string
+                  ports:
+                    items:
+                      properties:
+                        port:
+                          x-kubernetes-int-or-string: true
+                        protocol:
+                          type: string
+                      type: object
+                    type: array
+                  to:
+                    items:
+                      properties:
+                        ipBlock:
+                          properties:
+                            cidr:
+                              format: cidr
+                              type: string
+                          type: object
+                        namespaceSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                        podSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                      type: object
+                    type: array
+                required:
+                - action
+                type: object
+              type: array
+            ingress:
+              items:
+                properties:
+                  action:
+                    pattern: \bAllow|\bDrop
+                    type: string
+                  from:
+                    items:
+                      properties:
+                        ipBlock:
+                          properties:
+                            cidr:
+                              format: cidr
+                              type: string
+                          type: object
+                        namespaceSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                        podSelector:
+                          x-kubernetes-preserve-unknown-fields: true
+                      type: object
+                    type: array
+                  ports:
+                    items:
+                      properties:
+                        port:
+                          x-kubernetes-int-or-string: true
+                        protocol:
+                          type: string
+                      type: object
+                    type: array
+                required:
+                - action
+                type: object
+              type: array
+            priority:
+              format: float
+              maximum: 10000
+              minimum: 1
+              type: number
+            tier:
+              enum:
+              - Emergency
+              - SecurityOps
+              - NetworkOps
+              - Platform
+              - Application
+              type: string
+          required:
+          - appliedTo
+          - priority
+          type: object
+      type: object
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
   name: traceflows.ops.antrea.tanzu.vmware.com
 spec:
   additionalPrinterColumns:
@@ -594,6 +778,7 @@ rules:
   - security.antrea.tanzu.vmware.com
   resources:
   - clusternetworkpolicies
+  - networkpolicies
   verbs:
   - get
   - watch
@@ -679,9 +864,10 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
 
-    # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
-    # to define security policies which apply to the entire cluster.
-    #  ClusterNetworkPolicy: false
+    # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
+    # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
+    # feature that supports priorities, rule actions and externalEntities in the future.
+    #  AntreaPolicy: false
 
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
     #  FlowExporter: false
@@ -775,9 +961,10 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
 
-    # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
-    # to define security policies which apply to the entire cluster.
-    #  ClusterNetworkPolicy: false
+    # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
+    # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
+    # feature that supports priorities, rule actions and externalEntities in the future.
+    #  AntreaPolicy: false
 
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
@@ -800,7 +987,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-fg74hdgb78
+  name: antrea-config-5g6h28c5m5
   namespace: kube-system
 ---
 apiVersion: v1
@@ -906,7 +1093,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-fg74hdgb78
+          name: antrea-config-5g6h28c5m5
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1121,7 +1308,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-fg74hdgb78
+          name: antrea-config-5g6h28c5m5
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -95,6 +95,7 @@ rules:
       - security.antrea.tanzu.vmware.com
     resources:
       - clusternetworkpolicies
+      - networkpolicies
     verbs:
       - get
       - watch

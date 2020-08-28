@@ -88,6 +88,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		informerFactory.Core().V1().Namespaces(),
 		informerFactory.Networking().V1().NetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
+		crdInformerFactory.Security().V1alpha1().NetworkPolicies(),
 		addressGroupStore,
 		appliedToGroupStore,
 		internalNetworkPolicyStore)

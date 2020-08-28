@@ -34,7 +34,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | Feature Name            | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
 | ----------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | ----- |
 | `AntreaProxy`           | Agent              | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                | Must be enabled for Windows. |
-| `ClusterNetworkPolicy`  | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | No                 | Agent side config required from v0.9.0+. |
+| `AntreaPolicy`          | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                |       |
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9.0        | N/A          | N/A        | Yes                |       |
 
@@ -57,12 +57,14 @@ NetworkPolicy implementation for Pod-to-Service traffic.
 When using the OVS built-in kernel module (which is the most common case), your
 kernel version must be >= 4.6 (as opposed to >= 4.4 without this feature).
 
-### ClusterNetworkPolicy
+### AntreaPolicy
 
-`ClusterNetworkPolicy` is an Antrea-specific extension to K8s NetworkPolicies,
-which enables cluster admins to define security policies which apply to the
-entire cluster. Refer to this [document](network-policy.md) for more
-information.
+`AntreaPolicy` enables Antrea ClusterNetworkPolicy and Antrea NetworkPolicy CRDs to be
+handled by Antrea controller. `ClusterNetworkPolicy` is an Antrea-specific extension to K8s
+NetworkPolicies, which enables cluster admins to define security policies which
+apply to the entire cluster. `Antrea NetworkPolicy` also complements K8s NetworkPolicies
+by supporting policy priorities and rule actions.
+Refer to this [document](network-policy.md) for more information.
 
 #### Requirements for this Feature
 

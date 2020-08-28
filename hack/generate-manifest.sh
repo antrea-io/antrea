@@ -28,7 +28,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --proxy                       Generate a manifest with Antrea proxy enabled
-        --np                          Generate a manifest with Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs enabled
+        --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --help, -h                    Print this message and exit
@@ -180,8 +180,8 @@ if $PROXY; then
 fi
 
 if $NP; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  ClusterNetworkPolicy: true/" antrea-controller.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  ClusterNetworkPolicy: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-controller.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ClusterNetworkPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then
@@ -213,23 +213,6 @@ if $IPSEC; then
     # add an environment variable to the antrea-agent container for passing the PSK to Agent.
     $KUSTOMIZE edit add patch pskEnv.yml
     BASE=../ipsec
-    cd ..
-fi
-
-if $NP; then
-    mkdir np && cd np
-    cp ../../patches/np/*.yml .
-    cp ../../base/security-crds.yml .
-    cp ../../base/core-crds.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    # add RBAC to antrea-controller for ANP and CNP CRD access.
-    $KUSTOMIZE edit add patch npRbac.yml
-    # create NetworkPolicy related CRDs.
-    $KUSTOMIZE edit add resource security-crds.yml
-    # create ExternalEntity related CRDs.
-    $KUSTOMIZE edit add resource core-crds.yml
-    BASE=../np
     cd ..
 fi
 
