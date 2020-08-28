@@ -72,7 +72,7 @@ const (
 )
 
 var (
-	keyFunc = InternalNetworkPolicyKeyFunc
+	keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
 
 	// uuidNamespace is a uuid.UUID type generated from a string to be
 	// used to generate uuid.UUID for internal Antrea objects like
@@ -263,10 +263,6 @@ func (n *NetworkPolicyController) heartbeat(name string) {
 			timestamp: time.Now(),
 		}
 	}
-}
-
-func InternalNetworkPolicyKeyFunc(obj metav1.Object) (string, error) {
-	return string(obj.GetUID()), nil
 }
 
 func (n *NetworkPolicyController) GetNetworkPolicyNum() int {

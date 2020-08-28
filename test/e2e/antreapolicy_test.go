@@ -554,8 +554,8 @@ func testCNPRulePrioirty(t *testing.T) {
 }
 
 // testANPBasic tests traffic from X/B to Y/A on port 80 will be dropped, after applying Antrea NetworkPolicy
-// that specifies that. Also it tests that a K8s NetworkPolicy applied with the same name and namespace of the
-// Antrea NetworkPolicy will not affect its behavior.
+// that specifies that. Also it tests that a K8s NetworkPolicy with same appliedTo will not affect its behavior.
+// TODO: test with K8s NP having the same name and namespace as ANP after Issue #1173 is resolved.
 func testANPBasic(t *testing.T) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName("y", "np1").
@@ -577,7 +577,7 @@ func testANPBasic(t *testing.T) {
 	}
 	// build a K8s NetworkPolicy that has the same appliedTo but allows all traffic.
 	k8sNPBuilder := &NetworkPolicySpecBuilder{}
-	k8sNPBuilder = k8sNPBuilder.SetName("y", "np1").
+	k8sNPBuilder = k8sNPBuilder.SetName("y", "np2").
 		SetPodSelector(map[string]string{"pod": "a"})
 	k8sNPBuilder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
 		nil, nil, nil, nil)
