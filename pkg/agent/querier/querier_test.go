@@ -124,13 +124,14 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 				OVSBridge:   "br-int",
 				NodeIPAddr:  getIPNet("10.10.0.10"),
 				PodIPv4CIDR: getIPNet("20.20.20.0/24"),
+				PodIPv6CIDR: getIPNet("2001:ab03:cd04:55ef::/64"),
 			},
 			apiPort: 10350,
 			partial: false,
 			expectedAgentInfo: &v1beta1.AntreaAgentInfo{
 				ObjectMeta: v1.ObjectMeta{Name: "foo"},
 				NodeRef:    corev1.ObjectReference{Kind: "Node", Name: "foo"},
-				NodeSubnet: []string{"20.20.20.0/24"},
+				NodeSubnet: []string{"20.20.20.0/24", "2001:ab03:cd04:55ef::/64"},
 				OVSInfo: v1beta1.OVSInfo{
 					Version:    ovsVersion,
 					BridgeName: "br-int",
