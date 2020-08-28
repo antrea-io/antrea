@@ -38,6 +38,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
@@ -65,6 +66,7 @@ var (
 type networkPolicyController struct {
 	*NetworkPolicyController
 	podStore                   cache.Store
+	externalEntityStore        cache.Store
 	namespaceStore             cache.Store
 	networkPolicyStore         cache.Store
 	cnpStore                   cache.Store
@@ -102,6 +104,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),
+		crdInformerFactory.Core().V1alpha1().ExternalEntities().Informer().GetStore(),
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
@@ -1213,6 +1216,143 @@ func TestDeletePod(t *testing.T) {
 	assert.False(t, updatedAddrGroup.Pods.Has(memberPod2))
 }
 
+func TestAddExternalEntity(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"group": "appliedTo"},
+	}
+	selectorIn := metav1.LabelSelector{
+		MatchLabels: map[string]string{"inGroup": "inAddress"},
+	}
+	selectorOut := metav1.LabelSelector{
+		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	allowAction := secv1alpha1.RuleActionAllow
+	appliedPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "podA",
+			Namespace: "nsA",
+			Labels: map[string]string{
+				"group": "appliedTo",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name: "container-1",
+			}},
+			NodeName: "nodeA",
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+			PodIP: "1.2.3.4",
+		},
+	}
+	testANPObj := &secv1alpha1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "anpA",
+			Namespace: "nsA",
+		},
+		Spec: secv1alpha1.NetworkPolicySpec{
+			AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				{
+					PodSelector: &selectorSpec,
+				},
+			},
+			Ingress: []secv1alpha1.Rule{
+				{
+					From: []secv1alpha1.NetworkPolicyPeer{
+						{
+							ExternalEntitySelector: &selectorIn,
+						},
+					},
+					Action: &allowAction,
+				},
+			},
+			Egress: []secv1alpha1.Rule{
+				{
+					To: []secv1alpha1.NetworkPolicyPeer{
+						{
+							ExternalEntitySelector: &selectorOut,
+						},
+					},
+					Action: &allowAction,
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name                 string
+		addedExternalEntity  *v1alpha1.ExternalEntity
+		inAddressGroupMatch  bool
+		outAddressGroupMatch bool
+	}{
+		{
+			"no-match-ee",
+			&v1alpha1.ExternalEntity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "eeA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "none"},
+				},
+			},
+			false,
+			false,
+		},
+		{
+			"ee-match-ingress",
+			&v1alpha1.ExternalEntity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "eeB",
+					Namespace: "nsA",
+					Labels:    map[string]string{"inGroup": "inAddress"},
+				},
+			},
+			true,
+			false,
+		},
+		{
+			"ee-match-ingress-egress",
+			&v1alpha1.ExternalEntity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "eeC",
+					Namespace: "nsA",
+					Labels: map[string]string{
+						"inGroup":  "inAddress",
+						"outGroup": "outAddress",
+					},
+				},
+			},
+			true,
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.addANP(testANPObj)
+			npc.podStore.Add(appliedPod)
+			npc.externalEntityStore.Add(tt.addedExternalEntity)
+			appGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorSpec, nil, nil).NormalizedName)
+			inGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorIn).NormalizedName)
+			outGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorOut).NormalizedName)
+			npc.syncAppliedToGroup(appGroupID)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
+			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
+			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
+			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			member := externalEntityToGroupMember(tt.addedExternalEntity, true)
+			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(member))
+			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(member))
+		})
+	}
+}
+
 func TestAddNamespace(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{}
 	selectorIn := metav1.LabelSelector{
@@ -1554,7 +1694,111 @@ func TestFilterAddressGroupsForPodOrExternalEntity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expectedGroups, npc.filterAddressGroupsForPodOrExternalEntity(tt.toMatch),
-				"Filtered AddressGroup does not match expectation")
+				"Filtered AddressGroups does not match expectation")
+		})
+	}
+}
+
+func TestFilterAppliedToGroupsForPodOrExternalEntity(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"purpose": "test-select"},
+	}
+	eeSelectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"platform": "aws"},
+	}
+	ns1 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "ns1",
+			Labels: map[string]string{"purpose": "test-select"},
+		},
+	}
+	ns2 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "ns2",
+		},
+	}
+	atGrp1 := &antreatypes.AppliedToGroup{
+		UID:      "uid1",
+		Name:     "ATGrp1",
+		Selector: *toGroupSelector("ns1", &selectorSpec, nil, nil),
+	}
+	atGrp2 := &antreatypes.AppliedToGroup{
+		UID:      "uid2",
+		Name:     "ATGrp2",
+		Selector: *toGroupSelector("ns1", nil, nil, &eeSelectorSpec),
+	}
+	atGrp3 := &antreatypes.AppliedToGroup{
+		UID:      "uid3",
+		Name:     "ATGrp3",
+		Selector: *toGroupSelector("", nil, &selectorSpec, nil),
+	}
+	atGrp4 := &antreatypes.AppliedToGroup{
+		UID:      "uid4",
+		Name:     "ATGrp4",
+		Selector: *toGroupSelector("", &selectorSpec, &selectorSpec, nil),
+	}
+
+	pod1 := getPod("pod1", "ns1", "node1", "1.1.1.1", false)
+	pod1.Labels = map[string]string{"purpose": "test-select"}
+	pod2 := getPod("pod2", "ns1", "node1", "1.1.1.2", false)
+	pod3 := getPod("pod3", "ns2", "node1", "1.1.1.3", false)
+	ee1 := &v1alpha1.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ee1",
+			Namespace: "ns1",
+			Labels:    map[string]string{"platform": "aws"},
+		},
+	}
+	ee2 := &v1alpha1.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ee2",
+			Namespace: "ns1",
+			Labels:    map[string]string{"platform": "gke"},
+		},
+	}
+	tests := []struct {
+		name           string
+		toMatch        metav1.Object
+		expectedGroups sets.String
+	}{
+		{
+			"pod-match-selector-match-ns",
+			pod1,
+			sets.NewString("ATGrp1", "ATGrp3", "ATGrp4"),
+		},
+		{
+			"pod-unmatch-selector-match-ns",
+			pod2,
+			sets.NewString("ATGrp3"),
+		},
+		{
+			"pod-unmatch-selector-unmatch-ns",
+			pod3,
+			sets.String{},
+		},
+		{
+			"externalEntity-match-selector-match-ns",
+			ee1,
+			sets.NewString("ATGrp2", "ATGrp3"),
+		},
+		{
+			"externalEntity-unmatch-selector-match-ns",
+			ee2,
+			sets.NewString("ATGrp3"),
+		},
+	}
+	_, npc := newController()
+	npc.appliedToGroupStore.Create(atGrp1)
+	npc.appliedToGroupStore.Create(atGrp2)
+	npc.appliedToGroupStore.Create(atGrp3)
+	npc.appliedToGroupStore.Create(atGrp4)
+	npc.namespaceStore.Add(ns1)
+	npc.namespaceStore.Add(ns2)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expectedGroups, npc.filterAppliedToGroupsForPodOrExternalEntity(tt.toMatch),
+				"Filtered AppliedTo Groups does not match expectation")
 		})
 	}
 }
