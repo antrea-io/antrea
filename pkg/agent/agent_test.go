@@ -90,7 +90,7 @@ func TestInitstore(t *testing.T) {
 	container1, found1 := store.GetContainerInterface(uuid1)
 	if !found1 {
 		t.Errorf("Failed to load OVS port into local store")
-	} else if container1.OFPort != 11 || container1.GetIPv4Addr() == nil || container1.GetIPv4Addr().String() != p1IP || container1.MAC.String() != p1MAC || container1.InterfaceName != "p1" {
+	} else if container1.OFPort != 11 || len(container1.IPs) == 0 || container1.IPs[0].String() != p1IP || container1.MAC.String() != p1MAC || container1.InterfaceName != "p1" {
 		t.Errorf("Failed to load OVS port configuration into local store")
 	}
 	_, found2 := store.GetContainerInterface(uuid2)
