@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -41,7 +42,7 @@ func waitForPodIPs(t *testing.T, data *TestData, podNames []string) map[string]s
 	return podIPs
 }
 
-// runPingMesh runs a ping mesh between all the provided Pods after first retrieveing their IP
+// runPingMesh runs a ping mesh between all the provided Pods after first retrieving their IP
 // addresses.
 func (data *TestData) runPingMesh(t *testing.T, podNames []string) {
 	podIPs := waitForPodIPs(t, data, podNames)
@@ -396,7 +397,12 @@ func TestPingLargeMTU(t *testing.T) {
 	podIPs := waitForPodIPs(t, data, podNames)
 
 	pingSize := 2000
-	cmd := fmt.Sprintf("ping -c %d -s %d %s", pingCount, pingSize, podIPs[podName1])
+	var cmd string
+	if net.ParseIP(podIPs[podName1]).To4() != nil {
+		cmd = fmt.Sprintf("ping -c %d -s %d %s", pingCount, pingSize, podIPs[podName1])
+	} else {
+		cmd = fmt.Sprintf("ping -6 -c %d -s %d %s", pingCount, pingSize, podIPs[podName1])
+	}
 	t.Logf("Running ping with size %d between Pods %s and %s", pingSize, podName0, podName1)
 	stdout, stderr, err := data.runCommandFromPod(testNamespace, podName0, busyboxContainerName, strings.Fields(cmd))
 	if err != nil {
