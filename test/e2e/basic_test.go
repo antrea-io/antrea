@@ -63,7 +63,13 @@ func TestPodAssignIP(t *testing.T) {
 		t.Errorf("Error when waiting for Pod IP: %v", err)
 	} else {
 		t.Logf("Pod IP is '%s'", podIP)
-		isValid, err := validatePodIP(clusterInfo.podNetworkCIDR, podIP)
+		var isValid bool
+		var err error
+		if net.ParseIP(podIP).To4() != nil {
+			isValid, err = validatePodIP(clusterInfo.podV4NetworkCIDR, podIP)
+		} else {
+			isValid, err = validatePodIP(clusterInfo.podV6NetworkCIDR, podIP)
+		}
 		if err != nil {
 			t.Errorf("Error when trying to validate Pod IP: %v", err)
 		} else if !isValid {
