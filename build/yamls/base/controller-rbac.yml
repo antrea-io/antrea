@@ -87,10 +87,20 @@ rules:
       - apiservices
     resourceNames:
       - v1beta1.system.antrea.tanzu.vmware.com
-      - v1beta1.networking.antrea.tanzu.vmware.com
+      - v1beta1.controlplane.antrea.tanzu.vmware.com
     verbs:
       - get
       - update
+  - apiGroups:
+      - apiregistration.k8s.io
+    resources:
+      - apiservices
+    resourceNames:
+      # Add the APIServices for the deprecated APIGroups here. antrea-controller
+      # will try to delete the APIServices if they are registered.
+      - v1beta1.networking.antrea.tanzu.vmware.com
+    verbs:
+      - delete
   - apiGroups:
       - security.antrea.tanzu.vmware.com
     resources:

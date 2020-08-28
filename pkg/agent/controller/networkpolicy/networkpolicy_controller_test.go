@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	k8stesting "k8s.io/client-go/testing"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 )

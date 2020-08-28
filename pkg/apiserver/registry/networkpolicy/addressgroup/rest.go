@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -50,11 +50,11 @@ func NewREST(addressGroupStore storage.Interface) *REST {
 }
 
 func (r *REST) New() runtime.Object {
-	return &networking.AddressGroup{}
+	return &controlplane.AddressGroup{}
 }
 
 func (r *REST) NewList() runtime.Object {
-	return &networking.AddressGroupList{}
+	return &controlplane.AddressGroupList{}
 }
 
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
@@ -63,17 +63,17 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 		return nil, errors.NewInternalError(err)
 	}
 	if !exists {
-		return nil, errors.NewNotFound(networking.Resource("addressgroup"), name)
+		return nil, errors.NewNotFound(controlplane.Resource("addressgroup"), name)
 	}
-	obj := new(networking.AddressGroup)
+	obj := new(controlplane.AddressGroup)
 	store.ToAddressGroupMsg(addressGroup.(*types.AddressGroup), obj, true)
 	return obj, nil
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	addressGroups := r.addressGroupStore.List()
-	list := new(networking.AddressGroupList)
-	list.Items = make([]networking.AddressGroup, len(addressGroups))
+	list := new(controlplane.AddressGroupList)
+	list.Items = make([]controlplane.AddressGroup, len(addressGroups))
 	for i := range addressGroups {
 		store.ToAddressGroupMsg(addressGroups[i].(*types.AddressGroup), &list.Items[i], true)
 	}
@@ -90,5 +90,5 @@ func (r *REST) Watch(ctx context.Context, options *internalversion.ListOptions) 
 }
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	return rest.NewDefaultTableConvertor(networking.Resource("addressgroup")).ConvertToTable(ctx, obj, tableOptions)
+	return rest.NewDefaultTableConvertor(controlplane.Resource("addressgroup")).ConvertToTable(ctx, obj, tableOptions)
 }

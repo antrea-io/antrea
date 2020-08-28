@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +k8s:deepcopy-gen=package
-// +groupName=networking.antrea.tanzu.vmware.com
+package install
 
-// Package networking contains the latest (or "internal") version of the Antrea
-// NetworkPolicy API messages. This is the API messages as represented in memory.
-// The contract presented to clients is located in the versioned packages,
-// which are sub-directories. The first one is "v1beta1".
-// The messages are generated based on the stored NetworkPolicy objects, i.e.
-// the objects defined in antrea/pkg/controller/types/networkpolicy.go.
-package networking
+import (
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+)
+
+// Install registers the API group and adds types to a scheme
+func Install(scheme *runtime.Scheme) {
+	utilruntime.Must(controlplane.AddToScheme(scheme))
+	utilruntime.Must(v1beta1.AddToScheme(scheme))
+	utilruntime.Must(scheme.SetVersionPriority(v1beta1.SchemeGroupVersion))
+}
