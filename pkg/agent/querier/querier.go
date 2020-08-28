@@ -196,6 +196,9 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 		if aq.nodeConfig.PodIPv4CIDR != nil {
 			agentInfo.NodeSubnet = append(agentInfo.NodeSubnet, aq.nodeConfig.PodIPv4CIDR.String())
 		}
+		if aq.nodeConfig.PodIPv6CIDR != nil {
+			agentInfo.NodeSubnet = append(agentInfo.NodeSubnet, aq.nodeConfig.PodIPv6CIDR.String())
+		}
 		agentInfo.OVSInfo.BridgeName = aq.nodeConfig.OVSBridge
 		agentInfo.APIPort = aq.apiPort
 	}

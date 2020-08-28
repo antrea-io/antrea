@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
@@ -30,6 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
@@ -47,6 +49,16 @@ type tracingPeer struct {
 	ip        net.IP
 }
 
+func (p *tracingPeer) getAddressFamily() uint8 {
+	if p.ip == nil {
+		return 0
+	}
+	if p.ip.To4() != nil {
+		return util.FamilyIPv4
+	}
+	return util.FamilyIPv6
+}
+
 type request struct {
 	// tracingPeer.ip is invalid for inputPort, as inputPort can only be
 	// specified by ovsPort or Pod Namespace/name.
@@ -54,6 +66,7 @@ type request struct {
 	source      *tracingPeer
 	destination *tracingPeer
 	flow        string
+	addrFamily  uint8
 }
 
 func getServiceClusterIP(aq querier.AgentQuerier, name, namespace string) (net.IP, *handlers.HandlerError) {
@@ -68,28 +81,42 @@ func getServiceClusterIP(aq querier.AgentQuerier, name, namespace string) (net.I
 	return net.ParseIP(srv.Spec.ClusterIP).To4(), nil
 }
 
-// getPeerAddress looks up a Pod and returns its IP and MAC addresses. It
-// first looks up the Pod from the InterfaceStore, and returns the Pod's IP and
-// MAC addresses if found. If fails, it then gets the Pod from Kubernetes API,
-// and returns the IP address in Pod resource Status if found.
-func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer) (net.IP, *interfacestore.InterfaceConfig, *handlers.HandlerError) {
-	if peer.ip != nil {
-		return peer.ip, nil, nil
-	}
-
+func getLocalOVSInterface(aq querier.AgentQuerier, peer *tracingPeer) (*interfacestore.InterfaceConfig, *handlers.HandlerError) {
 	if peer.ovsPort != "" {
 		intf, ok := aq.GetInterfaceStore().GetInterfaceByName(peer.ovsPort)
 		if !ok {
 			err := handlers.NewHandlerError(fmt.Errorf("OVS port %s not found", peer.ovsPort), http.StatusNotFound)
-			return nil, nil, err
+			return nil, err
 		}
-		return intf.GetIPv4Addr(), intf, nil
+		return intf, nil
 	}
 
 	interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(peer.name, peer.namespace)
 	if len(interfaces) > 0 {
 		// Local Pod.
-		return interfaces[0].GetIPv4Addr(), interfaces[0], nil
+		return interfaces[0], nil
+	}
+
+	return nil, nil
+}
+
+// getPeerAddress looks up a Pod and returns its IP and MAC addresses. It
+// first looks up the Pod from the InterfaceStore, and returns the Pod's IP and
+// MAC addresses if found. If fails, it then gets the Pod from Kubernetes API,
+// and returns the IP address in Pod resource Status if found.
+func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer, addrFamily uint8) (net.IP, *interfacestore.InterfaceConfig, *handlers.HandlerError) {
+	if peer.ip != nil {
+		return peer.ip, nil, nil
+	}
+
+	if intf, err := getLocalOVSInterface(aq, peer); err != nil {
+		return nil, nil, err
+	} else if intf != nil {
+		ipAddr, err := util.GetIPWithFamily(intf.IPs, addrFamily)
+		if err != nil {
+			return nil, nil, handlers.NewHandlerError(err, http.StatusNotFound)
+		}
+		return ipAddr, intf, nil
 	}
 
 	// Try getting the Pod from K8s API.
@@ -103,7 +130,22 @@ func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer) (net.IP, *interf
 		return nil, nil, handlers.NewHandlerError(errors.New("Kubernetes API error"), http.StatusInternalServerError)
 	}
 	// Return IP only assuming it should be a remote Pod.
-	return net.ParseIP(pod.Status.PodIP).To4(), nil, nil
+	podIP, err := getPodIPWithAddressFamily(pod, addrFamily)
+	if err != nil {
+		return nil, nil, handlers.NewHandlerError(err, http.StatusNotFound)
+	}
+	return podIP, nil, nil
+}
+
+// Todo: move this function to pkg/agent/util/net.go if it is called by other code
+func getPodIPWithAddressFamily(pod *corev1.Pod, addrFamily uint8) (net.IP, error) {
+	podIPs := []net.IP{net.ParseIP(pod.Status.PodIP)}
+	if len(pod.Status.PodIPs) > 0 {
+		for _, podIP := range pod.Status.PodIPs {
+			podIPs = append(podIPs, net.ParseIP(podIP.IP))
+		}
+	}
+	return util.GetIPWithFamily(podIPs, addrFamily)
 }
 
 func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.TracingRequest, *handlers.HandlerError) {
@@ -122,7 +164,7 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 			}
 		}
 		if !ok {
-			return nil, handlers.NewHandlerError(errors.New("Input port not found"), http.StatusNotFound)
+			return nil, handlers.NewHandlerError(errors.New("input port not found"), http.StatusNotFound)
 		}
 	} else {
 		// Input port is not specified. Allow "in_port" field in "Flow" to override
@@ -131,7 +173,7 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 	}
 
 	if req.source != nil {
-		ip, intf, err := getPeerAddress(aq, req.source)
+		ip, intf, err := getPeerAddress(aq, req.source, req.addrFamily)
 		if err != nil {
 			return nil, err
 		}
@@ -148,7 +190,7 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 
 	gatewayConfig := aq.GetNodeConfig().GatewayConfig
 	if req.destination != nil {
-		ip, intf, err := getPeerAddress(aq, req.destination)
+		ip, intf, err := getPeerAddress(aq, req.destination, req.addrFamily)
 		if err != nil && err.HTTPStatusCode == http.StatusNotFound && req.destination.name != "" {
 			// The destination might be a Service.
 			ip, err = getServiceClusterIP(aq, req.destination.name, req.destination.namespace)
@@ -210,9 +252,9 @@ func prepareTracingRequest(aq querier.AgentQuerier, req *request) (*ovsctl.Traci
 }
 
 // parseTracingPeer parses Pod/Service name and Namespace or OVS port name or
-// IPv4 address from the string. nil is returned if the string is not of a
+// IP address from the string. nil is returned if the string is not of a
 // valid Pod/Service reference ("Namespace/name") or OVS port name format, and
-// not an IPv4 address.
+// not an IP address.
 func parseTracingPeer(str string) *tracingPeer {
 	parts := strings.Split(str, "/")
 	n := len(parts)
@@ -232,10 +274,7 @@ func parseTracingPeer(str string) *tracingPeer {
 			// Probably an OVS port name.
 			return &tracingPeer{ovsPort: str}
 		}
-		// Do not support IPv6 address.
-		if ip.To4() != nil {
-			return &tracingPeer{ip: ip}
-		}
+		return &tracingPeer{ip: ip}
 	}
 	return nil
 }
@@ -244,8 +283,33 @@ func validateRequest(r *http.Request) (*request, *handlers.HandlerError) {
 	port := r.URL.Query().Get("port")
 	src := r.URL.Query().Get("source")
 	dst := r.URL.Query().Get("destination")
+	addrFamily := r.URL.Query().Get("addressFamily")
 
 	request := request{flow: r.URL.Query().Get("flow")}
+	if addrFamily == "6" {
+		request.addrFamily = util.FamilyIPv6
+	} else if addrFamily == "4" {
+		request.addrFamily = util.FamilyIPv4
+	} else if request.flow != "" {
+		found := false
+		for _, s := range ovsctl.IPAndNWProtos {
+			if strings.Contains(request.flow, s) {
+				if strings.HasSuffix(s, "6") {
+					request.addrFamily = util.FamilyIPv6
+				} else {
+					request.addrFamily = util.FamilyIPv4
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			request.addrFamily = util.FamilyIPv4
+		}
+	} else {
+		request.addrFamily = util.FamilyIPv4
+	}
+
 	if port != "" {
 		request.inputPort = parseTracingPeer(port)
 		// Input port cannot be specified with an IP.
@@ -258,11 +322,19 @@ func validateRequest(r *http.Request) (*request, *handlers.HandlerError) {
 		if request.source == nil {
 			return nil, handlers.NewHandlerError(errors.New("invalid source format"), http.StatusBadRequest)
 		}
+		srcAddrFamily := request.source.getAddressFamily()
+		if srcAddrFamily != 0 && srcAddrFamily != request.addrFamily {
+			return nil, handlers.NewHandlerError(errors.New("address family incompatible between source and request"), http.StatusBadRequest)
+		}
 	}
 	if dst != "" {
 		request.destination = parseTracingPeer(dst)
 		if request.destination == nil {
 			return nil, handlers.NewHandlerError(errors.New("invalid destination format"), http.StatusBadRequest)
+		}
+		dstAddrFamily := request.destination.getAddressFamily()
+		if dstAddrFamily != 0 && dstAddrFamily != request.destination.getAddressFamily() {
+			return nil, handlers.NewHandlerError(errors.New("address family incompatible between destination and request"), http.StatusBadRequest)
 		}
 	}
 	return &request, nil
