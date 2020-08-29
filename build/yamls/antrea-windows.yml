@@ -42,8 +42,9 @@ data:
     # also adjust MTU to accommodate for tunnel encapsulation overhead.
     #defaultMTU: 1450
 
-    # CIDR Range for services in cluster. It's required to support egress network policy, should
-    # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
+    # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
+    # set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
+    # AntreaProxy is enabled, this parameter is not needed and will be ignored if provided.
     #serviceCIDR: 10.96.0.0/12
 
     # The port for the antrea-agent APIServer to serve on.
@@ -69,7 +70,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-k24chf74ct
+  name: antrea-windows-config-ht7fb8gdk8
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -157,7 +158,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-k24chf74ct
+          name: antrea-windows-config-ht7fb8gdk8
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

@@ -73,35 +73,30 @@ assign this permission.
 1. Prepare the Cluster Nodes
 
     Deploy ``antrea-node-init`` DaemonSet to enable ``kubelet`` to operate in CNI mode.
-
     ```bash
     kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke-node-init.yml
     ```
 
-2. Download and Update Antrea YAML
+2. Deploy Antrea
 
-    Deploy a released version of Antrea from the [list of releases](https://github.com/vmware-tanzu/antrea/releases).
-Note that GKE support was added in release 0.5.0, which means you cannot pick a release older than 0.5.0.
-For any given release `<TAG>` (e.g. `v0.5.0`), get the Antrea GKE deployment yaml at:
+    To deploy a released version of Antrea, pick a deployment manifest from the
+[list of releases](https://github.com/vmware-tanzu/antrea/releases).
+Note that GKE support was added in release 0.5.0, which means you cannot
+pick a release older than 0.5.0. For any given release `<TAG>` (e.g. `v0.5.0`),
+you can deploy Antrea as follows:
+    ```bash
+    kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-gke.yml
+    ```
 
-    ````
-    https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-gke.yml
-    ````
+    To deploy the latest version of Antrea (built from the master branch), use the
+checked-in [deployment yaml](/build/yamls/antrea-gke.yml):
+    ```bash
+    kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke.yml
+    ```
 
-    To deploy the latest version of Antrea (built from the master branch) to GKE, get the Antrea GKE deployment yaml at:
-
-    ````
-    https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke.yml
-    ````
-
-    Update ``serviceCIDR`` value of antrea-agent.conf in antrea-gke.yml with GKE_SERVICE_CIDR selected at the time of
-    deploying GKE cluster.
-
-3. Deploy Antrea
-
-    Deploy Antrea using `kubectl apply -f antrea-gke.yml`. It will deploy a single replica of Antrea controller to the GKE cluster
-and deploy Antrea agent to every Node. After a successful deployment you should be able to see these Pods running in your cluster:
-
+    The command will deploy a single replica of Antrea controller to the GKE
+cluster and deploy Antrea agent to every Node. After a successful deployment
+you should be able to see these Pods running in your cluster:
     ```bash
     $ kubectl get pods --namespace kube-system  -l app=antrea -o wide
     NAME                                READY   STATUS    RESTARTS   AGE   IP              NODE                                      NOMINATED NODE   READINESS GATES
@@ -110,10 +105,9 @@ and deploy Antrea agent to every Node. After a successful deployment you should 
     antrea-controller-5f9985c59-5crt6   1/1     Running   0          46s   10.138.15.209   gke-cluster1-default-pool-93d7da1c-rkbm   <none>           <none>
     ```
 
-4. Restart remaining Pods
+3. Restart remaining Pods
 
     Once Antrea is up and running, restart all Pods in all Namespaces (kube-system, etc) so they can be managed by Antrea.
-
     ```bash
     $ kubectl delete pods -n kube-system $(kubectl get pods -n kube-system -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork --no-headers=true | grep '<none>' | awk '{ print $1 }')
     pod "event-exporter-v0.2.5-7df89f4b8f-cm5r5" deleted
