@@ -40,11 +40,17 @@ import (
 const (
 	// Set resyncPeriod to 0 to disable resyncing.
 	resyncPeriod time.Duration = 0
+
 	// How long to wait before retrying the processing of a traceflow.
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
+
 	// Default number of workers processing traceflow request.
 	defaultWorkers = 4
+
+	// Traceflow timeout period.
+	timeoutDuration      = 2 * time.Minute
+	timeoutCheckInterval = timeoutDuration / 2
 
 	// Min and max data plane tag for traceflow. dataplaneTag=0 means it's not a Traceflow packet.
 	// dataplaneTag=15 is reserved.
@@ -53,11 +59,6 @@ const (
 
 	// PodIP index name for Pod cache.
 	podIPIndex = "podIP"
-)
-
-var (
-	// Traceflow timeout period.
-	timeout = (300 * time.Second).Seconds()
 )
 
 // Controller is for traceflow.
@@ -139,6 +140,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		}
 	}
 
+	go func() {
+		wait.Until(c.checkTraceflowTimeout, timeoutCheckInterval, stopCh)
+	}()
+
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
@@ -167,6 +172,21 @@ func (c *Controller) deleteTraceflow(old interface{}) {
 // in order to read and process a message on the workqueue.
 func (c *Controller) worker() {
 	for c.processTraceflowItem() {
+	}
+}
+
+func (c *Controller) checkTraceflowTimeout() {
+	c.runningTraceflowsMutex.Lock()
+	tfs := make([]string, 0, len(c.runningTraceflows))
+	for _, tfName := range c.runningTraceflows {
+		tfs = append(tfs, tfName)
+	}
+	c.runningTraceflowsMutex.Unlock()
+
+	for _, tfName := range tfs {
+		// Re-post all running Traceflow requests to the work queue to
+		// be processed and checked for timeout.
+		c.queue.Add(tfName)
 	}
 }
 
@@ -226,8 +246,6 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 		err = c.startTraceflow(tf)
 	case opsv1alpha1.Running:
 		err = c.checkTraceflowStatus(tf)
-	default:
-		c.deallocateTagForTF(tf)
 	}
 	return err
 }
@@ -277,10 +295,12 @@ func (c *Controller) checkTraceflowStatus(tf *opsv1alpha1.Traceflow) error {
 		}
 	}
 	if sender && receiver {
+		c.deallocateTagForTF(tf)
 		return c.updateTraceflowStatus(tf, opsv1alpha1.Succeeded, "", 0)
 	}
-	if time.Now().UTC().Sub(tf.CreationTimestamp.UTC()).Seconds() > timeout {
-		return c.updateTraceflowStatus(tf, opsv1alpha1.Failed, "traceflow timeout", 0)
+	if time.Now().UTC().Sub(tf.CreationTimestamp.UTC()) > timeoutDuration {
+		c.deallocateTagForTF(tf)
+		return c.updateTraceflowStatus(tf, opsv1alpha1.Failed, "Traceflow timeout", 0)
 	}
 	return nil
 }
@@ -288,9 +308,7 @@ func (c *Controller) checkTraceflowStatus(tf *opsv1alpha1.Traceflow) error {
 func (c *Controller) updateTraceflowStatus(tf *opsv1alpha1.Traceflow, phase opsv1alpha1.TraceflowPhase, reason string, dataPlaneTag uint8) error {
 	update := tf.DeepCopy()
 	update.Status.Phase = phase
-	if phase == opsv1alpha1.Running {
-		update.Status.DataplaneTag = dataPlaneTag
-	}
+	update.Status.DataplaneTag = dataPlaneTag
 	if reason != "" {
 		update.Status.Reason = reason
 	}

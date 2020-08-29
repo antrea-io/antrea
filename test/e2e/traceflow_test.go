@@ -98,12 +98,13 @@ func TestTraceflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Creates 4 traceflows:
+	// Creates 6 traceflows:
 	// 1. node1Pods[0] -> node1Pods[1], intra node1.
 	// 2. node1Pods[0] -> node2Pods[0], inter node1 and node2.
 	// 3. node1Pods[0] -> node1IPs[1], intra node1.
 	// 4. node1Pods[0] -> node2IPs[0], inter node1 and node2.
 	// 5. node1Pods[0] -> service, inter node1 and node2.
+	// 6. node1Pods[0] -> not existed Pod
 	testcases := []testcase{
 		{
 			name: "intraNodeTraceflow",
@@ -402,6 +403,26 @@ func TestTraceflow(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "notExistedDstPod",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, "not-existed-pod")),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       "not-existed-pod",
+					},
+				},
+			},
+			// Traceflow should fail with timeout.
+			expectedPhase: v1alpha1.Failed,
+		},
 	}
 
 	t.Run("traceflowGroupTest", func(t *testing.T) {
@@ -431,7 +452,7 @@ func TestTraceflow(t *testing.T) {
 						t.Fatal(err)
 						return
 					}
-				} else {
+				} else if len(tc.expectedResults) > 0 {
 					if tf.Status.Results[0].Observations[0].Component == v1alpha1.SpoofGuard {
 						if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0]); err != nil {
 							t.Fatal(err)
@@ -460,7 +481,12 @@ func TestTraceflow(t *testing.T) {
 func (data *TestData) waitForTraceflow(name string, phase v1alpha1.TraceflowPhase) (*v1alpha1.Traceflow, error) {
 	var tf *v1alpha1.Traceflow
 	var err error
-	if err = wait.PollImmediate(1*time.Second, 15*time.Second, func() (bool, error) {
+	timeout := 15 * time.Second
+	if phase == v1alpha1.Failed {
+		// 2 minutes timeout + 1 minute check interval
+		timeout = 3 * time.Minute
+	}
+	if err = wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
 		tf, err = data.crdClient.OpsV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil || tf.Status.Phase != phase {
 			return false, nil
