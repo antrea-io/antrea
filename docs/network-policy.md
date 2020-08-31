@@ -77,18 +77,18 @@ ConfigMap as follows:
 ```yaml
    antrea-controller.conf: |
      featureGates:
-       # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy
+       # Enable AntreaPolicy feature to complement K8s NetworkPolicy
        # for cluster admins to define security policies which apply to the
        # entire cluster.
-       ClusterNetworkPolicy: true
+       AntreaPolicy: true
 ```
 ```yaml
    antrea-agent.conf: |
      featureGates:
-       # Enable ClusterNetworkPolicy feature to complement K8s NetworkPolicy
+       # Enable AntreaPolicy feature to complement K8s NetworkPolicy
        # for cluster admins to define security policies which apply to the
        # entire cluster.
-       ClusterNetworkPolicy: true
+       AntreaPolicy: true
 ```
 
 ### The ClusterNetworkPolicy resource
