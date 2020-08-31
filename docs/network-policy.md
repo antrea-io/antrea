@@ -128,7 +128,7 @@ spec:
       - action: Drop
         to:
           - ipBlock:
-            cidr: 10.0.10.0/24
+              cidr: 10.0.10.0/24
         ports:
           - protocol: TCP
             port: 5978
