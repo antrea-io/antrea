@@ -635,11 +635,6 @@ func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedT
 
 func (r *reconciler) uninstallOFRule(ofID uint32, table binding.TableIDType) error {
 	klog.V(2).Infof("Uninstalling ofRule %d", ofID)
-	priorityAssigner, exists := r.priorityAssigners[table]
-	if exists {
-		priorityAssigner.mutex.Lock()
-		defer priorityAssigner.mutex.Unlock()
-	}
 	stalePriorities, err := r.ofClient.UninstallPolicyRuleFlows(ofID)
 	if err != nil {
 		return fmt.Errorf("error uninstalling ofRule %v: %v", ofID, err)
@@ -652,6 +647,8 @@ func (r *reconciler) uninstallOFRule(ofID uint32, table binding.TableIDType) err
 				// Cannot parse the priority str. Theoretically this should never happen.
 				return err
 			}
+			// If there are stalePriorities, priorityAssigners[table] must not be nil.
+			priorityAssigner, _ := r.priorityAssigners[table]
 			priorityAssigner.assigner.Release(uint16(priorityNum))
 		}
 	}
@@ -668,7 +665,6 @@ func (r *reconciler) Forget(ruleID string) error {
 	klog.Infof("Forgetting rule %v", ruleID)
 
 	value, exists := r.lastRealizeds.Load(ruleID)
-
 	if !exists {
 		// No-op if the rule was not realized before.
 		return nil
@@ -676,6 +672,11 @@ func (r *reconciler) Forget(ruleID string) error {
 
 	lastRealized := value.(*lastRealized)
 	table := r.getOFRuleTable(lastRealized.CompletedRule)
+	priorityAssigner, exists := r.priorityAssigners[table]
+	if exists {
+		priorityAssigner.mutex.Lock()
+		defer priorityAssigner.mutex.Unlock()
+	}
 	for svcKey, ofID := range lastRealized.ofIDs {
 		if err := r.uninstallOFRule(ofID, table); err != nil {
 			return err
