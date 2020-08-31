@@ -9,3 +9,10 @@ comment:
   require_base: no
   require_head: no
   after_n_builds: 1
+
+ignore:
+  - "**/testing/mock_*.go"
+  - "**/*generate*.go"
+  - "pkg/client"
+  - "**/*.pb.go"
+  - "third_party"
