@@ -991,7 +991,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-f72hcg8m78
+  name: antrea-config-4ch79cbmb4
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1097,7 +1097,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-f72hcg8m78
+          name: antrea-config-4ch79cbmb4
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1312,7 +1312,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-f72hcg8m78
+          name: antrea-config-4ch79cbmb4
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

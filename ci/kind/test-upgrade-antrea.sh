@@ -127,6 +127,17 @@ echo "Creating Kind cluster"
 IMAGES="${DOCKER_IMAGES[@]}"
 $THIS_DIR/kind-setup.sh create kind --antrea-cni false --images "$IMAGES"
 
+# We ensure that the appropriate kustomize binary is installed by running a
+# recent version of generate-manifest.sh, then export the KUSTOMIZE env variable
+# to ensure that the binary will be used to generate older manifests as well.
+# When running this script as part of a Github Action, we do *not* want to use
+# the pre-installed version of kustomize, as it is a snap and cannot access
+# /tmp. See:
+#  * https://github.com/actions/virtual-environments/issues/1514
+#  * https://forum.snapcraft.io/t/interfaces-allow-access-tmp-directory/5129
+$ROOT_DIR/hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea-new.yml
+export KUSTOMIZE=$ROOT_DIR/hack/.bin/kustomize
+
 TMP_ANTREA_DIR=$(mktemp -d)
 git clone --branch $FROM_TAG --depth 1 https://github.com/vmware-tanzu/antrea.git $TMP_ANTREA_DIR
 pushd $TMP_ANTREA_DIR > /dev/null
@@ -136,8 +147,6 @@ export IMG_TAG=$FROM_TAG
 ./hack/generate-manifest.sh --mode release --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
 popd
 rm -rf $TMP_DIR
-
-$ROOT_DIR/hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea-new.yml
 
 rc=0
 go test -v -run=TestUpgrade github.com/vmware-tanzu/antrea/test/e2e -provider=kind -upgrade.toYML=antrea-new.yml || rc=$?
