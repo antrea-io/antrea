@@ -996,7 +996,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-d429bkg4d6
+  name: antrea-config-h69mt672h6
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1111,7 +1111,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-d429bkg4d6
+          name: antrea-config-h69mt672h6
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1173,36 +1173,6 @@ spec:
         component: antrea-agent
     spec:
       containers:
-      - command:
-        - start_ovs_ipsec
-        image: antrea/antrea-ubuntu:latest
-        imagePullPolicy: IfNotPresent
-        livenessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - timeout 5 container_liveness_probe ovs-ipsec
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        name: antrea-ipsec
-        resources:
-          requests:
-            cpu: 50m
-        securityContext:
-          capabilities:
-            add:
-            - NET_ADMIN
-        volumeMounts:
-        - mountPath: /var/run/openvswitch
-          name: host-var-run-antrea
-          subPath: openvswitch
-        - mountPath: /var/log/openvswitch
-          name: host-var-log-antrea
-          subPath: openvswitch
-        - mountPath: /var/log/strongswan
-          name: host-var-log-antrea
-          subPath: strongswan
       - args:
         - --config
         - /etc/antrea/antrea-agent.conf
@@ -1214,11 +1184,6 @@ spec:
         command:
         - antrea-agent
         env:
-        - name: ANTREA_IPSEC_PSK
-          valueFrom:
-            secretKeyRef:
-              key: psk
-              name: antrea-ipsec
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -1231,6 +1196,11 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: ANTREA_IPSEC_PSK
+          valueFrom:
+            secretKeyRef:
+              key: psk
+              name: antrea-ipsec
         image: antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -1319,6 +1289,36 @@ spec:
         - mountPath: /var/log/openvswitch
           name: host-var-log-antrea
           subPath: openvswitch
+      - command:
+        - start_ovs_ipsec
+        image: antrea/antrea-ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - timeout 5 container_liveness_probe ovs-ipsec
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        name: antrea-ipsec
+        resources:
+          requests:
+            cpu: 50m
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+        volumeMounts:
+        - mountPath: /var/run/openvswitch
+          name: host-var-run-antrea
+          subPath: openvswitch
+        - mountPath: /var/log/openvswitch
+          name: host-var-log-antrea
+          subPath: openvswitch
+        - mountPath: /var/log/strongswan
+          name: host-var-log-antrea
+          subPath: strongswan
       hostNetwork: true
       initContainers:
       - command:
@@ -1361,7 +1361,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-d429bkg4d6
+          name: antrea-config-h69mt672h6
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

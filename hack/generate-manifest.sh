@@ -37,8 +37,9 @@ In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
 This tool uses kustomize (https://github.com/kubernetes-sigs/kustomize) to generate manifests for
 Antrea. You can set the KUSTOMIZE environment variable to the path of the kustomize binary you want
-us to use. Otherwise we will look for kustomize in your PATH and your GOPATH. If we cannot find
-kustomize there, we will try to install it."
+us to use. Otherwise we will download the appropriate version of the kustomize binary and use
+it (this is the recommended approach since different versions of kustomize may create different
+output YAMLs)."
 
 function print_usage {
     echoerr "$_usage"
