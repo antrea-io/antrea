@@ -21,6 +21,8 @@ function cleanup_ovs_run_files {
     rm -rf ${OVS_RUN_DIR}/.conf.db.*~lock~
 }
 
+# start_ovs takes one parameter: a boolean value which indicates whether OVS
+# kernel HW offload should be enabled.
 function start_ovs {
     offload=$1
     if daemon_is_running ovsdb-server; then
@@ -87,6 +89,6 @@ while true; do
         # OVS was stopped in the container.
         log_warning $CONTAINER_NAME "OVS was stopped. Starting it again"
 
-        start_ovs
+        start_ovs $offload
     fi
 done
