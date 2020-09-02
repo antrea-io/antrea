@@ -46,8 +46,8 @@ func (in *AntreaAgentInfo) DeepCopyInto(out *AntreaAgentInfo) {
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	out.PodRef = in.PodRef
 	out.NodeRef = in.NodeRef
-	if in.NodeSubnet != nil {
-		in, out := &in.NodeSubnet, &out.NodeSubnet
+	if in.NodeSubnets != nil {
+		in, out := &in.NodeSubnets, &out.NodeSubnets
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
