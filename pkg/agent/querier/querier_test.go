@@ -81,9 +81,9 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 			apiPort: 10350,
 			partial: false,
 			expectedAgentInfo: &v1beta1.AntreaAgentInfo{
-				ObjectMeta: v1.ObjectMeta{Name: "foo"},
-				NodeRef:    corev1.ObjectReference{Kind: "Node", Name: "foo"},
-				NodeSubnet: nil,
+				ObjectMeta:  v1.ObjectMeta{Name: "foo"},
+				NodeRef:     corev1.ObjectReference{Kind: "Node", Name: "foo"},
+				NodeSubnets: []string{},
 				OVSInfo: v1beta1.OVSInfo{
 					Version:    ovsVersion,
 					BridgeName: "br-int",
@@ -129,9 +129,9 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 			apiPort: 10350,
 			partial: false,
 			expectedAgentInfo: &v1beta1.AntreaAgentInfo{
-				ObjectMeta: v1.ObjectMeta{Name: "foo"},
-				NodeRef:    corev1.ObjectReference{Kind: "Node", Name: "foo"},
-				NodeSubnet: []string{"20.20.20.0/24", "2001:ab03:cd04:55ef::/64"},
+				ObjectMeta:  v1.ObjectMeta{Name: "foo"},
+				NodeRef:     corev1.ObjectReference{Kind: "Node", Name: "foo"},
+				NodeSubnets: []string{"20.20.20.0/24", "2001:ab03:cd04:55ef::/64"},
 				OVSInfo: v1beta1.OVSInfo{
 					Version:    ovsVersion,
 					BridgeName: "br-int",

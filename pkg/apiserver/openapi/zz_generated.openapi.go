@@ -435,7 +435,7 @@ func schema_pkg_apis_clusterinformation_v1beta1_AntreaAgentInfo(ref common.Refer
 							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
 						},
 					},
-					"nodeSubnet": {
+					"nodeSubnets": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The Node that Antrea Agent is running in",
 							Type:        []string{"array"},
@@ -451,7 +451,7 @@ func schema_pkg_apis_clusterinformation_v1beta1_AntreaAgentInfo(ref common.Refer
 					},
 					"ovsInfo": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Node subnet",
+							Description: "Node subnets",
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.OVSInfo"),
 						},
 					},

@@ -32,7 +32,7 @@ type AntreaAgentInfoResponse struct {
 	Version                     string                              `json:"version,omitempty"`                     // Antrea binary version
 	PodRef                      corev1.ObjectReference              `json:"podRef,omitempty"`                      // The Pod that Antrea Agent is running in
 	NodeRef                     corev1.ObjectReference              `json:"nodeRef,omitempty"`                     // The Node that Antrea Agent is running in
-	NodeSubnet                  []string                            `json:"nodeSubnet,omitempty"`                  // Node subnet
+	NodeSubnets                 []string                            `json:"nodeSubnets,omitempty"`                 // Node subnets
 	OVSInfo                     v1beta1.OVSInfo                     `json:"ovsInfo,omitempty"`                     // OVS Information
 	NetworkPolicyControllerInfo v1beta1.NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Agent NetworkPolicy information
 	LocalPodNum                 int32                               `json:"localPodNum,omitempty"`                 // The number of Pods which the agent is in charge of
@@ -53,7 +53,7 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			NetworkPolicyControllerInfo: agentInfo.NetworkPolicyControllerInfo,
 			LocalPodNum:                 agentInfo.LocalPodNum,
 			AgentConditions:             agentInfo.AgentConditions,
-			NodeSubnet:                  agentInfo.NodeSubnet,
+			NodeSubnets:                 agentInfo.NodeSubnets,
 		}
 		err := json.NewEncoder(w).Encode(info)
 		if err != nil {
@@ -89,7 +89,7 @@ func (r AntreaAgentInfoResponse) GetTableRow(maxColumnLength int) []string {
 	return []string{r.PodRef.Namespace + "/" + r.PodRef.Name,
 		r.NodeRef.Name,
 		r.GetAgentConditionStr(),
-		common.GenerateTableElementWithSummary(r.NodeSubnet, maxColumnLength),
+		common.GenerateTableElementWithSummary(r.NodeSubnets, maxColumnLength),
 		common.Int32ToString(r.NetworkPolicyControllerInfo.NetworkPolicyNum),
 		common.Int32ToString(r.NetworkPolicyControllerInfo.AddressGroupNum),
 		common.Int32ToString(r.NetworkPolicyControllerInfo.AppliedToGroupNum),
