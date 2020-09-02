@@ -99,7 +99,7 @@ kube-system/antrea-controller-55b9bcd59f-h9ll4 node-master Healthy 1            
 					Kind: "Node",
 					Name: "node-worker",
 				},
-				NodeSubnet: []string{"192.168.1.0/24", "192.168.1.1/24"},
+				NodeSubnets: []string{"192.168.1.0/24", "192.168.1.1/24"},
 				OVSInfo: v1beta1.OVSInfo{
 					Version:    "1.0",
 					BridgeName: "br-int",
