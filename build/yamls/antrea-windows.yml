@@ -10,7 +10,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-agent-windows-59cc7mmd6h
+  name: antrea-agent-windows-h7td2mh9gm
   namespace: kube-system
 ---
 apiVersion: v1
@@ -69,7 +69,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-k24chf74ct
+  name: antrea-windows-config-bmf96579h9
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -157,11 +157,11 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-k24chf74ct
+          name: antrea-windows-config-bmf96579h9
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
-          name: antrea-agent-windows-59cc7mmd6h
+          name: antrea-agent-windows-h7td2mh9gm
         name: antrea-agent-windows
       - hostPath:
           path: /etc/cni/net.d
@@ -180,7 +180,6 @@ spec:
         name: host
       - hostPath:
           path: \\.\pipe\rancher_wins
-          type: null
         name: wins
   updateStrategy:
     type: RollingUpdate
