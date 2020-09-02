@@ -18,7 +18,7 @@ configuration (e.g., IP, MAC and routing entries) on the host network adapter is
 this new interface. Some extra OpenFlow entries are needed to ensure the host traffic can be
 forwarded correctly.
 
-<img src="/docs/assets/hns_integration.svg" width="600" alt="HNS Integration">
+<img src="assets/hns_integration.svg" width="600" alt="HNS Integration">
 
 SNAT based on OpenFlow is needed to make sure the containers can access the external address.
 The SNATed address is using the IP configured on the OVS bridge. Some additional OpenFlow entries
@@ -236,7 +236,7 @@ The corresponding reply traffic will enter OVS on the uplink interface. It will 
 the destination IP will be translated back to the original Pod's IP within the ct context. Then it will be
 output to the Pod.
 
-<img src="/docs/assets/windows_external_traffic.svg" width="600" alt="Traffic to external">
+<img src="assets/windows_external_traffic.svg" width="600" alt="Traffic to external">
 
 ### Host Traffic
 

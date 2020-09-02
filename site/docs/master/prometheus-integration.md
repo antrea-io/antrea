@@ -1,0 +1,1 @@
+../../../docs/prometheus-integration.md

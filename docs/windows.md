@@ -9,7 +9,7 @@ This page shows how to install antrea-agent on Windows Nodes and register the
 Node to an existing Kubernetes cluster.
 
 For the detailed design of how antrea-agent works on Windows, please refer to
-the [design doc](/docs/windows-design.md).
+the [design doc](windows-design.md).
 
 ### Components that run on Windows
 
@@ -55,7 +55,7 @@ and daemons are pre-installed on the Windows Nodes in the demo.
 
 ### Installation
 #### Download & Configure Antrea for Linux
-Configure the Antrea for Linux on master Node following [Getting started](/docs/getting-started.md)
+Configure the Antrea for Linux on master Node following [Getting started](getting-started.md)
 document.
 ```
 # Example:

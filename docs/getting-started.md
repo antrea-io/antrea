@@ -65,7 +65,7 @@ kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/bu
 ```
 
 If you want to add Windows Nodes to your cluster, please refer to the
-installation instructions in [windows.md](/docs/windows.md).
+installation instructions in [windows.md](windows.md).
 
 Antrea supports some experimental features that can be enabled or disabled,
 please refer to the [Feature Gates documentation](feature-gates.md) for more
@@ -108,26 +108,26 @@ To build the image locally, you can follow the instructions in the [Contributor
 Guide](/CONTRIBUTING.md#building-and-testing-your-change).
 
 Antrea components can also be run manually as processes for development
-purposes. See [Manual Installation](/docs/manual-installation.md) for
+purposes. See [Manual Installation](manual-installation.md) for
 information.
 
 ### Deploying Antrea in Kind
 
 To deploy Antrea in a [Kind](https://github.com/kubernetes-sigs/kind) cluster,
-please refer to this [guide](/docs/kind.md).
+please refer to this [guide](kind.md).
 
 ### Deploying Antrea in EKS and GKE
 
 Antrea can be deployed in NetworkPolicy only mode to an EKS cluster or a GKE
 cluster, and enforce NetworkPolicies for the cluster.
 
-* To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
-* To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
+* To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](eks-installation.md).
+* To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](gke-installation.md).
 
 ### Deploying Antrea with Custom Certificates
 
 By default, Antrea generates the certificates needed for itself to run. To
-provide your own certificates, please refer to [Securing Control Plane](/docs/securing-control-plane.md).
+provide your own certificates, please refer to [Securing Control Plane](securing-control-plane.md).
 
 ### Antctl: Installation and Usage
 

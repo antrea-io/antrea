@@ -1,0 +1,7 @@
+<div class="row justify-content-start">
+{% for presentation in site.presentations %}
+    {% if presentation.embed contains "https://www.youtube.com" %}
+        {% include presentation-card-youtube.html %}
+    {% endif %}
+{% endfor %}
+</div>

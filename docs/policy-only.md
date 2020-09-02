@@ -13,7 +13,7 @@ NetworkPolicy in that CNI's environment using Open VSwitch(OVS).
 In addition, Antrea working as NetworkPolicy plug-in automatically enables Antrea-proxy, because
 it requires Antrea-proxy to load balance Pod-to-Service traffic.
 
-<img src="/docs/assets/policy-only-cni.svg" width="600" alt="Antrea Switched CNI">
+<img src="assets/policy-only-cni.svg" width="600" alt="Antrea Switched CNI">
 
 The above diagram depicts a routed CNI network topology on the left, and what it looks like 
 after Antrea inserts the OVS bridge into the data path.
