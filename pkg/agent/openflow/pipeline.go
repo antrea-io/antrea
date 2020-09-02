@@ -540,25 +540,25 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Action().CT(false, connectionTrackTable.GetNext(), CtZone).CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
+			connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
+				MatchCTMark(gatewayCTMark).
+				MatchCTStateNew(false).MatchCTStateTrk(true).
+				Action().GotoTable(connectionTrackStateTable.GetNext()).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
+			connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
+				MatchCTStateNew(true).MatchCTStateTrk(true).
+				Action().CT(true, connectionTrackCommitTable.GetNext(), CtZone).LoadToMark(gatewayCTMark).CTDone().
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
 		)
 	}
 	return append(flows,
-		connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-			MatchCTMark(gatewayCTMark).
-			MatchCTStateNew(false).MatchCTStateTrk(true).
-			Action().GotoTable(connectionTrackStateTable.GetNext()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
 		connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 			MatchCTStateInv(true).MatchCTStateTrk(true).
 			Action().Drop().
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-			MatchCTStateNew(true).MatchCTStateTrk(true).
-			Action().CT(true, connectionTrackCommitTable.GetNext(), CtZone).LoadToMark(gatewayCTMark).CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
@@ -1206,14 +1206,6 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 
 func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputPort int, category cookie.Category) []binding.Flow {
 	flows := []binding.Flow{
-		// Forward the packet to L2ForwardingCalc table if it is communicating to a Service.
-		c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
-			MatchCTMark(gatewayCTMark).
-			Action().GotoTable(l2ForwardingCalcTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
 		// Forward the packet to L2ForwardingCalc table if it is sent to the Node IP(not to the host gateway). Since
 		// the packet is using the host gateway's MAC as dst MAC, it will be sent out from "antrea-gw0". This flow
 		// entry is to avoid SNAT on such packet, otherwise the source and destination IP are the same.
@@ -1249,6 +1241,18 @@ func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputP
 			Action().Output(outputPort).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
+	}
+	if !c.enableProxy {
+		flows = append(flows,
+			// Forward the packet to L2ForwardingCalc table if it is communicating to a Service.
+			c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).
+				MatchProtocol(binding.ProtocolIP).
+				MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
+				MatchCTMark(gatewayCTMark).
+				Action().GotoTable(l2ForwardingCalcTable).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
+		)
 	}
 	return flows
 }

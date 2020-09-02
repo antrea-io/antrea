@@ -664,15 +664,6 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 			},
 		},
 		{
-			uint8(31),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: "priority=200,ct_state=-new+trk,ct_mark=0x20,ip",
-					ActStr:   fmt.Sprintf("load:0x%s->NXM_OF_ETH_DST[],goto_table:42", strings.Replace(gwMAC.String(), ":", "", -1)),
-				},
-			},
-		},
-		{
 			uint8(10),
 			[]*ofTestUtils.ExpectFlow{
 				{
@@ -790,14 +781,6 @@ func prepareDefaultFlows() []expectTableFlows {
 			},
 		},
 		{
-			uint8(31),
-			[]*ofTestUtils.ExpectFlow{
-				{MatchStr: "priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", ActStr: "goto_table:42"},
-				{MatchStr: "priority=190,ct_state=+inv+trk,ip", ActStr: "drop"},
-				{MatchStr: "priority=0", ActStr: "resubmit(,40),resubmit(,41)"},
-			},
-		},
-		{
 			uint8(42),
 			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:50"}},
 		},
@@ -832,13 +815,6 @@ func prepareDefaultFlows() []expectTableFlows {
 		{
 			uint8(101),
 			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:105"}},
-		},
-		{
-			uint8(105),
-			[]*ofTestUtils.ExpectFlow{
-				{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", ActStr: "ct(commit,table=106,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
-				{MatchStr: "priority=190,ct_state=+new+trk,ip", ActStr: "ct(commit,table=106,zone=65520)"},
-				{MatchStr: "priority=0", ActStr: "goto_table:106"}},
 		},
 		{
 			uint8(110),
@@ -915,9 +891,6 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 		{
 			uint8(70),
 			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: "priority=200,ct_mark=0x20,ip,reg0=0x2/0xffff", ActStr: "goto_table:80",
-				},
 				{
 					MatchStr: fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", nodeIP.String()),
 					ActStr:   "goto_table:80",
