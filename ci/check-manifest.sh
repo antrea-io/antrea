@@ -41,6 +41,7 @@ diff="$(git status --porcelain ${YAMLS[@]})"
 
 if [ ! -z "$diff" ]; then
     echoerr "The generated manifest YAMLs are not up-to-date"
+    git diff
     echoerr "You can regenerate them with 'make manifest' and commit the changes"
     exit 1
 fi
