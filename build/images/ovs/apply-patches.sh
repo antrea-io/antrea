@@ -78,6 +78,15 @@ curl https://github.com/openvswitch/ovs/commit/fe175ac17352ceb2dbc9958112b4b1bc1
 curl https://github.com/lzhecheng/ovs/commit/869b06356e389079861962160e864df609d033e5.patch | \
     git apply
 
+# Starting from version 5.7.0, strongSwan no longer supports specifying a configuration parameter
+# with the path delimited by dots in a configuration file. This patch fixes the strongSwan
+# configuration parameters that ovs-monitor-ipsec writes, to comply with the new strongSwan format.
+# After the patch is merged into OVS upstream, we should update the patch URL with the upstream
+# commit. After a new OVS release with the fix is available, we can switch to use that OVS release,
+# and remove the workaround to apply the patch here.
+curl https://github.com/jianjuns/ovs/commit/714b133ef2b2d8dac0770b78265a8b52c2f00f2f.patch | \
+    git apply
+
 # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
 # does not seem to be in the Python path in Ubuntu 20.04. There may be a better way to do this,
 # but this seems like an acceptable workaround.
