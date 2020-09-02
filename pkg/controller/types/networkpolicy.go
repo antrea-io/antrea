@@ -54,12 +54,16 @@ type GroupSelector struct {
 	// If Namespace is set, NamespaceSelector can not be set. It means only Pods in this Namespace will be matched.
 	Namespace string
 	// This is a label selector which selects Pods. If Namespace is also set, it selects the Pods in the Namespace.
-	// If NamespaceSelector is also set, it selects the Pods in the Namespaces selected by NamespaceSelector.
+	// If NamespaceSelector is set instead, it selects the Pods in the Namespaces selected by NamespaceSelector.
 	// If Namespace and NamespaceSelector both are unset, it selects the Pods in all the Namespaces.
 	PodSelector labels.Selector
 	// This is a label selector which selects Namespaces. It this field is set, Namespace can not be set.
 	NamespaceSelector labels.Selector
-	// This is a label selector which selects external entities.
+	// This is a label selector which selects ExternalEntities. Within a group, ExternalEntitySelector cannot be
+	// set concurrently with PodSelector. If Namespace is also set, it selects the ExternalEntities in the Namespace.
+	// If NamespaceSelector is set instead, it selects ExternalEntities in the Namespaces selected by NamespaceSelector.
+	// If Namespace and NamespaceSelector both are unset, it selects the ExternalEntities in all the Namespaces.
+	// TODO: Add validation in API to not allow externalEntitySelector and podSelector in the same group.
 	ExternalEntitySelector labels.Selector
 }
 

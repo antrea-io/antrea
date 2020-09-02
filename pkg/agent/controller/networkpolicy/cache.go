@@ -409,15 +409,11 @@ func (c *ruleCache) addAddressGroupLocked(group *v1beta1.AddressGroup) error {
 	for i := range group.Pods {
 		// Must not store address of loop iterator variable as it's the same
 		// address taking different values in each loop iteration, otherwise
-		// podSet would eventually contain only the last value.
+		// groupMemberSet would eventually contain only the last value.
 		// https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
 		groupMemberSet.Insert(group.Pods[i].ToGroupMember())
 	}
 	for i := range group.GroupMembers {
-		// Must not store address of loop iterator variable as it's the same
-		// address taking different values in each loop iteration, otherwise
-		// podSet would eventually contain only the last value.
-		// https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
 		groupMemberSet.Insert(&group.GroupMembers[i])
 	}
 

@@ -541,7 +541,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 
 		memberByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.ToAddresses)
 		// Same as the process in `add`, we must ensure the group for the original services is present
-		// in podsByServicesMap, so that this group won't be removed and its "From" will be updated.
+		// in memberByServicesMap, so that this group won't be removed and its "From" will be updated.
 		svcKey := normalizeServices(newRule.Services)
 		if _, exists := memberByServicesMap[svcKey]; !exists {
 			memberByServicesMap[svcKey] = v1beta1.NewGroupMemberSet()

@@ -18,6 +18,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -324,4 +325,61 @@ func TestAddANP(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDeleteANP(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	anpObj := getANP()
+	apgID := getNormalizedUID(toGroupSelector("test-ns", &selectorA, nil, nil).NormalizedName)
+	_, npc := newController()
+	npc.addANP(anpObj)
+	npc.deleteANP(anpObj)
+	_, found, _ := npc.appliedToGroupStore.Get(apgID)
+	assert.False(t, found, "expected AppliedToGroup to be deleted")
+	adgs := npc.addressGroupStore.List()
+	assert.Len(t, adgs, 0, "expected empty AddressGroup list")
+	key, _ := keyFunc(anpObj)
+	_, found, _ = npc.internalNetworkPolicyStore.Get(key)
+	assert.False(t, found, "expected internal NetworkPolicy to be deleted")
+}
+
+// util functions for testing.
+func getANP() *secv1alpha1.NetworkPolicy {
+	p10 := float64(10)
+	allowAction := secv1alpha1.RuleActionAllow
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
+	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	ingressRules := []secv1alpha1.Rule{
+		{
+			From: []secv1alpha1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &selectorB,
+				},
+			},
+			Action: &allowAction,
+		},
+	}
+	egressRules := []secv1alpha1.Rule{
+		{
+			To: []secv1alpha1.NetworkPolicyPeer{
+				{
+					ExternalEntitySelector: &selectorC,
+				},
+			},
+			Action: &allowAction,
+		},
+	}
+	npObj := &secv1alpha1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "test-anp"},
+		Spec: secv1alpha1.NetworkPolicySpec{
+			AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				{PodSelector: &selectorA},
+			},
+			Priority: p10,
+			Ingress:  ingressRules,
+			Egress:   egressRules,
+		},
+	}
+	return npObj
 }

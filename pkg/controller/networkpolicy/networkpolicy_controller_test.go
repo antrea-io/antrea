@@ -1346,7 +1346,7 @@ func TestAddExternalEntity(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			member := externalEntityToGroupMember(tt.addedExternalEntity, true)
+			member := externalEntityToGroupMember(tt.addedExternalEntity)
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(member))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(member))
 		})
