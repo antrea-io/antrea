@@ -1,7 +1,7 @@
 # golangci-lint configuration used for CI
 run:
   tests: true
-  timeout: 5m
+  timeout: 10m
   skip-files:
     - ".*\\.pb\\.go"
   skip-dirs-use-default: true
