@@ -55,7 +55,7 @@ and daemons are pre-installed on the Windows Nodes in the demo.
 
 ### Installation
 #### Download & Configure Antrea for Linux
-Configure the Antrea for Linux on master Node following [Getting started](/docs/getting-started.md)
+Configure the Antrea for Linux on master Node following [Getting started](getting-started.md)
 document.
 ```
 # Example:

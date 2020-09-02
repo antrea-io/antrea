@@ -1,0 +1,1 @@
+../../../docs/securing-control-plane.md
