@@ -3,6 +3,7 @@ bin
 .cache
 .golangci-bin
 .coverage/
+hack/.bin/
 
 .DS_Store
 
