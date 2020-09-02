@@ -808,7 +808,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-m7ktkktgdg
+  name: antrea-config-8mm776mc4b
   namespace: kube-system
 ---
 apiVersion: v1
@@ -914,7 +914,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-m7ktkktgdg
+          name: antrea-config-8mm776mc4b
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -987,8 +987,6 @@ spec:
         command:
         - antrea-agent
         env:
-        - name: ANTREA_CLOUD_EKS
-          value: "true"
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -1001,6 +999,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: ANTREA_CLOUD_EKS
+          value: "true"
         image: antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -1131,7 +1131,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-m7ktkktgdg
+          name: antrea-config-8mm776mc4b
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
