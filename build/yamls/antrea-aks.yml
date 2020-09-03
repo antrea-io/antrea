@@ -560,6 +560,47 @@ kind: ClusterRole
 metadata:
   labels:
     app: antrea
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+  name: aggregate-security-crds-edit
+rules:
+- apiGroups:
+  - security.antrea.tanzu.vmware.com
+  resources:
+  - clusternetworkpolicies
+  - networkpolicies
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+  name: aggregate-security-crds-view
+rules:
+- apiGroups:
+  - security.antrea.tanzu.vmware.com
+  resources:
+  - clusternetworkpolicies
+  - networkpolicies
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
   name: antctl
 rules:
 - apiGroups:
