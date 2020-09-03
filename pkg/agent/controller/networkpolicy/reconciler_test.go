@@ -660,7 +660,7 @@ func TestReconcilerUpdate(t *testing.T) {
 	ifaceStore.AddInterface(
 		&interfacestore.InterfaceConfig{
 			InterfaceName:            util.GenerateContainerInterfaceName("pod3", "ns1", "container3"),
-			IP:                       net.ParseIP("4.4.4.4"),
+			IPs:                      []net.IP{net.ParseIP("4.4.4.4")},
 			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod3", PodNamespace: "ns1", ContainerID: "container3"},
 			OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 3}})
 	tests := []struct {
