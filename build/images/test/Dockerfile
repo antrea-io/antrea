@@ -1,4 +1,4 @@
-FROM antrea/openvswitch:2.13.1
+FROM antrea/openvswitch:2.13.1-0.9.3
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image for antrea integration tests."

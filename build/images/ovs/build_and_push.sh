@@ -28,6 +28,10 @@ if [ -z "$OVS_VERSION" ]; then
     exit 1
 fi
 
+if [ -z "$IMG_TAG" ]; then
+    IMG_TAG="$OVS_VERSION"
+fi
+
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 pushd $THIS_DIR > /dev/null
@@ -42,17 +46,17 @@ pushd $THIS_DIR > /dev/null
 docker pull ubuntu:20.04
 
 docker build --target ovs-debs \
-       --cache-from antrea/openvswitch-debs:$OVS_VERSION \
-       -t antrea/openvswitch-debs:$OVS_VERSION \
+       --cache-from antrea/openvswitch-debs:$IMG_TAG \
+       -t antrea/openvswitch-debs:$IMG_TAG \
        --build-arg OVS_VERSION=$OVS_VERSION .
 
 docker build \
-       --cache-from antrea/openvswitch-debs:$OVS_VERSION \
-       --cache-from antrea/openvswitch:$OVS_VERSION \
-       -t antrea/openvswitch:$OVS_VERSION \
+       --cache-from antrea/openvswitch-debs:$IMG_TAG \
+       --cache-from antrea/openvswitch:$IMG_TAG \
+       -t antrea/openvswitch:$IMG_TAG \
        --build-arg OVS_VERSION=$OVS_VERSION .
 
-docker push antrea/openvswitch-debs:$OVS_VERSION
-docker push antrea/openvswitch:$OVS_VERSION
+docker push antrea/openvswitch-debs:$IMG_TAG
+docker push antrea/openvswitch:$IMG_TAG
 
 popd > /dev/null

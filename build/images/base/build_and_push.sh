@@ -23,8 +23,8 @@ function echoerr {
     >&2 echo "$@"
 }
 
-if [ -z "$OVS_VERSION" ]; then
-    echoerr "The OVS_VERSION env variable must be set to a valid value (e.g. 2.13.1)"
+if [ -z "$IMG_TAG" ]; then
+    echoerr "The IMG_TAG env variable must be set to a valid value (e.g. 2.13.1)"
     exit 1
 fi
 
@@ -34,13 +34,13 @@ pushd $THIS_DIR > /dev/null
 
 docker pull ubuntu:20.04
 
-docker pull antrea/openvswitch:$OVS_VERSION
+docker pull antrea/openvswitch:$IMG_TAG
 
 docker build \
-       -t antrea/base-ubuntu:$OVS_VERSION \
+       -t antrea/base-ubuntu:$IMG_TAG \
        -f Dockerfile \
-       --build-arg OVS_VERSION=$OVS_VERSION .
+       --build-arg IMG_TAG=$IMG_TAG .
 
-docker push antrea/base-ubuntu:$OVS_VERSION
+docker push antrea/base-ubuntu:$IMG_TAG
 
 popd > /dev/null
