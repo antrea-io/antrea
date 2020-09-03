@@ -68,6 +68,11 @@ should be deleted. This ensures that all tests are run on a clean testbed.
   | :------------: | :-----------------: | :-------------: | :------: |
   | 1.16.10        |  Standard_DS2_v2    |  Ubuntu 16.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
 
+* [daily-elk-flow-collector-validate](https://jenkins.antrea-ci.rocks/job/antrea-daily-elk-flow-collector-validate-for-period/):
+  [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-daily-elk-flow-collector-validate-for-period)](http://jenkins.antrea-ci.rocks/view/cloud/job/antrea-daily-elk-flow-collector-validate-for-period/)
+  daily validation of elk flow collector manifest. If build fails, Jenkins will send an email to 
+  projectantrea-dev@googlegroups.com for notification.
+
 If you need to run the K8s community tests locally, you may use the
 [ci/run-k8s-e2e-tests.sh](/ci/run-k8s-e2e-tests.sh) script. It takes care of
 installing the correct version of
