@@ -52,7 +52,7 @@
 
             echo "=== Saving cluster_api.yaml ==="
             mkdir -p ${CLUSTER_LOG_DIR}/cluster_api
-            kubectl get cluster-api -A -o yaml > ${CLUSTER_LOG_DIR}/cluster_api/cluster_api.yaml
+            kubectl get cluster-api -A -o yaml > ${CLUSTER_LOG_DIR}/cluster_api/cluster_api.yaml || true
           }
 
           set -e
@@ -420,5 +420,4 @@
       - shell: |-
           #!/bin/bash
           set -ex
-          source /home/ubuntu/.bashrc
-          ./ci/test-elk-flow-collector.sh
+          ./ci/test-elk-flow-collector.sh --kubeconfig jenkins/out/kubeconfig
