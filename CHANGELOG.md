@@ -11,6 +11,21 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.9.3 - 2020-09-03
+
+### Changed
+
+- Rename *internal* API group from "networking.antrea.tanzu.vmware.com" to "controlplane.antrea.tanzu.vmware.com". ([#1147](https://github.com/vmware-tanzu/antrea/pull/1147), [@jianjuns])
+   * This API is served by the Antrea Controller and consumed by Agents (directly) and antctl (through the K8s apiserver using an APIService)
+   * Antrea Controller deletes the previous APIService on startup to avoid issues (e.g. with Namespace deletion)
+   * During upgrade from a previous version, NetworkPolicy enforcement will be disrupted until the upgrade is complete: NetworkPolicy changes may not take effect and NetworkPolicies may not be applied to new Pods, until all components have been updated
+
+### Fixed
+
+- Fix IPsec support which was broken after updating the base distribution to Ubuntu 20.04 for the Antrea Docker image, as this update introduced a more recent version of [strongSwan]. ([#1184](https://github.com/vmware-tanzu/antrea/pull/1184) [#1191](https://github.com/vmware-tanzu/antrea/pull/1191), [@jianjuns])
+- Fix deadlock in the NetworkPolicy implementation in the Antrea Agent: this issue could only be observed when using ClusterNetworkPolicies but was affecting the enforcement of all NetworkPolicies. ([#1186](https://github.com/vmware-tanzu/antrea/pull/1186), [@Dyanngg] [@yktsubo] [@tnqn])
+- Fix unbound variable error in "start_ovs" Bash script, which was causing the antrea-ovs container to crash if one OVS daemon stopped for any reason. ([#1190](https://github.com/vmware-tanzu/antrea/pull/1190), [@antoninbas] [@alex-vmw])
+
 ## 0.9.2 - 2020-08-27
 
 ### Fixed
@@ -397,6 +412,7 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [AKS]: https://azure.microsoft.com/en-us/services/kubernetes-service/
 [Flow Exporter]: https://github.com/vmware-tanzu/antrea/blob/master/docs/network-flow-visibility.md
 [Elastic Stack]: https://www.elastic.co/elastic-stack
+[strongSwan]: https://www.strongswan.org/
 
 [@AbdYsn]: https://github.com/AbdYsn
 [@abhiraut]: https://github.com/abhiraut
