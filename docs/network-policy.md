@@ -47,15 +47,16 @@ relative order of precedence:
     Emergency > SecurityOps > NetworkOps > Platform > Application  
 ```
 
-Thus, all Antrea Policy CRs associated with "Emergency" tier will be enforced
-before any other Antrea Policy CR associated with any other tier, until a match
-occurs, in which case the policy rule's `action` will be applied. The
-"Application" tier carries the lowest precedence, and any Antrea Policy CR
-without a `tier` name set in its spec will be associated with the "Application"
-tier. Even though the policies associated with the "Application" tier carry the
-lowest precedence amongst all the tiers, they are still enforced before K8s
-NetworkPolicies. Thus, tiered Antrea Policy CRDs have a higher precedence over
-developer-created K8s NetworkPolicies.
+Thus, all Antrea Policy resources associated with "Emergency" tier will be
+enforced before any other Antrea Policy resource associated with any other
+tier, until a match occurs, in which case the policy rule's `action` will be
+applied. The "Application" tier carries the lowest precedence, and any Antrea
+Policy resource without a `tier` name set in its spec will be associated with
+the "Application" tier. Even though the policies associated with the
+"Application" tier carry the lowest precedence amongst all the tiers, they are
+still enforced before K8s NetworkPolicies. Thus, admin created tiered Antrea
+Policy CRDs have a higher precedence than developer-created K8s
+NetworkPolicies.
 
 
 ### Tier CRDs
@@ -99,7 +100,7 @@ ConfigMap as follows:
 ### The ClusterNetworkPolicy resource
 
 An example ClusterNetworkPolicy might look like this:
-```
+```yaml
 apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
 kind: ClusterNetworkPolicy
 metadata:
@@ -247,8 +248,8 @@ Antrea NetworkPolicy is another Policy CRD, which is similar to the
 ClusterNetworkPolicy CRD, however its scope is limited to a Namespace.
 The purpose of introducing this CRD is to allow admins to take advantage of
 advanced NetworkPolicy features and apply them within a Namespace to
-complement the K8s NetworkPolicies. Similar to ClusterNetworkPolicy resource,
-Antrea NetworkPolicy can also be associated with Tiers.
+complement the K8s NetworkPolicies. Similar to the ClusterNetworkPolicy
+resource, Antrea NetworkPolicy can also be associated with Tiers.
 
 **Note**: Antrea NetworkPolicy is currently in "Alpha" stage and is enabled
 along with Tiers and ClusterNetworkPolicy as part of the `AntreaPolicy`
@@ -257,7 +258,7 @@ feature gate.
 ### The Antrea NetworkPolicy resource
 
 An example Antrea NetworkPolicy might look like this:
-```
+```yaml
 apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
 kind: NetworkPolicy
 metadata:
