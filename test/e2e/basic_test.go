@@ -101,7 +101,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		t.Fatalf("Expected 1 pod interface, got %d", len(podInterfaces))
 	}
 	ifName := podInterfaces[0].InterfaceName
-	podIP := podInterfaces[0].IP
+	podIPs := podInterfaces[0].IPs
 	t.Logf("Host interface name for Pod is '%s'", ifName)
 
 	doesInterfaceExist := func() bool {
@@ -122,7 +122,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		return exists
 	}
 
-	doesIPAllocationExist := func() bool {
+	doesIPAllocationExist := func(podIP string) bool {
 		cmd := fmt.Sprintf("test -f /var/run/antrea/cni/networks/antrea/%s", podIP)
 		if rc, _, _, err := RunCommandOnNode(nodeName, cmd); err != nil {
 			t.Fatalf("Error when running ip command on Node '%s': %v", nodeName, err)
@@ -139,8 +139,10 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	if !doesOVSPortExist() {
 		t.Errorf("OVS port '%s' does not exist on Node '%s'", ifName, nodeName)
 	}
-	if !doesIPAllocationExist() {
-		t.Errorf("IP allocation '%s' does not exist on Node '%s'", podIP, nodeName)
+	for _, podIP := range podIPs {
+		if !doesIPAllocationExist(podIP) {
+			t.Errorf("IP allocation '%s' does not exist on Node '%s'", podIP, nodeName)
+		}
 	}
 
 	t.Logf("Deleting Pod '%s'", podName)
@@ -155,8 +157,10 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	if doesOVSPortExist() {
 		t.Errorf("OVS port '%s' still exists on Node '%s' after Pod deletion", ifName, nodeName)
 	}
-	if doesIPAllocationExist() {
-		t.Errorf("IP allocation '%s' still exists on Node '%s'", podIP, nodeName)
+	for _, podIP := range podIPs {
+		if doesIPAllocationExist(podIP) {
+			t.Errorf("IP allocation '%s' still exists on Node '%s'", podIP, nodeName)
+		}
 	}
 }
 
