@@ -54,7 +54,7 @@ applied. The "Application" tier carries the lowest precedence, and any Antrea
 Policy resource without a `tier` name set in its spec will be associated with
 the "Application" tier. Even though the policies associated with the
 "Application" tier carry the lowest precedence amongst all the tiers, they are
-still enforced before K8s NetworkPolicies. Thus, admin created tiered Antrea
+still enforced before K8s NetworkPolicies. Thus, admin-created tiered Antrea
 Policy CRDs have a higher precedence than developer-created K8s
 NetworkPolicies.
 
