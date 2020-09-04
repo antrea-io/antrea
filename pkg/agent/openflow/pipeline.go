@@ -191,6 +191,7 @@ const (
 	serviceLearnReg         = endpointPortReg // Use reg4[16..18] to store endpoint selection states.
 	EgressReg       regType = 5
 	IngressReg      regType = 6
+	DispositionReg	regType = 7	// Stores Allow or Drop
 	TraceflowReg    regType = 9 // Use reg9[28..31] to store traceflow dataplaneTag.
 	// marksRegServiceNeedLB indicates a packet need to do service selection.
 	marksRegServiceNeedLB uint32 = 0b001
@@ -289,7 +290,7 @@ type client struct {
 	encapMode   config.TrafficEncapModeType
 	gatewayPort uint32 // OVSOFPort number
 	// packetInHandlers stores handler to process PacketIn event
-	packetInHandlers map[string]PacketInHandler
+	packetInHandlers map[ofpPacketInReason]map[string]PacketInHandler
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -875,7 +876,7 @@ func (c *client) arpNormalFlow(category cookie.Category) binding.Flow {
 
 // conjunctionActionFlow generates the flow to jump to a specific table if policyRuleConjunction ID is matched. Priority of
 // conjunctionActionFlow is created at priorityLow for k8s network policies, and *priority assigned by PriorityAssigner for CNP.
-func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, priority *uint16) binding.Flow {
+func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, priority *uint16, enableLogging bool) binding.Flow {
 	var ofPriority uint16
 	if priority == nil {
 		ofPriority = priorityLow
@@ -883,25 +884,60 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 		ofPriority = *priority
 	}
 	conjReg := IngressReg
-	if tableID == EgressRuleTable {
+	if tableID == EgressRuleTable   {
 		conjReg = EgressReg
 	}
-	return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
-		MatchConjID(conjunctionID).
-		MatchPriority(ofPriority).
-		Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
-		Action().GotoTable(nextTable).
-		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-		Done()
+	for _, table := range GetCNPEgressTables() {
+		if tableID == table {
+			conjReg = EgressReg
+		}
+	}
+	if enableLogging {
+		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
+			MatchConjID(conjunctionID).
+			MatchPriority(ofPriority).
+			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
+			Action().LoadRegRange(int(DispositionReg), 1, binding.Range{0, 31}). //CNP
+			Action().SendToController(0).
+			Action().GotoTable(nextTable).
+			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+			Done()
+	} else {
+		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
+			MatchConjID(conjunctionID).
+			MatchPriority(ofPriority).
+			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
+			Action().GotoTable(nextTable).
+			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+			Done()
+	}
 }
 
-// conjunctionActionFlow generates the flow to drop traffic if policyRuleConjunction ID is matched.
+// conjunctionActionDropFlow generates the flow to drop traffic if policyRuleConjunction ID is matched.
 func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding.TableIDType, priority *uint16) binding.Flow {
 	ofPriority := *priority
 	return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
 		MatchConjID(conjunctionID).
 		MatchPriority(ofPriority).
 		Action().Drop().
+		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+		Done()
+}
+
+// conjunctionActionDropLogFlow generates the flow to drop traffic if policyRuleConjunction ID is matched.
+func (c *client) conjunctionActionDropLogFlow(conjunctionID uint32, tableID binding.TableIDType, priority *uint16) binding.Flow {
+	ofPriority := *priority
+	// Load register with conjunctionID for logging.
+	conjReg := IngressReg
+	if tableID == EgressDefaultTable {
+		conjReg = EgressReg
+	}
+	return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
+		MatchConjID(conjunctionID).
+		MatchPriority(ofPriority).
+		Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).
+		Action().LoadRegRange(int(DispositionReg), 2, binding.Range{0, 31}). //CNP
+		Action().SendToController(0).
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 		Done()
 }
@@ -1405,7 +1441,7 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 		policyCache:              policyCache,
 		groupCache:               sync.Map{},
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
-		packetInHandlers:         map[string]PacketInHandler{},
+		packetInHandlers:         map[ofpPacketInReason]map[string]PacketInHandler{},
 	}
 	c.ofEntryOperations = c
 	c.enableProxy = enableProxy

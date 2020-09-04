@@ -203,7 +203,7 @@ type NetworkPolicyRule struct {
 	Action *secv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1.RuleAction"`
 	// EnableLogging is used to indicate if agent should generate logs
 	// when rules are matched. Should be default to false.
-	EnableLogging bool `json:"enableLogging"`
+	EnableLogging bool `json:"enableLogging" protobuf:"varint,7,opt,name=enableLogging"`
 }
 
 // Protocol defines network protocols supported for things like container ports.

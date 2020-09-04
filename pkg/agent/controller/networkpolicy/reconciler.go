@@ -386,6 +386,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				Action:    rule.Action,
 				Priority:  ofPriority,
 				TableID:   table,
+				EnableLogging: rule.EnableLogging,
 			}
 		}
 	} else {
@@ -403,6 +404,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				Action:    rule.Action,
 				Priority:  ofPriority,
 				TableID:   table,
+				EnableLogging: rule.EnableLogging,
 			}
 		}
 
@@ -424,6 +426,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 					Action:    rule.Action,
 					Priority:  nil,
 					TableID:   table,
+					EnableLogging: rule.EnableLogging,
 				}
 				ofRuleByServicesMap[svcKey] = ofRule
 			}
@@ -518,6 +521,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					TableID:         table,
 					PolicyName:      newRule.PolicyName,
 					PolicyNamespace: newRule.PolicyNamespace,
+					EnableLogging:   newRule.EnableLogging,
 				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err
@@ -567,6 +571,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					TableID:         table,
 					PolicyName:      newRule.PolicyName,
 					PolicyNamespace: newRule.PolicyNamespace,
+					EnableLogging:   newRule.EnableLogging,
 				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err

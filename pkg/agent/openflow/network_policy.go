@@ -756,9 +756,13 @@ func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *poli
 		// Install action flows.
 		var actionFlows []binding.Flow
 		if rule.IsAntreaNetworkPolicyRule() && *rule.Action == secv1alpha1.RuleActionDrop {
-			actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleID, ruleTable.GetID(), rule.Priority))
+			if rule.EnableLogging {
+				actionFlows = append(actionFlows, c.conjunctionActionDropLogFlow(ruleID, ruleTable.GetID(), rule.Priority))
+			} else {
+				actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleID, ruleTable.GetID(), rule.Priority))
+			}
 		} else {
-			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority))
+			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority, rule.EnableLogging))
 		}
 		conj.actionFlows = actionFlows
 	}

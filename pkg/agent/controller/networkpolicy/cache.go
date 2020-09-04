@@ -78,6 +78,8 @@ type rule struct {
 	PolicyName string
 	// PolicyNamespace is empty for ClusterNetworkPolicy.
 	PolicyNamespace string
+	// EnableLogging is a boolean indicating if log for CNP. False for NP.
+	EnableLogging bool
 }
 
 // hashRule calculates a string based on the rule's content.
@@ -546,6 +548,7 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
 		TierPriority:    policy.TierPriority,
 		AppliedToGroups: policy.AppliedToGroups,
 		PolicyUID:       policy.UID,
+		EnableLogging:   r.EnableLogging,
 	}
 	rule.ID = hashRule(rule)
 	rule.PolicyNamespace = policy.Namespace

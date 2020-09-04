@@ -1594,7 +1594,15 @@ func schema_pkg_apis_controlplane_v1beta1_NetworkPolicyRule(ref common.Reference
 							Format:      "",
 						},
 					},
+					"enableLogging": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EnableLogging is used to indicate if agent should generate logs when rules are matched. Should be default to false.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
+				Required: []string{"enableLogging"},
 			},
 		},
 		Dependencies: []string{

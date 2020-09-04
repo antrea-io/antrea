@@ -53,6 +53,7 @@ type PolicyRule struct {
 	TableID         binding.TableIDType
 	PolicyName      string
 	PolicyNamespace string
+	EnableLogging 	bool
 }
 
 // IsAntreaNetworkPolicyRule returns if a PolicyRule is created for Antrea NetworkPolicy types.
