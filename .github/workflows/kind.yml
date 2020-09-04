@@ -10,9 +10,26 @@ on:
     - master
     - release-*
     - ipv6
+
 jobs:
+  check-changes:
+    name: Check whether tests need to be run based on diff
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@master
+      id: check_diff
+      with:
+        args: docs/* ci/jenkins/* *.md
+    outputs:
+      has_changes: ${{ steps.check_diff.outputs.has_changes }}
+
   build-antrea-image:
     name: Build Antrea image to be used for Kind e2e tests
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
