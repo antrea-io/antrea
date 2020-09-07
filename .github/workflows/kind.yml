@@ -135,37 +135,6 @@ jobs:
       run: |
         ./ci/kind/test-e2e-kind.sh --encap-mode noEncap
 
-  test-e2e-noencap-proxy:
-    name: E2e tests on a Kind cluster on Linux (noEncap) with proxy enabled
-    needs: build-antrea-image
-    runs-on: [ubuntu-18.04]
-    steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
-    - uses: actions/checkout@v2
-    - uses: actions/setup-go@v1
-      with:
-        go-version: 1.13
-    - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
-      with:
-        name: antrea-ubuntu
-    - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
-    - name: Install Kind
-      env:
-        KIND_VERSION: v0.7.0
-      run: |
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-        chmod +x ./kind
-        sudo mv kind /usr/local/bin
-    - name: Run e2e tests
-      run: |
-        ./ci/kind/test-e2e-kind.sh --encap-mode noEncap --proxy
-
   test-e2e-hybrid:
     name: E2e tests on a Kind cluster on Linux (hybrid)
     needs: build-antrea-image
@@ -196,37 +165,6 @@ jobs:
     - name: Run e2e tests
       run: |
         ./ci/kind/test-e2e-kind.sh --encap-mode hybrid
-
-  test-e2e-hybrid-proxy:
-    name: E2e tests on a Kind cluster on Linux (hybrid) with proxy enabled
-    needs: build-antrea-image
-    runs-on: [ubuntu-18.04]
-    steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
-    - uses: actions/checkout@v2
-    - uses: actions/setup-go@v1
-      with:
-        go-version: 1.13
-    - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
-      with:
-        name: antrea-ubuntu
-    - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
-    - name: Install Kind
-      env:
-        KIND_VERSION: v0.7.0
-      run: |
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-        chmod +x ./kind
-        sudo mv kind /usr/local/bin
-    - name: Run e2e tests
-      run: |
-        ./ci/kind/test-e2e-kind.sh --encap-mode hybrid --proxy
 
   test-e2e-encap-np:
     name: E2e tests on a Kind cluster on Linux with Antrea NetworkPolicies enabled
