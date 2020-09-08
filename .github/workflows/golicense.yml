@@ -1,0 +1,36 @@
+name: Golicense
+on:
+  pull_request:
+    branches:
+    - master
+    - release-*
+    paths:
+    - '**go.mod'
+  push:
+    branches:
+    - master
+    - release-*
+  release:
+    types:
+      - created
+
+jobs:
+  golicense:
+    runs-on: [ubuntu-latest]
+    steps:
+    - name: Set up Go 1.13
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+    - uses: actions/checkout@v2
+    - run: mkdir antrea-bins license-reports
+    - name: Build assets
+      run: |
+        export VERSION="$(head VERSION)"
+        ./hack/release/prepare-assets.sh ./antrea-bins
+    - name: Build Linux binaries
+      run: BINDIR=./antrea-bins make bin
+    - name: Run golicense
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: ./ci/golicense/run.sh ./antrea-bins ./license-reports
