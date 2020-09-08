@@ -562,7 +562,7 @@ metadata:
     app: antrea
     rbac.authorization.k8s.io/aggregate-to-admin: "true"
     rbac.authorization.k8s.io/aggregate-to-edit: "true"
-  name: aggregate-security-crds-edit
+  name: aggregate-antrea-policies-edit
 rules:
 - apiGroups:
   - security.antrea.tanzu.vmware.com
@@ -584,7 +584,7 @@ metadata:
   labels:
     app: antrea
     rbac.authorization.k8s.io/aggregate-to-view: "true"
-  name: aggregate-security-crds-view
+  name: aggregate-antrea-policies-view
 rules:
 - apiGroups:
   - security.antrea.tanzu.vmware.com
