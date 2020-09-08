@@ -148,7 +148,6 @@ type NetworkPolicyController struct {
 	// anpLister is able to list/get AntreaNetworkPolicies and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
 	anpLister seclisters.NetworkPolicyLister
-
 	// anpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
 	anpListerSynced cache.InformerSynced
 
@@ -915,10 +914,10 @@ func (n *NetworkPolicyController) updateExternalEntity(oldObj, curObj interface{
 		return
 	}
 	// Find groups matching the old ExternalEntity's labels.
+	oldAppliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(oldEE)
 	oldAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(oldEE)
-	oldAppliedToGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(oldEE)
 	// Find groups matching the new ExternalEntity's labels.
-	curAppliedToGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(curEE)
+	curAppliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(curEE)
 	curAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(curEE)
 	// Create set to hold the group keys to enqueue.
 	var appliedToGroupKeys sets.String
@@ -969,7 +968,7 @@ func (n *NetworkPolicyController) deleteExternalEntity(old interface{}) {
 
 	klog.V(2).Infof("Processing ExternalEntity %s/%s DELETE event, labels: %v", ee.Namespace, ee.Name, ee.Labels)
 	// Find all AppliedToGroup keys which match the Pod's labels.
-	appliedToGroupKeys := n.filterAddressGroupsForPodOrExternalEntity(ee)
+	appliedToGroupKeys := n.filterAppliedToGroupsForPodOrExternalEntity(ee)
 	// Find all AddressGroup keys which match the Pod's labels.
 	addressGroupKeys := n.filterAddressGroupsForPodOrExternalEntity(ee)
 	// Enqueue groups to their respective queues for group processing.
@@ -1351,9 +1350,9 @@ func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *controlplane.Gr
 func externalEntityToGroupMember(ee *v1alpha1.ExternalEntity) *controlplane.GroupMember {
 	memberEntity := &controlplane.GroupMember{}
 	for _, endpoint := range ee.Spec.Endpoints {
-		var networkingPorts []controlplane.NamedPort
+		var namedPorts []controlplane.NamedPort
 		for _, port := range endpoint.Ports {
-			networkingPorts = append(networkingPorts, controlplane.NamedPort{
+			namedPorts = append(namedPorts, controlplane.NamedPort{
 				Port:     port.Port,
 				Name:     port.Name,
 				Protocol: controlplane.Protocol(port.Protocol),
@@ -1361,7 +1360,7 @@ func externalEntityToGroupMember(ee *v1alpha1.ExternalEntity) *controlplane.Grou
 		}
 		ep := controlplane.Endpoint{
 			IP:    ipStrToIPAddress(endpoint.IP),
-			Ports: networkingPorts,
+			Ports: namedPorts,
 		}
 		memberEntity.Endpoints = append(memberEntity.Endpoints, ep)
 	}
@@ -1396,13 +1395,11 @@ func (n *NetworkPolicyController) processSelector(groupSelector antreatypes.Grou
 			}
 		}
 	} else if groupSelector.NamespaceSelector != nil {
-		// All the Pods and EEs from Namespaces matching the nsSelector must be selected.
+		// All the Pods from Namespaces matching the nsSelector must be selected.
 		namespaces, _ := n.namespaceLister.List(groupSelector.NamespaceSelector)
 		for _, ns := range namespaces {
 			nsPods, _ := n.podLister.Pods(ns.Name).List(labels.Everything())
 			pods = append(pods, nsPods...)
-			nsExtEntities, _ := n.externalEntityLister.ExternalEntities(ns.Name).List(labels.Everything())
-			externalEntities = append(externalEntities, nsExtEntities...)
 		}
 	} else if groupSelector.PodSelector != nil {
 		// Lack of Namespace and NamespaceSelector indicates Pods must be selected

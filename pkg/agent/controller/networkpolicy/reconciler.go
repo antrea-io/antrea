@@ -748,7 +748,7 @@ func groupPodsByServices(services []v1beta1.Service, pods v1beta1.GroupMemberPod
 	resolvedServices := make([]v1beta1.Service, len(services))
 	for podKey, pod := range pods {
 		for i := range services {
-			resolvedServices[i] = *resolveService(&services[i], *pod.ToGroupMember())
+			resolvedServices[i] = *resolveServiceForPod(&services[i], pod)
 		}
 		svcKey := normalizeServices(resolvedServices)
 		if _, exists := podsByServicesMap[svcKey]; !exists {
@@ -788,7 +788,7 @@ func groupMembersByServices(services []v1beta1.Service, memberSet v1beta1.GroupM
 	resolvedServices := make([]v1beta1.Service, len(services))
 	for memberKey, member := range memberSet {
 		for i := range services {
-			resolvedServices[i] = *resolveService(&services[i], *member)
+			resolvedServices[i] = *resolveService(&services[i], member)
 		}
 		svcKey := normalizeServices(resolvedServices)
 		if _, exists := membersByServicesMap[svcKey]; !exists {
@@ -884,9 +884,28 @@ func filterUnresolvablePort(in []v1beta1.Service) []v1beta1.Service {
 	return out
 }
 
-// resolveService resolves the port name of the provided service to a port number
-// for the provided groupMember.
-func resolveService(service *v1beta1.Service, member v1beta1.GroupMember) *v1beta1.Service {
+// resolveServiceForPod resolves the port name of the provided service to a port number
+// for the provided Pod.
+func resolveServiceForPod(service *v1beta1.Service, pod *v1beta1.GroupMemberPod) *v1beta1.Service {
+	// If port is not specified or is already a number, return it as is.
+	if service.Port == nil || service.Port.Type == intstr.Int {
+		return service
+	}
+	for _, port := range pod.Ports {
+		if port.Name == service.Port.StrVal && port.Protocol == *service.Protocol {
+			resolvedPort := intstr.FromInt(int(port.Port))
+			return &v1beta1.Service{Protocol: service.Protocol, Port: &resolvedPort}
+		}
+	}
+	klog.Warningf("Can not resolve port %s for Pod %v", service.Port.StrVal, pod)
+	// If not resolvable, return it as is.
+	// The Pods that cannot resolve it will be grouped together.
+	return service
+}
+
+// resolveService resolves the port name of the provided service to a port number for the provided groupMember.
+// This function should eventually supersede resolveServiceForPod.
+func resolveService(service *v1beta1.Service, member *v1beta1.GroupMember) *v1beta1.Service {
 	// If port is not specified or is already a number, return it as is.
 	if service.Port == nil || service.Port.Type == intstr.Int {
 		return service
@@ -901,6 +920,6 @@ func resolveService(service *v1beta1.Service, member v1beta1.GroupMember) *v1bet
 	}
 	klog.Warningf("Can not resolve port %s for endpoints %v", service.Port.StrVal, member)
 	// If not resolvable, return it as is.
-	// The Pods that cannot resolve it will be grouped together.
+	// The group members that cannot resolve it will be grouped together.
 	return service
 }

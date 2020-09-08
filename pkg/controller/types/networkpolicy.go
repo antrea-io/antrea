@@ -47,7 +47,7 @@ const (
 
 // GroupSelector describes how to select Pods.
 type GroupSelector struct {
-	// The normalized name is calculated from Namespace, PodSelector, and NamespaceSelector.
+	// The normalized name is calculated from Namespace, PodSelector, ExternalEntitySelector and NamespaceSelector.
 	// If multiple policies have same selectors, they should share this group by comparing NormalizedName.
 	// It's also used to generate Name and UUID of group.
 	NormalizedName string

@@ -38,7 +38,6 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
@@ -1226,7 +1225,6 @@ func TestAddExternalEntity(t *testing.T) {
 	selectorOut := metav1.LabelSelector{
 		MatchLabels: map[string]string{"outGroup": "outAddress"},
 	}
-	allowAction := secv1alpha1.RuleActionAllow
 	appliedPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "podA",
@@ -1251,39 +1249,7 @@ func TestAddExternalEntity(t *testing.T) {
 			PodIP: "1.2.3.4",
 		},
 	}
-	testANPObj := &secv1alpha1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "anpA",
-			Namespace: "nsA",
-		},
-		Spec: secv1alpha1.NetworkPolicySpec{
-			AppliedTo: []secv1alpha1.NetworkPolicyPeer{
-				{
-					PodSelector: &selectorSpec,
-				},
-			},
-			Ingress: []secv1alpha1.Rule{
-				{
-					From: []secv1alpha1.NetworkPolicyPeer{
-						{
-							ExternalEntitySelector: &selectorIn,
-						},
-					},
-					Action: &allowAction,
-				},
-			},
-			Egress: []secv1alpha1.Rule{
-				{
-					To: []secv1alpha1.NetworkPolicyPeer{
-						{
-							ExternalEntitySelector: &selectorOut,
-						},
-					},
-					Action: &allowAction,
-				},
-			},
-		},
-	}
+	testANPObj := getEETestANP(selectorSpec, selectorIn, selectorOut)
 	tests := []struct {
 		name                 string
 		addedExternalEntity  *v1alpha1.ExternalEntity
@@ -1339,6 +1305,14 @@ func TestAddExternalEntity(t *testing.T) {
 			appGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorSpec, nil, nil).NormalizedName)
 			inGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorIn).NormalizedName)
 			outGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorOut).NormalizedName)
+
+			npc.addPod(appliedPod)
+			npc.addExternalEntity(tt.addedExternalEntity)
+			atGroups, addrGroups := getQueuedGroups(npc)
+			assert.Equal(t, true, atGroups.Has(appGroupID))
+			assert.Equal(t, tt.inAddressGroupMatch, addrGroups.Has(inGroupID))
+			assert.Equal(t, tt.outAddressGroupMatch, addrGroups.Has(outGroupID))
+
 			npc.syncAppliedToGroup(appGroupID)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
@@ -1349,6 +1323,158 @@ func TestAddExternalEntity(t *testing.T) {
 			member := externalEntityToGroupMember(tt.addedExternalEntity)
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(member))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(member))
+		})
+	}
+}
+
+func TestUpdateExternalEntity(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"group": "appliedTo"},
+	}
+	selectorIn := metav1.LabelSelector{
+		MatchLabels: map[string]string{"inGroup": "inAddress"},
+	}
+	selectorOut := metav1.LabelSelector{
+		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	selectorOut2 := metav1.LabelSelector{
+		MatchLabels: map[string]string{"outGroup": "outAddress2"},
+	}
+	testANPObj := getEETestANP(selectorSpec, selectorIn, selectorOut)
+	testANPObj2 := getEETestANP(selectorSpec, selectorIn, selectorOut2)
+	ee1 := &v1alpha1.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eeC",
+			Namespace: "nsA",
+			Labels: map[string]string{
+				"outGroup": "outAddress",
+			},
+		},
+	}
+	ee2 := &v1alpha1.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eeC",
+			Namespace: "nsA",
+			Labels: map[string]string{
+				"outGroup": "outAddress2",
+			},
+		},
+	}
+	ee3 := &v1alpha1.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eeC",
+			Namespace: "nsA",
+			Labels: map[string]string{
+				"outGroup": "outAddress3",
+			},
+		},
+	}
+	outGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorOut).NormalizedName)
+	outGroupID2 := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorOut2).NormalizedName)
+	_, npc := newController()
+	npc.addANP(testANPObj)
+	npc.addANP(testANPObj2)
+	npc.updateExternalEntity(ee3, ee1)
+	_, addrGroups := getQueuedGroups(npc)
+	assert.Equal(t, true, addrGroups.Has(outGroupID))
+	assert.Equal(t, false, addrGroups.Has(outGroupID2))
+	// outGroupID and outGroupID2 should both be queued (EE removed and EE added)
+	npc.updateExternalEntity(ee1, ee2)
+	_, addrGroups = getQueuedGroups(npc)
+	assert.Equal(t, true, addrGroups.Has(outGroupID))
+	assert.Equal(t, true, addrGroups.Has(outGroupID2))
+	// only outGroupID2 should be queued (EE removed)
+	npc.updateExternalEntity(ee2, ee3)
+	_, addrGroups = getQueuedGroups(npc)
+	assert.Equal(t, false, addrGroups.Has(outGroupID))
+	assert.Equal(t, true, addrGroups.Has(outGroupID2))
+
+}
+
+func TestDeleteExternalEntity(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"group": "appliedTo"},
+	}
+	selectorIn := metav1.LabelSelector{
+		MatchLabels: map[string]string{"inGroup": "inAddress"},
+	}
+	selectorOut := metav1.LabelSelector{
+		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	testANPObj := getEETestANP(selectorSpec, selectorIn, selectorOut)
+	tests := []struct {
+		name                 string
+		addedExternalEntity  *v1alpha1.ExternalEntity
+		inAddressGroupMatch  bool
+		outAddressGroupMatch bool
+	}{
+		{
+			"no-match-ee",
+			&v1alpha1.ExternalEntity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "eeA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "none"},
+				},
+			},
+			false,
+			false,
+		},
+		{
+			"ee-match-ingress",
+			&v1alpha1.ExternalEntity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "eeB",
+					Namespace: "nsA",
+					Labels:    map[string]string{"inGroup": "inAddress"},
+				},
+			},
+			true,
+			false,
+		},
+		{
+			"ee-match-ingress-egress",
+			&v1alpha1.ExternalEntity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "eeC",
+					Namespace: "nsA",
+					Labels: map[string]string{
+						"inGroup":  "inAddress",
+						"outGroup": "outAddress",
+					},
+				},
+			},
+			true,
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.addANP(testANPObj)
+			npc.externalEntityStore.Add(tt.addedExternalEntity)
+			npc.addExternalEntity(tt.addedExternalEntity)
+			inGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorIn).NormalizedName)
+			outGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorOut).NormalizedName)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+
+			npc.externalEntityStore.Delete(tt.addedExternalEntity)
+			npc.deleteExternalEntity(tt.addedExternalEntity)
+			npc.syncAddressGroup(inGroupID)
+			npc.syncAddressGroup(outGroupID)
+			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
+			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
+			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
+			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			member := externalEntityToGroupMember(tt.addedExternalEntity)
+
+			if tt.inAddressGroupMatch {
+				assert.Equal(t, false, updatedInAddrGroup.GroupMembers.Has(member))
+			}
+			if tt.outAddressGroupMatch {
+				assert.Equal(t, false, updatedOutAddrGroup.GroupMembers.Has(member))
+			}
 		})
 	}
 }
@@ -2723,6 +2849,22 @@ func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
 	assert.True(t, ok, "Missing event on channel")
 	_, ok = <-c.heartbeatCh
 	assert.True(t, ok, "Missing event on channel")
+}
+
+func getQueuedGroups(npc *networkPolicyController) (atGroups, addrGroups sets.String) {
+	atGroups, addrGroups = sets.NewString(), sets.NewString()
+	atLen, addrLen := npc.appliedToGroupQueue.Len(), npc.addressGroupQueue.Len()
+	for i := 0; i < atLen; i++ {
+		id, _ := npc.appliedToGroupQueue.Get()
+		atGroups.Insert(id.(string))
+		npc.appliedToGroupQueue.Done(id)
+	}
+	for i := 0; i < addrLen; i++ {
+		id, _ := npc.addressGroupQueue.Get()
+		addrGroups.Insert(id.(string))
+		npc.addressGroupQueue.Done(id)
+	}
+	return
 }
 
 func getK8sNetworkPolicyObj() *networkingv1.NetworkPolicy {

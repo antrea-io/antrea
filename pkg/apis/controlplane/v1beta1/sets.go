@@ -224,21 +224,3 @@ func (s GroupMemberSet) Items() []*GroupMember {
 	}
 	return res
 }
-
-// Conversion functions
-func (g *GroupMember) ToGroupMemberPod() *GroupMemberPod {
-	return &GroupMemberPod{
-		Pod:   g.Pod,
-		IP:    g.Endpoints[0].IP,
-		Ports: g.Endpoints[0].Ports,
-	}
-}
-
-func (p *GroupMemberPod) ToGroupMember() *GroupMember {
-	return &GroupMember{
-		Pod: p.Pod,
-		Endpoints: []Endpoint{
-			{IP: p.IP, Ports: p.Ports},
-		},
-	}
-}
