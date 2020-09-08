@@ -39,4 +39,10 @@ type ControllerConfig struct {
 	// antrea-controller container.
 	// Defaults to true.
 	SelfSignedCert bool `yaml:"selfSignedCert,omitempty"`
+	// Enables IP protocol support in the controller.
+	// Valid values are:
+	//  ipv4: Controller will work in IPv4 only mode
+	//  ipv6: Controller will work in IPv6 only mode
+	//  dual: Controller will support both IPv4 and IPv6 in dual stack mode
+	IPProtocolSupport string `yaml:"ipProtocolSupport,omitempty"`
 }

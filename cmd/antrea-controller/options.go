@@ -16,6 +16,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 
 	"github.com/spf13/pflag"
@@ -61,6 +62,10 @@ func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
 		return errors.New("no positional arguments are supported")
 	}
+	// Validate IPProtocolSupport
+	if o.config.IPProtocolSupport != "ipv4" && o.config.IPProtocolSupport != "ipv6" && o.config.IPProtocolSupport != "dual" {
+		return fmt.Errorf("IPProtocolSupport %s is invalid", o.config.IPProtocolSupport)
+	}
 	return nil
 }
 
@@ -83,5 +88,8 @@ func (o *Options) loadConfigFromFile(file string) (*ControllerConfig, error) {
 func (o *Options) setDefaults() {
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaControllerAPIPort
+	}
+	if o.config.IPProtocolSupport == "" {
+		o.config.IPProtocolSupport = "ipv4"
 	}
 }

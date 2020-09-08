@@ -1086,12 +1086,19 @@ data:
     # And the Secret must be mounted to directory "/var/run/antrea/antrea-controller-tls" of the
     # antrea-controller container.
     #selfSignedCert: true
+
+    # Enables IP protocol support in the controller.
+    # Valid values are:
+    #  ipv4: Controller will work in IPv4 only mode
+    #  ipv6: Controller will work in IPv6 only mode
+    #  dual: Controller will support both IPv4 and IPv6 in dual stack mode
+    #ipProtocolSupport: ipv4
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-t47k4gbhkb
+  name: antrea-config-gb6gh98ggm
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1198,7 +1205,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-t47k4gbhkb
+          name: antrea-config-gb6gh98ggm
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1414,7 +1421,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-t47k4gbhkb
+          name: antrea-config-gb6gh98ggm
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
