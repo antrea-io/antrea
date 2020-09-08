@@ -673,11 +673,10 @@ func printResults() {
 
 func TestAntreaPolicy(t *testing.T) {
 	data, err := setupTest(t)
-	defer teardownTest(t, data)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-
+	defer teardownTest(t, data)
 	initialize(t, data)
 
 	t.Run("TestGroupDefaultDENY", func(t *testing.T) {

@@ -52,11 +52,10 @@ func runAntctl(podName string, cmds []string, data *TestData) (string, string, e
 // TestAntctlAgentLocalAccess ensures antctl is accessible in a agent Pod.
 func TestAntctlAgentLocalAccess(t *testing.T) {
 	data, err := setupTest(t)
-	defer teardownTest(t, data)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-
+	defer teardownTest(t, data)
 	podName, err := data.getAntreaPodOnNode(masterNodeName())
 	if err != nil {
 		t.Fatalf("Error when getting antrea-agent pod name: %v", err)
@@ -79,11 +78,10 @@ func TestAntctlAgentLocalAccess(t *testing.T) {
 // Pod.
 func TestAntctlControllerRemoteAccess(t *testing.T) {
 	data, err := setupTest(t)
-	defer teardownTest(t, data)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-
+	defer teardownTest(t, data)
 	nodeAntctlPath := "~/antctl"
 	podName, err := data.getAntreaPodOnNode(masterNodeName())
 	require.Nil(t, err, "Error when retrieving antrea controller pod name")
@@ -131,11 +129,10 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 // the antctl client.
 func TestAntctlVerboseMode(t *testing.T) {
 	data, err := setupTest(t)
-	defer teardownTest(t, data)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-
+	defer teardownTest(t, data)
 	podName, err := data.getAntreaPodOnNode(masterNodeName())
 	require.Nil(t, err, "Error when retrieving antrea controller pod name")
 	for _, tc := range []struct {
