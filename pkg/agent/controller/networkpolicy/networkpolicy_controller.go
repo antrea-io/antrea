@@ -75,7 +75,9 @@ type Controller struct {
 	reconciler Reconciler
 	// ofClient registers packetin for Antrea Policy logging.
 	ofClient openflow.Client
-
+	// statusManager syncs NetworkPolicy statuses with the antrea-controller.
+	// It's only for Antrea NetworkPolicies.
+	statusManager         StatusManager
 	networkPolicyWatcher  *watcher
 	appliedToGroupWatcher *watcher
 	addressGroupWatcher   *watcher
@@ -97,6 +99,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
+	if antreaPolicyEnabled {
+		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
+	}
+
 	// Create a WaitGroup that is used to block network policy workers from asynchronously processing
 	// NP rules until the events preceding bookmark are synced. It can also be used as part of the
 	// solution to a deterministic mechanism for when to cleanup flows from previous round.
@@ -182,6 +188,13 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 					return nil
 				}
 				klog.Infof("NetworkPolicy %s applied to Pods on this Node", policies[i].SourceRef.ToString())
+				// When ReplaceFunc is called, either the controller restarted or this was a regular reconnection.
+				// For the former case, agent must resync the statuses as the controller lost the previous statuses.
+				// For the latter case, agent doesn't need to do anything. However, we are not able to differentiate the
+				// two cases. Anyway there's no harm to do a periodical resync.
+				if c.antreaPolicyEnabled && policies[i].SourceRef.Type != v1beta2.K8sNetworkPolicy {
+					c.statusManager.Resync(policies[i].UID)
+				}
 			}
 			c.ruleCache.ReplaceNetworkPolicies(policies)
 			return nil
@@ -381,6 +394,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting IDAllocator worker to maintain the async rule cache")
 	go c.reconciler.RunIDAllocatorWorker(stopCh)
 
+	if c.antreaPolicyEnabled {
+		go c.statusManager.Run(stopCh)
+	}
+
 	<-stopCh
 }
 
@@ -442,6 +459,11 @@ func (c *Controller) syncRule(key string) error {
 		if err := c.reconciler.Forget(key); err != nil {
 			return err
 		}
+		if c.antreaPolicyEnabled {
+			// We don't know whether this is a rule owned by Antrea Policy, but
+			// harmless to delete it.
+			c.statusManager.DeleteRuleRealization(key)
+		}
 		return nil
 	}
 	// If the rule is not complete, we can simply skip it as it will be marked as dirty
@@ -452,6 +474,9 @@ func (c *Controller) syncRule(key string) error {
 	}
 	if err := c.reconciler.Reconcile(rule); err != nil {
 		return err
+	}
+	if c.antreaPolicyEnabled && rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+		c.statusManager.SetRuleRealization(key, rule.PolicyUID)
 	}
 	return nil
 }
@@ -476,6 +501,13 @@ func (c *Controller) syncRules(keys []string) error {
 	}
 	if err := c.reconciler.BatchReconcile(allRules); err != nil {
 		return err
+	}
+	if c.antreaPolicyEnabled {
+		for _, rule := range allRules {
+			if rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+				c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID)
+			}
+		}
 	}
 	return nil
 }
