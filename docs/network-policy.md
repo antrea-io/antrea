@@ -9,12 +9,12 @@
 - [ClusterNetworkPolicy](#clusternetworkpolicy)
   - [The ClusterNetworkPolicy resource](#the-clusternetworkpolicy-resource)
   - [Rule enforcement based on priorities](#rule-enforcement-based-on-priorities)
+  - [Ordering between Antrea Policies based on priorities](#ordering-between-antrea-policies-based-on-priorities)
   - [Behavior of to and from selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
 - [Antrea NetworkPolicy](#antrea-networkpolicy)
   - [The Antrea NetworkPolicy resource](#the-antrea-networkpolicy-resource)
   - [Key differences from ClusterNetworkPolicy](#key-differences-from-clusternetworkpolicy)
-- [Policy ordering based on priorities](#policy-ordering-based-on-priorities)
 - [Notes](#notes)
 
 ## Summary
@@ -210,6 +210,13 @@ Once a rule is matched, it is executed based on the action set. If none of the
 CNP rules match, the packet is then enforced for rules created for K8s NP.
 Hence, CNP take precedence over K8s NP.
 
+### Ordering between Antrea Policies based on priorities
+
+The relative ordering between a ClusterNetworkPolicy resource and an [Antrea
+NetworkPolicy resource](#antrea-networkPolicy) within a Tier depends on the `priority` set in each
+of the two resources. i.e. the ordering is performed solely based on the
+`priority` assigned as opposed to the "Kind" of the resource.
+
 ### Behavior of `to` and `from` selectors
 
 There are four kinds of selectors that can be specified in an ingress `from`
@@ -309,13 +316,6 @@ Policy CRDs.
 - `podSelector` without a `namespaceSelector`, set within a NetworkPolicy Peer
   of any rule, selects Pods from the Namespace in which the Antrea
   NetworkPolicy is created. This behavior is similar to the K8s NetworkPolicy.
-
-## Policy ordering based on priorities
-
-The relative ordering between a ClusterNetworkPolicy resource and an Antrea
-NetworkPolicy resource within a Tier depends on the `priority` set in each
-of the two resources. i.e. the ordering is performed solely based on the
-`priority` assigned as opposed to the "Kind" of the resource.
 
 ## Notes
 
