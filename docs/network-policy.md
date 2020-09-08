@@ -8,13 +8,15 @@
   - [Tier CRDs](#tier-crds)
 - [ClusterNetworkPolicy](#clusternetworkpolicy)
   - [The ClusterNetworkPolicy resource](#the-clusternetworkpolicy-resource)
-  - [Rule enforcement based on priorities](#rule-enforcement-based-on-priorities)
-  - [Ordering between Antrea Policies based on priorities](#ordering-between-antrea-policies-based-on-priorities)
   - [Behavior of to and from selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
 - [Antrea NetworkPolicy](#antrea-networkpolicy)
   - [The Antrea NetworkPolicy resource](#the-antrea-networkpolicy-resource)
   - [Key differences from ClusterNetworkPolicy](#key-differences-from-clusternetworkpolicy)
+- [Antrea Policy ordering based on priorities](#antrea-policy-ordering-based-on-priorities)
+  - [Ordering based on Tier priority](#ordering-based-on-tier-priority)
+  - [Ordering based on policy priority](#ordering-based-on-policy-priority)
+  - [Rule enforcement based on priorities](#rule-enforcement-based-on-priorities)
 - [Notes](#notes)
 
 ## Summary
@@ -185,38 +187,6 @@ to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
 **Note**: The order in which the egress rules are set matter, i.e. rules will
 be enforced in the order in which they are written.
 
-### Rule enforcement based on priorities
-
-With the introduction of tiers, ClusterNetworkPolicies are first enforced
-based on the tier to which they are associated with. i.e. all CNP belonging
-to the "Emergency" tier are enforced first, followed by policies associated
-with the "SecurityOps" tier and so on, until the "Application" tier policies
-are enforced. Within a tier, rules belonging to Cluster NetworkPolicy CRDs are
-associated with various priorities, such as the `priority` at the CNP level and
-the priority at the rule level. Overall, the Cluster Policy with the highest
-precedence (lowest priority number value) is enforced first. Within this
-policy, rules are enforced in the order in which they are set. For example,
-consider the following:
-
-- CNP1{tier: Application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
-- CNP2{tier: Application, priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
-- CNP3{tier: Emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
-
-This translates to the following order:
-- Ingress rules: ir3.1 > ir3.2 > ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
-- Egress rules: er3.1 > er3.2 > er1.1 -> er1.2 -> er2.1 -> er2.2
-
-Once a rule is matched, it is executed based on the action set. If none of the
-CNP rules match, the packet is then enforced for rules created for K8s NP.
-Hence, CNP take precedence over K8s NP.
-
-### Ordering between Antrea Policies based on priorities
-
-The relative ordering between a ClusterNetworkPolicy resource and an [Antrea
-NetworkPolicy resource](#antrea-networkPolicy) within a Tier depends on the `priority` set in each
-of the two resources. i.e. the ordering is performed solely based on the
-`priority` assigned as opposed to the "Kind" of the resource.
-
 ### Behavior of `to` and `from` selectors
 
 There are four kinds of selectors that can be specified in an ingress `from`
@@ -316,6 +286,45 @@ Policy CRDs.
 - `podSelector` without a `namespaceSelector`, set within a NetworkPolicy Peer
   of any rule, selects Pods from the Namespace in which the Antrea
   NetworkPolicy is created. This behavior is similar to the K8s NetworkPolicy.
+
+## Antrea Policy ordering based on priorities
+
+Antrea Policy CRDs are ordered based on priorities set at various levels.
+
+### Ordering based on Tier priority
+
+With the introduction of tiers, Antrea Policies, like ClusterNetworkPolicies,
+are first enforced based on the tier to which they are associated with. i.e.
+all policies belonging to the "Emergency" tier are enforced first, followed by
+policies associated with the "SecurityOps" tier and so on, until the
+"Application" tier policies are enforced.
+
+### Ordering based on policy priority
+
+Within a tier, Antrea Policy CRDs are ordered by the `priority` at the policy
+level. Thus, the policy with the highest precedence (lowest priority number
+value) is enforced first. This ordering is performed solely based on the
+`priority` assigned as opposed to the "Kind" of the resource, i.e. the relative
+ordering between a [ClusterNetworkPolicy resource](#clusternetworkpolicy) and an [Antrea NetworkPolicy
+resource](#antrea-networkpolicy) within a Tier depends only on the `priority`
+set in each of the two resources.
+
+### Rule enforcement based on priorities
+
+Within a policy, rules are enforced in the order in which they are set. For example,
+consider the following:
+
+- CNP1{tier: Application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
+- ANP1{tier: Application, priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
+- CNP3{tier: Emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
+
+This translates to the following order:
+- Ingress rules: ir3.1 > ir3.2 > ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
+- Egress rules: er3.1 > er3.2 > er1.1 -> er1.2 -> er2.1 -> er2.2
+
+Once a rule is matched, it is executed based on the action set. If none of the
+policy rules match, the packet is then enforced for rules created for K8s NP.
+Hence, Antrea Policy CRDs take precedence over K8s NP.
 
 ## Notes
 
