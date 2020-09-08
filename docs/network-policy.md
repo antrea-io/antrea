@@ -13,8 +13,8 @@
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
 - [Antrea NetworkPolicy](#antrea-networkpolicy)
   - [The Antrea NetworkPolicy resource](#the-antrea-networkpolicy-resource)
-  - [Policy ordering based on priorities](#policy-ordering-based-on-priorities)
   - [Key differences from ClusterNetworkPolicy](#key-differences-from-clusternetworkpolicy)
+- [Policy ordering based on priorities](#policy-ordering-based-on-priorities)
 - [Notes](#notes)
 
 ## Summary
@@ -296,13 +296,6 @@ spec:
             port: 5978
 ```
 
-### Policy ordering based on priorities
-
-The relative ordering between a ClusterNetworkPolicy resource and an Antrea
-NetworkPolicy resource within a Tier depends on the `priority` set in each
-of the two resources. i.e. the ordering is performed solely based on the
-`priority` assigned as opposed to the "Kind" of the resource.
-
 ### Key differences from ClusterNetworkPolicy
 
 Antrea NetworkPolicy shares it's spec with ClusterNetworkPolicy. However,
@@ -316,6 +309,13 @@ Policy CRDs.
 - `podSelector` without a `namespaceSelector`, set within a NetworkPolicy Peer
   of any rule, selects Pods from the Namespace in which the Antrea
   NetworkPolicy is created. This behavior is similar to the K8s NetworkPolicy.
+
+## Policy ordering based on priorities
+
+The relative ordering between a ClusterNetworkPolicy resource and an Antrea
+NetworkPolicy resource within a Tier depends on the `priority` set in each
+of the two resources. i.e. the ordering is performed solely based on the
+`priority` assigned as opposed to the "Kind" of the resource.
 
 ## Notes
 
