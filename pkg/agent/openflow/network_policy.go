@@ -1007,6 +1007,16 @@ func (c *client) GetPolicyFromConjunction(ruleID uint32) (string, string) {
 	return conjunction.npName, conjunction.npNamespace
 }
 
+func (c *client) GetPriorityFromConjunction(ruleID uint32) string {
+	conjunction := c.getPolicyRuleConjunction(ruleID)
+	priorities := conjunction.ActionFlowPriorities()
+	priorityStr := ""
+	if len(priorities) > 0 {
+		priorityStr = priorities[len(priorities)-1]
+	}
+	return priorityStr
+}
+
 // UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
 // It also returns a slice of stale ofPriorities used by ClusterNetworkPolicies.
 // UninstallPolicyRuleFlows will do nothing if no Openflow entry for the rule is installed.

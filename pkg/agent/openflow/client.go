@@ -219,6 +219,9 @@ type Client interface {
 	// Find network policy and namespace by conjunction ID.
 	GetPolicyFromConjunction(ruleID uint32) (string, string)
 
+	// Find OFpriority by conjunction ID. Return "0" if none.
+	GetPriorityFromConjunction(ruleID uint32) string
+
 	// RegisterPacketInHandler registers PacketIn handler to process PacketIn event.
 	RegisterPacketInHandler(packetHandlerReason ofpPacketInReason, packetHandlerName string, packetInHandler interface{})
 	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received

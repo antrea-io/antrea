@@ -17,7 +17,6 @@ package networkpolicy
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"net"
 	"log"
 	"os"
@@ -99,12 +98,8 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	npName, npNamespace := c.ofClient.GetPolicyFromConjunction(info)
 	ob.NetworkPolicy = getNetworkPolicyFullName(npName, npNamespace)
 
-	// Get rule priority
-	np:= c.ruleCache.getNetworkPolicy(npName, npNamespace)
-	priorityStr := "0"
-	if np != nil {
-		priorityStr = strconv.Itoa(int(*np.Priority))
-	}
+	// Get OF priority of the conjunction
+	ofPriority := c.ofClient.GetPriorityFromConjunction(info)
 
 	// Get disposition Allow or Drop
 	match = getMatchRegField(matchers, uint32(openflow.DispositionReg))
@@ -118,7 +113,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	}
 
 	// Store log file
-	CNPLogger.Printf("%s %s %s Priority: %s SRC: %s DEST: %s Protocol: %d", ob.ComponentInfo, ob.NetworkPolicy, disposition, priorityStr, ob.TranslatedSrcIP, ob.TranslatedDstIP, obProtocol)
+	CNPLogger.Printf("%s %s %s Priority: %s SRC: %s DEST: %s Protocol: %d", ob.ComponentInfo, ob.NetworkPolicy, disposition, ob.TranslatedSrcIP, ofPriority, ob.TranslatedDstIP, obProtocol)
 	return nil
 }
 
