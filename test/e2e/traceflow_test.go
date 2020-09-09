@@ -473,35 +473,18 @@ func (data *TestData) waitForTraceflow(name string, phase v1alpha1.TraceflowPhas
 }
 
 func (data *TestData) enableTraceflow(t *testing.T) error {
-	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
-	if err != nil {
-		t.Fatalf("Failed to get ConfigMap: %v", err)
-	}
-
 	// Enable Traceflow in antrea-controller and antrea-agent ConfigMap.
 	// Use Geneve tunnel.
-	antreaControllerConf, _ := configMap.Data["antrea-controller.conf"]
-	antreaControllerConf = strings.Replace(antreaControllerConf, "#  Traceflow: false", " Traceflow: true", 1)
-	configMap.Data["antrea-controller.conf"] = antreaControllerConf
-	antreaAgentConf, _ := configMap.Data["antrea-agent.conf"]
-	antreaAgentConf = strings.Replace(antreaAgentConf, "#  Traceflow: false", " Traceflow: true", 1)
-	antreaAgentConf = strings.Replace(antreaAgentConf, "#  AntreaProxy: false", " AntreaProxy: true", 1)
-	antreaAgentConf = strings.Replace(antreaAgentConf, "#tunnelType: geneve", "tunnelType: geneve", 1)
-	configMap.Data["antrea-agent.conf"] = antreaAgentConf
-
-	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
-	}
-	_, err = data.restartAntreaControllerPod(defaultTimeout)
-	if err != nil {
-		return fmt.Errorf("error when restarting antrea-controller Pod: %v", err)
-	}
-	err = data.restartAntreaAgentPods(defaultTimeout)
-	if err != nil {
-		return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
-	}
-
-	return nil
+	return data.mutateAntreaConfigMap(func(data map[string]string) {
+		antreaControllerConf, _ := data["antrea-controller.conf"]
+		antreaControllerConf = strings.Replace(antreaControllerConf, "#  Traceflow: false", "  Traceflow: true", 1)
+		data["antrea-controller.conf"] = antreaControllerConf
+		antreaAgentConf, _ := data["antrea-agent.conf"]
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#  Traceflow: false", "  Traceflow: true", 1)
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#  AntreaProxy: false", "  AntreaProxy: true", 1)
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#tunnelType: geneve", "tunnelType: geneve", 1)
+		data["antrea-agent.conf"] = antreaAgentConf
+	}, true, true)
 }
 
 // compareObservations compares expected results and actual results.
