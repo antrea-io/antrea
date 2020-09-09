@@ -71,10 +71,10 @@ func setupTest(tb testing.TB) (*TestData, error) {
 		return nil, err
 	}
 	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
-	if err := data.createTestNamespace(); err != nil {
+	if err := ensureAntreaRunning(tb, data); err != nil {
 		return nil, err
 	}
-	if err := ensureAntreaRunning(tb, data); err != nil {
+	if err := data.createTestNamespace(); err != nil {
 		return nil, err
 	}
 	return data, nil
