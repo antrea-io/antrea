@@ -177,29 +177,33 @@ func exportLogs(tb testing.TB, data *TestData) {
 	}
 
 	// dump the logs for Antrea Pods to disk.
-	data.forAllAntreaPods(func(nodeName, podName string) error {
+	writePodLogs := func(nodeName, podName, nsName string) error {
 		w := getPodWriter(nodeName, podName, "logs")
 		if w == nil {
 			return nil
 		}
 		defer w.Close()
-		cmd := fmt.Sprintf("kubectl -n %s logs --all-containers %s", antreaNamespace, podName)
+		cmd := fmt.Sprintf("kubectl -n %s logs --all-containers %s", nsName, podName)
 		stdout := runKubectl(cmd)
 		if stdout == "" {
 			return nil
 		}
 		w.WriteString(stdout)
 		return nil
-	})
+	}
+	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, writePodLogs)
+
+	// dump the logs for monitoring Pods to disk.
+	data.forAllMatchingPodsInNamespace("", monitoringNamespace, writePodLogs)
 
 	// dump the output of "kubectl describe" for Antrea pods to disk.
-	data.forAllAntreaPods(func(nodeName, podName string) error {
+	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, func(nodeName, podName, nsName string) error {
 		w := getPodWriter(nodeName, podName, "describe")
 		if w == nil {
 			return nil
 		}
 		defer w.Close()
-		cmd := fmt.Sprintf("kubectl -n %s describe pod %s", antreaNamespace, podName)
+		cmd := fmt.Sprintf("kubectl -n %s describe pod %s", nsName, podName)
 		stdout := runKubectl(cmd)
 		if stdout == "" {
 			return nil
