@@ -294,10 +294,10 @@ Antrea Policy CRDs are ordered based on priorities set at various levels.
 ### Ordering based on Tier priority
 
 With the introduction of tiers, Antrea Policies, like ClusterNetworkPolicies,
-are first enforced based on the tier to which they are associated with. i.e.
-all policies belonging to the "Emergency" tier are enforced first, followed by
-policies associated with the "SecurityOps" tier and so on, until the
-"Application" tier policies are enforced.
+are first enforced based on the tier to which they are associated. i.e. all
+policies belonging to the "Emergency" tier are enforced first, followed by
+policies belonging to the "SecurityOps" tier and so on, until the "Application"
+tier policies are enforced.
 
 ### Ordering based on policy priority
 
