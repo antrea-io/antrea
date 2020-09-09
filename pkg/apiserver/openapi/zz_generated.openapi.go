@@ -37,6 +37,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.ControllerCondition":         schema_pkg_apis_clusterinformation_v1beta1_ControllerCondition(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.NetworkPolicyControllerInfo": schema_pkg_apis_clusterinformation_v1beta1_NetworkPolicyControllerInfo(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.OVSInfo":                     schema_pkg_apis_clusterinformation_v1beta1_OVSInfo(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1alpha1.NetworkPolicyReference":           schema_pkg_apis_controlplane_v1alpha1_NetworkPolicyReference(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1alpha1.NetworkPolicyStats":               schema_pkg_apis_controlplane_v1alpha1_NetworkPolicyStats(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1alpha1.NodeStatsSummary":                 schema_pkg_apis_controlplane_v1alpha1_NodeStatsSummary(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AddressGroup":                      schema_pkg_apis_controlplane_v1beta1_AddressGroup(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AddressGroupList":                  schema_pkg_apis_controlplane_v1beta1_AddressGroupList(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AddressGroupPatch":                 schema_pkg_apis_controlplane_v1beta1_AddressGroupPatch(ref),
@@ -57,6 +60,13 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyRule":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicyRule(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.PodReference":                      schema_pkg_apis_controlplane_v1beta1_PodReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.Service":                           schema_pkg_apis_controlplane_v1beta1_Service(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.AntreaClusterNetworkPolicyMetrics":     schema_pkg_apis_metrics_v1alpha1_AntreaClusterNetworkPolicyMetrics(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.AntreaClusterNetworkPolicyMetricsList": schema_pkg_apis_metrics_v1alpha1_AntreaClusterNetworkPolicyMetricsList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.AntreaNetworkPolicyMetrics":            schema_pkg_apis_metrics_v1alpha1_AntreaNetworkPolicyMetrics(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.AntreaNetworkPolicyMetricsList":        schema_pkg_apis_metrics_v1alpha1_AntreaNetworkPolicyMetricsList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.NetworkPolicyMetrics":                  schema_pkg_apis_metrics_v1alpha1_NetworkPolicyMetrics(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.NetworkPolicyMetricsList":              schema_pkg_apis_metrics_v1alpha1_NetworkPolicyMetricsList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.TrafficStats":                          schema_pkg_apis_metrics_v1alpha1_TrafficStats(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1.SupportBundle":                           schema_pkg_apis_system_v1beta1_SupportBundle(ref),
 		"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource":                                            schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
 		"k8s.io/api/core/v1.Affinity":                                    schema_k8sio_api_core_v1_Affinity(ref),
@@ -762,6 +772,146 @@ func schema_pkg_apis_clusterinformation_v1beta1_OVSInfo(ref common.ReferenceCall
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1alpha1_NetworkPolicyReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Type of the NetworkPolicy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace of the NetworkPolicy. It's empty for ClusterNetworkPolicy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the NetworkPolicy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"uid": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UID of the NetworkPolicy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1alpha1_NetworkPolicyStats(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"networkPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The reference of the NetworkPolicy.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1alpha1.NetworkPolicyReference"),
+						},
+					},
+					"trafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The stats of the NetworkPolicy.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.TrafficStats"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1alpha1.NetworkPolicyReference", "github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.TrafficStats"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1alpha1_NodeStatsSummary(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NodeStatsSummary contains stats produced on a Node. It's used by the antrea-agents to report stats to the antrea-controller.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"networkPolicies": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The TrafficStats of K8s NetworkPolicies collected from the Node.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1alpha1.NetworkPolicyStats"),
+									},
+								},
+							},
+						},
+					},
+					"antreaClusterNetworkPolicies": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The TrafficStats of Antrea ClusterNetworkPolicies collected from the Node.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1alpha1.NetworkPolicyStats"),
+									},
+								},
+							},
+						},
+					},
+					"antreaNetworkPolicies": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The TrafficStats of Antrea NetworkPolicies collected from the Node.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1alpha1.NetworkPolicyStats"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1alpha1.NetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -1701,6 +1851,304 @@ func schema_pkg_apis_controlplane_v1beta1_Service(ref common.ReferenceCallback) 
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
+	}
+}
+
+func schema_pkg_apis_metrics_v1alpha1_AntreaClusterNetworkPolicyMetrics(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AntreaClusterNetworkPolicyMetrics is the metrics of a Antrea ClusterNetworkPolicy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"trafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The traffic stats of the Antrea ClusterNetworkPolicy.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.TrafficStats"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_metrics_v1alpha1_AntreaClusterNetworkPolicyMetricsList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AntreaClusterNetworkPolicyMetricsList is a list of AntreaClusterNetworkPolicyMetrics.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of AntreaClusterNetworkPolicyMetrics.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.AntreaClusterNetworkPolicyMetrics"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.AntreaClusterNetworkPolicyMetrics", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_metrics_v1alpha1_AntreaNetworkPolicyMetrics(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AntreaNetworkPolicyMetrics is the metrics of a Antrea NetworkPolicy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"trafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The traffic stats of the Antrea NetworkPolicy.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.TrafficStats"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_metrics_v1alpha1_AntreaNetworkPolicyMetricsList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AntreaNetworkPolicyMetricsList is a list of AntreaNetworkPolicyMetrics.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of AntreaNetworkPolicyMetrics.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.AntreaNetworkPolicyMetrics"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.AntreaNetworkPolicyMetrics", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_metrics_v1alpha1_NetworkPolicyMetrics(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyMetrics is the metrics of a K8s NetworkPolicy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"trafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The traffic stats of the K8s NetworkPolicy.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.TrafficStats"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_metrics_v1alpha1_NetworkPolicyMetricsList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyMetricsList is a list of NetworkPolicyMetrics.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of NetworkPolicyMetrics.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.NetworkPolicyMetrics"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1.NetworkPolicyMetrics", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_metrics_v1alpha1_TrafficStats(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TrafficStats contains the traffic stats of a NetworkPolicy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"packets": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Packets is the packets count hit by the NetworkPolicy.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"bytes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Bytes is the bytes count hit by the NetworkPolicy.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"sessions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Sessions is the sessions count hit by the NetworkPolicy.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

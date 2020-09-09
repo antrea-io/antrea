@@ -138,10 +138,10 @@ type NetworkPolicyController struct {
 	networkPolicyListerSynced cache.InformerSynced
 
 	cnpInformer secinformers.ClusterNetworkPolicyInformer
-	// cnpLister is able to list/get ClusterNetworkPolicies and is populated by the shared informer passed to
+	// cnpLister is able to list/get AntreaClusterNetworkPolicies and is populated by the shared informer passed to
 	// NewClusterNetworkPolicyController.
 	cnpLister seclisters.ClusterNetworkPolicyLister
-	// cnpListerSynced is a function which returns true if the ClusterNetworkPolicies shared informer has been synced at least once.
+	// cnpListerSynced is a function which returns true if the AntreaClusterNetworkPolicies shared informer has been synced at least once.
 	cnpListerSynced cache.InformerSynced
 
 	anpInformer secinformers.NetworkPolicyInformer

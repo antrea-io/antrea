@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	metricsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
@@ -267,4 +268,26 @@ type NetworkPolicyList struct {
 	metav1.TypeMeta
 	metav1.ListMeta
 	Items []NetworkPolicy
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// NodeStatsSummary contains stats produced on a Node. It's used by the antrea-agents to report stats to the antrea-controller.
+type NodeStatsSummary struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+
+	// The TrafficStats of K8s NetworkPolicies collected from the Node.
+	NetworkPolicies []NetworkPolicyStats
+	// The TrafficStats of Antrea ClusterNetworkPolicies collected from the Node.
+	AntreaClusterNetworkPolicies []NetworkPolicyStats
+	// The TrafficStats of Antrea NetworkPolicies collected from the Node.
+	AntreaNetworkPolicies []NetworkPolicyStats
+}
+
+// NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
+type NetworkPolicyStats struct {
+	// The reference of the NetworkPolicy.
+	NetworkPolicy NetworkPolicyReference
+	// The stats of the NetworkPolicy.
+	TrafficStats metricsv1alpha1.TrafficStats
 }
