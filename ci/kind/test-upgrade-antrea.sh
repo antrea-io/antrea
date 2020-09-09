@@ -22,6 +22,7 @@ function echoerr {
 
 FROM_TAG=
 FROM_VERSION_N_MINUS=
+CONTROLLER_ONLY=false
 
 _usage="Usage: $0 [--from-tag <TAG>] [--from-version-n-minus <COUNT>]
 Perform some basic tests to make sure that Antrea can be upgraded from the provided version to the
@@ -32,6 +33,7 @@ provided.
         --from-version-n-minus <COUNT>  Get all the released versions of Antrea and run the upgrade
                                         test from the latest bug fix release for *minor* version
                                         N-{COUNT}. N-1 designates the latest minor release.
+        --controller-only               Update antrea-controller only when upgrading.
         --help, -h                      Print this message and exit
 "
 
@@ -58,6 +60,10 @@ case $key in
     --from-version-n-minus)
     FROM_VERSION_N_MINUS="$2"
     shift 2
+    ;;
+    --controller-only)
+    CONTROLLER_ONLY=true
+    shift
     ;;
     -h|--help)
     print_usage
@@ -135,7 +141,10 @@ $THIS_DIR/kind-setup.sh create kind --antrea-cni false --images "$IMAGES"
 # /tmp. See:
 #  * https://github.com/actions/virtual-environments/issues/1514
 #  * https://forum.snapcraft.io/t/interfaces-allow-access-tmp-directory/5129
-$ROOT_DIR/hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea-new.yml
+# "--on-delete" is specified so that the upgrade can be done in a controlled
+# fashion, e.g. upgrading controller only and specific antrea-agents for
+# compatibility test.
+$ROOT_DIR/hack/generate-manifest.sh --kind --on-delete | docker exec -i kind-control-plane dd of=/root/antrea-new.yml
 export KUSTOMIZE=$ROOT_DIR/hack/.bin/kustomize
 
 TMP_ANTREA_DIR=$(mktemp -d)
@@ -149,7 +158,7 @@ popd
 rm -rf $TMP_DIR
 
 rc=0
-go test -v -run=TestUpgrade github.com/vmware-tanzu/antrea/test/e2e -provider=kind -upgrade.toYML=antrea-new.yml || rc=$?
+go test -v -run=TestUpgrade github.com/vmware-tanzu/antrea/test/e2e -provider=kind -upgrade.toYML=antrea-new.yml --upgrade.controllerOnly=$CONTROLLER_ONLY || rc=$?
 
 $THIS_DIR/kind-setup.sh destroy kind
 
