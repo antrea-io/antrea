@@ -316,7 +316,7 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 }
 
 // getAgentContainersRestartCount reads the restart count for every container across all Antrea
-// Agent Pod and returns the sum of all the read values.
+// Agent Pods and returns the sum of all the read values.
 func (data *TestData) getAgentContainersRestartCount() (int, error) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea,component=antrea-agent",
