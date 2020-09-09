@@ -56,6 +56,12 @@ defaults:
       version: v0.9.2
       gh: https://github.com/vmware-tanzu/antrea/tree/v0.9.2
       layout: "docs"
+  - scope:
+      path: docs/v0.9.3
+    values:
+      version: v0.9.3
+      gh: https://github.com/vmware-tanzu/antrea/tree/v0.9.3
+      layout: "docs"
 page_gen:
   - data: shortlinks
     template: redirect
@@ -66,9 +72,10 @@ collections:
   - features
   - presentations
 versioning: true
-latest: v0.9.2
+latest: v0.9.3
 versions:
   - master
+  - v0.9.3
   - v0.9.2
 # Build settings
 permalink: :title/
