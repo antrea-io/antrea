@@ -53,15 +53,12 @@ func TestUserProvidedCert(t *testing.T) {
 
 	// Re-configure antrea-controller to use user-provided cert.
 	// Note antrea-controller must be restarted to take effect.
-	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
-	if err != nil {
-		t.Fatalf("Failed to get ConfigMap: %v", err)
-	}
-	antreaControllerConf, _ := configMap.Data["antrea-controller.conf"]
-	antreaControllerConf = strings.Replace(antreaControllerConf, "#selfSignedCert: true", "selfSignedCert: false", 1)
-	configMap.Data["antrea-controller.conf"] = antreaControllerConf
-	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
-		t.Fatalf("Failed to update ConfigMap %s: %v", configMap.Name, err)
+	if err := data.mutateAntreaConfigMap(func(data map[string]string) {
+		antreaControllerConf, _ := data["antrea-controller.conf"]
+		antreaControllerConf = strings.Replace(antreaControllerConf, "#selfSignedCert: true", "selfSignedCert: false", 1)
+		data["antrea-controller.conf"] = antreaControllerConf
+	}, false, false); err != nil {
+		t.Fatalf("Failed to update ConfigMap: %v", err)
 	}
 
 	genCertKeyAndUpdateSecret := func() ([]byte, []byte) {

@@ -305,29 +305,14 @@ func (data *TestData) deployAntreaIPSec() error {
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
 func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	// Enable flow exporter feature and add related config params to antrea agent configmap.
-	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
-	if err != nil {
-		return fmt.Errorf("failed to get ConfigMap: %v", err)
-	}
-
-	antreaAgentConf, _ := configMap.Data["antrea-agent.conf"]
-	antreaAgentConf = strings.Replace(antreaAgentConf, "#  FlowExporter: false", "  FlowExporter: true", 1)
-	antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
-	antreaAgentConf = strings.Replace(antreaAgentConf, "#flowPollInterval: \"5s\"", "flowPollInterval: \"1s\"", 1)
-	antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 5", 1)
-	configMap.Data["antrea-agent.conf"] = antreaAgentConf
-	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
-	}
-
-	// Delete and re-deploy antrea for config map settings to take effect.
-	// TODO: Remove this when configmap can be changed runtime
-	err = data.restartAntreaAgentPods(defaultTimeout)
-	if err != nil {
-		return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
-	}
-
-	return nil
+	return data.mutateAntreaConfigMap(func(data map[string]string) {
+		antreaAgentConf, _ := data["antrea-agent.conf"]
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#  FlowExporter: false", "  FlowExporter: true", 1)
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowPollInterval: \"5s\"", "flowPollInterval: \"1s\"", 1)
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 5", 1)
+		data["antrea-agent.conf"] = antreaAgentConf
+	}, false, true)
 }
 
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
@@ -1115,4 +1100,28 @@ func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, e
 		}
 	}
 	return antreaDefaultGW, nil
+}
+
+func (data *TestData) mutateAntreaConfigMap(mutatingFunc func(data map[string]string), restartController, restartAgent bool) error {
+	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		return err
+	}
+	mutatingFunc(configMap.Data)
+	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
+	}
+	if restartController {
+		_, err = data.restartAntreaControllerPod(defaultTimeout)
+		if err != nil {
+			return fmt.Errorf("error when restarting antrea-controller Pod: %v", err)
+		}
+	}
+	if restartAgent {
+		err = data.restartAntreaAgentPods(defaultTimeout)
+		if err != nil {
+			return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
+		}
+	}
+	return nil
 }
