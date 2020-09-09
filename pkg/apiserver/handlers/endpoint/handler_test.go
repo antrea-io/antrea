@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package handlers
+package endpoint
 
 import (
 	"encoding/json"
@@ -25,7 +25,6 @@ import (
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/endpoint"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	queriermock "github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/testing"
 )
@@ -212,7 +211,7 @@ func evaluateTestCases(testCases map[string]TestCase, mockCtrl *gomock.Controlle
 			mockQuerier.EXPECT().QueryNetworkPolicies(tc.argsMock[0], tc.argsMock[1]).Return(tc.mockQueryResponse.response, tc.mockQueryResponse.error)
 		}
 		// initialize handler with mockQuerier
-		handler := endpoint.HandleFunc(mockQuerier)
+		handler := HandleFunc(mockQuerier)
 		// create http using handlerArgs and serve the http request
 		req, err := http.NewRequest(http.MethodGet, tc.handlerRequest, nil)
 		assert.Nil(t, err)
