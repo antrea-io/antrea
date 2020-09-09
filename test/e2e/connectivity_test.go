@@ -210,9 +210,10 @@ func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
 
 	// After redeploying Antrea with / without IPsec, we wait for watchForRestartsDuration and
 	// count the number of container restarts. watchForRestartsDuration should be large enough
-	// to detect issues, e.g. if there is an issues with the antrea-ipsec container.
+	// to detect issues, e.g. if there is an issue with the antrea-ipsec container.
 	const watchForRestartsDuration = 20 * time.Second
 	timer := time.NewTimer(watchForRestartsDuration)
+	defer timer.Stop()
 
 	t.Logf("Waiting for all Antrea DaemonSet Pods")
 	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
