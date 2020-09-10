@@ -17,6 +17,7 @@
   - [Ordering based on Tier priority](#ordering-based-on-tier-priority)
   - [Ordering based on policy priority](#ordering-based-on-policy-priority)
   - [Rule enforcement based on priorities](#rule-enforcement-based-on-priorities)
+- [RBAC](#rbac)
 - [Notes](#notes)
 
 ## Summary
@@ -325,6 +326,19 @@ This translates to the following order:
 Once a rule is matched, it is executed based on the action set. If none of the
 policy rules match, the packet is then enforced for rules created for K8s NP.
 Hence, Antrea Policy CRDs take precedence over K8s NP.
+
+## RBAC
+
+Antrea Policy CRDs are meant for admins to manage the security of their
+cluster. Thus, access to manage these CRDs must be granted to subjects which
+have the authority to outline the security policies for the cluster and/or
+Namespaces. On cluster initialization, Antrea grants the permissions to edit
+these CRDs with `admin` and the `edit` ClusterRole. In addition to this, Antrea
+also grants the permission to view these CRDs with the `view` ClusterRole.
+Cluster admins can therefore grant these ClusterRoles to any subject who may
+be responsible to manage the Antrea Policy CRDs. The admins may also decide to
+share the `view` ClusterRole to a wider range of subjects to allow them to read
+the policies that may affect their workloads.
 
 ## Notes
 
