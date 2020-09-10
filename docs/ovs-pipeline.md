@@ -696,7 +696,7 @@ traffic to the next table ([ConntrackCommitTable]).
 
 ### ConntrackCommitTable (105)
 
-As mentionned before, this table is in charge of committing all new connections
+As mentioned before, this table is in charge of committing all new connections
 which are not dropped becuse of Network Policies. If you dump the flows for this
 table, you should see something like this:
 
