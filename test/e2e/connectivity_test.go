@@ -208,6 +208,13 @@ func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
 		t.Fatalf("Error when applying Antrea YAML: %v", err)
 	}
 
+	// After redeploying Antrea with / without IPsec, we wait for watchForRestartsDuration and
+	// count the number of container restarts. watchForRestartsDuration should be large enough
+	// to detect issues, e.g. if there is an issue with the antrea-ipsec container.
+	const watchForRestartsDuration = 20 * time.Second
+	timer := time.NewTimer(watchForRestartsDuration)
+	defer timer.Stop()
+
 	t.Logf("Waiting for all Antrea DaemonSet Pods")
 	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting Antrea: %v", err)
@@ -217,6 +224,15 @@ func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
 	t.Logf("Restarting CoreDNS Pods")
 	if err := data.restartCoreDNSPods(defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting CoreDNS Pods: %v", err)
+	}
+
+	<-timer.C
+	containerRestarts, err := data.getAgentContainersRestartCount()
+	if err != nil {
+		t.Fatalf("Cannot retrieve number of container restarts across Agent Pods: %v", err)
+	}
+	if containerRestarts > 0 {
+		t.Errorf("Unexpected container restarts (%d) after deploying new YAML", containerRestarts)
 	}
 }
 
