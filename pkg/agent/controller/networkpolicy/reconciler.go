@@ -368,8 +368,8 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 	ofRuleByServicesMap := map[servicesKey]*types.PolicyRule{}
 
 	if rule.Direction == v1beta1.DirectionIn {
-		// Addresses got from source Pod IPs.
-		from1 := podsToOFAddresses(rule.FromAddresses)
+		// Addresses got from source GroupMembers' IPs.
+		from1 := groupMembersToOFAddresses(rule.FromAddresses)
 		// Get addresses that in From IPBlock but not in Except IPBlocks.
 		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks)
 
@@ -392,13 +392,12 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		ips := r.getPodIPs(rule.Pods)
 		lastRealized.podIPs = ips
 		from := ipsToOFAddresses(ips)
-
-		podsByServicesMap, servicesMap := groupPodsByServices(rule.Services, rule.ToAddresses)
-		for svcKey, pods := range podsByServicesMap {
+		memberByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.ToAddresses)
+		for svcKey, members := range memberByServicesMap {
 			ofRuleByServicesMap[svcKey] = &types.PolicyRule{
 				Direction: v1beta1.DirectionOut,
 				From:      from,
-				To:        podsToOFAddresses(pods),
+				To:        groupMembersToOFAddresses(members),
 				Service:   filterUnresolvablePort(servicesMap[svcKey]),
 				Action:    rule.Action,
 				Priority:  ofPriority,
@@ -492,10 +491,10 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 	// As rule identifier is calculated from the rule's content, the update can
 	// only happen to Group members.
 	if newRule.Direction == v1beta1.DirectionIn {
-		from1 := podsToOFAddresses(newRule.FromAddresses)
+		from1 := groupMembersToOFAddresses(newRule.FromAddresses)
 		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks)
-		addedFrom := podsToOFAddresses(newRule.FromAddresses.Difference(lastRealized.FromAddresses))
-		deletedFrom := podsToOFAddresses(lastRealized.FromAddresses.Difference(newRule.FromAddresses))
+		addedFrom := groupMembersToOFAddresses(newRule.FromAddresses.Difference(lastRealized.FromAddresses))
+		deletedFrom := groupMembersToOFAddresses(lastRealized.FromAddresses.Difference(newRule.FromAddresses))
 
 		podsByServicesMap, servicesMap := groupPodsByServices(newRule.Services, newRule.Pods)
 		for svcKey, pods := range podsByServicesMap {
@@ -540,16 +539,16 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 		addedFrom := ipsToOFAddresses(newIPs.Difference(lastRealized.podIPs))
 		deletedFrom := ipsToOFAddresses(lastRealized.podIPs.Difference(newIPs))
 
-		podsByServicesMap, servicesMap := groupPodsByServices(newRule.Services, newRule.ToAddresses)
+		memberByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.ToAddresses)
 		// Same as the process in `add`, we must ensure the group for the original services is present
-		// in podsByServicesMap, so that this group won't be removed and its "From" will be updated.
+		// in memberByServicesMap, so that this group won't be removed and its "From" will be updated.
 		svcKey := normalizeServices(newRule.Services)
-		if _, exists := podsByServicesMap[svcKey]; !exists {
-			podsByServicesMap[svcKey] = v1beta1.NewGroupMemberPodSet()
+		if _, exists := memberByServicesMap[svcKey]; !exists {
+			memberByServicesMap[svcKey] = v1beta1.NewGroupMemberSet()
 			servicesMap[svcKey] = newRule.Services
 		}
-		prevPodsByServicesMap, _ := groupPodsByServices(lastRealized.Services, lastRealized.ToAddresses)
-		for svcKey, pods := range podsByServicesMap {
+		prevMembersByServicesMap, _ := groupMembersByServices(lastRealized.Services, lastRealized.ToAddresses)
+		for svcKey, members := range memberByServicesMap {
 			ofID, exists := lastRealized.ofIDs[svcKey]
 			if !exists {
 				ofID, err := r.idAllocator.allocate()
@@ -559,7 +558,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				ofRule := &types.PolicyRule{
 					Direction:       v1beta1.DirectionOut,
 					From:            from,
-					To:              podsToOFAddresses(pods),
+					To:              groupMembersToOFAddresses(members),
 					Service:         filterUnresolvablePort(servicesMap[svcKey]),
 					Action:          newRule.Action,
 					Priority:        ofPriority,
@@ -573,8 +572,8 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				}
 				lastRealized.ofIDs[svcKey] = ofID
 			} else {
-				addedTo := podsToOFAddresses(pods.Difference(prevPodsByServicesMap[svcKey]))
-				deletedTo := podsToOFAddresses(prevPodsByServicesMap[svcKey].Difference(pods))
+				addedTo := groupMembersToOFAddresses(members.Difference(prevMembersByServicesMap[svcKey]))
+				deletedTo := groupMembersToOFAddresses(prevMembersByServicesMap[svcKey].Difference(members))
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
@@ -750,7 +749,7 @@ func groupPodsByServices(services []v1beta1.Service, pods v1beta1.GroupMemberPod
 	resolvedServices := make([]v1beta1.Service, len(services))
 	for podKey, pod := range pods {
 		for i := range services {
-			resolvedServices[i] = *resolveService(&services[i], pod)
+			resolvedServices[i] = *resolveServiceForPod(&services[i], pod)
 		}
 		svcKey := normalizeServices(resolvedServices)
 		if _, exists := podsByServicesMap[svcKey]; !exists {
@@ -764,6 +763,46 @@ func groupPodsByServices(services []v1beta1.Service, pods v1beta1.GroupMemberPod
 	return podsByServicesMap, servicesMap
 }
 
+// groupMembersByServices groups the provided groupMembers based on their services resolving result.
+// A map of servicesHash to the grouped members and a map of servicesHash to the services resolving result will be returned.
+func groupMembersByServices(services []v1beta1.Service, memberSet v1beta1.GroupMemberSet) (map[servicesKey]v1beta1.GroupMemberSet, map[servicesKey][]v1beta1.Service) {
+	membersByServicesMap := map[servicesKey]v1beta1.GroupMemberSet{}
+	servicesMap := map[servicesKey][]v1beta1.Service{}
+
+	// If there is no named port in services, all members are in same group.
+	namedPortServiceExist := false
+	for _, svc := range services {
+		if svc.Port != nil && svc.Port.Type == intstr.String {
+			namedPortServiceExist = true
+			break
+		}
+	}
+	if !namedPortServiceExist {
+		svcKey := normalizeServices(services)
+		membersByServicesMap[svcKey] = memberSet
+		servicesMap[svcKey] = services
+		return membersByServicesMap, servicesMap
+	}
+	// Reuse the slice to avoid memory reallocations in the following loop. The
+	// optimization makes difference as the number of group members might get up to tens
+	// of thousands.
+	resolvedServices := make([]v1beta1.Service, len(services))
+	for memberKey, member := range memberSet {
+		for i := range services {
+			resolvedServices[i] = *resolveService(&services[i], member)
+		}
+		svcKey := normalizeServices(resolvedServices)
+		if _, exists := membersByServicesMap[svcKey]; !exists {
+			membersByServicesMap[svcKey] = v1beta1.NewGroupMemberSet()
+			// Copy resolvedServices as it may be updated in next iteration.
+			servicesMap[svcKey] = make([]v1beta1.Service, len(resolvedServices))
+			copy(servicesMap[svcKey], resolvedServices)
+		}
+		membersByServicesMap[svcKey][memberKey] = member
+	}
+	return membersByServicesMap, servicesMap
+}
+
 func ofPortsToOFAddresses(ofPorts sets.Int32) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0, len(ofPorts))
@@ -773,11 +812,13 @@ func ofPortsToOFAddresses(ofPorts sets.Int32) []types.Address {
 	return addresses
 }
 
-func podsToOFAddresses(podSet v1beta1.GroupMemberPodSet) []types.Address {
+func groupMembersToOFAddresses(groupMemberSet v1beta1.GroupMemberSet) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
-	addresses := make([]types.Address, 0, len(podSet))
-	for _, p := range podSet {
-		addresses = append(addresses, openflow.NewIPAddress(net.IP(p.IP)))
+	addresses := make([]types.Address, 0, len(groupMemberSet))
+	for _, member := range groupMemberSet {
+		for _, ep := range member.Endpoints {
+			addresses = append(addresses, openflow.NewIPAddress(net.IP(ep.IP)))
+		}
 	}
 	return addresses
 }
@@ -815,8 +856,8 @@ func ipNetToOFAddress(in v1beta1.IPNet) *openflow.IPNetAddress {
 func ipsToOFAddresses(ips sets.String) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	from := make([]types.Address, 0, len(ips))
-	for ip := range ips {
-		from = append(from, openflow.NewIPAddress(net.ParseIP((ip))))
+	for ipAddr := range ips {
+		from = append(from, openflow.NewIPAddress(net.ParseIP(ipAddr)))
 	}
 	return from
 }
@@ -844,9 +885,9 @@ func filterUnresolvablePort(in []v1beta1.Service) []v1beta1.Service {
 	return out
 }
 
-// resolveService resolves the port name of the provided service to a port number
+// resolveServiceForPod resolves the port name of the provided service to a port number
 // for the provided Pod.
-func resolveService(service *v1beta1.Service, pod *v1beta1.GroupMemberPod) *v1beta1.Service {
+func resolveServiceForPod(service *v1beta1.Service, pod *v1beta1.GroupMemberPod) *v1beta1.Service {
 	// If port is not specified or is already a number, return it as is.
 	if service.Port == nil || service.Port.Type == intstr.Int {
 		return service
@@ -860,5 +901,26 @@ func resolveService(service *v1beta1.Service, pod *v1beta1.GroupMemberPod) *v1be
 	klog.Warningf("Can not resolve port %s for Pod %v", service.Port.StrVal, pod)
 	// If not resolvable, return it as is.
 	// The Pods that cannot resolve it will be grouped together.
+	return service
+}
+
+// resolveService resolves the port name of the provided service to a port number for the provided groupMember.
+// This function should eventually supersede resolveServiceForPod.
+func resolveService(service *v1beta1.Service, member *v1beta1.GroupMember) *v1beta1.Service {
+	// If port is not specified or is already a number, return it as is.
+	if service.Port == nil || service.Port.Type == intstr.Int {
+		return service
+	}
+	for _, ep := range member.Endpoints {
+		for _, port := range ep.Ports {
+			if port.Name == service.Port.StrVal && port.Protocol == *service.Protocol {
+				resolvedPort := intstr.FromInt(int(port.Port))
+				return &v1beta1.Service{Protocol: service.Protocol, Port: &resolvedPort}
+			}
+		}
+	}
+	klog.Warningf("Can not resolve port %s for endpoints %v", service.Port.StrVal, member)
+	// If not resolvable, return it as is.
+	// The group members that cannot resolve it will be grouped together.
 	return service
 }

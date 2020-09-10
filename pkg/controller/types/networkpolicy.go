@@ -47,18 +47,24 @@ const (
 
 // GroupSelector describes how to select Pods.
 type GroupSelector struct {
-	// The normalized name is calculated from Namespace, PodSelector, and NamespaceSelector.
+	// The normalized name is calculated from Namespace, PodSelector, ExternalEntitySelector and NamespaceSelector.
 	// If multiple policies have same selectors, they should share this group by comparing NormalizedName.
 	// It's also used to generate Name and UUID of group.
 	NormalizedName string
 	// If Namespace is set, NamespaceSelector can not be set. It means only Pods in this Namespace will be matched.
 	Namespace string
 	// This is a label selector which selects Pods. If Namespace is also set, it selects the Pods in the Namespace.
-	// If NamespaceSelector is also set, it selects the Pods in the Namespaces selected by NamespaceSelector.
+	// If NamespaceSelector is set instead, it selects the Pods in the Namespaces selected by NamespaceSelector.
 	// If Namespace and NamespaceSelector both are unset, it selects the Pods in all the Namespaces.
 	PodSelector labels.Selector
 	// This is a label selector which selects Namespaces. It this field is set, Namespace can not be set.
 	NamespaceSelector labels.Selector
+	// This is a label selector which selects ExternalEntities. Within a group, ExternalEntitySelector cannot be
+	// set concurrently with PodSelector. If Namespace is also set, it selects the ExternalEntities in the Namespace.
+	// If NamespaceSelector is set instead, it selects ExternalEntities in the Namespaces selected by NamespaceSelector.
+	// If Namespace and NamespaceSelector both are unset, it selects the ExternalEntities in all the Namespaces.
+	// TODO: Add validation in API to not allow externalEntitySelector and podSelector in the same group.
+	ExternalEntitySelector labels.Selector
 }
 
 // AppliedToGroup describes a set of Pods to apply Network Policies to.
@@ -74,6 +80,8 @@ type AppliedToGroup struct {
 	// It will be converted to a slice of GroupMemberPod for transferring according
 	// to client's selection.
 	PodsByNode map[string]controlplane.GroupMemberPodSet
+	// ExternalEntityByNode is a mapping from externalNodeName to a set of GroupMembers on that externalNode
+	GroupMemberByNode map[string]controlplane.GroupMemberSet
 }
 
 // AddressGroup describes a set of addresses used as source or destination of Network Policy rules.
@@ -89,6 +97,9 @@ type AddressGroup struct {
 	// It will be converted to a slice of GroupMemberPod for transferring according
 	// to client's selection.
 	Pods controlplane.GroupMemberPodSet
+	// GroupMembers is a set of GroupMembers selected by this group
+	// TODO: Eventually Pods should be unified into the GroupMembers field
+	GroupMembers controlplane.GroupMemberSet
 }
 
 // NetworkPolicy describes what network traffic is allowed for a set of Pods.

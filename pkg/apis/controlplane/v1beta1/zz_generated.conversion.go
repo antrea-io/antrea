@@ -421,8 +421,8 @@ func Convert_controlplane_ExternalEntityReference_To_v1beta1_ExternalEntityRefer
 }
 
 func autoConvert_v1beta1_GroupMember_To_controlplane_GroupMember(in *GroupMember, out *controlplane.GroupMember, s conversion.Scope) error {
-	out.ExternalEntity = (*controlplane.ExternalEntityReference)(unsafe.Pointer(in.ExternalEntity))
 	out.Pod = (*controlplane.PodReference)(unsafe.Pointer(in.Pod))
+	out.ExternalEntity = (*controlplane.ExternalEntityReference)(unsafe.Pointer(in.ExternalEntity))
 	out.Endpoints = *(*[]controlplane.Endpoint)(unsafe.Pointer(&in.Endpoints))
 	return nil
 }

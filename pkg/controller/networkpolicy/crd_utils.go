@@ -111,7 +111,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 // function simply creates the object without actually populating the
 // PodAddresses as the affected Pods are calculated during sync process.
 func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.NetworkPolicyPeer, np metav1.Object) string {
-	groupSelector := toGroupSelector(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector)
+	groupSelector := toGroupSelector(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector)
 	normalizedUID := getNormalizedUID(groupSelector.NormalizedName)
 	// Get or create an AddressGroup for the generated UID.
 	_, found, _ := n.addressGroupStore.Get(normalizedUID)

@@ -30,15 +30,23 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
-func newAppliedToGroupMember(name, namespace string) *controlplane.GroupMemberPod {
+func newAppliedToGroupPodMember(name, namespace string) *controlplane.GroupMemberPod {
 	return &controlplane.GroupMemberPod{Pod: &controlplane.PodReference{Name: name, Namespace: namespace}}
 }
 
+func newAppliedToGroupMemberExternalEntity(name, namespace string) *controlplane.GroupMember {
+	return &controlplane.GroupMember{ExternalEntity: &controlplane.ExternalEntityReference{Name: name, Namespace: namespace}}
+}
+
 func TestWatchAppliedToGroupEvent(t *testing.T) {
-	pod1 := newAppliedToGroupMember("pod1", "default")
-	pod2 := newAppliedToGroupMember("pod2", "default")
-	pod3 := newAppliedToGroupMember("pod3", "default")
-	pod4 := newAppliedToGroupMember("pod4", "default")
+	pod1 := newAppliedToGroupPodMember("pod1", "default")
+	pod2 := newAppliedToGroupPodMember("pod2", "default")
+	pod3 := newAppliedToGroupPodMember("pod3", "default")
+	pod4 := newAppliedToGroupPodMember("pod4", "default")
+	ee1 := newAppliedToGroupMemberExternalEntity("ee1", "default")
+	ee2 := newAppliedToGroupMemberExternalEntity("ee2", "default")
+	ee3 := newAppliedToGroupMemberExternalEntity("ee3", "default")
+	ee4 := newAppliedToGroupMemberExternalEntity("ee4", "default")
 
 	testCases := map[string]struct {
 		fieldSelector fields.Selector
@@ -61,6 +69,16 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
 					PodsByNode: map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node2": controlplane.NewGroupMemberPodSet(pod3)},
 				})
+				store.Create(&types.AppliedToGroup{
+					Name:              "bar",
+					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1), "node2": controlplane.NewGroupMemberSet(ee2)},
+				})
+				store.Update(&types.AppliedToGroup{
+					Name:              "bar",
+					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1), "node2": controlplane.NewGroupMemberSet(ee3)},
+				})
 			},
 			expected: []watch.Event{
 				{Type: watch.Bookmark, Object: nil},
@@ -73,6 +91,15 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 					AddedPods:   []controlplane.GroupMemberPod{*pod3},
 					RemovedPods: []controlplane.GroupMemberPod{*pod2},
 				}},
+				{Type: watch.Added, Object: &controlplane.AppliedToGroup{
+					ObjectMeta:   metav1.ObjectMeta{Name: "bar"},
+					GroupMembers: []controlplane.GroupMember{*ee1, *ee2},
+				}},
+				{Type: watch.Modified, Object: &controlplane.AppliedToGroupPatch{
+					ObjectMeta:          metav1.ObjectMeta{Name: "bar"},
+					AddedGroupMembers:   []controlplane.GroupMember{*ee3},
+					RemovedGroupMembers: []controlplane.GroupMember{*ee2},
+				}},
 			},
 		},
 		"node-scoped-watcher": {
@@ -81,45 +108,53 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 			operations: func(store storage.Interface) {
 				// This should not be seen as it doesn't span node3.
 				store.Create(&types.AppliedToGroup{
-					Name:       "foo",
-					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-					PodsByNode: map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node2": controlplane.NewGroupMemberPodSet(pod2)},
+					Name:              "foo",
+					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					PodsByNode:        map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node2": controlplane.NewGroupMemberPodSet(pod2)},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1), "node2": controlplane.NewGroupMemberSet(ee2)},
 				})
 				// This should be seen as an added event as it makes foo span node3 for the first time.
 				store.Update(&types.AppliedToGroup{
-					Name:       "foo",
-					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
-					PodsByNode: map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node3": controlplane.NewGroupMemberPodSet(pod3)},
+					Name:              "foo",
+					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+					PodsByNode:        map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node3": controlplane.NewGroupMemberPodSet(pod3)},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1), "node2": controlplane.NewGroupMemberSet(ee3)},
 				})
 				// This should be seen as a modified event as it updates appliedToGroups of node3.
 				store.Update(&types.AppliedToGroup{
-					Name:       "foo",
-					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
-					PodsByNode: map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node3": controlplane.NewGroupMemberPodSet(pod4)},
+					Name:              "foo",
+					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+					PodsByNode:        map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node3": controlplane.NewGroupMemberPodSet(pod4)},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1), "node3": controlplane.NewGroupMemberSet(ee4)},
 				})
 				// This should not be seen as a modified event as the change doesn't span node3.
 				store.Update(&types.AppliedToGroup{
-					Name:       "foo",
-					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node3")},
-					PodsByNode: map[string]controlplane.GroupMemberPodSet{"node3": controlplane.NewGroupMemberPodSet(pod4)},
+					Name:              "foo",
+					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node3")},
+					PodsByNode:        map[string]controlplane.GroupMemberPodSet{"node3": controlplane.NewGroupMemberPodSet(pod4)},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node3": controlplane.NewGroupMemberSet(ee4)},
 				})
 				// This should be seen as a deleted event as it makes foo not span node3 any more.
 				store.Update(&types.AppliedToGroup{
-					Name:       "foo",
-					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1")},
-					PodsByNode: map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1)},
+					Name:              "foo",
+					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1")},
+					PodsByNode:        map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1)},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1)},
 				})
 			},
 			expected: []watch.Event{
 				{Type: watch.Bookmark, Object: nil},
 				{Type: watch.Added, Object: &controlplane.AppliedToGroup{
-					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-					Pods:       []controlplane.GroupMemberPod{*pod3},
+					ObjectMeta:   metav1.ObjectMeta{Name: "foo"},
+					Pods:         []controlplane.GroupMemberPod{*pod3},
+					GroupMembers: []controlplane.GroupMember{*ee3},
 				}},
 				{Type: watch.Modified, Object: &controlplane.AppliedToGroupPatch{
-					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
-					AddedPods:   []controlplane.GroupMemberPod{*pod4},
-					RemovedPods: []controlplane.GroupMemberPod{*pod3},
+					ObjectMeta:          metav1.ObjectMeta{Name: "foo"},
+					AddedPods:           []controlplane.GroupMemberPod{*pod4},
+					RemovedPods:         []controlplane.GroupMemberPod{*pod3},
+					AddedGroupMembers:   []controlplane.GroupMember{*ee4},
+					RemovedGroupMembers: []controlplane.GroupMember{*ee3},
 				}},
 				{Type: watch.Deleted, Object: &controlplane.AppliedToGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},

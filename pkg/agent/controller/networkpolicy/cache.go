@@ -93,10 +93,10 @@ func hashRule(r *rule) string {
 // It's the struct used by reconciler.
 type CompletedRule struct {
 	*rule
-	// Source Pods of this rule, can't coexist with ToAddresses.
-	FromAddresses v1beta1.GroupMemberPodSet
-	// Destination Pods of this rule, can't coexist with FromAddresses.
-	ToAddresses v1beta1.GroupMemberPodSet
+	// Source GroupMembers of this rule, can't coexist with ToAddresses.
+	FromAddresses v1beta1.GroupMemberSet
+	// Destination GroupMembers of this rule, can't coexist with FromAddresses.
+	ToAddresses v1beta1.GroupMemberSet
 	// Target Pods of this rule.
 	Pods v1beta1.GroupMemberPodSet
 }
@@ -128,8 +128,8 @@ type ruleCache struct {
 
 	addressSetLock sync.RWMutex
 	// addressSetByGroup stores the AddressGroup members.
-	// It is a mapping from group name to a set of Pods.
-	addressSetByGroup map[string]v1beta1.GroupMemberPodSet
+	// It is a mapping from group name to a set of GroupMembers.
+	addressSetByGroup map[string]v1beta1.GroupMemberSet
 
 	policyMapLock sync.RWMutex
 	// policyMap is a map using NetworkPolicy UID as the key.
@@ -252,14 +252,21 @@ func (c *ruleCache) GetAddressGroups() []v1beta1.AddressGroup {
 	var ret []v1beta1.AddressGroup
 	c.addressSetLock.RLock()
 	defer c.addressSetLock.RUnlock()
+
 	for k, v := range c.addressSetByGroup {
 		var pods []v1beta1.GroupMemberPod
-		for _, pod := range v {
-			pods = append(pods, *pod)
+		var groupMembers []v1beta1.GroupMember
+		for _, member := range v {
+			if member.Pod != nil {
+				pods = append(pods, *member.ToGroupMemberPod())
+			} else if member.ExternalEntity != nil {
+				groupMembers = append(groupMembers, *member)
+			}
 		}
 		ret = append(ret, v1beta1.AddressGroup{
-			ObjectMeta: metav1.ObjectMeta{Name: k},
-			Pods:       pods,
+			ObjectMeta:   metav1.ObjectMeta{Name: k},
+			Pods:         pods,
+			GroupMembers: groupMembers,
 		})
 	}
 	return ret
@@ -320,7 +327,7 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta1.PodRef
 	)
 	cache := &ruleCache{
 		podSetByGroup:     make(map[string]v1beta1.GroupMemberPodSet),
-		addressSetByGroup: make(map[string]v1beta1.GroupMemberPodSet),
+		addressSetByGroup: make(map[string]v1beta1.GroupMemberSet),
 		policyMap:         make(map[string]*types.NamespacedName),
 		rules:             rules,
 		dirtyRuleHandler:  dirtyRuleHandler,
@@ -398,19 +405,23 @@ func (c *ruleCache) AddAddressGroup(group *v1beta1.AddressGroup) error {
 }
 
 func (c *ruleCache) addAddressGroupLocked(group *v1beta1.AddressGroup) error {
-	podSet := v1beta1.GroupMemberPodSet{}
+	groupMemberSet := v1beta1.GroupMemberSet{}
 	for i := range group.Pods {
 		// Must not store address of loop iterator variable as it's the same
 		// address taking different values in each loop iteration, otherwise
-		// podSet would eventually contain only the last value.
+		// groupMemberSet would eventually contain only the last value.
 		// https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
-		podSet.Insert(&group.Pods[i])
+		groupMemberSet.Insert(group.Pods[i].ToGroupMember())
 	}
-	oldPodSet, exists := c.addressSetByGroup[group.Name]
-	if exists && oldPodSet.Equal(podSet) {
+	for i := range group.GroupMembers {
+		groupMemberSet.Insert(&group.GroupMembers[i])
+	}
+
+	oldGroupMemberSet, exists := c.addressSetByGroup[group.Name]
+	if exists && oldGroupMemberSet.Equal(groupMemberSet) {
 		return nil
 	}
-	c.addressSetByGroup[group.Name] = podSet
+	c.addressSetByGroup[group.Name] = groupMemberSet
 	c.onAddressGroupUpdate(group.Name)
 	return nil
 }
@@ -421,16 +432,23 @@ func (c *ruleCache) PatchAddressGroup(patch *v1beta1.AddressGroupPatch) error {
 	c.addressSetLock.Lock()
 	defer c.addressSetLock.Unlock()
 
-	podSet, exists := c.addressSetByGroup[patch.Name]
+	groupMemberSet, exists := c.addressSetByGroup[patch.Name]
 	if !exists {
 		return fmt.Errorf("AddressGroup %v doesn't exist in cache, can't be patched", patch.Name)
 	}
 	for i := range patch.AddedPods {
-		podSet.Insert(&patch.AddedPods[i])
+		groupMemberSet.Insert(patch.AddedPods[i].ToGroupMember())
 	}
 	for i := range patch.RemovedPods {
-		podSet.Delete(&patch.RemovedPods[i])
+		groupMemberSet.Delete(patch.RemovedPods[i].ToGroupMember())
 	}
+	for i := range patch.AddedGroupMembers {
+		groupMemberSet.Insert(&patch.AddedGroupMembers[i])
+	}
+	for i := range patch.RemovedGroupMembers {
+		groupMemberSet.Delete(&patch.RemovedGroupMembers[i])
+	}
+
 	c.onAddressGroupUpdate(patch.Name)
 	return nil
 }
@@ -680,7 +698,7 @@ func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRul
 	}
 
 	r := obj.(*rule)
-	var fromAddresses, toAddresses v1beta1.GroupMemberPodSet
+	var fromAddresses, toAddresses v1beta1.GroupMemberSet
 	if r.Direction == v1beta1.DirectionIn {
 		fromAddresses, completed = c.unionAddressGroups(r.From.AddressGroups)
 	} else {
@@ -725,11 +743,11 @@ func (c *ruleCache) onAddressGroupUpdate(groupName string) {
 // unionAddressGroups gets the union of addresses of the provided address groups.
 // If any group is not found, nil and false will be returned to indicate the
 // set is not complete yet.
-func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta1.GroupMemberPodSet, bool) {
+func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta1.GroupMemberSet, bool) {
 	c.addressSetLock.RLock()
 	defer c.addressSetLock.RUnlock()
 
-	set := v1beta1.NewGroupMemberPodSet()
+	set := v1beta1.NewGroupMemberSet()
 	for _, groupName := range groupNames {
 		curSet, exists := c.addressSetByGroup[groupName]
 		if !exists {

@@ -127,7 +127,8 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 	// Create AppliedToGroup for each AppliedTo present in
 	// AntreaNetworkPolicy spec.
 	for _, at := range np.Spec.AppliedTo {
-		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup(np.Namespace, at.PodSelector, at.NamespaceSelector))
+		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup(
+			np.Namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector))
 	}
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
 	// Compute NetworkPolicyRule for Egress Rule.

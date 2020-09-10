@@ -138,7 +138,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	// Create AppliedToGroup for each AppliedTo present in
 	// ClusterNetworkPolicy spec.
 	for _, at := range cnp.Spec.AppliedTo {
-		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector))
+		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector))
 	}
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(cnp.Spec.Ingress)+len(cnp.Spec.Egress))
 	// Compute NetworkPolicyRule for Egress Rule.
