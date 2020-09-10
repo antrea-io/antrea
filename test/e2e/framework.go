@@ -315,6 +315,25 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	}, false, true)
 }
 
+// getAgentContainersRestartCount reads the restart count for every container across all Antrea
+// Agent Pods and returns the sum of all the read values.
+func (data *TestData) getAgentContainersRestartCount() (int, error) {
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=antrea,component=antrea-agent",
+	}
+	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list antrea-agent Pods: %v", err)
+	}
+	containerRestarts := 0
+	for _, pod := range pods.Items {
+		for _, containerStatus := range pod.Status.ContainerStatuses {
+			containerRestarts += int(containerStatus.RestartCount)
+		}
+	}
+	return containerRestarts, nil
+}
+
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
@@ -344,13 +363,14 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 	} else if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 // waitForCoreDNSPods waits for the K8s apiserver to report that all the CoreDNS Pods are available.
 func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
 	err := wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
-		deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(context.TODO(), "coredns", metav1.GetOptions{})
+		deployment, err := data.clientset.AppsV1().Deployments("kube-system").Get(context.TODO(), "coredns", metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
 		}
@@ -668,7 +688,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	}
 	// we do not use DeleteCollection directly because we want to ensure the resources no longer
 	// exist by the time we return
-	pods, err := data.clientset.CoreV1().Pods("kube-system").List(context.TODO(), listOptions)
+	pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 	if err != nil {
 		return 0, fmt.Errorf("failed to list antrea-agent Pods on Node '%s': %v", nodeName, err)
 	}
@@ -681,13 +701,13 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	}
 
 	start := time.Now()
-	if err := data.clientset.CoreV1().Pods("kube-system").DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
 		return 0, fmt.Errorf("error when deleting antrea-agent Pods on Node '%s': %v", nodeName, err)
 	}
 
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
 		for _, pod := range pods.Items {
-			if _, err := data.clientset.CoreV1().Pods("kube-system").Get(context.TODO(), pod.Name, metav1.GetOptions{}); err != nil {
+			if _, err := data.clientset.CoreV1().Pods(antreaNamespace).Get(context.TODO(), pod.Name, metav1.GetOptions{}); err != nil {
 				if errors.IsNotFound(err) {
 					continue
 				}
@@ -705,7 +725,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 
 	// wait for new antrea-agent Pod
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		pods, err := data.clientset.CoreV1().Pods("kube-system").List(context.TODO(), listOptions)
+		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-agent Pods on Node '%s': %v", nodeName, err)
 		}
@@ -774,7 +794,7 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1
 	var newPod *corev1.Pod
 	// wait for new antrea-controller Pod
 	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		pods, err := data.clientset.CoreV1().Pods("kube-system").List(context.TODO(), listOptions)
+		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-controller Pods: %v", err)
 		}
@@ -1042,13 +1062,13 @@ func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (b
 }
 
 func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
-	mapList, err := data.clientset.CoreV1().ConfigMaps("kube-system").List(context.TODO(), metav1.ListOptions{})
+	mapList, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return config.TrafficEncapModeInvalid, err
 	}
 	for _, m := range mapList.Items {
 		if strings.HasPrefix(m.Name, "antrea-config") {
-			configMap, err := data.clientset.CoreV1().ConfigMaps("kube-system").Get(context.TODO(), m.Name, metav1.GetOptions{})
+			configMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Get(context.TODO(), m.Name, metav1.GetOptions{})
 			if err != nil {
 				return config.TrafficEncapModeInvalid, err
 			}
