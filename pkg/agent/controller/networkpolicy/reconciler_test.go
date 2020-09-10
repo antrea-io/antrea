@@ -33,8 +33,8 @@ import (
 )
 
 var (
-	addressGroup1 = v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))
-	addressGroup2 = v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.2"))
+	addressGroup1 = v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))
+	addressGroup2 = v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"))
 
 	appliedToGroup1                     = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))
 	appliedToGroup2                     = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod2", "ns1"))

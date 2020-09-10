@@ -124,7 +124,11 @@ func newAppliedToGroupMember(name, namespace string, containerPorts ...v1beta1.N
 	return &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{Name: name, Namespace: namespace}, Ports: containerPorts}
 }
 
-func newAddressGroupMember(ip string) *v1beta1.GroupMemberPod {
+func newAddressGroupMember(ip string) *v1beta1.GroupMember {
+	return (&v1beta1.GroupMemberPod{IP: v1beta1.IPAddress(net.ParseIP(ip))}).ToGroupMember()
+}
+
+func newAddressGroupMemberPod(ip string) *v1beta1.GroupMemberPod {
 	return &v1beta1.GroupMemberPod{IP: v1beta1.IPAddress(net.ParseIP(ip))}
 }
 
@@ -141,7 +145,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 		name               string
 		rules              []*rule
 		args               *v1beta1.AddressGroup
-		expectedAddresses  []*v1beta1.GroupMemberPod
+		expectedAddresses  []*v1beta1.GroupMember
 		expectedDirtyRules sets.String
 	}{
 		{
@@ -159,9 +163,9 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 			[]*rule{rule1, rule2},
 			&v1beta1.AddressGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "group2"},
-				Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1")},
+				Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
 			},
-			[]*v1beta1.GroupMemberPod{newAddressGroupMember("1.1.1.1")},
+			[]*v1beta1.GroupMember{newAddressGroupMember("1.1.1.1")},
 			sets.NewString("rule2"),
 		},
 		{
@@ -169,9 +173,9 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 			[]*rule{rule1, rule2},
 			&v1beta1.AddressGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "group1"},
-				Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
+				Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2")},
 			},
-			[]*v1beta1.GroupMemberPod{newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")},
+			[]*v1beta1.GroupMember{newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")},
 			sets.NewString("rule1", "rule2"),
 		},
 	}
@@ -298,56 +302,56 @@ func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 	tests := []struct {
 		name               string
 		rules              []*rule
-		preExistingGroups  map[string]v1beta1.GroupMemberPodSet
+		preExistingGroups  map[string]v1beta1.GroupMemberSet
 		args               []*v1beta1.AddressGroup
-		expectedGroups     map[string]v1beta1.GroupMemberPodSet
+		expectedGroups     map[string]v1beta1.GroupMemberSet
 		expectedDirtyRules sets.String
 	}{
 		{
 			"stale-group-can-be-cleaned",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))},
+			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
 			[]*v1beta1.AddressGroup{},
-			map[string]v1beta1.GroupMemberPodSet{},
+			map[string]v1beta1.GroupMemberSet{},
 			sets.NewString(),
 		},
 		{
 			"existing-group-can-be-updated",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))},
+			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
 			[]*v1beta1.AddressGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "group1"},
-					Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.2"), *newAddressGroupMember("1.1.1.3")},
+					Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.2"), *newAddressGroupMemberPod("1.1.1.3")},
 				},
 			},
-			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.2"), newAddressGroupMember("1.1.1.3"))},
+			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"), newAddressGroupMember("1.1.1.3"))},
 			sets.NewString("rule1", "rule2"),
 		},
 		{
 			"unchanged-group-can-be-skipped",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))},
+			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
 			[]*v1beta1.AddressGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "group1"},
-					Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1")},
+					Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
 				},
 			},
-			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))},
+			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
 			sets.NewString(),
 		},
 		{
 			"new-group-can-be-added",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{},
+			map[string]v1beta1.GroupMemberSet{},
 			[]*v1beta1.AddressGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "group2"},
-					Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.2")},
+					Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.2")},
 				},
 			},
-			map[string]v1beta1.GroupMemberPodSet{"group2": v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.2"))},
+			map[string]v1beta1.GroupMemberSet{"group2": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"))},
 			sets.NewString("rule2"),
 		},
 	}
@@ -636,8 +640,8 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 }
 
 func TestRuleCacheGetCompletedRule(t *testing.T) {
-	addressGroup1 := v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("1.1.1.2"))
-	addressGroup2 := v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.3"), newAddressGroupMember("1.1.1.2"))
+	addressGroup1 := v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("1.1.1.2"))
+	addressGroup2 := v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.3"), newAddressGroupMember("1.1.1.2"))
 	appliedToGroup1 := v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1"))
 	appliedToGroup2 := v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod3", "ns1"), newAppliedToGroupMember("pod2", "ns1"))
 	rule1 := &rule{
@@ -818,9 +822,9 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 	tests := []struct {
 		name               string
 		rules              []*rule
-		addressSetByGroup  map[string]v1beta1.GroupMemberPodSet
+		addressSetByGroup  map[string]v1beta1.GroupMemberSet
 		args               *v1beta1.AddressGroupPatch
-		expectedAddresses  []*v1beta1.GroupMemberPod
+		expectedAddresses  []*v1beta1.GroupMember
 		expectedDirtyRules sets.String
 		expectedErr        bool
 	}{
@@ -830,7 +834,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 			nil,
 			&v1beta1.AddressGroupPatch{
 				ObjectMeta: metav1.ObjectMeta{Name: "group0"},
-				AddedPods:  []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
+				AddedPods:  []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2")},
 			},
 			nil,
 			sets.NewString(),
@@ -839,26 +843,26 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 		{
 			"add-and-remove-addresses-affecting-one-rule",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{"group2": v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))},
+			map[string]v1beta1.GroupMemberSet{"group2": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
 			&v1beta1.AddressGroupPatch{
 				ObjectMeta:  metav1.ObjectMeta{Name: "group2"},
-				AddedPods:   []v1beta1.GroupMemberPod{*newAddressGroupMember("2.2.2.2"), *newAddressGroupMember("3.3.3.3")},
-				RemovedPods: []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1")},
+				AddedPods:   []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("2.2.2.2"), *newAddressGroupMemberPod("3.3.3.3")},
+				RemovedPods: []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
 			},
-			[]*v1beta1.GroupMemberPod{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
+			[]*v1beta1.GroupMember{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
 			sets.NewString("rule2"),
 			false,
 		},
 		{
 			"add-and-remove-addresses-affecting-two-rule",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAddressGroupMember("1.1.1.1"))},
+			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
 			&v1beta1.AddressGroupPatch{
 				ObjectMeta:  metav1.ObjectMeta{Name: "group1"},
-				AddedPods:   []v1beta1.GroupMemberPod{*newAddressGroupMember("2.2.2.2"), *newAddressGroupMember("3.3.3.3")},
-				RemovedPods: []v1beta1.GroupMemberPod{*newAddressGroupMember("1.1.1.1")},
+				AddedPods:   []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("2.2.2.2"), *newAddressGroupMemberPod("3.3.3.3")},
+				RemovedPods: []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
 			},
-			[]*v1beta1.GroupMemberPod{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
+			[]*v1beta1.GroupMember{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
 			sets.NewString("rule1", "rule2"),
 			false,
 		},

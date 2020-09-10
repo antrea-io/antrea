@@ -70,17 +70,30 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isI
 		obj.Name = event.CurrGroup.Name
 
 		var currPods, prevPods controlplane.GroupMemberPodSet
+		// TODO: Eventually pods should be unified as GroupMember
+		var currMembers, prevMembers controlplane.GroupMemberSet
 		if nodeSpecified {
+			// TODO: Deprecate currPods and prevPods
 			currPods = event.CurrGroup.PodsByNode[nodeName]
 			prevPods = event.PrevGroup.PodsByNode[nodeName]
+			currMembers = event.CurrGroup.GroupMemberByNode[nodeName]
+			prevMembers = event.PrevGroup.GroupMemberByNode[nodeName]
 		} else {
 			currPods = controlplane.GroupMemberPodSet{}
+			currMembers = controlplane.GroupMemberSet{}
 			for _, pods := range event.CurrGroup.PodsByNode {
 				currPods = currPods.Union(pods)
 			}
+			for _, members := range event.CurrGroup.GroupMemberByNode {
+				currMembers = currMembers.Union(members)
+			}
 			prevPods = controlplane.GroupMemberPodSet{}
+			prevMembers = controlplane.GroupMemberSet{}
 			for _, pods := range event.PrevGroup.PodsByNode {
 				prevPods = prevPods.Union(pods)
+			}
+			for _, members := range event.PrevGroup.GroupMemberByNode {
+				prevMembers = prevMembers.Union(members)
 			}
 		}
 		for _, pod := range currPods.Difference(prevPods) {
@@ -89,7 +102,14 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isI
 		for _, pod := range prevPods.Difference(currPods) {
 			obj.RemovedPods = append(obj.RemovedPods, *pod)
 		}
-		if len(obj.AddedPods)+len(obj.RemovedPods) == 0 {
+		for _, member := range currMembers.Difference(prevMembers) {
+			obj.AddedGroupMembers = append(obj.AddedGroupMembers, *member)
+		}
+		for _, member := range prevMembers.Difference(currMembers) {
+			obj.RemovedGroupMembers = append(obj.RemovedGroupMembers, *member)
+		}
+
+		if len(obj.AddedPods)+len(obj.RemovedPods)+len(obj.AddedGroupMembers)+len(obj.RemovedGroupMembers) == 0 {
 			// No change for the watcher.
 			return nil
 		}
@@ -141,15 +161,27 @@ func ToAppliedToGroupMsg(in *types.AppliedToGroup, out *controlplane.AppliedToGr
 		return
 	}
 	if nodeName != nil {
+		// TODO: deprecate PodsByNode
 		if pods, exists := in.PodsByNode[*nodeName]; exists {
 			for _, pod := range pods {
 				out.Pods = append(out.Pods, *pod)
 			}
 		}
+		if members, exists := in.GroupMemberByNode[*nodeName]; exists {
+			for _, member := range members {
+				out.GroupMembers = append(out.GroupMembers, *member)
+			}
+		}
 	} else {
+		// TODO: deprecate PodsByNode
 		for _, pods := range in.PodsByNode {
 			for _, pod := range pods {
 				out.Pods = append(out.Pods, *pod)
+			}
+		}
+		for _, members := range in.GroupMemberByNode {
+			for _, member := range members {
+				out.GroupMembers = append(out.GroupMembers, *member)
 			}
 		}
 	}

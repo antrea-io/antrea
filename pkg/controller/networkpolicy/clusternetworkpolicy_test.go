@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -110,7 +110,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					{
 						Direction: controlplane.DirectionOut,
 						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -122,7 +122,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   1,
@@ -176,7 +176,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, nil).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, nil, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -190,7 +190,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -202,7 +202,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   2,
@@ -243,7 +243,7 @@ func TestAddCNP(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorAll := metav1.LabelSelector{}
 	matchAllPeerEgress := matchAllPeer
-	matchAllPeerEgress.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll).NormalizedName)}
+	matchAllPeerEgress.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
 	tests := []struct {
 		name               string
 		inputPolicy        *secv1alpha1.ClusterNetworkPolicy
@@ -289,7 +289,7 @@ func TestAddCNP(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -301,7 +301,7 @@ func TestAddCNP(t *testing.T) {
 						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
 			expAddressGroups:   1,
@@ -344,7 +344,7 @@ func TestAddCNP(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -356,7 +356,7 @@ func TestAddCNP(t *testing.T) {
 						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
 			expAddressGroups:   1,
@@ -399,7 +399,7 @@ func TestAddCNP(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -411,7 +411,7 @@ func TestAddCNP(t *testing.T) {
 						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
 			expAddressGroups:   1,
@@ -454,7 +454,7 @@ func TestAddCNP(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -466,7 +466,7 @@ func TestAddCNP(t *testing.T) {
 						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
 			expAddressGroups:   1,
@@ -509,7 +509,7 @@ func TestAddCNP(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -521,7 +521,7 @@ func TestAddCNP(t *testing.T) {
 						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
 			expAddressGroups:   1,
@@ -579,7 +579,7 @@ func TestAddCNP(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -593,7 +593,7 @@ func TestAddCNP(t *testing.T) {
 					{
 						Direction: controlplane.DirectionOut,
 						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -605,7 +605,7 @@ func TestAddCNP(t *testing.T) {
 						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
 			expAddressGroups:   1,
@@ -659,7 +659,7 @@ func TestAddCNP(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, nil).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, nil, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -673,7 +673,7 @@ func TestAddCNP(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorC).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
 							{
@@ -685,7 +685,7 @@ func TestAddCNP(t *testing.T) {
 						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
 			expAddressGroups:   2,
@@ -723,7 +723,7 @@ func TestAddCNP(t *testing.T) {
 func TestDeleteCNP(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	cnpObj := getCNP()
-	apgID := getNormalizedUID(toGroupSelector("", &selectorA, nil).NormalizedName)
+	apgID := getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)
 	_, npc := newController()
 	npc.addCNP(cnpObj)
 	npc.deleteCNP(cnpObj)

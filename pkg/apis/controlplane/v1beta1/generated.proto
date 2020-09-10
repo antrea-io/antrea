@@ -119,11 +119,11 @@ message ExternalEntityReference {
 // GroupMember represents resource member to be populated in Groups.
 // This supersedes GroupMemberPod, and will eventually replace it.
 message GroupMember {
-  // ExternalEntity maintains the reference to the ExternalEntity.
-  optional ExternalEntityReference externalEntity = 1;
-
   // Pod maintains the reference to the Pod.
-  optional PodReference pod = 2;
+  optional PodReference pod = 1;
+
+  // ExternalEntity maintains the reference to the ExternalEntity.
+  optional ExternalEntityReference externalEntity = 2;
 
   // Endpoints maintains a list of EndPoints associated with this groupMember.
   repeated Endpoint endpoints = 3;
