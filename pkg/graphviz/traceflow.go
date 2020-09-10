@@ -131,7 +131,10 @@ func isReceiver(result *opsv1alpha1.NodeResult) bool {
 // of quotation marks to prevent them from being used for parsing the DOT language.
 // More details about DOT language can be seen at: https://graphviz.org/doc/info/lang.html.
 func getWrappedStr(str string) string {
-	return `"` + str + `"`
+	// In quoted strings in DOT, the only escaped character is double-quote (").
+	// That is, in quoted strings, the dyad \" is converted to "; all other characters are left unchanged.
+	wStr := strings.ReplaceAll(str, `"`, `\"`)
+	return `"` + wStr + `"`
 }
 
 func getNodeResult(tf *opsv1alpha1.Traceflow, fn func(result *opsv1alpha1.NodeResult) bool) *opsv1alpha1.NodeResult {
@@ -217,6 +220,19 @@ func genOutput(graph *gographviz.Graph, isSingleCluster bool) string {
 		return str[:dstStartIdx] + str[srcStartIdx:srcEndIdx] + str[dstEndIdx:srcStartIdx] + str[dstStartIdx:dstEndIdx] + str[srcEndIdx:]
 	}
 	return str
+}
+
+func getTraceflowStatusMessage(tf *opsv1alpha1.Traceflow) string {
+	switch tf.Status.Phase {
+	case opsv1alpha1.Failed:
+		return getWrappedStr(fmt.Sprintf("Traceflow %s failed: %s", tf.Name, tf.Status.Reason))
+	case opsv1alpha1.Running:
+		return getWrappedStr(fmt.Sprintf("Traceflow %s is running...", tf.Name))
+	case opsv1alpha1.Pending:
+		return getWrappedStr(fmt.Sprintf("Traceflow %s is pending...", tf.Name))
+	default:
+		return getWrappedStr("Unknown Traceflow status. Please check Antrea is running with Traceflow feature gate enabled.")
+	}
 }
 
 func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *opsv1alpha1.NodeResult,
@@ -309,6 +325,9 @@ func GenGraph(tf *opsv1alpha1.Traceflow) (string, error) {
 
 	senderRst := getNodeResult(tf, isSender)
 	receiverRst := getNodeResult(tf, isReceiver)
+	if tf.Status.Phase != opsv1alpha1.Succeeded {
+		graph.Attrs[gographviz.Label] = getTraceflowStatusMessage(tf)
+	}
 	if tf == nil || senderRst == nil || tf.Status.Phase != opsv1alpha1.Succeeded || len(senderRst.Observations) == 0 {
 		return genOutput(graph, true), nil
 	}
