@@ -65,7 +65,7 @@ We use 2 32-bit OVS registers to carry information throughout the pipeline:
    essentially a "dmac" table.
  * reg1 (NXM_NX_REG1): it is used to store the egress OF port for the packet. It
  is set by [DNATTable] for traffic destined to services and by
- [L2ForwardingCalcTable] otherwise. It is consummed by [L2ForwardingOutTable] to
+ [L2ForwardingCalcTable] otherwise. It is consumed by [L2ForwardingOutTable] to
  output each packet to the correct port.
 
 ## Network Policy Implementation
