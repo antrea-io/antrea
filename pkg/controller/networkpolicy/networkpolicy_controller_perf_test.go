@@ -124,7 +124,7 @@ func TestInitXLargeScaleWithSmallNamespaces(t *testing.T) {
 		return namespaces, networkPolicies, pods
 	}
 	namespaces, networkPolicies, pods := getXObjects(25000, getObjects)
-	testComputeNetworkPolicy(t, 10*time.Second, namespaces, networkPolicies, pods)
+	testComputeNetworkPolicy(t, 15*time.Second, namespaces, networkPolicies, pods)
 }
 
 /*
@@ -175,7 +175,7 @@ func TestInitXLargeScaleWithOneNamespace(t *testing.T) {
 		return namespaces, networkPolicies, pods
 	}
 	namespaces, networkPolicies, pods := getXObjects(10000, getObjects)
-	testComputeNetworkPolicy(t, 15*time.Second, namespaces[0:1], networkPolicies, pods)
+	testComputeNetworkPolicy(t, 20*time.Second, namespaces[0:1], networkPolicies, pods)
 }
 
 func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, namespaces []*corev1.Namespace, networkPolicies []*networkingv1.NetworkPolicy, pods []*corev1.Pod) {

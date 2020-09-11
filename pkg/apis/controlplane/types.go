@@ -57,7 +57,7 @@ type GroupMemberPod struct {
 	// Pod maintains the reference to the Pod.
 	Pod *PodReference
 	// IP maintains the IPAddress of the Pod.
-	IP IPAddress
+	IPs []IPAddress
 	// Ports maintain the list of named port associated with this Pod member.
 	Ports []NamedPort
 }

@@ -59,8 +59,8 @@ type NamedPort struct {
 type GroupMemberPod struct {
 	// Pod maintains the reference to the Pod.
 	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
-	// IP maintains the IPAddress associated with the Pod.
-	IP IPAddress `json:"ip,omitempty" protobuf:"bytes,2,opt,name=ip"`
+	// IPs maintains the IPAddress associated with the Pod.
+	IPs []IPAddress `json:"ips,omitempty" protobuf:"bytes,2,opt,name=ips"`
 	// Ports maintain the named port mapping of this Pod.
 	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,3,rep,name=ports"`
 }

@@ -186,8 +186,8 @@ Namespace2 GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2
 				{
 					Name: "GroupName1",
 					Pods: []common.GroupMemberPod{
-						{IP: "127.0.0.1"}, {IP: "192.168.0.1"}, {IP: "127.0.0.2"},
-						{IP: "127.0.0.3"}, {IP: "10.0.0.3"}, {IP: "127.0.0.5"}, {IP: "127.0.0.6"},
+						{IPs: []string{"127.0.0.1"}}, {IPs: []string{"192.168.0.1"}}, {IPs: []string{"127.0.0.2"}},
+						{IPs: []string{"127.0.0.3"}}, {IPs: []string{"10.0.0.3"}}, {IPs: []string{"127.0.0.5"}}, {IPs: []string{"127.0.0.6"}},
 					},
 				},
 				{

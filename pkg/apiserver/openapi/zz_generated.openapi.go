@@ -1265,11 +1265,18 @@ func schema_pkg_apis_controlplane_v1beta1_GroupMemberPod(ref common.ReferenceCal
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.PodReference"),
 						},
 					},
-					"ip": {
+					"ips": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IP maintains the IPAddress associated with the Pod.",
-							Type:        []string{"string"},
-							Format:      "byte",
+							Description: "IPs maintains the IPAddress associated with the Pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "byte",
+									},
+								},
+							},
 						},
 					},
 					"ports": {

@@ -33,8 +33,10 @@ func normalizeGroupMemberPod(pod *GroupMemberPod) groupMemberPodKey {
 		b.WriteString(pod.Pod.Namespace)
 		b.WriteString(delimiter)
 		b.WriteString(pod.Pod.Name)
-	} else if len(pod.IP) != 0 {
-		b.Write(pod.IP)
+	} else if len(pod.IPs) != 0 {
+		for _, ip := range pod.IPs {
+			b.Write(ip)
+		}
 	}
 	return groupMemberPodKey(b.String())
 }

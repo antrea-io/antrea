@@ -1213,7 +1213,7 @@ func TestAddPod(t *testing.T) {
 			} else {
 				assert.Len(t, podsAdded, 0, "expected Pod not to match AppliedToGroup")
 			}
-			memberPod := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
+			memberPod := &controlplane.GroupMemberPod{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")}}
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod))
 		})
@@ -1286,7 +1286,7 @@ func TestDeletePod(t *testing.T) {
 	updatedAddrGroupObj, _, _ := npc.addressGroupStore.Get(addrGroup.Name)
 	updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
 	// Ensure Pod2 IP is removed from AddressGroup.
-	memberPod2 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress(p2IP)}
+	memberPod2 := &controlplane.GroupMemberPod{IPs: []controlplane.IPAddress{ipStrToIPAddress(p2IP)}}
 	assert.False(t, updatedAddrGroup.Pods.Has(memberPod2))
 }
 
@@ -1660,8 +1660,8 @@ func TestAddNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			memberPod1 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
-			memberPod2 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("2.2.3.4")}
+			memberPod1 := &controlplane.GroupMemberPod{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")}}
+			memberPod2 := &controlplane.GroupMemberPod{IPs: []controlplane.IPAddress{ipStrToIPAddress("2.2.3.4")}}
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod1))
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod2))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod1))
@@ -1782,8 +1782,8 @@ func TestDeleteNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			memberPod1 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.1.1.1")}
-			memberPod2 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.1.1.2")}
+			memberPod1 := &controlplane.GroupMemberPod{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.1")}}
+			memberPod2 := &controlplane.GroupMemberPod{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.2")}}
 			if tt.inAddressGroupMatch {
 				assert.False(t, updatedInAddrGroup.Pods.Has(memberPod1))
 				assert.False(t, updatedInAddrGroup.Pods.Has(memberPod2))
@@ -2701,7 +2701,7 @@ func TestPodToMemberPod(t *testing.T) {
 			name:     "namedport-pod-with-ip-ref",
 			inputPod: namedPod,
 			expMemberPod: controlplane.GroupMemberPod{
-				IP: ipStrToIPAddress(namedPod.Status.PodIP),
+				IPs: []controlplane.IPAddress{ipStrToIPAddress(namedPod.Status.PodIP)},
 				Pod: &controlplane.PodReference{
 					Name:      namedPod.Name,
 					Namespace: namedPod.Namespace,
@@ -2722,7 +2722,7 @@ func TestPodToMemberPod(t *testing.T) {
 			name:     "namedport-pod-with-ip",
 			inputPod: namedPod,
 			expMemberPod: controlplane.GroupMemberPod{
-				IP: ipStrToIPAddress(namedPod.Status.PodIP),
+				IPs: []controlplane.IPAddress{ipStrToIPAddress(namedPod.Status.PodIP)},
 				Ports: []controlplane.NamedPort{
 					{
 						Port:     80,
@@ -2772,7 +2772,7 @@ func TestPodToMemberPod(t *testing.T) {
 			name:     "unnamedport-pod-with-ip",
 			inputPod: unNamedPod,
 			expMemberPod: controlplane.GroupMemberPod{
-				IP: ipStrToIPAddress(unNamedPod.Status.PodIP),
+				IPs: []controlplane.IPAddress{ipStrToIPAddress(unNamedPod.Status.PodIP)},
 			},
 			includeIP:  true,
 			includeRef: false,
@@ -2782,7 +2782,7 @@ func TestPodToMemberPod(t *testing.T) {
 			name:     "unnamedport-pod-with-ip-ref",
 			inputPod: unNamedPod,
 			expMemberPod: controlplane.GroupMemberPod{
-				IP: ipStrToIPAddress(unNamedPod.Status.PodIP),
+				IPs: []controlplane.IPAddress{ipStrToIPAddress(unNamedPod.Status.PodIP)},
 				Pod: &controlplane.PodReference{
 					Name:      unNamedPod.Name,
 					Namespace: unNamedPod.Namespace,
@@ -2813,11 +2813,11 @@ func TestPodToMemberPod(t *testing.T) {
 			}
 			// Case where the IPAddress must not be populated.
 			if !tt.includeIP {
-				if actualMemberPod.IP != nil {
-					t.Errorf("podToMemberPod() got unexpected IP %v, want nil", actualMemberPod.IP)
+				if len(actualMemberPod.IPs) > 0 {
+					t.Errorf("podToMemberPod() got unexpected IP %v, want nil", actualMemberPod.IPs)
 				}
-			} else if bytes.Compare(actualMemberPod.IP, tt.expMemberPod.IP) != 0 {
-				t.Errorf("podToMemberPod() got unexpected IP %v, want %v", actualMemberPod.IP, tt.expMemberPod.IP)
+			} else if !comparePodIPs(actualMemberPod.IPs, tt.expMemberPod.IPs) {
+				t.Errorf("podToMemberPod() got unexpected IP %v, want %v", actualMemberPod.IPs, tt.expMemberPod.IPs)
 			}
 			if !tt.namedPort {
 				if len(actualMemberPod.Ports) > 0 {
@@ -3080,4 +3080,25 @@ func compareIPNet(ipn1, ipn2 controlplane.IPNet) bool {
 		return false
 	}
 	return true
+}
+
+func comparePodIPs(actIPs, expIPs []controlplane.IPAddress) bool {
+	if len(actIPs) != len(expIPs) {
+		return false
+	}
+	for _, ip := range actIPs {
+		if !containsPodIP(expIPs, ip) {
+			return false
+		}
+	}
+	return true
+}
+
+func containsPodIP(expIPs []controlplane.IPAddress, actIP controlplane.IPAddress) bool {
+	for _, expIP := range expIPs {
+		if bytes.Compare(actIP, expIP) == 0 {
+			return true
+		}
+	}
+	return false
 }

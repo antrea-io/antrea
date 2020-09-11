@@ -18,20 +18,24 @@ import "fmt"
 
 // Conversion functions between GroupMember and GroupMemberPod
 func (g *GroupMember) ToGroupMemberPod() *GroupMemberPod {
-	return &GroupMemberPod{
+	groupMemberPod := &GroupMemberPod{
 		Pod:   g.Pod,
-		IP:    g.Endpoints[0].IP,
 		Ports: g.Endpoints[0].Ports,
 	}
+	for _, ep := range g.Endpoints {
+		groupMemberPod.IPs = append(groupMemberPod.IPs, ep.IP)
+	}
+	return groupMemberPod
 }
 
 func (p *GroupMemberPod) ToGroupMember() *GroupMember {
-	return &GroupMember{
+	groupMember := &GroupMember{
 		Pod: p.Pod,
-		Endpoints: []Endpoint{
-			{IP: p.IP, Ports: p.Ports},
-		},
 	}
+	for _, ip := range p.IPs {
+		groupMember.Endpoints = append(groupMember.Endpoints, Endpoint{IP: ip, Ports: p.Ports})
+	}
+	return groupMember
 }
 
 func (r *NetworkPolicyReference) ToString() string {

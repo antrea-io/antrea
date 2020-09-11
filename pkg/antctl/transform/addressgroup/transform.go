@@ -17,6 +17,7 @@ package addressgroup
 import (
 	"io"
 	"reflect"
+	"strings"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
@@ -65,7 +66,7 @@ func (r Response) GetTableHeader() []string {
 func (r Response) GetPodNames(maxColumnLength int) string {
 	list := make([]string, len(r.Pods))
 	for i, pod := range r.Pods {
-		list[i] = pod.IP
+		list[i] = strings.Join(pod.IPs, ",")
 	}
 	return common.GenerateTableElementWithSummary(list, maxColumnLength)
 }

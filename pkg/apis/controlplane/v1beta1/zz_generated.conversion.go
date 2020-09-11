@@ -477,7 +477,7 @@ func Convert_controlplane_GroupMember_To_v1beta1_GroupMember(in *controlplane.Gr
 
 func autoConvert_v1beta1_GroupMemberPod_To_controlplane_GroupMemberPod(in *GroupMemberPod, out *controlplane.GroupMemberPod, s conversion.Scope) error {
 	out.Pod = (*controlplane.PodReference)(unsafe.Pointer(in.Pod))
-	out.IP = *(*controlplane.IPAddress)(unsafe.Pointer(&in.IP))
+	out.IPs = *(*[]controlplane.IPAddress)(unsafe.Pointer(&in.IPs))
 	out.Ports = *(*[]controlplane.NamedPort)(unsafe.Pointer(&in.Ports))
 	return nil
 }
@@ -489,7 +489,7 @@ func Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMemberPod(in *GroupMemb
 
 func autoConvert_controlplane_GroupMemberPod_To_v1beta1_GroupMemberPod(in *controlplane.GroupMemberPod, out *GroupMemberPod, s conversion.Scope) error {
 	out.Pod = (*PodReference)(unsafe.Pointer(in.Pod))
-	out.IP = *(*IPAddress)(unsafe.Pointer(&in.IP))
+	out.IPs = *(*[]IPAddress)(unsafe.Pointer(&in.IPs))
 	out.Ports = *(*[]NamedPort)(unsafe.Pointer(&in.Ports))
 	return nil
 }

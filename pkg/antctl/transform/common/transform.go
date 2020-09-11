@@ -25,18 +25,20 @@ import (
 
 type GroupMemberPod struct {
 	Pod *cpv1beta1.PodReference `json:"pod,omitempty"`
-	// IP maintains the IPAddress associated with the Pod.
-	IP string `json:"ip,omitempty"`
+	// IPs maintains the IPAddress associated with the Pod.
+	IPs []string `json:"ips,omitempty"`
 	// Ports maintain the named port mapping of this Pod.
 	Ports []cpv1beta1.NamedPort `json:"ports,omitempty"`
 }
 
 func GroupMemberPodTransform(pod cpv1beta1.GroupMemberPod) GroupMemberPod {
-	var ipStr string
-	if len(pod.IP) != 0 {
-		ipStr = net.IP(pod.IP).String()
+	var ipStrs []string
+	if len(pod.IPs) != 0 {
+		for _, ip := range pod.IPs {
+			ipStrs = append(ipStrs, net.IP(ip).String())
+		}
 	}
-	return GroupMemberPod{Pod: pod.Pod, IP: ipStr, Ports: pod.Ports}
+	return GroupMemberPod{Pod: pod.Pod, IPs: ipStrs, Ports: pod.Ports}
 }
 
 type TableOutput interface {

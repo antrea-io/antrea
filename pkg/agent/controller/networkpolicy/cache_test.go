@@ -184,12 +184,16 @@ func newAppliedToGroupMember(name, namespace string, containerPorts ...v1beta1.N
 	return &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{Name: name, Namespace: namespace}, Ports: containerPorts}
 }
 
-func newAddressGroupMember(ip string) *v1beta1.GroupMember {
-	return (&v1beta1.GroupMemberPod{IP: v1beta1.IPAddress(net.ParseIP(ip))}).ToGroupMember()
+func newAddressGroupMember(ips ...string) *v1beta1.GroupMember {
+	podIPs := make([]v1beta1.IPAddress, len(ips))
+	for i, ip := range ips {
+		podIPs[i] = v1beta1.IPAddress(net.ParseIP(ip))
+	}
+	return (&v1beta1.GroupMemberPod{IPs: podIPs}).ToGroupMember()
 }
 
 func newAddressGroupMemberPod(ip string) *v1beta1.GroupMemberPod {
-	return &v1beta1.GroupMemberPod{IP: v1beta1.IPAddress(net.ParseIP(ip))}
+	return &v1beta1.GroupMemberPod{IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP(ip))}}
 }
 
 func TestRuleCacheAddAddressGroup(t *testing.T) {

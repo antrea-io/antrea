@@ -32,7 +32,7 @@ import (
 )
 
 func newAddressGroupMemberPod(ip string) *controlplane.GroupMemberPod {
-	return &controlplane.GroupMemberPod{IP: controlplane.IPAddress(net.ParseIP(ip))}
+	return &controlplane.GroupMemberPod{IPs: []controlplane.IPAddress{controlplane.IPAddress(net.ParseIP(ip))}}
 }
 
 func newAddressGroupMemberExternalEntity(ip string) *controlplane.GroupMember {

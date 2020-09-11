@@ -33,8 +33,10 @@ import (
 )
 
 var (
-	addressGroup1 = v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))
-	addressGroup2 = v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"))
+	addressGroup1     = v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))
+	addressGroup2     = v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"))
+	ipv6AddressGroup1 = v1beta1.NewGroupMemberSet(newAddressGroupMember("2002:1a23:fb44::1"))
+	dualAddressGroup1 = v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1", "2002:1a23:fb44::1"))
 
 	appliedToGroup1                     = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))
 	appliedToGroup2                     = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod2", "ns1"))
@@ -162,6 +164,8 @@ func TestReconcilerForget(t *testing.T) {
 			defer controller.Finish()
 			ifaceStore := interfacestore.NewInterfaceStore()
 			mockOFClient := openflowtest.NewMockClient(controller)
+			mockOFClient.EXPECT().IsIPv4Enabled().Return(true).AnyTimes()
+			mockOFClient.EXPECT().IsIPv6Enabled().Return(false).AnyTimes()
 			if len(tt.expectedOFRuleIDs) == 0 {
 				mockOFClient.EXPECT().UninstallPolicyRuleFlows(gomock.Any()).Times(0)
 			} else {
@@ -507,6 +511,8 @@ func TestReconcilerReconcile(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
+			mockOFClient.EXPECT().IsIPv4Enabled().Return(true).AnyTimes()
+			mockOFClient.EXPECT().IsIPv6Enabled().Return(false).AnyTimes()
 			// TODO: mock idAllocator and priorityAssigner
 			for i := 0; i < len(tt.expectedOFRules); i++ {
 				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
@@ -619,6 +625,8 @@ func TestReconcilerBatchReconcile(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
+			mockOFClient.EXPECT().IsIPv4Enabled().Return(true).AnyTimes()
+			mockOFClient.EXPECT().IsIPv6Enabled().Return(false).AnyTimes()
 			r := newReconciler(mockOFClient, ifaceStore)
 			if tt.numInstalledRules > 0 {
 				// BatchInstall should skip rules already installed
@@ -814,6 +822,8 @@ func TestReconcilerUpdate(t *testing.T) {
 			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any()).MaxTimes(2)
+			mockOFClient.EXPECT().IsIPv4Enabled().Return(true).AnyTimes()
+			mockOFClient.EXPECT().IsIPv6Enabled().Return(true).AnyTimes()
 			priority := gomock.Any()
 			if !tt.originalRule.isAntreaNetworkPolicyRule() {
 				priority = nil
@@ -861,19 +871,19 @@ func TestGroupPodsByServices(t *testing.T) {
 			services: numberedServices,
 			pods: v1beta1.NewGroupMemberPodSet(
 				&v1beta1.GroupMemberPod{
-					IP: v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
+					IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.1"))},
 				},
 				&v1beta1.GroupMemberPod{
-					IP: v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
+					IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.2"))},
 				},
 			),
 			wantPodsByServicesMap: map[servicesKey]v1beta1.GroupMemberPodSet{
 				numberedServicesKey: v1beta1.NewGroupMemberPodSet(
 					&v1beta1.GroupMemberPod{
-						IP: v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
+						IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.1"))},
 					},
 					&v1beta1.GroupMemberPod{
-						IP: v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
+						IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.2"))},
 					},
 				),
 			},
@@ -886,58 +896,58 @@ func TestGroupPodsByServices(t *testing.T) {
 			services: namedServices,
 			pods: v1beta1.NewGroupMemberPodSet(
 				&v1beta1.GroupMemberPod{
-					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
+					IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.1"))},
 					Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
 				},
 				&v1beta1.GroupMemberPod{
-					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
+					IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.2"))},
 					Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
 				},
 				&v1beta1.GroupMemberPod{
-					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.3")),
+					IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.3"))},
 					Ports: []v1beta1.NamedPort{{Port: 8080, Name: "http", Protocol: protocolTCP}},
 				},
 				&v1beta1.GroupMemberPod{
-					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.4")),
+					IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.4"))},
 					Ports: []v1beta1.NamedPort{{Port: 443, Name: "https", Protocol: protocolTCP}},
 				},
 				&v1beta1.GroupMemberPod{
-					IP: v1beta1.IPAddress(net.ParseIP("1.1.1.5")),
+					IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.5"))},
 				},
 				&v1beta1.GroupMemberPod{
-					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.6")),
+					IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.6"))},
 					Ports: []v1beta1.NamedPort{{Port: 443, Name: "foo", Protocol: protocolTCP}},
 				},
 			),
 			wantPodsByServicesMap: map[servicesKey]v1beta1.GroupMemberPodSet{
 				normalizeServices([]v1beta1.Service{serviceTCP80, serviceHTTPS}): v1beta1.NewGroupMemberPodSet(
 					&v1beta1.GroupMemberPod{
-						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
+						IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.1"))},
 						Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
 					},
 					&v1beta1.GroupMemberPod{
-						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
+						IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.2"))},
 						Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
 					},
 				),
 				normalizeServices([]v1beta1.Service{serviceTCP8080, serviceHTTPS}): v1beta1.NewGroupMemberPodSet(
 					&v1beta1.GroupMemberPod{
-						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.3")),
+						IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.3"))},
 						Ports: []v1beta1.NamedPort{{Port: 8080, Name: "http", Protocol: protocolTCP}},
 					},
 				),
 				normalizeServices([]v1beta1.Service{serviceHTTP, serviceTCP443}): v1beta1.NewGroupMemberPodSet(
 					&v1beta1.GroupMemberPod{
-						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.4")),
+						IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.4"))},
 						Ports: []v1beta1.NamedPort{{Port: 443, Name: "https", Protocol: protocolTCP}},
 					},
 				),
 				normalizeServices([]v1beta1.Service{serviceHTTP, serviceHTTPS}): v1beta1.NewGroupMemberPodSet(
 					&v1beta1.GroupMemberPod{
-						IP: v1beta1.IPAddress(net.ParseIP("1.1.1.5")),
+						IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.5"))},
 					},
 					&v1beta1.GroupMemberPod{
-						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.6")),
+						IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.6"))},
 						Ports: []v1beta1.NamedPort{{Port: 443, Name: "foo", Protocol: protocolTCP}},
 					},
 				),
@@ -955,6 +965,797 @@ func TestGroupPodsByServices(t *testing.T) {
 			gotPodsByServicesMap, gotServicesMap := groupPodsByServices(tt.services, tt.pods)
 			assert.Equal(t, tt.wantPodsByServicesMap, gotPodsByServicesMap)
 			assert.Equal(t, tt.wantServicesMap, gotServicesMap)
+		})
+	}
+}
+
+func TestReconcilerReconcileIPv6Only(t *testing.T) {
+	ifaceStore := interfacestore.NewInterfaceStore()
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1", "container1"),
+		IPs:                      []net.IP{net.ParseIP("2002:1a23:fb45::2")},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1", ContainerID: "container1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1},
+	})
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("pod3", "ns1", "container3"),
+		IPs:                      []net.IP{net.ParseIP("2002:1a23:fb46::3")},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod3", PodNamespace: "ns1", ContainerID: "container3"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 3},
+	})
+	ipNet1 := newCIDR("2002:1a23:fb46::10:0/112")
+	ipNet2 := newCIDR("2002:1a23:fb46::11:0/112")
+	ipNet3 := newCIDR("2002:1a23:fb46::11:100/120")
+	ipNet4 := newCIDR("2002:1a23:fb46::11:200/124")
+	ipNet5 := newCIDR("10.10.0.0/16")
+	diffNet1 := newCIDR("2002:1a23:fb46::11:8000/113")
+	diffNet2 := newCIDR("2002:1a23:fb46::11:4000/114")
+	diffNet3 := newCIDR("2002:1a23:fb46::11:2000/115")
+	diffNet4 := newCIDR("2002:1a23:fb46::11:1000/116")
+	diffNet5 := newCIDR("2002:1a23:fb46::11:800/117")
+	diffNet6 := newCIDR("2002:1a23:fb46::11:400/118")
+	diffNet7 := newCIDR("2002:1a23:fb46::11:0/120")
+	diffNet8 := newCIDR("2002:1a23:fb46::11:300/120")
+	diffNet9 := newCIDR("2002:1a23:fb46::11:280/121")
+	diffNet10 := newCIDR("2002:1a23:fb46::11:240/122")
+	diffNet11 := newCIDR("2002:1a23:fb46::11:220/123")
+	diffNet12 := newCIDR("2002:1a23:fb46::11:210/124")
+	diffNet13 := newCIDR("10.10.0.0/24")
+
+	ipBlock1 := v1beta1.IPBlock{
+		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet1.IP), PrefixLength: 112},
+	}
+	ipBlock2 := v1beta1.IPBlock{
+		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet2.IP), PrefixLength: 112},
+		Except: []v1beta1.IPNet{
+			{IP: v1beta1.IPAddress(ipNet3.IP), PrefixLength: 120},
+			{IP: v1beta1.IPAddress(ipNet4.IP), PrefixLength: 124},
+		},
+	}
+	ipBlock3 := v1beta1.IPBlock{
+		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet5.IP), PrefixLength: 16},
+		Except: []v1beta1.IPNet{
+			{IP: v1beta1.IPAddress(diffNet13.IP), PrefixLength: 24},
+		},
+	}
+
+	tests := []struct {
+		name            string
+		args            *CompletedRule
+		expectedOFRules []*types.PolicyRule
+		wantErr         bool
+	}{
+		{
+			"ingress-rule",
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceTCP80, serviceTCP}, SourceRef: &np1},
+				FromAddresses: ipv6AddressGroup1,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb44::1")),
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-missing-ofport",
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
+				FromAddresses: ipv6AddressGroup1,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup2,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb44::1")),
+					To:        []types.Address{},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-ipblocks",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					From:      v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2}},
+					Services:  []v1beta1.Service{serviceTCP80, serviceTCP},
+					SourceRef: &np1,
+				},
+				FromAddresses: ipv6AddressGroup1,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From: []types.Address{
+						openflow.NewIPAddress(net.ParseIP("2002:1a23:fb44::1")),
+						openflow.NewIPNetAddress(*ipNet1),
+						openflow.NewIPNetAddress(*diffNet1),
+						openflow.NewIPNetAddress(*diffNet2),
+						openflow.NewIPNetAddress(*diffNet3),
+						openflow.NewIPNetAddress(*diffNet4),
+						openflow.NewIPNetAddress(*diffNet5),
+						openflow.NewIPNetAddress(*diffNet6),
+						openflow.NewIPNetAddress(*diffNet7),
+						openflow.NewIPNetAddress(*diffNet8),
+						openflow.NewIPNetAddress(*diffNet9),
+						openflow.NewIPNetAddress(*diffNet10),
+						openflow.NewIPNetAddress(*diffNet11),
+						openflow.NewIPNetAddress(*diffNet12),
+					},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-no-ports",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{},
+					SourceRef: &np1,
+				},
+				Pods: appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-unresolvable-namedport",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{serviceHTTP},
+					SourceRef: &np1,
+				},
+				Pods: appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-same-namedport",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{serviceHTTP},
+					SourceRef: &np1,
+				},
+				Pods: appliedToGroupWithSameContainerPort,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1, 3)),
+					Service:   []v1beta1.Service{serviceTCP80},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-diff-namedport",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{serviceHTTP},
+					SourceRef: &np1,
+				},
+				Pods: appliedToGroupWithDiffContainerPort,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{serviceTCP80},
+					PolicyRef: &np1,
+				},
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(3)),
+					Service:   []v1beta1.Service{serviceTCP443},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-deny-all",
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
+				FromAddresses: nil,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"egress-rule",
+			&CompletedRule{
+				rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
+				FromAddresses: nil,
+				ToAddresses:   ipv6AddressGroup1,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2")),
+					To:        ipsToOFAddresses(sets.NewString("2002:1a23:fb44::1")),
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"egress-rule-with-ipblocks",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta1.DirectionOut,
+					To:        v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2}},
+					SourceRef: &np1,
+				},
+				FromAddresses: nil,
+				ToAddresses:   ipv6AddressGroup1,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2")),
+					To: []types.Address{
+						openflow.NewIPAddress(net.ParseIP("2002:1a23:fb44::1")),
+						openflow.NewIPNetAddress(*ipNet1),
+						openflow.NewIPNetAddress(*diffNet1),
+						openflow.NewIPNetAddress(*diffNet2),
+						openflow.NewIPNetAddress(*diffNet3),
+						openflow.NewIPNetAddress(*diffNet4),
+						openflow.NewIPNetAddress(*diffNet5),
+						openflow.NewIPNetAddress(*diffNet6),
+						openflow.NewIPNetAddress(*diffNet7),
+						openflow.NewIPNetAddress(*diffNet8),
+						openflow.NewIPNetAddress(*diffNet9),
+						openflow.NewIPNetAddress(*diffNet10),
+						openflow.NewIPNetAddress(*diffNet11),
+						openflow.NewIPNetAddress(*diffNet12),
+					},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"egress-rule-deny-all",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta1.DirectionOut,
+					SourceRef: &np1,
+				},
+				FromAddresses: nil,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2")),
+					To:        []types.Address{},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"egress-rule-with-dual-ipblocks",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta1.DirectionOut,
+					To:        v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2, ipBlock3}},
+					SourceRef: &np1,
+				},
+				FromAddresses: nil,
+				ToAddresses:   ipv6AddressGroup1,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2")),
+					To: []types.Address{
+						openflow.NewIPAddress(net.ParseIP("2002:1a23:fb44::1")),
+						openflow.NewIPNetAddress(*ipNet1),
+						openflow.NewIPNetAddress(*diffNet1),
+						openflow.NewIPNetAddress(*diffNet2),
+						openflow.NewIPNetAddress(*diffNet3),
+						openflow.NewIPNetAddress(*diffNet4),
+						openflow.NewIPNetAddress(*diffNet5),
+						openflow.NewIPNetAddress(*diffNet6),
+						openflow.NewIPNetAddress(*diffNet7),
+						openflow.NewIPNetAddress(*diffNet8),
+						openflow.NewIPNetAddress(*diffNet9),
+						openflow.NewIPNetAddress(*diffNet10),
+						openflow.NewIPNetAddress(*diffNet11),
+						openflow.NewIPNetAddress(*diffNet12),
+					},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+			mockOFClient := openflowtest.NewMockClient(controller)
+			mockOFClient.EXPECT().IsIPv4Enabled().Return(false).AnyTimes()
+			mockOFClient.EXPECT().IsIPv6Enabled().Return(true).AnyTimes()
+			// TODO: mock idAllocator and priorityAssigner
+			for i := 0; i < len(tt.expectedOFRules); i++ {
+				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
+			}
+			r := newReconciler(mockOFClient, ifaceStore)
+			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
+				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestReconcilerReconcileDualStack(t *testing.T) {
+	ifaceStore := interfacestore.NewInterfaceStore()
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1", "container1"),
+		IPs:                      []net.IP{net.ParseIP("2.2.2.2"), net.ParseIP("2002:1a23:fb45::2")},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1", ContainerID: "container1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1},
+	})
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("pod3", "ns1", "container3"),
+		IPs:                      []net.IP{net.ParseIP("3.3.3.3"), net.ParseIP("2002:1a23:fb46::3")},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod3", PodNamespace: "ns1", ContainerID: "container3"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 3},
+	})
+	ipNet1 := newCIDR("2002:1a23:fb46::10:0/112")
+	ipNet2 := newCIDR("2002:1a23:fb46::11:0/112")
+	ipNet3 := newCIDR("2002:1a23:fb46::11:100/120")
+	ipNet4 := newCIDR("2002:1a23:fb46::11:200/124")
+	diffNet1 := newCIDR("2002:1a23:fb46::11:8000/113")
+	diffNet2 := newCIDR("2002:1a23:fb46::11:4000/114")
+	diffNet3 := newCIDR("2002:1a23:fb46::11:2000/115")
+	diffNet4 := newCIDR("2002:1a23:fb46::11:1000/116")
+	diffNet5 := newCIDR("2002:1a23:fb46::11:800/117")
+	diffNet6 := newCIDR("2002:1a23:fb46::11:400/118")
+	diffNet7 := newCIDR("2002:1a23:fb46::11:0/120")
+	diffNet8 := newCIDR("2002:1a23:fb46::11:300/120")
+	diffNet9 := newCIDR("2002:1a23:fb46::11:280/121")
+	diffNet10 := newCIDR("2002:1a23:fb46::11:240/122")
+	diffNet11 := newCIDR("2002:1a23:fb46::11:220/123")
+	diffNet12 := newCIDR("2002:1a23:fb46::11:210/124")
+	ipNet5 := newCIDR("10.10.0.0/16")
+	ipNet6 := newCIDR("10.20.0.0/16")
+	ipNet7 := newCIDR("10.20.1.0/24")
+	diffNet13 := newCIDR("10.20.128.0/17")
+	diffNet14 := newCIDR("10.20.64.0/18")
+	diffNet15 := newCIDR("10.20.32.0/19")
+	diffNet16 := newCIDR("10.20.16.0/20")
+	diffNet17 := newCIDR("10.20.8.0/21")
+	diffNet18 := newCIDR("10.20.4.0/22")
+	diffNet19 := newCIDR("10.20.2.0/23")
+	diffNet20 := newCIDR("10.20.0.0/24")
+
+	ipBlock1 := v1beta1.IPBlock{
+		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet1.IP), PrefixLength: 112},
+	}
+	ipBlock2 := v1beta1.IPBlock{
+		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet2.IP), PrefixLength: 112},
+		Except: []v1beta1.IPNet{
+			{IP: v1beta1.IPAddress(ipNet3.IP), PrefixLength: 120},
+			{IP: v1beta1.IPAddress(ipNet4.IP), PrefixLength: 124},
+		},
+	}
+	ipBlock3 := v1beta1.IPBlock{
+		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet5.IP), PrefixLength: 16},
+	}
+	ipBlock4 := v1beta1.IPBlock{
+		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet6.IP), PrefixLength: 16},
+		Except: []v1beta1.IPNet{
+			{IP: v1beta1.IPAddress(ipNet7.IP), PrefixLength: 24},
+		},
+	}
+
+	tests := []struct {
+		name            string
+		args            *CompletedRule
+		expectedOFRules []*types.PolicyRule
+		wantErr         bool
+	}{
+		{
+			"ingress-rule",
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceTCP80, serviceTCP}, SourceRef: &np1},
+				FromAddresses: dualAddressGroup1,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      ipsToOFAddresses(sets.NewString("1.1.1.1", "2002:1a23:fb44::1")),
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-missing-ofport",
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
+				FromAddresses: dualAddressGroup1,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup2,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      ipsToOFAddresses(sets.NewString("1.1.1.1", "2002:1a23:fb44::1")),
+					To:        []types.Address{},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-ipblocks",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					From:      v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2, ipBlock3, ipBlock4}},
+					Services:  []v1beta1.Service{serviceTCP80, serviceTCP},
+					SourceRef: &np1,
+				},
+				FromAddresses: dualAddressGroup1,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From: []types.Address{
+						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
+						openflow.NewIPAddress(net.ParseIP("2002:1a23:fb44::1")),
+						openflow.NewIPNetAddress(*ipNet1),
+						openflow.NewIPNetAddress(*ipNet5),
+						openflow.NewIPNetAddress(*diffNet1),
+						openflow.NewIPNetAddress(*diffNet2),
+						openflow.NewIPNetAddress(*diffNet3),
+						openflow.NewIPNetAddress(*diffNet4),
+						openflow.NewIPNetAddress(*diffNet5),
+						openflow.NewIPNetAddress(*diffNet6),
+						openflow.NewIPNetAddress(*diffNet7),
+						openflow.NewIPNetAddress(*diffNet8),
+						openflow.NewIPNetAddress(*diffNet9),
+						openflow.NewIPNetAddress(*diffNet10),
+						openflow.NewIPNetAddress(*diffNet11),
+						openflow.NewIPNetAddress(*diffNet12),
+						openflow.NewIPNetAddress(*diffNet13),
+						openflow.NewIPNetAddress(*diffNet14),
+						openflow.NewIPNetAddress(*diffNet15),
+						openflow.NewIPNetAddress(*diffNet16),
+						openflow.NewIPNetAddress(*diffNet17),
+						openflow.NewIPNetAddress(*diffNet18),
+						openflow.NewIPNetAddress(*diffNet19),
+						openflow.NewIPNetAddress(*diffNet20),
+					},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-no-ports",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{},
+					SourceRef: &np1,
+				},
+				Pods: appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-unresolvable-namedport",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{serviceHTTP},
+					SourceRef: &np1,
+				},
+				Pods: appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-same-namedport",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{serviceHTTP},
+					SourceRef: &np1,
+				},
+				Pods: appliedToGroupWithSameContainerPort,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1, 3)),
+					Service:   []v1beta1.Service{serviceTCP80},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-diff-namedport",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{serviceHTTP},
+					SourceRef: &np1,
+				},
+				Pods: appliedToGroupWithDiffContainerPort,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{serviceTCP80},
+					PolicyRef: &np1,
+				},
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(3)),
+					Service:   []v1beta1.Service{serviceTCP443},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-deny-all",
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
+				FromAddresses: nil,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"egress-rule",
+			&CompletedRule{
+				rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
+				FromAddresses: nil,
+				ToAddresses:   dualAddressGroup1,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb44::1", "1.1.1.1")),
+					To:        ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2", "2.2.2.2")),
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"egress-rule-with-ipblocks",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta1.DirectionOut,
+					To:        v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2, ipBlock3, ipBlock4}},
+					SourceRef: &np1,
+				},
+				FromAddresses: nil,
+				ToAddresses:   dualAddressGroup1,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2", "2.2.2.2")),
+					To: []types.Address{
+						openflow.NewIPAddress(net.ParseIP("2002:1a23:fb44::1")),
+						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
+						openflow.NewIPNetAddress(*ipNet1),
+						openflow.NewIPNetAddress(*ipNet5),
+						openflow.NewIPNetAddress(*diffNet1),
+						openflow.NewIPNetAddress(*diffNet2),
+						openflow.NewIPNetAddress(*diffNet3),
+						openflow.NewIPNetAddress(*diffNet4),
+						openflow.NewIPNetAddress(*diffNet5),
+						openflow.NewIPNetAddress(*diffNet6),
+						openflow.NewIPNetAddress(*diffNet7),
+						openflow.NewIPNetAddress(*diffNet8),
+						openflow.NewIPNetAddress(*diffNet9),
+						openflow.NewIPNetAddress(*diffNet10),
+						openflow.NewIPNetAddress(*diffNet11),
+						openflow.NewIPNetAddress(*diffNet12),
+						openflow.NewIPNetAddress(*diffNet13),
+						openflow.NewIPNetAddress(*diffNet14),
+						openflow.NewIPNetAddress(*diffNet15),
+						openflow.NewIPNetAddress(*diffNet16),
+						openflow.NewIPNetAddress(*diffNet17),
+						openflow.NewIPNetAddress(*diffNet18),
+						openflow.NewIPNetAddress(*diffNet19),
+						openflow.NewIPNetAddress(*diffNet20),
+					},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"egress-rule-deny-all",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta1.DirectionOut,
+					SourceRef: &np1,
+				},
+				FromAddresses: nil,
+				ToAddresses:   nil,
+				Pods:          appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2", "2.2.2.2")),
+					To:        []types.Address{},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"egress-rule-with-same-namedport",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta1.DirectionIn,
+					Services:  []v1beta1.Service{serviceHTTP},
+					SourceRef: &np1,
+				},
+				Pods: appliedToGroupWithSameContainerPort,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta1.DirectionIn,
+					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2", "2.2.2.2", "3.3.3.3", "2002:1a23:fb46::3")),
+					To:        []types.Address{},
+					Service:   []v1beta1.Service{serviceTCP80},
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+			mockOFClient := openflowtest.NewMockClient(controller)
+			mockOFClient.EXPECT().IsIPv4Enabled().Return(true).AnyTimes()
+			mockOFClient.EXPECT().IsIPv6Enabled().Return(true).AnyTimes()
+			// TODO: mock idAllocator and priorityAssigner
+			for i := 0; i < len(tt.expectedOFRules); i++ {
+				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
+			}
+			r := newReconciler(mockOFClient, ifaceStore)
+			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
+				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
+			}
 		})
 	}
 }
@@ -984,7 +1785,7 @@ func benchmarkGroupPodsByServices(b *testing.B, withNamedPort bool) {
 		for i2 := 1; i2 <= 50; i2++ {
 			for i3 := 1; i3 <= 10; i3++ {
 				pod := &v1beta1.GroupMemberPod{
-					IP: v1beta1.IPAddress(net.ParseIP(fmt.Sprintf("1.%d.%d.%d", i1, i2, i3))),
+					IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP(fmt.Sprintf("1.%d.%d.%d", i1, i2, i3)))},
 				}
 				if withNamedPort {
 					pod.Ports = []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}}

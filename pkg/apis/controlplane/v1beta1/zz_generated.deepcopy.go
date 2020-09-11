@@ -361,10 +361,16 @@ func (in *GroupMemberPod) DeepCopyInto(out *GroupMemberPod) {
 		*out = new(PodReference)
 		**out = **in
 	}
-	if in.IP != nil {
-		in, out := &in.IP, &out.IP
-		*out = make(IPAddress, len(*in))
-		copy(*out, *in)
+	if in.IPs != nil {
+		in, out := &in.IPs, &out.IPs
+		*out = make([]IPAddress, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = make(IPAddress, len(*in))
+				copy(*out, *in)
+			}
+		}
 	}
 	if in.Ports != nil {
 		in, out := &in.Ports, &out.Ports

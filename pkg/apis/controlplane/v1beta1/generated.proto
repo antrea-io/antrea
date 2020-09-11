@@ -135,8 +135,8 @@ message GroupMemberPod {
   // Pod maintains the reference to the Pod.
   optional PodReference pod = 1;
 
-  // IP maintains the IPAddress associated with the Pod.
-  optional bytes ip = 2;
+  // IPs maintains the IPAddress associated with the Pod.
+  repeated bytes ips = 2;
 
   // Ports maintain the named port mapping of this Pod.
   repeated NamedPort ports = 3;
