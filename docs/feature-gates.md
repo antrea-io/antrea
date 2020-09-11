@@ -78,12 +78,13 @@ useful for troubleshooting connectivity issues, e.g. determining if a
 NetworkPolicy is responsible for traffic drops between two Pods. Refer to
 this [document](traceflow-guide.md) for more information.
 
-
 #### Requirements for this Feature
 
 This feature can only be used in "encap" mode when the Geneve tunnel type is
 being used. Note that this is the default configuration for both Linux and
-Windows.
+Windows. In order to support cluster Services as the destination for tracing
+requests, `AntreaProxy` should be enabled (it is not enabled by default for
+Linux Nodes in "encap" mode)..
 
 ### Flow Exporter
 
