@@ -50,12 +50,13 @@ func (m *MockConnTrackDumper) EXPECT() *MockConnTrackDumperMockRecorder {
 }
 
 // DumpFlows mocks base method
-func (m *MockConnTrackDumper) DumpFlows(arg0 uint16) ([]*flowexporter.Connection, error) {
+func (m *MockConnTrackDumper) DumpFlows(arg0 uint16) ([]*flowexporter.Connection, *flowexporter.ConntrackOccupancy, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DumpFlows", arg0)
 	ret0, _ := ret[0].([]*flowexporter.Connection)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(*flowexporter.ConntrackOccupancy)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // DumpFlows indicates an expected call of DumpFlows

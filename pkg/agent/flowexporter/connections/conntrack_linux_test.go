@@ -18,6 +18,9 @@ package connections
 
 import (
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,13 +31,16 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	connectionstest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections/testing"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
 	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
 )
 
 func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	metrics.InitializeConnectionMetrics()
 	// Create flows for test
 	tuple, revTuple := makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
 	antreaFlow := &flowexporter.Connection{
@@ -76,28 +82,58 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	}
 	// Test the DumpFlows implementation of connTrackSystem
 	mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
-	connDumperDPSystem := &connTrackSystem{
-		nodeConfig,
-		serviceCIDR,
-		mockNetlinkCT,
+	connDumperDPSystem, acctErr, timestampErr := NewConnTrackSystem(nodeConfig, serviceCIDR)
+	if acctErr == nil {
+		conntrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
+		// Bypass this assert statement if the test VM meets a permission error for the sysctl command.
+		if err != nil && !os.IsPermission(err) {
+			t.Errorf("error when getting nf_conntrack_acct: %v", err)
+		} else if err == nil {
+			assert.Equal(t, 1, conntrackAcct, "net.netfilter.nf_conntrack_acct value should be 1")
+		}
 	}
+	if timestampErr == nil {
+		conntrackTimestamping, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_timestamp")
+		// Bypass this assert statement if the test VM meets a permission error for the sysctl command.
+		if err != nil && !os.IsPermission(err) {
+			t.Errorf("error when getting nf_conntrack_timestamp: %v", err)
+		} else if err == nil {
+			assert.Equal(t, 1, conntrackTimestamping, "net.netfilter.nf_conntrack_timestamp value should be 1")
+		}
+	}
+
+	connDumperDPSystem.connTrack = mockNetlinkCT
 	// Set expects for mocks
 	mockNetlinkCT.EXPECT().Dial().Return(nil)
 	mockNetlinkCT.EXPECT().DumpFilter(conntrack.Filter{}).Return(testFlows, nil)
 
-	conns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
+	conns, conntrackMetrics, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
 	if err != nil {
 		t.Errorf("Dump flows function returned error: %v", err)
 	}
 	assert.Equal(t, 1, len(conns), "number of filtered connections should be equal")
+
+	maxConns, err := sysctl.GetSysctlNet("nf_conntrack_max")
+	// Bypass this assert statement if the test VM meets a permission error for the sysctl command.
+	if err != nil && !os.IsPermission(err) {
+		t.Errorf("error when getting nf_conntrack_max: %v", err)
+	} else if err == nil {
+		assert.Equal(t, maxConns, conntrackMetrics.MaxConnections, "Size of the conntrack table should be equal to the nf_conntrack_max")
+	}
+
+	assert.Equal(t, len(testFlows), conntrackMetrics.TotalConnections, "Number of connections in conntrack table should be equal to testFlows")
 }
 
-func TestConnTackOvsAppCtl_DumpFlows(t *testing.T) {
+func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	metrics.InitializeConnectionMetrics()
 
 	// Create mock interface
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
+	// Set expect call of dpctl/ct-get-maxconns for mock ovsCtlClient
+	maxConns := 300000
+	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/ct-get-maxconns", false).Return([]byte(strconv.Itoa(maxConns)), nil)
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
 	gwConfig := &config.GatewayConfig{
@@ -117,6 +153,7 @@ func TestConnTackOvsAppCtl_DumpFlows(t *testing.T) {
 	ovsctlCmdOutput := []byte("tcp,orig=(src=127.0.0.1,dst=127.0.0.1,sport=45218,dport=2379,packets=320108,bytes=24615344),reply=(src=127.0.0.1,dst=127.0.0.1,sport=2379,dport=45218,packets=239595,bytes=24347883),start=2020-07-24T05:07:03.998,id=3750535678,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86399,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
 		"tcp,orig=(src=127.0.0.1,dst=8.7.6.5,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=8.7.6.5,dst=127.0.0.1,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
 		"tcp,orig=(src=100.10.0.105,dst=10.96.0.1,sport=41284,dport=443,packets=343260,bytes=19340621),reply=(src=192.168.86.82,dst=100.10.0.105,sport=6443,dport=41284,packets=381035,bytes=181176472),start=2020-07-25T08:40:08.959,id=982464968,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|DST_NAT|DST_NAT_DONE,timeout=86399,mark=33,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)")
+	outputFlow := strings.Split(string(ovsctlCmdOutput), "\n")
 	expConn := &flowexporter.Connection{
 		ID:         982464968,
 		Timeout:    86399,
@@ -151,11 +188,12 @@ func TestConnTackOvsAppCtl_DumpFlows(t *testing.T) {
 	}
 	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/dump-conntrack", false, "-m", "-s").Return(ovsctlCmdOutput, nil)
 
-	conns, err := connDumper.DumpFlows(uint16(openflow.CtZone))
+	conns, conntrackMetrics, err := connDumper.DumpFlows(uint16(openflow.CtZone))
 	if err != nil {
 		t.Errorf("conntrackNetdev.DumpConnections function returned error: %v", err)
 	}
 	assert.Equal(t, len(conns), 1)
 	assert.Equal(t, conns[0], expConn, "filtered connection and expected connection should be same")
-
+	assert.Equal(t, len(outputFlow), conntrackMetrics.TotalConnections, "Number of connections in conntrack table should be equal to outputFlow")
+	assert.Equal(t, maxConns, conntrackMetrics.MaxConnections, "Size of the conntrack table should be equal to the previous hard-coded value")
 }

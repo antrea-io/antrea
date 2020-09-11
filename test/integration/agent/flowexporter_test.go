@@ -128,7 +128,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// TODO: Enhance the integration test by testing service.
 	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, nil, nil, testPollInterval)
 	// Expect calls for connStore.poll and other callees
-	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, nil)
+	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, &flowexporter.ConntrackOccupancy{}, nil)
 	for i, testConn := range testConns {
 		if i == 0 {
 			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.TupleOrig.SourceAddress.String()).Return(testIfConfigs[i], true)

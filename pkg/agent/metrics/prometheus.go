@@ -94,6 +94,30 @@ var (
 		},
 		[]string{"operation"},
 	)
+
+	TotalConnectionsInConnTrackTable = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Name:           "antrea_agent_conntrack_total_connection_count",
+			Help:           "Number of connections in the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configMap parameter in antrea-agent.conf.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	TotalAntreaConnectionsInConnTrackTable = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Name:           "antrea_agent_conntrack_antrea_connection_count",
+			Help:           "Number of connections in the Antrea ZoneID of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configMap parameter in antrea-agent.conf.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	MaxConnectionsInConnTrackTable = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Name:           "antrea_agent_conntrack_max_connection_count",
+			Help:           "Size of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configMap parameter in antrea-agent.conf.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
 )
 
 func InitializePrometheusMetrics() {
@@ -121,6 +145,7 @@ func InitializePrometheusMetrics() {
 	InitializePodMetrics()
 	InitializeNetworkPolicyMetrics()
 	InitializeOVSMetrics()
+	InitializeConnectionMetrics()
 }
 
 func InitializePodMetrics() {
@@ -167,5 +192,17 @@ func InitializeOVSMetrics() {
 		OVSFlowOpsCount.WithLabelValues(ops)
 		OVSFlowOpsErrorCount.WithLabelValues(ops)
 		OVSFlowOpsLatency.WithLabelValues(ops)
+	}
+}
+
+func InitializeConnectionMetrics() {
+	if err := legacyregistry.Register(TotalConnectionsInConnTrackTable); err != nil {
+		klog.Errorf("Failed to register antrea_agent_conntrack_total_connection_count with error: %v", err)
+	}
+	if err := legacyregistry.Register(TotalAntreaConnectionsInConnTrackTable); err != nil {
+		klog.Errorf("Failed to register antrea_agent_conntrack_antrea_connection_count with error: %v", err)
+	}
+	if err := legacyregistry.Register(MaxConnectionsInConnTrackTable); err != nil {
+		klog.Errorf("Failed to register antrea_agent_conntrack_antrea_connection_count with error: %v", err)
 	}
 }

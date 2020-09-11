@@ -65,3 +65,8 @@ type FlowRecord struct {
 	PrevReversePackets uint64
 	PrevReverseBytes   uint64
 }
+
+type ConntrackOccupancy struct {
+	MaxConnections   int
+	TotalConnections int
+}

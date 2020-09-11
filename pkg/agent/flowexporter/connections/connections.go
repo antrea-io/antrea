@@ -25,6 +25,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 )
@@ -147,6 +148,7 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 				}
 			}
 		}
+		metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
 		cs.connections[connKey] = *conn
@@ -190,7 +192,7 @@ func (cs *ConnectionStore) Poll() (int, error) {
 	// We do not expect any error as resetConn is not returning any error
 	cs.ForAllConnectionsDo(resetConn)
 
-	filteredConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
+	filteredConns, conntrackOccupancyMetrics, err := cs.connDumper.DumpFlows(openflow.CtZone)
 	if err != nil {
 		return 0, err
 	}
@@ -200,6 +202,8 @@ func (cs *ConnectionStore) Poll() (int, error) {
 	}
 	connsLen := len(filteredConns)
 	filteredConns = nil
+	metrics.MaxConnectionsInConnTrackTable.Set(float64(conntrackOccupancyMetrics.MaxConnections))
+	metrics.TotalConnectionsInConnTrackTable.Set(float64(conntrackOccupancyMetrics.TotalConnections))
 
 	klog.V(2).Infof("Conntrack polling successful")
 
@@ -215,7 +219,7 @@ func (cs *ConnectionStore) DeleteConnectionByKey(connKey flowexporter.Connection
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 	delete(cs.connections, connKey)
-
+	metrics.TotalAntreaConnectionsInConnTrackTable.Dec()
 	return nil
 }
 
