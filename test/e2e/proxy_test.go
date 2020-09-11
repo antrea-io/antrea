@@ -51,7 +51,6 @@ func proxyEnabled(data *TestData) (bool, error) {
 }
 
 func TestProxyServiceSessionAffinity(t *testing.T) {
-	skipIfProviderIs(t, "kind", "#881 Does not work in Kind, needs to be investigated.")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -68,7 +67,7 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 	svc, err := data.createNginxClusterIPService(true)
 	require.NoError(t, err)
 	ingressIPs := []string{"169.254.169.253", "169.254.169.254"}
-	_, err = data.createNginxLoadBalancerService(false, ingressIPs)
+	_, err = data.createNginxLoadBalancerService(true, ingressIPs)
 	require.NoError(t, err)
 	require.NoError(t, data.createBusyboxPodOnNode("busybox", nodeName))
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, "busybox", testNamespace))
