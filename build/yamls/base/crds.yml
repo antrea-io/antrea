@@ -276,7 +276,7 @@ spec:
                   # Ensure that Action field allows only ALLOW and DROP values
                   action:
                     type: string
-                    pattern: '\bAllow|\bDrop'
+                    enum: ['Allow', 'Drop']
                   ports:
                     type: array
                     items:
@@ -311,7 +311,7 @@ spec:
                   # Ensure that Action field allows only ALLOW and DROP values
                   action:
                     type: string
-                    pattern: '\bAllow|\bDrop'
+                    enum: ['Allow', 'Drop']
                   ports:
                     type: array
                     items:
@@ -408,7 +408,7 @@ spec:
                   # Ensure that Action field allows only ALLOW and DROP values
                   action:
                     type: string
-                    pattern: '\bAllow|\bDrop'
+                    enum: ['Allow', 'Drop']
                   ports:
                     type: array
                     items:
@@ -445,7 +445,7 @@ spec:
                   # Ensure that Action field allows only ALLOW and DROP values
                   action:
                     type: string
-                    pattern: '\bAllow|\bDrop'
+                    enum: ['Allow', 'Drop']
                   ports:
                     type: array
                     items:
