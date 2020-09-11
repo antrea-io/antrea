@@ -216,6 +216,7 @@ type FlowBuilder interface {
 	MatchCTStateTrk(isSet bool) FlowBuilder
 	MatchCTStateInv(isSet bool) FlowBuilder
 	MatchCTMark(value uint32) FlowBuilder
+	MatchCTLabelRange(high, low uint64, bitRange Range) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
 	MatchTCPDstPort(port uint16) FlowBuilder
 	MatchUDPDstPort(port uint16) FlowBuilder
