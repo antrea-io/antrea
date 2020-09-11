@@ -15,6 +15,7 @@ result via CRD, Antctl or UI graph.
   - [Using Octant with antrea-octant-plugin](#Using-Octant-with-antrea-octant-plugin)
 - [View Traceflow Result and Graph](#View-Traceflow-Result-and-Graph)
 - [View Traceflow CRDs](#View-Traceflow-CRDs)
+- [RBAC](#rbac)
 
 ## Prerequisites
 You need to enable Traceflow from the featureGates map defined in antrea.yml for
@@ -119,3 +120,17 @@ in the Octant UI. You can generate a trace graph for any of these CRDs, as expla
 Also, you can view all the traceflow CRDs from the Tracflow page by clicking the right tab named "Traceflow Info" like below.
 
 <img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/tf_table.png" width="600" alt="Traceflow CRDs">
+
+## RBAC
+
+Traceflow CRDs are meant for admins to troubleshoot and diagnose the network
+by injecting a packet from a source workload to a destination workload. Thus,
+access to manage these CRDs must be granted to subjects which
+have the authority to perform these diagnostic actions. On cluster
+initialization, Antrea grants the permissions to edit these CRDs with `admin`
+and the `edit` ClusterRole. In addition to this, Antrea also grants the
+permission to view these CRDs with the `view` ClusterRole. Cluster admins can
+therefore grant these ClusterRoles to any subject who may be responsible to
+troubleshoot the network. The admins may also decide to share the `view`
+ClusterRole to a wider range of subjects to allow them to read the traceflows
+that are active in the cluster.
