@@ -48,10 +48,6 @@ const (
 	// Default number of workers processing traceflow request.
 	defaultWorkers = 4
 
-	// Traceflow timeout period.
-	timeoutDuration      = 2 * time.Minute
-	timeoutCheckInterval = timeoutDuration / 2
-
 	// Min and max data plane tag for traceflow. dataplaneTag=0 means it's not a Traceflow packet.
 	// dataplaneTag=15 is reserved.
 	minTagNum uint8 = 1
@@ -59,6 +55,15 @@ const (
 
 	// PodIP index name for Pod cache.
 	podIPIndex = "podIP"
+
+	// String set to TraceflowStatus.Reason.
+	traceflowTimeout = "Traceflow timeout"
+)
+
+var (
+	// Traceflow timeout period.
+	timeoutDuration      = 2 * time.Minute
+	timeoutCheckInterval = timeoutDuration / 2
 )
 
 // Controller is for traceflow.
@@ -246,6 +251,9 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 		err = c.startTraceflow(tf)
 	case opsv1alpha1.Running:
 		err = c.checkTraceflowStatus(tf)
+	case opsv1alpha1.Failed:
+		// Deallocate tag when agent set Traceflow status to Failed.
+		c.deallocateTagForTF(tf)
 	}
 	return err
 }
@@ -298,9 +306,10 @@ func (c *Controller) checkTraceflowStatus(tf *opsv1alpha1.Traceflow) error {
 		c.deallocateTagForTF(tf)
 		return c.updateTraceflowStatus(tf, opsv1alpha1.Succeeded, "", 0)
 	}
-	if time.Now().UTC().Sub(tf.CreationTimestamp.UTC()) > timeoutDuration {
+	// CreationTimestamp is of second accuracy.
+	if time.Now().Unix() > tf.CreationTimestamp.Unix()+int64(timeoutDuration.Seconds()) {
 		c.deallocateTagForTF(tf)
-		return c.updateTraceflowStatus(tf, opsv1alpha1.Failed, "Traceflow timeout", 0)
+		return c.updateTraceflowStatus(tf, opsv1alpha1.Failed, traceflowTimeout, 0)
 	}
 	return nil
 }

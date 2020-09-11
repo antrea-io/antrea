@@ -104,7 +104,7 @@ func TestTraceflow(t *testing.T) {
 	// 3. node1Pods[0] -> node1IPs[1], intra node1.
 	// 4. node1Pods[0] -> node2IPs[0], inter node1 and node2.
 	// 5. node1Pods[0] -> service, inter node1 and node2.
-	// 6. node1Pods[0] -> not existed Pod
+	// 6. node1Pods[0] -> non-existing Pod
 	testcases := []testcase{
 		{
 			name: "intraNodeTraceflow",
@@ -404,10 +404,10 @@ func TestTraceflow(t *testing.T) {
 			},
 		},
 		{
-			name: "notExistedDstPod",
+			name: "nonExistingDstPod",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, "not-existed-pod")),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, "non-existing-pod")),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -416,11 +416,10 @@ func TestTraceflow(t *testing.T) {
 					},
 					Destination: v1alpha1.Destination{
 						Namespace: testNamespace,
-						Pod:       "not-existed-pod",
+						Pod:       "non-existing-pod",
 					},
 				},
 			},
-			// Traceflow should fail with timeout.
 			expectedPhase: v1alpha1.Failed,
 		},
 	}
@@ -438,7 +437,7 @@ func TestTraceflow(t *testing.T) {
 					}
 				}()
 
-				tf, err := data.waitForTraceflow(tc.tf.Name, tc.expectedPhase)
+				tf, err := data.waitForTraceflow(t, tc.tf.Name, tc.expectedPhase)
 				if err != nil {
 					t.Fatalf("Error: Get Traceflow failed: %v", err)
 					return
@@ -478,14 +477,10 @@ func TestTraceflow(t *testing.T) {
 	})
 }
 
-func (data *TestData) waitForTraceflow(name string, phase v1alpha1.TraceflowPhase) (*v1alpha1.Traceflow, error) {
+func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1alpha1.TraceflowPhase) (*v1alpha1.Traceflow, error) {
 	var tf *v1alpha1.Traceflow
 	var err error
 	timeout := 15 * time.Second
-	if phase == v1alpha1.Failed {
-		// 2 minutes timeout + 1 minute check interval
-		timeout = 3 * time.Minute
-	}
 	if err = wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
 		tf, err = data.crdClient.OpsV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil || tf.Status.Phase != phase {
@@ -493,6 +488,9 @@ func (data *TestData) waitForTraceflow(name string, phase v1alpha1.TraceflowPhas
 		}
 		return true, nil
 	}); err != nil {
+		if tf != nil {
+			t.Errorf("Latest Traceflow status: %v", tf.Status)
+		}
 		return nil, err
 	}
 	return tf, nil
