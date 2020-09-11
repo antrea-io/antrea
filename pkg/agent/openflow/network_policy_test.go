@@ -1,3 +1,17 @@
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package openflow
 
 import (
@@ -28,13 +42,17 @@ var (
 	outTable      *mocks.MockTable
 	outDropTable  *mocks.MockTable
 	outAllowTable *mocks.MockTable
+	metricTable   *mocks.MockTable
 
-	ruleFlowBuilder *mocks.MockFlowBuilder
-	ruleFlow        *mocks.MockFlow
-	dropFlowBuilder *mocks.MockFlowBuilder
-	dropFlow        *mocks.MockFlow
+	ruleFlowBuilder   *mocks.MockFlowBuilder
+	ruleFlow          *mocks.MockFlow
+	dropFlowBuilder   *mocks.MockFlowBuilder
+	dropFlow          *mocks.MockFlow
+	metricFlowBuilder *mocks.MockFlowBuilder
+	metricFlow        *mocks.MockFlow
 
-	ruleAction *mocks.MockAction
+	ruleAction   *mocks.MockAction
+	metricAction *mocks.MockAction
 )
 
 type expectConjunctionTimes struct {
@@ -59,6 +77,7 @@ func TestPolicyRuleConjunction(t *testing.T) {
 
 	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
 	outTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
+	metricTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockMetricFlowBuilder(ctrl)).AnyTimes()
 
 	var addedAddrs = parseAddresses([]string{"192.168.1.3", "192.168.1.30", "192.168.2.0/24", "103", "104"})
 	expectConjunctionsCount([]*expectConjunctionTimes{{5, ruleID1, clauseID, nClause}})
@@ -135,6 +154,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
 	outTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
+	metricTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockMetricFlowBuilder(ctrl)).AnyTimes()
 
 	conj := &policyRuleConjunction{id: ruleID1}
 	conj.calculateClauses(rule1, c)
@@ -276,6 +296,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 	ruleFlowBuilder := newMockRuleFlowBuilder(ctrl)
 	outTable.EXPECT().BuildFlow(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	cnpOutTable.EXPECT().BuildFlow(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	metricTable.EXPECT().BuildFlow(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
 
 	conj := &policyRuleConjunction{id: ruleID1}
 	conj.calculateClauses(rule1, c)
@@ -481,6 +502,10 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlowBuilder.EXPECT().MatchConjID(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchPriority(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleAction = mocks.NewMockAction(ctrl)
+	ruleCtAction := mocks.NewMockCTAction(ctrl)
+	ruleCtAction.EXPECT().LoadToLabelRange(gomock.Any(), gomock.Any()).Return(ruleCtAction).AnyTimes()
+	ruleCtAction.EXPECT().CTDone().Return(ruleFlowBuilder).AnyTimes()
+	ruleAction.EXPECT().CT(true, gomock.Any(), gomock.Any()).Return(ruleCtAction).AnyTimes()
 	ruleAction.EXPECT().GotoTable(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleAction.EXPECT().LoadRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().Action().Return(ruleAction).AnyTimes()
@@ -490,6 +515,27 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlow.EXPECT().FlowPriority().Return(uint16(priorityNormal)).AnyTimes()
 	ruleFlow.EXPECT().MatchString().Return("").AnyTimes()
 	return ruleFlowBuilder
+}
+
+func newMockMetricFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
+	metricFlowBuilder = mocks.NewMockFlowBuilder(ctrl)
+	metricFlowBuilder.EXPECT().Cookie(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricFlowBuilder.EXPECT().MatchProtocol(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricFlowBuilder.EXPECT().MatchRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricFlowBuilder.EXPECT().MatchPriority(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricFlowBuilder.EXPECT().MatchCTStateNew(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricFlowBuilder.EXPECT().MatchCTLabelRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricAction = mocks.NewMockAction(ctrl)
+	metricAction.EXPECT().GotoTable(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricAction.EXPECT().LoadRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricAction.EXPECT().Drop().Return(metricFlowBuilder).AnyTimes()
+	metricFlowBuilder.EXPECT().Action().Return(metricAction).AnyTimes()
+	metricFlow = mocks.NewMockFlow(ctrl)
+	metricFlowBuilder.EXPECT().Done().Return(metricFlow).AnyTimes()
+	metricFlow.EXPECT().CopyToBuilder(gomock.Any(), gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricFlow.EXPECT().FlowPriority().Return(uint16(priorityNormal)).AnyTimes()
+	metricFlow.EXPECT().MatchString().Return("").AnyTimes()
+	return metricFlowBuilder
 }
 
 func parseAddresses(addrs []string) []types.Address {
@@ -526,13 +572,15 @@ func prepareClient(ctrl *gomock.Controller) *client {
 	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	cnpOutTable = createMockTable(ctrl, ApplicationEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
 	outTable = createMockTable(ctrl, EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext)
-	outDropTable = createMockTable(ctrl, EgressDefaultTable, l3ForwardingTable, binding.TableMissActionNext)
+	outDropTable = createMockTable(ctrl, EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext)
+	metricTable = createMockTable(ctrl, EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext)
 	outAllowTable = createMockTable(ctrl, l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext)
 	c = &client{
 		pipeline: map[binding.TableIDType]binding.Table{
 			ApplicationEgressRuleTable: cnpOutTable,
 			EgressRuleTable:            outTable,
 			EgressDefaultTable:         outDropTable,
+			EgressMetricTable:          metricTable,
 			l3ForwardingTable:          outAllowTable,
 		},
 		policyCache:              policyCache,
@@ -545,4 +593,48 @@ func prepareClient(ctrl *gomock.Controller) *client {
 	m.EXPECT().DeleteAll(gomock.Any()).Return(nil).AnyTimes()
 	c.ofEntryOperations = m
 	return c
+}
+
+func TestParseMetricFlow(t *testing.T) {
+	for name, tc := range map[string]struct {
+		flow   string
+		rule   uint32
+		metric types.RuleMetric
+	}{
+		"Drop flow": {
+			flow: "table=101, n_packets=9, n_bytes=666, priority=200,ip,reg0=0x100000/0x100000,reg3=0x5 actions=drop",
+			rule: 5,
+			metric: types.RuleMetric{
+				Bytes:    666,
+				Packets:  9,
+				Sessions: 9,
+			},
+		},
+		"New allow flow": {
+			flow: "table=101, n_packets=123, n_bytes=456, priority=200,ct_state=+new,ct_label=0x112345678/0xffffffff00000000,ip actions=goto_table:105",
+			rule: 1,
+			metric: types.RuleMetric{
+				Bytes:    456,
+				Packets:  123,
+				Sessions: 123,
+			},
+		},
+		"Following allow flow": {
+			flow: "table=101, n_packets=123, n_bytes=456, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=goto_table:105",
+			rule: 1,
+			metric: types.RuleMetric{
+				Bytes:    456,
+				Packets:  123,
+				Sessions: 0,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rule, metric := parseMetricFlow(tc.flow)
+			require.Equal(t, tc.rule, rule)
+			require.Equal(t, tc.metric.Bytes, metric.Bytes)
+			require.Equal(t, tc.metric.Sessions, metric.Sessions)
+			require.Equal(t, tc.metric.Packets, metric.Packets)
+		})
+	}
 }

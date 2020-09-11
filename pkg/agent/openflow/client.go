@@ -224,6 +224,8 @@ type Client interface {
 	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received
 	// packets through registered handlers.
 	StartPacketInHandler(stopCh <-chan struct{})
+	// Get traffic metrics of each NetworkPolicy rule.
+	NetworkPolicyMetrics() map[uint32]*types.RuleMetric
 }
 
 // GetFlowTableStatus returns an array of flow table status.

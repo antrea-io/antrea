@@ -77,3 +77,13 @@ func (p *Priority) Less(p2 Priority) bool {
 	}
 	return p.TierPriority > p2.TierPriority
 }
+
+type RuleMetric struct {
+	Bytes, Packets, Sessions uint64
+}
+
+func (m *RuleMetric) Merge(m1 *RuleMetric) {
+	m.Bytes += m1.Bytes
+	m.Packets += m1.Packets
+	m.Sessions += m1.Sessions
+}
