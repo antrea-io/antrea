@@ -85,7 +85,9 @@ spec:
               items:
                 properties:
                   action:
-                    pattern: \bAllow|\bDrop
+                    enum:
+                    - Allow
+                    - Drop
                     type: string
                   ports:
                     items:
@@ -119,7 +121,9 @@ spec:
               items:
                 properties:
                   action:
-                    pattern: \bAllow|\bDrop
+                    enum:
+                    - Allow
+                    - Drop
                     type: string
                   from:
                     items:
@@ -269,7 +273,9 @@ spec:
               items:
                 properties:
                   action:
-                    pattern: \bAllow|\bDrop
+                    enum:
+                    - Allow
+                    - Drop
                     type: string
                   ports:
                     items:
@@ -305,7 +311,9 @@ spec:
               items:
                 properties:
                   action:
-                    pattern: \bAllow|\bDrop
+                    enum:
+                    - Allow
+                    - Drop
                     type: string
                   from:
                     items:
