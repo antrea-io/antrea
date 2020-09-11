@@ -8,14 +8,16 @@ result via CRD, antctl or UI graph.
 
 ## Table of Contents
 
-- [Prerequisites](#Prerequisites)
-- [Start a New Trace](#Start-a-New-Trace)
-  - [Using kubectl and YAML file](#using-kubectl-and-YAML-file)
-  - [Using antctl and spec config](#using-antctl-and-spec-config)
-  - [Using Octant with antrea-octant-plugin](#Using-Octant-with-antrea-octant-plugin)
-- [View Traceflow Result and Graph](#View-Traceflow-Result-and-Graph)
-- [View Traceflow CRDs](#View-Traceflow-CRDs)
+<!-- toc -->
+- [Prerequisites](#prerequisites)
+- [Start a New Trace](#start-a-new-trace)
+  - [Using kubectl and YAML file](#using-kubectl-and-yaml-file)
+  - [Using-antctl-and-spec-config](#using-antctl-and-spec-config)
+  - [Using Octant with antrea-octant-plugin](#using-octant-with-antrea-octant-plugin)
+- [View Traceflow Result and Graph](#view-traceflow-result-and-graph)
+- [View Traceflow CRDs](#view-traceflow-crds)
 - [RBAC](#rbac)
+<!-- /toc -->
 
 ## Prerequisites
 You need to enable Traceflow from the featureGates map defined in antrea.yml for

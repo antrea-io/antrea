@@ -1,22 +1,25 @@
 # Network Flow Visibility in Antrea
 
 ## Table of Contents
+
+<!-- toc -->
 - [Overview](#overview)
 - [Flow Exporter feature](#flow-exporter-feature)
-  * [Configuration](#configuration)
-  * [Supported capabilities](#supported-capabilities)
+  - [Configuration](#configuration)
+  - [Supported capabilities](#supported-capabilities)
 - [ELK Flow Collector](#elk-flow-collector)
-  * [Purpose](#purpose)
-  * [About Elastic Stack](#about-elastic-stack)
-  * [Deployment Steps](#deployment-steps)
-  * [Pre-built Dashboards](#pre-built-dashboards)
-    + [Overview](#overview-1)
-    + [Flows](#flows)
+  - [Purpose](#purpose)
+  - [About Elastic Stack](#about-elastic-stack)
+  - [Deployment Steps](#deployment-steps)
+  - [Pre-built Dashboards](#pre-built-dashboards)
+    - [Overview](#overview-1)
+    - [Flows](#flows)
       - [Pod-to-Pod Traffic](#pod-to-pod-traffic)
       - [Pod-to-Service Traffic](#pod-to-service-traffic)
-    + [Flow Records](#flow-records)
-    + [Node Throughput](#node-throughput)
-      
+    - [Flow Records](#flow-records)
+    - [Node Throughput](#node-throughput)
+<!-- /toc -->
+
 ## Overview
 [Antrea](architecture.md) is a Kubernetes network plugin that provides network
 connectivity and security features for Pod workloads. Considering the scale and
@@ -241,4 +244,6 @@ intra-Node traffic by aggregating all the Pod traffic per Node.
 Visualization Node Throughput Dashboard">
 
 <img src="https://downloads.antrea.io/static/flow-visualization-node-2.png" width="900" alt="Flow
+=======
+<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-node-2.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">

@@ -12,15 +12,18 @@ running in two different modes:
 
 ## Table of Contents
 
+<!-- toc -->
 - [Installation](#installation)
 - [Usage](#usage)
   - [Collecting support information](#collecting-support-information)
-  - [`controllerinfo` and `agentinfo` commands](#controllerinfo-and-agentinfo-commands)
+  - [<code>controllerinfo</code> and <code>agentinfo</code> commands](#-and--commands)
   - [NetworkPolicy commands](#networkpolicy-commands)
+    - [Mapping endpoints to NetworkPolicies](#mapping-endpoints-to-networkpolicies)
   - [Dumping Pod network interface information](#dumping-pod-network-interface-information)
   - [Dumping OVS flows](#dumping-ovs-flows)
   - [OVS packet tracing](#ovs-packet-tracing)
   - [Traceflow](#traceflow)
+<!-- /toc -->
 
 ## Installation
 
