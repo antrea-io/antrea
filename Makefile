@@ -211,20 +211,20 @@ codegen:
 .PHONY: ubuntu
 ubuntu:
 	@echo "===> Building antrea/antrea-ubuntu Docker image <==="
-	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu .
+	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu .
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 
 # Build bins in a golang container, and build the antrea-ubuntu Docker image.
 .PHONY: build-ubuntu
 build-ubuntu:
 	@echo "===> Building Antrea bins and antrea/antrea-ubuntu Docker image <==="
-	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu .
+	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu .
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 
 .PHONY: build-windows
 build-windows:
 	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="
-	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
+	docker build --pull -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
 	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) antrea/antrea-windows
 
 .PHONY: manifest
@@ -241,7 +241,7 @@ manifest:
 .PHONY: octant-antrea-ubuntu
 octant-antrea-ubuntu:
 	@echo "===> Building antrea/octant-antrea-ubuntu Docker image <==="
-	docker build -t antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.octant.ubuntu .
+	docker build --pull -t antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.octant.ubuntu .
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/octant-antrea-ubuntu
 
 .PHONY: verify-spelling
