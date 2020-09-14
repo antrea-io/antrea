@@ -38,20 +38,20 @@ var (
 		Help:           "The total number of internal-networkpolicy processed",
 		StabilityLevel: metrics.STABLE,
 	})
-	DurationAppliedToGroupSyncing = metrics.NewSummary(&metrics.SummaryOpts{
+	DurationAppliedToGroupSyncing = metrics.NewHistogram(&metrics.HistogramOpts{
 		Name:           "antrea_controller_applied_to_group_sync_duration_milliseconds",
 		Help:           "The duration of syncing applied-to-group",
-		StabilityLevel: metrics.STABLE,
+		StabilityLevel: metrics.ALPHA,
 	})
-	DurationAddressGroupSyncing = metrics.NewSummary(&metrics.SummaryOpts{
+	DurationAddressGroupSyncing = metrics.NewHistogram(&metrics.HistogramOpts{
 		Name:           "antrea_controller_address_group_sync_duration_milliseconds",
 		Help:           "The duration of syncing address-group",
-		StabilityLevel: metrics.STABLE,
+		StabilityLevel: metrics.ALPHA,
 	})
-	DurationInternalNetworkPolicySyncing = metrics.NewSummary(&metrics.SummaryOpts{
+	DurationInternalNetworkPolicySyncing = metrics.NewHistogram(&metrics.HistogramOpts{
 		Name:           "antrea_controller_network_policy_sync_duration_milliseconds",
 		Help:           "The duration of syncing internal-networkpolicy",
-		StabilityLevel: metrics.STABLE,
+		StabilityLevel: metrics.ALPHA,
 	})
 	LengthAppliedToGroupQueue = metrics.NewGauge(&metrics.GaugeOpts{
 		Name:           "antrea_controller_length_applied_to_group_queue",
