@@ -123,11 +123,26 @@ enabled explicitly.
 
 
 ## Running the e2e tests on a Kind cluster
+The simplest way is to run the following command:
 
-Refer to this [document](/docs/kind.md) for instructions on how to create a
-Kind cluster and use Antrea as the CNI. You need at least one control-plane
-(master) Node and one worker Node. Before running the Go e2e tests, you will
-also need to copy the Antrea manifest to the master Docker container:
+```bash
+./ci/kind/test-e2e-kind.sh [options]
+```
+
+It will set up a two worker Node Kind cluster to run the e2e tests, and destroy
+the cluster after the tests stop (succeed or fail). `kubectl` needs to be
+present in your `PATH` to set up the test cluster. For more information on the
+usage of this script and the options, run:
+
+```bash
+./ci/kind/test-e2e-kind.sh --help
+```
+
+You can also run the e2e tests with an existing Kind cluster. Refer to this
+[document](/docs/kind.md) for instructions on how to create a Kind cluster and
+use Antrea as the CNI. You need at least one control-plane (master) Node and one
+worker Node. Before running the Go e2e tests, you will also need to copy the Antrea
+manifest to the master Docker container:
 
 ```bash
 ./hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
