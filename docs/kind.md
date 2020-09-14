@@ -24,6 +24,9 @@ To create a two worker Node cluster with Antrea installed using scripts, do
 ./ci/kind/kind-setup.sh create CLUSTER_NAME
 ```
 
+This command will execute `kubectl` commands to set up the cluster, and requires
+that `kubectl` be present in your `PATH`.
+
 kind-setup.sh allows users to specify the number of worker Nodes, the docker
 bridge networks/subnets connected to worker Nodes, and some docker images to be
 pre-loaded in each Node. For more information on usage, run:
