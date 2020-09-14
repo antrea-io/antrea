@@ -11,7 +11,23 @@ on:
       - release-*
 
 jobs:
+  check-changes:
+    name: Check whether tests need to be run based on diff
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@master
+      id: check_diff
+      with:
+        args: docs/* ci/jenkins/* *.md
+    outputs:
+      has_changes: ${{ steps.check_diff.outputs.has_changes }}
+
   build:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
@@ -27,6 +43,8 @@ jobs:
         docker push antrea/antrea-ubuntu:latest
 
   build-windows:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [windows-2019]
     steps:
     - uses: actions/checkout@v2
@@ -43,6 +61,8 @@ jobs:
       shell: bash
 
   build-octant-antrea-ubuntu:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
@@ -58,6 +78,8 @@ jobs:
         docker push antrea/octant-antrea-ubuntu:latest
 
   build-netpol-tmp:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
