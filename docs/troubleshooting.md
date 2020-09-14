@@ -38,6 +38,14 @@ The Open vSwitch daemon logs for each `antrea-agent` Pod are also stored on the
 persistent storage of the corresponding node (i.e. the node on which the Pod is
 scheduled), under `/var/log/antrea/openvswitch`.
 
+To increase the log level for the `antrea-agent` and the `antrea-controller`, you
+can edit the `--v=0` arg in the Antrea manifest to a desired level.
+Alternatively, you can generate an Antrea manifest with increased log level of
+4 (maximum debug level) using `generate_manifest.sh`:
+```
+hack/generate-manifest.sh --mode dev --verbose-log
+```  
+
 ## Accessing the antrea-controller API
 
 antrea-controller runs as a Deployment, exposes its API via a Service and

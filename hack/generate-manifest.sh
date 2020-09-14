@@ -31,6 +31,8 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
+        --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
+                                      This option will work only with 'dev' mode.
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -58,6 +60,7 @@ KEEP=false
 ENCAP_MODE=""
 CLOUD=""
 TUN_TYPE="geneve"
+VERBOSE_LOG=false
 
 while [[ $# -gt 0 ]]
 do
@@ -100,6 +103,10 @@ case $key in
     TUN_TYPE="$2"
     shift 2
     ;;
+    --verbose-log)
+    VERBOSE_LOG=true
+    shift
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -131,6 +138,12 @@ fi
 
 if [ "$MODE" == "release" ] && [ -z "$IMG_TAG" ]; then
     echoerr "In 'release' mode, environment variable IMG_TAG must be set"
+    print_help
+    exit 1
+fi
+
+if [ "$MODE" == "release" ] && [ ! -z "$VERBOSE_LOG" ]; then
+    echoerr "--verbose-log works only with 'dev' mode"
     print_help
     exit 1
 fi
@@ -290,6 +303,11 @@ if [ "$MODE" == "dev" ]; then
     $KUSTOMIZE edit set image antrea=antrea/antrea-ubuntu:latest
     $KUSTOMIZE edit add patch agentImagePullPolicy.yml
     $KUSTOMIZE edit add patch controllerImagePullPolicy.yml
+    if $VERBOSE_LOG; then
+        $KUSTOMIZE edit add patch agentVerboseLog.yml
+        $KUSTOMIZE edit add patch controllerVerboseLog.yml
+    fi
+
     # only required because there is no good way at the moment to update the imagePullPolicy for all
     # containers. See https://github.com/kubernetes-sigs/kustomize/issues/1493
     if $IPSEC; then
