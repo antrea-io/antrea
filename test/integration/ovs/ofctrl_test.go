@@ -425,6 +425,7 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 	for i < loop {
 		// Sending Bundle message in parallel.
 		go func() {
+			defer wg.Done()
 			// Sending OpenFlow messages when OVS is disconnected is not in this case's scope.
 			if !bridge.IsConnected() {
 				return
@@ -453,7 +454,6 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 			case <-ch:
 				successCount++
 			}
-			wg.Done()
 		}()
 		i++
 	}
