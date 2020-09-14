@@ -142,7 +142,7 @@ if [ "$MODE" == "release" ] && [ -z "$IMG_TAG" ]; then
     exit 1
 fi
 
-if [ "$MODE" == "release" ] && [ ! -z "$VERBOSE_LOG" ]; then
+if [ "$MODE" == "release" ] && $VERBOSE_LOG; then
     echoerr "--verbose-log works only with 'dev' mode"
     print_help
     exit 1
