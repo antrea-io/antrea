@@ -153,13 +153,19 @@ func run(o *Options) error {
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated Pods.
 	podUpdates := make(chan v1beta2.PodReference, 100)
+	// We set flow poll interval as the time interval for rule deletion in the async
+	// rule cache, which is implemented as part of the idAllocator. This is to preserve
+	// the rule info for populating NetworkPolicy fields in the Flow Exporter even
+	// after rule deletion.
+	asyncRuleDeleteInterval := o.pollInterval
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
 		ifaceStore,
 		nodeConfig.Name,
 		podUpdates,
-		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
+		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
+		asyncRuleDeleteInterval)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
 	}
@@ -296,6 +302,7 @@ func run(o *Options) error {
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, o.config.OVSDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
 			ifaceStore,
 			proxier,
+			networkPolicyController,
 			o.pollInterval)
 		pollDone := make(chan struct{})
 		go connStore.Run(stopCh, pollDone)

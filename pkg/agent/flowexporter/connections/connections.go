@@ -15,6 +15,7 @@
 package connections
 
 import (
+	"encoding/binary"
 	"fmt"
 	"sync"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
@@ -36,21 +38,29 @@ var serviceProtocolMap = map[uint8]corev1.Protocol{
 }
 
 type ConnectionStore struct {
-	connections   map[flowexporter.ConnectionKey]flowexporter.Connection
-	connDumper    ConnTrackDumper
-	ifaceStore    interfacestore.InterfaceStore
-	antreaProxier proxy.Provider
-	pollInterval  time.Duration
-	mutex         sync.Mutex
+	connections          map[flowexporter.ConnectionKey]flowexporter.Connection
+	connDumper           ConnTrackDumper
+	ifaceStore           interfacestore.InterfaceStore
+	antreaProxier        proxy.Provider
+	networkPolicyQuerier querier.AgentNetworkPolicyInfoQuerier
+	pollInterval         time.Duration
+	mutex                sync.Mutex
 }
 
-func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, proxier proxy.Provider, pollInterval time.Duration) *ConnectionStore {
+func NewConnectionStore(
+	connTrackDumper ConnTrackDumper,
+	ifaceStore interfacestore.InterfaceStore,
+	proxier proxy.Provider,
+	npQuerier querier.AgentNetworkPolicyInfoQuerier,
+	pollInterval time.Duration,
+) *ConnectionStore {
 	return &ConnectionStore{
-		connections:   make(map[flowexporter.ConnectionKey]flowexporter.Connection),
-		connDumper:    connTrackDumper,
-		ifaceStore:    ifaceStore,
-		antreaProxier: proxier,
-		pollInterval:  pollInterval,
+		connections:          make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		connDumper:           connTrackDumper,
+		ifaceStore:           ifaceStore,
+		antreaProxier:        proxier,
+		networkPolicyQuerier: npQuerier,
+		pollInterval:         pollInterval,
 	}
 }
 
@@ -109,7 +119,6 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		if !srcFound && !dstFound {
 			klog.Warningf("Cannot map any of the IP %s or %s to a local Pod", conn.TupleOrig.SourceAddress.String(), conn.TupleReply.SourceAddress.String())
 		}
-		// sourceIP/destinationIP are mapped only to local Pods and not remote Pods.
 		if srcFound && sIface.Type == interfacestore.ContainerInterface {
 			conn.SourcePodName = sIface.ContainerInterfaceConfig.PodName
 			conn.SourcePodNamespace = sIface.ContainerInterfaceConfig.PodNamespace
@@ -118,10 +127,16 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 			conn.DestinationPodName = dIface.ContainerInterfaceConfig.PodName
 			conn.DestinationPodNamespace = dIface.ContainerInterfaceConfig.PodNamespace
 		}
-		// Do not export flow records of connections whose destination is local Pod and source is remote Pod.
-		// We export flow records only from "source node", where the connection is originated from. This is to avoid
-		// 2 copies of flow records at flow collector. This restriction will be removed when flow records store network policy rule ID.
-		// TODO: Remove this when network policy rule IDs are added to flow records.
+
+		// Do not export the flow records of connections whose destination is local
+		// Pod and source is remote Pod. We export flow records only from source node,
+		// where the connection originates from. This is to avoid duplicate copies
+		// of flow records at flow collector. This restriction will be removed when
+		// flow aggregator is implemented. We miss some key information such as
+		// destination Pod info, ingress NetworkPolicy info, stats from destination
+		// node etc.
+		// TODO: Remove this when flow aggregator that correlates the flow records
+		// is implemented.
 		if !srcFound && dstFound {
 			conn.DoExport = false
 		}
@@ -142,6 +157,36 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 					} else {
 						conn.DestinationServicePortName = servicePortName.String()
 					}
+				}
+			}
+		}
+
+		// Retrieve NetworkPolicy Name and Namespace by using the ingress and egress
+		// IDs stored in the connection label.
+		if len(conn.Labels) != 0 {
+			klog.V(4).Infof("connection label: %x; label masks: %x", conn.Labels, conn.LabelsMask)
+			ingressOfID := binary.LittleEndian.Uint32(conn.Labels[:4])
+			egressOfID := binary.LittleEndian.Uint32(conn.Labels[4:8])
+			if ingressOfID != 0 {
+				policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressOfID)
+				if policy == nil {
+					// This should not happen because the rule flow ID to rule mapping is
+					// preserved for max(5s, flowPollInterval) even after the rule deletion.
+					klog.Warningf("Cannot find NetworkPolicy that has rule with ingressOfID %v", ingressOfID)
+				} else {
+					conn.IngressNetworkPolicyName = policy.Name
+					conn.IngressNetworkPolicyNamespace = policy.Namespace
+				}
+			}
+			if egressOfID != 0 {
+				policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressOfID)
+				if policy == nil {
+					// This should not happen because the rule flow ID to rule mapping is
+					// preserved for max(5s, flowPollInterval) even after the rule deletion.
+					klog.Warningf("Cannot find NetworkPolicy that has rule with egressOfID %v", egressOfID)
+				} else {
+					conn.EgressNetworkPolicyName = policy.Name
+					conn.EgressNetworkPolicyNamespace = policy.Namespace
 				}
 			}
 		}

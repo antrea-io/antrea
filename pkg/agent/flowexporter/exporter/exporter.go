@@ -58,6 +58,10 @@ var (
 		"destinationNodeName",
 		"destinationClusterIPv4",
 		"destinationServicePortName",
+		"ingressNetworkPolicyName",
+		"ingressNetworkPolicyNamespace",
+		"egressNetworkPolicyName",
+		"egressNetworkPolicyNamespace",
 	}
 )
 
@@ -332,11 +336,15 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 				_, err = dataRec.AddInfoElement(ie, net.IP{0, 0, 0, 0})
 			}
 		case "destinationServicePortName":
-			if record.Conn.DestinationServicePortName != "" {
-				_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationServicePortName)
-			} else {
-				_, err = dataRec.AddInfoElement(ie, "")
-			}
+			_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationServicePortName)
+		case "ingressNetworkPolicyName":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.IngressNetworkPolicyName)
+		case "ingressNetworkPolicyNamespace":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.IngressNetworkPolicyNamespace)
+		case "egressNetworkPolicyName":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.EgressNetworkPolicyName)
+		case "egressNetworkPolicyNamespace":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.EgressNetworkPolicyNamespace)
 		}
 		if err != nil {
 			return fmt.Errorf("error while adding info element: %s to data record: %v", ie.Name, err)
