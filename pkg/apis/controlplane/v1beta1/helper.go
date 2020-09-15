@@ -14,6 +14,8 @@
 
 package v1beta1
 
+import "fmt"
+
 // Conversion functions between GroupMember and GroupMemberPod
 func (g *GroupMember) ToGroupMemberPod() *GroupMemberPod {
 	return &GroupMemberPod{
@@ -29,5 +31,13 @@ func (p *GroupMemberPod) ToGroupMember() *GroupMember {
 		Endpoints: []Endpoint{
 			{IP: p.IP, Ports: p.Ports},
 		},
+	}
+}
+
+func (r *NetworkPolicyReference) ToString() string {
+	if r.Type == AntreaClusterNetworkPolicy {
+		return fmt.Sprintf("%s:%s", r.Type, r.Name)
+	} else {
+		return fmt.Sprintf("%s:%s/%s", r.Type, r.Namespace, r.Name)
 	}
 }

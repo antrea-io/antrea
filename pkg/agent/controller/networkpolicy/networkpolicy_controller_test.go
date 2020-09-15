@@ -128,6 +128,12 @@ func newNetworkPolicy(uid string, from, to, appliedTo []string, services []v1bet
 		ObjectMeta:      v1.ObjectMeta{UID: types.UID(uid), Name: uid, Namespace: testNamespace},
 		Rules:           []v1beta1.NetworkPolicyRule{networkPolicyRule1},
 		AppliedToGroups: appliedTo,
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type:      v1beta1.K8sNetworkPolicy,
+			Namespace: testNamespace,
+			Name:      uid,
+			UID:       types.UID(uid),
+		},
 	}
 }
 
@@ -148,6 +154,12 @@ func getNetworkPolicyWithMultipleRules(uid string, from, to, appliedTo []string,
 		ObjectMeta:      v1.ObjectMeta{UID: types.UID(uid), Name: uid, Namespace: testNamespace},
 		Rules:           []v1beta1.NetworkPolicyRule{networkPolicyRule1, networkPolicyRule2},
 		AppliedToGroups: appliedTo,
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type:      v1beta1.K8sNetworkPolicy,
+			Namespace: testNamespace,
+			Name:      uid,
+			UID:       types.UID(uid),
+		},
 	}
 }
 

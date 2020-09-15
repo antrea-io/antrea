@@ -453,9 +453,8 @@ type policyRuleConjunction struct {
 	serviceClause *clause
 	actionFlows   []binding.Flow
 	metricFlows   []binding.Flow
-	// NetworkPolicy name and Namespace information for debugging usage.
-	npName      string
-	npNamespace string
+	// NetworkPolicy reference information for debugging usage.
+	npRef       *v1beta1.NetworkPolicyReference
 	ruleTableID binding.TableIDType
 }
 
@@ -749,9 +748,9 @@ func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *poli
 		return nil
 	}
 	conj = &policyRuleConjunction{
-		id:          ruleID,
-		npName:      rule.PolicyName,
-		npNamespace: rule.PolicyNamespace}
+		id:    ruleID,
+		npRef: rule.PolicyRef,
+	}
 	nClause, ruleTable, dropTable := conj.calculateClauses(rule, c)
 	conj.ruleTableID = rule.TableID
 	_, isEgress := egressTables[rule.TableID]
@@ -1008,12 +1007,12 @@ func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction 
 	return conj.(*policyRuleConjunction)
 }
 
-func (c *client) GetPolicyFromConjunction(ruleID uint32) (string, string) {
+func (c *client) GetPolicyFromConjunction(ruleID uint32) *v1beta1.NetworkPolicyReference {
 	conjunction := c.getPolicyRuleConjunction(ruleID)
 	if conjunction == nil {
-		return "", ""
+		return nil
 	}
-	return conjunction.npName, conjunction.npNamespace
+	return conjunction.npRef
 }
 
 // UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
@@ -1183,7 +1182,7 @@ func (c *client) GetNetworkPolicyFlowKeys(npName, npNamespace string) []string {
 
 	for _, conjObj := range c.policyCache.List() {
 		conj := conjObj.(*policyRuleConjunction)
-		if conj.npName == npName && conj.npNamespace == npNamespace {
+		if conj.npRef.Name == npName && conj.npRef.Namespace == npNamespace {
 			// There can be duplicated flows added due to conjunctive matches
 			// shared by multiple policy rules (clauses).
 			flowKeys = append(flowKeys, conj.getAllFlowKeys()...)
@@ -1254,8 +1253,7 @@ func (c *client) updateConjunctionActionFlows(conj *policyRuleConjunction, updat
 		toClause:      conj.toClause,
 		serviceClause: conj.serviceClause,
 		actionFlows:   newActionFlows,
-		npName:        conj.npName,
-		npNamespace:   conj.npNamespace,
+		npRef:         conj.npRef,
 		ruleTableID:   conj.ruleTableID,
 	}
 	return newConj

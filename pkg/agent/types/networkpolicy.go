@@ -43,21 +43,20 @@ type Address interface {
 
 // PolicyRule groups configurations to set up conjunctive match for egress/ingress policy rules.
 type PolicyRule struct {
-	Direction       v1beta1.Direction
-	From            []Address
-	To              []Address
-	Service         []v1beta1.Service
-	Action          *secv1alpha1.RuleAction
-	Priority        *uint16
-	FlowID          uint32
-	TableID         binding.TableIDType
-	PolicyName      string
-	PolicyNamespace string
+	Direction v1beta1.Direction
+	From      []Address
+	To        []Address
+	Service   []v1beta1.Service
+	Action    *secv1alpha1.RuleAction
+	Priority  *uint16
+	FlowID    uint32
+	TableID   binding.TableIDType
+	PolicyRef *v1beta1.NetworkPolicyReference
 }
 
 // IsAntreaNetworkPolicyRule returns if a PolicyRule is created for Antrea NetworkPolicy types.
 func (r *PolicyRule) IsAntreaNetworkPolicyRule() bool {
-	return r.Priority != nil
+	return r.PolicyRef.Type != v1beta1.K8sNetworkPolicy
 }
 
 // Priority is a struct that is composed of Antrea NetworkPolicy priority, rule priority and Tier priority.

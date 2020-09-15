@@ -25,6 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -217,7 +218,7 @@ type Client interface {
 	InitialTLVMap() error
 
 	// Find network policy and namespace by conjunction ID.
-	GetPolicyFromConjunction(ruleID uint32) (string, string)
+	GetPolicyFromConjunction(ruleID uint32) *v1beta1.NetworkPolicyReference
 
 	// RegisterPacketInHandler registers PacketIn handler to process PacketIn event.
 	RegisterPacketInHandler(packetHandlerName string, packetInHandler interface{})

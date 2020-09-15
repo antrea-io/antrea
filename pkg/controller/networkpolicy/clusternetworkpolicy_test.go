@@ -15,7 +15,6 @@
 package networkpolicy
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -87,9 +86,14 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidA",
-				Name:         "cnpA",
-				Namespace:    "",
+				UID:       "uidA",
+				Name:      "cnpA",
+				Namespace: "",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpA",
+					UID:  "uidA",
+				},
 				Priority:     &p10,
 				TierPriority: &appTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -167,9 +171,14 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidA",
-				Name:         "cnpA",
-				Namespace:    "",
+				UID:       "uidA",
+				Name:      "cnpA",
+				Namespace: "",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpA",
+					UID:  "uidA",
+				},
 				Priority:     &p10,
 				TierPriority: &appTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -212,17 +221,9 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
 
-			if actualPolicy := c.processClusterNetworkPolicy(tt.inputPolicy); !reflect.DeepEqual(actualPolicy, tt.expectedPolicy) {
-				t.Errorf("processClusterNetworkPolicy() got %v, want %v", actualPolicy, tt.expectedPolicy)
-			}
-
-			if actualAddressGroups := len(c.addressGroupStore.List()); actualAddressGroups != tt.expectedAddressGroups {
-				t.Errorf("len(addressGroupStore.List()) got %v, want %v", actualAddressGroups, tt.expectedAddressGroups)
-			}
-
-			if actualAppliedToGroups := len(c.appliedToGroupStore.List()); actualAppliedToGroups != tt.expectedAppliedToGroups {
-				t.Errorf("len(appliedToGroupStore.List()) got %v, want %v", actualAppliedToGroups, tt.expectedAppliedToGroups)
-			}
+			assert.Equal(t, tt.expectedPolicy, c.processClusterNetworkPolicy(tt.inputPolicy))
+			assert.Equal(t, tt.expectedAddressGroups, len(c.addressGroupStore.List()))
+			assert.Equal(t, tt.expectedAppliedToGroups, len(c.appliedToGroupStore.List()))
 		})
 	}
 }
@@ -280,9 +281,14 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidA",
-				Name:         "cnpA",
-				Namespace:    "",
+				UID:       "uidA",
+				Name:      "cnpA",
+				Namespace: "",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpA",
+					UID:  "uidA",
+				},
 				Priority:     &p10,
 				TierPriority: &appTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -335,9 +341,13 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidB",
-				Name:         "cnpB",
-				Namespace:    "",
+				UID:  "uidB",
+				Name: "cnpB",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpB",
+					UID:  "uidB",
+				},
 				Priority:     &p10,
 				TierPriority: &secOpsTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -390,9 +400,14 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidC",
-				Name:         "cnpC",
-				Namespace:    "",
+				UID:       "uidC",
+				Name:      "cnpC",
+				Namespace: "",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpC",
+					UID:  "uidC",
+				},
 				Priority:     &p10,
 				TierPriority: &netOpsTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -445,9 +460,14 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidD",
-				Name:         "cnpD",
-				Namespace:    "",
+				UID:       "uidD",
+				Name:      "cnpD",
+				Namespace: "",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpD",
+					UID:  "uidD",
+				},
 				Priority:     &p10,
 				TierPriority: &emergencyTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -500,9 +520,14 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidE",
-				Name:         "cnpE",
-				Namespace:    "",
+				UID:       "uidE",
+				Name:      "cnpE",
+				Namespace: "",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpE",
+					UID:  "uidE",
+				},
 				Priority:     &p10,
 				TierPriority: &platformTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -570,9 +595,14 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidF",
-				Name:         "cnpF",
-				Namespace:    "",
+				UID:       "uidF",
+				Name:      "cnpF",
+				Namespace: "",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpF",
+					UID:  "uidF",
+				},
 				Priority:     &p10,
 				TierPriority: &appTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -650,9 +680,14 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidG",
-				Name:         "cnpG",
-				Namespace:    "",
+				UID:       "uidG",
+				Name:      "cnpG",
+				Namespace: "",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpG",
+					UID:  "uidG",
+				},
 				Priority:     &p10,
 				TierPriority: &appTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -698,17 +733,9 @@ func TestAddCNP(t *testing.T) {
 			key, _ := keyFunc(tt.inputPolicy)
 			actualPolicyObj, _, _ := npc.internalNetworkPolicyStore.Get(key)
 			actualPolicy := actualPolicyObj.(*antreatypes.NetworkPolicy)
-			if !reflect.DeepEqual(actualPolicy, tt.expPolicy) {
-				t.Errorf("addCNP() got %v, want %v", actualPolicy, tt.expPolicy)
-			}
-
-			if actualAddressGroups := len(npc.addressGroupStore.List()); actualAddressGroups != tt.expAddressGroups {
-				t.Errorf("len(addressGroupStore.List()) got %v, want %v", actualAddressGroups, tt.expAddressGroups)
-			}
-
-			if actualAppliedToGroups := len(npc.appliedToGroupStore.List()); actualAppliedToGroups != tt.expAppliedToGroups {
-				t.Errorf("len(appliedToGroupStore.List()) got %v, want %v", actualAppliedToGroups, tt.expAppliedToGroups)
-			}
+			assert.Equal(t, tt.expPolicy, actualPolicy)
+			assert.Equal(t, tt.expAddressGroups, len(npc.addressGroupStore.List()))
+			assert.Equal(t, tt.expAppliedToGroups, len(npc.appliedToGroupStore.List()))
 		})
 	}
 	_, npc := newController()
