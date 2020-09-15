@@ -183,3 +183,45 @@
          url: https://github.com/vmware-tanzu/antrea
      publishers: '{publishers}'
      wrappers: '{wrappers}'
+
+- job-template:
+    name: '{name}-{test_name}-matrix-compatibility-test'
+    node: '{node}'
+    block-downstream: false
+    block-upstream: false
+    builders: '{builders}'
+    concurrent: true
+    description: '{description}'
+    project-type: matrix
+    execution-strategy:
+      sequential: true
+    scm:
+    - git:
+        branches: '{branches}'
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
+        included-regions: '{included_regions}'
+    triggers:
+    - pollscm:
+        cron: '{cron}'
+        ignore-post-commit-hooks: '{ignore_post_commit_hooks}'
+    axes: '{axes}'
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: -1
+        artifact-num-to-keep: -1
+        days-to-keep: 7
+        num-to-keep: 30
+    - throttle:
+        option: project
+        max-per-node: 2
+        max-total: 2
+        parameters-limit: true
+        matrix-configs: true
+        matrix-builds: true
+    publishers: '{publishers}'
+    parameters: '{parameters}'
+    wrappers: '{wrappers}'
