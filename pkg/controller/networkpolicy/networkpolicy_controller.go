@@ -75,8 +75,8 @@ const (
 	defaultRulePriority = -1
 	// TierIndex is used to index ClusterNetworkPolicies by Tier names.
 	TierIndex = "tier"
-	// maxSupportedTiers is the maximum number of supported Tiers.
-	maxSupportedTiers = 10
+	// PriorityIndex is used to index Tiers by their priorities.
+	PriorityIndex = "priority"
 )
 
 var (
@@ -269,6 +269,17 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		n.tierLister = tierInformer.Lister()
 		n.tierListerSynced = tierInformer.Informer().HasSynced
 		n.tierPrioritySet = sets.Int32{}
+		tierInformer.Informer().AddIndexers(
+			cache.Indexers{
+				PriorityIndex: func(obj interface{}) ([]string, error) {
+					tr, ok := obj.(*secv1alpha1.Tier)
+					if !ok {
+						return []string{}, nil
+					}
+					return []string{strconv.FormatInt(int64(tr.Spec.Priority), 10)}, nil
+				},
+			},
+		)
 		tierInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addTier,

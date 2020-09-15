@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -140,17 +141,23 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier
 	reason := ""
 	switch op {
 	case admv1.Create:
-		// Tier priority must not overlap existing tier's priority
 		klog.V(2).Info("Validating CREATE request for Tier")
+		// There is a potential race condition here, where the tierPrioritySet may
+		// not yet be updated as the handler may not have yet been invoked before
+		// a simultaneous Tier add validation checks for this limit. Even though this
+		// results in number of Tiers exceeding the maxSupportedTiers, we consider
+		// maxSupportedTiers as a soft limit and hence allow this condition to occur.
 		if len(v.networkPolicyController.tierPrioritySet) >= maxSupportedTiers {
-			allowed = false
-			reason = fmt.Sprintf("maximum number of Tiers supported: %d", maxSupportedTiers)
-		} else if reservedTierPriorities.Has(curTier.Spec.Priority) {
-			allowed = false
-			reason = fmt.Sprintf("tier %s priority %d is reserved", curTier.Name, curTier.Spec.Priority)
-		} else if v.networkPolicyController.tierPrioritySet.Has(curTier.Spec.Priority) {
-			allowed = false
-			reason = fmt.Sprintf("tier %s priority %d overlaps with existing Tier", curTier.Name, curTier.Spec.Priority)
+			return fmt.Sprintf("maximum number of Tiers supported: %d", maxSupportedTiers), false
+		}
+		// Tier priority must not overlap reserved tier's priority
+		if reservedTierPriorities.Has(curTier.Spec.Priority) {
+			return fmt.Sprintf("tier %s priority %d is reserved", curTier.Name, curTier.Spec.Priority), false
+		}
+		// Tier priority must not overlap existing tier's priority
+		trs, err := v.networkPolicyController.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, strconv.FormatInt(int64(curTier.Spec.Priority), 10))
+		if err != nil || len(trs) > 0 {
+			return fmt.Sprintf("tier %s priority %d overlaps with existing Tier", curTier.Name, curTier.Spec.Priority), false
 		}
 	case admv1.Update:
 		// Tier priority updates are not allowed

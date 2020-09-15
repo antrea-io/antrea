@@ -30,6 +30,9 @@ import (
 )
 
 var (
+	// maxSupportedTiers is the soft limit on the maximum number of supported
+	// Tiers.
+	maxSupportedTiers = 50
 	// retryInitTier maintains the number of times Tier creation will be attempted
 	// for default Tiers during initialization.
 	retryInitTier     = 5
