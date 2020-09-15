@@ -14,11 +14,7 @@
 
 package controlplane
 
-import (
-	"strings"
-
-	"k8s.io/apimachinery/pkg/util/sets"
-)
+import "strings"
 
 // groupMemberPodKey is used to uniquely identify GroupMemberPod. Either Pod or
 // IP is used as unique key.
@@ -216,37 +212,4 @@ func (s GroupMemberSet) Items() []*GroupMember {
 		res = append(res, item)
 	}
 	return res
-}
-
-// UInt32 maintains a set of types uint32, implemented via
-// map[uint32]struct{} for minimal memory consumption.
-type UInt32 map[uint32]sets.Empty
-
-// NewUInt32 creates a UInt32 from a list of values.
-func NewUInt32(items ...uint32) UInt32 {
-	ss := UInt32{}
-	ss.Insert(items...)
-	return ss
-}
-
-// Insert adds items to the set.
-func (s UInt32) Insert(items ...uint32) UInt32 {
-	for _, item := range items {
-		s[item] = sets.Empty{}
-	}
-	return s
-}
-
-// Delete removes all items from the set.
-func (s UInt32) Delete(items ...uint32) UInt32 {
-	for _, item := range items {
-		delete(s, item)
-	}
-	return s
-}
-
-// Has returns true if and only if item is contained in the set.
-func (s UInt32) Has(item uint32) bool {
-	_, contained := s[item]
-	return contained
 }

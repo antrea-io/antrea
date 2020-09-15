@@ -104,7 +104,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController.cnpListerSynced = alwaysReady
 	npController.tierLister = crdInformerFactory.Security().V1alpha1().Tiers().Lister()
 	npController.tierListerSynced = alwaysReady
-	npController.tierPrioritySet = controlplane.UInt32{}
+	npController.tierPrioritySet = sets.Int32{}
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),

@@ -134,7 +134,7 @@ func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.Netw
 // getTierPriority retrieves the priority associated with the input Tier name.
 // If the Tier name is empty, by default, the lowest priority Application Tier
 // is returned.
-func (n *NetworkPolicyController) getTierPriority(tier string) uint32 {
+func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 	if tier == "" {
 		return defaultTierPriority
 	}

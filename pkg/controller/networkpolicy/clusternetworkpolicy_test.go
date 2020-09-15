@@ -28,7 +28,7 @@ import (
 
 func TestProcessClusterNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
-	t10 := uint32(10)
+	t10 := int32(10)
 	tierA := secv1alpha1.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "tier-A", UID: "uidA"},
 		Spec: secv1alpha1.TierSpec{
@@ -326,7 +326,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 
 func TestAddCNP(t *testing.T) {
 	p10 := float64(10)
-	emergencyTierPriority := uint32(1)
+	emergencyTierPriority := int32(1)
 	emergencyTier := secv1alpha1.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "emergency", UID: "tE"},
 		Spec: secv1alpha1.TierSpec{
@@ -809,11 +809,11 @@ func TestDeleteCNP(t *testing.T) {
 }
 
 func TestGetTierPriority(t *testing.T) {
-	p10 := uint32(10)
+	p10 := int32(10)
 	tests := []struct {
 		name      string
 		inputTier *secv1alpha1.Tier
-		expPrio   uint32
+		expPrio   int32
 	}{
 		{
 			name:      "empty-tier-name",

@@ -36,6 +36,7 @@ import (
 	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/endpoint"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/webhook"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
@@ -203,8 +204,8 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		// Get new NetworkPolicyValidator
 		v := controllernetworkpolicy.NewNetworkPolicyValidator(c.networkPolicyController)
 		// Install handlers for NetworkPolicy related validation
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", controllernetworkpolicy.HandleValidationNetworkPolicy(v))
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/cnp", controllernetworkpolicy.HandleValidationNetworkPolicy(v))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandleValidationNetworkPolicy(v))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/cnp", webhook.HandleValidationNetworkPolicy(v))
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
 			go c.networkPolicyController.InitializeTiers()

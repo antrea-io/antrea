@@ -36,15 +36,15 @@ var (
 	retryInitInterval = 2 * time.Second
 	// defaultTierPriority maintains the lowest priority for the system generated
 	// default Tier.
-	defaultTierPriority = uint32(250)
+	defaultTierPriority = int32(250)
 	// priorityMap maintains the Tier priority associated with system generated
 	// Tier names.
-	priorityMap = map[string]uint32{
+	priorityMap = map[string]int32{
 		"application": defaultTierPriority,
-		"platform":    uint32(150),
-		"networkops":  uint32(100),
-		"securityops": uint32(50),
-		"emergency":   uint32(5),
+		"platform":    int32(150),
+		"networkops":  int32(100),
+		"securityops": int32(50),
+		"emergency":   int32(5),
 	}
 	// staticTierSet maintains the names of the static tiers such that they can
 	// be converted to corresponding Tier CRD names.
@@ -106,10 +106,10 @@ var (
 func (n *NetworkPolicyController) InitializeTiers() {
 	for _, t := range systemGeneratedTiers {
 		// Check if Tier is already present.
-		tr, err := n.tierLister.Get(t.Name)
-		if tr != nil && err == nil {
+		_, err := n.tierLister.Get(t.Name)
+		if err == nil {
 			// Tier is already present.
-			klog.Infof("%s Tier already created", t.Name)
+			klog.V(2).Infof("%s Tier already created", t.Name)
 			continue
 		}
 		err = n.initTier(t)
@@ -125,7 +125,7 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) error {
 	for i := 1; i <= retryInitTier; i++ {
 		// Allow APIServer to start and accept requests for Tier CREATE validation.
 		time.Sleep(retryInitInterval)
-		klog.Infof("Creating %s Tier", t.Name)
+		klog.V(2).Infof("Creating %s Tier", t.Name)
 		_, err = n.crdClient.SecurityV1alpha1().Tiers().Create(context.TODO(), t, metav1.CreateOptions{})
 		if err != nil {
 			klog.Warningf("Failed to create %s Tier on init: %v. Retry attempt: %d", t.Name, err, i)
@@ -133,9 +133,8 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) error {
 			// to accept requests for validation. Retry fixed number of times
 			// not exceeding 2 * 5 = 10s.
 			continue
-		} else {
-			return nil
 		}
+		return nil
 	}
 	return err
 }
@@ -143,7 +142,7 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) error {
 // addTier receives Tier ADD events and updates the TierPrioritySet.
 func (n *NetworkPolicyController) addTier(obj interface{}) {
 	t := obj.(*secv1alpha1.Tier)
-	klog.Infof("Processing Tier %s ADD event", t.Name)
+	klog.V(2).Infof("Processing Tier %s ADD event", t.Name)
 	// Insert Tier's Priority in the unique set.
 	n.tierPrioritySet.Insert(t.Spec.Priority)
 }
@@ -151,7 +150,7 @@ func (n *NetworkPolicyController) addTier(obj interface{}) {
 // updateTier receives Tier UPDATE events and updates the TierPrioritySet.
 func (n *NetworkPolicyController) updateTier(oldObj, curObj interface{}) {
 	curT := curObj.(*secv1alpha1.Tier)
-	klog.Infof("Processing Tier %s UPDATE event", curT.Name)
+	klog.V(2).Infof("Processing Tier %s UPDATE event", curT.Name)
 	// Insert Tier's Priority in the unique set.
 	n.tierPrioritySet.Insert(curT.Spec.Priority)
 }
@@ -159,7 +158,7 @@ func (n *NetworkPolicyController) updateTier(oldObj, curObj interface{}) {
 // deleteTier receives Tier DELETE events and updates the TierPrioritySet.
 func (n *NetworkPolicyController) deleteTier(old interface{}) {
 	t := old.(*secv1alpha1.Tier)
-	klog.Infof("Processing Tier %s DELETE event", t.Name)
+	klog.V(2).Infof("Processing Tier %s DELETE event", t.Name)
 	// Remove Tier's Priority from the unique set.
 	n.tierPrioritySet.Delete(t.Spec.Priority)
 }

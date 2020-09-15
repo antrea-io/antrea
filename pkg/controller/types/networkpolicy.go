@@ -115,5 +115,5 @@ type NetworkPolicy struct {
 	AppliedToGroups []string
 	// TierPriority represents the priority of the Tier associated with this Network
 	// Policy.
-	TierPriority *uint32
+	TierPriority *int32
 }
