@@ -174,3 +174,58 @@
          url: https://github.com/vmware-tanzu/antrea
      publishers: '{publishers}'
      wrappers: '{wrappers}'
+
+- job-template:
+    name: 'test-{name}-{test_name}-matrix-test'
+    node: '{node}'
+    block-downstream: false
+    block-upstream: false
+    builders: '{builders}'
+    concurrent: true
+    description: '{description}'
+    project-type: matrix
+    scm:
+    - git:
+        branches: '{branches}'
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
+        included-regions: '{included_regions}'
+    triggers:
+    - pollscm:
+        cron: '{cron}'
+        ignore-post-commit-hooks: '{ignore_post_commit_hooks}'
+    axes:
+      - axis:
+         type: label-expression
+         name: TEST_OS
+         values:
+#          - ubuntu-1804
+          - centos-7
+          - photon-3
+      - axis:
+         type: label-expression
+         name: K8S_VERSION
+         values:
+#          - v1.16.9
+          - v1.17.5
+          - v1.18.2
+#      - axis:
+#         type: groovy
+#         name: test
+#         command: return [one,two,three]
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: -1
+        artifact-num-to-keep: -1
+        days-to-keep: 7
+        num-to-keep: 30
+    - throttle:
+        option: project
+        max-per-node: 0
+        max-total: 2
+        parameters-limit: true
+    publishers: '{publishers}'
+    wrappers: '{wrappers}'

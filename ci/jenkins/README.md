@@ -47,19 +47,19 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 * [EKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)
   community tests on EKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above, as well as "NodePort" (See [#690](https://github.com/vmware-tanzu/antrea/issues/690)).\
   Current test environment matrix:
-  
+
   |  K8s Version |    Node Type    |  Node AMI Family |  Status  |
   | :----------: | :-------------: | :--------------: | :------: |
   |     1.15     |  EC2 t3.medium  |   AmazonLinux2   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)|
-  
+
 * [GKE conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)
   community tests on GKE cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
   Current test environment matrix:
-    
+
   |  K8s Version   |     Node OS     | VPC Native Mode (on by default) |  Status  |
   | :------------: | :-------------: | :-----------------------------: |:-------: |
   | 1.16.13-gke.1  |     Ubuntu      |  On                             |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)|
-  
+
 * [AKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)
   community tests on AKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
   Current test environment matrix:
@@ -70,8 +70,10 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 
 * [daily-elk-flow-collector-validate](https://jenkins.antrea-ci.rocks/job/antrea-daily-elk-flow-collector-validate-for-period/):
   [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-daily-elk-flow-collector-validate-for-period)](http://jenkins.antrea-ci.rocks/view/cloud/job/antrea-daily-elk-flow-collector-validate-for-period/)
-  daily validation of elk flow collector manifest. If build fails, Jenkins will send an email to 
+  daily validation of elk flow collector manifest. If build fails, Jenkins will send an email to
   projectantrea-dev@googlegroups.com for notification.
+
+ * daily-matrix-test: to be tested
 
 If you need to run the K8s community tests locally, you may use the
 [ci/run-k8s-e2e-tests.sh](/ci/run-k8s-e2e-tests.sh) script. It takes care of

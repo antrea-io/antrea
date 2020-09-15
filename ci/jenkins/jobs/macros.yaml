@@ -56,7 +56,13 @@
           }
 
           set -e
-          cluster="${JOB_NAME}-${BUILD_NUMBER}"
+          if [ !$K8S_VERSION ]; then
+            export K8S_VERSION=v1.17.3
+          fi
+          if [ !$MATRIX_TEST_OS ]; then
+            export TEST_OS=ubuntu-1804
+          fi
+          cluster="${JOB_NAME}-${BUILD_NUMBER}-$K8S_VERSION"
 
           WORK_HOME="/var/lib/jenkins"
           export KUBECONFIG="${WORK_HOME}/.kube/config"
@@ -71,6 +77,8 @@
           mkdir -p ${WORKSPACE}/jenkins/out
           cp ci/cluster-api/vsphere/templates/* ${WORKSPACE}/jenkins/out
           sed -i "s/CLUSTERNAMESPACE/${cluster}/g" "${WORKSPACE}/jenkins/out/cluster.yaml"
+          sed -i "s/K8SVERSION/$K8S_VERSION/g" "${WORKSPACE}/jenkins/out/cluster.yaml"
+          sed -i "s/OPERATINGSYSTEM/$TEST_OS/g" "${WORKSPACE}/jenkins/out/cluster.yaml"
           sed -i "s/CLUSTERNAME/${cluster}/g" "${WORKSPACE}/jenkins/out/cluster.yaml"
           sed -i "s|SSHAUTHORIZEDKEYS|${publickey}|g" "${WORKSPACE}/jenkins/out/cluster.yaml"
           sed -i "s/CLUSTERNAMESPACE/${cluster}/g" "${WORKSPACE}/jenkins/out/namespace.yaml"
@@ -138,8 +146,11 @@
           set -ex
           echo '=== Clean up workload cluster ==='
           export KUBECONFIG="/var/lib/jenkins/.kube/config"
+          if [ !$K8S_VERSION ]; then
+            export K8S_VERSION=v1.17.3
+          fi
 
-          cluster="${JOB_NAME}-${BUILD_NUMBER}"
+          cluster="${JOB_NAME}-${BUILD_NUMBER}-$K8S_VERSION"
           kubectl delete ns ${cluster}
           rm -rf "${WORKSPACE}/jenkins"
 
@@ -255,6 +266,9 @@
           export GOROOT=/usr/local/go
           export GOCACHE="${WORKSPACE}/../gocache"
           export PATH=$GOROOT/bin:$PATH
+          if [ !$K8S_VERSION ]; then
+            export K8S_VERSION=v1.17.3
+          fi
 
           make clean
           docker pull antrea/openvswitch --all-tags
@@ -264,7 +278,7 @@
           docker image prune -f --filter "until=1h" || true
           for i in `seq 2`
           do
-            VERSION="$JOB_NAME-$BUILD_NUMBER" make && break
+            VERSION="${JOB_NAME}-${BUILD_NUMBER}-$K8S_VERSION" make && break
           done
 
           if [ "$?" -ne "0" ]; then
@@ -277,7 +291,10 @@
       - shell: |-
           echo ====== Delivering Antrea to all the Nodes ======
           export KUBECONFIG="${WORKSPACE}/jenkins/out/kubeconfig"
-          DOCKER_IMG_VERSION="$JOB_NAME-$BUILD_NUMBER"
+          if [ !$K8S_VERSION ]; then
+            export K8S_VERSION=v1.17.3
+          fi
+          DOCKER_IMG_VERSION="${JOB_NAME}-${BUILD_NUMBER}-$K8S_VERSION"
 
           docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
 
@@ -305,7 +322,10 @@
           export GOCACHE=$WORK_HOME/.cache/go-build
           export PATH=$GOROOT/bin:$PATH
           export KUBECONFIG=${WORKSPACE}/jenkins/out/kubeconfig
-          cluster="${JOB_NAME}-${BUILD_NUMBER}"
+          if [ !$K8S_VERSION ]; then
+            export K8S_VERSION=v1.17.3
+          fi
+          cluster="${JOB_NAME}-${BUILD_NUMBER}-$K8S_VERSION"
 
           mkdir -p test/e2e/infra/vagrant/playbook/kube
           cp -f "${WORKSPACE}/jenkins/out/kubeconfig" test/e2e/infra/vagrant/playbook/kube/config

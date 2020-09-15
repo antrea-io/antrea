@@ -657,3 +657,29 @@
               send-to-individuals: false
           triggers: []
           wrappers: []
+      - 'test-{name}-{test_name}-matrix-test':
+          test_name: daily
+          node: 'antrea-test-node'
+          description: 'This is daily matrix test for Antrea.'
+          builders:
+            - builder-workload-cluster-setup
+            - builder-prepare-antrea
+            - builder-conformance:
+                mode_regex: 'certified-conformance'
+                focus_regex: ''
+                skip_regex: ''
+            - builder-e2e
+            - builder-workload-cluster-cleanup
+          branches:
+          - '*/master'
+          included_regions: []
+          cron: 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers: []
+#          - email:
+#              recipients: projectantrea-dev@googlegroups.com
+          wrappers:
+             - workspace-cleanup
+             - timeout:
+                 timeout: 600
+                 type: absolute
