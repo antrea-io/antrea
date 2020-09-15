@@ -945,8 +945,6 @@ rules:
   - watch
   - list
   - create
-  - patch
-  - update
 - apiGroups:
   - ops.antrea.tanzu.vmware.com
   resources:
