@@ -278,7 +278,7 @@ section introduces these modes.
 
 * ***Hybrid*** When two Nodes are in two different subnets, Pod traffic between
 the two Nodes is encapsulated; when the two Nodes are in the same subnet, Pod
-traffic between them is not encapsulated, instead the traffic is routed from one
+traffic between them is not encapsulated, instead the traffic is routed from on3e
 Node to another. Antrea Agent adds routes on the Node to enable the routing
 within the same Node subnet. For every remote Node in the same subnet as the
 local Node, Agent adds a static route entry that uses the remote Node IP as the
