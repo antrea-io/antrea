@@ -908,16 +908,6 @@ rules:
   - get
   - update
 - apiGroups:
-<<<<<<< HEAD
-=======
-  - apiregistration.k8s.io
-  resourceNames:
-  - v1beta1.networking.antrea.tanzu.vmware.com
-  resources:
-  - apiservices
-  verbs:
-  - delete
-- apiGroups:
   - admissionregistration.k8s.io
   resourceNames:
   - crdvalidator.antrea.tanzu.vmware.com
@@ -927,7 +917,6 @@ rules:
   - get
   - update
 - apiGroups:
->>>>>>> ef64d1b... Add ValidationWebhookConfig
   - security.antrea.tanzu.vmware.com
   resources:
   - clusternetworkpolicies

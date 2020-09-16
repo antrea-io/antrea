@@ -33,10 +33,6 @@ var (
 	// maxSupportedTiers is the soft limit on the maximum number of supported
 	// Tiers.
 	maxSupportedTiers = 50
-	// retryInitTier maintains the number of times Tier creation will be attempted
-	// for default Tiers during initialization.
-	retryInitTier     = 5
-	retryInitInterval = 2 * time.Second
 	// defaultTierPriority maintains the lowest priority for the system generated
 	// default Tier.
 	defaultTierPriority = int32(250)
