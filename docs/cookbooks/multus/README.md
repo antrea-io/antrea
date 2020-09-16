@@ -13,6 +13,7 @@ e.g. [ipvlan](https://github.com/containernetworking/plugins/tree/master/plugins
 ## Prerequisites
 
 The only prerequisites are:
+
  * a K8s cluster (Linux Nodes) running a K8s version supported by Antrea. At the
    time of writing, we recommend version 1.16 or later. Typically the cluster
    needs to be running on a network infrastructure that you control. For
@@ -22,11 +23,16 @@ The only prerequisites are:
 All the required software will be deployed using YAML manifests, and the
 corresponding container images will be downloaded from public registries.
 
-macvlan requires the network to be able to handle "promiscuous mode", as the
-same physical interface / virtual adapter ends up being assigned multiple MAC
-addresses. When using a virtual network for the Nodes, some configuration
+For the sake of this guide, we will use macvlan in "bridge" mode, which supports
+the creation of multiple subinterfaces on one parent interface, and connects
+them all using a bridge. For more information on the different macvlan modes,
+you can refer to this [blog post](https://hicu.be/bridge-vs-macvlan). Macvlan in
+"bridge" mode requires the network to be able to handle "promiscuous mode", as
+the same physical interface / virtual adapter ends up being assigned multiple
+MAC addresses. When using a virtual network for the Nodes, some configuration
 changes are usually required, which depend on the virtualization technology. For
 example:
+
  * when using VirtualBox and [Internal
    Networking](https://www.virtualbox.org/manual/ch06.html#network_internal),
    set the `Promiscuous Mode` to `Allow All`
@@ -72,11 +78,16 @@ use as an example in this guide.
 
 ### Step 1: Deploying Antrea
 
+For detailed information on the Antrea requirements and instructions on how to
+deploy Antrea, please refer to
+[getting-started.md](/docs/getting-started.md). To deploy the latest version of
+Antrea, use:
+
 ```bash
-kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/v0.9.2/antrea.yml
+kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea.yml
 ```
 
-You may also choose a different [Antrea
+You may also choose a [released Antrea
 version](https://github.com/vmware-tanzu/antrea/releases).
 
 ### Step 2: Deploy Multus as a DaemonSet
@@ -171,7 +182,7 @@ include the IP addresses assigned to the parent interfaces.
 
 When using the [dhcp
 plugin](https://github.com/containernetworking/plugins/tree/master/plugins/ipam/dhcp)
-to assign IP addresses to Pod interfaces, a separate daemon needs to runone ach
+to assign IP addresses to Pod interfaces, a separate daemon needs to run on each
 Node, which will notably ensure that local DHCP leases are renewed
 periodically. To deploy the DHCP daemon (as a DaemonSet), you can use the
 following command:
