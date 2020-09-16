@@ -253,7 +253,7 @@ func (mr *MockClientMockRecorder) InstallBridgeUplinkFlows(arg0, arg1 interface{
 }
 
 // InstallClusterServiceCIDRFlows mocks base method
-func (m *MockClient) InstallClusterServiceCIDRFlows(arg0 *net.IPNet, arg1 uint32) error {
+func (m *MockClient) InstallClusterServiceCIDRFlows(arg0 []*net.IPNet, arg1 uint32) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallClusterServiceCIDRFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)

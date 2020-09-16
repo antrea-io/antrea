@@ -450,7 +450,7 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
 
-	routeClient, err := route.NewClient(serviceCIDR, config.TrafficEncapModeEncap)
+	routeClient, err := route.NewClient(serviceCIDR, config.TrafficEncapModeEncap, false)
 	assert.Nil(t, err)
 	_, ipv6Subnet, _ := net.ParseCIDR("fd74:ca9b:172:19::/64")
 	gwIPv6 := net.ParseIP("fd74:ca9b:172:19::1")

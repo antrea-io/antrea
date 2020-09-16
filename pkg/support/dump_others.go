@@ -52,7 +52,8 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 }
 
 func (d *agentDumper) dumpIPTables(basedir string) error {
-	c, err := iptables.New()
+	nodeConfig := d.aq.GetNodeConfig()
+	c, err := iptables.New(nodeConfig.PodIPv4CIDR != nil, nodeConfig.PodIPv6CIDR != nil)
 	if err != nil {
 		return err
 	}

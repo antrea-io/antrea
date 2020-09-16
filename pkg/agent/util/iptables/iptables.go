@@ -52,23 +52,33 @@ const (
 var restoreWaitSupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
 
 type Client struct {
-	ipt  *iptables.IPTables
-	ip6t *iptables.IPTables
-	// restoreWaitSupported indicates whether iptables-restore supports --wait flag.
+	ipts []*iptables.IPTables
+	// restoreWaitSupported indicates whether iptables-restore (or ip6tables-restore) supports --wait flag.
 	restoreWaitSupported bool
-	enableIPv6           bool
 }
 
-func New() (*Client, error) {
-	ipt, err := iptables.New()
-	if err != nil {
-		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
+func New(enableIPV4, enableIPV6 bool) (*Client, error) {
+	var ipts []*iptables.IPTables
+	var restoreWaitSupported bool
+	if enableIPV4 {
+		ipt, err := iptables.New()
+		if err != nil {
+			return nil, fmt.Errorf("error creating IPTables instance: %v", err)
+		}
+		ipts = append(ipts, ipt)
+		restoreWaitSupported = isRestoreWaitSupported(ipt)
 	}
-	ip6t, err := iptables.NewWithProtocol(iptables.ProtocolIPv6)
-	if err != nil {
-		return nil, fmt.Errorf("error creating IPTables instance for IPv6: %v", err)
+	if enableIPV6 {
+		ip6t, err := iptables.NewWithProtocol(iptables.ProtocolIPv6)
+		if err != nil {
+			return nil, fmt.Errorf("error creating IPTables instance for IPv6: %v", err)
+		}
+		ipts = append(ipts, ip6t)
+		if !restoreWaitSupported {
+			restoreWaitSupported = isRestoreWaitSupported(ip6t)
+		}
 	}
-	return &Client{ipt: ipt, ip6t: ip6t, restoreWaitSupported: isRestoreWaitSupported(ipt)}, nil
+	return &Client{ipts: ipts, restoreWaitSupported: restoreWaitSupported}, nil
 }
 
 func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
@@ -79,8 +89,8 @@ func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
 
 // ensureChain checks if target chain already exists, creates it if not.
 func (c *Client) EnsureChain(table string, chain string) error {
-	ipts := c.getIptablesInstances()
-	for _, ipt := range ipts {
+	for idx := range c.ipts {
+		ipt := c.ipts[idx]
 		oriChains, err := ipt.ListChains(table)
 		if err != nil {
 			return fmt.Errorf("error listing existing chains in table %s: %v", table, err)
@@ -96,18 +106,10 @@ func (c *Client) EnsureChain(table string, chain string) error {
 	return nil
 }
 
-func (c *Client) getIptablesInstances() []*iptables.IPTables {
-	ipts := []*iptables.IPTables{c.ipt}
-	if c.enableIPv6 {
-		ipts = append(ipts, c.ip6t)
-	}
-	return ipts
-}
-
 // ensureRule checks if target rule already exists, appends it if not.
 func (c *Client) EnsureRule(table string, chain string, ruleSpec []string) error {
-	ipts := c.getIptablesInstances()
-	for _, ipt := range ipts {
+	for idx := range c.ipts {
+		ipt := c.ipts[idx]
 		exist, err := ipt.Exists(table, chain, ruleSpec...)
 		if err != nil {
 			return fmt.Errorf("error checking if rule %v exists in table %s chain %s: %v", ruleSpec, table, chain, err)
@@ -165,11 +167,23 @@ func (c *Client) Restore(data []byte, flush bool, useIPv6 bool) error {
 
 // Save calls iptables-saves to dump chains and tables in iptables.
 func (c *Client) Save() ([]byte, error) {
-	return exec.Command("iptables-save", "-c").CombinedOutput()
-}
-
-func (c *Client) SetIPv6Supported(val bool) {
-	c.enableIPv6 = val
+	var output []byte
+	for idx := range c.ipts {
+		var cmd string
+		ipt := c.ipts[idx]
+		switch ipt.Proto() {
+		case iptables.ProtocolIPv6:
+			cmd = "ip6tables-save"
+		default:
+			cmd = "iptables-save"
+		}
+		data, err := exec.Command(cmd, "-c").CombinedOutput()
+		if err != nil {
+			return nil, err
+		}
+		output = append(output, data...)
+	}
+	return output, nil
 }
 
 func contains(chains []string, targetChain string) bool {
