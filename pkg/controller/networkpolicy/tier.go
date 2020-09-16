@@ -115,31 +115,35 @@ func (n *NetworkPolicyController) InitializeTiers() {
 			klog.V(2).Infof("%s Tier already created", t.Name)
 			continue
 		}
-		err = n.initTier(t)
-		if err != nil {
-			// System generated Tiers were not initialized within an acceptable delay.
-			klog.Errorf("Failed to create system Tier %s on init", t.Name)
-		}
+		n.initTier(t)
 	}
 }
 
-func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) error {
+// initTier attempts to create system Tiers until they are created using an
+// exponential backoff period from 1 to max of 8secs.
+func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
 	var err error
-	for i := 1; i <= retryInitTier; i++ {
-		// Allow APIServer to start and accept requests for Tier CREATE validation.
-		time.Sleep(retryInitInterval)
+	const maxBackoffTime = 8 * time.Second
+	backoff := 1 * time.Second
+	retryAttempt := 1
+	for {
 		klog.V(2).Infof("Creating %s Tier", t.Name)
 		_, err = n.crdClient.SecurityV1alpha1().Tiers().Create(context.TODO(), t, metav1.CreateOptions{})
 		if err != nil {
-			klog.Warningf("Failed to create %s Tier on init: %v. Retry attempt: %d", t.Name, err, i)
+			klog.Warningf("Failed to create %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)
 			// Tier creation may fail because antrea APIService is not yet ready
 			// to accept requests for validation. Retry fixed number of times
 			// not exceeding 2 * 5 = 10s.
+			time.Sleep(backoff)
+			backoff *= 2
+			if backoff > maxBackoffTime {
+				backoff = maxBackoffTime
+			}
+			retryAttempt += 1
 			continue
 		}
-		return nil
+		return
 	}
-	return err
 }
 
 // addTier receives Tier ADD events and updates the TierPrioritySet.
