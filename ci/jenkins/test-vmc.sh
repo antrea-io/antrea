@@ -381,11 +381,6 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/../..
 pushd "$THIS_DIR" > /dev/null
 
-if [[ "$CLUSTER" == "" ]]; then
-    echoerr "CLUSTER option is not provided."
-    exit 1
-fi
-
 if [[ "$RUN_GARBAGE_COLLECTION" == true ]]; then
     garbage_collection
     exit 0
