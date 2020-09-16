@@ -68,6 +68,11 @@ type AgentConfig struct {
 	// AntreaProxy is enabled, this parameter is not needed and will be ignored if provided.
 	// Default is 10.96.0.0/12
 	ServiceCIDR string `yaml:"serviceCIDR,omitempty"`
+	// ClusterIP CIDR range for IPv6 Services. It's required when using kube-proxy to provide IPv6 Service in a Dual-Stack
+	// cluster or an IPv6 only cluster. The value should be the same as the configuration for kube-apiserver specified by
+	// --service-cluster-ip-range. When AntreaProxy is enabled, this parameter is not needed.
+	// No default value for this field.
+	ServiceCIDRv6 string `yaml:"serviceCIDRv6,omitempty"`
 	// Whether or not to enable IPSec (ESP) encryption for Pod traffic across Nodes. IPSec encryption
 	// is supported only for the GRE tunnel type. Antrea uses Preshared Key (PSK) for IKE
 	// authentication. When IPSec tunnel is enabled, the PSK value must be passed to Antrea Agent
