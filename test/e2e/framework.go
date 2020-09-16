@@ -62,6 +62,7 @@ const (
 	antreaYML            string = "antrea.yml"
 	antreaIPSecYML       string = "antrea-ipsec.yml"
 	defaultBridgeName    string = "br-int"
+	monitoringNamespace  string = "monitoring"
 
 	nameSuffixLength int = 8
 )
@@ -989,19 +990,21 @@ func forAllNodes(fn func(nodeName string) error) error {
 	return nil
 }
 
-// forAllAntreaPods invokes the provided function for every Antrea Pod currently running on every Node.
-func (data *TestData) forAllAntreaPods(fn func(nodeName, podName string) error) error {
+// forAllMatchingPodsInNamespace invokes the provided function for every Pod currently running on every Node in a given
+// namespace and which matches labelSelector criteria.
+func (data *TestData) forAllMatchingPodsInNamespace(
+	labelSelector, nsName string, fn func(nodeName string, podName string, nsName string) error) error {
 	for _, node := range clusterInfo.nodes {
 		listOptions := metav1.ListOptions{
-			LabelSelector: "app=antrea",
+			LabelSelector: labelSelector,
 			FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.name),
 		}
-		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
+		pods, err := data.clientset.CoreV1().Pods(nsName).List(context.TODO(), listOptions)
 		if err != nil {
 			return fmt.Errorf("failed to list Antrea Pods on Node '%s': %v", node.name, err)
 		}
 		for _, pod := range pods.Items {
-			if err := fn(node.name, pod.Name); err != nil {
+			if err := fn(node.name, pod.Name, nsName); err != nil {
 				return err
 			}
 		}

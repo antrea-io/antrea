@@ -126,6 +126,7 @@ spec:
           args:
             - "--config.file=/etc/prometheus/prometheus.yml"
             - "--storage.tsdb.path=/prometheus/"
+            - "--log.level=debug"
           ports:
             - containerPort: 9090
           volumeMounts:
