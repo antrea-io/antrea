@@ -446,34 +446,75 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 }
 
-func waitForReconcilerUpdated(t *testing.T, reconciler *mockReconciler) {
-	select {
-	case ruleID := <-reconciler.updated:
-		_, exists := reconciler.getLastRealized(ruleID)
-		if !exists {
-			t.Fatalf("Expected rule %s, got none", ruleID)
-		}
-	case <-time.After(time.Millisecond * 100):
-		t.Fatal("Expected one update, got none")
-	}
-}
-
-func waitForReconcilerDeleted(t *testing.T, reconciler *mockReconciler) {
-	select {
-	case ruleID := <-reconciler.deleted:
-		actualRule, exists := reconciler.getLastRealized(ruleID)
-		if exists {
-			t.Fatalf("Expected no rule, got %v", actualRule)
-		}
-	case <-time.After(time.Millisecond * 100):
-		t.Fatal("Expected one update, got none")
-	}
-}
-
 func TestNetworkPolicyMetrics(t *testing.T) {
 	// Initialize NetworkPolicy metrics (prometheus)
 	metrics.InitializeNetworkPolicyMetrics()
 	controller, clientset, reconciler := newTestController()
+
+	// Define functions to wait for a message from reconciler
+	waitForReconcilerUpdated := func() {
+		select {
+		case ruleID := <-reconciler.updated:
+			_, exists := reconciler.getLastRealized(ruleID)
+			if !exists {
+				t.Fatalf("Expected rule %s, got none", ruleID)
+			}
+		case <-time.After(time.Millisecond * 100):
+			t.Fatal("Expected one update, got none")
+		}
+	}
+	waitForReconcilerDeleted := func() {
+		select {
+		case ruleID := <-reconciler.deleted:
+			actualRule, exists := reconciler.getLastRealized(ruleID)
+			if exists {
+				t.Fatalf("Expected no rule, got %v", actualRule)
+			}
+		case <-time.After(time.Millisecond * 100):
+			t.Fatal("Expected one update, got none")
+		}
+	}
+
+	// Define a function to check networkpolicy metrics
+	checkNetworkPolicyMetrics := func() {
+		expectedEgressNetworkPolicyRuleCount := `
+		# HELP antrea_agent_egress_networkpolicy_rule_count [STABLE] Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.
+		# TYPE antrea_agent_egress_networkpolicy_rule_count gauge
+		`
+
+		expectedIngressNetworkPolicyRuleCount := `
+		# HELP antrea_agent_ingress_networkpolicy_rule_count [STABLE] Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.
+		# TYPE antrea_agent_ingress_networkpolicy_rule_count gauge
+		`
+
+		expectedNetworkPolicyCount := `
+		# HELP antrea_agent_networkpolicy_count [STABLE] Number of networkpolicies on local node which are managed by the Antrea Agent.
+		# TYPE antrea_agent_networkpolicy_count gauge
+		`
+
+		ingressRuleCount := 0
+		egressRuleCount := 0
+
+		// Get networkpolicies in all namespaces
+		networkpolicies := controller.GetNetworkPolicies("")
+		for _, networkpolicy := range networkpolicies {
+			for _, rule := range networkpolicy.Rules {
+				if rule.Direction == v1beta1.DirectionIn {
+					ingressRuleCount++
+				} else {
+					egressRuleCount++
+				}
+			}
+		}
+
+		expectedEgressNetworkPolicyRuleCount = expectedEgressNetworkPolicyRuleCount + fmt.Sprintf("antrea_agent_egress_networkpolicy_rule_count %d\n", egressRuleCount)
+		expectedIngressNetworkPolicyRuleCount = expectedIngressNetworkPolicyRuleCount + fmt.Sprintf("antrea_agent_ingress_networkpolicy_rule_count %d\n", ingressRuleCount)
+		expectedNetworkPolicyCount = expectedNetworkPolicyCount + fmt.Sprintf("antrea_agent_networkpolicy_count %d\n", controller.GetNetworkPolicyNum())
+
+		assert.NoError(t, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedEgressNetworkPolicyRuleCount), "antrea_agent_egress_networkpolicy_rule_count"))
+		assert.NoError(t, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedIngressNetworkPolicyRuleCount), "antrea_agent_ingress_networkpolicy_rule_count"))
+		assert.NoError(t, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedNetworkPolicyCount), "antrea_agent_networkpolicy_count"))
+	}
 
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
@@ -497,8 +538,8 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	networkPolicyWatcher.Add(policy1)
 	networkPolicyWatcher.Action(watch.Bookmark, nil)
-	waitForReconcilerUpdated(t, reconciler)
-	checkNetworkPolicyMetrics(t, controller)
+	waitForReconcilerUpdated()
+	checkNetworkPolicyMetrics()
 
 	// Test adding policy2 with multiple rules
 	policy2 := getNetworkPolicyWithMultipleRules("policy2", []string{"addressGroup2"}, []string{"addressGroup2"}, []string{"appliedToGroup2"}, services)
@@ -507,57 +548,16 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns2")}))
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	networkPolicyWatcher.Add(policy2)
-	waitForReconcilerUpdated(t, reconciler)
-	checkNetworkPolicyMetrics(t, controller)
+	waitForReconcilerUpdated()
+	checkNetworkPolicyMetrics()
 
 	// Test deleting policy1
 	networkPolicyWatcher.Delete(newNetworkPolicy("policy1", []string{}, []string{}, []string{}, nil))
-	waitForReconcilerDeleted(t, reconciler)
-	checkNetworkPolicyMetrics(t, controller)
+	waitForReconcilerDeleted()
+	checkNetworkPolicyMetrics()
 
 	// Test deleting policy2
 	networkPolicyWatcher.Delete(newNetworkPolicy("policy2", []string{}, []string{}, []string{}, nil))
-	waitForReconcilerDeleted(t, reconciler)
-	checkNetworkPolicyMetrics(t, controller)
-}
-
-func checkNetworkPolicyMetrics(t *testing.T, controller *Controller) {
-	expectedEgressNetworkPolicyRuleCount := `
-    # HELP antrea_agent_egress_networkpolicy_rule_count [STABLE] Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.
-    # TYPE antrea_agent_egress_networkpolicy_rule_count gauge
-	`
-
-	expectedIngressNetworkPolicyRuleCount := `
-    # HELP antrea_agent_ingress_networkpolicy_rule_count [STABLE] Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.
-    # TYPE antrea_agent_ingress_networkpolicy_rule_count gauge
-	`
-
-	expectedNetworkPolicyCount := `
-    # HELP antrea_agent_networkpolicy_count [STABLE] Number of networkpolicies on local node which are managed by the Antrea Agent.
-    # TYPE antrea_agent_networkpolicy_count gauge
-	`
-
-	ingressRuleCount := 0
-	egressRuleCount := 0
-
-	// Get networkpolicies in all namespaces
-	networkpolicies := controller.GetNetworkPolicies("")
-	for _, networkpolicy := range networkpolicies {
-		for _, rule := range networkpolicy.Rules {
-			if rule.Direction == v1beta1.DirectionIn {
-				ingressRuleCount++
-			} else {
-				egressRuleCount++
-			}
-		}
-	}
-
-	expectedEgressNetworkPolicyRuleCount = expectedEgressNetworkPolicyRuleCount + fmt.Sprintf("antrea_agent_egress_networkpolicy_rule_count %d\n", egressRuleCount)
-	expectedIngressNetworkPolicyRuleCount = expectedIngressNetworkPolicyRuleCount + fmt.Sprintf("antrea_agent_ingress_networkpolicy_rule_count %d\n", ingressRuleCount)
-	expectedNetworkPolicyCount = expectedNetworkPolicyCount + fmt.Sprintf("antrea_agent_networkpolicy_count %d\n", controller.GetNetworkPolicyNum())
-
-	assert.NoError(t, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedEgressNetworkPolicyRuleCount), "antrea_agent_egress_networkpolicy_rule_count"))
-	assert.NoError(t, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedIngressNetworkPolicyRuleCount), "antrea_agent_ingress_networkpolicy_rule_count"))
-	assert.NoError(t, testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedNetworkPolicyCount), "antrea_agent_networkpolicy_count"))
-
+	waitForReconcilerDeleted()
+	checkNetworkPolicyMetrics()
 }
