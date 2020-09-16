@@ -84,7 +84,13 @@ func (o *Options) validate(args []string) error {
 	// Validate service CIDR configuration
 	_, _, err := net.ParseCIDR(o.config.ServiceCIDR)
 	if err != nil {
-		return fmt.Errorf("service CIDR %s is invalid", o.config.ServiceCIDR)
+		return fmt.Errorf("Service CIDR %s is invalid", o.config.ServiceCIDR)
+	}
+	if o.config.ServiceCIDRv6 != "" {
+		_, _, err := net.ParseCIDR(o.config.ServiceCIDRv6)
+		if err != nil {
+			return fmt.Errorf("Service CIDR v6 %s is invalid", o.config.ServiceCIDRv6)
+		}
 	}
 	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
 		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
