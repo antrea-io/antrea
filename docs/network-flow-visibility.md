@@ -26,7 +26,7 @@ to enhance the performance and security aspects of Pod workloads.
 For visualizing the network flows, Antrea monitors the flows in Linux conntrack module. These flows are converted to flow records
 and are sent to the configured flow controller. High-level design is given below:
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/netviz.png" width="600" alt="Network Flow Visibilty">
+<img src="https://downloads.antrea.io/static/netviz.png" width="600" alt="Network Flow Visibilty">
 
 ## Flow Exporter feature
 
@@ -150,7 +150,7 @@ visualization.
 #### Overview
 An overview of Pod-based flow records information is provided.
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-overview.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/flow-visualization-overview.png" width="900" alt="Flow
 Visualization Overview Dashboard"> 
 
 #### Flows
@@ -158,35 +158,35 @@ Visualization Overview Dashboard">
 Pod-to-Pod Tx and Rx traffic is shown in sankey diagrams. Corresponding 
 source or destination Pod throughput is visualized using stacked line graph. 
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-flow-1.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/flow-visualization-flow-1.png" width="900" alt="Flow
 Visualization Flows Dashboard"> 
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-flow-2.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/flow-visualization-flow-2.png" width="900" alt="Flow
 Visualization Flow Dashboard"> 
 
 ##### Pod-to-Service Traffic
 Pod-to-Service traffic is presented similar to Pod-to-Pod traffic.
 Corresponding source or destination IP addresses are shown in tooltips.
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-flow-3.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/flow-visualization-flow-3.png" width="900" alt="Flow
 Visualization Flows Dashboard"> 
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-flow-4.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/flow-visualization-flow-4.png" width="900" alt="Flow
 Visualization Flow Dashboard"> 
 
 #### Flow Records 
 Flow Records dashboard shows the raw flow records over time with support 
 for filters.
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-flow-record.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/flow-visualization-flow-record.png" width="900" alt="Flow
 Visualization Flow Record Dashboard">
 
 #### Node Throughput
 Node Throughput dashboard shows the visualization of inter-Node and 
 intra-Node traffic by aggregating all the Pod traffic per Node.
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-node-1.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/flow-visualization-node-1.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-node-2.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/flow-visualization-node-2.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
