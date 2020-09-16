@@ -77,17 +77,13 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
-	ipt, err := iptables.New()
-	if err != nil {
-		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
-	}
-
+// TODO: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy. This param is not used in this file;
+// leaving it here is to be compatible with the implementation on Windows.
+func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType, noSNAT bool) (*Client, error) {
 	return &Client{
-		serviceCIDR:   serviceCIDR,
-		networkConfig: networkConfig,
-		noSNAT:        noSNAT,
-		ipt:           ipt,
+		serviceCIDR: serviceCIDR,
+		encapMode:   encapMode,
+		noSNAT:      noSNAT,
 	}, nil
 }
 
@@ -172,8 +168,10 @@ func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
 // initIPTables ensure that the iptables infrastructure we use is set up.
 // It's idempotent and can safely be called on every startup.
 func (c *Client) initIPTables() error {
-	if c.nodeConfig.PodIPv6CIDR != nil {
-		c.ipt.SetIPv6Supported(true)
+	var err error
+	c.ipt, err = iptables.New(c.nodeConfig.PodIPv4CIDR != nil, c.nodeConfig.PodIPv6CIDR != nil)
+	if err != nil {
+		return fmt.Errorf("error creating IPTables instance: %v", err)
 	}
 	// Create the antrea managed chains and link them to built-in chains.
 	// We cannot use iptables-restore for these jump rules because there
