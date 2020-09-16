@@ -84,7 +84,7 @@ Please refer to the corresponding [Antctl page](https://github.com/vmware-tanzu/
 
 ### Using Octant with antrea-octant-plugin
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/tf_create.1.png" width="600" alt="Start a New Trace">
+<img src="https://downloads.antrea.io/static/tf_create.1.png" width="600" alt="Start a New Trace">
 
 From Octant dashboard, you need to click on left navigation bar named "Antrea" and then
 choose category named "Traceflow" to lead you to the Traceflow UI displayed on the right side.
@@ -98,28 +98,28 @@ You can always view Traceflow result directly via Traceflow CRD status and see i
 or somehow dropped by certain packet-processing stage. Antrea also provides a more user-friendly way by showing the
 Traceflow result via a trace graph on UI.
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/tf_graph_success.png" width="600" alt="Show Successful Trace">
+<img src="https://downloads.antrea.io/static/tf_graph_success.png" width="600" alt="Show Successful Trace">
 
 From the graph above, we can see the inter-node traffic between two Pods has been successfully delivered.
 Sometimes the traffic may not be successfully delivered and we can always easily identify where the traffic is dropped
 via a trace graph like below.
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/tf_graph_failure.png" width="600" alt="Show Failing Trace">
+<img src="https://downloads.antrea.io/static/tf_graph_failure.png" width="600" alt="Show Failing Trace">
 
 You can also generate a historical trace graph by providing a specific Traceflow CRD name (assuming the CRD has not been deleted yet)
 as shown below.
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/tf_historical_graph.png" width="600" alt="Generate Historical Trace">
+<img src="https://downloads.antrea.io/static/tf_historical_graph.png" width="600" alt="Generate Historical Trace">
 
 ## View Traceflow CRDs
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/tf_overview.png" width="600" alt="Antrea Overview">
+<img src="https://downloads.antrea.io/static/tf_overview.png" width="600" alt="Antrea Overview">
 
 As shown above, you can check the existing Traceflow CRDs in the "Traceflow Info" table of the Antrea Overview web page
 in the Octant UI. You can generate a trace graph for any of these CRDs, as explained in the previous section.
 Also, you can view all the traceflow CRDs from the Tracflow page by clicking the right tab named "Traceflow Info" like below.
 
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/tf_table.png" width="600" alt="Traceflow CRDs">
+<img src="https://downloads.antrea.io/static/tf_table.png" width="600" alt="Traceflow CRDs">
 
 ## RBAC
 
