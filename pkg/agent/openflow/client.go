@@ -52,7 +52,7 @@ type Client interface {
 	// InstallClusterServiceCIDRFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once with
 	// the Cluster Service CIDR as a parameter.
-	InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOFPort uint32) error
+	InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet, gatewayOFPort uint32) error
 
 	// InstallClusterServiceFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once.
@@ -471,23 +471,22 @@ func (c *client) InstallClusterServiceFlows() error {
 	return nil
 }
 
-func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOFPort uint32) error {
-	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort)
-	if err := c.ofEntryOperations.Add(flow); err != nil {
+func (c *client) InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet, gatewayOFPort uint32) error {
+	flows := c.serviceCIDRDNATFlows(serviceNets, gatewayOFPort)
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
-	c.defaultServiceFlows = []binding.Flow{flow}
+	c.defaultServiceFlows = flows
 	return nil
 }
 
 func (c *client) InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
 	flows := []binding.Flow{
 		c.gatewayClassifierFlow(gatewayOFPort, cookie.Default),
-		c.ctRewriteDstMACFlow(gatewayMAC, cookie.Default),
 		c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default),
 	}
-	hasIPv6Addr := util.ContainIPv6Addr(gatewayAddrs)
-	flows = append(flows, c.gatewayIPSpoofGuardFlows(gatewayOFPort, hasIPv6Addr, cookie.Default)...)
+	hasV4, hasV6 := util.CheckAddressFamilies(gatewayAddrs)
+	flows = append(flows, c.gatewayIPSpoofGuardFlows(gatewayOFPort, hasV4, hasV6, cookie.Default)...)
 
 	// Add ARP SpoofGuard flow for local gateway interface.
 	gwIPv4 := util.GetIPv4Addr(gatewayAddrs)
@@ -496,7 +495,7 @@ func (c *client) InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.Hardw
 	}
 	// Add flow to ensure the liveness check packet could be forwarded correctly.
 	flows = append(flows, c.localProbeFlow(gatewayAddrs, cookie.Default)...)
-
+	flows = append(flows, c.ctRewriteDstMACFlow(gatewayMAC, hasV4, hasV6, cookie.Default)...)
 	// In NoEncap , no traffic from tunnel port
 	if c.encapMode.SupportsEncap() {
 		flows = append(flows, c.l3ToGatewayFlow(gatewayAddrs, gatewayMAC, cookie.Default)...)
