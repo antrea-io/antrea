@@ -64,6 +64,7 @@ type Initializer struct {
 	hostGateway     string // name of gateway port on the OVS bridge
 	mtu             int
 	serviceCIDR     *net.IPNet // K8s Service ClusterIP CIDR
+	serviceCIDRv6   *net.IPNet // K8s Service ClusterIP CIDR in IPv6
 	networkConfig   *config.NetworkConfig
 	nodeConfig      *config.NodeConfig
 	enableProxy     bool
@@ -79,6 +80,7 @@ func NewInitializer(
 	hostGateway string,
 	mtu int,
 	serviceCIDR *net.IPNet,
+	serviceCIDRv6 *net.IPNet,
 	networkConfig *config.NetworkConfig,
 	enableProxy bool) *Initializer {
 	return &Initializer{
@@ -91,6 +93,7 @@ func NewInitializer(
 		hostGateway:     hostGateway,
 		mtu:             mtu,
 		serviceCIDR:     serviceCIDR,
+		serviceCIDRv6:   serviceCIDRv6,
 		networkConfig:   networkConfig,
 		enableProxy:     enableProxy,
 	}
@@ -313,8 +316,8 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// from local Pods to any Service address can be forwarded to the host gateway interface
 		// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
 		// backend Pods.
-		if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gatewayOFPort); err != nil {
-			klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
+		if err := i.ofClient.InstallClusterServiceCIDRFlows([]*net.IPNet{i.serviceCIDR, i.serviceCIDRv6}, gatewayOFPort); err != nil {
+			klog.Errorf("Failed to setup OpenFlow entries for Service CIDRs: %v", err)
 			return err
 		}
 	} else {
