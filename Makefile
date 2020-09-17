@@ -265,7 +265,14 @@ octant-antrea-ubuntu:
 	docker build --pull -t antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.octant.ubuntu .
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/octant-antrea-ubuntu
 
-.PHONY: verify-spelling
-verify-spelling:
+.PHONY: verify
+verify:
 	@echo "===> Verifying spellings <==="
 	$(CURDIR)/hack/verify-spelling.sh
+	@echo "===> Verifying Table of Contents <==="
+	$(CURDIR)/hack/verify-toc.sh
+
+.PHONY: toc
+toc:
+	@echo "===> Generating Table of Contents for Antrea docs <==="
+	$(CURDIR)/hack/update-toc.sh

@@ -244,6 +244,4 @@ intra-Node traffic by aggregating all the Pod traffic per Node.
 Visualization Node Throughput Dashboard">
 
 <img src="https://downloads.antrea.io/static/flow-visualization-node-2.png" width="900" alt="Flow
-=======
-<img src="https://s3-us-west-2.amazonaws.com/downloads.antrea.io/static/flow-visualization-node-2.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">

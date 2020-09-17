@@ -16,7 +16,7 @@ running in two different modes:
 - [Installation](#installation)
 - [Usage](#usage)
   - [Collecting support information](#collecting-support-information)
-  - [<code>controllerinfo</code> and <code>agentinfo</code> commands](#-and--commands)
+  - [controllerinfo and agentinfo commands](#controllerinfo-and-agentinfo-commands)
   - [NetworkPolicy commands](#networkpolicy-commands)
     - [Mapping endpoints to NetworkPolicies](#mapping-endpoints-to-networkpolicies)
   - [Dumping Pod network interface information](#dumping-pod-network-interface-information)
@@ -113,7 +113,7 @@ included over time):
 The `antctl supportbundle` command can also be run inside a Controller or Agent
 Pod, in which case only local information will be collected.
 
-### `controllerinfo` and `agentinfo` commands
+### controllerinfo and agentinfo commands
 
 `antctl` controller command `get controllerinfo` (or `get ci`) and agent command
 `get agentinfo` (or `get ai`) print the runtime information of

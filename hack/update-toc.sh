@@ -44,6 +44,5 @@ GO111MODULE=on GOBIN="${TMP_DIR}" go get "github.com/tallclair/mdtoc@${TOOL_VERS
 export PATH="${TMP_DIR}:${PATH}"
 cd "${ROOT}"
 
-echo "Checking table of contents are up to date..."
-# Verify tables of contents are up-to-date
-find docs -name '*.md' | grep -Fxvf hack/.notableofcontents | xargs mdtoc --inplace --dryrun
+# Update tables of contents if necessary.
+find docs -name '*.md' | grep -Fxvf hack/.notableofcontents | xargs mdtoc --inplace
