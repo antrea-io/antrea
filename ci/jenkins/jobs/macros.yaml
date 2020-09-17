@@ -21,7 +21,7 @@
           #!/bin/bash
           set -ex
           source /home/ubuntu/.bashrc
-          ./ci/test-conformance-eks.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
+          sudo ./ci/test-conformance-eks.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
 
 - builder:
     name: builder-gke-cluster-cleanup
