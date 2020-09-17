@@ -147,6 +147,15 @@
         fail: true
         timeout: 40
         type: absolute
+    scm:
+    - git:
+        branches: '{branches}'
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
+        included-regions: '{included_regions}'
 
 - job-template:
      name: 'cloud-{name}-{test_name}'

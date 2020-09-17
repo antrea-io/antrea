@@ -80,6 +80,8 @@ installing the correct version of
 subset of community tests for Antrea:
 * To run conformance tests: `./run-k8s-e2e-tests.sh --e2e-conformance
   [--kubeconfig <Kubeconfig>]`.
+* To run whole conformance tests: `./run-k8s-e2e-tests.sh --e2e-whole-conformance
+  [--kubeconfig <Kubeconfig>]`.
 * To run network policy tests: `./run-k8s-e2e-tests.sh --e2e-network-policy
   [--kubeconfig <Kubeconfig>]`.
 * To run a single test by name: `./run-k8s-e2e-tests.sh --e2e-focus <TestRegex>

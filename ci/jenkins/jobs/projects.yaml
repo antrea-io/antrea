@@ -23,13 +23,8 @@
           node: 'antrea-test-node'
           description: 'This is for testing all conformance daily.'
           builders:
-            - builder-workload-cluster-setup
-            - builder-prepare-antrea
             - builder-conformance:
-                mode_regex: 'certified-conformance'
-                focus_regex: ''
-                skip_regex: ''
-            - builder-workload-cluster-cleanup
+                conformance_type: 'whole-conformance'
           branches:
           - '*/master'
           included_regions: []
@@ -43,10 +38,7 @@
           node: 'antrea-test-node'
           description: 'This is for validating the elk flow collector manifest daily.'
           builders:
-            - builder-workload-cluster-setup
-            - builder-prepare-antrea
             - builder-elk-flow-collector
-            - builder-workload-cluster-cleanup
           branches:
           - '*/master'
           included_regions: []
@@ -60,8 +52,11 @@
           node: 'antrea-test-node'
           description: 'This is for deleting useless workload clusters.'
           builders:
-            - builder-workload-cluster-gc
+            - builder-workload-cluster-garbage-collection
           timed: 'H * * * *'
+          branches:
+          - '*/master'
+          included_regions: []
       - '{name}-{test_name}-for-pull-request':
           test_name: list-tests
           node: null
@@ -191,10 +186,7 @@
           branches:
           - ${{sha1}}
           builders:
-            - builder-workload-cluster-setup
-            - builder-prepare-antrea
             - builder-e2e
-            - builder-workload-cluster-cleanup
           trigger_phrase: ^(?!Thanks for your PR).*/test-(e2e|all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
@@ -279,13 +271,8 @@
           branches:
           - ${{sha1}}
           builders:
-            - builder-workload-cluster-setup
-            - builder-prepare-antrea
             - builder-conformance:
-                mode_regex: ''
-                focus_regex: '\[Conformance\]'
-                skip_regex: '\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]'
-            - builder-workload-cluster-cleanup
+                conformance_type: 'conformance'
           trigger_phrase: ^(?!Thanks for your PR).*/test-(conformance|all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
@@ -309,7 +296,7 @@
           publishers:
           - archive:
               allow-empty: true
-              artifacts: '*sonobuoy*.tar.gz'
+              artifacts: 'ci/jenkins/*sonobuoy*.tar.gz'
               case-sensitive: true
               default-excludes: true
               fingerprint: false
@@ -345,13 +332,8 @@
           branches:
           - ${{sha1}}
           builders:
-            - builder-workload-cluster-setup
-            - builder-prepare-antrea
             - builder-conformance:
-                mode_regex: 'certified-conformance'
-                focus_regex: ''
-                skip_regex: ''
-            - builder-workload-cluster-cleanup
+                conformance_type: 'whole-conformance'
           trigger_phrase: .*/test-(whole-conformance).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
@@ -375,7 +357,7 @@
           publishers:
           - archive:
               allow-empty: true
-              artifacts: '*sonobuoy*.tar.gz'
+              artifacts: 'ci/jenkins/*sonobuoy*.tar.gz'
               case-sensitive: true
               default-excludes: true
               fingerprint: false
@@ -436,13 +418,8 @@
           branches:
           - ${{sha1}}
           builders:
-            - builder-workload-cluster-setup
-            - builder-prepare-antrea
             - builder-conformance:
-                mode_regex: ''
-                focus_regex: '\[Feature:NetworkPolicy\]'
-                skip_regex: 'SKIP_NO_TESTCASE'
-            - builder-workload-cluster-cleanup
+                conformance_type: 'networkpolicy'
           trigger_phrase: ^(?!Thanks for your PR).*/test-(networkpolicy|all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
@@ -466,7 +443,7 @@
           publishers:
           - archive:
               allow-empty: true
-              artifacts: '*sonobuoy*.tar.gz'
+              artifacts: 'ci/jenkins/*sonobuoy*.tar.gz'
               case-sensitive: true
               default-excludes: true
               fingerprint: false
