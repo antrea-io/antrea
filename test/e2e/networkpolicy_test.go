@@ -36,7 +36,10 @@ func TestDifferentNamedPorts(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	data.testDifferentNamedPorts(t)
+}
 
+func (data *TestData) testDifferentNamedPorts(t *testing.T) {
 	server0Port := 80
 	_, server0IP, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
 		return data.createServerPod(name, "http", server0Port, false)
@@ -57,10 +60,10 @@ func TestDifferentNamedPorts(t *testing.T) {
 
 	// Both clients can connect to both servers.
 	for _, clientName := range []string{client0Name, client1Name} {
-		if err = data.runNetcatCommandFromTestPod(clientName, server0IP, server0Port); err != nil {
+		if err := data.runNetcatCommandFromTestPod(clientName, server0IP, server0Port); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, server0IP, server0Port)
 		}
-		if err = data.runNetcatCommandFromTestPod(clientName, server1IP, server1Port); err != nil {
+		if err := data.runNetcatCommandFromTestPod(clientName, server1IP, server1Port); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, server1IP, server1Port)
 		}
 	}

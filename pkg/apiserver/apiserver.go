@@ -30,6 +30,8 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	cpinstall "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/install"
+	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	networkinginstall "github.com/vmware-tanzu/antrea/pkg/apis/networking/install"
 	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
 	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
@@ -57,6 +59,7 @@ var (
 func init() {
 	cpinstall.Install(Scheme)
 	systeminstall.Install(Scheme)
+	networkinginstall.Install(Scheme)
 	// We need to add the options to empty v1, see sample-apiserver/pkg/apiserver/apiserver.go.
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
 }
@@ -129,6 +132,11 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpStorage["networkpolicies"] = networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
 	cpGroup.VersionedResourcesStorageMap["v1beta1"] = cpStorage
 
+	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to
+	// two minor versions, the APIs must be kept for two minor releases before it can be deleted.
+	networkingGroup := genericapiserver.NewDefaultAPIGroupInfo(networking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	networkingGroup.VersionedResourcesStorageMap["v1beta1"] = cpStorage
+
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	systemStorage := map[string]rest.Storage{}
 	systemStorage["controllerinfos"] = controllerinfo.NewREST(c.extraConfig.controllerQuerier)
@@ -137,7 +145,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	systemStorage["supportbundles/download"] = bundleStorage.Download
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
 
-	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &systemGroup}
+	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &systemGroup, &networkingGroup}
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
 			return err
@@ -178,9 +186,7 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 	// deprecates a registered APIService, the APIService should be deleted,
 	// otherwise K8s will fail to delete an existing Namespace.
 	// Also check: https://github.com/vmware-tanzu/antrea/issues/494
-	deprecatedAPIServices := []string{
-		"v1beta1.networking.antrea.tanzu.vmware.com",
-	}
+	deprecatedAPIServices := []string{}
 	for _, as := range deprecatedAPIServices {
 		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})
 		if err == nil {
