@@ -223,10 +223,13 @@ type Client interface {
 	// Find OFpriority by conjunction ID. Return "0" if none.
 	GetPriorityFromConjunction(ruleID uint32) string
 
-	// RegisterPacketInHandler registers PacketIn handler to process PacketIn event.
-	RegisterPacketInHandler(packetHandlerReason ofpPacketInReason, packetHandlerName string, packetInHandler interface{})
+	// Get antrea policy config.
+	GetAntreaPolicyConfig() bool
+
 	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received
 	// packets through registered handlers.
+	RegisterPacketInHandler(packetHandlerReason uint8, packetHandlerName string, packetInHandler interface{})
+
 	StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{})
 	// Get traffic metrics of each NetworkPolicy rule.
 	NetworkPolicyMetrics() map[uint32]*types.RuleMetric

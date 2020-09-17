@@ -1018,11 +1018,14 @@ func (c *client) GetPolicyFromConjunction(ruleID uint32) *v1beta1.NetworkPolicyR
 func (c *client) GetPriorityFromConjunction(ruleID uint32) string {
 	conjunction := c.getPolicyRuleConjunction(ruleID)
 	priorities := conjunction.ActionFlowPriorities()
-	priorityStr := ""
 	if len(priorities) > 0 {
-		priorityStr = priorities[len(priorities)-1]
+		return priorities[0]
 	}
-	return priorityStr
+	return ""
+}
+
+func (c *client) GetAntreaPolicyConfig() bool {
+	return c.enableAntreaPolicy
 }
 
 // UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.

@@ -88,7 +88,7 @@ type rule struct {
 	// change in the future, features that need the information of the original
 	// NetworkPolicy should use SourceRef.
 	SourceRef *v1beta1.NetworkPolicyReference
-	// EnableLogging is a boolean indicating if log for CNP. False for NP.
+	// EnableLogging is a boolean indicating whether logging is required for Antrea Policies. Always false for K8s NetworkPolicy.
 	EnableLogging bool
 }
 
@@ -586,11 +586,8 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy, maxPrio
 		TierPriority:    policy.TierPriority,
 		AppliedToGroups: policy.AppliedToGroups,
 		PolicyUID:       policy.UID,
-<<<<<<< HEAD
 		SourceRef:       policy.SourceRef,
-=======
 		EnableLogging:   r.EnableLogging,
->>>>>>> OVS and Agent Connection (#2)
 	}
 	rule.ID = hashRule(rule)
 	rule.PolicyNamespace = policy.Namespace

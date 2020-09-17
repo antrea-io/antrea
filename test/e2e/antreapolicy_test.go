@@ -16,6 +16,8 @@ package e2e
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strings"
 	"testing"
 	"time"
 
@@ -652,6 +654,53 @@ func testANPBasic(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+// testAuditLoggingBasic tests that a audit log is generated when egress drop applied
+func testAuditLoggingBasic(t *testing.T) {
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-log-cnp-deny").
+		SetPriority(1.0).
+		SetAppliedToGroup(map[string]string{"pod": "a"}, nil, nil, nil)
+	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
+		nil, nil, secv1alpha1.RuleActionDrop).
+		AddEgressLogging()
+
+	reachability := NewReachability(allPods, true)
+	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
+	reachability.Expect(Pod("x/a"), Pod("z/b"), false)
+	reachability.Expect(Pod("x/a"), Pod("z/c"), false)
+	reachability.Expect(Pod("y/a"), Pod("z/a"), false)
+	reachability.Expect(Pod("y/a"), Pod("z/b"), false)
+	reachability.Expect(Pod("y/a"), Pod("z/c"), false)
+	reachability.Expect(Pod("z/a"), Pod("z/b"), false)
+	reachability.Expect(Pod("z/a"), Pod("z/c"), false)
+
+	testStep := []*TestStep{
+		{
+			"Port 80",
+			reachability,
+			[]metav1.Object{builder.Get()},
+			80,
+			0,
+		},
+	}
+	testCase := []*TestCase{
+		{"Audit Log CNP Drop Egress From All Pod:a to NS:z", testStep},
+	}
+	executeTests(t, testCase)
+}
+
+// validateAuditLog validates whether testAuditLoggingBasic succeeded or failed
+func validateAuditLog() bool {
+	data, err := ioutil.ReadFile("/var/log/antrea/networkpolicy/np.log")
+	if err != nil {
+		return false
+	}
+	s := string(data)
+	// check whether s contains test CNP
+	fmt.Println(strings.Contains(s, "test-log-cnp-deny"))
+	return true
+}
+
 // executeTests runs all the tests in testList and prints results
 func executeTests(t *testing.T, testList []*TestCase) {
 	for _, testCase := range testList {
@@ -717,6 +766,10 @@ func printResults() {
 				result = fmt.Sprintf("failure -- %d wrong results", wrong)
 				testFailed = true
 			}
+			if testCase.Name == "Audit Log CNP Drop Egress From All Pod:a to NS:z" {
+				result = fmt.Sprintf("failure -- %d wrong results", 1)
+				testFailed = !validateAuditLog()
+			}
 			fmt.Printf("\tStep %s on port %d, duration %d seconds, result: %s\n",
 				step.Name, step.Port, int(step.Duration.Seconds()), result)
 			fmt.Printf("\n%s\n", comparison.PrettyPrint("\t\t"))
@@ -761,6 +814,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=CNPPriorityConflictingRule", func(t *testing.T) { testCNPPriorityConflictingRule(t) })
 		t.Run("Case=CNPRulePriority", func(t *testing.T) { testCNPRulePrioirty(t) })
 		t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })
+		t.Run("Case=AuditLoggingBasic", func(t *testing.T) { testAuditLoggingBasic(t) })
 	})
 
 	printResults()

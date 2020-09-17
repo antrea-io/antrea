@@ -481,6 +481,8 @@ spec:
                                   format: cidr
                       name:
                         type: string
+                      enableLogging:
+                        type: boolean
                 egress:
                   type: array
                   items:
@@ -520,6 +522,8 @@ spec:
                                   format: cidr
                       name:
                         type: string
+                      enableLogging:
+                        type: boolean
   scope: Namespaced
   names:
     plural: networkpolicies

@@ -73,7 +73,7 @@ type Controller struct {
 	// reconciler provides interfaces to reconcile the desired state of
 	// NetworkPolicy rules with the actual state of Openflow entries.
 	reconciler Reconciler
-	// include openflow client to register packetin for logging
+	// ofClient registers packetin for Antrea Policy logging.
 	ofClient openflow.Client
 
 	networkPolicyWatcher  *watcher
@@ -102,10 +102,15 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	// Wait until appliedToGroupWatcher, addressGroupWatcher and networkPolicyWatcher to receive bookmark event.
 	c.fullSyncGroup.Add(3)
 
-	// Register packetInHandler
-	c.ofClient.RegisterPacketInHandler(openflow.NewOFReason(0), "networkpolicy", c)
-	// Initiate logger for cnp audit logging
-	InitLogger()
+	if c.ofClient != nil && c.ofClient.GetAntreaPolicyConfig() {
+		// Register packetInHandler
+		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "networkpolicy", c)
+		// initiate logger for Antrea Policy audit logging
+		err := initLogger()
+		if err != nil {
+			return nil
+		}
+	}
 
 	// Use nodeName to filter resources when watching resources.
 	options := metav1.ListOptions{

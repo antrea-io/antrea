@@ -17,13 +17,13 @@ package networkpolicy
 import (
 	"errors"
 	"fmt"
-	"net"
 	"log"
 	"os"
 
-	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/libOpenflow/openflow13"
+	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/ofnet/ofctrl"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
@@ -32,107 +32,108 @@ import (
 )
 
 const (
-	logDir string = "/var/log/antrea/networkpolicy/"
+	logDir      string = "/var/log/antrea/networkpolicy/"
+	logfileName string = "np.log"
 )
 
 var (
-	CNPLogger    *log.Logger
+	AntreaPolicyLogger *log.Logger
 )
 
-func InitLogger() {
-	// logging file should be /var/log/antrea/networkpolicy/cnp.log
+// logInfo will be set by retrieving info from packetin and register
+type logInfo struct {
+	tableName   string // name of the table sending packetin
+	npName      string // namespace/name for Antrea NetworkPolicy and name for Antrea ClusterNetworkPolicy
+	disposition string // Allow/Drop of the rule sending packetin
+	ofPriority  string // openflow priority of the flow sending packetin
+	srcIP       string // source IP of the traffic logged
+	destIP      string // destination IP of the traffic logged
+	pktLength   uint16 // packet length of packetin
+	protocolStr string // protocol of the traffic logged
+}
+
+// initLogger is called while newing Antrea network policy agent controller.
+// Customize AntreaPolicyLogger specifically for Antrea Policies audit logging.
+func initLogger() error {
+	// logging file should be /var/log/antrea/networkpolicy/np.log
 	if _, err := os.Stat(logDir); os.IsNotExist(err) {
 		os.Mkdir(logDir, 0755)
 	}
-	file, err := os.OpenFile(logDir + "cnp.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(logDir+logfileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
-		klog.Errorf("Failed to initiate logger %v", err)
+		klog.Errorf("Failed to initialize logger to audit Antrea Policies %v", err)
+		return err
 	}
 
-	CNPLogger = log.New(file, "CNP: ", log.Ldate|log.Ltime|log.Lshortfile)
-	klog.Info("Initiated CNPLogger for audit logging")
+	AntreaPolicyLogger = log.New(file, "", log.Ldate|log.Lmicroseconds)
+	// Use lumberjack log file rotation
+	AntreaPolicyLogger.SetOutput(&lumberjack.Logger{
+		Filename:   logDir + logfileName,
+		MaxSize:    500, // megabytes after which new file is created
+		MaxBackups: 3,   // number of backups
+		MaxAge:     28,  //days
+		Compress:   true,
+	})
+	klog.V(2).Info("Initialized Antrea Policy Logger for audit logging")
+	return nil
 }
 
+// HandlePacketIn is the packetin handler registered to openflow by Antrea network policy agent controller.
+// Retrieves information from openflow reg, controller cache, packetin packet to log.
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if pktIn == nil {
-		return errors.New("empty packetin for CNP")
+		return errors.New("empty packetin for Antrea Policy")
 	}
-	matchers := pktIn.GetMatches()
-	var match *ofctrl.MatchField
-	tableID := binding.TableIDType(pktIn.TableId)
 
-	ob := new(opsv1alpha1.Observation)
-	// Get ingress/egress reg
+	ob := new(logInfo)
+
+	// Get network policy log info
+	err := getNetworkPolicyInfo(pktIn, c, ob)
+	if err != nil {
+		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
+	}
+
+	// Get packet log info
+	err = getPacketInfo(pktIn, ob)
+	if err != nil {
+		return fmt.Errorf("received error while handling packetin for NetworkPolicy: %v", err)
+	}
+
+	// Store log file
+	AntreaPolicyLogger.Printf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npName, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
+	return nil
+}
+
+// getMatchRegField returns match to the regNum register.
+func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchField {
+	return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_REG%d", regNum))
+}
+
+// getMatch receives ofctrl matchers and table id, match field.
+// Modifies match field to Ingress/Egress register based on tableID.
+func getMatch(matchers *ofctrl.Matchers, tableID binding.TableIDType) *ofctrl.MatchField {
+	var match *ofctrl.MatchField
+	// Get match from ingress/egress reg
 	for _, table := range openflow.GetCNPEgressTables() {
 		if tableID == table {
 			match = getMatchRegField(matchers, uint32(openflow.EgressReg))
+			break
 		}
 	}
 	for _, table := range openflow.GetCNPIngressTables() {
 		if tableID == table {
 			match = getMatchRegField(matchers, uint32(openflow.IngressReg))
+			break
 		}
 	}
-
-	// Get source destination IP and protocol
-	var obProtocol uint8
-	if pktIn.Data.Ethertype == 0x800 {
-		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
-		if !ok {
-			return errors.New("invalid IPv4 packet")
-		}
-		ob.TranslatedSrcIP = ipPacket.NWSrc.String()
-		ob.TranslatedDstIP = ipPacket.NWDst.String()
-		obProtocol = ipPacket.Protocol
-	}
-
-	// Get table ID
-	ob.Component = opsv1alpha1.NetworkPolicy
-	ob.ComponentInfo = openflow.GetFlowTableName(tableID)
-
-	// Get network policy full name, CNP is not namespaced
-	info, err := getInfoInReg(match, nil)
-	if err != nil {
-		return err
-	}
-	npName, npNamespace := c.ofClient.GetPolicyFromConjunction(info)
-	ob.NetworkPolicy = getNetworkPolicyFullName(npName, npNamespace)
-
-	// Get OF priority of the conjunction
-	ofPriority := c.ofClient.GetPriorityFromConjunction(info)
-
-	// Get disposition Allow or Drop
-	match = getMatchRegField(matchers, uint32(openflow.DispositionReg))
-	info, err = getInfoInReg(match, nil)
-	if err != nil {
-		return err
-	}
-	disposition := "Drop"
-	if info == 1 {
-		disposition = "Allow"
-	}
-
-	// Store log file
-	CNPLogger.Printf("%s %s %s Priority: %s SRC: %s DEST: %s Protocol: %d", ob.ComponentInfo, ob.NetworkPolicy, disposition, ob.TranslatedSrcIP, ofPriority, ob.TranslatedDstIP, obProtocol)
-	return nil
+	return match
 }
 
-func getNetworkPolicyFullName(npName string, npNamespace string) string {
-	if npName == "" || npNamespace == "" {
-		return npName
-	} else {
-		return fmt.Sprintf("%s/%s", npNamespace, npName)
-	}
-}
-
-func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchField {
-	return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_REG%d", regNum))
-}
-
+// getInfoInReg unloads and returns data stored in the match field.
 func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32, error) {
 	regValue, ok := regMatch.GetValue().(*ofctrl.NXRegister)
 	if !ok {
-		return 0, errors.New("register value cannot be got")
+		return 0, errors.New("register value cannot be retrieved")
 	}
 	if rng != nil {
 		return ofctrl.GetUint32ValueWithRange(regValue.Data, rng), nil
@@ -140,14 +141,51 @@ func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32,
 	return regValue.Data, nil
 }
 
-func getInfoInCtNwDstField(matchers *ofctrl.Matchers) (string, error) {
-	match := matchers.GetMatchByName("NXM_NX_CT_NW_DST")
-	if match == nil {
-		return "", nil
+// getNetworkPolicyInfo fills in tableName, npName, ofPriority, disposition of logInfo ob.
+func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) error {
+	matchers := pktIn.GetMatches()
+	var match *ofctrl.MatchField
+	// Get table name
+	tableID := binding.TableIDType(pktIn.TableId)
+	ob.tableName = openflow.GetFlowTableName(tableID)
+
+	// Set match to corresponding ingress/egress reg
+	match = getMatch(matchers, tableID)
+
+	// Get network policy full name, CNP is not namespaced
+	info, err := getInfoInReg(match, nil)
+	if err != nil {
+		return errors.New(fmt.Sprintf("received error while unloading conjunction id from reg: %v", err))
 	}
-	regValue, ok := match.GetValue().(net.IP)
-	if !ok {
-		return "", errors.New("packet-in conntrack IP destination value cannot be retrieved from metadata")
+	npRef := c.ofClient.GetPolicyFromConjunction(info)
+	ob.npName = npRef.ToString()
+
+	// Get OF priority of the conjunction
+	ob.ofPriority = c.ofClient.GetPriorityFromConjunction(info)
+
+	// Get disposition Allow or Drop
+	match = getMatchRegField(matchers, uint32(openflow.DispositionReg))
+	info, err = getInfoInReg(match, nil)
+	if err != nil {
+		return errors.New(fmt.Sprintf("received error while unloading disposition from reg: %v", err))
 	}
-	return regValue.String(), nil
+	ob.disposition = openflow.DispositionToString[info]
+	return nil
+}
+
+// getPacketInfo fills in srcIP, destIP, pktLength, protocol of logInfo ob.
+func getPacketInfo(pktIn *ofctrl.PacketIn, ob *logInfo) error {
+	// TODO: supprt IPv6 packet
+	if pktIn.Data.Ethertype == opsv1alpha1.EtherTypeIPv4 {
+		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
+		if !ok {
+			return errors.New("invalid IPv4 packet")
+		}
+		// Get source destination IP and protocol
+		ob.srcIP = ipPacket.NWSrc.String()
+		ob.destIP = ipPacket.NWDst.String()
+		ob.pktLength = ipPacket.Length
+		ob.protocolStr = opsv1alpha1.ProtocolsToString[int32(ipPacket.Protocol)]
+	}
+	return nil
 }

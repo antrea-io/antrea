@@ -200,7 +200,7 @@ const (
 	serviceLearnReg         = endpointPortReg // Use reg4[16..18] to store endpoint selection states.
 	EgressReg       regType = 5
 	IngressReg      regType = 6
-	DispositionReg	regType = 7	// Stores Allow or Drop
+	DispositionReg  regType = 7 // Stores Allow or Drop
 	TraceflowReg    regType = 9 // Use reg9[28..31] to store traceflow dataplaneTag.
 	// cnpDropConjunctionIDReg reuses reg3 which will also be used for storing endpoint IP to store the rule ID. Since
 	// the service selection will finish when a packet hitting NetworkPolicy related rules, there is no conflict.
@@ -226,7 +226,16 @@ const (
 	gatewayCTMark = 0x20
 	snatCTMark    = 0x40
 	ServiceCTMark = 0x21
+
+	// disposition marks the flow action stored in DispositionReg
+	DispositionAllow uint32 = 1
+	DispositionDrop  uint32 = 2
 )
+
+var DispositionToString = map[uint32]string{
+	DispositionAllow: "Allow",
+	DispositionDrop:  "Drop",
+}
 
 var (
 	// ofPortMarkRange takes the 16th bit of register marksReg to indicate if the ofPort number of an interface
@@ -309,8 +318,9 @@ type client struct {
 	nodeConfig  *config.NodeConfig
 	encapMode   config.TrafficEncapModeType
 	gatewayPort uint32 // OVSOFPort number
-	// packetInHandlers stores handler to process PacketIn event
-	packetInHandlers map[ofpPacketInReason]map[string]PacketInHandler
+	// packetInHandlers stores handler to process PacketIn event. Each packetin reason can have multiple handlers registered.
+	// When a packetin arrives, openflow send packet to registered handlers in this map.
+	packetInHandlers map[uint8]map[string]PacketInHandler
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -980,8 +990,8 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
 			MatchConjID(conjunctionID).
 			MatchPriority(ofPriority).
-			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
-			Action().LoadRegRange(int(DispositionReg), 1, binding.Range{0, 31}). //CNP
+			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).           // Traceflow.
+			Action().LoadRegRange(int(DispositionReg), DispositionAllow, binding.Range{0, 31}). //AntreaPolicy
 			Action().SendToController(0).
 			Action().CT(true, nextTable, CtZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
 			LoadToLabelRange(uint64(conjunctionID), &labelRange).
@@ -1019,9 +1029,10 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 			Action().LoadRegRange(int(cnpDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
 			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Logging
 			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
-			Action().LoadRegRange(int(DispositionReg), 2, binding.Range{0, 31}). //Logging
+			Action().LoadRegRange(int(DispositionReg), DispositionDrop, binding.Range{0, 31}). //Logging
 			Action().SendToController(0).
 			Action().GotoTable(metricTableID).
+			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 			Done()
 	} else {
 		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
@@ -1030,6 +1041,7 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 			Action().LoadRegRange(int(cnpDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
 			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
 			Action().GotoTable(metricTableID).
+			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 			Done()
 	}
 
@@ -1517,7 +1529,7 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 		policyCache:              policyCache,
 		groupCache:               sync.Map{},
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
-		packetInHandlers:         map[ofpPacketInReason]map[string]PacketInHandler{},
+		packetInHandlers:         map[uint8]map[string]PacketInHandler{},
 	}
 	c.ofEntryOperations = c
 	c.enableProxy = enableProxy

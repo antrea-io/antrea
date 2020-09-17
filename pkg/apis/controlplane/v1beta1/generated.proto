@@ -255,8 +255,7 @@ message NetworkPolicyRule {
   // K8s Network Policy.
   optional string action = 6;
 
-  // EnableLogging is used to indicate if agent should generate logs
-  // when rules are matched. Should be default to false.
+  // EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.
   optional bool enableLogging = 7;
 }
 

@@ -400,14 +400,14 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			ofPorts := r.getPodOFPorts(pods)
 			lastRealized.podOFPorts[svcKey] = ofPorts
 			ofRuleByServicesMap[svcKey] = &types.PolicyRule{
-				Direction: v1beta1.DirectionIn,
-				From:      append(from1, from2...),
-				To:        ofPortsToOFAddresses(ofPorts),
-				Service:   filterUnresolvablePort(servicesMap[svcKey]),
-				Action:    rule.Action,
-				Priority:  ofPriority,
-				TableID:   table,
-				PolicyRef: rule.SourceRef,
+				Direction:     v1beta1.DirectionIn,
+				From:          append(from1, from2...),
+				To:            ofPortsToOFAddresses(ofPorts),
+				Service:       filterUnresolvablePort(servicesMap[svcKey]),
+				Action:        rule.Action,
+				Priority:      ofPriority,
+				TableID:       table,
+				PolicyRef:     rule.SourceRef,
 				EnableLogging: rule.EnableLogging,
 			}
 		}
@@ -418,14 +418,14 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		memberByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.ToAddresses)
 		for svcKey, members := range memberByServicesMap {
 			ofRuleByServicesMap[svcKey] = &types.PolicyRule{
-				Direction: v1beta1.DirectionOut,
-				From:      from,
-				To:        groupMembersToOFAddresses(members),
-				Service:   filterUnresolvablePort(servicesMap[svcKey]),
-				Action:    rule.Action,
-				Priority:  ofPriority,
-				TableID:   table,
-				PolicyRef: rule.SourceRef,
+				Direction:     v1beta1.DirectionOut,
+				From:          from,
+				To:            groupMembersToOFAddresses(members),
+				Service:       filterUnresolvablePort(servicesMap[svcKey]),
+				Action:        rule.Action,
+				Priority:      ofPriority,
+				TableID:       table,
+				PolicyRef:     rule.SourceRef,
 				EnableLogging: rule.EnableLogging,
 			}
 		}
@@ -441,14 +441,14 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			// Create a new Openflow rule if the group doesn't exist.
 			if !exists {
 				ofRule = &types.PolicyRule{
-					Direction: v1beta1.DirectionOut,
-					From:      from,
-					To:        []types.Address{},
-					Service:   filterUnresolvablePort(rule.Services),
-					Action:    rule.Action,
-					Priority:  nil,
-					TableID:   table,
-					PolicyRef: rule.SourceRef,
+					Direction:     v1beta1.DirectionOut,
+					From:          from,
+					To:            []types.Address{},
+					Service:       filterUnresolvablePort(rule.Services),
+					Action:        rule.Action,
+					Priority:      nil,
+					TableID:       table,
+					PolicyRef:     rule.SourceRef,
 					EnableLogging: rule.EnableLogging,
 				}
 				ofRuleByServicesMap[svcKey] = ofRule
@@ -532,16 +532,16 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					return fmt.Errorf("error allocating Openflow ID")
 				}
 				ofRule := &types.PolicyRule{
-					Direction: v1beta1.DirectionIn,
-					From:      append(from1, from2...),
-					To:        ofPortsToOFAddresses(newOFPorts),
-					Service:   filterUnresolvablePort(servicesMap[svcKey]),
-					Action:    newRule.Action,
-					Priority:  ofPriority,
-					FlowID:    ofID,
-					TableID:   table,
-					PolicyRef: newRule.SourceRef,
-					EnableLogging:   newRule.EnableLogging,
+					Direction:     v1beta1.DirectionIn,
+					From:          append(from1, from2...),
+					To:            ofPortsToOFAddresses(newOFPorts),
+					Service:       filterUnresolvablePort(servicesMap[svcKey]),
+					Action:        newRule.Action,
+					Priority:      ofPriority,
+					FlowID:        ofID,
+					TableID:       table,
+					PolicyRef:     newRule.SourceRef,
+					EnableLogging: newRule.EnableLogging,
 				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err
@@ -581,16 +581,16 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					return fmt.Errorf("error allocating Openflow ID")
 				}
 				ofRule := &types.PolicyRule{
-					Direction: v1beta1.DirectionOut,
-					From:      from,
-					To:        groupMembersToOFAddresses(members),
-					Service:   filterUnresolvablePort(servicesMap[svcKey]),
-					Action:    newRule.Action,
-					Priority:  ofPriority,
-					FlowID:    ofID,
-					TableID:   table,
-					PolicyRef: newRule.SourceRef,
-					EnableLogging:   newRule.EnableLogging,
+					Direction:     v1beta1.DirectionOut,
+					From:          from,
+					To:            groupMembersToOFAddresses(members),
+					Service:       filterUnresolvablePort(servicesMap[svcKey]),
+					Action:        newRule.Action,
+					Priority:      ofPriority,
+					FlowID:        ofID,
+					TableID:       table,
+					PolicyRef:     newRule.SourceRef,
+					EnableLogging: newRule.EnableLogging,
 				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err

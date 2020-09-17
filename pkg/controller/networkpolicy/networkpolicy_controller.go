@@ -633,11 +633,11 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 		ingressRuleExists = true
 		services, namedPortExists := toAntreaServices(ingressRule.Ports)
 		rules = append(rules, controlplane.NetworkPolicyRule{
-			Direction: controlplane.DirectionIn,
-			From:      *n.toAntreaPeer(ingressRule.From, np, controlplane.DirectionIn, namedPortExists),
-			Services:  services,
-			Priority:  defaultRulePriority,
-			Action:    &defaultAction,
+			Direction:     controlplane.DirectionIn,
+			From:          *n.toAntreaPeer(ingressRule.From, np, controlplane.DirectionIn, namedPortExists),
+			Services:      services,
+			Priority:      defaultRulePriority,
+			Action:        &defaultAction,
 			EnableLogging: false,
 		})
 	}
@@ -646,11 +646,11 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 		egressRuleExists = true
 		services, namedPortExists := toAntreaServices(egressRule.Ports)
 		rules = append(rules, controlplane.NetworkPolicyRule{
-			Direction: controlplane.DirectionOut,
-			To:        *n.toAntreaPeer(egressRule.To, np, controlplane.DirectionOut, namedPortExists),
-			Services:  services,
-			Priority:  defaultRulePriority,
-			Action:    &defaultAction,
+			Direction:     controlplane.DirectionOut,
+			To:            *n.toAntreaPeer(egressRule.To, np, controlplane.DirectionOut, namedPortExists),
+			Services:      services,
+			Priority:      defaultRulePriority,
+			Action:        &defaultAction,
 			EnableLogging: false,
 		})
 	}

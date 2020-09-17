@@ -147,7 +147,7 @@ func TestReconcilerForget(t *testing.T) {
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8, servicesKey2: 9},
 					CompletedRule: &CompletedRule{
-						rule: &rule{Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1},
+						rule: &rule{Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
 					},
 				},
 			},
@@ -772,12 +772,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-cnp-ingress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
 				FromAddresses: addressGroup1,
 				Pods:          appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
 				FromAddresses: addressGroup2,
 				Pods:          appliedToGroup2,
 			},
@@ -791,12 +791,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-cnp-ingress-rule-uninstall",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &cnp1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
 				FromAddresses: addressGroup1,
 				Pods:          appliedToGroupWithDiffContainerPort,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &cnp1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
 				FromAddresses: addressGroup1,
 				Pods:          appliedToGroupWithSingleContainerPort,
 			},
