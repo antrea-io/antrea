@@ -12,6 +12,7 @@ metadata:
 rules:
   - apiGroups:
       - controlplane.antrea.tanzu.vmware.com
+      - networking.antrea.tanzu.vmware.com
     resources:
       - networkpolicies
       - appliedtogroups

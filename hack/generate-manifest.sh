@@ -33,6 +33,8 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
                                       This option will work only with 'dev' mode.
+        --on-delete                   Generate a manifest with antrea-agent's update strategy set to OnDelete.
+                                      This option will work only for Kind clusters (when using '--kind').
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -61,6 +63,7 @@ ENCAP_MODE=""
 CLOUD=""
 TUN_TYPE="geneve"
 VERBOSE_LOG=false
+ON_DELETE=false
 
 while [[ $# -gt 0 ]]
 do
@@ -107,6 +110,10 @@ case $key in
     VERBOSE_LOG=true
     shift
     ;;
+    --on-delete)
+    ON_DELETE=true
+    shift
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -144,6 +151,12 @@ fi
 
 if [ "$MODE" == "release" ] && $VERBOSE_LOG; then
     echoerr "--verbose-log works only with 'dev' mode"
+    print_help
+    exit 1
+fi
+
+if ! $KIND && $ON_DELETE; then
+    echoerr "--on-delete works only for Kind clusters"
     print_help
     exit 1
 fi
@@ -288,6 +301,10 @@ if $KIND; then
     $KUSTOMIZE edit add patch startAgent.yml
     # change initContainer script and remove SYS_MODULE capability
     $KUSTOMIZE edit add patch installCni.yml
+
+    if $ON_DELETE; then
+        $KUSTOMIZE edit add patch onDeleteUpdateStrategy.yml
+    fi
 
     BASE=../kind
     cd ..
