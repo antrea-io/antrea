@@ -21,11 +21,14 @@ function echoerr {
 }
 
 RUN_CONFORMANCE=false
+RUN_WHOLE_CONFORMANCE=false
 RUN_NETWORK_POLICY=false
 RUN_E2E_FOCUS=""
 KUBECONFIG_OPTION=""
 E2E_CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
 MODE="report"
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+KUBE_CONFORMANCE_IMAGE_VERSION="$(head -n1 $THIS_DIR/k8s-conformance-image-version)"
 
 _usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-conformance-skip <SkipRegex>]
                   [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]
@@ -33,6 +36,7 @@ _usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestR
 Run the K8s e2e community tests (Conformance & Network Policy) which are relevant to Project Antrea,
 using the sonobuoy tool.
         --e2e-conformance                                         Run Conformance tests.
+        --e2e-whole-conformance                                   Run whole Conformance tests.
         --e2e-network-policy                                      Run Network Policy tests.
         --e2e-all                                                 Run both Conformance and Network Policy tests.
         --e2e-focus TestRegex                                     Run only tests matching a specific regex, this is useful to run a single tests for example.
@@ -54,9 +58,6 @@ function print_help {
     echoerr "Try '$0 --help' for more information."
 }
 
-THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-KUBE_CONFORMANCE_IMAGE_VERSION="$(head -n1 $THIS_DIR/k8s-conformance-image-version)"
-
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -72,6 +73,10 @@ case $key in
     ;;
     --e2e-conformance)
     RUN_CONFORMANCE=true
+    shift
+    ;;
+    --e2e-whole-conformance)
+    RUN_WHOLE_CONFORMANCE=true
     shift
     ;;
     --e2e-network-policy)
@@ -123,10 +128,17 @@ function run_sonobuoy() {
     local skip_regex="$2"
     $SONOBUOY delete --wait $KUBECONFIG_OPTION
     echo "Running tests with sonobuoy. While test is running, check logs with: $SONOBUOY $KUBECONFIG_OPTION logs -f."
-    $SONOBUOY run --wait \
-              $KUBECONFIG_OPTION \
-              --kube-conformance-image-version $KUBE_CONFORMANCE_IMAGE_VERSION \
-              --e2e-focus "$focus_regex" --e2e-skip "$skip_regex"
+    if [[ "$focus_regex" == "" && "$skip_regex" == "" ]]; then
+        $SONOBUOY run --wait \
+                $KUBECONFIG_OPTION \
+                --kube-conformance-image-version $KUBE_CONFORMANCE_IMAGE_VERSION \
+                --mode "certified-conformance"
+    else
+        $SONOBUOY run --wait \
+                $KUBECONFIG_OPTION \
+                --kube-conformance-image-version $KUBE_CONFORMANCE_IMAGE_VERSION \
+                --e2e-focus "$focus_regex" --e2e-skip "$skip_regex"
+    fi
     results=$($SONOBUOY retrieve $KUBECONFIG_OPTION)
     $SONOBUOY results $results --mode=$MODE
 }
@@ -135,12 +147,20 @@ function run_conformance() {
     run_sonobuoy "\[Conformance\]" ${E2E_CONFORMANCE_SKIP}
 }
 
+function run_whole_conformance() {
+    run_sonobuoy "" ""
+}
+
 function run_network_policy() {
     run_sonobuoy "\[Feature:NetworkPolicy\]" ""
 }
 
 if $RUN_CONFORMANCE; then
     run_conformance
+fi
+
+if $RUN_WHOLE_CONFORMANCE; then
+    run_whole_conformance
 fi
 
 if $RUN_NETWORK_POLICY; then
