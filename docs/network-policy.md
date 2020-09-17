@@ -4,8 +4,8 @@
 
 - [Summary](#summary)
 - [Tier](#tier)
-  - [Static Tiers](#static-tiers)
   - [Tier CRDs](#tier-crds)
+  - [Static Tiers](#static-tiers)
 - [ClusterNetworkPolicy](#clusternetworkpolicy)
   - [The ClusterNetworkPolicy resource](#the-clusternetworkpolicy-resource)
   - [Behavior of to and from selectors](#behavior-of-to-and-from-selectors)
@@ -41,10 +41,54 @@ it, which determines its relative order among all tiers.
 **Note**: K8s NetworkPolicies will be enforced once all tiers have been
 enforced.
 
+### Tier CRDs
+
+Creating Tiers as CRDs allows users the flexibility to create and delete
+Tiers as per their preference i.e. not be bound to 5 static tiering options
+as was the case initially.
+
+An example Tier might look like this:
+```yaml
+apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+kind: Tier
+metadata:
+  name: mytier
+spec:
+    priority: 10
+    description: "my custom tier"
+```
+
+Tiers have the following characteristics:
+- Policies can associate themselves with an existing Tier by setting the `tier`
+  field in a Antrea NetworkPolicy CRD spec to the Tier's name.
+- A Tier must exist before an Antrea policy can reference it.
+- Policies associated with higher ordered (low `priority` value) Tiers are
+  enforced first.
+- No two Tiers can be created with overlapping priorities.
+- Updating the Tier's `priority` field is unsupported.
+- Deleting Tier with existing references from policies is not allowed.
+
+On startup, antrea-controller will create 5 Tier resources corresponding to
+the static tiers for default consumption as shown below.
+
+```
+    Emergency -> Tier name "emergency" with priority "5"
+    SecurityOps -> Tier name "securityops" with priority "50"
+    NetworkOps -> Tier name "networkops" with priority "100"
+    Platform -> Tier name "platform" with priority "150"
+    Application -> Tier name "application" with priority "250"
+```
+
+Any Antrea policy CRD referencing a static tier in its spec will now internally
+reference the corresponding Tier resource, thus maintaining the order of
+enforcement.
+
 ### Static tiers
 
-Currently, we support 5 static tiers in Antrea. They are as follows in the
-relative order of precedence:
+Antrea release 0.9.x introduced support for 5 static tiers. These static tiers
+have been removed in favor of Tier CRDs as mentioned in the previous section.
+Previously, the static tiers created were as follows in the relative order of
+precedence:
 
 ```
     Emergency > SecurityOps > NetworkOps > Platform > Application  
@@ -60,14 +104,6 @@ the "Application" tier. Even though the policies associated with the
 still enforced before K8s NetworkPolicies. Thus, admin-created tiered Antrea
 Policy CRDs have a higher precedence than developer-created K8s
 NetworkPolicies.
-
-
-### Tier CRDs
-
-Although static tiers provide a way to organize security policies for different
-use cases, they are not flexible i.e. admin cannot add/delete a new tier at
-will. This can be made possible by the introduction of Tier as CRDs. Tier CRDs
-will be available soon and will replace the existing static tiers.
 
 ## ClusterNetworkPolicy
 
@@ -110,7 +146,7 @@ metadata:
   name: test-cnp
 spec:
     priority: 5
-    tier: SecurityOps
+    tier: securityops
     appliedTo:
       - podSelector:
           matchLabels:
@@ -165,10 +201,10 @@ can range from 1.0 to 10000.0.
 indeterministically. Users should therefore take care to use priorities to
 ensure the behavior they expect.
 
-**tier**: The `tier` field associates a CNP to an existing tier. As of now, the
-`tier` field can be set with "Emergency", "SecurityOps", "NetworkOps",
-"Platform" or "Application" as value. If not set, the CNP is associated with
-the lowest priority "Application" tier.
+**tier**: The `tier` field associates a CNP to an existing Tier. The `tier`
+field can be set with the name of the Tier CRD to which this policy must be
+associated with. If not set, the CNP is associated with the lowest priority
+default tier i.e. the "application" Tier.
 
 **ingress**: Each ClusterNetworkPolicy may consist of zero or more ordered
 set of ingress rules. Each rule, depending on the `action` field of the rule,
@@ -244,7 +280,7 @@ metadata:
   namespace: default
 spec:
     priority: 5
-    tier: SecurityOps
+    tier: securityops
     appliedTo:
       - podSelector:
           matchLabels:
@@ -295,10 +331,10 @@ Antrea Policy CRDs are ordered based on priorities set at various levels.
 ### Ordering based on Tier priority
 
 With the introduction of tiers, Antrea Policies, like ClusterNetworkPolicies,
-are first enforced based on the tier to which they are associated. i.e. all
-policies belonging to the "Emergency" tier are enforced first, followed by
-policies belonging to the "SecurityOps" tier and so on, until the "Application"
-tier policies are enforced.
+are first enforced based on the Tier to which they are associated. i.e. all
+policies belonging to a higher order Tier are enforced first, followed by
+policies belonging to the next ordered Tier and so on, until the lowest ordered
+"application" Tier policies are enforced.
 
 ### Ordering based on policy priority
 
@@ -315,9 +351,9 @@ set in each of the two resources.
 Within a policy, rules are enforced in the order in which they are set. For example,
 consider the following:
 
-- CNP1{tier: Application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
-- ANP1{tier: Application, priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
-- CNP3{tier: Emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
+- CNP1{tier: application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
+- ANP1{tier: application, priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
+- CNP3{tier: emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
 
 This translates to the following order:
 - Ingress rules: ir3.1 > ir3.2 > ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
@@ -342,6 +378,9 @@ the policies that may affect their workloads.
 
 ## Notes
 
+- There is a soft limit of 50 on the maximum number of Tier resources that are
+  supported. But for optimal performance, it is recommended that the number of
+  Tiers in a cluster be less than or equal to 10.
 - The v1alpha1 Policy CRDs support up to 10000 unique priority at policy level.
   In order to reduce the churn in the agent, it is recommended to set the
   priority within the range 1.0 to 100.0.
