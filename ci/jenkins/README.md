@@ -50,7 +50,7 @@ should be deleted. This ensures that all tests are run on a clean testbed.
   
   |  K8s Version |    Node Type    |  Node AMI Family |  Status  |
   | :----------: | :-------------: | :--------------: | :------: |
-  |     1.15     |  EC2 t3.medium  |   AmazonLinux2   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)|
+  |     1.17     |  EC2 t3.medium  |   AmazonLinux2   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)|
   
 * [GKE conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)
   community tests on GKE cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
@@ -58,7 +58,7 @@ should be deleted. This ensures that all tests are run on a clean testbed.
     
   |  K8s Version   |     Node OS     | VPC Native Mode (on by default) |  Status  |
   | :------------: | :-------------: | :-----------------------------: |:-------: |
-  | 1.16.13-gke.1  |     Ubuntu      |  On                             |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)|
+  |    1.16.13     |     Ubuntu      |  On                             |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)|
   
 * [AKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)
   community tests on AKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
@@ -66,7 +66,7 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 
   |  K8s Version   |  Node Type          |  Node OS        |  Status  |
   | :------------: | :-----------------: | :-------------: | :------: |
-  | 1.16.10        |  Standard_DS2_v2    |  Ubuntu 16.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
+  |    1.16.10     |  Standard_DS2_v2    |  Ubuntu 16.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
 
 * [daily-elk-flow-collector-validate](https://jenkins.antrea-ci.rocks/job/antrea-daily-elk-flow-collector-validate-for-period/):
   [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-daily-elk-flow-collector-validate-for-period)](http://jenkins.antrea-ci.rocks/view/cloud/job/antrea-daily-elk-flow-collector-validate-for-period/)

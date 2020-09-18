@@ -538,8 +538,8 @@
               # gcloud auth login requires verification code from url
               ${{GCLOUD_PATH}} auth activate-service-account --key-file=${{GCLOUD_KEY_PATH}}
               sudo ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
-                --k8s-version 1.16.11-gke.5 --svc-account antrea-gcp@antrea.iam.gserviceaccount.com \
-                --gcloud-path ${{GCLOUD_PATH}} --log-mode detail --setup-only
+                --svc-account antrea-gcp@antrea.iam.gserviceaccount.com --gcloud-path ${{GCLOUD_PATH}} \
+                --log-mode detail --setup-only
           triggers:
           - timed: H H */2 * *
           publishers:
