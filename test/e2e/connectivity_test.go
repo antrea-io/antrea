@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -28,11 +27,11 @@ import (
 
 const pingCount = 5
 
-func waitForPodIPs(t *testing.T, data *TestData, podNames []string) map[string]string {
+func waitForPodIPs(t *testing.T, data *TestData, podNames []string) map[string]*PodIPs {
 	t.Logf("Waiting for Pods to be ready and retrieving IPs")
-	podIPs := make(map[string]string)
+	podIPs := make(map[string]*PodIPs)
 	for _, podName := range podNames {
-		if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
+		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
 			t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
 		} else {
 			podIPs[podName] = podIP
@@ -115,7 +114,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, clientName)
-	if _, err := data.podWaitForIP(defaultTimeout, clientName, testNamespace); err != nil {
+	if _, err := data.podWaitForIPs(defaultTimeout, clientName, testNamespace); err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
 	}
 
@@ -267,6 +266,7 @@ func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
 // br-int bridge is to implement normal L2 forwarding.
 func TestOVSRestartSameNode(t *testing.T) {
 	skipIfProviderIs(t, "kind", "test not valid for the netdev datapath type")
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -285,7 +285,7 @@ func TestOVSRestartSameNode(t *testing.T) {
 		// that restarting Antrea takes less than that time. Unfortunately, the arping
 		// utility in busybox does not let us choose a smaller interval than 1 second.
 		count := 25
-		cmd := fmt.Sprintf("arping -c %d %s", count, podIPs[1])
+		cmd := fmt.Sprintf("arping -c %d %s", count, podIPs[1].ipv4.String())
 		stdout, stderr, err := data.runCommandFromPod(testNamespace, podNames[0], busyboxContainerName, strings.Fields(cmd))
 		if err != nil {
 			return fmt.Errorf("error when running arping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
@@ -393,14 +393,19 @@ func TestPingLargeMTU(t *testing.T) {
 
 	pingSize := 2000
 	var cmd string
-	if net.ParseIP(podIPs[podName1]).To4() != nil {
-		cmd = fmt.Sprintf("ping -c %d -s %d %s", pingCount, pingSize, podIPs[podName1])
-	} else {
-		cmd = fmt.Sprintf("ping -6 -c %d -s %d %s", pingCount, pingSize, podIPs[podName1])
-	}
 	t.Logf("Running ping with size %d between Pods %s and %s", pingSize, podName0, podName1)
-	stdout, stderr, err := data.runCommandFromPod(testNamespace, podName0, busyboxContainerName, strings.Fields(cmd))
-	if err != nil {
-		t.Errorf("Error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+	if podIPs[podName1].ipv4 != nil {
+		cmd = fmt.Sprintf("ping -c %d -s %d %s", pingCount, pingSize, podIPs[podName1].ipv4.String())
+		stdout, stderr, err := data.runCommandFromPod(testNamespace, podName0, busyboxContainerName, strings.Fields(cmd))
+		if err != nil {
+			t.Errorf("Error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+		}
+	}
+	if podIPs[podName1].ipv6 != nil {
+		cmd = fmt.Sprintf("ping -6 -c %d -s %d %s", pingCount, pingSize, podIPs[podName1].ipv6.String())
+		stdout, stderr, err := data.runCommandFromPod(testNamespace, podName0, busyboxContainerName, strings.Fields(cmd))
+		if err != nil {
+			t.Errorf("Error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+		}
 	}
 }
