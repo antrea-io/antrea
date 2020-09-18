@@ -21,7 +21,7 @@ function echoerr {
 }
 
 REGION="us-east-2"
-K8S_VERSION="1.15"
+K8S_VERSION="1.17"
 AWS_NODE_TYPE="t3.medium"
 SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
 SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_rsa"
@@ -40,7 +40,7 @@ Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy
 
         --cluster-name           The cluster name to be used for the generated EKS cluster. Must be specified if not run in Jenkins environment.
         --kubeconfig             Path to save kubeconfig of generated EKS cluster.
-        --k8s-version            GKE K8s cluster version. Defaults to 1.15.
+        --k8s-version            GKE K8s cluster version. Defaults to 1.17.
         --aws-access-key         AWS Acess Key for logging in to awscli.
         --aws-secret-key         AWS Secret Key for logging in to awscli.
         --aws-region             The AWS region where the cluster will be initiated. Defaults to us-east-2.
@@ -134,6 +134,9 @@ ${AWS_SECRET_KEY}
 ${REGION}
 JSON
 EOF
+    echo "=== Installing latest version of eksctl ==="
+    curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+    sudo mv /tmp/eksctl /usr/local/bin
     set -e
     printf "\n"
     echo "=== Using the following kubectl ==="
