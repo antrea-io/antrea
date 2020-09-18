@@ -62,6 +62,7 @@ var (
 )
 
 func BenchmarkHTTPRequest(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	for _, scale := range []struct{ requests, policyRules int }{
 		{100000, 0},
 		{1000000, 0},
@@ -76,6 +77,7 @@ func BenchmarkHTTPRequest(b *testing.B) {
 }
 
 func BenchmarkRealizeNetworkPolicy(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	for _, policyRules := range []int{5000, 10000, 15000} {
 		b.Run(fmt.Sprintf("RealizeNetworkPolicy%d", policyRules), func(b *testing.B) {
 			withPerfTestSetup(func(data *TestData) { networkPolicyRealize(policyRules, data, b) }, b)
@@ -84,6 +86,7 @@ func BenchmarkRealizeNetworkPolicy(b *testing.B) {
 }
 
 func BenchmarkCustomizeHTTPRequest(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	if *customizeRequests == 0 {
 		b.Skip("The value of perf.http.requests=0, skipped")
 	}
@@ -91,6 +94,7 @@ func BenchmarkCustomizeHTTPRequest(b *testing.B) {
 }
 
 func BenchmarkCustomizeRealizeNetworkPolicy(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	if *customizePolicyRules == 0 {
 		b.Skip("The value of perf.http.policy_rules=0, skipped")
 	}
@@ -176,7 +180,7 @@ func populateWorkloadNetworkPolicy(np *networkv1.NetworkPolicy, data *TestData) 
 	return err
 }
 
-func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) {
+func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP *PodIPs) {
 	b.Logf("Creating a nginx test Pod")
 	nginxPod := createPerfTestPodDefinition(benchNginxPodName, nginxContainerName, nginxImage)
 	_, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), nginxPod, metav1.CreateOptions{})
@@ -184,7 +188,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 		b.Fatalf("Error when creating nginx test pod: %v", err)
 	}
 	b.Logf("Waiting IP assignment of the nginx test Pod")
-	nginxPodIP, err = data.podWaitForIP(defaultTimeout, benchNginxPodName, testNamespace)
+	nginxPodIP, err = data.podWaitForIPs(defaultTimeout, benchNginxPodName, testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of nginx test Pod: %v", err)
 	}
@@ -196,7 +200,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 		b.Fatalf("Error when creating perftool test Pod: %v", err)
 	}
 	b.Logf("Waiting for IP assignment of the perftool test Pod")
-	perfPodIP, err = data.podWaitForIP(defaultTimeout, perftoolPodName, testNamespace)
+	perfPodIP, err = data.podWaitForIPs(defaultTimeout, perftoolPodName, testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of perftool test Pod: %v", err)
 	}
@@ -210,6 +214,9 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 // rules should be included in the network policy applied to the Pods.
 func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	nginxPodIP, _ := setupTestPods(data, b)
+
+	// performance_test only runs in IPv4 cluster, so here only check the IPv4 address of nginx server Pod.
+	nginxPodIPStr := nginxPodIP.ipv4.String()
 
 	err := setupTestPodsConnection(data) // enable Pods connectivity policy first
 	if err != nil {
@@ -229,7 +236,7 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	}
 	b.Log("Network policy realized")
 
-	serverURL := &url.URL{Scheme: "http", Host: nginxPodIP, Path: "/"}
+	serverURL := &url.URL{Scheme: "http", Host: nginxPodIPStr, Path: "/"}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		b.Logf("Running http request bench %d/%d", i+1, b.N)
