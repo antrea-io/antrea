@@ -178,9 +178,9 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidB",
-				Name:         "cnpB",
-				Namespace:    "",
+				UID:       "uidB",
+				Name:      "cnpB",
+				Namespace: "",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpB",
@@ -264,9 +264,9 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidC",
-				Name:         "cnpC",
-				Namespace:    "",
+				UID:       "uidC",
+				Name:      "cnpC",
+				Namespace: "",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpC",

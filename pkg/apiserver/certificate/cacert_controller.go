@@ -29,6 +29,7 @@ import (
 	"k8s.io/klog"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
@@ -128,8 +129,10 @@ func (c *CACertController) syncCACert() error {
 		return err
 	}
 
-	if err := c.syncValidatingWebhooks(caCert); err != nil {
-		return err
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		if err := c.syncValidatingWebhooks(caCert); err != nil {
+			return err
+		}
 	}
 	return nil
 }

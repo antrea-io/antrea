@@ -556,16 +556,8 @@ func autoConvert_v1beta1_NetworkPolicy_To_controlplane_NetworkPolicy(in *Network
 	out.Rules = *(*[]controlplane.NetworkPolicyRule)(unsafe.Pointer(&in.Rules))
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
-<<<<<<< HEAD
-<<<<<<< HEAD
-	out.TierPriority = (*controlplane.TierPriority)(unsafe.Pointer(in.TierPriority))
-	out.SourceRef = (*controlplane.NetworkPolicyReference)(unsafe.Pointer(in.SourceRef))
-=======
-	out.TierPriority = (*uint32)(unsafe.Pointer(in.TierPriority))
->>>>>>> 08e572f... Add ValidationWebhookConfig
-=======
 	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))
->>>>>>> 7cf60ff... Use int32 for Tier Priority
+	out.SourceRef = (*controlplane.NetworkPolicyReference)(unsafe.Pointer(in.SourceRef))
 	return nil
 }
 
@@ -579,16 +571,8 @@ func autoConvert_controlplane_NetworkPolicy_To_v1beta1_NetworkPolicy(in *control
 	out.Rules = *(*[]NetworkPolicyRule)(unsafe.Pointer(&in.Rules))
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
-<<<<<<< HEAD
-<<<<<<< HEAD
-	out.TierPriority = (*TierPriority)(unsafe.Pointer(in.TierPriority))
-	out.SourceRef = (*NetworkPolicyReference)(unsafe.Pointer(in.SourceRef))
-=======
-	out.TierPriority = (*uint32)(unsafe.Pointer(in.TierPriority))
->>>>>>> 08e572f... Add ValidationWebhookConfig
-=======
 	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))
->>>>>>> 7cf60ff... Use int32 for Tier Priority
+	out.SourceRef = (*NetworkPolicyReference)(unsafe.Pointer(in.SourceRef))
 	return nil
 }
 

@@ -142,12 +142,7 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier
 	switch op {
 	case admv1.Create:
 		klog.V(2).Info("Validating CREATE request for Tier")
-		// There is a potential race condition here, where the tierPrioritySet may
-		// not yet be updated as the handler may not have yet been invoked before
-		// a simultaneous Tier add validation checks for this limit. Even though this
-		// results in number of Tiers exceeding the maxSupportedTiers, we consider
-		// maxSupportedTiers as a soft limit and hence allow this condition to occur.
-		if len(v.networkPolicyController.tierPrioritySet) >= maxSupportedTiers {
+		if len(v.networkPolicyController.tierInformer.Informer().GetIndexer().ListIndexFuncValues(PriorityIndex)) >= maxSupportedTiers {
 			return fmt.Sprintf("maximum number of Tiers supported: %d", maxSupportedTiers), false
 		}
 		// Tier priority must not overlap reserved tier's priority
@@ -183,8 +178,8 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier
 }
 
 func (v *NetworkPolicyValidator) tierExists(name string) bool {
-	tier, err := v.networkPolicyController.tierLister.Get(name)
-	if tier == nil || err != nil {
+	_, err := v.networkPolicyController.tierLister.Get(name)
+	if err != nil {
 		return false
 	}
 	return true

@@ -22,6 +22,7 @@ import (
 	"context"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
@@ -125,7 +126,8 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
 	for {
 		klog.V(2).Infof("Creating %s Tier", t.Name)
 		_, err = n.crdClient.SecurityV1alpha1().Tiers().Create(context.TODO(), t, metav1.CreateOptions{})
-		if err != nil {
+		// Attempt to recreate Tier after a backoff only if it does not exist.
+		if err != nil && !errors.IsAlreadyExists(err) {
 			klog.Warningf("Failed to create %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)
 			// Tier creation may fail because antrea APIService is not yet ready
 			// to accept requests for validation. Retry fixed number of times
@@ -140,28 +142,4 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
 		}
 		return
 	}
-}
-
-// addTier receives Tier ADD events and updates the TierPrioritySet.
-func (n *NetworkPolicyController) addTier(obj interface{}) {
-	t := obj.(*secv1alpha1.Tier)
-	klog.V(2).Infof("Processing Tier %s ADD event", t.Name)
-	// Insert Tier's Priority in the unique set.
-	n.tierPrioritySet.Insert(t.Spec.Priority)
-}
-
-// updateTier receives Tier UPDATE events and updates the TierPrioritySet.
-func (n *NetworkPolicyController) updateTier(oldObj, curObj interface{}) {
-	curT := curObj.(*secv1alpha1.Tier)
-	klog.V(2).Infof("Processing Tier %s UPDATE event", curT.Name)
-	// Insert Tier's Priority in the unique set.
-	n.tierPrioritySet.Insert(curT.Spec.Priority)
-}
-
-// deleteTier receives Tier DELETE events and updates the TierPrioritySet.
-func (n *NetworkPolicyController) deleteTier(old interface{}) {
-	t := old.(*secv1alpha1.Tier)
-	klog.V(2).Infof("Processing Tier %s DELETE event", t.Name)
-	// Remove Tier's Priority from the unique set.
-	n.tierPrioritySet.Delete(t.Spec.Priority)
 }

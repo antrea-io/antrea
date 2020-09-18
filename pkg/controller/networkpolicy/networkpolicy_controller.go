@@ -161,8 +161,6 @@ type NetworkPolicyController struct {
 	tierLister seclisters.TierLister
 	// tierListerSynced is a function which returns true if the Tiers shared informer has been synced at least once.
 	tierListerSynced cache.InformerSynced
-	// tierPrioritySet maintains a list of Tier Priorities.
-	tierPrioritySet sets.Int32
 
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
@@ -268,7 +266,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		n.tierInformer = tierInformer
 		n.tierLister = tierInformer.Lister()
 		n.tierListerSynced = tierInformer.Informer().HasSynced
-		n.tierPrioritySet = sets.Int32{}
 		tierInformer.Informer().AddIndexers(
 			cache.Indexers{
 				PriorityIndex: func(obj interface{}) ([]string, error) {
@@ -279,14 +276,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 					return []string{strconv.FormatInt(int64(tr.Spec.Priority), 10)}, nil
 				},
 			},
-		)
-		tierInformer.Informer().AddEventHandlerWithResyncPeriod(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addTier,
-				UpdateFunc: n.updateTier,
-				DeleteFunc: n.deleteTier,
-			},
-			resyncPeriod,
 		)
 		cnpInformer.Informer().AddIndexers(
 			cache.Indexers{
