@@ -27,6 +27,7 @@ const iperfPort = 5201
 // TestBenchmarkBandwidthIntraNode runs the bandwidth benchmark between Pods on same node.
 func TestBenchmarkBandwidthIntraNode(t *testing.T) {
 	skipIfNotBenchmarkTest(t)
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -41,10 +42,11 @@ func TestBenchmarkBandwidthIntraNode(t *testing.T) {
 	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
-	podBIP, err := data.podWaitForIP(defaultTimeout, "perftest-b", testNamespace)
+	podBIPs, err := data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
 	if err != nil {
 		t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
 	}
+	podBIP := podBIPs.ipv4.String()
 	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", fmt.Sprintf("iperf3 -c %s|grep sender|awk '{print $7,$8}'", podBIP)})
 	if err != nil {
 		t.Fatalf("Error when running iperf3 client: %v", err)
