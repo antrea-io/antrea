@@ -30,6 +30,9 @@ import (
 // TestFlowExporter runs flow exporter to export flow records for flows.
 // Flows are deployed between Pods on same node.
 func TestFlowExporter(t *testing.T) {
+	// TODO: remove this limitation after flow_exporter supports IPv6
+	skipIfIPv6Cluster(t)
+	skipIfNotIPv4Cluster(t)
 	// Should I add skipBenchmark as this runs iperf?
 	data, err := setupTestWithIPFIXCollector(t)
 	if err != nil {
@@ -40,18 +43,31 @@ func TestFlowExporter(t *testing.T) {
 	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil, false); err != nil {
 		t.Fatalf("Error when creating the perftest client Pod: %v", err)
 	}
-	podAIP, err := data.podWaitForIP(defaultTimeout, "perftest-a", testNamespace)
+	podAIP, err := data.podWaitForIPs(defaultTimeout, "perftest-a", testNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 	}
 	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
-	podBIP, err := data.podWaitForIP(defaultTimeout, "perftest-b", testNamespace)
+	podBIP, err := data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
 	if err != nil {
 		t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
 	}
-	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", fmt.Sprintf("iperf3 -c %s|grep sender|awk '{print $7,$8}'", podBIP)})
+
+	podAIPStr := podAIP.ipv4.String()
+	podBIPStr := podBIP.ipv4.String()
+	checkRecordsWithPodIPs(t, data, podAIPStr, podBIPStr, false)
+}
+
+func checkRecordsWithPodIPs(t *testing.T, data *TestData, podAIP string, podBIP string, isIPv6 bool) {
+	var cmdStr string
+	if !isIPv6 {
+		cmdStr = fmt.Sprintf("iperf3 -c %s|grep sender|awk '{print $7,$8}'", podBIP)
+	} else {
+		cmdStr = fmt.Sprintf("iperf3 -6 -c %s|grep sender|awk '{print $7,$8}'", podBIP)
+	}
+	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
 	if err != nil {
 		t.Fatalf("Error when running iperf3 client: %v", err)
 	}

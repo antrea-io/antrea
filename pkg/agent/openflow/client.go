@@ -471,7 +471,6 @@ func (c *client) InstallClusterServiceFlows() error {
 	return nil
 }
 
-
 func (c *client) InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet, gatewayOFPort uint32) error {
 	flows := c.serviceCIDRDNATFlows(serviceNets, gatewayOFPort)
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
