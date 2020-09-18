@@ -238,7 +238,11 @@ function deliver_antrea {
     fi
 
     sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
+
+    # Configure and append antrea-prometheus.yml to antrea.yml
     sed -i "s|#enablePrometheusMetrics: false|enablePrometheusMetrics: true|g" $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
+    echo "---" >> $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
+    cat $GIT_CHECKOUT_DIR/build/yamls/antrea-prometheus.yml >> $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
 
     echo "====== Delivering Antrea to all the Nodes ======"
     export KUBECONFIG=${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig
@@ -294,9 +298,6 @@ function run_e2e {
     scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${master_ip}:~/.kube/config
     sed -i "s/CONTROLPLANENODE/${master_name}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
     echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
-
-    # Run and configure Prometheus
-    kubectl apply -f $GIT_CHECKOUT_DIR/build/yamls/antrea-prometheus.yml
 
     set +e
     mkdir -p ${GIT_CHECKOUT_DIR}/antrea-test-logs
