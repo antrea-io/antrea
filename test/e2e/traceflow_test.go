@@ -39,6 +39,7 @@ type testcase struct {
 
 // TestTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
 func TestTraceflowIntraNode(t *testing.T) {
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -208,7 +209,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node1IPs[2],
+						IP: node1IPs[2].ipv4.String(),
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
@@ -257,7 +258,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node1IPs[2],
+						IP: node1IPs[2].ipv4.String(),
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
@@ -324,6 +325,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 // TestTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
 func TestTraceflowInterNode(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
+	skipIfNotIPv4Cluster(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -344,10 +346,13 @@ func TestTraceflowInterNode(t *testing.T) {
 	defer node2CleanupFn()
 
 	require.NoError(t, data.createNginxPod("nginx", node2))
-	nginxIP, err := data.podWaitForIP(defaultTimeout, "nginx", testNamespace)
+	nginxIP, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
 	require.NoError(t, err)
 	svc, err := data.createNginxClusterIPService(false)
 	require.NoError(t, err)
+
+	// TODO: Extend the test cases to support IPv6 address after Traceflow IPv6 is supported. Currently we only use IPv4 address.
+	nginxIPStr := nginxIP.ipv4.String()
 
 	// Setup 2 NetworkPolicies:
 	// 1. Allow all egress traffic.
@@ -460,7 +465,7 @@ func TestTraceflowInterNode(t *testing.T) {
 			name: "interNodeUDPDstIPTraceflow",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0])),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0].ipv4.String())),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -468,7 +473,7 @@ func TestTraceflowInterNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node2IPs[0],
+						IP: node2IPs[0].ipv4.String(),
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
@@ -524,7 +529,7 @@ func TestTraceflowInterNode(t *testing.T) {
 			name: "interNodeICMPDstIPTraceflow",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0])),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0].ipv4.String())),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -532,7 +537,7 @@ func TestTraceflowInterNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node2IPs[0],
+						IP: node2IPs[0].ipv4.String(),
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
@@ -619,7 +624,7 @@ func TestTraceflowInterNode(t *testing.T) {
 						{
 							Component:       v1alpha1.LB,
 							Pod:             fmt.Sprintf("%s/%s", testNamespace, "nginx"),
-							TranslatedDstIP: nginxIP,
+							TranslatedDstIP: nginxIPStr,
 							Action:          v1alpha1.Forwarded,
 						},
 						{
