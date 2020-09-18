@@ -69,7 +69,10 @@ rules:
 
 ### Antrea Components Scraping configuration
 Add the following jobs to Prometheus scraping configuration to enable metrics
-collection from Antrea components
+collection from Antrea components. Antrea Agent metrics endpoint is exposed through
+Antrea apiserver on `apiport` config parameter given in `antrea-agent.conf` (default
+value is 10350). Antrea Controller metrics endpoint is exposed through Antrea apiserver
+on `apiport` config parameter given in `antrea-controller.conf` (default value is 10349). 
 
 #### Controller Scraping
 ```yaml
@@ -85,6 +88,8 @@ relabel_configs:
 - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_container_name]
   action: keep
   regex: kube-system;antrea-controller
+- source_labels: [__meta_kubernetes_pod_node_name, __meta_kubernetes_pod_name]
+  target_label: instance
 ```
 
 #### Agent Scraping
@@ -101,6 +106,8 @@ relabel_configs:
 - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_container_name]
   action: keep
   regex: kube-system;antrea-agent
+- source_labels: [__meta_kubernetes_pod_node_name, __meta_kubernetes_pod_name]
+  target_label: instance
 ```
 For further reference see the enclosed 
 [configuration file](/build/yamls/antrea-prometheus.yml).
