@@ -419,31 +419,34 @@ func (c *Controller) errorTraceflowCRD(tf *opsv1alpha1.Traceflow, reason string)
 	return c.traceflowClient.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
 
-// Deallocate tag from cache. Ignore DataplaneTag == 0 which is invalid case.
+// Deallocate tag from cache.
 func (c *Controller) deallocateTag(tf *opsv1alpha1.Traceflow) {
-	if tf.Status.DataplaneTag == 0 {
-		return
-	}
-	c.injectedTagsMutex.Lock()
-	if existingTraceflowName, ok := c.injectedTags[tf.Status.DataplaneTag]; ok {
-		if tf.Name == existingTraceflowName {
-			delete(c.injectedTags, tf.Status.DataplaneTag)
-		} else {
-			klog.Warningf("injectedTags cache mismatch tag: %d name: %s existingName: %s",
-				tf.Status.DataplaneTag, tf.Name, existingTraceflowName)
-		}
-	}
-	c.injectedTagsMutex.Unlock()
+	dataplaneTag := uint8(0)
 	c.runningTraceflowsMutex.Lock()
-	if existingTraceflowName, ok := c.runningTraceflows[tf.Status.DataplaneTag]; ok {
+	// Controller could have deallocated the tag and cleared the DataplaneTag
+	// field in the Traceflow Status, so try looking up the tag from the
+	// cache by Traceflow name.
+	for tag, existingTraceflowName := range c.runningTraceflows {
 		if tf.Name == existingTraceflowName {
-			delete(c.runningTraceflows, tf.Status.DataplaneTag)
-		} else {
-			klog.Warningf("runningTraceflows cache mismatch tag: %d name: %s existingName: %s",
-				tf.Status.DataplaneTag, tf.Name, existingTraceflowName)
+			delete(c.runningTraceflows, tag)
+			dataplaneTag = tag
+			break
 		}
 	}
 	c.runningTraceflowsMutex.Unlock()
+	if dataplaneTag == 0 {
+		return
+	}
+	c.injectedTagsMutex.Lock()
+	if existingTraceflowName, ok := c.injectedTags[dataplaneTag]; ok {
+		if tf.Name == existingTraceflowName {
+			delete(c.injectedTags, dataplaneTag)
+		} else {
+			klog.Warningf("runningTraceflows cache mismatch tag: %d name: %s existingName: %s",
+				dataplaneTag, tf.Name, existingTraceflowName)
+		}
+	}
+	c.injectedTagsMutex.Unlock()
 }
 
 func (c *Controller) isSender(tag uint8) bool {
