@@ -67,23 +67,30 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
 * **Kubernetes-native**: Antrea follows best practices to extend the Kubernetes
   APIs and provide familiar abstractions to users, while also leveraging
   Kubernetes libraries in its own implementation.
-* **Run everywhere**: Multiple traffic modes (with or without overlay) are
-  supported to ensure that Antrea can run in private clouds, public clouds and
-  at the edge.
+* **Powered by Open vSwitch**: Antrea relies on Open vSwitch to implement all
+  networking functions, including Kubernetes Service load-balancing, and to
+  enable hardware offloading in order to support the most demanding workloads.
+* **Run everywhere**: Run Antrea in private clouds, public clouds and on bare
+  metal, and select the appropriate traffic mode (with or without overlay) based
+  on your infrastructure and use case.
 * **Windows Node support**: Thanks to the portability of Open vSwitch, Antrea
   can use the same data plane implementation on both Linux and Windows
   Kubernetes Nodes.
 * **Comprehensive policy model**: Antrea provides a comprehensive network policy
   model, which builds upon Kubernetes Network Policies with new features such as
   policy tiering, rule priorities and cluster-level policies.
-* **Troubleshooting and monitoring tools**: Antrea comes with a CLI tool
-  (antctl) and an Octant UI plugin, it exposes Prometheus metrics and supports
+* **Troubleshooting and monitoring tools**: Antrea comes with CLI and UI tools
+  which provide visibility and diagnostics capabilities (packet tracing, policy
+  analysis, flow inspection). It exposes Prometheus metrics and supports
   exporting network flow information which can be visualized in Kibana
   dashboards.
 * **Encryption**: Encryption of inter-Node Pod traffic with IPsec tunnels when
   using an overlay Pod network.
 * **Easy deployment**: Antrea is deployed by applying a single YAML manifest
   file.
+
+Refer to the [Changelog](CHANGELOG.md) for a detailed list of features
+introduced for each version release.
 
 ## Roadmap
 
