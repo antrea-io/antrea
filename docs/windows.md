@@ -219,14 +219,14 @@ take over the host network. After that you should be able to view the Windows
 Nodes and Pods in your cluster by running:
 ```
 # Show nodes
-kubectl get nodes -o wide -nkube-system
+kubectl get nodes -o wide -n kube-system
 NAME                           STATUS   ROLES    AGE    VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                                  KERNEL-VERSION     CONTAINER-RUNTIME
 master                         Ready    master   1h   v1.18.3   10.176.27.168   <none>        Ubuntu 18.04.3 LTS                        4.15.0-66-generic   docker://19.3.9
 win-5akrf2tpq91                Ready    <none>   1h   v1.18.0   10.176.27.150   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158    docker://19.3.5
 win-5akrf2tpq92                Ready    <none>   1h   v1.18.0   10.176.27.197   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158     docker://19.3.5
 
 # Show antrea-agent and kube-proxy pods
-kubectl get pods -o wide -nkube-system | grep windows
+kubectl get pods -o wide -n kube-system | grep windows
 antrea-agent-windows-6hvkw                             1/1     Running     0          100s
 kube-proxy-windows-2d45w                               1/1     Running     0          102s
 ```

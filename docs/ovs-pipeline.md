@@ -17,8 +17,8 @@
   "proxy" for the local gateway when receiving tunnelled traffic and directly
   take care of the packet forwarding. At the moment, we use an hard-coded value
   of aa:bb:cc:dd:ee:ff.
-* *`normal` action*: OpenFlow defines this action to submit a packet to “the
-  traditional non-OpenFlow pipeline of the switch”. That is, if a flow uses this
+* *`normal` action*: OpenFlow defines this action to submit a packet to "the
+  traditional non-OpenFlow pipeline of the switch". That is, if a flow uses this
   action, then the packets in the flow go through the switch in the same way
   that they would if OpenFlow was not configured on the switch. Antrea uses this
   action to process ARP traffic as a regular learning L2 switch would.
@@ -321,7 +321,7 @@ purposes:
  and kube-proxy. This means that the reply traffic will arrive at the
  originating Pod with the incorrect source IP (it will be set to the backend's
  IP instead of the service IP). So we keep track of such connections
- (indentified by matching the ingress port against the gateway port) and for all
+ (identified by matching the ingress port against the gateway port) and for all
  reply traffic we set the destination to the local gateway MAC.
  * drop packets reported as invalid by conntrack
 
@@ -461,7 +461,7 @@ Policy example).
 
 If the Network Policy specification includes exceptions (`except` field), then
 the table will include multiple flows with conjunctive match, corresponding to
-each cidr that is present in `from` or `to` fields, but not in `except` field.
+each CIDR that is present in `from` or `to` fields, but not in `except` field.
 Network Policy implementation details are not covered in this document.
 
 If the `conjunction` action is matched, packets are "allowed" and forwarded
@@ -697,7 +697,7 @@ traffic to the next table ([ConntrackCommitTable]).
 ### ConntrackCommitTable (105)
 
 As mentioned before, this table is in charge of committing all new connections
-which are not dropped becuse of Network Policies. If you dump the flows for this
+which are not dropped because of Network Policies. If you dump the flows for this
 table, you should see something like this:
 
 ```
