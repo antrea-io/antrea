@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -68,7 +69,31 @@ func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	return nil
 }
 
+func createDirectory(path string) error {
+	if err := os.Mkdir(path, 0700); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (data *TestData) setupLogDirectoryForTest(testName string) error {
+	path := filepath.Join(testOptions.logsExportDir, testName)
+	// remove directory if it already exists. This ensures that we start with an empty
+	// directory
+	_ = os.RemoveAll(path)
+	err := createDirectory(path)
+	if err != nil {
+		return err
+	}
+	data.logsDirForTestCase = path
+	return nil
+}
+
 func setupTest(tb testing.TB) (*TestData, error) {
+	if err := testData.setupLogDirectoryForTest(tb.Name()); err != nil {
+		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
+		return nil, err
+	}
 	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
 	if err := ensureAntreaRunning(tb, testData); err != nil {
 		return nil, err
@@ -81,6 +106,10 @@ func setupTest(tb testing.TB) (*TestData, error) {
 
 func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error) {
 	data := &TestData{}
+	if err := data.setupLogDirectoryForTest(tb.Name()); err != nil {
+		tb.Errorf("Error creating logs directory '%s': %v", data.logsDirForTestCase, err)
+		return nil, err
+	}
 	tb.Logf("Creating K8s clientset")
 	if err := data.createClient(); err != nil {
 		return nil, err
@@ -108,15 +137,7 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error) {
 	return data, nil
 }
 
-func logsDirForTest(testName string) string {
-	// a filepath-friendly timestamp format.
-	const timeFormat = "Jan02-15-04-05"
-	timeStamp := time.Now().Format(timeFormat)
-	logsDir := filepath.Join(testOptions.logsExportDir, fmt.Sprintf("%s.%s", testName, timeStamp))
-	return logsDir
-}
-
-func exportLogs(tb testing.TB, data *TestData) {
+func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs bool) {
 	if tb.Skipped() {
 		return
 	}
@@ -125,17 +146,15 @@ func exportLogs(tb testing.TB, data *TestData) {
 	if !tb.Failed() && !testOptions.logsExportOnSuccess {
 		return
 	}
-	logsDir := logsDirForTest(tb.Name())
-	tb.Logf("Exporting test logs to '%s'", logsDir)
-	// remove directory if it already exists. This ensures that we start with an empty
-	// directory. Given that we append a timestamp at the end of the path it is very unlikely to
-	// happen.
-	_ = os.RemoveAll(logsDir)
-	if err := os.Mkdir(logsDir, 0700); err != nil {
+	const timeFormat = "Jan02-15-04-05"
+	timeStamp := time.Now().Format(timeFormat)
+	logsDir := filepath.Join(data.logsDirForTestCase, fmt.Sprintf("%s.%s", logsSubDir, timeStamp))
+	err := createDirectory(logsDir)
+	if err != nil {
 		tb.Errorf("Error when creating logs directory '%s': %v", logsDir, err)
 		return
 	}
-
+	tb.Logf("Exporting test logs to '%s'", logsDir)
 	// for now we just retrieve the logs for the Antrea Pods, but maybe we can find a good way to
 	// retrieve the logs for the test Pods in the future (before deleting them) if it is useful
 	// for debugging.
@@ -144,18 +163,6 @@ func exportLogs(tb testing.TB, data *TestData) {
 	// file cannot be created. File must be closed by the caller.
 	getPodWriter := func(nodeName, podName, suffix string) *os.File {
 		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s-%s", nodeName, podName, suffix))
-		f, err := os.Create(logFile)
-		if err != nil {
-			tb.Errorf("Error when creating log file '%s': '%v'", logFile, err)
-			return nil
-		}
-		return f
-	}
-
-	// getNodeWriter creates the file with name nodeName-suffix. It returns nil if the file
-	// cannot be created. File must be closed by the caller.
-	getNodeWriter := func(nodeName, suffix string) *os.File {
-		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s", nodeName, suffix))
 		f, err := os.Create(logFile)
 		if err != nil {
 			tb.Errorf("Error when creating log file '%s': '%v'", logFile, err)
@@ -211,6 +218,20 @@ func exportLogs(tb testing.TB, data *TestData) {
 		return nil
 	})
 
+	if !writeNodeLogs {
+		return
+	}
+	// getNodeWriter creates the file with name nodeName-suffix. It returns nil if the file
+	// cannot be created. File must be closed by the caller.
+	getNodeWriter := func(nodeName, suffix string) *os.File {
+		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s", nodeName, suffix))
+		f, err := os.Create(logFile)
+		if err != nil {
+			tb.Errorf("Error when creating log file '%s': '%v'", logFile, err)
+			return nil
+		}
+		return f
+	}
 	// export kubelet logs with journalctl for each Node. If the Nodes do not use journalctl we
 	// print a log message. If kubelet is not run with systemd, the log file will be empty.
 	if err := forAllNodes(func(nodeName string) error {
@@ -236,7 +257,10 @@ func exportLogs(tb testing.TB, data *TestData) {
 }
 
 func teardownTest(tb testing.TB, data *TestData) {
-	exportLogs(tb, data)
+	exportLogs(tb, data, "beforeTeardown", true)
+	if empty, _ := IsDirEmpty(data.logsDirForTestCase); empty {
+		_ = os.Remove(data.logsDirForTestCase)
+	}
 	tb.Logf("Deleting '%s' K8s Namespace", testNamespace)
 	if err := data.deleteTestNamespace(defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down test: %v", err)
