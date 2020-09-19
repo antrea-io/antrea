@@ -30,7 +30,7 @@ Prometheus requires access to Kubernetes API resources for the service discovery
 capability. Reading metrics also requires access to the "/metrics" API
 endpoints.
 ```yaml
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: prometheus
@@ -57,7 +57,7 @@ To scrape the metrics from Antrea Controller and Agent, Prometheus needs the
 following permissions
 ```yaml
 kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: prometheus-antrea
 rules:
