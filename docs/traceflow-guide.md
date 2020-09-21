@@ -3,8 +3,8 @@
 Antrea supports using Traceflow for network diagnosis: it generates tracing requests for traffic going through
 Antrea-managed Pod network. Creating a new Traceflow CRD triggers the Traceflow module to inject packet into OVS,
 provide various observation points along the packet's path and populate these observations into the status field of
-the Traceflow CRD. Users can start a new trace simply from Kubectl, Antctl or Antrea-Octant-Plugin and view Traceflow
-result via CRD, Antctl or UI graph.
+the Traceflow CRD. Users can start a new trace simply from kubectl, antctl or Antrea-Octant-Plugin and view Traceflow
+result via CRD, antctl or UI graph.
 
 ## Table of Contents
 
@@ -41,7 +41,7 @@ the Agent configuration:
 For antrea-octant-plugin installation, please refer to [antrea-octant-installation](/docs/octant-plugin-installation.md).
 
 ## Start a New Trace
-You can choose to use Kubectl together with YAML file, Antctl with spec information or Octant UI to start a new trace.
+You can choose to use kubectl together with YAML file, antctl with spec information or Octant UI to start a new trace.
 
 When starting a new trace, you can provide the following information which will be used to build the trace packet:
 * source Pod
@@ -50,7 +50,7 @@ When starting a new trace, you can provide the following information which will 
 * transport ports
 
 ### Using kubectl and YAML file
-You can start a new trace by creating Traceflow CRD via Kubectl and a YAML file which contains the essential
+You can start a new trace by creating Traceflow CRD via kubectl and a YAML file which contains the essential
 configuration of Traceflow CRD. An example YAML file of Traceflow CRD might look like this:
 
 ```yaml
@@ -80,7 +80,7 @@ of destination Pod named `tcp-sts-2` using TCP protocol.
 
 ### Using-antctl-and-spec-config
 
-Please refer to the corresponding [Antctl page](https://github.com/vmware-tanzu/antrea/blob/master/docs/antctl.md#traceflow).
+Please refer to the corresponding [antctl page](https://github.com/vmware-tanzu/antrea/blob/master/docs/antctl.md#traceflow).
 
 ### Using Octant with antrea-octant-plugin
 
@@ -117,7 +117,7 @@ as shown below.
 
 As shown above, you can check the existing Traceflow CRDs in the "Traceflow Info" table of the Antrea Overview web page
 in the Octant UI. You can generate a trace graph for any of these CRDs, as explained in the previous section.
-Also, you can view all the traceflow CRDs from the Tracflow page by clicking the right tab named "Traceflow Info" like below.
+Also, you can view all the Traceflow CRDs from the Traceflow page by clicking the right tab named "Traceflow Info" like below.
 
 <img src="https://downloads.antrea.io/static/tf_table.png" width="600" alt="Traceflow CRDs">
 
