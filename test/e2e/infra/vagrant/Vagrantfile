@@ -9,7 +9,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.provider "virtualbox" do |v|
     v.memory = 2048
-    # 2 CPUS required to initialize k8s cluster with "kubeadm init"
+    # 2 CPUS required to initialize K8s cluster with "kubeadm init"
     v.cpus = 2
   end
 

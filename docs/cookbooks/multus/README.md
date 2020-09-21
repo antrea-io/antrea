@@ -39,7 +39,7 @@ example:
  * when using VMware Fusion, enable "promiscuous mode" in the guest (Node) for
    the appropriate interface (e.g. using `ifconfig`); this may prompt for your
    password on the host unless you uncheck `Require authentication to enter
-   promiscuous mode` in the Network Preferences
+   promiscuous mode` in `Preferences ... > Network`
 
 This needs to be done for every Node VM, so it's best if you can automate this
 when provisioning your VMs.
@@ -146,8 +146,9 @@ parent network interface.
 This manifest will create a DaemonSet that will run a bash script once on every
 Node. It will:
  * Enable promiscuous mode on the parent interface using `ifconfig`; if using a
-   virtual network for the Nodes, this does not replace enabling promiscuous
-   mode for the virtual adapters
+   virtual network for the Nodes, this needs to be done in addition to enabling
+   promiscuous mode in the hypervisor for the virtual adapters, as described in
+   the [Prerequisites](#prerequisites).
  * Create a macvlan subinterface for the Node
  * Move the IP address from the parent interface to the new subinterface
 
