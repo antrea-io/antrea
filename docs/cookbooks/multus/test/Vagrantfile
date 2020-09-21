@@ -1,6 +1,6 @@
 VAGRANTFILE_API_VERSION = "2"
 
-NUM_WORKERS = 1
+NUM_WORKERS = 2
 
 K8S_POD_NETWORK_CIDR = "10.10.0.0/16"
 
@@ -11,6 +11,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     v.memory = 2048
     # 2 CPUS required to initialize K8s cluster with "kubeadm init"
     v.cpus = 2
+
+    v.customize [
+                             "modifyvm", :id,
+                             "--nicpromisc3", "allow-all"
+                ]
   end
 
   groups = {
@@ -22,6 +27,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     node.vm.hostname = "k8s-node-master"
     node_ip = "192.168.77.100"
     node.vm.network "private_network", ip: node_ip
+    node.vm.network "private_network", ip: "192.168.78.100", virtualbox__intnet: true
 
     node.vm.provision :ansible  do |ansible|
       ansible.playbook = "playbook/k8s.yml"
@@ -42,6 +48,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       node.vm.hostname = "k8s-node-worker-#{node_id}"
       node_ip = "192.168.77.#{100 + node_id}"
       node.vm.network "private_network", ip: node_ip
+      node.vm.network "private_network", ip: "192.168.78.#{100 + node_id}", virtualbox__intnet: true
 
       node.vm.provision :ansible do |ansible|
         ansible.playbook = "playbook/k8s.yml"
