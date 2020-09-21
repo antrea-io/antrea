@@ -92,7 +92,7 @@ Tunnel port configuration should be similar to Antrea on Linux:
 * a flow-based tunnel with the appropriate remote address is created for each Node in the cluster with OpenFlow.
 
 The only difference with Antrea on Linux is that the tunnel local address is required when creating the tunnel
-port (provided wth `local_ip` option). This local address is the one configured on the OVS bridge. 
+port (provided with `local_ip` option). This local address is the one configured on the OVS bridge. 
 
 ### OVS bridge interface configuration
 
@@ -208,7 +208,7 @@ The Antrea Agent is configured using a ConfigMap, and the environment variables 
 ### OVS Management
 OVS is running as 2 Windows Services: one for ovsdb-server and one for ovs-vswitchd.
 
-## Traffic walkthough
+## Traffic walkthrough
 
 ### Pod-to-Pod Traffic
 

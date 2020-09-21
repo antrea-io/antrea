@@ -40,7 +40,7 @@ Create the VFs
 echo '4' > /sys/class/net/enp3s0f0/device/sriov_numvfs
 ```
 
-Verfiy that the VFs are created
+Verify that the VFs are created
 
 ```
 ip link show enp3s0f0
@@ -142,7 +142,7 @@ Modify the build/yamls/antrea.yml with offload flag
 
 ## Deploy POD with OVS hardware-offload
 
-Create POD spec and
+Create POD spec and request a VF
 
 ```yaml
 apiVersion: v1
