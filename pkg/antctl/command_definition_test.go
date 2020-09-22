@@ -175,9 +175,9 @@ foo2
 					NameSpace:       "Namespace2",
 				},
 			},
-			expected: `NAMESPACE  NAME       APPLIED-TO                                       RULES
-Namespace1 GroupName2 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1    
-Namespace2 GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2    
+			expected: `NAMESPACE  NAME       APPLIED-TO                                       RULES SOURCE-TYPE
+Namespace1 GroupName2 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1     <NONE>     
+Namespace2 GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2     <NONE>     
 `,
 		},
 		{

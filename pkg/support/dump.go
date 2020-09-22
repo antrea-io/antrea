@@ -16,6 +16,7 @@ import (
 
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	controllerquerier "github.com/vmware-tanzu/antrea/pkg/controller/querier"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
@@ -209,7 +210,7 @@ func (d *agentDumper) DumpNetworkPolicyResources(basedir string) error {
 	if err := dump(d.npq.GetAddressGroups(), "addressgroups"); err != nil {
 		return err
 	}
-	if err := dump(d.npq.GetNetworkPolicies(""), "networkpolicies"); err != nil {
+	if err := dump(d.npq.GetNetworkPolicies(cpv1beta1.NetworkPolicyQueryFilter{}), "networkpolicies"); err != nil {
 		return err
 	}
 	return dump(d.npq.GetAppliedToGroups(), "appliedtogroups")

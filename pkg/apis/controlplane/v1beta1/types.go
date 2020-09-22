@@ -298,3 +298,18 @@ type NetworkPolicyStats struct {
 	// The stats of the NetworkPolicy.
 	TrafficStats statsv1alpha1.TrafficStats `json:"trafficStats,omitempty" protobuf:"bytes,2,opt,name=trafficStats"`
 }
+
+// NetworkPolicyQueryFilter is used to filter the result while retrieve network policy
+// Not settled attributes means match all.
+// e.g SourceType = "" means all type network policy will be retrieved
+// Can have more attributes in future if more args are required
+type NetworkPolicyQueryFilter struct {
+	// Name of the network policy.
+	Name string `protobuf:"bytes,1,opt,name=name"`
+	// Namespace of the NetworkPolicy.
+	Namespace string `protobuf:"bytes,2,opt,name=namespace"`
+	// Name of the pod that the network policy is applied on.
+	Pod string `protobuf:"bytes,3,opt,name=pod"`
+	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, CNP, ANP)
+	SourceType NetworkPolicyType `protobuf:"bytes,4,opt,name=sourceType,casttype=NetworkPolicyType"`
+}

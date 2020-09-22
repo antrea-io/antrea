@@ -216,6 +216,24 @@ message NetworkPolicyPeer {
   repeated IPBlock ipBlocks = 2;
 }
 
+// NetworkPolicyQueryFilter is used to filter the result while retrieve network policy
+// Not settled attributes means match all.
+// e.g SourceType = "" means all type network policy will be retrieved
+// Can have more attributes in future if more args are required
+message NetworkPolicyQueryFilter {
+  // Name of the network policy.
+  optional string name = 1;
+
+  // Namespace of the NetworkPolicy.
+  optional string namespace = 2;
+
+  // Name of the pod that the network policy is applied on.
+  optional string pod = 3;
+
+  // The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, CNP, ANP)
+  optional string sourceType = 4;
+}
+
 message NetworkPolicyReference {
   // Type of the NetworkPolicy.
   optional string type = 1;

@@ -26,10 +26,13 @@ import (
 )
 
 type Response struct {
-	NameSpace       string          `json:"namespace" yaml:"namespace"`
-	Name            string          `json:"name" yaml:"name"`
-	Rules           []rule.Response `json:"rules" yaml:"rules"`
-	AppliedToGroups []string        `json:"appliedToGroups" yaml:"appliedToGroups"`
+	NameSpace       string                      `json:"namespace" yaml:"namespace"`
+	Name            string                      `json:"name" yaml:"name"`
+	TierPriority    int32                       `json:"tierPriority" yaml:"tierPriority"`
+	Priority        float64                     `json:"priority" yaml:"priority"`
+	Rules           []rule.Response             `json:"rules" yaml:"rules"`
+	AppliedToGroups []string                    `json:"appliedToGroups" yaml:"appliedToGroups"`
+	SourceType      cpv1beta1.NetworkPolicyType `json:"sourceNetworkPolicyType" yaml:"sourceNetworkPolicyType"`
 }
 
 func objectTransform(o interface{}) (interface{}, error) {
@@ -38,11 +41,27 @@ func objectTransform(o interface{}) (interface{}, error) {
 	if policy.AppliedToGroups == nil {
 		policy.AppliedToGroups = []string{}
 	}
+
+	if policy.SourceRef.Type == cpv1beta1.K8sNetworkPolicy {
+		return Response{
+			NameSpace:       policy.Namespace,
+			Name:            policy.Name,
+			TierPriority:    0,
+			Priority:        0,
+			Rules:           rules.([]rule.Response),
+			AppliedToGroups: policy.AppliedToGroups,
+			SourceType:      policy.SourceRef.Type,
+		}, nil
+	}
+
 	return Response{
 		NameSpace:       policy.Namespace,
 		Name:            policy.Name,
+		TierPriority:    *policy.TierPriority,
+		Priority:        *policy.Priority,
 		Rules:           rules.([]rule.Response),
 		AppliedToGroups: policy.AppliedToGroups,
+		SourceType:      policy.SourceRef.Type,
 	}, nil
 }
 
@@ -68,11 +87,11 @@ func Transform(reader io.Reader, single bool) (interface{}, error) {
 var _ common.TableOutput = new(Response)
 
 func (r Response) GetTableHeader() []string {
-	return []string{"NAMESPACE", "NAME", "APPLIED-TO", "RULES"}
+	return []string{"NAMESPACE", "NAME", "APPLIED-TO", "RULES", "SOURCE-TYPE"}
 }
 
 func (r Response) GetTableRow(maxColumnLength int) []string {
-	return []string{r.NameSpace, r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength), strconv.Itoa(len(r.Rules))}
+	return []string{r.NameSpace, r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength), strconv.Itoa(len(r.Rules)), string(r.SourceType)}
 }
 
 func (r Response) SortRows() bool {

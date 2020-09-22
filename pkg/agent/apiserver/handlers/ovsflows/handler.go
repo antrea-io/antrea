@@ -24,6 +24,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
+	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -97,7 +98,7 @@ func getPodFlows(aq querier.AgentQuerier, podName, namespace string) ([]Response
 }
 
 func getNetworkPolicyFlows(aq querier.AgentQuerier, npName, namespace string) ([]Response, error) {
-	if aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicy(npName, namespace) == nil {
+	if aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicy(cpv1beta1.NetworkPolicyQueryFilter{Name: npName, Namespace: namespace}) == nil {
 		// NetworkPolicy not found.
 		return nil, nil
 	}

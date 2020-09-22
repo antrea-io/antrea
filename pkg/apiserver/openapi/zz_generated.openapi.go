@@ -53,6 +53,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicy":                     schema_pkg_apis_controlplane_v1beta1_NetworkPolicy(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyList":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicyList(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyPeer":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicyPeer(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyQueryFilter":          schema_pkg_apis_controlplane_v1beta1_NetworkPolicyQueryFilter(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyReference":            schema_pkg_apis_controlplane_v1beta1_NetworkPolicyReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyRule":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicyRule(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyStats":                schema_pkg_apis_controlplane_v1beta1_NetworkPolicyStats(ref),
@@ -1554,6 +1555,48 @@ func schema_pkg_apis_controlplane_v1beta1_NetworkPolicyPeer(ref common.Reference
 		},
 		Dependencies: []string{
 			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.IPBlock"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta1_NetworkPolicyQueryFilter(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyQueryFilter is used to filter the result while retrieve network policy Not settled attributes means match all. e.g SourceType = \"\" means all type network policy will be retrieved Can have more attributes in future if more args are required",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"Name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the network policy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"Namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace of the NetworkPolicy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"Pod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the pod that the network policy is applied on.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"SourceType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, CNP, ANP)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"Name", "Namespace", "Pod", "SourceType"},
+			},
+		},
 	}
 }
 

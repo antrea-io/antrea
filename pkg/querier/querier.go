@@ -31,11 +31,11 @@ type NetworkPolicyInfoQuerier interface {
 type AgentNetworkPolicyInfoQuerier interface {
 	NetworkPolicyInfoQuerier
 	GetControllerConnectionStatus() bool
-	GetNetworkPolicies(namespace string) []cpv1beta1.NetworkPolicy
+	GetNetworkPolicies(npFilter cpv1beta1.NetworkPolicyQueryFilter) []cpv1beta1.NetworkPolicy
 	GetAddressGroups() []cpv1beta1.AddressGroup
 	GetAppliedToGroups() []cpv1beta1.AppliedToGroup
-	GetNetworkPolicy(npName, npNamespace string) *cpv1beta1.NetworkPolicy
-	GetAppliedNetworkPolicies(pod, namespace string) []cpv1beta1.NetworkPolicy
+	GetNetworkPolicy(npFilter cpv1beta1.NetworkPolicyQueryFilter) *cpv1beta1.NetworkPolicy
+	GetAppliedNetworkPolicies(pod, namespace string, npFilter cpv1beta1.NetworkPolicyQueryFilter) []cpv1beta1.NetworkPolicy
 }
 
 type ControllerNetworkPolicyInfoQuerier interface {
