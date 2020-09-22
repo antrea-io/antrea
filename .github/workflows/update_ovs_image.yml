@@ -20,6 +20,8 @@ jobs:
         cd build/images/ovs/
         docker pull antrea/openvswitch-debs:$OVS_VERSION || true
         docker pull antrea/openvswitch:$OVS_VERSION || true
+        docker pull antrea/openvswitch-rpms:$OVS_VERSION || true
+        docker pull antrea/openvswitch-ubi:$OVS_VERSION || true
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         ./build_and_push.sh
         cd ../base/

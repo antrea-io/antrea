@@ -43,4 +43,11 @@ docker build \
 
 docker push antrea/base-ubuntu:$OVS_VERSION
 
+docker pull antrea/openvswitch-ubi:$OVS_VERSION
+
+docker build \
+       -t antrea/base-ubi:$OVS_VERSION \
+       -f Dockerfile.ubi \
+       --build-arg OVS_VERSION=$OVS_VERSION .
+
 popd > /dev/null

@@ -55,4 +55,20 @@ docker build \
 docker push antrea/openvswitch-debs:$OVS_VERSION
 docker push antrea/openvswitch:$OVS_VERSION
 
+docker build --target ovs-rpms \
+       --cache-from antrea/openvswitch-rpms:$OVS_VERSION \
+       -t antrea/openvswitch-rpms:$OVS_VERSION \
+       --build-arg OVS_VERSION=$OVS_VERSION \
+       -f Dockerfile.ubi .
+
+docker build \
+       --cache-from antrea/openvswitch-rpms:$OVS_VERSION \
+       --cache-from antrea/openvswitch-ubi:$OVS_VERSION \
+       -t antrea/openvswitch-ubi:$OVS_VERSION \
+       --build-arg OVS_VERSION=$OVS_VERSION \
+       -f Dockerfile.ubi .
+
+docker push antrea/openvswitch-rpms:$OVS_VERSION
+docker push antrea/openvswitch-ubi:$OVS_VERSION
+
 popd > /dev/null

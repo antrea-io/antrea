@@ -19,6 +19,7 @@ jobs:
         VERSION="${TAG:10}" make
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/antrea-ubuntu:"${TAG:10}"
+        docker push antrea/antrea-ubi:"${TAG:10}"
 
   build-windows:
     runs-on: [windows-2019]

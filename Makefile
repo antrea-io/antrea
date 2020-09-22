@@ -91,7 +91,7 @@ test-integration:
 endif
 
 .PHONY: build
-build: build-ubuntu
+build: build-ubuntu build-ubi
 
 .PHONY: test
 test: golangci
@@ -272,6 +272,27 @@ endif
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION)
+
+.PHONY: ubi
+ubi:
+	@echo "===> Building antrea/antrea-ubi Docker image <==="
+	docker build --pull -t antrea/antrea-ubi:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubi .
+	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) antrea/antrea-ubi
+	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubi
+	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubi:$(DOCKER_IMG_VERSION)
+
+# Build bins in a golang container, and build the antrea-ubi Docker image.
+.PHONY: build-ubi
+build-ubi:
+	@echo "===> Building Antrea bins and antrea/antrea-ubi Docker image <==="
+ifneq ($(DOCKER_REGISTRY),"")
+	docker build -t antrea/antrea-ubi:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubi .
+else
+	docker build --pull -t antrea/antrea-ubi:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubi .
+endif
+	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) antrea/antrea-ubi
+	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubi
+	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubi:$(DOCKER_IMG_VERSION)
 
 .PHONY: build-windows
 build-windows:
