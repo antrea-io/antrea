@@ -350,6 +350,5 @@ the policies that may affect their workloads.
 ## Known Issues
 
 - Creating an Antrea NetworkPolicy with the same name as a K8s NetworkPolicy
-  under the same Namespace is known to collide with each other and cause
-  unexpected outcome. See issue [1173](https://github.com/vmware-tanzu/antrea/issues/1173)
-  for more details.
+  under the same Namespace creates a collision and causes unexpected behavior.
+  See issue [1173](https://github.com/vmware-tanzu/antrea/issues/1173) for more details.
