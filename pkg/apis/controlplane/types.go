@@ -16,6 +16,7 @@ package controlplane
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
@@ -150,6 +151,25 @@ type AddressGroupList struct {
 // TierPriority indicates higher precedence.
 type TierPriority uint32
 
+type NetworkPolicyType string
+
+const (
+	K8sNetworkPolicy           NetworkPolicyType = "K8sNetworkPolicy"
+	AntreaClusterNetworkPolicy NetworkPolicyType = "AntreaClusterNetworkPolicy"
+	AntreaNetworkPolicy        NetworkPolicyType = "AntreaNetworkPolicy"
+)
+
+type NetworkPolicyReference struct {
+	// Type of the NetworkPolicy.
+	Type NetworkPolicyType
+	// Namespace of the NetworkPolicy. It's empty for Antrea ClusterNetworkPolicy.
+	Namespace string
+	// Name of the NetworkPolicy.
+	Name string
+	// UID of the NetworkPolicy.
+	UID types.UID
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.
 type NetworkPolicy struct {
@@ -165,6 +185,8 @@ type NetworkPolicy struct {
 	// TierPriority represents the priority of the Tier associated with this NetworkPolicy.
 	// The TierPriority will remain nil for K8s NetworkPolicy.
 	TierPriority *TierPriority
+	// Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
+	SourceRef *NetworkPolicyReference
 }
 
 // Direction defines traffic direction of NetworkPolicyRule.

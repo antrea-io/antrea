@@ -22,7 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
@@ -33,9 +32,16 @@ import (
 
 func TestWatchNetworkPolicyEvent(t *testing.T) {
 	protocolTCP := controlplane.ProtocolTCP
+	npRef := controlplane.NetworkPolicyReference{
+		Type:      controlplane.K8sNetworkPolicy,
+		Namespace: "foo",
+		Name:      "bar",
+		UID:       "id1",
+	}
 	policyV1 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
+		SourceRef: &npRef,
 		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
 		Rules: []controlplane.NetworkPolicyRule{{
 			Direction: controlplane.DirectionIn,
@@ -48,6 +54,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 	policyV2 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
+		SourceRef: &npRef,
 		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
 		Rules: []controlplane.NetworkPolicyRule{{
 			Direction: controlplane.DirectionIn,
@@ -60,6 +67,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 	policyV3 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
+		SourceRef: &npRef,
 		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
 		Rules: []controlplane.NetworkPolicyRule{{
 			Direction: controlplane.DirectionIn,
@@ -88,11 +96,13 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
 				{Type: watch.Added, Object: &controlplane.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+					SourceRef:       &npRef,
 					Rules:           policyV1.Rules,
 					AppliedToGroups: policyV1.AppliedToGroups,
 				}},
 				{Type: watch.Modified, Object: &controlplane.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+					SourceRef:       &npRef,
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
 				}},
@@ -115,16 +125,19 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
 				{Type: watch.Added, Object: &controlplane.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+					SourceRef:       &npRef,
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
 				}},
 				{Type: watch.Modified, Object: &controlplane.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+					SourceRef:       &npRef,
 					Rules:           policyV3.Rules,
 					AppliedToGroups: policyV3.AppliedToGroups,
 				}},
 				{Type: watch.Deleted, Object: &controlplane.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+					SourceRef:  &npRef,
 				}},
 			},
 		},
@@ -157,7 +170,13 @@ func TestGetNetworkPolicyByIndex(t *testing.T) {
 	policy1 := &types.NetworkPolicy{
 		Namespace: "foo",
 		Name:      "bar",
-		UID:       apitypes.UID("uid-1"),
+		UID:       "uid-1",
+		SourceRef: &controlplane.NetworkPolicyReference{
+			Type:      controlplane.K8sNetworkPolicy,
+			Namespace: "foo",
+			Name:      "bar",
+			UID:       "uid-1",
+		},
 		Rules: []controlplane.NetworkPolicyRule{{
 			Direction: controlplane.DirectionIn,
 			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
@@ -168,7 +187,13 @@ func TestGetNetworkPolicyByIndex(t *testing.T) {
 	policy2 := &types.NetworkPolicy{
 		Namespace: "foo2",
 		Name:      "bar2",
-		UID:       apitypes.UID("uid-2"),
+		UID:       "uid-2",
+		SourceRef: &controlplane.NetworkPolicyReference{
+			Type:      controlplane.K8sNetworkPolicy,
+			Namespace: "foo2",
+			Name:      "bar2",
+			UID:       "uid-2",
+		},
 		Rules: []controlplane.NetworkPolicyRule{{
 			Direction: controlplane.DirectionIn,
 			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},

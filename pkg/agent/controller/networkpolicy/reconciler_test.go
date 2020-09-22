@@ -72,6 +72,18 @@ var (
 
 	policyPriority = float64(1)
 	tierPriority   = v1beta1.TierPriority(1)
+
+	np1 = v1beta1.NetworkPolicyReference{
+		Type:      v1beta1.K8sNetworkPolicy,
+		Namespace: "ns1",
+		Name:      "name1",
+		UID:       "uid1",
+	}
+	cnp1 = v1beta1.NetworkPolicyReference{
+		Type: v1beta1.AntreaClusterNetworkPolicy,
+		Name: "name1",
+		UID:  "uid1",
+	}
 )
 
 func newCIDR(cidrStr string) *net.IPNet {
@@ -93,7 +105,7 @@ func TestReconcilerForget(t *testing.T) {
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8},
 					CompletedRule: &CompletedRule{
-						rule: &rule{Direction: v1beta1.DirectionIn, PolicyPriority: nil},
+						rule: &rule{Direction: v1beta1.DirectionIn, SourceRef: &np1},
 					},
 				},
 			},
@@ -107,7 +119,7 @@ func TestReconcilerForget(t *testing.T) {
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8},
 					CompletedRule: &CompletedRule{
-						rule: &rule{Direction: v1beta1.DirectionIn, PolicyPriority: nil},
+						rule: &rule{Direction: v1beta1.DirectionIn, SourceRef: &np1},
 					},
 				},
 			},
@@ -121,7 +133,7 @@ func TestReconcilerForget(t *testing.T) {
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8, servicesKey2: 9},
 					CompletedRule: &CompletedRule{
-						rule: &rule{Direction: v1beta1.DirectionIn, PolicyPriority: nil},
+						rule: &rule{Direction: v1beta1.DirectionIn, SourceRef: &np1},
 					},
 				},
 			},
@@ -135,7 +147,7 @@ func TestReconcilerForget(t *testing.T) {
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8, servicesKey2: 9},
 					CompletedRule: &CompletedRule{
-						rule: &rule{Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority},
+						rule: &rule{Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1},
 					},
 				},
 			},
@@ -219,7 +231,7 @@ func TestReconcilerReconcile(t *testing.T) {
 		{
 			"ingress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceTCP80, serviceTCP}},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceTCP80, serviceTCP}, SourceRef: &np1},
 				FromAddresses: addressGroup1,
 				ToAddresses:   nil,
 				Pods:          appliedToGroup1,
@@ -230,6 +242,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 					Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -237,7 +250,7 @@ func TestReconcilerReconcile(t *testing.T) {
 		{
 			"ingress-rule-with-missing-ofport",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
 				FromAddresses: addressGroup1,
 				ToAddresses:   nil,
 				Pods:          appliedToGroup2,
@@ -248,6 +261,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
 					To:        []types.Address{},
 					Service:   nil,
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -260,6 +274,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					Direction: v1beta1.DirectionIn,
 					From:      v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2}},
 					Services:  []v1beta1.Service{serviceTCP80, serviceTCP},
+					SourceRef: &np1,
 				},
 				FromAddresses: addressGroup1,
 				ToAddresses:   nil,
@@ -284,8 +299,9 @@ func TestReconcilerReconcile(t *testing.T) {
 						openflow.NewIPNetAddress(*diffNet11),
 						openflow.NewIPNetAddress(*diffNet12),
 					},
-					To:      ofPortsToOFAddresses(sets.NewInt32(1)),
-					Service: []v1beta1.Service{serviceTCP80, serviceTCP},
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -297,6 +313,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					ID:        "ingress-rule",
 					Direction: v1beta1.DirectionIn,
 					Services:  []v1beta1.Service{},
+					SourceRef: &np1,
 				},
 				Pods: appliedToGroup1,
 			},
@@ -306,6 +323,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 					Service:   nil,
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -317,6 +335,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					ID:        "ingress-rule",
 					Direction: v1beta1.DirectionIn,
 					Services:  []v1beta1.Service{serviceHTTP},
+					SourceRef: &np1,
 				},
 				Pods: appliedToGroup1,
 			},
@@ -326,6 +345,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 					Service:   []v1beta1.Service{},
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -337,6 +357,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					ID:        "ingress-rule",
 					Direction: v1beta1.DirectionIn,
 					Services:  []v1beta1.Service{serviceHTTP},
+					SourceRef: &np1,
 				},
 				Pods: appliedToGroupWithSameContainerPort,
 			},
@@ -346,6 +367,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1, 3)),
 					Service:   []v1beta1.Service{serviceTCP80},
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -357,6 +379,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					ID:        "ingress-rule",
 					Direction: v1beta1.DirectionIn,
 					Services:  []v1beta1.Service{serviceHTTP},
+					SourceRef: &np1,
 				},
 				Pods: appliedToGroupWithDiffContainerPort,
 			},
@@ -366,12 +389,14 @@ func TestReconcilerReconcile(t *testing.T) {
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 					Service:   []v1beta1.Service{serviceTCP80},
+					PolicyRef: &np1,
 				},
 				{
 					Direction: v1beta1.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(3)),
 					Service:   []v1beta1.Service{serviceTCP443},
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -379,7 +404,7 @@ func TestReconcilerReconcile(t *testing.T) {
 		{
 			"ingress-rule-deny-all",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
 				FromAddresses: nil,
 				ToAddresses:   nil,
 				Pods:          appliedToGroup1,
@@ -390,6 +415,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 					Service:   nil,
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -397,7 +423,7 @@ func TestReconcilerReconcile(t *testing.T) {
 		{
 			"egress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
 				FromAddresses: nil,
 				ToAddresses:   addressGroup1,
 				Pods:          appliedToGroup1,
@@ -408,6 +434,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
 					To:        ipsToOFAddresses(sets.NewString("1.1.1.1")),
 					Service:   nil,
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -419,6 +446,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					ID:        "egress-rule",
 					Direction: v1beta1.DirectionOut,
 					To:        v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2}},
+					SourceRef: &np1,
 				},
 				FromAddresses: nil,
 				ToAddresses:   addressGroup1,
@@ -444,7 +472,8 @@ func TestReconcilerReconcile(t *testing.T) {
 						openflow.NewIPNetAddress(*diffNet11),
 						openflow.NewIPNetAddress(*diffNet12),
 					},
-					Service: nil,
+					Service:   nil,
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -455,6 +484,7 @@ func TestReconcilerReconcile(t *testing.T) {
 				rule: &rule{
 					ID:        "egress-rule",
 					Direction: v1beta1.DirectionOut,
+					SourceRef: &np1,
 				},
 				FromAddresses: nil,
 				ToAddresses:   nil,
@@ -466,6 +496,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
 					To:        []types.Address{},
 					Service:   nil,
+					PolicyRef: &np1,
 				},
 			},
 			false,
@@ -504,21 +535,21 @@ func TestReconcilerBatchReconcile(t *testing.T) {
 	})
 	completedRules := []*CompletedRule{
 		{
-			rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceTCP80, serviceTCP}},
+			rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceTCP80, serviceTCP}, SourceRef: &np1},
 			FromAddresses: addressGroup1,
 			ToAddresses:   nil,
 			Pods:          appliedToGroup1,
 		},
 		{
-			rule: &rule{ID: "ingress-rule-no-ports", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{}},
+			rule: &rule{ID: "ingress-rule-no-ports", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{}, SourceRef: &np1},
 			Pods: appliedToGroup1,
 		},
 		{
-			rule: &rule{ID: "ingress-rule-diff-named-port", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceHTTP}},
+			rule: &rule{ID: "ingress-rule-diff-named-port", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &np1},
 			Pods: appliedToGroupWithDiffContainerPort,
 		},
 		{
-			rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+			rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
 			FromAddresses: nil,
 			ToAddresses:   addressGroup1,
 			Pods:          appliedToGroup1,
@@ -530,30 +561,35 @@ func TestReconcilerBatchReconcile(t *testing.T) {
 			From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
 			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 			Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+			PolicyRef: &np1,
 		},
 		{
 			Direction: v1beta1.DirectionIn,
 			From:      []types.Address{},
 			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 			Service:   nil,
+			PolicyRef: &np1,
 		},
 		{
 			Direction: v1beta1.DirectionIn,
 			From:      []types.Address{},
 			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 			Service:   []v1beta1.Service{serviceTCP80},
+			PolicyRef: &np1,
 		},
 		{
 			Direction: v1beta1.DirectionIn,
 			From:      []types.Address{},
 			To:        ofPortsToOFAddresses(sets.NewInt32(3)),
 			Service:   []v1beta1.Service{serviceTCP443},
+			PolicyRef: &np1,
 		},
 		{
 			Direction: v1beta1.DirectionOut,
 			From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
 			To:        ipsToOFAddresses(sets.NewString("1.1.1.1")),
 			Service:   nil,
+			PolicyRef: &np1,
 		},
 	}
 	tests := []struct {
@@ -641,12 +677,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-ingress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
 				FromAddresses: addressGroup1,
 				Pods:          appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
 				FromAddresses: addressGroup2,
 				Pods:          appliedToGroup2,
 			},
@@ -660,12 +696,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-egress-rule",
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
 				ToAddresses: addressGroup1,
 				Pods:        appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
 				ToAddresses: addressGroup2,
 				Pods:        appliedToGroup2,
 			},
@@ -679,12 +715,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-ingress-rule-with-missing-ofport",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
 				FromAddresses: addressGroup1,
 				Pods:          appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
 				FromAddresses: addressGroup2,
 				Pods:          appliedToGroup3,
 			},
@@ -698,12 +734,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-egress-rule-with-missing-ip",
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
 				ToAddresses: addressGroup1,
 				Pods:        appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
 				ToAddresses: addressGroup2,
 				Pods:        appliedToGroup3,
 			},
@@ -717,12 +753,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-egress-rule-deny-all",
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
 				ToAddresses: nil,
 				Pods:        appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut},
+				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
 				ToAddresses: nil,
 				Pods:        appliedToGroup2,
 			},
@@ -736,12 +772,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-cnp-ingress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1},
 				FromAddresses: addressGroup1,
 				Pods:          appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1},
 				FromAddresses: addressGroup2,
 				Pods:          appliedToGroup2,
 			},
@@ -755,12 +791,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-cnp-ingress-rule-uninstall",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &cnp1},
 				FromAddresses: addressGroup1,
 				Pods:          appliedToGroupWithDiffContainerPort,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &cnp1},
 				FromAddresses: addressGroup1,
 				Pods:          appliedToGroupWithSingleContainerPort,
 			},

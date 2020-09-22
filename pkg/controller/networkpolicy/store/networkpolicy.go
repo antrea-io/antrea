@@ -106,6 +106,7 @@ func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *controlplane.NetworkPolicy
 	out.Namespace = in.Namespace
 	out.Name = in.Name
 	out.UID = in.UID
+	out.SourceRef = in.SourceRef
 	if !includeBody {
 		return
 	}

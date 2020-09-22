@@ -147,7 +147,7 @@ func newLastRealized(rule *CompletedRule) *lastRealized {
 }
 
 // tablePriorityAssigner groups the priorityAssigner and mutex for a single OVS table
-// that is reserved for installing ClusterNetworkPolicy rules.
+// that is reserved for installing Antrea policy rules.
 type tablePriorityAssigner struct {
 	assigner *priorityAssigner
 	mutex    sync.RWMutex
@@ -197,7 +197,7 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 // Reconcile checks whether the provided rule have been enforced or not, and
 // invoke the add or update method accordingly.
 func (r *reconciler) Reconcile(rule *CompletedRule) error {
-	klog.Infof("Reconciling rule %s of NetworkPolicy %s/%s", rule.ID, rule.PolicyNamespace, rule.PolicyName)
+	klog.Infof("Reconciling rule %s of NetworkPolicy %s", rule.ID, rule.SourceRef.ToString())
 	var err error
 	var ofPriority *uint16
 
@@ -250,7 +250,7 @@ func (r *reconciler) getOFRuleTable(rule *CompletedRule) binding.TableIDType {
 // getOFPriority retrieves the OFPriority for the input CompletedRule to be installed,
 // and re-arranges installed priorities on OVS if necessary.
 func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDType, pa *tablePriorityAssigner) (*uint16, error) {
-	if rule.PolicyPriority == nil {
+	if !rule.isAntreaNetworkPolicyRule() {
 		klog.V(2).Infof("Assigning default priority for k8s NetworkPolicy.")
 		return nil, nil
 	}
@@ -295,7 +295,7 @@ func (r *reconciler) BatchReconcile(rules []*CompletedRule) error {
 	for _, rule := range rulesToInstall {
 		ruleTable := r.getOFRuleTable(rule)
 		priorityAssigner := r.priorityAssigners[ruleTable]
-		klog.V(2).Infof("Adding rule %s of NetworkPolicy %s/%s to be reconciled in batch", rule.ID, rule.PolicyNamespace, rule.PolicyName)
+		klog.V(2).Infof("Adding rule %s of NetworkPolicy %s to be reconciled in batch", rule.ID, rule.SourceRef.ToString())
 		ofPriority, _ := r.getOFPriority(rule, ruleTable, priorityAssigner)
 		priorities = append(priorities, ofPriority)
 		if ofPriority != nil {
@@ -348,8 +348,6 @@ func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16, table binding.
 			return fmt.Errorf("error allocating Openflow ID")
 		}
 		ofRule.FlowID = ofID
-		ofRule.PolicyName = lastRealized.CompletedRule.PolicyName
-		ofRule.PolicyNamespace = lastRealized.CompletedRule.PolicyNamespace
 		if err = r.installOFRule(ofRule); err != nil {
 			return err
 		}
@@ -386,6 +384,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				Action:    rule.Action,
 				Priority:  ofPriority,
 				TableID:   table,
+				PolicyRef: rule.SourceRef,
 			}
 		}
 	} else {
@@ -402,6 +401,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				Action:    rule.Action,
 				Priority:  ofPriority,
 				TableID:   table,
+				PolicyRef: rule.SourceRef,
 			}
 		}
 
@@ -409,7 +409,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		// We must ensure there is at least one PolicyRule, otherwise the Pods won't be
 		// isolated, so we create a PolicyRule with the original services if it doesn't exist.
 		// If there are IPBlocks or Pods that cannot resolve any named port, they will share
-		// this PolicyRule. ClusterNetworkPolicy does not need this default isolation.
+		// this PolicyRule. Antrea policies do not need this default isolation.
 		if !rule.isAntreaNetworkPolicyRule() || len(rule.To.IPBlocks) > 0 {
 			svcKey := normalizeServices(rule.Services)
 			ofRule, exists := ofRuleByServicesMap[svcKey]
@@ -423,6 +423,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 					Action:    rule.Action,
 					Priority:  nil,
 					TableID:   table,
+					PolicyRef: rule.SourceRef,
 				}
 				ofRuleByServicesMap[svcKey] = ofRule
 			}
@@ -453,8 +454,6 @@ func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) er
 				return fmt.Errorf("error allocating Openflow ID")
 			}
 			ofRule.FlowID = ofID
-			ofRule.PolicyName = lastRealized.CompletedRule.PolicyName
-			ofRule.PolicyNamespace = lastRealized.CompletedRule.PolicyNamespace
 			allOFRules = append(allOFRules, ofRule)
 			if ofIDUpdateMaps[idx] == nil {
 				ofIDUpdateMaps[idx] = make(map[servicesKey]uint32)
@@ -507,16 +506,15 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					return fmt.Errorf("error allocating Openflow ID")
 				}
 				ofRule := &types.PolicyRule{
-					Direction:       v1beta1.DirectionIn,
-					From:            append(from1, from2...),
-					To:              ofPortsToOFAddresses(newOFPorts),
-					Service:         filterUnresolvablePort(servicesMap[svcKey]),
-					Action:          newRule.Action,
-					Priority:        ofPriority,
-					FlowID:          ofID,
-					TableID:         table,
-					PolicyName:      newRule.PolicyName,
-					PolicyNamespace: newRule.PolicyNamespace,
+					Direction: v1beta1.DirectionIn,
+					From:      append(from1, from2...),
+					To:        ofPortsToOFAddresses(newOFPorts),
+					Service:   filterUnresolvablePort(servicesMap[svcKey]),
+					Action:    newRule.Action,
+					Priority:  ofPriority,
+					FlowID:    ofID,
+					TableID:   table,
+					PolicyRef: newRule.SourceRef,
 				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err
@@ -556,16 +554,15 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					return fmt.Errorf("error allocating Openflow ID")
 				}
 				ofRule := &types.PolicyRule{
-					Direction:       v1beta1.DirectionOut,
-					From:            from,
-					To:              groupMembersToOFAddresses(members),
-					Service:         filterUnresolvablePort(servicesMap[svcKey]),
-					Action:          newRule.Action,
-					Priority:        ofPriority,
-					FlowID:          ofID,
-					TableID:         table,
-					PolicyName:      newRule.PolicyName,
-					PolicyNamespace: newRule.PolicyNamespace,
+					Direction: v1beta1.DirectionOut,
+					From:      from,
+					To:        groupMembersToOFAddresses(members),
+					Service:   filterUnresolvablePort(servicesMap[svcKey]),
+					Action:    newRule.Action,
+					Priority:  ofPriority,
+					FlowID:    ofID,
+					TableID:   table,
+					PolicyRef: newRule.SourceRef,
 				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err

@@ -133,9 +133,9 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		ob.Component = opsv1alpha1.NetworkPolicy
 		ob.ComponentInfo = openflow.GetFlowTableName(openflow.EgressRuleTable)
 		ob.Action = opsv1alpha1.Forwarded
-		npName, npNamespace := c.ofClient.GetPolicyFromConjunction(egressInfo)
-		if npName != "" {
-			ob.NetworkPolicy = fmt.Sprintf("%s/%s", npNamespace, npName)
+		npRef := c.ofClient.GetPolicyFromConjunction(egressInfo)
+		if npRef != nil {
+			ob.NetworkPolicy = npRef.ToString()
 		}
 		obs = append(obs, *ob)
 	}
@@ -150,9 +150,9 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		ob.Component = opsv1alpha1.NetworkPolicy
 		ob.ComponentInfo = openflow.GetFlowTableName(openflow.IngressRuleTable)
 		ob.Action = opsv1alpha1.Forwarded
-		npName, npNamespace := c.ofClient.GetPolicyFromConjunction(ingressInfo)
-		if npName != "" {
-			ob.NetworkPolicy = fmt.Sprintf("%s/%s", npNamespace, npName)
+		npRef := c.ofClient.GetPolicyFromConjunction(ingressInfo)
+		if npRef != nil {
+			ob.NetworkPolicy = npRef.ToString()
 		}
 		obs = append(obs, *ob)
 	}
