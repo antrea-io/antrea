@@ -78,6 +78,13 @@ type rule struct {
 	PolicyName string
 	// PolicyNamespace is empty for ClusterNetworkPolicy.
 	PolicyNamespace string
+	// Reference to the original NetworkPolicy that the rule belongs to.
+	// Note it has a different meaning from PolicyUID, PolicyName, and
+	// PolicyNamespace which are the metadata fields of the corresponding
+	// controlplane NetworkPolicy. Although they are same for now, it might
+	// change in the future, features that need the information of the original
+	// NetworkPolicy should use SourceRef.
+	SourceRef *v1beta1.NetworkPolicyReference
 }
 
 // hashRule calculates a string based on the rule's content.
@@ -113,9 +120,9 @@ func (r *CompletedRule) String() string {
 		r.ID, r.Direction, len(r.Pods), addressString, len(r.Services), r.PolicyPriority, r.Priority)
 }
 
-// isAntreaNetworkPolicyRule returns true if the rule is part of a ClusterNetworkPolicy.
+// isAntreaNetworkPolicyRule returns true if the rule is part of a Antrea policy.
 func (r *CompletedRule) isAntreaNetworkPolicyRule() bool {
-	return r.PolicyPriority != nil
+	return r.SourceRef.Type != v1beta1.K8sNetworkPolicy
 }
 
 // ruleCache caches Antrea AddressGroups, AppliedToGroups and NetworkPolicies,
@@ -200,6 +207,7 @@ func addRuleToNetworkPolicy(np *v1beta1.NetworkPolicy, rule *rule) *v1beta1.Netw
 			ObjectMeta: metav1.ObjectMeta{UID: rule.PolicyUID,
 				Name:      rule.PolicyName,
 				Namespace: rule.PolicyNamespace},
+			SourceRef:       rule.SourceRef,
 			AppliedToGroups: rule.AppliedToGroups,
 			Priority:        rule.PolicyPriority,
 			TierPriority:    rule.TierPriority,
@@ -564,6 +572,7 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
 		TierPriority:    policy.TierPriority,
 		AppliedToGroups: policy.AppliedToGroups,
 		PolicyUID:       policy.UID,
+		SourceRef:       policy.SourceRef,
 	}
 	rule.ID = hashRule(rule)
 	rule.PolicyNamespace = policy.Namespace

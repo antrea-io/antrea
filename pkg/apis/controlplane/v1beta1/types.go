@@ -16,6 +16,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
@@ -155,6 +156,25 @@ type AddressGroupList struct {
 // TierPriority indicates higher precedence.
 type TierPriority uint32
 
+type NetworkPolicyType string
+
+const (
+	K8sNetworkPolicy           NetworkPolicyType = "K8sNetworkPolicy"
+	AntreaClusterNetworkPolicy NetworkPolicyType = "AntreaClusterNetworkPolicy"
+	AntreaNetworkPolicy        NetworkPolicyType = "AntreaNetworkPolicy"
+)
+
+type NetworkPolicyReference struct {
+	// Type of the NetworkPolicy.
+	Type NetworkPolicyType `json:"type,omitempty" protobuf:"bytes,1,opt,name=type,casttype=NetworkPolicyType"`
+	// Namespace of the NetworkPolicy. It's empty for Antrea ClusterNetworkPolicy.
+	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
+	// Name of the NetworkPolicy.
+	Name string `json:"name,omitempty" protobuf:"bytes,3,opt,name=name"`
+	// UID of the NetworkPolicy.
+	UID types.UID `json:"uid,omitempty" protobuf:"bytes,4,opt,name=uid,casttype=k8s.io/apimachinery/pkg/types.UID"`
+}
+
 // +genclient
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -172,6 +192,8 @@ type NetworkPolicy struct {
 	// TierPriority represents the priority of the Tier associated with this Network
 	// Policy. The TierPriority will remain nil for K8s NetworkPolicy.
 	TierPriority *TierPriority `json:"tierPriority,omitempty" protobuf:"varint,5,opt,name=tierPriority"`
+	// Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
+	SourceRef *NetworkPolicyReference `json:"sourceRef,omitempty" protobuf:"bytes,6,opt,name=sourceRef"`
 }
 
 // Direction defines traffic direction of NetworkPolicyRule.

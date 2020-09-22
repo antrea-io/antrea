@@ -157,6 +157,12 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 	}
 	tierPriority := getTierPriority(np.Spec.Tier)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
+		SourceRef: &controlplane.NetworkPolicyReference{
+			Type:      controlplane.AntreaNetworkPolicy,
+			Namespace: np.Namespace,
+			Name:      np.Name,
+			UID:       np.UID,
+		},
 		Name:            np.Name,
 		Namespace:       np.Namespace,
 		UID:             np.UID,

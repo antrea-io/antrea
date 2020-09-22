@@ -15,7 +15,6 @@
 package networkpolicy
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,9 +90,15 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidA",
-				Name:         "npA",
-				Namespace:    "ns1",
+				UID:       "uidA",
+				Name:      "npA",
+				Namespace: "ns1",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "ns1",
+					Name:      "npA",
+					UID:       "uidA",
+				},
 				Priority:     &p10,
 				TierPriority: &appTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -171,9 +176,15 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidB",
-				Name:         "npB",
-				Namespace:    "ns2",
+				UID:       "uidB",
+				Name:      "npB",
+				Namespace: "ns2",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "ns2",
+					Name:      "npB",
+					UID:       "uidB",
+				},
 				Priority:     &p10,
 				TierPriority: &appTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -216,17 +227,9 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
 
-			if actualPolicy := c.processAntreaNetworkPolicy(tt.inputPolicy); !reflect.DeepEqual(actualPolicy, tt.expectedPolicy) {
-				t.Errorf("processClusterNetworkPolicy() got %v, want %v", actualPolicy, tt.expectedPolicy)
-			}
-
-			if actualAddressGroups := len(c.addressGroupStore.List()); actualAddressGroups != tt.expectedAddressGroups {
-				t.Errorf("len(addressGroupStore.List()) got %v, want %v", actualAddressGroups, tt.expectedAddressGroups)
-			}
-
-			if actualAppliedToGroups := len(c.appliedToGroupStore.List()); actualAppliedToGroups != tt.expectedAppliedToGroups {
-				t.Errorf("len(appliedToGroupStore.List()) got %v, want %v", actualAppliedToGroups, tt.expectedAppliedToGroups)
-			}
+			assert.Equal(t, tt.expectedPolicy, c.processAntreaNetworkPolicy(tt.inputPolicy))
+			assert.Equal(t, tt.expectedAddressGroups, len(c.addressGroupStore.List()))
+			assert.Equal(t, tt.expectedAppliedToGroups, len(c.appliedToGroupStore.List()))
 		})
 	}
 }
@@ -278,9 +281,15 @@ func TestAddANP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:          "uidA",
-				Name:         "anpA",
-				Namespace:    "nsA",
+				UID:       "uidA",
+				Name:      "anpA",
+				Namespace: "nsA",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "nsA",
+					Name:      "anpA",
+					UID:       "uidA",
+				},
 				Priority:     &p10,
 				TierPriority: &appTier,
 				Rules: []controlplane.NetworkPolicyRule{
@@ -312,17 +321,10 @@ func TestAddANP(t *testing.T) {
 			key, _ := keyFunc(tt.inputPolicy)
 			actualPolicyObj, _, _ := npc.internalNetworkPolicyStore.Get(key)
 			actualPolicy := actualPolicyObj.(*antreatypes.NetworkPolicy)
-			if !reflect.DeepEqual(actualPolicy, tt.expPolicy) {
-				t.Errorf("addANP() got %v, want %v", actualPolicy, tt.expPolicy)
-			}
 
-			if actualAddressGroups := len(npc.addressGroupStore.List()); actualAddressGroups != tt.expAddressGroups {
-				t.Errorf("len(addressGroupStore.List()) got %v, want %v", actualAddressGroups, tt.expAddressGroups)
-			}
-
-			if actualAppliedToGroups := len(npc.appliedToGroupStore.List()); actualAppliedToGroups != tt.expAppliedToGroups {
-				t.Errorf("len(appliedToGroupStore.List()) got %v, want %v", actualAppliedToGroups, tt.expAppliedToGroups)
-			}
+			assert.Equal(t, tt.expPolicy, actualPolicy)
+			assert.Equal(t, tt.expAddressGroups, len(npc.addressGroupStore.List()))
+			assert.Equal(t, tt.expAppliedToGroups, len(npc.appliedToGroupStore.List()))
 		})
 	}
 }

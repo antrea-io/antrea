@@ -192,6 +192,9 @@ message NetworkPolicy {
   // TierPriority represents the priority of the Tier associated with this Network
   // Policy. The TierPriority will remain nil for K8s NetworkPolicy.
   optional uint32 tierPriority = 5;
+
+  // Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
+  optional NetworkPolicyReference sourceRef = 6;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -210,6 +213,20 @@ message NetworkPolicyPeer {
 
   // A list of IPBlock.
   repeated IPBlock ipBlocks = 2;
+}
+
+message NetworkPolicyReference {
+  // Type of the NetworkPolicy.
+  optional string type = 1;
+
+  // Namespace of the NetworkPolicy. It's empty for Antrea ClusterNetworkPolicy.
+  optional string namespace = 2;
+
+  // Name of the NetworkPolicy.
+  optional string name = 3;
+
+  // UID of the NetworkPolicy.
+  optional string uid = 4;
 }
 
 // NetworkPolicyRule describes a particular set of traffic that is allowed.

@@ -53,6 +53,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicy":                     schema_pkg_apis_controlplane_v1beta1_NetworkPolicy(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyList":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicyList(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyPeer":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicyPeer(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyReference":            schema_pkg_apis_controlplane_v1beta1_NetworkPolicyReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyRule":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicyRule(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.PodReference":                      schema_pkg_apis_controlplane_v1beta1_PodReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.Service":                           schema_pkg_apis_controlplane_v1beta1_Service(ref),
@@ -1444,11 +1445,17 @@ func schema_pkg_apis_controlplane_v1beta1_NetworkPolicy(ref common.ReferenceCall
 							Format:      "int64",
 						},
 					},
+					"sourceRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyReference"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyRule", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyReference", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyRule", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -1538,6 +1545,46 @@ func schema_pkg_apis_controlplane_v1beta1_NetworkPolicyPeer(ref common.Reference
 		},
 		Dependencies: []string{
 			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.IPBlock"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta1_NetworkPolicyReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Type of the NetworkPolicy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace of the NetworkPolicy. It's empty for Antrea ClusterNetworkPolicy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the NetworkPolicy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"uid": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UID of the NetworkPolicy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
