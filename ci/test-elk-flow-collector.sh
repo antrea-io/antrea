@@ -61,6 +61,8 @@ setup_flow_collector() {
   kubectl wait --for=condition=ready pod -l app=kibana -n elk-flow-collector --timeout=600s
   kubectl wait --for=condition=ready pod -l app=logstash -n elk-flow-collector --timeout=600s
   kubectl wait --for=condition=ready pod -l app=elasticsearch -n elk-flow-collector --timeout=600s
+  # wait some time for logstash to connect to elasticsearch
+  sleep 30s
   # get cluster-ip of logstash
   LOGSTASH_IP=$(kubectl get svc logstash -n elk-flow-collector -o jsonpath='{.spec.clusterIP}')
   if [ ${LOGSTASH_PROTOCOL} = "udp" ]; then
