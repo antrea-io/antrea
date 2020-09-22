@@ -313,7 +313,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// from local Pods to any Service address can be forwarded to the host gateway interface
 		// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
 		// backend Pods.
-		if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gateway.MAC, gatewayOFPort); err != nil {
+		if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gatewayOFPort); err != nil {
 			klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
 			return err
 		}
