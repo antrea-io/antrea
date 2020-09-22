@@ -51,7 +51,7 @@ type Client interface {
 	// InstallClusterServiceCIDRFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once with
 	// the Cluster Service CIDR as a parameter.
-	InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
+	InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOFPort uint32) error
 
 	// InstallClusterServiceFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once.
@@ -457,8 +457,8 @@ func (c *client) InstallClusterServiceFlows() error {
 	return nil
 }
 
-func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
-	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayMAC, gatewayOFPort)
+func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOFPort uint32) error {
+	flow := c.serviceCIDRDNATFlow(serviceNet, gatewayOFPort)
 	if err := c.ofEntryOperations.Add(flow); err != nil {
 		return err
 	}

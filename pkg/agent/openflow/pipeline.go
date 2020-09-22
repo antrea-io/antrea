@@ -871,10 +871,9 @@ func (c *client) sessionAffinityReselectFlow() binding.Flow {
 }
 
 // serviceCIDRDNATFlow generates flows to match dst IP in service CIDR and output to host gateway interface directly.
-func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) binding.Flow {
+func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayOFPort uint32) binding.Flow {
 	return c.pipeline[dnatTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstIPNet(*serviceCIDR).
-		Action().SetDstMAC(gatewayMAC).
 		Action().LoadRegRange(int(portCacheReg), gatewayOFPort, ofPortRegRange).
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		Action().GotoTable(conntrackCommitTable).
