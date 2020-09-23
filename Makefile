@@ -59,6 +59,11 @@ antctl-ubuntu:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
 
+.PHONY: antctl-instr-binary
+antctl-instr-binary:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antctl-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
+
 .PHONY: windows-bin
 windows-bin:
 	@mkdir -p $(BINDIR)

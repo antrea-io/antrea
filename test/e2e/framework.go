@@ -1383,21 +1383,28 @@ func (data *TestData) gracefulExitAntreaController(covDir string) error {
 		return fmt.Errorf("error when getting antrea-controller Pod: %v", err)
 	}
 	podName := antreaController.Name
+
+	err = data.collectAntctlCovFiles(podName, "antrea-controller", antreaNamespace, covDir)
+
+	if err != nil {
+		return fmt.Errorf("error when graceful exit Antrea controller - copy antctl coverage files out: %v", err)
+	}
+
 	cmds := []string{"pgrep", "-f", antreaControllerCovBinary, "-P", "1"}
 	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, "antrea-controller", cmds)
 	if err != nil {
-		return fmt.Errorf("error when getting pid of '%s': <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
+		return fmt.Errorf("error when getting pid of '%s', stderr: <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
 	}
 	cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
 
 	_, stderr, err = data.runCommandFromPod(antreaNamespace, podName, "antrea-controller", cmds)
 	if err != nil {
-		return fmt.Errorf("error when sending SIGINT signal to '%s': <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
+		return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
 	}
 	err = data.copyPodFiles(podName, "antrea-controller", antreaNamespace, antreaControllerCovFile, covDir)
 
 	if err != nil {
-		return fmt.Errorf("error when graceful exit Antrea controller: copy pod files out, error:%v", err)
+		return fmt.Errorf("error when graceful exit Antrea controller - copy antrea-controller coverage files out: %v", err)
 	}
 
 	return nil
@@ -1418,63 +1425,145 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 	}
 	for _, pod := range pods.Items {
 		podName := pod.Name
+		err := data.collectAntctlCovFiles(podName, "antrea-agent", antreaNamespace, covDir)
+
+		if err != nil {
+			return fmt.Errorf("error when graceful exit Antrea agent - copy antctl coverage files out: %v", err)
+		}
+
 		cmds := []string{"pgrep", "-f", antreaAgentCovBinary, "-P", "1"}
 		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
 		if err != nil {
-			return fmt.Errorf("error when getting pid of '%s': <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
+			return fmt.Errorf("error when getting pid of '%s', stderr: <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
 		}
 		cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
 		_, stderr, err = data.runCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
 		if err != nil {
-			return fmt.Errorf("error when sending SIGINT signal to '%s': <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
+			return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
 		}
 		err = data.copyPodFiles(podName, "antrea-agent", antreaNamespace, antreaAgentCovFile, covDir)
 
 		if err != nil {
-			return fmt.Errorf("error when graceful exit Antrea agent: copy pod files out, error:%v", err)
+			return fmt.Errorf("error when graceful exit Antrea agent - copy antrea-agent coverage files out: %v", err)
 		}
 	}
 	return nil
 }
 
-// gracefulExitAntreaAgent copies the Antrea agent binary coverage data file out before terminating the Pod
-func (data *TestData) copyPodFiles(podName string, containerName string, nsName string, fileName string, covDir string) error {
-	fmt.Printf("Copying file %s from pod %s podName to '%s'", fileName, podName, covDir)
+// collectAntctlCovFiles collects coverage files for the antctl binary from the Pod and saves them to the coverage directory
+func (data *TestData) collectAntctlCovFiles(podName string, containerName string, nsName string, covDir string) error {
+	// copy antctl coverage files from Pod to the coverage directory
+	cmds := []string{"bash", "-c", "find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"}
+	stdout, stderr, err := data.runCommandFromPod(nsName, podName, containerName, cmds)
+	if err != nil {
+		return fmt.Errorf("error when running this find command '%s' on Pod '%s', stderr: <%v>, err: <%v>", cmds, podName, stderr, err)
+	}
+	stdout = strings.TrimSpace(stdout)
+	files := strings.Split(stdout, "\n")
+	for _, file := range files {
+		if len(file) == 0 {
+			continue
+		}
+		err := data.copyPodFiles(podName, containerName, nsName, file, covDir)
+		if err != nil {
+			return fmt.Errorf("error when copying coverage files for antctl from Pod '%s' to coverage directory '%s': %v", podName, covDir, err)
+		}
+	}
+	return nil
+}
 
-	// getPodWriter creates the file with name podName-suffix. It returns nil if the
+// collectAntctlCovFilesFromMasterNode collects coverage files for the antctl binary from the master Node and saves them to the coverage directory
+func (data *TestData) collectAntctlCovFilesFromMasterNode(covDir string) error {
+	// copy antctl coverage files from node to the coverage directory
+	var cmd string
+	if testOptions.providerName == "kind" {
+		cmd = "/bin/sh -c find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"
+	} else {
+		cmd = "find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"
+	}
+	rc, stdout, stderr, err := RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when running this find command '%s' on master Node '%s', stderr: <%v>, err: <%v>", cmd, masterNodeName(), stderr, err)
+
+	}
+	stdout = strings.TrimSpace(stdout)
+	files := strings.Split(stdout, "\n")
+	for _, file := range files {
+		if len(file) == 0 {
+			continue
+		}
+		err := data.copyNodeFiles(masterNodeName(), file, covDir)
+		if err != nil {
+			return fmt.Errorf("error when copying coverage files for antctl from Node '%s' to coverage directory '%s': %v", masterNodeName(), covDir, err)
+		}
+	}
+	return nil
+
+}
+
+// copyPodFiles copies file from a Pod and save it to specified directory
+func (data *TestData) copyPodFiles(podName string, containerName string, nsName string, fileName string, covDir string) error {
+	// getPodWriter creates the file with name podName-fileName-suffix. It returns nil if the
 	// file cannot be created. File must be closed by the caller.
-	getPodWriter := func(podName, suffix string) *os.File {
-		covFile := filepath.Join(covDir, fmt.Sprintf("%s-%s", podName, suffix))
+	getPodWriter := func(podName, fileName, suffix string) *os.File {
+		covFile := filepath.Join(covDir, fmt.Sprintf("%s-%s-%s", podName, fileName, suffix))
 		f, err := os.Create(covFile)
 		if err != nil {
-			_ = fmt.Errorf("error when creating coverage file '%s': '%v'", covFile, err)
+			_ = fmt.Errorf("error when creating coverage file '%s': %v", covFile, err)
 			return nil
 		}
 		return f
-	}
-
-	// runKubectl runs the provided kubectl command on the master Node and returns the
-	// output. It returns an empty string in case of error.
-	runKubectl := func(cmd string) string {
-		rc, stdout, _, err := RunCommandOnNode(masterNodeName(), cmd)
-		if err != nil || rc != 0 {
-			_ = fmt.Errorf("error when running this kubectl command on master Node: %s", cmd)
-			return ""
-		}
-		return stdout
 	}
 
 	// dump the file from Antrea Pods to disk.
 	// a filepath-friendly timestamp format.
 	const timeFormat = "Jan02-15-04-05"
 	timeStamp := time.Now().Format(timeFormat)
-	w := getPodWriter(podName, timeStamp)
+	w := getPodWriter(podName, fileName, timeStamp)
 	if w == nil {
 		return nil
 	}
 	defer w.Close()
-	cmd := fmt.Sprintf("kubectl exec -i %s -c %s -n %s -- cat %s", podName, containerName, nsName, fileName)
-	stdout := runKubectl(cmd)
+	cmd := []string{"cat", fileName}
+	stdout, stderr, err := data.runCommandFromPod(nsName, podName, containerName, cmd)
+	if err != nil {
+		return fmt.Errorf("cannot retrieve content of file '%s' from Pod '%s', stderr: <%v>, err: <%v>", fileName, podName, stderr, err)
+	}
+	if stdout == "" {
+		return nil
+	}
+	w.WriteString(stdout)
+	return nil
+}
+
+// copyNodeFiles copies a file from a Node and save it to specified directory
+func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir string) error {
+	// getNodeWriter creates the file with name nodeName-suffix. It returns nil if the file
+	// cannot be created. File must be closed by the caller.
+	getNodeWriter := func(nodeName, fileName, suffix string) *os.File {
+		covFile := filepath.Join(covDir, fmt.Sprintf("%s-%s-%s", nodeName, fileName, suffix))
+		f, err := os.Create(covFile)
+		if err != nil {
+			_ = fmt.Errorf("error when creating coverage file '%s': %v", covFile, err)
+			return nil
+		}
+		return f
+	}
+
+	// dump the file from Antrea Pods to disk.
+	// a filepath-friendly timestamp format.
+	const timeFormat = "Jan02-15-04-05"
+	timeStamp := time.Now().Format(timeFormat)
+	w := getNodeWriter(nodeName, fileName, timeStamp)
+	if w == nil {
+		return nil
+	}
+	defer w.Close()
+	cmd := fmt.Sprintf("cat %s", fileName)
+	rc, stdout, stderr, err := RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("cannot retrieve content of file '%s' from Node '%s', stderr: <%v>, err: <%v>", fileName, masterNodeName(), stderr, err)
+	}
 	if stdout == "" {
 		return nil
 	}

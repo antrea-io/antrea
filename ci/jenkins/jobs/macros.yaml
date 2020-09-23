@@ -12,7 +12,7 @@
         - shell: |-
             #!/bin/bash
             set -e
-            ./ci/jenkins/test-vmc.sh --testcase integration
+            ./ci/jenkins/test-vmc.sh --testcase integration --coverage --codecov-token "${CODECOV_TOKEN}"
 
 - builder:
     name: builder-eks-cluster-cleanup
@@ -101,15 +101,7 @@
       - shell: |-
           #!/bin/bash
           set -ex
-          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e
-
-- builder:
-    name: builder-e2e-coverage
-    builders:
-      - shell: |-
-          #!/bin/bash
-          set -ex
-          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --coverage
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --coverage --codecov-token "${CODECOV_TOKEN}"
 
 - builder:
     name: builder-conformance
@@ -117,7 +109,7 @@
       - shell: |-
           #!/bin/bash
           set -ex
-          ./ci/jenkins/test-vmc.sh --cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}" --testcase '{conformance_type}'
+          ./ci/jenkins/test-vmc.sh --cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}" --testcase '{conformance_type}' --coverage --codecov-token "${{CODECOV_TOKEN}}"
 
 - builder:
     name: builder-elk-flow-collector
