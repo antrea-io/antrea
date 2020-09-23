@@ -39,7 +39,7 @@ require (
 	github.com/stretchr/testify v1.5.1
 	github.com/ti-mo/conntrack v0.3.0
 	github.com/vishvananda/netlink v1.1.0
-	github.com/vmware/go-ipfix v0.2.0
+	github.com/vmware/go-ipfix v0.2.1
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/exp v0.0.0-20190312203227-4b39c73a6495
 	golang.org/x/net v0.0.0-20200822124328-c89045814202 // indirect
