@@ -263,7 +263,7 @@ spec:
     singular: clusternetworkpolicy
     kind: ClusterNetworkPolicy
     shortNames:
-      - cnp
+      - acnp
   # Prune any unknown fields
   preserveUnknownFields: false
   additionalPrinterColumns:
@@ -396,6 +396,7 @@ spec:
     kind: NetworkPolicy
     shortNames:
       - netpol
+      - anp
   # Prune any unknown fields
   preserveUnknownFields: false
   additionalPrinterColumns:

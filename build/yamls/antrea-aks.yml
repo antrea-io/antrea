@@ -63,7 +63,7 @@ spec:
     kind: ClusterNetworkPolicy
     plural: clusternetworkpolicies
     shortNames:
-    - cnp
+    - acnp
     singular: clusternetworkpolicy
   preserveUnknownFields: false
   scope: Cluster
@@ -247,6 +247,7 @@ spec:
     plural: networkpolicies
     shortNames:
     - netpol
+    - anp
     singular: networkpolicy
   preserveUnknownFields: false
   scope: Namespaced
