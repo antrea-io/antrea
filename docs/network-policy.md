@@ -54,8 +54,8 @@ kind: Tier
 metadata:
   name: mytier
 spec:
-    priority: 10
-    description: "my custom tier"
+  priority: 10
+  description: "my custom tier"
 ```
 
 Tiers have the following characteristics:
@@ -64,12 +64,13 @@ Tiers have the following characteristics:
 - A Tier must exist before an Antrea policy can reference it.
 - Policies associated with higher ordered (low `priority` value) Tiers are
   enforced first.
-- No two Tiers can be created with overlapping priorities.
+- No two Tiers can be created with same priorities.
 - Updating the Tier's `priority` field is unsupported.
 - Deleting Tier with existing references from policies is not allowed.
+- Deleting system generated Tier resources is not allowed.
 
-On startup, antrea-controller will create 5 Tier resources corresponding to
-the static tiers for default consumption as shown below.
+On startup, antrea-controller will create 5 Read-Only Tier resources
+corresponding to the static tiers for default consumption as shown below.
 
 ```
     Emergency -> Tier name "emergency" with priority "5"
@@ -378,7 +379,7 @@ the policies that may affect their workloads.
 
 ## Notes
 
-- There is a soft limit of 50 on the maximum number of Tier resources that are
+- There is a soft limit of 20 on the maximum number of Tier resources that are
   supported. But for optimal performance, it is recommended that the number of
   Tiers in a cluster be less than or equal to 10.
 - The v1alpha1 Policy CRDs support up to 10000 unique priority at policy level.
