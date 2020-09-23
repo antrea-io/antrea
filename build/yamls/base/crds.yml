@@ -263,6 +263,8 @@ spec:
     singular: clusternetworkpolicy
     kind: ClusterNetworkPolicy
     shortNames:
+      # Short name cnp is deprecated and will be removed in 0.12 release
+      - cnp
       - acnp
   # Prune any unknown fields
   preserveUnknownFields: false
@@ -395,6 +397,7 @@ spec:
     singular: networkpolicy
     kind: NetworkPolicy
     shortNames:
+      # Short name netpol is deprecated and will be removed in 0.12 release
       - netpol
       - anp
   # Prune any unknown fields
