@@ -19,6 +19,7 @@
   - [Rule enforcement based on priorities](#rule-enforcement-based-on-priorities)
 - [RBAC](#rbac)
 - [Notes](#notes)
+- [Known Issues](#known-issues)
 
 ## Summary
 
@@ -345,3 +346,9 @@ the policies that may affect their workloads.
 - The v1alpha1 Policy CRDs support up to 10000 unique priority at policy level.
   In order to reduce the churn in the agent, it is recommended to set the
   priority within the range 1.0 to 100.0.
+
+## Known Issues
+
+- Creating an Antrea NetworkPolicy with the same name as a K8s NetworkPolicy
+  under the same Namespace creates a collision and causes unexpected behavior.
+  See issue [1173](https://github.com/vmware-tanzu/antrea/issues/1173) for more details.
