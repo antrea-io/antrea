@@ -33,7 +33,7 @@ import (
 var (
 	// maxSupportedTiers is the soft limit on the maximum number of supported
 	// Tiers.
-	maxSupportedTiers = 50
+	maxSupportedTiers = 20
 	// defaultTierPriority maintains the lowest priority for the system generated
 	// default Tier.
 	defaultTierPriority = int32(250)

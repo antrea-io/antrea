@@ -141,7 +141,9 @@ func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 	// If the tier name is part of the static tier name set, we need to convert
 	// tier name to lowercase to match the corresponding Tier CRD name. This is
 	// possible in case of upgrade where in a previously created Antrea Policy
-	// CRD was referring to an old static tier.
+	// CRD was referring to an old static tier. Static tiers were introduced in
+	// release 0.9.0 and deprecated in 0.10.0. So any upgrade from 0.9.0 to a
+	// later release will undergo this conversion.
 	if staticTierSet.Has(tier) {
 		tier = strings.ToLower(tier)
 	}
