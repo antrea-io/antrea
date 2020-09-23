@@ -172,7 +172,7 @@ type ClusterNetworkPolicySpec struct {
 	// Tier right above the K8s NetworkPolicy which resides at the bottom.
 	Tier string `json:"tier,omitempty"`
 	// Priority specfies the order of the ClusterNetworkPolicy relative to
-	// other ClusterNetworkPolicies.
+	// other AntreaClusterNetworkPolicies.
 	Priority float64 `json:"priority"`
 	// Select workloads on which the rules will be applied to.
 	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
