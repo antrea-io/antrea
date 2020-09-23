@@ -1,5 +1,3 @@
-// +build linux
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +16,6 @@ package connections
 
 import (
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -26,6 +23,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/ti-mo/conntrack"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
@@ -82,24 +80,14 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	}
 	// Test the DumpFlows implementation of connTrackSystem
 	mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
-	connDumperDPSystem, acctErr, timestampErr := NewConnTrackSystem(nodeConfig, serviceCIDR)
-	if acctErr == nil {
+	connDumperDPSystem, err := NewConnTrackSystem(nodeConfig, serviceCIDR)
+	if err == nil {
 		conntrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
-		// Bypass this assert statement if the test VM meets a permission error for the sysctl command.
-		if err != nil && !os.IsPermission(err) {
-			t.Errorf("error when getting nf_conntrack_acct: %v", err)
-		} else if err == nil {
-			assert.Equal(t, 1, conntrackAcct, "net.netfilter.nf_conntrack_acct value should be 1")
-		}
-	}
-	if timestampErr == nil {
+		require.NoError(t, err, "Cannot read nf_conntrack_acct")
+		assert.Equal(t, 1, conntrackAcct, "net.netfilter.nf_conntrack_acct value should be 1")
 		conntrackTimestamping, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_timestamp")
-		// Bypass this assert statement if the test VM meets a permission error for the sysctl command.
-		if err != nil && !os.IsPermission(err) {
-			t.Errorf("error when getting nf_conntrack_timestamp: %v", err)
-		} else if err == nil {
-			assert.Equal(t, 1, conntrackTimestamping, "net.netfilter.nf_conntrack_timestamp value should be 1")
-		}
+		require.NoError(t, err, "Cannot read nf_conntrack_timestamp")
+		assert.Equal(t, 1, conntrackTimestamping, "net.netfilter.nf_conntrack_timestamp value should be 1")
 	}
 
 	connDumperDPSystem.connTrack = mockNetlinkCT
@@ -108,18 +96,12 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	mockNetlinkCT.EXPECT().DumpFilter(conntrack.Filter{}).Return(testFlows, nil)
 
 	conns, conntrackMetrics, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
-	if err != nil {
-		t.Errorf("Dump flows function returned error: %v", err)
-	}
+	assert.NoErrorf(t, err, "Dump flows function returned error: %v", err)
 	assert.Equal(t, 1, len(conns), "number of filtered connections should be equal")
 
 	maxConns, err := sysctl.GetSysctlNet("nf_conntrack_max")
-	// Bypass this assert statement if the test VM meets a permission error for the sysctl command.
-	if err != nil && !os.IsPermission(err) {
-		t.Errorf("error when getting nf_conntrack_max: %v", err)
-	} else if err == nil {
-		assert.Equal(t, maxConns, conntrackMetrics.MaxConnections, "Size of the conntrack table should be equal to the nf_conntrack_max")
-	}
+	require.NoError(t, err, "Cannot read nf_conntrack_max")
+	assert.Equal(t, maxConns, conntrackMetrics.MaxConnections, "Size of the conntrack table should be equal to nf_conntrack_max")
 
 	assert.Equal(t, len(testFlows), conntrackMetrics.TotalConnections, "Number of connections in conntrack table should be equal to testFlows")
 }
