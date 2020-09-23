@@ -23,17 +23,6 @@ import (
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
-var (
-	// tierPriorityMap maintains a map of the Tier name to it's priority.
-	tierPriorityMap = map[string]controlplane.TierPriority{
-		"Emergency":   antreatypes.TierEmergency,
-		"SecurityOps": antreatypes.TierSecurityOps,
-		"NetworkOps":  antreatypes.TierNetworkOps,
-		"Platform":    antreatypes.TierPlatform,
-		"Application": antreatypes.TierApplication,
-	}
-)
-
 // addCNP receives ClusterNetworkPolicy ADD events and creates resources
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) addCNP(obj interface{}) {
@@ -165,7 +154,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			Priority:  int32(idx),
 		})
 	}
-	tierPriority := getTierPriority(cnp.Spec.Tier)
+	tierPriority := n.getTierPriority(cnp.Spec.Tier)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
 		Name:      cnp.Name,
 		Namespace: "",

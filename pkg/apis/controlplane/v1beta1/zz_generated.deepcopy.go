@@ -519,7 +519,7 @@ func (in *NetworkPolicy) DeepCopyInto(out *NetworkPolicy) {
 	}
 	if in.TierPriority != nil {
 		in, out := &in.TierPriority, &out.TierPriority
-		*out = new(TierPriority)
+		*out = new(int32)
 		**out = **in
 	}
 	if in.SourceRef != nil {

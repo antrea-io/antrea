@@ -69,6 +69,7 @@ type networkPolicyController struct {
 	namespaceStore             cache.Store
 	networkPolicyStore         cache.Store
 	cnpStore                   cache.Store
+	tierStore                  cache.Store
 	appliedToGroupStore        storage.Interface
 	addressGroupStore          storage.Interface
 	internalNetworkPolicyStore storage.Interface
@@ -93,6 +94,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		informerFactory.Networking().V1().NetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().NetworkPolicies(),
+		crdInformerFactory.Security().V1alpha1().Tiers(),
 		addressGroupStore,
 		appliedToGroupStore,
 		internalNetworkPolicyStore)
@@ -100,6 +102,8 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController.namespaceListerSynced = alwaysReady
 	npController.networkPolicyListerSynced = alwaysReady
 	npController.cnpListerSynced = alwaysReady
+	npController.tierLister = crdInformerFactory.Security().V1alpha1().Tiers().Lister()
+	npController.tierListerSynced = alwaysReady
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),
@@ -107,6 +111,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
+		crdInformerFactory.Security().V1alpha1().Tiers().Informer().GetStore(),
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,

@@ -152,10 +152,6 @@ type AddressGroupList struct {
 	Items           []AddressGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-// TierPriority specifies the relative ordering among Tiers. A lower
-// TierPriority indicates higher precedence.
-type TierPriority uint32
-
 type NetworkPolicyType string
 
 const (
@@ -191,7 +187,7 @@ type NetworkPolicy struct {
 	Priority *float64 `json:"priority,omitempty" protobuf:"fixed64,4,opt,name=priority"`
 	// TierPriority represents the priority of the Tier associated with this Network
 	// Policy. The TierPriority will remain nil for K8s NetworkPolicy.
-	TierPriority *TierPriority `json:"tierPriority,omitempty" protobuf:"varint,5,opt,name=tierPriority"`
+	TierPriority *int32 `json:"tierPriority,omitempty" protobuf:"varint,5,opt,name=tierPriority"`
 	// Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
 	SourceRef *NetworkPolicyReference `json:"sourceRef,omitempty" protobuf:"bytes,6,opt,name=sourceRef"`
 }

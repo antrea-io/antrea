@@ -155,7 +155,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 			Priority:  int32(idx),
 		})
 	}
-	tierPriority := getTierPriority(np.Spec.Tier)
+	tierPriority := n.getTierPriority(np.Spec.Tier)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
 		SourceRef: &controlplane.NetworkPolicyReference{
 			Type:      controlplane.AntreaNetworkPolicy,

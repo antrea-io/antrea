@@ -159,12 +159,6 @@ spec:
               minimum: 1
               type: number
             tier:
-              enum:
-              - Emergency
-              - SecurityOps
-              - NetworkOps
-              - Platform
-              - Application
               type: string
           required:
           - appliedTo
@@ -360,6 +354,50 @@ spec:
               type: string
           required:
           - appliedTo
+          - priority
+          type: object
+      type: object
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: tiers.security.antrea.tanzu.vmware.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.priority
+    description: The Priority of this Tier relative to other Tiers.
+    name: Priority
+    type: integer
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: security.antrea.tanzu.vmware.com
+  names:
+    kind: Tier
+    plural: tiers
+    shortNames:
+    - tr
+    singular: tier
+  preserveUnknownFields: false
+  scope: Cluster
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            description:
+              type: string
+            priority:
+              maximum: 255
+              minimum: 0
+              type: integer
+          required:
           - priority
           type: object
       type: object
@@ -870,6 +908,15 @@ rules:
   - get
   - update
 - apiGroups:
+  - admissionregistration.k8s.io
+  resourceNames:
+  - crdvalidator.antrea.tanzu.vmware.com
+  resources:
+  - validatingwebhookconfigurations
+  verbs:
+  - get
+  - update
+- apiGroups:
   - security.antrea.tanzu.vmware.com
   resources:
   - clusternetworkpolicies
@@ -878,6 +925,15 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - security.antrea.tanzu.vmware.com
+  resources:
+  - tiers
+  verbs:
+  - get
+  - watch
+  - list
+  - create
 - apiGroups:
   - ops.antrea.tanzu.vmware.com
   resources:
@@ -1463,3 +1519,56 @@ spec:
         name: xtables-lock
   updateStrategy:
     type: RollingUpdate
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  labels:
+    app: antrea
+  name: crdvalidator.antrea.tanzu.vmware.com
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/tier
+  name: tiervalidator.antrea.tanzu.vmware.com
+  rules:
+  - apiGroups:
+    - security.antrea.tanzu.vmware.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - tiers
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/cnp
+  name: cnpvalidator.antrea.tanzu.vmware.com
+  rules:
+  - apiGroups:
+    - security.antrea.tanzu.vmware.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clusternetworkpolicies
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5

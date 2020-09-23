@@ -35,7 +35,6 @@ var (
 
 func TestProcessAntreaNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
-	appTier := antreatypes.TierApplication
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
 	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
@@ -100,7 +99,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 					UID:       "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &appTier,
+				TierPriority: &defaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -186,7 +185,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 					UID:       "uidB",
 				},
 				Priority:     &p10,
-				TierPriority: &appTier,
+				TierPriority: &defaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -236,7 +235,6 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 
 func TestAddANP(t *testing.T) {
 	p10 := float64(10)
-	appTier := antreatypes.TierApplication
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
 	intstr80 := intstr.FromInt(80)
@@ -291,7 +289,7 @@ func TestAddANP(t *testing.T) {
 					UID:       "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &appTier,
+				TierPriority: &defaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,

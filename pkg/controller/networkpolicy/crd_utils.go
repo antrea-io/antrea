@@ -15,6 +15,8 @@
 package networkpolicy
 
 import (
+	"strings"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -132,9 +134,24 @@ func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.Netw
 // getTierPriority retrieves the priority associated with the input Tier name.
 // If the Tier name is empty, by default, the lowest priority Application Tier
 // is returned.
-func getTierPriority(tier string) controlplane.TierPriority {
+func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 	if tier == "" {
-		return antreatypes.TierApplication
+		return defaultTierPriority
 	}
-	return tierPriorityMap[tier]
+	// If the tier name is part of the static tier name set, we need to convert
+	// tier name to lowercase to match the corresponding Tier CRD name. This is
+	// possible in case of upgrade where in a previously created Antrea Policy
+	// CRD was referring to an old static tier. Static tiers were introduced in
+	// release 0.9.0 and deprecated in 0.10.0. So any upgrade from 0.9.0 to a
+	// later release will undergo this conversion.
+	if staticTierSet.Has(tier) {
+		tier = strings.ToLower(tier)
+	}
+	t, err := n.tierLister.Get(tier)
+	if err != nil {
+		// This error should ideally not occur as we perform validation.
+		klog.Errorf("Failed to retrieve Tier %s. Setting default tier priority: %v", tier, err)
+		return defaultTierPriority
+	}
+	return t.Spec.Priority
 }

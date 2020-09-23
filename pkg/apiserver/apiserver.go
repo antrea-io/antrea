@@ -36,14 +36,16 @@ import (
 	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/endpoint"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/webhook"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	networkquery "github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
+	controllernetworkpolicy "github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
 var (
@@ -66,12 +68,13 @@ func init() {
 
 // ExtraConfig holds custom apiserver config.
 type ExtraConfig struct {
-	addressGroupStore   storage.Interface
-	appliedToGroupStore storage.Interface
-	networkPolicyStore  storage.Interface
-	controllerQuerier   querier.ControllerQuerier
-	endpointQuerier     networkquery.EndpointQuerier
-	caCertController    *certificate.CACertController
+	addressGroupStore       storage.Interface
+	appliedToGroupStore     storage.Interface
+	networkPolicyStore      storage.Interface
+	controllerQuerier       querier.ControllerQuerier
+	endpointQuerier         controllernetworkpolicy.EndpointQuerier
+	networkPolicyController *controllernetworkpolicy.NetworkPolicyController
+	caCertController        *certificate.CACertController
 }
 
 // Config defines the config for Antrea apiserver.
@@ -106,16 +109,18 @@ func NewConfig(
 	addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface,
 	caCertController *certificate.CACertController,
 	controllerQuerier querier.ControllerQuerier,
-	endpointQuerier networkquery.EndpointQuerier) *Config {
+	endpointQuerier controllernetworkpolicy.EndpointQuerier,
+	npController *controllernetworkpolicy.NetworkPolicyController) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
-			addressGroupStore:   addressGroupStore,
-			appliedToGroupStore: appliedToGroupStore,
-			networkPolicyStore:  networkPolicyStore,
-			caCertController:    caCertController,
-			controllerQuerier:   controllerQuerier,
-			endpointQuerier:     endpointQuerier,
+			addressGroupStore:       addressGroupStore,
+			appliedToGroupStore:     appliedToGroupStore,
+			networkPolicyStore:      networkPolicyStore,
+			caCertController:        caCertController,
+			controllerQuerier:       controllerQuerier,
+			endpointQuerier:         endpointQuerier,
+			networkPolicyController: npController,
 		},
 	}
 }
@@ -154,10 +159,6 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	return nil
 }
 
-func installHandlers(eq networkquery.EndpointQuerier, s *genericapiserver.GenericAPIServer) {
-	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(eq))
-}
-
 func (c completedConfig) New() (*APIServer, error) {
 	genericServer, err := c.genericConfig.New("antrea-apiserver", genericapiserver.NewEmptyDelegate())
 	if err != nil {
@@ -172,8 +173,7 @@ func (c completedConfig) New() (*APIServer, error) {
 	if err := installAPIGroup(s, c); err != nil {
 		return nil, err
 	}
-
-	installHandlers(c.extraConfig.endpointQuerier, s.GenericAPIServer)
+	installHandlers(c.extraConfig, s.GenericAPIServer)
 
 	return s, nil
 }
@@ -196,4 +196,20 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 		}
 	}
 	return nil
+}
+
+func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
+	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		// Get new NetworkPolicyValidator
+		v := controllernetworkpolicy.NewNetworkPolicyValidator(c.networkPolicyController)
+		// Install handlers for NetworkPolicy related validation
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandleValidationNetworkPolicy(v))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/cnp", webhook.HandleValidationNetworkPolicy(v))
+		// Install a post start hook to initialize Tiers on start-up
+		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
+			go c.networkPolicyController.InitializeTiers()
+			return nil
+		})
+	}
 }

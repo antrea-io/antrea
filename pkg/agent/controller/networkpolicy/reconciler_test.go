@@ -71,7 +71,7 @@ var (
 	servicesKey2 = normalizeServices(services2)
 
 	policyPriority = float64(1)
-	tierPriority   = v1beta1.TierPriority(1)
+	tierPriority   = int32(1)
 
 	np1 = v1beta1.NetworkPolicyReference{
 		Type:      v1beta1.K8sNetworkPolicy,

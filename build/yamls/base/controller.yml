@@ -56,6 +56,42 @@ spec:
     name: antrea
     namespace: kube-system
 ---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: "crdvalidator.antrea.tanzu.vmware.com"
+webhooks:
+- name: "tiervalidator.antrea.tanzu.vmware.com"
+  clientConfig:
+    service:
+      name: "antrea"
+      namespace: "kube-system"
+      path: "/validate/tier"
+  rules:
+  - operations: ["CREATE", "UPDATE", "DELETE"]
+    apiGroups: ["security.antrea.tanzu.vmware.com"]
+    apiVersions: ["v1alpha1"]
+    resources: ["tiers"]
+    scope: "Cluster"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  timeoutSeconds: 5
+- name: "cnpvalidator.antrea.tanzu.vmware.com"
+  clientConfig:
+    service:
+      name: "antrea"
+      namespace: "kube-system"
+      path: "/validate/cnp"
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["security.antrea.tanzu.vmware.com"]
+    apiVersions: ["v1alpha1"]
+    resources: ["clusternetworkpolicies"]
+    scope: "Cluster"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  timeoutSeconds: 5
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
