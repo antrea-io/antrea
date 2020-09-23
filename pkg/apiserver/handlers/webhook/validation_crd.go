@@ -45,11 +45,6 @@ func HandleValidationNetworkPolicy(v *networkpolicy.NetworkPolicyValidator) http
 			http.Error(w, "invalid Content-Type, expected `application/json`", http.StatusUnsupportedMediaType)
 			return
 		}
-		if r.URL.Path != "/validate/tier" && r.URL.Path != "/validate/cnp" {
-			klog.Errorf("Invalid path received for Antrea NP/Tier validation")
-			http.Error(w, "invalid path", http.StatusBadRequest)
-			return
-		}
 		var admissionResponse *admv1.AdmissionResponse
 		ar := admv1.AdmissionReview{}
 		ar.TypeMeta.Kind = "AdmissionReview"

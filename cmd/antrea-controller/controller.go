@@ -71,6 +71,7 @@ var allowedPaths = []string{
 	"/healthz",
 	"/validate/tier",
 	"/validate/cnp",
+	"/validate/anp",
 }
 
 // run starts Antrea Controller with the given options and waits for termination signal.

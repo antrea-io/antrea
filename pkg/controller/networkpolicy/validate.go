@@ -89,6 +89,22 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 			}
 		}
 		msg, allowed = v.validateCNP(&curCNP, &oldCNP, op)
+	case "NetworkPolicy":
+		klog.V(2).Info("Validating Antrea NetworkPolicy CRD")
+		var curANP, oldANP secv1alpha1.NetworkPolicy
+		if curRaw != nil {
+			if err := json.Unmarshal(curRaw, &curANP); err != nil {
+				klog.Errorf("Error de-serializing current Antrea NetworkPolicy")
+				return GetAdmissionResponseForErr(err)
+			}
+		}
+		if oldRaw != nil {
+			if err := json.Unmarshal(oldRaw, &oldANP); err != nil {
+				klog.Errorf("Error de-serializing old Antrea NetworkPolicy")
+				return GetAdmissionResponseForErr(err)
+			}
+		}
+		msg, allowed = v.validateANP(&curANP, &oldANP, op)
 	}
 	if msg != "" {
 		result = &metav1.Status{
@@ -135,6 +151,40 @@ func (v *NetworkPolicyValidator) validateCNP(curCNP, oldCNP *secv1alpha1.Cluster
 	return reason, allowed
 }
 
+// validateANP validates the admission of a Antrea NetworkPolicy resource
+func (v *NetworkPolicyValidator) validateANP(curANP, oldANP *secv1alpha1.NetworkPolicy, op admv1.Operation) (string, bool) {
+	allowed := true
+	reason := ""
+	switch op {
+	case admv1.Create:
+		// ANP "tier" must exist before referencing
+		klog.V(2).Info("Validating CREATE request for Antrea NetworkPolicy")
+		if curANP.Spec.Tier == "" || staticTierSet.Has(curANP.Spec.Tier) {
+			// Empty Tier name corresponds to default Tier
+			break
+		}
+		if ok := v.tierExists(curANP.Spec.Tier); !ok {
+			allowed = false
+			reason = fmt.Sprintf("tier %s does not exist", curANP.Spec.Tier)
+		}
+	case admv1.Update:
+		// ANP "tier" must exist before referencing
+		klog.V(2).Info("Validating UPDATE request for ANP")
+		if curANP.Spec.Tier == "" || staticTierSet.Has(curANP.Spec.Tier) {
+			// Empty Tier name corresponds to default Tier
+			break
+		}
+		if ok := v.tierExists(curANP.Spec.Tier); !ok {
+			allowed = false
+			reason = fmt.Sprintf("tier %s does not exist", curANP.Spec.Tier)
+		}
+	case admv1.Delete:
+		// Delete of ANP have no validation
+		allowed = true
+	}
+	return reason, allowed
+}
+
 // validateTier validates the admission of a Tier resource
 func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier, op admv1.Operation) (string, bool) {
 	allowed := true
@@ -167,11 +217,16 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier
 			reason = fmt.Sprintf("cannot delete reserved tier %s", oldTier.Name)
 			return reason, false
 		}
-		// Tier with existing CNPs cannot be deleted
+		// Tier with existing CNPs/ANPs cannot be deleted
 		cnps, err := v.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
 		if err != nil || len(cnps) > 0 {
-			allowed = false
-			reason = fmt.Sprintf("tier %s is referenced by %d NetworkPolic(y)ies", oldTier.Name, len(cnps))
+			reason = fmt.Sprintf("tier %s is referenced by %d ClusterNetworkPolicies", oldTier.Name, len(cnps))
+			return reason, false
+		}
+		anps, err := v.networkPolicyController.anpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
+		if err != nil || len(anps) > 0 {
+			reason = fmt.Sprintf("tier %s is referenced by %d NetworkPolicies", oldTier.Name, len(anps))
+			return reason, false
 		}
 	}
 	return reason, allowed

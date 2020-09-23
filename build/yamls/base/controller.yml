@@ -91,6 +91,21 @@ webhooks:
   admissionReviewVersions: ["v1", "v1beta1"]
   sideEffects: None
   timeoutSeconds: 5
+- name: "anpvalidator.antrea.tanzu.vmware.com"
+  clientConfig:
+    service:
+      name: "antrea"
+      namespace: "kube-system"
+      path: "/validate/anp"
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["security.antrea.tanzu.vmware.com"]
+    apiVersions: ["v1alpha1"]
+    resources: ["networkpolicies"]
+    scope: "Namespaced"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  timeoutSeconds: 5
 ---
 apiVersion: apps/v1
 kind: Deployment

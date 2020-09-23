@@ -431,7 +431,6 @@ spec:
               properties:
                 tier:
                   type: string
-                  enum: ['Emergency', 'SecurityOps', 'NetworkOps', 'Platform', 'Application']
                 priority:
                   type: number
                   format: float
