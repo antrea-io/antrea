@@ -153,10 +153,10 @@ func TestGetInsertionPoint(t *testing.T) {
 		{
 			"upper-bound",
 			[]types.Priority{p1120, p1121, p1130},
-			[]uint16{PriorityTopCNP, PriorityTopCNP - 1, PriorityTopCNP - 2},
+			[]uint16{PolicyTopPriority, PolicyTopPriority - 1, PolicyTopPriority - 2},
 			p110,
-			PriorityTopCNP - 2,
-			PriorityTopCNP + 1,
+			PolicyTopPriority - 2,
+			PolicyTopPriority + 1,
 			false,
 		},
 	}
@@ -189,35 +189,35 @@ func TestReassignPriorities(t *testing.T) {
 		{
 			"sift-down-at-upper-bound",
 			[]types.Priority{p191, p193},
-			[]uint16{PriorityTopCNP, PriorityTopCNP - 1},
+			[]uint16{PolicyTopPriority, PolicyTopPriority - 1},
 			[]types.Priority{p190, p192},
-			[]uint16{PriorityTopCNP + 1, PriorityTopCNP - 1},
-			[]uint16{PriorityTopCNP, PriorityTopCNP - 2},
+			[]uint16{PolicyTopPriority + 1, PolicyTopPriority - 1},
+			[]uint16{PolicyTopPriority, PolicyTopPriority - 2},
 			[]map[uint16]uint16{
 				{
-					PriorityTopCNP:     PriorityTopCNP - 1,
-					PriorityTopCNP - 1: PriorityTopCNP - 2,
+					PolicyTopPriority:     PolicyTopPriority - 1,
+					PolicyTopPriority - 1: PolicyTopPriority - 2,
 				},
 				{
-					PriorityTopCNP - 2: PriorityTopCNP - 3,
+					PolicyTopPriority - 2: PolicyTopPriority - 3,
 				},
 			},
 		},
 		{
 			"sift-up-at-lower-bound",
 			[]types.Priority{p1130, p1120},
-			[]uint16{PriorityBottomCNP, PriorityBottomCNP + 1},
+			[]uint16{PolicyBottomPriority, PolicyBottomPriority + 1},
 			[]types.Priority{p1121, p1131},
-			[]uint16{PriorityBottomCNP + 1, PriorityBottomCNP},
-			[]uint16{PriorityBottomCNP + 1, PriorityBottomCNP},
+			[]uint16{PolicyBottomPriority + 1, PolicyBottomPriority},
+			[]uint16{PolicyBottomPriority + 1, PolicyBottomPriority},
 			[]map[uint16]uint16{
 				{
-					PriorityBottomCNP + 1: PriorityBottomCNP + 2,
+					PolicyBottomPriority + 1: PolicyBottomPriority + 2,
 				},
 				{
-					PriorityBottomCNP:     PriorityBottomCNP + 1,
-					PriorityBottomCNP + 1: PriorityBottomCNP + 2,
-					PriorityBottomCNP + 2: PriorityBottomCNP + 3,
+					PolicyBottomPriority:     PolicyBottomPriority + 1,
+					PolicyBottomPriority + 1: PolicyBottomPriority + 2,
+					PolicyBottomPriority + 2: PolicyBottomPriority + 3,
 				},
 			},
 		},
@@ -348,11 +348,11 @@ func generatePriorities(start, end int32) []types.Priority {
 
 func TestRegisterAllOFPriorities(t *testing.T) {
 	pa := newPriorityAssigner(InitialOFPrioritySingleTierPerTable)
-	maxPriorities := generatePriorities(int32(PriorityBottomCNP), int32(PriorityTopCNP))
+	maxPriorities := generatePriorities(int32(PolicyBottomPriority), int32(PolicyTopPriority))
 	err := pa.RegisterPriorities(maxPriorities)
 	assert.Equalf(t, nil, err, "Error occurred in registering max number of allowed priorities")
 
-	extraPriority := types.Priority{TierPriority: 1, PolicyPriority: 5, RulePriority: int32(PriorityTopCNP) - int32(PriorityBottomCNP) + 1}
+	extraPriority := types.Priority{TierPriority: 1, PolicyPriority: 5, RulePriority: int32(PolicyTopPriority) - int32(PolicyBottomPriority) + 1}
 	_, _, _, err = pa.GetOFPriority(extraPriority)
 	assert.Errorf(t, err, "Error should be raised after max number of priorities are registered")
 }
