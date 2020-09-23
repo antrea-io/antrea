@@ -26,6 +26,7 @@ type SecurityV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ClusterNetworkPoliciesGetter
 	NetworkPoliciesGetter
+	TiersGetter
 }
 
 // SecurityV1alpha1Client is used to interact with features provided by the security.antrea.tanzu.vmware.com group.
@@ -39,6 +40,10 @@ func (c *SecurityV1alpha1Client) ClusterNetworkPolicies() ClusterNetworkPolicyIn
 
 func (c *SecurityV1alpha1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {
 	return newNetworkPolicies(c, namespace)
+}
+
+func (c *SecurityV1alpha1Client) Tiers() TierInterface {
+	return newTiers(c)
 }
 
 // NewForConfig creates a new SecurityV1alpha1Client for the given config.

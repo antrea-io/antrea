@@ -191,7 +191,7 @@ message NetworkPolicy {
 
   // TierPriority represents the priority of the Tier associated with this Network
   // Policy. The TierPriority will remain nil for K8s NetworkPolicy.
-  optional uint32 tierPriority = 5;
+  optional int32 tierPriority = 5;
 
   // Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
   optional NetworkPolicyReference sourceRef = 6;

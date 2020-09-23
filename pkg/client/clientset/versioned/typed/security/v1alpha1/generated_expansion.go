@@ -19,3 +19,5 @@ package v1alpha1
 type ClusterNetworkPolicyExpansion interface{}
 
 type NetworkPolicyExpansion interface{}
+
+type TierExpansion interface{}

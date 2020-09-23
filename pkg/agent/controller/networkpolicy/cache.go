@@ -67,7 +67,7 @@ type rule struct {
 	// Priority of the NetworkPolicy to which this rule belong. nil for K8s NetworkPolicy.
 	PolicyPriority *float64
 	// Priority of the tier that the NetworkPolicy belongs to. nil for K8s NetworkPolicy.
-	TierPriority *v1beta1.TierPriority
+	TierPriority *int32
 	// Targets of this rule.
 	AppliedToGroups []string
 	// The parent Policy ID. Used to identify rules belong to a specified

@@ -65,6 +65,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Security().V1alpha1().ClusterNetworkPolicies().Informer()}, nil
 	case securityv1alpha1.SchemeGroupVersion.WithResource("networkpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Security().V1alpha1().NetworkPolicies().Informer()}, nil
+	case securityv1alpha1.SchemeGroupVersion.WithResource("tiers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Security().V1alpha1().Tiers().Informer()}, nil
 
 	}
 

@@ -29,6 +29,7 @@ import (
 	"k8s.io/klog"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
@@ -45,6 +46,10 @@ var (
 		"v1beta1.controlplane.antrea.tanzu.vmware.com",
 		"v1beta1.networking.antrea.tanzu.vmware.com",
 		"v1beta1.system.antrea.tanzu.vmware.com",
+	}
+	// validatingWebhooks contains all the ValidatingWebhookConfigurations backed by antrea-controller.
+	validatingWebhooks = []string{
+		"crdvalidator.antrea.tanzu.vmware.com",
 	}
 )
 
@@ -122,6 +127,39 @@ func (c *CACertController) syncCACert() error {
 
 	if err := c.syncAPIServices(caCert); err != nil {
 		return err
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		if err := c.syncValidatingWebhooks(caCert); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// syncValidatingWebhooks updates the CABundle of the ValidatingWebhookConfiguration backed by antrea-controller.
+func (c *CACertController) syncValidatingWebhooks(caCert []byte) error {
+	klog.Info("Syncing CA certificate with ValidatingWebhookConfigurations")
+	for _, name := range validatingWebhooks {
+		updated := false
+		vWebhook, err := c.client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error getting ValidatingWebhookConfiguration %s: %v", name, err)
+		}
+		for idx, webhook := range vWebhook.Webhooks {
+			if bytes.Equal(webhook.ClientConfig.CABundle, caCert) {
+				continue
+			} else {
+				updated = true
+				webhook.ClientConfig.CABundle = caCert
+				vWebhook.Webhooks[idx] = webhook
+			}
+		}
+		if updated {
+			if _, err := c.client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(context.TODO(), vWebhook, metav1.UpdateOptions{}); err != nil {
+				return fmt.Errorf("error updating antrea CA cert of ValidatingWebhookConfiguration %s: %v", name, err)
+			}
+		}
 	}
 	return nil
 }

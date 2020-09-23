@@ -73,6 +73,10 @@ const (
 	defaultWorkers = 4
 	// Default rule priority for K8s NetworkPolicy rules.
 	defaultRulePriority = -1
+	// TierIndex is used to index ClusterNetworkPolicies by Tier names.
+	TierIndex = "tier"
+	// PriorityIndex is used to index Tiers by their priorities.
+	PriorityIndex = "priority"
 )
 
 var (
@@ -151,6 +155,13 @@ type NetworkPolicyController struct {
 	// anpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
 	anpListerSynced cache.InformerSynced
 
+	tierInformer secinformers.TierInformer
+	// tierLister is able to list/get Tiers and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	tierLister seclisters.TierLister
+	// tierListerSynced is a function which returns true if the Tiers shared informer has been synced at least once.
+	tierListerSynced cache.InformerSynced
+
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
 	// appliedToGroupStore is the storage where the populated AppliedTo Groups are stored.
@@ -191,6 +202,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	cnpInformer secinformers.ClusterNetworkPolicyInformer,
 	anpInformer secinformers.NetworkPolicyInformer,
+	tierInformer secinformers.TierInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface) *NetworkPolicyController {
@@ -251,6 +263,31 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		n.anpInformer = anpInformer
 		n.anpLister = anpInformer.Lister()
 		n.anpListerSynced = anpInformer.Informer().HasSynced
+		n.tierInformer = tierInformer
+		n.tierLister = tierInformer.Lister()
+		n.tierListerSynced = tierInformer.Informer().HasSynced
+		tierInformer.Informer().AddIndexers(
+			cache.Indexers{
+				PriorityIndex: func(obj interface{}) ([]string, error) {
+					tr, ok := obj.(*secv1alpha1.Tier)
+					if !ok {
+						return []string{}, nil
+					}
+					return []string{strconv.FormatInt(int64(tr.Spec.Priority), 10)}, nil
+				},
+			},
+		)
+		cnpInformer.Informer().AddIndexers(
+			cache.Indexers{
+				TierIndex: func(obj interface{}) ([]string, error) {
+					cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+					if !ok {
+						return []string{}, nil
+					}
+					return []string{cnp.Spec.Tier}, nil
+				},
+			},
+		)
 		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addCNP,

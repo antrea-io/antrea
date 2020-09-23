@@ -93,6 +93,15 @@ rules:
       - get
       - update
   - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    resourceNames:
+      - crdvalidator.antrea.tanzu.vmware.com
+    verbs:
+      - get
+      - update
+  - apiGroups:
       - security.antrea.tanzu.vmware.com
     resources:
       - clusternetworkpolicies
@@ -101,6 +110,15 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
+      - tiers
+    verbs:
+      - get
+      - watch
+      - list
+      - create
   - apiGroups:
       - ops.antrea.tanzu.vmware.com
     resources:

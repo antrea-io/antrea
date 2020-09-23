@@ -37,14 +37,6 @@ func (meta *SpanMeta) Has(nodeName string) bool {
 	return meta.NodeNames.Has(nodeName)
 }
 
-const (
-	TierEmergency controlplane.TierPriority = iota + 1
-	TierSecurityOps
-	TierNetworkOps
-	TierPlatform
-	TierApplication
-)
-
 // GroupSelector describes how to select Pods.
 type GroupSelector struct {
 	// The normalized name is calculated from Namespace, PodSelector, ExternalEntitySelector and NamespaceSelector.
@@ -123,5 +115,5 @@ type NetworkPolicy struct {
 	AppliedToGroups []string
 	// TierPriority represents the priority of the Tier associated with this Network
 	// Policy.
-	TierPriority *controlplane.TierPriority
+	TierPriority *int32
 }

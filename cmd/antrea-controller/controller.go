@@ -67,6 +67,12 @@ const (
 	serverMinWatchTimeout = 2 * time.Hour
 )
 
+var allowedPaths = []string{
+	"/healthz",
+	"/validate/tier",
+	"/validate/cnp",
+}
+
 // run starts Antrea Controller with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.Infof("Starting Antrea Controller (version %s)", version.GetFullVersion())
@@ -86,6 +92,7 @@ func run(o *Options) error {
 	cnpInformer := crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
 	externalEntityInformer := crdInformerFactory.Core().V1alpha1().ExternalEntities()
 	anpInformer := crdInformerFactory.Security().V1alpha1().NetworkPolicies()
+	tierInformer := crdInformerFactory.Security().V1alpha1().Tiers()
 	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
 
 	// Create Antrea object storage.
@@ -101,6 +108,7 @@ func run(o *Options) error {
 		networkPolicyInformer,
 		cnpInformer,
 		anpInformer,
+		tierInformer,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore)
@@ -126,6 +134,7 @@ func run(o *Options) error {
 		networkPolicyStore,
 		controllerQuerier,
 		endpointQuerier,
+		networkPolicyController,
 		o.config.EnablePrometheusMetrics)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
@@ -179,10 +188,11 @@ func createAPIServerConfig(kubeconfig string,
 	networkPolicyStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
+	npController *networkpolicy.NetworkPolicyController,
 	enableMetrics bool) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
-	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz")
+	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
 
 	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, secureServing)
 	if err != nil {
@@ -228,5 +238,6 @@ func createAPIServerConfig(kubeconfig string,
 		networkPolicyStore,
 		caCertController,
 		controllerQuerier,
-		endpointQuerier), nil
+		endpointQuerier,
+		npController), nil
 }
