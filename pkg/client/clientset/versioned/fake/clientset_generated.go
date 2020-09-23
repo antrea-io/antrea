@@ -20,10 +20,14 @@ import (
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
 	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1/fake"
+	controlplanev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1alpha1"
+	fakecontrolplanev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1alpha1/fake"
 	controlplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1"
 	fakecontrolplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1/fake"
 	corev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha1"
 	fakecorev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha1/fake"
+	metricsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/metrics/v1alpha1"
+	fakemetricsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/metrics/v1alpha1/fake"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1"
 	fakeopsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1/fake"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
@@ -89,6 +93,11 @@ func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.Cluste
 	return &fakeclusterinformationv1beta1.FakeClusterinformationV1beta1{Fake: &c.Fake}
 }
 
+// ControlplaneV1alpha1 retrieves the ControlplaneV1alpha1Client
+func (c *Clientset) ControlplaneV1alpha1() controlplanev1alpha1.ControlplaneV1alpha1Interface {
+	return &fakecontrolplanev1alpha1.FakeControlplaneV1alpha1{Fake: &c.Fake}
+}
+
 // ControlplaneV1beta1 retrieves the ControlplaneV1beta1Client
 func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface {
 	return &fakecontrolplanev1beta1.FakeControlplaneV1beta1{Fake: &c.Fake}
@@ -97,6 +106,11 @@ func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta
 // CoreV1alpha1 retrieves the CoreV1alpha1Client
 func (c *Clientset) CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface {
 	return &fakecorev1alpha1.FakeCoreV1alpha1{Fake: &c.Fake}
+}
+
+// MetricsV1alpha1 retrieves the MetricsV1alpha1Client
+func (c *Clientset) MetricsV1alpha1() metricsv1alpha1.MetricsV1alpha1Interface {
+	return &fakemetricsv1alpha1.FakeMetricsV1alpha1{Fake: &c.Fake}
 }
 
 // OpsV1alpha1 retrieves the OpsV1alpha1Client

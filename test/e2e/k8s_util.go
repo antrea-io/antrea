@@ -242,14 +242,14 @@ func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(ns string, netpol *v1net.N
 	return np, err
 }
 
-// CleanCNPs is a convenience function for deleting ClusterNetworkPolicies before startup of any new test.
+// CleanCNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
 func (k *KubernetesUtils) CleanCNPs() error {
 	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to list ClusterNetworkPolicies")
+		return errors.Wrapf(err, "unable to list AntreaClusterNetworkPolicies")
 	}
 	for _, cnp := range l.Items {
-		log.Infof("deleting ClusterNetworkPolicies %s", cnp.Name)
+		log.Infof("deleting AntreaClusterNetworkPolicies %s", cnp.Name)
 		err = k.securityClient.ClusterNetworkPolicies().Delete(context.TODO(), cnp.Name, metav1.DeleteOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "unable to delete ClusterNetworkPolicy %s", cnp.Name)
@@ -258,7 +258,7 @@ func (k *KubernetesUtils) CleanCNPs() error {
 	return nil
 }
 
-// CreateOrUpdateCNP is a convenience function for updating/creating ClusterNetworkPolicies.
+// CreateOrUpdateCNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
 func (k *KubernetesUtils) CreateOrUpdateCNP(cnp *secv1alpha1.ClusterNetworkPolicy) (*secv1alpha1.ClusterNetworkPolicy, error) {
 	log.Infof("creating/updating ClusterNetworkPolicy %s", cnp.Name)
 	cnpReturned, err := k.securityClient.ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
