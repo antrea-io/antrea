@@ -77,6 +77,18 @@ func (p *Priority) Less(p2 Priority) bool {
 	return p.TierPriority > p2.TierPriority
 }
 
+func (p *Priority) Equals(p2 Priority) bool {
+	return p.TierPriority == p2.TierPriority && p.PolicyPriority == p2.PolicyPriority && p.RulePriority == p2.RulePriority
+}
+
+// ByPriority sorts a list of Priority by their relative TierPriority, PolicyPriority and RulePriority, in that order.
+// It implements sort.Interface.
+type ByPriority []Priority
+
+func (bp ByPriority) Len() int           { return len(bp) }
+func (bp ByPriority) Swap(i, j int)      { bp[i], bp[j] = bp[j], bp[i] }
+func (bp ByPriority) Less(i, j int) bool { return bp[i].Less(bp[j]) }
+
 type RuleMetric struct {
 	Bytes, Packets, Sessions uint64
 }
