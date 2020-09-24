@@ -76,6 +76,10 @@ fi
 
 start_ovs $offload
 
+# Restrict read permissions for "others"
+# See discussion in https://github.com/vmware-tanzu/antrea/issues/1292
+chmod 0640 $OVS_DB_FILE
+
 log_info $CONTAINER_NAME "Started the loop that checks OVS status every 30 seconds"
 while true; do
     # we run sleep in the background so that we can immediately exit when we
