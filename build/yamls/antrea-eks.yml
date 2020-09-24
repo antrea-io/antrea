@@ -257,110 +257,6 @@ spec:
     - anp
     singular: networkpolicy
   scope: Namespaced
-<<<<<<< HEAD
-=======
-  validation:
-    openAPIV3Schema:
-      properties:
-        spec:
-          properties:
-            appliedTo:
-              items:
-                properties:
-                  podSelector:
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                type: object
-              type: array
-            egress:
-              items:
-                properties:
-                  action:
-                    enum:
-                    - Allow
-                    - Drop
-                    type: string
-                  ports:
-                    items:
-                      properties:
-                        port:
-                          x-kubernetes-int-or-string: true
-                        protocol:
-                          type: string
-                      type: object
-                    type: array
-                  to:
-                    items:
-                      properties:
-                        externalEntitySelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        ipBlock:
-                          properties:
-                            cidr:
-                              format: cidr
-                              type: string
-                          type: object
-                        namespaceSelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        podSelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                      type: object
-                    type: array
-                required:
-                - action
-                type: object
-              type: array
-            ingress:
-              items:
-                properties:
-                  action:
-                    enum:
-                    - Allow
-                    - Drop
-                    type: string
-                  from:
-                    items:
-                      properties:
-                        externalEntitySelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        ipBlock:
-                          properties:
-                            cidr:
-                              format: cidr
-                              type: string
-                          type: object
-                        namespaceSelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                        podSelector:
-                          x-kubernetes-preserve-unknown-fields: true
-                      type: object
-                    type: array
-                  ports:
-                    items:
-                      properties:
-                        port:
-                          x-kubernetes-int-or-string: true
-                        protocol:
-                          type: string
-                      type: object
-                    type: array
-                required:
-                - action
-                type: object
-              type: array
-            priority:
-              format: float
-              maximum: 10000
-              minimum: 1
-              type: number
-            tier:
-              type: string
-          required:
-          - appliedTo
-          - priority
-          type: object
-      type: object
->>>>>>> 860ca13... Validate ANP CRDs for Tier references
   versions:
   - additionalPrinterColumns:
     - description: The Tier to which this Antrea NetworkPolicy belongs to.
@@ -471,12 +367,6 @@ spec:
                 minimum: 1
                 type: number
               tier:
-                enum:
-                - Emergency
-                - SecurityOps
-                - NetworkOps
-                - Platform
-                - Application
                 type: string
             required:
             - appliedTo
@@ -1676,8 +1566,8 @@ webhooks:
     service:
       name: antrea
       namespace: kube-system
-      path: /validate/cnp
-  name: cnpvalidator.antrea.tanzu.vmware.com
+      path: /validate/acnp
+  name: acnpvalidator.antrea.tanzu.vmware.com
   rules:
   - apiGroups:
     - security.antrea.tanzu.vmware.com

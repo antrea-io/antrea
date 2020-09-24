@@ -28,7 +28,7 @@ import (
 
 func HandleValidationNetworkPolicy(v *networkpolicy.NetworkPolicyValidator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		klog.V(2).Info("Received request to validate Antrea NP/Tier CRD")
+		klog.V(2).Info("Received request to validate Antrea Policy/Tier CRD")
 		var reqBody []byte
 		if r.Body != nil {
 			reqBody, _ = ioutil.ReadAll(r.Body)

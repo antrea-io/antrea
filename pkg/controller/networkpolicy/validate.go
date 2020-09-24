@@ -48,7 +48,7 @@ func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController)
 	}
 }
 
-// Validate function validates a Tier or CNP object
+// Validate function validates a Tier or Antrea Policy object
 func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var result *metav1.Status
 	var msg string
@@ -74,21 +74,21 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 		}
 		msg, allowed = v.validateTier(&curTier, &oldTier, op)
 	case "ClusterNetworkPolicy":
-		klog.V(2).Info("Validating ClusterNetworkPolicy CRD")
+		klog.V(2).Info("Validating Antrea ClusterNetworkPolicy CRD")
 		var curCNP, oldCNP secv1alpha1.ClusterNetworkPolicy
 		if curRaw != nil {
 			if err := json.Unmarshal(curRaw, &curCNP); err != nil {
-				klog.Errorf("Error de-serializing current ClusterNetworkPolicy")
+				klog.Errorf("Error de-serializing current Antrea ClusterNetworkPolicy")
 				return GetAdmissionResponseForErr(err)
 			}
 		}
 		if oldRaw != nil {
 			if err := json.Unmarshal(oldRaw, &oldCNP); err != nil {
-				klog.Errorf("Error de-serializing old ClusterNetworkPolicy")
+				klog.Errorf("Error de-serializing old Antrea ClusterNetworkPolicy")
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateCNP(&curCNP, &oldCNP, op)
+		msg, allowed = v.validateAntreaPolicy(op, curCNP.Spec.Tier)
 	case "NetworkPolicy":
 		klog.V(2).Info("Validating Antrea NetworkPolicy CRD")
 		var curANP, oldANP secv1alpha1.NetworkPolicy
@@ -104,7 +104,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateANP(&curANP, &oldANP, op)
+		msg, allowed = v.validateAntreaPolicy(op, curANP.Spec.Tier)
 	}
 	if msg != "" {
 		result = &metav1.Status{
@@ -117,69 +117,23 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 	}
 }
 
-// validateCNP validates the admission of a ClusterNetworkPolicy resource
-func (v *NetworkPolicyValidator) validateCNP(curCNP, oldCNP *secv1alpha1.ClusterNetworkPolicy, op admv1.Operation) (string, bool) {
+// validateAntreaPolicy validates the admission of a Antrea NetworkPolicy CRDs
+func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier string) (string, bool) {
 	allowed := true
 	reason := ""
 	switch op {
-	case admv1.Create:
-		// CNP "tier" must exist before referencing
-		klog.V(2).Info("Validating CREATE request for ClusterNetworkPolicy")
-		if curCNP.Spec.Tier == "" || staticTierSet.Has(curCNP.Spec.Tier) {
+	case admv1.Create, admv1.Update:
+		// "tier" must exist before referencing
+		if tier == "" || staticTierSet.Has(tier) {
 			// Empty Tier name corresponds to default Tier
 			break
 		}
-		if ok := v.tierExists(curCNP.Spec.Tier); !ok {
+		if ok := v.tierExists(tier); !ok {
 			allowed = false
-			reason = fmt.Sprintf("tier %s does not exist", curCNP.Spec.Tier)
-		}
-	case admv1.Update:
-		// CNP "tier" must exist before referencing
-		klog.V(2).Info("Validating UPDATE request for CNP")
-		if curCNP.Spec.Tier == "" || staticTierSet.Has(curCNP.Spec.Tier) {
-			// Empty Tier name corresponds to default Tier
-			break
-		}
-		if ok := v.tierExists(curCNP.Spec.Tier); !ok {
-			allowed = false
-			reason = fmt.Sprintf("tier %s does not exist", curCNP.Spec.Tier)
+			reason = fmt.Sprintf("tier %s does not exist", tier)
 		}
 	case admv1.Delete:
-		// Delete of CNP have no validation
-		allowed = true
-	}
-	return reason, allowed
-}
-
-// validateANP validates the admission of a Antrea NetworkPolicy resource
-func (v *NetworkPolicyValidator) validateANP(curANP, oldANP *secv1alpha1.NetworkPolicy, op admv1.Operation) (string, bool) {
-	allowed := true
-	reason := ""
-	switch op {
-	case admv1.Create:
-		// ANP "tier" must exist before referencing
-		klog.V(2).Info("Validating CREATE request for Antrea NetworkPolicy")
-		if curANP.Spec.Tier == "" || staticTierSet.Has(curANP.Spec.Tier) {
-			// Empty Tier name corresponds to default Tier
-			break
-		}
-		if ok := v.tierExists(curANP.Spec.Tier); !ok {
-			allowed = false
-			reason = fmt.Sprintf("tier %s does not exist", curANP.Spec.Tier)
-		}
-	case admv1.Update:
-		// ANP "tier" must exist before referencing
-		klog.V(2).Info("Validating UPDATE request for ANP")
-		if curANP.Spec.Tier == "" || staticTierSet.Has(curANP.Spec.Tier) {
-			// Empty Tier name corresponds to default Tier
-			break
-		}
-		if ok := v.tierExists(curANP.Spec.Tier); !ok {
-			allowed = false
-			reason = fmt.Sprintf("tier %s does not exist", curANP.Spec.Tier)
-		}
-	case admv1.Delete:
-		// Delete of ANP have no validation
+		// Delete of Antrea Policies have no validation
 		allowed = true
 	}
 	return reason, allowed
@@ -217,15 +171,15 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier
 			reason = fmt.Sprintf("cannot delete reserved tier %s", oldTier.Name)
 			return reason, false
 		}
-		// Tier with existing CNPs/ANPs cannot be deleted
+		// Tier with existing ACNPs/ANPs cannot be deleted
 		cnps, err := v.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
 		if err != nil || len(cnps) > 0 {
-			reason = fmt.Sprintf("tier %s is referenced by %d ClusterNetworkPolicies", oldTier.Name, len(cnps))
+			reason = fmt.Sprintf("tier %s is referenced by %d Antrea ClusterNetworkPolicies", oldTier.Name, len(cnps))
 			return reason, false
 		}
 		anps, err := v.networkPolicyController.anpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
 		if err != nil || len(anps) > 0 {
-			reason = fmt.Sprintf("tier %s is referenced by %d NetworkPolicies", oldTier.Name, len(anps))
+			reason = fmt.Sprintf("tier %s is referenced by %d Antrea NetworkPolicies", oldTier.Name, len(anps))
 			return reason, false
 		}
 	}
