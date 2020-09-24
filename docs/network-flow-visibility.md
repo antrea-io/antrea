@@ -18,27 +18,32 @@
     + [Node Throughput](#node-throughput)
       
 ## Overview
-[Antrea](architecture.md) is a Kubernetes network plugin that provides network connectivity and security features for Pod workloads.
-Considering the scale and dynamism of Kubernetes workloads in a cluster, Network Flow Visibility helps in the management
-and configuration of Kubernetes resources such as Network Policy, Services, Pods etc., and thereby provides opportunities
-to enhance the performance and security aspects of Pod workloads.
+[Antrea](architecture.md) is a Kubernetes network plugin that provides network
+connectivity and security features for Pod workloads. Considering the scale and
+dynamism of Kubernetes workloads in a cluster, Network Flow Visibility helps in
+the management and configuration of Kubernetes resources such as Network Policy,
+Services, Pods etc., and thereby provides opportunities to enhance the performance
+and security aspects of Pod workloads.
 
-For visualizing the network flows, Antrea monitors the flows in Linux conntrack module. These flows are converted to flow records
-and are sent to the configured flow controller. High-level design is given below:
+For visualizing the network flows, Antrea monitors the flows in Linux conntrack
+module. These flows are converted to flow records and are sent to the configured
+flow controller. High-level design is given below:
 
-<img src="https://downloads.antrea.io/static/netviz.png" width="600" alt="Network Flow Visibilty">
+![Flow Exporter Design](assets/flow_exporter.svg)
 
 ## Flow Exporter feature
 
-In Antrea, the basic building block for the Network Flow Visibility is the **Flow Exporter feature**. Flow Exporter operates
-within Antrea Agent; it builds and maintains a connection store by polling and dumping flows from conntrack module periodically.
-Connections from the connection store are exported to a flow collector using the IPFIX protocol, and for this purpose we
-use the [go-ipfix](https://github.com/vmware/go-ipfix) library.
+In Antrea, the basic building block for the Network Flow Visibility is the **Flow
+Exporter feature**. Flow Exporter operates within Antrea Agent; it builds and maintains
+a connection store by polling and dumping flows from conntrack module periodically.
+Connections from the connection store are exported to a flow collector using the
+IPFIX protocol, and for this purpose we use the [go-ipfix](https://github.com/vmware/go-ipfix) library.
  
 ### Configuration
 
-To enable the Flow Exporter feature at the Antrea Agent, the following config parameters have to be set in the Antrea Agent
-ConfigMap as shown below. We provide some examples for the parameter values in the following snippet.
+To enable the Flow Exporter feature at the Antrea Agent, the following config
+parameters have to be set in the Antrea Agent ConfigMap as shown below. We provide
+some examples for the parameter values in the following snippet.
 
 ```yaml
   antrea-agent.conf: |
@@ -67,46 +72,43 @@ ConfigMap as shown below. We provide some examples for the parameter values in t
     flowExportFrequency: 5
 ```
  
-Please note that the default values for `flowPollInterval` and `flowExportFrequency` parameters are set to 5s and 12, respectively.
-`flowCollectorAddr` is a required parameter that is necessary for the Flow Exporter feature to work.
+Please note that the default values for `flowPollInterval` and `flowExportFrequency`
+parameters are set to 5s and 12, respectively. `flowCollectorAddr` is a required
+parameter that is necessary for the Flow Exporter feature to work.
 
-### Supported capabilities
+### IPFIX Information Elements (IEs) in a Flow Record
 
-Currently, the Flow Exporter feature provides visibility for Pod-to-Pod, Pod-to-Node, Node-to-Pod, Node-to-Node and Pod-to-Service
-network flows along with the associated statistics such as data throughput (bits per second), packet throughput (packets
-per second), cumulative byte count, cumulative packet count etc. Pod-To-Service flow visibility is supported only [when Antrea Proxy enabled](feature-gates.md). 
+There are 23 IPFIX IEs in each exported flow record, which are defined in the
+IANA-assigned IE registry, the Reverse IANA-assigned IE registry and the Antrea
+IE registry. The reverse IEs are used to provide bi-directional information about
+the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 
-Kubernetes information such as Node name, Pod name, Pod Namespace, Service name etc. is added to the flow records.
-For flow records that are exported from any given Antrea Agent, we only provide the information of Kubernetes entities
-that are local to the Antrea Agent. In the future, we plan to extend this feature to provide information about remote
-Kubernetes entities such as remote Node name, remote Pod name etc.
+#### IEs from IANA-assigned IE registry 
 
-Please note that in the case of inter-Node flows, we are exporting only one copy of the flow record from the source Node,
-where the flow is originated from, and ignore the flow record from the destination Node, where the destination Pod resides.
-In the future, this behavior will be changed when the support for Network Policy is added as both hosts may apply different
-Network Policies and Rules.
+| IPFIX Information Element| Enterprise ID | Field ID | Type           |
+|--------------------------|---------------|----------|----------------|
+| flowStartSeconds         | 0             | 150      | dateTimeSeconds|
+| flowEndSeconds           | 0             | 151      | dateTimeSeconds|
+| sourceIPv4Address        | 0             | 8        | ipv4Address    |
+| destinationIPv4Address   | 0             | 12       | ipv4Address    |
+| sourceTransportPort      | 0             | 7        | unsigned16     |
+| destinationTransportPort | 0             | 11       | unsigned16     |
+| protocolIdentifier       | 0             | 4        | unsigned8      |
+| packetTotalCount         | 0             | 86       | unsigned64     |
+| octetTotalCount          | 0             | 85       | unsigned64     |
+| packetDeltaCount         | 0             | 2        | unsigned64     |
+| octetDeltaCount          | 0             | 1        | unsigned64     |
 
-## ELK Flow Collector
+#### IEs from Reverse IANA-assigned IE Registry
 
-### Purpose
-Antrea supports sending IPFIX flow records through the Flow Exporter feature described above. The Elastic
-Stack (ELK Stack) works as the data collector, data storage and visualization tool
-for flow records and flow-related information. This document provides the guidelines for
-deploying Elastic Stack with support for Antrea-specific IPFIX fields in a Kubernetes
-cluster.
+| IPFIX Information Element| Enterprise ID | Field ID | Type           |
+|--------------------------|---------------|----------|----------------|
+| packetTotalCount         | 29305         | 86       | unsigned64     |
+| octetTotalCount          | 29305         | 85       | unsigned64     |
+| packetDeltaCount         | 29305         | 2        | unsigned64     |
+| octetDeltaCount          | 29305         | 1        | unsigned64     |
 
-### About Elastic Stack
-[Elastic Stack](https://www.elastic.co) is a group of open source products to
-help collect, store, search, analyze and visualize data in real time. We will
-use Logstash, Elasticsearch and Kibana in Antrea flow visualization.
-[Logstash](https://www.elastic.co/logstash) works as data collector to
-centralize flow records. [Logstash Netflow codec plugin](https://www.elastic.co/guide/en/logstash/current/plugins-codecs-netflow.html)
-supports Netflow v5/v9/v10(IPFIX) protocols for flow data collection.
-The flow exporter feature in Antrea Agent uses the IPFIX (Netflow v10) protocol 
-to export flow records.
-
-Exported IPFIX flow records contain the following Antrea-specific fields along 
-with standard IANA fields.
+#### IEs from Antrea IE Registry
 
 | IPFIX Information Element | Enterprise ID | Field ID | Type        |
 |---------------------------|---------------|----------|-------------|
@@ -118,6 +120,56 @@ with standard IANA fields.
 | destinationNodeName       | 55829         | 105      | string      |
 | destinationClusterIP      | 55829         | 106      | ipv4Address |
 | destinationServicePortName| 55829         | 108      | string      |
+
+### Supported capabilities
+
+#### Types of Flows and Associated Information
+
+Currently, the Flow Exporter feature provides visibility for Pod-to-Pod, Pod-to-Node,
+Node-to-Pod, Node-to-Node and Pod-to-Service network flows along with the associated
+statistics such as data throughput (bits per second), packet throughput (packets
+per second), cumulative byte count, cumulative packet count etc. Pod-To-Service
+flow visibility is supported only [when Antrea Proxy enabled](feature-gates.md). 
+
+Kubernetes information such as Node name, Pod name, Pod Namespace, Service name
+etc. is added to the flow records. For flow records that are exported from any given
+Antrea Agent, we only provide the information of Kubernetes entities that are local
+to the Antrea Agent. In the future, we plan to extend this feature to provide
+information about remote Kubernetes entities such as remote Node name, remote Pod
+name etc.
+
+Please note that in the case of inter-Node flows, we are exporting only one copy
+of the flow record from the source Node, where the flow is originated from, and
+ignore the flow record from the destination Node, where the destination Pod resides.
+In the future, this behavior will be changed when the support for Network Policy
+is added as both hosts may apply different Network Policies and Rules.
+
+#### Connection Metrics
+
+We support following connection metrics as Prometheus metrics that are exposed
+through [Antrea Agent apiserver endpoint](prometheus-integration.md):
+`antrea_agent_conntrack_total_connection_count`,
+`antrea_agent_conntrack_antrea_connection_count` and
+`antrea_agent_conntrack_max_connection_count`
+
+## ELK Flow Collector
+
+### Purpose
+Antrea supports sending IPFIX flow records through the Flow Exporter feature
+described above. The Elastic Stack (ELK Stack) works as the data collector, data 
+storage and visualization tool for flow records and flow-related information. This 
+document provides the guidelines for deploying Elastic Stack with support for 
+Antrea-specific IPFIX fields in a Kubernetes cluster.
+
+### About Elastic Stack
+[Elastic Stack](https://www.elastic.co) is a group of open source products to
+help collect, store, search, analyze and visualize data in real time. We will
+use Logstash, Elasticsearch and Kibana in Antrea flow visualization.
+[Logstash](https://www.elastic.co/logstash) works as data collector to
+centralize flow records. [Logstash Netflow codec plugin](https://www.elastic.co/guide/en/logstash/current/plugins-codecs-netflow.html)
+supports Netflow v5/v9/v10(IPFIX) protocols for flow data collection.
+The flow exporter feature in Antrea Agent uses the IPFIX (Netflow v10) protocol 
+to export flow records.
 
 [Elasticsearch](https://www.elastic.co/elasticsearch/), as a RESTful search
 engine, supports storing, searching and indexing records received. 
