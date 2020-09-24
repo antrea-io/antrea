@@ -34,6 +34,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/util/ip"
 )
 
+var (
+	defaultTierPriority int32 = 250
+)
+
 // Reconciler is an interface that knows how to reconcile the desired state of
 // CompletedRule with the actual state of Openflow entries.
 type Reconciler interface {
@@ -177,11 +181,15 @@ type reconciler struct {
 
 // newReconciler returns a new *reconciler.
 func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore) *reconciler {
-	cnpTables := append(openflow.GetCNPEgressTables(), openflow.GetCNPIngressTables()...)
 	priorityAssigners := map[binding.TableIDType]*tablePriorityAssigner{}
-	for _, table := range cnpTables {
+	for _, table := range openflow.GetAntreaPolicySingleTierTables() {
 		priorityAssigners[table] = &tablePriorityAssigner{
-			assigner: newPriorityAssigner(InitialOFPrioritySingleTierPerTable),
+			assigner: newPriorityAssigner(InitialOFPriority, true),
+		}
+	}
+	for _, table := range openflow.GetAntreaPolicyMultiTierTables() {
+		priorityAssigners[table] = &tablePriorityAssigner{
+			assigner: newPriorityAssigner(InitialOFPriority, false),
 		}
 	}
 	reconciler := &reconciler{
@@ -240,11 +248,14 @@ func (r *reconciler) getOFRuleTable(rule *CompletedRule) binding.TableIDType {
 	}
 	var ruleTables []binding.TableIDType
 	if rule.Direction == v1beta1.DirectionIn {
-		ruleTables = openflow.GetCNPIngressTables()
+		ruleTables = openflow.GetAntreaPolicyIngressTables()
 	} else {
-		ruleTables = openflow.GetCNPEgressTables()
+		ruleTables = openflow.GetAntreaPolicyEgressTables()
 	}
-	return ruleTables[int(*rule.TierPriority)-1]
+	if *rule.TierPriority != defaultTierPriority {
+		return ruleTables[0]
+	}
+	return ruleTables[1]
 }
 
 // getOFPriority retrieves the OFPriority for the input CompletedRule to be installed,
