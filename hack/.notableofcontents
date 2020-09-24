@@ -1,11 +1,12 @@
 docs/aks-installation.md
 docs/architecture.md
-docs/cloud.md
 docs/assets/README.md
 docs/assets/logo/README.md
-docs/maintainers/release.md
+docs/cloud.md
 docs/code-generation.md
 docs/configuration.md
+docs/cookbooks/multus/README.md
+docs/cookbooks/multus/build/cni-dhcp-daemon/README.md
 docs/eks-installation.md
 docs/feature-gates.md
 docs/getting-started.md
@@ -13,6 +14,7 @@ docs/github-labels.md
 docs/gke-installation.md
 docs/ipsec-tunnel.md
 docs/kind.md
+docs/maintainers/release.md
 docs/manual-installation.md
 docs/octant-plugin-installation.md
 docs/os-issues.md
