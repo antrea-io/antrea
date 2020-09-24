@@ -362,7 +362,9 @@ type client struct {
 	encapMode     config.TrafficEncapModeType
 	gatewayOFPort uint32
 	// ovsDatapathType is the type of the datapath used by the bridge.
-	ovsDatapathType ovsconfig.OVSDatapathType
+	ovsDatapathType     ovsconfig.OVSDatapathType
+	nodePortVirtualIPv4 net.IP // The virtual IPv4 used for host forwarding, it can be nil if NodePort support is not enabled.
+	nodePortVirtualIPv6 net.IP // The virtual IPv6 used for host forwarding, it can be nil if NodePort support is not enabled.
 	// packetInHandlers stores handler to process PacketIn event. Each packetin reason can have multiple handlers registered.
 	// When a packetin arrives, openflow send packet to registered handlers in this map.
 	packetInHandlers map[uint8]map[string]PacketInHandler
@@ -994,6 +996,22 @@ func (c *client) arpResponderFlow(peerGatewayIP net.IP, category cookie.Category
 		Action().SetARPSpa(peerGatewayIP).
 		Action().OutputInPort().
 		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
+func (c *client) arpNodePortVirtualResponderFlow() binding.Flow {
+	return c.pipeline[arpResponderTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
+		MatchARPOp(1).
+		MatchARPTpa(c.nodePortVirtualIPv4).
+		Action().Move(binding.NxmFieldSrcMAC, binding.NxmFieldDstMAC).
+		Action().SetSrcMAC(globalVirtualMAC).
+		Action().LoadARPOperation(2).
+		Action().Move(binding.NxmFieldARPSha, binding.NxmFieldARPTha).
+		Action().SetARPSha(globalVirtualMAC).
+		Action().Move(binding.NxmFieldARPSpa, binding.NxmFieldARPTpa).
+		Action().SetARPSpa(c.nodePortVirtualIPv4).
+		Action().OutputInPort().
+		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
 }
 
@@ -1910,6 +1928,22 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 	return group
 }
 
+// serviceGatewayFlow replies Service packets back to external addresses without entering Gateway CTZone.
+func (c *client) serviceGatewayFlow(isIPv6 bool) binding.Flow {
+	builder := c.pipeline[conntrackCommitTable].BuildFlow(priorityHigh).
+		MatchCTMark(ServiceCTMark, nil).
+		MatchCTStateNew(true).
+		MatchCTStateTrk(true).
+		MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
+		Action().GotoTable(L2ForwardingOutTable).
+		Cookie(c.cookieAllocator.Request(cookie.Service).Raw())
+
+	if isIPv6 {
+		return builder.MatchProtocol(binding.ProtocolIPv6).Done()
+	}
+	return builder.MatchProtocol(binding.ProtocolIP).Done()
+}
+
 // decTTLFlows decrements TTL by one for the packets forwarded across Nodes.
 // The TTL decrement should be skipped for the packets which enter OVS pipeline
 // from the gateway interface, as the host IP stack should have decremented the
@@ -1994,7 +2028,7 @@ func (c *client) generatePipeline() {
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapathType, enableProxy, enableAntreaPolicy bool) Client {
+func NewClient(bridgeName string, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapathType, nodePortVirtualIPv4 net.IP, nodePortVirtualIPv6 net.IP, enableProxy, enableAntreaPolicy bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -2002,6 +2036,8 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 	)
 	c := &client{
 		bridge:                   bridge,
+		nodePortVirtualIPv4:      nodePortVirtualIPv4,
+		nodePortVirtualIPv6:      nodePortVirtualIPv6,
 		enableProxy:              enableProxy,
 		enableAntreaPolicy:       enableAntreaPolicy,
 		nodeFlowCache:            newFlowCategoryCache(),

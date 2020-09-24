@@ -134,4 +134,7 @@ type AgentConfig struct {
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
 	// TLS min version.
 	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
+	// A string slice of values which specify the addresses to use for NodePorts. Values may be valid IP blocks
+	// (e.g. 1.2.3.0/24, 1.2.3.4/32). The default empty string slice ([]) means to use all local addresses.
+	NodePortAddresses []string `yaml:"nodePortAddresses,omitempty"`
 }

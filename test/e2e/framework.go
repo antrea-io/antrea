@@ -1233,6 +1233,11 @@ func (data *TestData) createNginxClusterIPService(name string, affinity bool, ip
 	return data.createService(name, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily)
 }
 
+// createNginxNodePortService create a NodePort nginx service with the given name.
+func (data *TestData) createNginxNodePortService(affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeNodePort, ipFamily)
+}
+
 func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	svc, err := data.createService(nginxLBService, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {

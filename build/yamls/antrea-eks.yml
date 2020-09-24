@@ -1312,6 +1312,9 @@ data:
     # this flag will not take effect.
     #  EndpointSlice: false
 
+    # Enable NodePort Service support in AntreaProxy in antrea-agent.
+      AntreaProxyNodePort: true
+
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
 
@@ -1434,6 +1437,10 @@ data:
 
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     #tlsMinVersion:
+
+    # A string slice of values which specify the addresses to use for NodePorts. Values may be valid IP blocks
+    # (e.g. 1.2.3.0/24, 1.2.3.4/32). The default empty string slice ([]) means to use all local addresses.
+    #nodePortAddresses: []
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -1499,7 +1506,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-mc9bkf47f4
+  name: antrea-config-hdm8fm2tkk
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1619,7 +1626,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-mc9bkf47f4
+          name: antrea-config-hdm8fm2tkk
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1885,7 +1892,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-mc9bkf47f4
+          name: antrea-config-hdm8fm2tkk
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

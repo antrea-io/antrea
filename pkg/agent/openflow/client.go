@@ -532,6 +532,15 @@ func (c *client) InstallGatewayFlows() error {
 	// Add flow to ensure the liveness check packet could be forwarded correctly.
 	flows = append(flows, c.localProbeFlow(gatewayIPs, cookie.Default)...)
 	flows = append(flows, c.ctRewriteDstMACFlows(gatewayConfig.MAC, cookie.Default)...)
+	if c.enableProxy {
+		flows = append(flows, c.arpNodePortVirtualResponderFlow())
+		if gatewayConfig.IPv6 != nil {
+			flows = append(flows, c.serviceGatewayFlow(true))
+		}
+		if gatewayConfig.IPv4 != nil {
+			flows = append(flows, c.serviceGatewayFlow(false))
+		}
+	}
 	// In NoEncap , no traffic from tunnel port
 	if c.encapMode.SupportsEncap() {
 		flows = append(flows, c.l3FwdFlowToGateway(gatewayIPs, gatewayConfig.MAC, cookie.Default)...)

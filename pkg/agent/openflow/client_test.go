@@ -38,7 +38,10 @@ import (
 
 const bridgeName = "dummy-br"
 
-var bridgeMgmtAddr = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
+var (
+	bridgeMgmtAddr    = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
+	nodePortVirtualIP = net.ParseIP("169.254.169.110")
+)
 
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	hostName := cacheKey
@@ -91,7 +94,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, nodePortVirtualIP, nil, true, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -122,7 +125,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, nodePortVirtualIP, nil, true, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -166,7 +169,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, nodePortVirtualIP, nil, true, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -203,7 +206,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, nodePortVirtualIP, nil, true, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -469,7 +472,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 }
 
 func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, nodePortVirtualIP, nil, true, true)
 	c := ofClient.(*client)
 	c.cookieAllocator = cookie.NewAllocator(0)
 	c.nodeConfig = &config.NodeConfig{}
@@ -487,7 +490,7 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 }
 
 func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, nil, nil, true, true)
 	c := ofClient.(*client)
 	mac, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	c.nodeConfig = &config.NodeConfig{GatewayConfig: &config.GatewayConfig{MAC: mac}}

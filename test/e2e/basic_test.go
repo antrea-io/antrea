@@ -24,11 +24,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
 // TestDeploy is a "no-op" test that simply performs setup and teardown.
@@ -351,7 +353,11 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 				continue
 			}
 			route := Route{}
-			if _, route.peerPodCIDR, err = net.ParseCIDR(matches[1]); err != nil {
+			m1 := matches[1]
+			if !strings.Contains(m1, "/") {
+				m1 = m1 + "/32"
+			}
+			if _, route.peerPodCIDR, err = net.ParseCIDR(m1); err != nil {
 				return nil, fmt.Errorf("%s is not a valid net CIDR", matches[1])
 			}
 			if route.peerPodGW = net.ParseIP(matches[2]); route.peerPodGW == nil {
@@ -368,6 +374,12 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 
 	} else if encapMode == config.TrafficEncapModeHybrid {
 		expectedRtNumMin = 1
+	}
+	agentFeatures, err := data.GetAgentFeatures(antreaNamespace)
+	require.NoError(t, err)
+	if agentFeatures.Enabled(features.AntreaProxy) && agentFeatures.Enabled(features.AntreaProxyNodePort) {
+		expectedRtNumMin += 1
+		expectedRtNumMax += 1
 	}
 
 	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)
