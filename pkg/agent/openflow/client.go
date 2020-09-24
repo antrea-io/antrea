@@ -20,6 +20,7 @@ import (
 	"net"
 
 	"antrea.io/libOpenflow/protocol"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -50,9 +51,9 @@ type Client interface {
 	// the Cluster Service CIDR as a parameter.
 	InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet) error
 
-	// InstallClusterServiceFlows sets up the appropriate flows so that traffic can reach
+	// InstallDefaultServiceFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once.
-	InstallClusterServiceFlows() error
+	InstallDefaultServiceFlows(nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP) error
 
 	// InstallDefaultTunnelFlows sets up the classification flow for the default (flow based) tunnel.
 	InstallDefaultTunnelFlows() error
@@ -103,13 +104,12 @@ type Client interface {
 	// InstallEndpointFlows.
 	UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error
 
-	// InstallServiceFlows installs flows for accessing Service with clusterIP.
-	// It installs the flow that uses the group/bucket to do service LB. If the
-	// affinityTimeout is not zero, it also installs the flow which has a learn
-	// action to maintain the LB decision.
-	// The group with the groupID must be installed before, otherwise the
-	// installation will fail.
-	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error
+	// InstallServiceFlows installs flows for accessing Service NodePort, LoadBalancer and ClusterIP. It installs the
+	// flow that uses the group/bucket to do service LB. If the affinityTimeout is not zero, it also installs the flow
+	// which has a learn action to maintain the LB decision. The group with the groupID must be installed before,
+	// otherwise the installation will fail. If the externalTrafficPolicy of NodePort/LoadBalancer is Local,
+	// nodeLocalExternal will be true, otherwise it will be false.
+	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType) error
 	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
 	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 	// InstallLoadBalancerServiceFromOutsideFlows installs flows for LoadBalancer Service traffic from outside node.
@@ -583,13 +583,13 @@ func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint prox
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
-func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
+func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
-	flows = append(flows, c.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0))
+	flows = append(flows, c.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0, nodeLocalExternal, svcType))
 	if affinityTimeout != 0 {
-		flows = append(flows, c.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout))
+		flows = append(flows, c.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout, nodeLocalExternal, svcType))
 	}
 	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)
 	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
@@ -613,7 +613,7 @@ func (c *client) GetServiceFlowKeys(svcIP net.IP, svcPort uint16, protocol bindi
 	return flowKeys
 }
 
-func (c *client) InstallClusterServiceFlows() error {
+func (c *client) InstallDefaultServiceFlows(nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP) error {
 	flows := []binding.Flow{
 		c.serviceNeedLBFlow(),
 		c.sessionAffinityReselectFlow(),
@@ -622,10 +622,27 @@ func (c *client) InstallClusterServiceFlows() error {
 	if c.IsIPv4Enabled() {
 		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIP))
 		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIP)...)
+		flows = append(flows, c.l3FwdServiceDefaultFlowsViaGW(binding.ProtocolIP, cookie.Service)...)
+		if c.proxyAll {
+			// The output interface of a packet is the same as where it is from, and the action of the packet should be
+			// IN_PORT, rather than output. When a packet of Service is from Antrea gateway and its Endpoint is on host
+			// network, it needs hairpin mark (by setting a register, it will be matched at table L2ForwardingOutTable).
+			flows = append(flows, c.serviceHairpinRegSetFlows(binding.ProtocolIP))
+			// These flows are used to match the first packet of NodePort. The flows will set a bit of a register to mark
+			// the Service type of the packet as NodePort. The mark will be consumed in table serviceLBTable to match NodePort
+			flows = append(flows, c.serviceClassifierFlows(nodePortAddressesIPv4, binding.ProtocolIP)...)
+		}
 	}
 	if c.IsIPv6Enabled() {
 		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6))
 		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIPv6)...)
+		flows = append(flows, c.l3FwdServiceDefaultFlowsViaGW(binding.ProtocolIPv6, cookie.Service)...)
+		if c.proxyAll {
+			// As IPv4 above.
+			flows = append(flows, c.serviceHairpinRegSetFlows(binding.ProtocolIPv6))
+			// As IPv4 above.
+			flows = append(flows, c.serviceClassifierFlows(nodePortAddressesIPv6, binding.ProtocolIPv6)...)
+		}
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err

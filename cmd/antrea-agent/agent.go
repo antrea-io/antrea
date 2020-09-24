@@ -60,6 +60,9 @@ import (
 // https://github.com/kubernetes/kubernetes/blob/release-1.17/pkg/controller/apis/config/v1alpha1/defaults.go#L120
 const informerDefaultResync = 12 * time.Hour
 
+// The devices that should be excluded from NodePort.
+var excludeNodePortDevices = []string{"antrea-egress0", "kube-ipvs0"}
+
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
@@ -104,7 +107,8 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		features.DefaultFeatureGate.Enabled(features.Egress),
-		features.DefaultFeatureGate.Enabled(features.FlowExporter))
+		features.DefaultFeatureGate.Enabled(features.FlowExporter),
+		o.config.AntreaProxy.ProxyAll)
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	var serviceCIDRNetv6 *net.IPNet
@@ -129,7 +133,7 @@ func run(o *Options) error {
 	wireguardConfig := &config.WireGuardConfig{
 		Port: o.config.WireGuard.Port,
 	}
-	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT)
+	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
@@ -144,6 +148,16 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
+
+	// Get all available NodePort addresses.
+	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
+	if o.config.AntreaProxy.ProxyAll {
+		nodePortAddressesIPv4, nodePortAddressesIPv6, err = getAvailableNodePortAddresses(o.config.AntreaProxy.NodePortAddresses, append(excludeNodePortDevices, o.config.HostGateway))
+		if err != nil {
+			return fmt.Errorf("getting available NodePort IP addresses failed: %v", err)
+		}
+	}
+
 	// Initialize agent and node network.
 	agentInitializer := agent.NewInitializer(
 		k8sClient,
@@ -160,7 +174,11 @@ func run(o *Options) error {
 		wireguardConfig,
 		networkReadyCh,
 		stopCh,
-		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
+		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
+		o.config.AntreaProxy.ProxyAll,
+		nodePortAddressesIPv4,
+		nodePortAddressesIPv6)
+
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -182,13 +200,15 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+		proxyAll := o.config.AntreaProxy.ProxyAll
+
 		switch {
 		case v4Enabled && v6Enabled:
-			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient, routeClient, nodePortAddressesIPv4, nodePortAddressesIPv6, proxyAll)
 		case v4Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAll)
 		case v6Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAll)
 		default:
 			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
 		}

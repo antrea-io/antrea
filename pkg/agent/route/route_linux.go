@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/types"
@@ -36,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util/ipset"
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/env"
 )
@@ -50,12 +52,19 @@ const (
 	// antreaPodIP6Set contains all IPv6 Pod CIDRs of this cluster.
 	antreaPodIP6Set = "ANTREA-POD-IP6"
 
+	// Antrea proxy NodePort IP
+	antreaNodePortIPSet  = "ANTREA-NODEPORT-IP"
+	antreaNodePortIP6Set = "ANTREA-NODEPORT-IP6"
+
 	// Antrea managed iptables chains.
 	antreaForwardChain     = "ANTREA-FORWARD"
 	antreaPreRoutingChain  = "ANTREA-PREROUTING"
 	antreaPostRoutingChain = "ANTREA-POSTROUTING"
 	antreaOutputChain      = "ANTREA-OUTPUT"
 	antreaMangleChain      = "ANTREA-MANGLE"
+
+	ipv4AddrLength = 32
+	ipv6AddrLength = 128
 )
 
 // Client implements Interface.
@@ -85,16 +94,30 @@ type Client struct {
 	markToSNATIP sync.Map
 	// iptablesInitialized is used to notify when iptables initialization is done.
 	iptablesInitialized chan struct{}
+	proxyAll            bool
+	// serviceRoutes caches ip routes about Services.
+	serviceRoutes sync.Map
+	// serviceNeighbors caches neighbors.
+	serviceNeighbors sync.Map
+	// nodePortsIPv4 caches all existing IPv4 NodePorts.
+	nodePortsIPv4 sync.Map
+	// nodePortsIPv6 caches all existing IPv6 NodePorts.
+	nodePortsIPv6 sync.Map
+	// clusterIPv4CIDR stores the calculated ClusterIP CIDR for IPv4.
+	clusterIPv4CIDR *net.IPNet
+	// clusterIPv6CIDR stores the calculated ClusterIP CIDR for IPv6.
+	clusterIPv6CIDR *net.IPNet
 }
 
 // NewClient returns a route client.
 // TODO: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy. This param is not used in this file;
 // leaving it here is to be compatible with the implementation on Windows.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyAll bool) (*Client, error) {
 	return &Client{
 		serviceCIDR:   serviceCIDR,
 		networkConfig: networkConfig,
 		noSNAT:        noSNAT,
+		proxyAll:      proxyAll,
 	}, nil
 }
 
@@ -140,6 +163,13 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		}
 		if v != 1 {
 			return fmt.Errorf("IPv6 forwarding is not enabled")
+		}
+	}
+
+	// Set up the IP routes and sysctl parameters to support all Services in AntreaProxy.
+	if c.proxyAll {
+		if err := c.initServiceIPRoutes(); err != nil {
+			return fmt.Errorf("failed to initialize Service IP routes: %v", err)
 		}
 	}
 
@@ -197,6 +227,20 @@ func (c *Client) syncRoutes() error {
 		}
 		return true
 	})
+	if c.proxyAll {
+		c.serviceRoutes.Range(func(_, v interface{}) bool {
+			route := v.(*netlink.Route)
+			r, ok := routeMap[route.Dst.String()]
+			if ok && routeEqual(route, r) {
+				return true
+			}
+			if err := netlink.RouteReplace(route); err != nil {
+				klog.Errorf("Failed to add route to the gateway: %v", err)
+				return false
+			}
+			return true
+		})
+	}
 	return nil
 }
 
@@ -232,6 +276,32 @@ func (c *Client) syncIPSet() error {
 			}
 		}
 	}
+
+	// If proxy full is enabled, create NodePort ipset.
+	if c.proxyAll {
+		if err := ipset.CreateIPSet(antreaNodePortIPSet, ipset.HashIPPort, false); err != nil {
+			return err
+		}
+		if err := ipset.CreateIPSet(antreaNodePortIP6Set, ipset.HashIPPort, true); err != nil {
+			return err
+		}
+
+		c.nodePortsIPv4.Range(func(k, _ interface{}) bool {
+			ipSetEntry := k.(string)
+			if err := ipset.AddEntry(antreaNodePortIPSet, ipSetEntry); err != nil {
+				return false
+			}
+			return true
+		})
+		c.nodePortsIPv6.Range(func(k, _ interface{}) bool {
+			ipSetEntry := k.(string)
+			if err := ipset.AddEntry(antreaNodePortIP6Set, ipSetEntry); err != nil {
+				return false
+			}
+			return true
+		})
+	}
+
 	return nil
 }
 
@@ -240,6 +310,14 @@ func getIPSetName(ip net.IP) string {
 		return antreaPodIP6Set
 	}
 	return antreaPodIPSet
+}
+
+func getNodePortIPSetName(isIPv6 bool) string {
+	if isIPv6 {
+		return antreaNodePortIP6Set
+	} else {
+		return antreaNodePortIPSet
+	}
 }
 
 // writeEKSMangleRule writes an additional iptables mangle rule to the
@@ -287,6 +365,14 @@ func (c *Client) syncIPTables() error {
 		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"}, // TODO: unify the chain naming style
 		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 	}
+	if c.proxyAll {
+		jumpRules = append(jumpRules,
+			[]struct{ table, srcChain, dstChain, comment string }{
+				{iptables.NATTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules"},
+				{iptables.NATTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
+			}...,
+		)
+	}
 	for _, rule := range jumpRules {
 		if err := c.ipt.EnsureChain(iptables.ProtocolDual, rule.table, rule.dstChain); err != nil {
 			return err
@@ -311,7 +397,7 @@ func (c *Client) syncIPTables() error {
 	})
 	// Use iptables-restore to configure IPv4 settings.
 	if v4Enabled {
-		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR, antreaPodIPSet, snatMarkToIPv4)
+		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR, antreaPodIPSet, antreaNodePortIPSet, config.VirtualServiceIPv4, snatMarkToIPv4)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, false); err != nil {
 			return err
@@ -320,7 +406,7 @@ func (c *Client) syncIPTables() error {
 
 	// Use ip6tables-restore to configure IPv6 settings.
 	if v6Enabled {
-		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR, antreaPodIP6Set, snatMarkToIPv6)
+		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR, antreaPodIP6Set, antreaNodePortIP6Set, config.VirtualServiceIPv6, snatMarkToIPv6)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, true); err != nil {
 			return err
@@ -329,7 +415,7 @@ func (c *Client) syncIPTables() error {
 	return nil
 }
 
-func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMarkToIP map[uint32]net.IP) *bytes.Buffer {
+func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, nodePortIPSet string, serviceVirtualIP net.IP, snatMarkToIP map[uint32]net.IP) *bytes.Buffer {
 	// Create required rules in the antrea chains.
 	// Use iptables-restore as it flushes the involved chains and creates the desired rules
 	// with a single call, instead of string matching to clean up stale rules.
@@ -409,6 +495,24 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*nat")
+	if c.proxyAll {
+		writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
+		writeLine(iptablesData, []string{
+			"-A", antreaPreRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: DNAT external to NodePort packets"`,
+			"-m", "set", "--match-set", nodePortIPSet, "dst,dst",
+			"-j", iptables.DNATTarget,
+			"--to-destination", serviceVirtualIP.String(),
+		}...)
+		writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
+		writeLine(iptablesData, []string{
+			"-A", antreaOutputChain,
+			"-m", "comment", "--comment", `"Antrea: DNAT local to NodePort packets"`,
+			"-m", "set", "--match-set", nodePortIPSet, "dst,dst",
+			"-j", iptables.DNATTarget,
+			"--to-destination", serviceVirtualIP.String(),
+		}...)
+	}
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
 	// Egress rules must be inserted before the default masquerade rule.
 	for snatMark, snatIP := range snatMarkToIP {
@@ -427,6 +531,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: masquerade Pod to external packets"`,
 			"-s", podCIDR.String(), "-m", "set", "!", "--match-set", podIPSet, "dst",
+			"!", "-o", c.nodeConfig.GatewayConfig.Name,
 			"-j", iptables.MasqueradeTarget,
 		}...)
 	}
@@ -444,6 +549,17 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 		"-m", "addrtype", "--src-type", "LOCAL",
 		"-j", iptables.MasqueradeTarget, "--random-fully",
 	}...)
+
+	// If AntreaProxy full support is enabled, it SNATs the packets whose source IP is VirtualServiceIPv4/VirtualServiceIPv6
+	// so the packets can be routed back to this Node.
+	if c.proxyAll {
+		writeLine(iptablesData, []string{
+			"-A", antreaPostRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: masquerade OVS virtual source IP"`,
+			"-s", serviceVirtualIP.String(),
+			"-j", iptables.MasqueradeTarget,
+		}...)
+	}
 
 	writeLine(iptablesData, "COMMIT")
 	return iptablesData
@@ -463,6 +579,20 @@ func (c *Client) initIPRoutes() error {
 			if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
 				return fmt.Errorf("failed to add address %s to gw %s: %v", gwIP, gwLink.Attrs().Name, err)
 			}
+		}
+	}
+	return nil
+}
+
+func (c *Client) initServiceIPRoutes() error {
+	if config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode) {
+		if err := c.addVirtualServiceIPRoute(false); err != nil {
+			return err
+		}
+	}
+	if config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode) {
+		if err := c.addVirtualServiceIPRoute(true); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -498,7 +628,7 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 		}
 	}
 
-	// Remove any unknown routes on antrea-gw0.
+	// Remove any unknown routes on Antrea gateway.
 	routes, err := c.listIPRoutesOnGW()
 	if err != nil {
 		return fmt.Errorf("error listing ip routes: %v", err)
@@ -511,13 +641,18 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 		if desiredPodCIDRs.Has(route.Dst.String()) {
 			continue
 		}
+		// Don't delete the routes which are added by AntreaProxy.
+		if c.isServiceRoute(&route) {
+			continue
+		}
+
 		klog.Infof("Deleting unknown route %v", route)
 		if err := netlink.RouteDel(&route); err != nil && err != unix.ESRCH {
 			return err
 		}
 	}
 
-	// Remove any unknown IPv6 neighbors on antrea-gw0.
+	// Remove any unknown IPv6 neighbors on Antrea gateway.
 	desiredGWs := getIPv6Gateways(podCIDRs)
 	// Return immediately if there is no IPv6 gateway address configured on the Nodes.
 	if desiredGWs.Len() == 0 {
@@ -532,6 +667,10 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 		if desiredGWs.Has(neighIP) {
 			continue
 		}
+		// Don't delete the virtual Service IP neigh which is added by AntreaProxy.
+		if actualNeigh.IP.Equal(config.VirtualServiceIPv6) {
+			continue
+		}
 		klog.V(4).Infof("Deleting orphaned IPv6 neighbor %v", actualNeigh)
 		if err := netlink.NeighDel(actualNeigh); err != nil {
 			return err
@@ -540,7 +679,16 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 	return nil
 }
 
-// listIPRoutes returns list of routes on antrea-gw0.
+func (c *Client) isServiceRoute(route *netlink.Route) bool {
+	// If the destination IP or gateway IP is virtual Service IP , then it is a route which is added by AntreaProxy.
+	if route.Dst.IP.Equal(config.VirtualServiceIPv6) || route.Dst.IP.Equal(config.VirtualServiceIPv4) ||
+		route.Gw.Equal(config.VirtualServiceIPv6) || route.Gw.Equal(config.VirtualServiceIPv4) {
+		return true
+	}
+	return false
+}
+
+// listIPRoutes returns list of routes on Antrea gateway.
 func (c *Client) listIPRoutesOnGW() ([]netlink.Route, error) {
 	filter := &netlink.Route{
 		LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex}
@@ -810,4 +958,259 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	c.markToSNATIP.Delete(mark)
 	snatIP := value.(net.IP)
 	return c.ipt.DeleteRule(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+}
+
+// addVirtualServiceIPRoute is used to add routing entry which is used to forward the packets whose destination IP is
+// virtual Service IP back to Antrea gateway on host.
+func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	svcIP := config.VirtualServiceIPv4
+	mask := ipv4AddrLength
+	if isIPv6 {
+		svcIP = config.VirtualServiceIPv6
+		mask = ipv6AddrLength
+	}
+
+	neigh := generateNeigh(svcIP, linkIndex)
+	if err := netlink.NeighSet(neigh); err != nil {
+		return fmt.Errorf("failed to add new IP neighbour for %s: %v", svcIP, err)
+	}
+	c.serviceNeighbors.Store(svcIP.String(), neigh)
+
+	route := generateRoute(svcIP, mask, nil, linkIndex, netlink.SCOPE_LINK)
+	if err := netlink.RouteReplace(route); err != nil {
+		return fmt.Errorf("failed to install route for virtual Service IP %s: %w", svcIP.String(), err)
+	}
+	c.serviceRoutes.Store(svcIP.String(), route)
+	klog.InfoS("Added virtual Service IP route", "route", route)
+
+	return nil
+}
+
+// AddNodePort is used to add IP,port:protocol entries to target ip set when a NodePort Service is added. An entry is added
+// for every NodePort IP.
+func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
+	isIPv6 := isIPv6Protocol(protocol)
+	transProtocol := getTransProtocolStr(protocol)
+	ipSetName := getNodePortIPSetName(isIPv6)
+
+	for i := range nodePortAddresses {
+		ipSetEntry := fmt.Sprintf("%s,%s:%d", nodePortAddresses[i], transProtocol, port)
+		if err := ipset.AddEntry(ipSetName, ipSetEntry); err != nil {
+			return err
+		}
+		if isIPv6 {
+			c.nodePortsIPv6.Store(ipSetEntry, struct{}{})
+		} else {
+			c.nodePortsIPv4.Store(ipSetEntry, struct{}{})
+		}
+	}
+
+	return nil
+}
+
+// DeleteNodePort is used to delete related IP set entries when a NodePort Service is deleted.
+func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
+	isIPv6 := isIPv6Protocol(protocol)
+	transProtocol := getTransProtocolStr(protocol)
+	ipSetName := getNodePortIPSetName(isIPv6)
+
+	for i := range nodePortAddresses {
+		ipSetEntry := fmt.Sprintf("%s,%s:%d", nodePortAddresses[i], transProtocol, port)
+		if err := ipset.DelEntry(ipSetName, ipSetEntry); err != nil {
+			return err
+		}
+		if isIPv6 {
+			c.nodePortsIPv6.Delete(ipSetEntry)
+		} else {
+			c.nodePortsIPv4.Delete(ipSetEntry)
+		}
+	}
+
+	return nil
+}
+
+// AddClusterIPRoute is used to add or update a routing entry which is used to route ClusterIP traffic to Antrea gateway.
+func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
+	isIPv6 := utilnet.IsIPv6(svcIP)
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	scope := netlink.SCOPE_UNIVERSE
+	curClusterIPCIDR := c.clusterIPv4CIDR
+	mask := ipv4AddrLength
+	gw := config.VirtualServiceIPv4
+	if isIPv6 {
+		curClusterIPCIDR = c.clusterIPv6CIDR
+		mask = ipv6AddrLength
+		gw = config.VirtualServiceIPv6
+	}
+
+	if curClusterIPCIDR != nil {
+		// If the route exists, check that whether the route can cover the ClusterIP.
+		if !curClusterIPCIDR.Contains(svcIP) {
+			// If not, generate a new destination ipNet.
+			newClusterIPCIDR, err := util.ExtendCIDRWithIP(curClusterIPCIDR, svcIP)
+			if err != nil {
+				return fmt.Errorf("extend route CIDR with error: %v", err)
+			}
+			// Generate a new route with new ClusterIP CIDR and install the route.
+			mask, _ = newClusterIPCIDR.Mask.Size()
+			route := generateRoute(newClusterIPCIDR.IP, mask, gw, linkIndex, scope)
+			if err = netlink.RouteReplace(route); err != nil {
+				return fmt.Errorf("failed to install new route: %w", err)
+			}
+
+			// Generate the current route by replacing the destination CIDR with current ClusterIP CIDR and delete the
+			// route.
+			route.Dst = curClusterIPCIDR
+			if err = netlink.RouteDel(route); err != nil {
+				return fmt.Errorf("failed to uninstall old route: %w", err)
+			}
+
+			if isIPv6 {
+				c.clusterIPv6CIDR = newClusterIPCIDR
+			} else {
+				c.clusterIPv4CIDR = newClusterIPCIDR
+			}
+			klog.V(4).InfoS("Created a route with new CLusterIP CIDR to route the ClusterIP to Antrea gateway", "CLusterIP CIDR", newClusterIPCIDR, "clusterIP", svcIP)
+		} else {
+			klog.V(4).InfoS("Route with current ClusterIP CIDR can route the ClusterIP to Antrea gateway", "ClusterIP CIDR", curClusterIPCIDR, "clusterIP", svcIP)
+		}
+	} else {
+		route := generateRoute(svcIP, mask, gw, linkIndex, scope)
+		if err := netlink.RouteReplace(route); err != nil {
+			return fmt.Errorf("failed to install new ClusterIP route: %w", err)
+		}
+
+		if isIPv6 {
+			c.clusterIPv6CIDR = route.Dst
+		} else {
+			c.clusterIPv4CIDR = route.Dst
+		}
+	}
+
+	return nil
+}
+
+// addLoadBalancerIngressIPRoute is used to add routing entry which is used to route LoadBalancer ingress IP to Antrea
+// gateway on host.
+func (c *Client) addLoadBalancerIngressIPRoute(svcIPStr string) error {
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	svcIP := net.ParseIP(svcIPStr)
+	isIPv6 := utilnet.IsIPv6(svcIP)
+	var gw net.IP
+	var mask int
+	if !isIPv6 {
+		gw = config.VirtualServiceIPv4
+		mask = ipv4AddrLength
+	} else {
+		gw = config.VirtualServiceIPv6
+		mask = ipv6AddrLength
+	}
+
+	route := generateRoute(svcIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
+	if err := netlink.RouteReplace(route); err != nil {
+		return fmt.Errorf("failed to install routing entry for LoadBalancer ingress IP %s: %w", svcIP.String(), err)
+	}
+	klog.V(4).InfoS("Added LoadBalancer ingress IP route", "route", route)
+	c.serviceRoutes.Store(svcIP.String(), route)
+
+	return nil
+}
+
+// deleteLoadBalancerIngressIPRoute is used to delete routing entry which is used to route LoadBalancer ingress IP to Antrea
+// gateway on host.
+func (c *Client) deleteLoadBalancerIngressIPRoute(svcIPStr string) error {
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	svcIP := net.ParseIP(svcIPStr)
+	isIPv6 := utilnet.IsIPv6(svcIP)
+	var gw net.IP
+	var mask int
+	if !isIPv6 {
+		gw = config.VirtualServiceIPv4
+		mask = ipv4AddrLength
+	} else {
+		gw = config.VirtualServiceIPv6
+		mask = ipv6AddrLength
+	}
+
+	route := generateRoute(svcIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
+	if err := netlink.RouteDel(route); err != nil {
+		return fmt.Errorf("failed to delete routing entry for LoadBalancer ingress IP %s: %w", svcIP.String(), err)
+	}
+	klog.V(4).InfoS("Deleted LoadBalancer ingress IP route", "route", route)
+	c.serviceRoutes.Delete(svcIP.String())
+
+	return nil
+}
+
+// AddLoadBalancer is used to add routing entries when a LoadBalancer Service is added.
+func (c *Client) AddLoadBalancer(externalIPs []string) error {
+	for _, svcIPStr := range externalIPs {
+		if err := c.addLoadBalancerIngressIPRoute(svcIPStr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DeleteLoadBalancer is used to delete routing entries when a LoadBalancer Service is deleted.
+func (c *Client) DeleteLoadBalancer(externalIPs []string) error {
+	for _, svcIPStr := range externalIPs {
+		if err := c.deleteLoadBalancerIngressIPRoute(svcIPStr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func getTransProtocolStr(protocol binding.Protocol) string {
+	if protocol == binding.ProtocolTCP || protocol == binding.ProtocolTCPv6 {
+		return "tcp"
+	} else if protocol == binding.ProtocolUDP || protocol == binding.ProtocolUDPv6 {
+		return "udp"
+	} else if protocol == binding.ProtocolSCTP || protocol == binding.ProtocolSCTPv6 {
+		return "sctp"
+	}
+	return ""
+}
+
+func isIPv6Protocol(protocol binding.Protocol) bool {
+	if protocol == binding.ProtocolTCPv6 || protocol == binding.ProtocolUDPv6 || protocol == binding.ProtocolSCTPv6 {
+		return true
+	}
+	return false
+}
+
+func generateRoute(ip net.IP, mask int, gw net.IP, linkIndex int, scope netlink.Scope) *netlink.Route {
+	addrBits := ipv4AddrLength
+	if ip.To4() == nil {
+		addrBits = ipv6AddrLength
+	}
+
+	route := &netlink.Route{
+		Dst: &net.IPNet{
+			IP:   ip,
+			Mask: net.CIDRMask(mask, addrBits),
+		},
+		Gw:        gw,
+		Scope:     scope,
+		LinkIndex: linkIndex,
+	}
+	return route
+}
+
+func generateNeigh(ip net.IP, linkIndex int) *netlink.Neigh {
+	family := netlink.FAMILY_V4
+	if utilnet.IsIPv6(ip) {
+		family = netlink.FAMILY_V6
+	}
+	return &netlink.Neigh{
+		LinkIndex:    linkIndex,
+		Family:       family,
+		State:        netlink.NUD_PERMANENT,
+		IP:           ip,
+		HardwareAddr: globalVMAC,
+	}
 }

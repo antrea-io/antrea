@@ -257,12 +257,12 @@ func NPLTestMultiplePods(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err := testData.createNginxPodOnNode(testPodName, testNamespace, node)
+		err := testData.createNginxPodOnNode(testPodName, testNamespace, node, false)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
 	clientName := randName("test-client-")
-	err := testData.createBusyboxPodOnNode(clientName, testNamespace, node)
+	err := testData.createBusyboxPodOnNode(clientName, testNamespace, node, false)
 	r.NoError(err, "Error creating Pod %s: %v", clientName)
 
 	err = testData.podWaitForRunning(defaultTimeout, clientName, testNamespace)
@@ -296,8 +296,8 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
-	testData.createServiceWithAnnotations("agnhost1", 80, 80, selector, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	testData.createServiceWithAnnotations("agnhost2", 80, 8080, selector, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.createServiceWithAnnotations("agnhost1", 80, 80, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.createServiceWithAnnotations("agnhost2", 80, 8080, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
 	targetPorts := sets.NewInt(80, 8080)
 
 	podcmd := "porter"
@@ -328,7 +328,7 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPodName)
 
 	clientName := randName("test-client-")
-	err = testData.createBusyboxPodOnNode(clientName, testNamespace, node)
+	err = testData.createBusyboxPodOnNode(clientName, testNamespace, node, false)
 	r.NoError(err, "Error when creating Pod %s", clientName)
 
 	err = testData.podWaitForRunning(defaultTimeout, clientName, testNamespace)
@@ -359,11 +359,11 @@ func NPLTestLocalAccess(t *testing.T) {
 	node := nodeName(0)
 
 	testPodName := randName("test-pod-")
-	err := testData.createNginxPodOnNode(testPodName, testNamespace, node)
+	err := testData.createNginxPodOnNode(testPodName, testNamespace, node, false)
 	r.NoError(err, "Error creating test Pod: %v", err)
 
 	clientName := randName("test-client-")
-	err = testData.createHostNetworkBusyboxPodOnNode(clientName, testNamespace, node)
+	err = testData.createBusyboxPodOnNode(clientName, testNamespace, node, true)
 	r.NoError(err, "Error creating hostNetwork Pod %s: %v", clientName)
 
 	err = testData.podWaitForRunning(defaultTimeout, clientName, testNamespace)
@@ -402,12 +402,12 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = data.createNginxPodOnNode(testPodName, testNamespace, node)
+		err = data.createNginxPodOnNode(testPodName, testNamespace, node, false)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
 	clientName := randName("test-client-")
-	err = data.createBusyboxPodOnNode(clientName, testNamespace, node)
+	err = data.createBusyboxPodOnNode(clientName, testNamespace, node, false)
 	r.NoError(err, "Error when creating Pod %s", clientName)
 
 	err = data.podWaitForRunning(defaultTimeout, clientName, testNamespace)
@@ -466,12 +466,12 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = data.createNginxPodOnNode(testPodName, testNamespace, node)
+		err = data.createNginxPodOnNode(testPodName, testNamespace, node, false)
 		r.NoError(err, "Error Creating test Pod: %v", err)
 	}
 
 	clientName := randName("test-client-")
-	err = data.createBusyboxPodOnNode(clientName, testNamespace, node)
+	err = data.createBusyboxPodOnNode(clientName, testNamespace, node, false)
 	r.NoError(err, "Error when creating Pod %s", clientName)
 
 	err = data.podWaitForRunning(defaultTimeout, clientName, testNamespace)

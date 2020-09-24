@@ -14,7 +14,10 @@
 
 package openflow
 
-import binding "antrea.io/antrea/pkg/ovs/openflow"
+import (
+	"antrea.io/antrea/pkg/agent/config"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+)
 
 // Fields using reg.
 var (
@@ -67,6 +70,8 @@ var (
 	// reg1(NXM_NX_REG1)
 	// Field to cache the ofPort of the OVS interface where to output packet.
 	TargetOFPortField = binding.NewRegField(1, 0, 31, "TargetOFPort")
+	// ToGatewayRegMark marks that the output interface is Antrea gateway.
+	ToGatewayRegMark = binding.NewRegMark(TargetOFPortField, config.HostGatewayOFPort)
 
 	// reg2(NXM_NX_REG2)
 	// Field to help swap values in two different flow fields in the OpenFlow actions. This field is only used in func
@@ -94,6 +99,16 @@ var (
 	// reg4[0..18]: Field to store the union value of Endpoint port and Endpoint status. It is used as a single match
 	// when needed.
 	EpUnionField = binding.NewRegField(4, 0, 18, "EndpointUnion")
+	// reg4[19]: Field to mark that whether Service type is NodePort.
+	NodePortAddressField = binding.NewRegField(4, 19, 19, "NodePortAddress")
+	// ToNodePortAddressRegMark marks that the Service type as NodePort.
+	ToNodePortAddressRegMark = binding.NewRegMark(NodePortAddressField, 0b1)
+	// reg4[20]: Field to mark that whether the packet of Service NodePort/LoadBalancer from gateway requires SNAT.
+	ServiceSNATField = binding.NewRegField(4, 20, 20, "ServiceSNAT")
+	// ServiceNeedSNATRegMark marks that the packet of Service NodePort/LoadBalancer requires SNAT.
+	ServiceNeedSNATRegMark = binding.NewRegMark(ServiceSNATField, 0b1)
+	// reg4[16..19]: Field to store the union value of Endpoint state and the mark of whether Service type is NodePort.
+	NodePortUnionField = binding.NewRegField(4, 16, 19, "NodePortUnion")
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.

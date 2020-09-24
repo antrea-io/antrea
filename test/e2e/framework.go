@@ -276,6 +276,28 @@ func workerNodeName(idx int) string {
 	return node.name
 }
 
+func workerNodeIPv4(idx int) string {
+	if idx == 0 { // control-plane Node
+		return ""
+	}
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
+		return ""
+	}
+	return node.ipv4Addr
+}
+
+func workerNodeIPv6(idx int) string {
+	if idx == 0 { // control-plane Node
+		return ""
+	}
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
+		return ""
+	}
+	return node.ipv6Addr
+}
+
 // workerNodeIP returns an empty string if there is no worker Node with the provided idx
 // (including if idx is 0, which is reserved for the control-plane Node)
 func workerNodeIP(idx int) string {
@@ -1007,28 +1029,21 @@ func (data *TestData) createPodOnNodeInNamespace(name, ns string, nodeName, ctrN
 
 // createBusyboxPodOnNode creates a Pod in the test namespace with a single busybox container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createBusyboxPodOnNode(name string, ns string, nodeName string) error {
+func (data *TestData) createBusyboxPodOnNode(name string, ns string, nodeName string, hostNetowrk bool) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
-}
-
-// createHostNetworkBusyboxPodOnNode creates a host network Pod in the test namespace with a single busybox container.
-// The Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createHostNetworkBusyboxPodOnNode(name string, ns string, nodeName string) error {
-	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, true, nil)
+	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetowrk, nil)
 }
 
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName string) error {
+func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
 	return data.createPodOnNode(name, ns, nodeName, nginxImage, []string{}, nil, nil, []corev1.ContainerPort{
 		{
 			Name:          "http",
 			ContainerPort: 80,
 			Protocol:      corev1.ProtocolTCP,
 		},
-	}, false, nil)
+	}, hostNetwork, nil)
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
@@ -1376,14 +1391,14 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 }
 
 // createService creates a service with port and targetPort.
-func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity bool,
+func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	annotation := make(map[string]string)
-	return data.createServiceWithAnnotations(serviceName, port, targetPort, selector, affinity, serviceType, ipFamily, annotation)
+	return data.createServiceWithAnnotations(serviceName, port, targetPort, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
 }
 
 // createService creates a service with Annotation
-func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, selector map[string]string, affinity bool,
+func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotations map[string]string) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	var ipFamilies []corev1.IPFamily
@@ -1414,24 +1429,51 @@ func (data *TestData) createServiceWithAnnotations(serviceName string, port, tar
 			IPFamilies: ipFamilies,
 		},
 	}
+	if (serviceType == corev1.ServiceTypeNodePort || serviceType == corev1.ServiceTypeLoadBalancer) && nodeLocalExternal {
+		service.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeLocal
+	}
 	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }
 
 // createNginxClusterIPServiceWithAnnotations creates nginx service with Annotation
 func (data *TestData) createNginxClusterIPServiceWithAnnotations(affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
-	return data.createServiceWithAnnotations("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily, annotation)
+	return data.createServiceWithAnnotations("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily, annotation)
 }
 
-// createNginxClusterIPService create a nginx service with the given name.
+// createNginxClusterIPService creates a nginx service with the given name.
 func (data *TestData) createNginxClusterIPService(name string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	if name == "" {
 		name = "nginx"
 	}
-	return data.createService(name, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily)
+	return data.createService(name, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily)
+}
+
+// createAgnhostNodePortService creates a NodePort agnhost service with the given name.
+func (data *TestData) createAgnhostNodePortService(serviceName string, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	return data.createService(serviceName, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
+}
+
+// createAgnhostLoadBalancerService creates a LoadBalancer agnhost service with the given name.
+func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affinity, nodeLocalExternal bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	svc, err := data.createService(serviceName, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily)
+	if err != nil {
+		return svc, err
+	}
+	ingress := make([]corev1.LoadBalancerIngress, len(ingressIPs))
+	for idx, ingressIP := range ingressIPs {
+		ingress[idx].IP = ingressIP
+	}
+	updatedSvc := svc.DeepCopy()
+	updatedSvc.Status.LoadBalancer.Ingress = ingress
+	patchData, err := json.Marshal(updatedSvc)
+	if err != nil {
+		return svc, err
+	}
+	return data.clientset.CoreV1().Services(svc.Namespace).Patch(context.TODO(), svc.Name, types.MergePatchType, patchData, metav1.PatchOptions{}, "status")
 }
 
 func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	svc, err := data.createService(nginxLBService, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeLoadBalancer, ipFamily)
+	svc, err := data.createService(nginxLBService, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
 		return svc, err
 	}
@@ -1683,6 +1725,20 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 		}
 	}
 	return config.TrafficEncapModeEncap, nil
+}
+
+func (data *TestData) isProxyAll() (bool, error) {
+	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		return false, fmt.Errorf("failed to get Antrea ConfigMap: %v", err)
+	}
+	for _, antreaConfig := range configMap.Data {
+		searchStr := "proxyAll: true"
+		if strings.Index(strings.ToLower(antreaConfig), strings.ToLower(searchStr)) != -1 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func getFeatures(confName string) (featuregate.FeatureGate, error) {

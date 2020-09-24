@@ -26,6 +26,7 @@ import (
 
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -47,9 +48,11 @@ const (
 	spoofGuardTable              binding.TableIDType = 10
 	arpResponderTable            binding.TableIDType = 20
 	ipv6Table                    binding.TableIDType = 21
-	serviceHairpinTable          binding.TableIDType = 29
+	serviceHairpinTable          binding.TableIDType = 23
+	serviceConntrackTable        binding.TableIDType = 24 // serviceConntrackTable use a new ct_zone to transform SNAT'd connections.
 	conntrackTable               binding.TableIDType = 30
 	conntrackStateTable          binding.TableIDType = 31
+	serviceClassifierTable       binding.TableIDType = 35
 	sessionAffinityTable         binding.TableIDType = 40
 	dnatTable                    binding.TableIDType = 40
 	serviceLBTable               binding.TableIDType = 41
@@ -69,7 +72,8 @@ const (
 	IngressDefaultTable          binding.TableIDType = 100
 	IngressMetricTable           binding.TableIDType = 101
 	conntrackCommitTable         binding.TableIDType = 105
-	hairpinSNATTable             binding.TableIDType = 106
+	serviceConntrackCommitTable  binding.TableIDType = 106
+	hairpinSNATTable             binding.TableIDType = 108
 	L2ForwardingOutTable         binding.TableIDType = 110
 
 	// Flow priority level
@@ -130,8 +134,10 @@ var (
 		{arpResponderTable, "ARPResponder"},
 		{ipv6Table, "IPv6"},
 		{serviceHairpinTable, "ServiceHairpin"},
+		{serviceConntrackTable, "ServiceConntrack"},
 		{conntrackTable, "ConntrackZone"},
 		{conntrackStateTable, "ConntrackState"},
+		{serviceClassifierTable, "ServiceClassifier"},
 		{dnatTable, "DNAT(SessionAffinity)"},
 		{sessionAffinityTable, "SessionAffinity"},
 		{serviceLBTable, "ServiceLB"},
@@ -149,6 +155,7 @@ var (
 		{IngressDefaultTable, "IngressDefaultRule"},
 		{IngressMetricTable, "IngressMetric"},
 		{conntrackCommitTable, "ConntrackCommit"},
+		{serviceConntrackCommitTable, "ServiceConntrackCommit"},
 		{hairpinSNATTable, "HairpinSNATTable"},
 		{L2ForwardingOutTable, "Output"},
 	}
@@ -220,8 +227,10 @@ func (rt regType) reg() string {
 }
 
 const (
-	CtZone   = 0xfff0
-	CtZoneV6 = 0xffe6
+	CtZone       = 0xfff0
+	CtZoneV6     = 0xffe6
+	SNATCtZone   = 0xfff1
+	SNATCtZoneV6 = 0xffe7
 
 	// disposition values used in AP
 	DispositionAllow = 0b00
@@ -292,6 +301,7 @@ func portToUint16(port int) uint16 {
 
 type client struct {
 	enableProxy        bool
+	proxyAll           bool
 	enableAntreaPolicy bool
 	enableDenyTracking bool
 	enableEgress       bool
@@ -461,11 +471,15 @@ func (c *client) defaultFlows() (flows []binding.Flow) {
 
 // tunnelClassifierFlow generates the flow to mark traffic comes from the tunnelOFPort.
 func (c *client) tunnelClassifierFlow(tunnelOFPort uint32, category cookie.Category) binding.Flow {
+	nextTable := conntrackTable
+	if c.proxyAll {
+		nextTable = serviceConntrackTable
+	}
 	return c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
 		MatchInPort(tunnelOFPort).
 		Action().LoadRegMark(FromTunnelRegMark).
 		Action().LoadRegMark(RewriteMACRegMark).
-		Action().GotoTable(conntrackTable).
+		Action().GotoTable(nextTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -508,37 +522,142 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 	connectionTrackCommitTable := c.pipeline[conntrackCommitTable]
 	flows := c.conntrackBasicFlows(category)
 	if c.enableProxy {
-		flows = append(flows,
-			// Replace the default flow with multiple resubmits actions.
-			connectionTrackStateTable.BuildFlow(priorityMiss).
+		// Replace the default flow with multiple resubmits actions.
+		if c.proxyAll {
+			flows = append(flows, connectionTrackStateTable.BuildFlow(priorityMiss).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Action().ResubmitToTable(serviceClassifierTable).
+				Action().ResubmitToTable(sessionAffinityTable).
+				Action().ResubmitToTable(serviceLBTable).
+				Done())
+		} else {
+			flows = append(flows, connectionTrackStateTable.BuildFlow(priorityMiss).
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Action().ResubmitToTable(sessionAffinityTable).
 				Action().ResubmitToTable(serviceLBTable).
-				Done(),
-			// Enable NAT.
-			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-				Action().CT(false, connectionTrackTable.GetNext(), CtZone).NAT().CTDone().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
-				Action().CT(false, connectionTrackTable.GetNext(), CtZoneV6).NAT().CTDone().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
-				MatchCTStateTrk(true).
-				MatchCTMark(ServiceCTMark).
-				MatchRegMark(EpSelectedRegMark).
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Action().GotoTable(connectionTrackCommitTable.GetNext()).
-				Done(),
-			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIPv6).
-				MatchCTStateTrk(true).
-				MatchCTMark(ServiceCTMark).
-				MatchRegMark(EpSelectedRegMark).
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Action().GotoTable(connectionTrackCommitTable.GetNext()).
-				Done(),
-		)
+				Done())
+		}
+
+		for _, proto := range c.ipProtocols {
+			gatewayIP := c.nodeConfig.GatewayConfig.IPv4
+			serviceVirtualIP := config.VirtualServiceIPv4
+			snatZone := SNATCtZone
+			ctZone := CtZone
+			if proto == binding.ProtocolIPv6 {
+				gatewayIP = c.nodeConfig.GatewayConfig.IPv6
+				serviceVirtualIP = config.VirtualServiceIPv6
+				snatZone = SNATCtZoneV6
+				ctZone = CtZoneV6
+			}
+			flows = append(flows,
+				// This flow is used to maintain DNAT conntrack for Service traffic.
+				connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(proto).
+					Action().CT(false, connectionTrackTable.GetNext(), ctZone).NAT().CTDone().
+					Cookie(c.cookieAllocator.Request(category).Raw()).
+					Done(),
+				connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(proto).
+					MatchCTStateTrk(true).
+					MatchCTMark(ServiceCTMark).
+					MatchRegMark(EpSelectedRegMark).
+					Cookie(c.cookieAllocator.Request(category).Raw()).
+					Action().GotoTable(connectionTrackCommitTable.GetNext()).
+					Done(),
+			)
+
+			if c.proxyAll {
+				serviceConnectionTrackTable := c.pipeline[serviceConntrackTable]
+				serviceConnectionTrackCommitTable := c.pipeline[serviceConntrackCommitTable]
+				flows = append(flows,
+					// This flow is used to match the Service traffic from Antrea gateway. The Service traffic from gateway
+					// should enter table serviceConntrackCommitTable, otherwise it will be matched by other flows in
+					// table connectionTrackCommit.
+					connectionTrackCommitTable.BuildFlow(priorityHigh).MatchProtocol(proto).
+						MatchCTMark(ServiceCTMark).
+						MatchRegMark(FromGatewayRegMark).
+						Action().GotoTable(serviceConntrackCommitTable).
+						Cookie(c.cookieAllocator.Request(category).Raw()).
+						Done(),
+					// This flow is used to maintain SNAT conntrack for Service traffic.
+					serviceConnectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(proto).
+						Action().CT(false, serviceConnectionTrackTable.GetNext(), snatZone).NAT().CTDone().
+						Cookie(c.cookieAllocator.Request(category).Raw()).
+						Done(),
+					// This flow is used to match the following cases:
+					// - The first packet of NodePort/LoadBalancer whose Endpoint is not on local Pod CIDR or any remote
+					//   Pod CIDRs. Note that, this flow will change the behavior of the packet that NodePort/LoadBalancer
+					//   whose externalTrafficPolicy is Local and the Endpoint is on host network. According to the definition
+					//   of externalTrafficPolicy Local, the source IP should be retained. If the Endpoint is on host network,
+					//   there should be only one backend Pod of the Service on a Node (It is impossible to have more than
+					//   one Pods which listen on the same port on host network), so it is not useful to expose the Pod as
+					//   NodePort Service, as it makes no difference to access it directly.
+					// - The first packet of ClusterIP and the Endpoint is not on local Pod CIDR or any remote Pod CIDRs.
+					// As the packet is from Antrea gateway, and it will pass through Antrea gateway, a virtual IP is used
+					// to perform SNAT for the packet, rather than Antrea gateway's IP.
+					serviceConnectionTrackCommitTable.BuildFlow(priorityHigh).MatchProtocol(proto).
+						MatchRegMark(ToGatewayRegMark).
+						Cookie(c.cookieAllocator.Request(category).Raw()).
+						MatchCTStateNew(true).
+						MatchCTStateTrk(true).
+						Action().CT(true, serviceConnectionTrackCommitTable.GetNext(), snatZone).
+						SNAT(&binding.IPRange{StartIP: serviceVirtualIP, EndIP: serviceVirtualIP}, nil).
+						CTDone().
+						Done(),
+					// This flow is used to match the first packet of NodePort/LoadBalancer whose output port is not
+					// Antrea gateway, and externalTrafficPolicy is Cluster. This packet requires SNAT. Antrea gateway
+					// IP is used to perform SNAT for the packet.
+					serviceConnectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(proto).
+						MatchRegMark(ServiceNeedSNATRegMark).
+						Cookie(c.cookieAllocator.Request(category).Raw()).
+						MatchCTStateNew(true).
+						MatchCTStateTrk(true).
+						Action().CT(true, serviceConnectionTrackCommitTable.GetNext(), snatZone).
+						SNAT(&binding.IPRange{StartIP: gatewayIP, EndIP: gatewayIP}, nil).
+						CTDone().
+						Done(),
+					// This flow is used to match the consequent request packets of Service traffic whose first request packet has been committed
+					// and performed SNAT. For example:
+					/*
+							* 192.168.77.1 is the IP address of client.
+							* 192.168.77.100 is the IP address of k8s node.
+							* 30001 is a NodePort port.
+							* 10.10.0.1 is the IP address of Antrea gateway.
+							* 10.10.0.3 is the Endpoint of NodePort Service.
+
+							* pkt 1 (request)
+								* client                     192.168.77.1:12345->192.168.77.100:30001
+								* ct zone SNAT 65521         192.168.77.1:12345->192.168.77.100:30001
+								* ct zone DNAT 65520         192.168.77.1:12345->192.168.77.100:30001
+								* ct commit DNAT zone 65520  192.168.77.1:12345->192.168.77.100:30001  =>  192.168.77.1:12345->10.10.0.3:80
+								* ct commit SNAT zone 65521  192.168.77.1:12345->10.10.0.3:80          =>  10.10.0.1:12345->10.10.0.3:80
+								* output
+							  * pkt 2 (response)
+								* Pod                         10.10.0.3:80->10.10.0.1:12345
+								* ct zone SNAT 65521          10.10.0.3:80->10.10.0.1:12345            =>  10.10.0.3:80->192.168.77.1:12345
+								* ct zone DNAT 65520          10.10.0.3:80->192.168.77.1:12345         =>  192.168.77.1:30001->192.168.77.1:12345
+								* output
+							  * pkt 3 (request)
+								* client                     192.168.77.1:12345->192.168.77.100:30001
+								* ct zone SNAT 65521         192.168.77.1:12345->192.168.77.100:30001
+								* ct zone DNAT 65520         192.168.77.1:12345->10.10.0.3:80
+								* ct zone SNAT 65521         192.168.77.1:12345->10.10.0.3:80          =>  10.10.0.1:12345->10.10.0.3:80
+								* output
+						      * pkt ...
+
+							The source IP address of pkt 3 cannot be transformed through zone 65521 as there is no connection track about
+							192.168.77.1:12345<->192.168.77.100:30001, and the source IP is still 192.168.77.100.
+							Before output, pkt 3 needs SNAT, but the connection has been committed. The flow is for pkt 3 to perform SNAT.
+					*/
+					serviceConnectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(proto).
+						Cookie(c.cookieAllocator.Request(category).Raw()).
+						MatchCTStateNew(false).
+						MatchCTStateTrk(true).
+						Action().CT(false, serviceConnectionTrackCommitTable.GetNext(), snatZone).
+						NAT().
+						CTDone().
+						Done(),
+				)
+			}
+		}
 	} else {
 		flows = append(flows, c.kubeProxyFlows(category)...)
 	}
@@ -580,8 +699,11 @@ func (c *client) conntrackBypassRejectFlow(proto binding.Protocol) binding.Flow 
 // dnsResponseBypassConntrackFlow generates a flow which is used to bypass the
 // dns response packetout from conntrack, to avoid unexpected packet drop.
 func (c *client) dnsResponseBypassConntrackFlow() binding.Flow {
-	conntrackTable := c.pipeline[conntrackTable]
-	return conntrackTable.BuildFlow(priorityHigh).
+	table := c.pipeline[conntrackTable]
+	if c.proxyAll {
+		table = c.pipeline[serviceConntrackTable]
+	}
+	return table.BuildFlow(priorityHigh).
 		MatchRegFieldWithValue(CustomReasonField, CustomReasonDNS).
 		Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
 		Action().ResubmitToTable(l2ForwardingCalcTable).
@@ -1166,6 +1288,31 @@ func (c *client) l3FwdFlowToRemoteViaGW(
 		Done()
 }
 
+// l3FwdServiceDefaultFlowsViaGW generates the default L3 forward flows to support Service traffic to pass through Antrea gateway.
+func (c *client) l3FwdServiceDefaultFlowsViaGW(ipProto binding.Protocol, category cookie.Category) []binding.Flow {
+	gatewayMAC := c.nodeConfig.GatewayConfig.MAC
+
+	flows := []binding.Flow{
+		// This flow is used to match the packets of Service traffic:
+		//	- NodePort/LoadBalancer request packets which pass through Antrea gateway and the Service Endpoint is not on
+		//    local Pod CIDR or any remote Pod CIDRs.
+		//	- ClusterIP request packets which are from Antrea gateway and the Service Endpoint is not on local Pod CIDR
+		// 	or any remote Pod CIDRs.
+		//  - NodePort/LoadBalancer/ClusterIP response packets.
+		// The matched packets should leave through Antrea gateway, however, they also enter through Antrea gateway. This
+		// is hairpin traffic.
+		c.pipeline[l3ForwardingTable].BuildFlow(priorityLow).MatchProtocol(ipProto).
+			MatchCTMark(ServiceCTMark).
+			MatchCTStateTrk(true).
+			MatchRegMark(RewriteMACRegMark).
+			Action().SetDstMAC(gatewayMAC).
+			Action().GotoTable(l3DecTTLTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+	}
+	return flows
+}
+
 // arpResponderFlow generates the ARP responder flow entry that replies request comes from local gateway for peer
 // gateway MAC.
 func (c *client) arpResponderFlow(peerGatewayIP net.IP, category cookie.Category) binding.Flow {
@@ -1246,18 +1393,32 @@ func getIPProtocol(ip net.IP) binding.Protocol {
 // IP of the hairpin packet to the source IP.
 func (c *client) serviceHairpinResponseDNATFlow(ipProtocol binding.Protocol) binding.Flow {
 	hpIP := hairpinIP
-	from := "NXM_OF_IP_SRC"
-	to := "NXM_OF_IP_DST"
+	from := binding.NxmFieldSrcIPv4
+	to := binding.NxmFieldDstIPv4
 	if ipProtocol == binding.ProtocolIPv6 {
 		hpIP = hairpinIPv6
-		from = "NXM_NX_IPV6_SRC"
-		to = "NXM_NX_IPV6_DST"
+		from = binding.NxmFieldSrcIPv6
+		to = binding.NxmFieldDstIPv6
 	}
-	return c.pipeline[serviceHairpinTable].BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
+	hairpinTable := c.pipeline[serviceHairpinTable]
+	return hairpinTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
 		MatchDstIP(hpIP).
 		Action().Move(from, to).
 		Action().LoadRegMark(HairpinRegMark).
-		Action().GotoTable(conntrackTable).
+		Action().GotoTable(hairpinTable.GetNext()).
+		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+		Done()
+}
+
+// serviceHairpinRegSetFlows generates the flow to set the hairpin mark for the packet which is from Antrea gateway and
+// its output interface is also Antrea gateway. In table L2ForwardingOutTable #110, a packet with hairpin mark will be
+// sent out with action IN_PORT, otherwise the packet with action output will be dropped.
+func (c *client) serviceHairpinRegSetFlows(ipProtocol binding.Protocol) binding.Flow {
+	return c.pipeline[hairpinSNATTable].BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
+		MatchRegMark(FromGatewayRegMark).
+		MatchRegMark(ToGatewayRegMark).
+		Action().LoadRegMark(HairpinRegMark).
+		Action().GotoTable(L2ForwardingOutTable).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
 }
@@ -1972,22 +2133,66 @@ func (c *client) loadBalancerServiceFromOutsideFlow(svcIP net.IP, svcPort uint16
 		Done()
 }
 
+// serviceClassifierFlows generate the flows to match the first packet of Service NodePort and set a bit of a register
+// to mark the Service type as NodePort.
+func (c *client) serviceClassifierFlows(nodePortAddresses []net.IP, ipProtocol binding.Protocol) []binding.Flow {
+	virtualServiceIP := config.VirtualServiceIPv4
+	if ipProtocol == binding.ProtocolIPv6 {
+		virtualServiceIP = config.VirtualServiceIPv6
+	}
+	// Generate flows for every NodePort IP address. The flows are used to match the first packet of Service NodePort from
+	// Pod.
+	var flows []binding.Flow
+	for i := range nodePortAddresses {
+		flows = append(flows,
+			c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).
+				Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+				MatchProtocol(ipProtocol).
+				MatchDstIP(nodePortAddresses[i]).
+				Action().LoadRegMark(ToNodePortAddressRegMark).
+				Done())
+	}
+	// Generate flow for the virtual IP. The flow is used to match the first packet of Service NodePort from Antrea gateway,
+	// because the destination IP of the packet has already performed DNAT with the virtual IP on host.
+	flows = append(flows,
+		c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+			MatchProtocol(ipProtocol).
+			MatchDstIP(virtualServiceIP).
+			Action().LoadRegMark(ToNodePortAddressRegMark).
+			Done())
+
+	return flows
+}
+
 // serviceLearnFlow generates the flow with learn action which adds new flows in
 // sessionAffinityTable according to the Endpoint selection decision.
-func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) binding.Flow {
+func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType) binding.Flow {
 	// Using unique cookie ID here to avoid learned flow cascade deletion.
 	cookieID := c.cookieAllocator.RequestWithObjectID(cookie.Service, uint32(groupID)).Raw()
-	learnFlowBuilder := c.pipeline[serviceLBTable].BuildFlow(priorityLow).
-		MatchRegMark(EpToLearnRegMark).
-		MatchDstIP(svcIP).
-		MatchProtocol(protocol).
-		MatchDstPort(svcPort, nil).
-		Cookie(cookieID)
+
+	var flowBuilder binding.FlowBuilder
+	if svcType == v1.ServiceTypeNodePort {
+		unionVal := (ToNodePortAddressRegMark.GetValue() << ServiceEPStateField.GetRange().Length()) + EpToLearnRegMark.GetValue()
+		flowBuilder = c.pipeline[serviceLBTable].BuildFlow(priorityLow).
+			Cookie(cookieID).
+			MatchRegFieldWithValue(NodePortUnionField, unionVal).
+			MatchProtocol(protocol).
+			MatchDstPort(svcPort, nil)
+	} else {
+		flowBuilder = c.pipeline[serviceLBTable].BuildFlow(priorityLow).
+			Cookie(cookieID).
+			MatchRegMark(EpToLearnRegMark).
+			MatchDstIP(svcIP).
+			MatchProtocol(protocol).
+			MatchDstPort(svcPort, nil)
+	}
+
 	// affinityTimeout is used as the OpenFlow "hard timeout": learned flow will be removed from
 	// OVS after that time regarding of whether traffic is still hitting the flow. This is the
 	// desired behavior based on the K8s spec. Note that existing connections will keep going to
 	// the same endpoint because of connection tracking; and that is also the desired behavior.
-	learnFlowBuilderLearnAction := learnFlowBuilder.
+	learnFlowBuilderLearnAction := flowBuilder.
 		Action().Learn(sessionAffinityTable, priorityNormal, 0, affinityTimeout, cookieID).
 		DeleteLearned()
 	ipProtocol := binding.ProtocolIP
@@ -2008,6 +2213,12 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 		ipProtocol = binding.ProtocolIPv6
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedSCTPv6DstPort()
 	}
+	// If externalTrafficPolicy of NodePort/LoadBalancer is Cluster, the learned flow which
+	// is used to match the first packet of NodePort/LoadBalancer also requires SNAT.
+	if (svcType == v1.ServiceTypeNodePort || svcType == v1.ServiceTypeLoadBalancer) && !nodeLocalExternal {
+		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.LoadRegMark(ServiceNeedSNATRegMark)
+	}
+
 	if ipProtocol == binding.ProtocolIP {
 		return learnFlowBuilderLearnAction.
 			MatchLearnedDstIP().
@@ -2038,7 +2249,7 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 
 // serviceLBFlow generates the flow which uses the specific group to do Endpoint
 // selection.
-func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, withSessionAffinity bool) binding.Flow {
+func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, withSessionAffinity, nodeLocalExternal bool, svcType v1.ServiceType) binding.Flow {
 	var lbResultMark *binding.RegMark
 	if withSessionAffinity {
 		lbResultMark = EpToLearnRegMark
@@ -2046,16 +2257,37 @@ func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPor
 		lbResultMark = EpSelectedRegMark
 	}
 
-	return c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
-		MatchProtocol(protocol).
-		MatchDstPort(svcPort, nil).
-		MatchDstIP(svcIP).
-		MatchRegMark(EpToSelectRegMark).
-		Action().LoadRegMark(lbResultMark).
-		Action().LoadRegMark(RewriteMACRegMark).
-		Action().Group(groupID).
-		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-		Done()
+	var flowBuilder binding.FlowBuilder
+	if svcType == v1.ServiceTypeNodePort {
+		// If externalTrafficPolicy of NodePort is Cluster, the first packet of NodePort requires SNAT, so nodeLocalExternal
+		// will be false, and ServiceNeedSNATRegMark will be set. If externalTrafficPolicy of NodePort is Local, the first
+		// packet of NodePort doesn't require SNAT, ServiceNeedSNATRegMark won't be set.
+		unionVal := (ToNodePortAddressRegMark.GetValue() << ServiceEPStateField.GetRange().Length()) + EpToSelectRegMark.GetValue()
+		flowBuilder = c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+			MatchProtocol(protocol).
+			MatchRegFieldWithValue(NodePortUnionField, unionVal).
+			MatchDstPort(svcPort, nil).
+			Action().LoadRegMark(lbResultMark).
+			Action().LoadRegMark(RewriteMACRegMark)
+		if !nodeLocalExternal {
+			flowBuilder = flowBuilder.Action().LoadRegMark(ServiceNeedSNATRegMark)
+		}
+	} else {
+		// If Service type is LoadBalancer, as above NodePort.
+		flowBuilder = c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+			MatchProtocol(protocol).
+			MatchDstPort(svcPort, nil).
+			MatchDstIP(svcIP).
+			MatchRegMark(EpToSelectRegMark).
+			Action().LoadRegMark(lbResultMark).
+			Action().LoadRegMark(RewriteMACRegMark)
+		if svcType == v1.ServiceTypeLoadBalancer && !nodeLocalExternal {
+			flowBuilder = flowBuilder.Action().LoadRegMark(ServiceNeedSNATRegMark)
+		}
+	}
+	return flowBuilder.Action().Group(groupID).Done()
 }
 
 // endpointDNATFlow generates the flow which transforms the Service Cluster IP
@@ -2228,7 +2460,14 @@ func (c *client) generatePipeline() {
 	if c.enableProxy {
 		c.pipeline[spoofGuardTable] = bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop)
 		c.pipeline[ipv6Table] = bridge.CreateTable(ipv6Table, serviceHairpinTable, binding.TableMissActionNext)
-		c.pipeline[serviceHairpinTable] = bridge.CreateTable(serviceHairpinTable, conntrackTable, binding.TableMissActionNext)
+		if c.proxyAll {
+			c.pipeline[serviceHairpinTable] = bridge.CreateTable(serviceHairpinTable, serviceConntrackTable, binding.TableMissActionNext)
+			c.pipeline[serviceConntrackTable] = bridge.CreateTable(serviceConntrackTable, conntrackTable, binding.TableMissActionNext)
+			c.pipeline[serviceClassifierTable] = bridge.CreateTable(serviceClassifierTable, binding.LastTableID, binding.TableMissActionNone)
+			c.pipeline[serviceConntrackCommitTable] = bridge.CreateTable(serviceConntrackCommitTable, hairpinSNATTable, binding.TableMissActionNext)
+		} else {
+			c.pipeline[serviceHairpinTable] = bridge.CreateTable(serviceHairpinTable, conntrackTable, binding.TableMissActionNext)
+		}
 		c.pipeline[conntrackStateTable] = bridge.CreateTable(conntrackStateTable, endpointDNATTable, binding.TableMissActionNext)
 		c.pipeline[sessionAffinityTable] = bridge.CreateTable(sessionAffinityTable, binding.LastTableID, binding.TableMissActionNone)
 		c.pipeline[serviceLBTable] = bridge.CreateTable(serviceLBTable, endpointDNATTable, binding.TableMissActionNext)
@@ -2256,7 +2495,14 @@ func (c *client) generatePipeline() {
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapathType, enableProxy, enableAntreaPolicy, enableEgress bool, enableDenyTracking bool) Client {
+func NewClient(bridgeName string,
+	mgmtAddr string,
+	ovsDatapathType ovsconfig.OVSDatapathType,
+	enableProxy bool,
+	enableAntreaPolicy bool,
+	enableEgress bool,
+	enableDenyTracking bool,
+	proxyAll bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -2265,6 +2511,7 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 	c := &client{
 		bridge:                   bridge,
 		enableProxy:              enableProxy,
+		proxyAll:                 proxyAll,
 		enableAntreaPolicy:       enableAntreaPolicy,
 		enableDenyTracking:       enableDenyTracking,
 		enableEgress:             enableEgress,

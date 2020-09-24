@@ -132,14 +132,14 @@ ip netns exec %[1]s /agnhost netexec
 
 			localPod := fmt.Sprintf("localpod%s", tt.name)
 			remotePod := fmt.Sprintf("remotepod%s", tt.name)
-			if err := data.createBusyboxPodOnNode(localPod, testNamespace, egressNode); err != nil {
+			if err := data.createBusyboxPodOnNode(localPod, testNamespace, egressNode, false); err != nil {
 				t.Fatalf("Failed to create local Pod: %v", err)
 			}
 			defer deletePodWrapper(t, data, localPod)
 			if err := data.podWaitForRunning(defaultTimeout, localPod, testNamespace); err != nil {
 				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", localPod)
 			}
-			if err := data.createBusyboxPodOnNode(remotePod, testNamespace, workerNodeName(1)); err != nil {
+			if err := data.createBusyboxPodOnNode(remotePod, testNamespace, workerNodeName(1), false); err != nil {
 				t.Fatalf("Failed to create remote Pod: %v", err)
 			}
 			defer deletePodWrapper(t, data, remotePod)

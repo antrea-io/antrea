@@ -3927,6 +3927,19 @@ data:
     # If there are multiple IP addresses configured on the interface, the first one is used.
     # The interface configured with Node IP is used if this parameter is not set.
     #transportInterface:
+
+    # Option antreaProxy contains AntreaProxy related configuration options.
+    antreaProxy:
+      # ProxyAll tells antrea-agent to proxy all Service traffic, including NodePort, LoadBalancer, and ClusterIP traffic,
+      # regardless of where they come from. Therefore, running kube-proxy is no longer required. This requires the AntreaProxy
+      # feature to be enabled.
+      # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
+      # apiserver directly.
+      #proxyAll: false
+      # A string array of values which specifies the host IPv4/IPv6 addresses for NodePort. Values can be valid IP blocks.
+      # (e.g. 1.2.3.0/24, 1.2.3.4/32). An empty string slice is meant to select all host IPv4/IPv6 addresses.
+      # Note that the option is only valid when proxyAll is true.
+      #nodePortAddresses: []
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -4033,7 +4046,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-fhh5d26dg8
+  name: antrea-config-48bgbgd97b
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4104,7 +4117,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-fhh5d26dg8
+          value: antrea-config-48bgbgd97b
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4155,7 +4168,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-fhh5d26dg8
+          name: antrea-config-48bgbgd97b
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4436,7 +4449,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-fhh5d26dg8
+          name: antrea-config-48bgbgd97b
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
