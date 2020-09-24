@@ -28,6 +28,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/winfirewall"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 const (
@@ -243,5 +244,29 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 }
 
 func (c *Client) DeleteSNATRule(mark uint32) error {
+	return nil
+}
+
+func (c *Client) InitService(nodePortIPMap map[int][]net.IP, isIPv6 bool) error {
+	return nil
+}
+
+func (c *Client) AddNodePort(nodePortIPMap map[int][]net.IP, port uint16, protocol binding.Protocol) error {
+	return nil
+}
+
+func (c *Client) DeleteNodePort(nodePortIPMap map[int][]net.IP, port uint16, protocol binding.Protocol) error {
+	return nil
+}
+
+func (c *Client) AddClusterIPRoute(svcIP net.IP, isIPv6 bool) error {
+	return nil
+}
+
+func (c *Client) AddLoadBalancer(port uint16, protocol binding.Protocol, externalIPs []string, isIPv6 bool) error {
+	return nil
+}
+
+func (c *Client) DeleteLoadBalancer(port uint16, protocol binding.Protocol, externalIPs []string, isIPv6 bool) error {
 	return nil
 }

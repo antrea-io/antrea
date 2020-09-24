@@ -20,6 +20,7 @@ import (
 	"net"
 
 	"antrea.io/libOpenflow/protocol"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -49,9 +50,9 @@ type Client interface {
 	// the Cluster Service CIDR as a parameter.
 	InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet) error
 
-	// InstallClusterServiceFlows sets up the appropriate flows so that traffic can reach
+	// InstallDefaultServiceFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once.
-	InstallClusterServiceFlows() error
+	InstallDefaultServiceFlows() error
 
 	// InstallDefaultTunnelFlows sets up the classification flow for the default (flow based) tunnel.
 	InstallDefaultTunnelFlows() error
@@ -118,6 +119,14 @@ type Client interface {
 	InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 	// UninstallLoadBalancerServiceFromOutsideFlows removes flows installed by InstallLoadBalancerServiceFromOutsideFlows.
 	UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
+
+	// InstallServiceClassifierFlow installs flows to classify Service traffic from outside the cluster. For
+	// NodePort/LoadBalancer whose externalTrafficPolicy is Cluster, the flows will mark the traffic for SNAT. The flows
+	// will also generate a learned flow to rewrite the destination MAC of response packet whose request packet is from
+	// outside the cluster.
+	InstallServiceClassifierFlow(groupID binding.GroupIDType, svcType v1.ServiceType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, nodeLocalExternal bool) error
+	// UninstallServiceClassifierFlow removes flows installed by InstallServiceClassifierFlow.
+	UninstallServiceClassifierFlow(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
@@ -523,6 +532,10 @@ func generateServicePortFlowCacheKey(svcIP net.IP, svcPort uint16, protocol bind
 	return fmt.Sprintf("S%s%s%x", svcIP, protocol, svcPort)
 }
 
+func generateServiceClassifierFlowCacheKey(svcIP net.IP, svcPort uint16, protocol binding.Protocol) string {
+	return fmt.Sprintf("S%s%s%x/C", svcIP, protocol, svcPort)
+}
+
 func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
@@ -536,8 +549,18 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 		portVal := portToUint16(endpointPort)
 		cacheKey := generateEndpointFlowCacheKey(endpoint.IP(), endpointPort, protocol)
 		flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
+
 		if endpoint.GetIsLocal() {
-			flows = append(flows, c.hairpinSNATFlow(endpointIP))
+			// If Endpoint network is host network, don't add flow to hairpinSNATFlow table.
+			var hostNetwork bool
+			ipProtocol := getIPProtocol(endpointIP)
+			if ipProtocol == binding.ProtocolIP && !c.nodeConfig.PodIPv4CIDR.Contains(endpointIP) ||
+				ipProtocol == binding.ProtocolIPv6 && !c.nodeConfig.PodIPv6CIDR.Contains(endpointIP) {
+				hostNetwork = true
+			}
+			if !hostNetwork {
+				flows = append(flows, c.hairpinSNATFlow(endpointIP))
+			}
 		}
 		keyToFlows[cacheKey] = flows
 	}
@@ -554,6 +577,22 @@ func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint prox
 		return fmt.Errorf("error when getting port: %w", err)
 	}
 	cacheKey := generateEndpointFlowCacheKey(endpoint.IP(), port, protocol)
+	return c.deleteFlows(c.serviceFlowCache, cacheKey)
+}
+
+func (c *client) InstallServiceClassifierFlow(groupID binding.GroupIDType, svcType v1.ServiceType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, nodeLocalExternal bool) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	flows := c.serviceClassifierFlow(groupID, svcType, svcIP, svcPort, protocol, nodeLocalExternal)
+	cacheKey := generateServiceClassifierFlowCacheKey(svcIP, svcPort, protocol)
+	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallServiceClassifierFlow(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	cacheKey := generateServiceClassifierFlowCacheKey(svcIP, svcPort, protocol)
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
@@ -587,7 +626,7 @@ func (c *client) GetServiceFlowKeys(svcIP net.IP, svcPort uint16, protocol bindi
 	return flowKeys
 }
 
-func (c *client) InstallClusterServiceFlows() error {
+func (c *client) InstallDefaultServiceFlows() error {
 	flows := []binding.Flow{
 		c.serviceNeedLBFlow(),
 		c.sessionAffinityReselectFlow(),
@@ -596,10 +635,19 @@ func (c *client) InstallClusterServiceFlows() error {
 	if c.IsIPv4Enabled() {
 		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIP))
 		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIP)...)
+		flows = append(flows, c.l3FwdServiceDefaultFlowsViaGW(binding.ProtocolIP, cookie.Service)...)
+		if c.enableProxyFull {
+			flows = append(flows, c.serviceHairpinRegSetFlows(binding.ProtocolIP))
+			flows = append(flows, c.arpResponderFlow(serviceGWHairpinIPv4, cookie.Service))
+		}
 	}
 	if c.IsIPv6Enabled() {
 		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6))
 		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIPv6)...)
+		flows = append(flows, c.l3FwdServiceDefaultFlowsViaGW(binding.ProtocolIPv6, cookie.Service)...)
+		if c.enableProxyFull {
+			flows = append(flows, c.serviceHairpinRegSetFlows(binding.ProtocolIPv6))
+		}
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
@@ -631,6 +679,9 @@ func (c *client) InstallGatewayFlows() error {
 	if gatewayConfig.IPv4 != nil {
 		gatewayIPs = append(gatewayIPs, gatewayConfig.IPv4)
 		flows = append(flows, c.gatewayARPSpoofGuardFlow(gatewayConfig.IPv4, gatewayConfig.MAC, cookie.Default))
+		// This flow is used to allow the response Service packet whose Endpoint is on host network to get ARP resolution.
+		// The source IP of the ARP is Node IP, not Antrea gateway's IP.
+		flows = append(flows, c.gatewayARPSpoofGuardFlow(c.nodeConfig.NodeIPAddr.IP, gatewayConfig.MAC, cookie.Default))
 	}
 	if gatewayConfig.IPv6 != nil {
 		gatewayIPs = append(gatewayIPs, gatewayConfig.IPv6)

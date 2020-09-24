@@ -46,6 +46,12 @@ const (
 	// Service traffic.
 	AntreaProxy featuregate.Feature = "AntreaProxy"
 
+	// alpha: v1.3
+	// Enable full Service support in AntreaProxy in antrea-agent. After enabling this
+	//feature, without KubeProxy, NodePort/LoadBalancer can be accessed from outside the
+	//cluster, and ClusterIP can be accessed from host.
+	AntreaProxyFull featuregate.Feature = "AntreaProxyFull"
+
 	// alpha: v0.8
 	// beta: v0.11
 	// Allows to trace path from a generated packet.
@@ -83,6 +89,7 @@ var (
 	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		AntreaPolicy:       {Default: true, PreRelease: featuregate.Beta},
 		AntreaProxy:        {Default: true, PreRelease: featuregate.Beta},
+		AntreaProxyFull:    {Default: false, PreRelease: featuregate.Alpha},
 		Egress:             {Default: false, PreRelease: featuregate.Alpha},
 		EndpointSlice:      {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
@@ -102,8 +109,9 @@ var (
 	// can have different FeatureSpecs between Linux and Windows, we should
 	// still define a separate defaultAntreaFeatureGates map for Windows.
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
-		NodePortLocal: {},
-		Egress:        {},
+		AntreaProxyFull: {},
+		NodePortLocal:   {},
+		Egress:          {},
 	}
 )
 

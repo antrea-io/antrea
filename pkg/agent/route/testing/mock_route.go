@@ -21,6 +21,7 @@ package testing
 
 import (
 	config "antrea.io/antrea/pkg/agent/config"
+	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	gomock "github.com/golang/mock/gomock"
 	net "net"
 	reflect "reflect"
@@ -47,6 +48,48 @@ func NewMockInterface(ctrl *gomock.Controller) *MockInterface {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
+}
+
+// AddClusterIPRoute mocks base method
+func (m *MockInterface) AddClusterIPRoute(arg0 net.IP, arg1 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddClusterIPRoute", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddClusterIPRoute indicates an expected call of AddClusterIPRoute
+func (mr *MockInterfaceMockRecorder) AddClusterIPRoute(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddClusterIPRoute", reflect.TypeOf((*MockInterface)(nil).AddClusterIPRoute), arg0, arg1)
+}
+
+// AddLoadBalancer mocks base method
+func (m *MockInterface) AddLoadBalancer(arg0 uint16, arg1 openflow.Protocol, arg2 []string, arg3 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddLoadBalancer", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddLoadBalancer indicates an expected call of AddLoadBalancer
+func (mr *MockInterfaceMockRecorder) AddLoadBalancer(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLoadBalancer", reflect.TypeOf((*MockInterface)(nil).AddLoadBalancer), arg0, arg1, arg2, arg3)
+}
+
+// AddNodePort mocks base method
+func (m *MockInterface) AddNodePort(arg0 map[int][]net.IP, arg1 uint16, arg2 openflow.Protocol) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddNodePort", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddNodePort indicates an expected call of AddNodePort
+func (mr *MockInterfaceMockRecorder) AddNodePort(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNodePort", reflect.TypeOf((*MockInterface)(nil).AddNodePort), arg0, arg1, arg2)
 }
 
 // AddRoutes mocks base method
@@ -77,6 +120,34 @@ func (mr *MockInterfaceMockRecorder) AddSNATRule(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSNATRule", reflect.TypeOf((*MockInterface)(nil).AddSNATRule), arg0, arg1)
 }
 
+// DeleteLoadBalancer mocks base method
+func (m *MockInterface) DeleteLoadBalancer(arg0 uint16, arg1 openflow.Protocol, arg2 []string, arg3 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteLoadBalancer", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteLoadBalancer indicates an expected call of DeleteLoadBalancer
+func (mr *MockInterfaceMockRecorder) DeleteLoadBalancer(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLoadBalancer", reflect.TypeOf((*MockInterface)(nil).DeleteLoadBalancer), arg0, arg1, arg2, arg3)
+}
+
+// DeleteNodePort mocks base method
+func (m *MockInterface) DeleteNodePort(arg0 map[int][]net.IP, arg1 uint16, arg2 openflow.Protocol) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteNodePort", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteNodePort indicates an expected call of DeleteNodePort
+func (mr *MockInterfaceMockRecorder) DeleteNodePort(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNodePort", reflect.TypeOf((*MockInterface)(nil).DeleteNodePort), arg0, arg1, arg2)
+}
+
 // DeleteRoutes mocks base method
 func (m *MockInterface) DeleteRoutes(arg0 *net.IPNet) error {
 	m.ctrl.T.Helper()
@@ -103,6 +174,20 @@ func (m *MockInterface) DeleteSNATRule(arg0 uint32) error {
 func (mr *MockInterfaceMockRecorder) DeleteSNATRule(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSNATRule", reflect.TypeOf((*MockInterface)(nil).DeleteSNATRule), arg0)
+}
+
+// InitService mocks base method
+func (m *MockInterface) InitService(arg0 map[int][]net.IP, arg1 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InitService", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InitService indicates an expected call of InitService
+func (mr *MockInterfaceMockRecorder) InitService(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitService", reflect.TypeOf((*MockInterface)(nil).InitService), arg0, arg1)
 }
 
 // Initialize mocks base method

@@ -91,7 +91,7 @@ func testBenchmarkBandwidthIntraNode(t *testing.T, data *TestData) {
 }
 
 func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string, data *TestData) {
-	svc, err := data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP, nil)
+	svc, err := data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, false, v1.ServiceTypeClusterIP, nil)
 	if err != nil {
 		t.Fatalf("Error when creating perftest service: %v", err)
 	}

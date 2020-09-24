@@ -152,4 +152,7 @@ type AgentConfig struct {
 	// If there are multiple IP addresses configured on the interface, the first one is used.
 	// The interface configured with Node IP is used if this parameter is not set.
 	TransportInterface string `yaml:"transportInterface,omitempty"`
+	// A string array of values which specifies the host IPv4/IPv6 addresses for NodePorts. Values may be valid IP blocks.
+	// (e.g. 1.2.3.0/24, 1.2.3.4/32). An empty string slice is meant to select all host IPv4/IPv6 addresses.
+	NodePortAddresses []string `yaml:"nodePortAddresses,omitempty"`
 }

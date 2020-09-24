@@ -409,6 +409,47 @@ func (a *ofLearnAction) MatchTransportDst(protocol Protocol) LearnAction {
 	return a
 }
 
+// MatchTransportDstAsSrc specifies that the transport layer destination field
+// {tcp|udp|sctp}_src in the learned flow must match the {tcp|udp|sctp}_dst field
+// of the packet currently being processed. It only accepts ProtocolTCP, ProtocolUDP, or
+// ProtocolSCTP, otherwise this does nothing.
+func (a *ofLearnAction) MatchTransportDstAsSrc(protocol Protocol) LearnAction {
+	var ipProtoValue int
+	isIPv6 := false
+	switch protocol {
+	case ProtocolTCP:
+		ipProtoValue = ofctrl.IP_PROTO_TCP
+	case ProtocolUDP:
+		ipProtoValue = ofctrl.IP_PROTO_UDP
+	case ProtocolSCTP:
+		ipProtoValue = ofctrl.IP_PROTO_SCTP
+	case ProtocolTCPv6:
+		ipProtoValue = ofctrl.IP_PROTO_TCP
+		isIPv6 = true
+	case ProtocolUDPv6:
+		ipProtoValue = ofctrl.IP_PROTO_UDP
+		isIPv6 = true
+	case ProtocolSCTPv6:
+		ipProtoValue = ofctrl.IP_PROTO_SCTP
+		isIPv6 = true
+	default:
+		// Return directly if the protocol is not acceptable.
+		return a
+	}
+
+	a.MatchEthernetProtocolIP(isIPv6)
+	ipTypeVal := make([]byte, 2)
+	ipTypeVal[1] = byte(ipProtoValue)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_PROTO"}, 1*8, nil, ipTypeVal)
+	// OXM_OF fields support TCP, UDP and SCTP, but NXM_OF fields only support TCP and UDP. So here using "OXM_OF_" to
+	// generate the field name.
+	trimProtocol := strings.ReplaceAll(string(protocol), "v6", "")
+	learnFieldName := fmt.Sprintf("OXM_OF_%s_SRC", strings.ToUpper(trimProtocol))
+	fromFieldName := fmt.Sprintf("OXM_OF_%s_DST", strings.ToUpper(trimProtocol))
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: learnFieldName}, 2*8, &ofctrl.LearnField{Name: fromFieldName}, nil)
+	return a
+}
+
 // MatchLearnedTCPDstPort specifies that the tcp_dst field in the learned flow
 // must match the tcp_dst of the packet currently being processed.
 func (a *ofLearnAction) MatchLearnedTCPDstPort() LearnAction {
@@ -445,6 +486,42 @@ func (a *ofLearnAction) MatchLearnedSCTPv6DstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolSCTPv6)
 }
 
+// MatchLearnedTCPDstPortAsSrcPort specifies that the tcp_src field in the learned flow
+// must match the tcp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedTCPDstPortAsSrcPort() LearnAction {
+	return a.MatchTransportDstAsSrc(ProtocolTCP)
+}
+
+// MatchLearnedTCPv6DstPortAsSrcPort specifies that the tcp_src field in the learned flow
+// must match the tcp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedTCPv6DstPortAsSrcPort() LearnAction {
+	return a.MatchTransportDstAsSrc(ProtocolTCPv6)
+}
+
+// MatchLearnedUDPDstPortAsSrcPort specifies that the udp_src field in the learned flow
+// must match the udp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedUDPDstPortAsSrcPort() LearnAction {
+	return a.MatchTransportDstAsSrc(ProtocolUDP)
+}
+
+// MatchLearnedUDPv6DstPortAsSrcPort specifies that the udp_src field in the learned flow
+// must match the udp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedUDPv6DstPortAsSrcPort() LearnAction {
+	return a.MatchTransportDstAsSrc(ProtocolUDPv6)
+}
+
+// MatchLearnedSCTPDstPortAsSrcPort specifies that the sctp_src field in the learned flow
+// must match the sctp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedSCTPDstPortAsSrcPort() LearnAction {
+	return a.MatchTransportDstAsSrc(ProtocolSCTP)
+}
+
+// MatchLearnedSCTPv6DstPortAsSrcPort specifies that the sctp_src field in the learned flow
+// must match the sctp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedSCTPv6DstPortAsSrcPort() LearnAction {
+	return a.MatchTransportDstAsSrc(ProtocolSCTPv6)
+}
+
 // MatchLearnedSrcIP makes the learned flow to match the nw_src of current IP packet.
 func (a *ofLearnAction) MatchLearnedSrcIP() LearnAction {
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, nil)
@@ -466,6 +543,47 @@ func (a *ofLearnAction) MatchLearnedSrcIPv6() LearnAction {
 // MatchLearnedDstIPv6 makes the learned flow to match the ipv6_dst of current IPv6 packet.
 func (a *ofLearnAction) MatchLearnedDstIPv6() LearnAction {
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_NX_IPV6_DST"}, 16*8, &ofctrl.LearnField{Name: "NXM_NX_IPV6_DST"}, nil)
+	return a
+}
+
+// MatchLearnedSrcIPAsDstIP makes the learned flow to match the nw_dst of current IP packet's nw_src.
+func (a *ofLearnAction) MatchLearnedSrcIPAsDstIP() LearnAction {
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_DST"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, nil)
+	return a
+}
+
+// MatchLearnedDstIPAsSrcIP makes the learned flow to match the nw_src of current IP packet's nw_dst.
+func (a *ofLearnAction) MatchLearnedDstIPAsSrcIP() LearnAction {
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_DST"}, nil)
+	return a
+}
+
+// MatchLearnedSrcIPv6AsDstIPv6 makes the learned flow to match the ipv6_dst of current IPv6 packet's ipv6_src.
+func (a *ofLearnAction) MatchLearnedSrcIPv6AsDstIPv6() LearnAction {
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_NX_IPV6_DST"}, 16*8, &ofctrl.LearnField{Name: "NXM_NX_IPV6_SRC"}, nil)
+	return a
+}
+
+// MatchLearnedDstIPv6AsSrcIPv6 makes the learned flow to match the ipv6_src of current IPv6 packet's ipv6_dst.
+func (a *ofLearnAction) MatchLearnedDstIPv6AsSrcIPv6() LearnAction {
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_NX_IPV6_SRC"}, 16*8, &ofctrl.LearnField{Name: "NXM_NX_IPV6_DST"}, nil)
+	return a
+}
+
+// MatchNetworkSrcAsDst makes the learned flow to match the network nw_src/ipv6_src of current packet's nw_dst/ipv6_dst.
+func (a *ofLearnAction) MatchNetworkSrcAsDst(protocol Protocol) LearnAction {
+	isIPv6 := false
+	learnBits := uint16(32)
+	from := "NXM_OF_IP_SRC"
+	to := "NXM_OF_IP_DST"
+	if protocol == ProtocolTCPv6 || protocol == ProtocolUDPv6 || protocol == ProtocolSCTPv6 {
+		isIPv6 = true
+		learnBits = 128
+		from = "NXM_NX_IPV6_SRC"
+		to = "NXM_NX_IPV6_DST"
+	}
+	a.MatchEthernetProtocolIP(isIPv6)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: to}, learnBits, &ofctrl.LearnField{Name: from}, nil)
 	return a
 }
 
@@ -528,6 +646,13 @@ func (a *ofLearnAction) LoadReg(regID int, data uint32, rng Range) LearnAction {
 func (a *ofLearnAction) SetDstMAC(mac net.HardwareAddr) LearnAction {
 	toField := &ofctrl.LearnField{Name: "NXM_OF_ETH_DST"}
 	a.nxLearn.AddLoadAction(toField, 48, nil, mac)
+	return a
+}
+
+func (a *ofLearnAction) SetLearnedSrcMACAsDstMAC() LearnAction {
+	toField := &ofctrl.LearnField{Name: "NXM_OF_ETH_DST"}
+	fromField := &ofctrl.LearnField{Name: "NXM_OF_ETH_SRC"}
+	a.nxLearn.AddLoadAction(toField, 48, fromField, nil)
 	return a
 }
 

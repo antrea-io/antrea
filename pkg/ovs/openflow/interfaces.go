@@ -71,6 +71,10 @@ const (
 	NxmFieldIPToS       = "NXM_OF_IP_TOS"
 	NxmFieldXXReg       = "NXM_NX_XXREG"
 	NxmFieldPktMark     = "NXM_NX_PKT_MARK"
+	NxmFieldSrcIPv4     = "NXM_OF_IP_SRC"
+	NxmFieldDstIPv4     = "NXM_OF_IP_DST"
+	NxmFieldSrcIPv6     = "NXM_NX_IPV6_SRC"
+	NxmFieldDstIPv6     = "NXM_NX_IPV6_DST"
 )
 
 const (
@@ -275,21 +279,34 @@ type LearnAction interface {
 	DeleteLearned() LearnAction
 	MatchEthernetProtocolIP(isIPv6 bool) LearnAction
 	MatchTransportDst(protocol Protocol) LearnAction
+	MatchTransportDstAsSrc(protocol Protocol) LearnAction
+	MatchNetworkSrcAsDst(protocol Protocol) LearnAction
 	MatchLearnedTCPDstPort() LearnAction
 	MatchLearnedUDPDstPort() LearnAction
 	MatchLearnedSCTPDstPort() LearnAction
 	MatchLearnedTCPv6DstPort() LearnAction
 	MatchLearnedUDPv6DstPort() LearnAction
 	MatchLearnedSCTPv6DstPort() LearnAction
+	MatchLearnedTCPDstPortAsSrcPort() LearnAction
+	MatchLearnedUDPDstPortAsSrcPort() LearnAction
+	MatchLearnedSCTPDstPortAsSrcPort() LearnAction
+	MatchLearnedTCPv6DstPortAsSrcPort() LearnAction
+	MatchLearnedUDPv6DstPortAsSrcPort() LearnAction
+	MatchLearnedSCTPv6DstPortAsSrcPort() LearnAction
 	MatchLearnedSrcIP() LearnAction
 	MatchLearnedDstIP() LearnAction
 	MatchLearnedSrcIPv6() LearnAction
 	MatchLearnedDstIPv6() LearnAction
+	MatchLearnedSrcIPAsDstIP() LearnAction
+	MatchLearnedDstIPAsSrcIP() LearnAction
+	MatchLearnedSrcIPv6AsDstIPv6() LearnAction
+	MatchLearnedDstIPv6AsSrcIPv6() LearnAction
 	MatchReg(regID int, data uint32, rng Range) LearnAction
 	LoadReg(regID int, data uint32, rng Range) LearnAction
 	LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
 	LoadXXRegToXXReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
 	SetDstMAC(mac net.HardwareAddr) LearnAction
+	SetLearnedSrcMACAsDstMAC() LearnAction
 	Done() FlowBuilder
 }
 

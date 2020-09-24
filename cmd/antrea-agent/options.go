@@ -146,6 +146,9 @@ func (o *Options) validate(args []string) error {
 		// (but SNAT can be done by the primary CNI).
 		o.config.NoSNAT = true
 	}
+	if err := o.validateAntreaProxyConfig(); err != nil {
+		return fmt.Errorf("proxy config is invalid: %w", err)
+	}
 	if err := o.validateFlowExporterConfig(); err != nil {
 		return fmt.Errorf("failed to validate flow exporter config: %v", err)
 	}
@@ -217,6 +220,17 @@ func (o *Options) setDefaults() {
 			o.config.NPLPortRange = defaultNPLPortRange
 		}
 	}
+}
+
+func (o *Options) validateAntreaProxyConfig() error {
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxyFull) {
+		for _, nodePortIP := range o.config.NodePortAddresses {
+			if _, _, err := net.ParseCIDR(nodePortIP); err != nil {
+				return fmt.Errorf("invalid NodePort IP address `%s`: %w", nodePortIP, err)
+			}
+		}
+	}
+	return nil
 }
 
 func (o *Options) validateFlowExporterConfig() error {

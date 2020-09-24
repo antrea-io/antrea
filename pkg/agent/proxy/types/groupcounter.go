@@ -15,6 +15,7 @@
 package types
 
 import (
+	"fmt"
 	"sync"
 
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -27,10 +28,10 @@ type GroupCounter interface {
 	// If the group ID of the service has been generated, then return the
 	// prior one. The bool return value indicates whether the groupID is newly
 	// generated.
-	Get(svcPortName k8sproxy.ServicePortName) (binding.GroupIDType, bool)
+	Get(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) (binding.GroupIDType, bool)
 	// Recycle removes a Service Group ID mapping. The recycled groupID can be
 	// reused.
-	Recycle(svcPortName k8sproxy.ServicePortName) bool
+	Recycle(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) bool
 }
 
 type groupCounter struct {
@@ -38,7 +39,7 @@ type groupCounter struct {
 	groupIDCounter binding.GroupIDType
 	recycled       []binding.GroupIDType
 
-	groupMap map[k8sproxy.ServicePortName]binding.GroupIDType
+	groupMap map[string]binding.GroupIDType
 }
 
 func NewGroupCounter(isIPv6 bool) *groupCounter {
@@ -46,33 +47,42 @@ func NewGroupCounter(isIPv6 bool) *groupCounter {
 	if isIPv6 {
 		groupIDCounter = 0x10000000
 	}
-	return &groupCounter{groupMap: map[k8sproxy.ServicePortName]binding.GroupIDType{}, groupIDCounter: groupIDCounter}
+	return &groupCounter{groupMap: map[string]binding.GroupIDType{}, groupIDCounter: groupIDCounter}
 }
 
-func (c *groupCounter) Get(svcPortName k8sproxy.ServicePortName) (binding.GroupIDType, bool) {
+func keyString(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) string {
+	key := svcPortName.String()
+	if isEndpointsLocal {
+		key = fmt.Sprintf("%s/local", key)
+	}
+	return key
+}
+
+func (c *groupCounter) Get(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) (binding.GroupIDType, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	if id, ok := c.groupMap[svcPortName]; ok {
+	key := keyString(svcPortName, isEndpointsLocal)
+	if id, ok := c.groupMap[key]; ok {
 		return id, false
 	} else if len(c.recycled) != 0 {
 		id = c.recycled[len(c.recycled)-1]
 		c.recycled = c.recycled[:len(c.recycled)-1]
-		c.groupMap[svcPortName] = id
+		c.groupMap[key] = id
 		return id, true
 	} else {
 		c.groupIDCounter += 1
-		c.groupMap[svcPortName] = c.groupIDCounter
+		c.groupMap[key] = c.groupIDCounter
 		return c.groupIDCounter, true
 	}
 }
 
-func (c *groupCounter) Recycle(svcPortName k8sproxy.ServicePortName) bool {
+func (c *groupCounter) Recycle(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if id, ok := c.groupMap[svcPortName]; ok {
-		delete(c.groupMap, svcPortName)
+	key := keyString(svcPortName, isEndpointsLocal)
+	if id, ok := c.groupMap[key]; ok {
+		delete(c.groupMap, key)
 		c.recycled = append(c.recycled, id)
 		return true
 	}

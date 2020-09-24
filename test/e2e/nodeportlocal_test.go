@@ -295,8 +295,8 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
-	testData.createServiceWithAnnotations("agnhost1", 80, 80, selector, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	testData.createServiceWithAnnotations("agnhost2", 80, 8080, selector, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.createServiceWithAnnotations("agnhost1", 80, 80, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.createServiceWithAnnotations("agnhost2", 80, 8080, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
 	targetPorts := sets.NewInt(80, 8080)
 
 	podcmd := "porter"

@@ -221,3 +221,50 @@ func ListenLocalSocket(address string) (net.Listener, error) {
 func DialLocalSocket(address string) (net.Conn, error) {
 	return dialUnix(address)
 }
+
+// GetDefaultRouteInterfaces gets the output interfaces of default IPv4 and IPv6 route with highest priority (with
+// lowest metric value)
+func GetDefaultRouteInterfaces() (map[int]int, error) {
+	defaultRouteInterfaces := make(map[int]int)
+
+	var defaultRouteIPv4, defaultRouteIPv6 *netlink.Route
+	routesIPv4, err := netlink.RouteList(nil, netlink.FAMILY_V4)
+	if err != nil {
+		return nil, err
+	}
+	for i := range routesIPv4 {
+		if routesIPv4[i].Dst == nil && (defaultRouteIPv4 == nil || routesIPv4[i].Priority < defaultRouteIPv4.Priority) {
+			defaultRouteIPv4 = &routesIPv4[i]
+			defaultRouteInterfaces[netlink.FAMILY_V4] = routesIPv4[i].LinkIndex
+		}
+	}
+	if defaultRouteIPv4 != nil {
+		klog.Infof("Chosen IPv4 default route output interface index is %v", defaultRouteIPv4.LinkIndex)
+	}
+
+	routesIPv6, err := netlink.RouteList(nil, netlink.FAMILY_V6)
+	if err != nil {
+		return nil, err
+	}
+	for i := range routesIPv6 {
+		if routesIPv6[i].Dst == nil && (defaultRouteIPv6 == nil || routesIPv6[i].Priority < defaultRouteIPv6.Priority) {
+			defaultRouteIPv6 = &routesIPv6[i]
+			if routesIPv6[i].LinkIndex == 0 {
+				// If there are multiple default output interfaces, choose a output interface.
+				for j := range routesIPv6[i].MultiPath {
+					if routesIPv6[i].MultiPath[j].LinkIndex != 0 {
+						defaultRouteInterfaces[netlink.FAMILY_V6] = routesIPv6[i].MultiPath[j].LinkIndex
+						break
+					}
+				}
+			} else {
+				defaultRouteInterfaces[netlink.FAMILY_V6] = routesIPv6[i].LinkIndex
+			}
+		}
+	}
+	if defaultRouteIPv6 != nil {
+		klog.Infof("Chosen IPv6 default route output interface index is %v", defaultRouteIPv6.LinkIndex)
+	}
+
+	return defaultRouteInterfaces, nil
+}

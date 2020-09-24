@@ -105,6 +105,7 @@ const (
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.4"
+	echoServerImage     = "k8s.gcr.io/echoserver:1.10"
 	ipfixCollectorPort  = "4739"
 
 	nginxLBService = "nginx-loadbalancer"
@@ -979,6 +980,30 @@ func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName stri
 	}, false, nil)
 }
 
+// createEchoServerPodOnNode creates a Pod in the test namespace with a single echoserver container. The
+// Pod will be scheduled on the specified Node (if nodeName is not empty).
+func (data *TestData) createEchoServerPodOnNode(name string, nodeName string, hostNetwork bool) error {
+	return data.createPodOnNode(name, testNamespace, nodeName, echoServerImage, []string{}, nil, nil, []corev1.ContainerPort{
+		{
+			Name:          "http",
+			ContainerPort: 8080,
+			Protocol:      corev1.ProtocolTCP,
+		},
+	}, hostNetwork, nil)
+}
+
+// createNginxPodOnNode2 creates a Pod in the test namespace with a single nginx container. The
+// Pod will be scheduled on the specified Node (if nodeName is not empty).
+func (data *TestData) createNginxPodOnNodeV2(name string, nodeName string, hostNetwork bool) error {
+	return data.createPodOnNode(name, testNamespace, nodeName, nginxImage, []string{}, nil, nil, []corev1.ContainerPort{
+		{
+			Name:          "http",
+			ContainerPort: 80,
+			Protocol:      corev1.ProtocolTCP,
+		},
+	}, hostNetwork, nil)
+}
+
 // createServerPod creates a Pod that can listen to specified port and have named port set.
 func (data *TestData) createServerPod(name string, ns string, portName string, portNum int32, setHostPort bool, hostNetwork bool) error {
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.
@@ -1325,14 +1350,14 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 }
 
 // createService creates a service with port and targetPort.
-func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity bool,
+func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	annotation := make(map[string]string)
-	return data.createServiceWithAnnotations(serviceName, port, targetPort, selector, affinity, serviceType, ipFamily, annotation)
+	return data.createServiceWithAnnotations(serviceName, port, targetPort, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
 }
 
 // createService creates a service with Annotation
-func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, selector map[string]string, affinity bool,
+func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotations map[string]string) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	var ipFamilies []corev1.IPFamily
@@ -1363,12 +1388,15 @@ func (data *TestData) createServiceWithAnnotations(serviceName string, port, tar
 			IPFamilies: ipFamilies,
 		},
 	}
+	if (serviceType == corev1.ServiceTypeNodePort || serviceType == corev1.ServiceTypeLoadBalancer) && nodeLocalExternal {
+		service.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeLocal
+	}
 	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }
 
 // createNginxClusterIPServiceWithAnnotations creates nginx service with Annotation
 func (data *TestData) createNginxClusterIPServiceWithAnnotations(affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
-	return data.createServiceWithAnnotations("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily, annotation)
+	return data.createServiceWithAnnotations("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily, annotation)
 }
 
 // createNginxClusterIPService create a nginx service with the given name.
@@ -1376,11 +1404,40 @@ func (data *TestData) createNginxClusterIPService(name string, affinity bool, ip
 	if name == "" {
 		name = "nginx"
 	}
-	return data.createService(name, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily)
+	return data.createService(name, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily)
+}
+
+// createEchoServerNodePortService create a NodePort echoserver service with the given name.
+func (data *TestData) createEchoServerNodePortService(serviceName string, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	return data.createService(serviceName, 8080, 8080, map[string]string{"app": "echoserver"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
+}
+
+// createEchoServerLoadBalancerService create a LoadBalancer echoserver service with the given name.
+func (data *TestData) createEchoServerLoadBalancerService(serviceName string, affinity, nodeLocalExternal bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	svc, err := data.createService(serviceName, 8080, 8080, map[string]string{"app": "echoserver"}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily)
+	if err != nil {
+		return svc, err
+	}
+	ingress := make([]corev1.LoadBalancerIngress, len(ingressIPs))
+	for idx, ingressIP := range ingressIPs {
+		ingress[idx].IP = ingressIP
+	}
+	updatedSvc := svc.DeepCopy()
+	updatedSvc.Status.LoadBalancer.Ingress = ingress
+	patchData, err := json.Marshal(updatedSvc)
+	if err != nil {
+		return svc, err
+	}
+	return data.clientset.CoreV1().Services(svc.Namespace).Patch(context.TODO(), svc.Name, types.MergePatchType, patchData, metav1.PatchOptions{}, "status")
+}
+
+// createEchoServerClusterIPService create a ClusterIP echoserver service with the given name.
+func (data *TestData) createEchoServerClusterIPService(serviceName string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	return data.createService(serviceName, 8080, 8080, map[string]string{"app": "echoserver"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily)
 }
 
 func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	svc, err := data.createService(nginxLBService, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeLoadBalancer, ipFamily)
+	svc, err := data.createService(nginxLBService, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
 		return svc, err
 	}

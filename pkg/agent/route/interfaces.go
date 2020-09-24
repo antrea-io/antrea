@@ -18,6 +18,7 @@ import (
 	"net"
 
 	"antrea.io/antrea/pkg/agent/config"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 // Interface is the interface for routing container packets in host network.
@@ -50,6 +51,24 @@ type Interface interface {
 
 	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark.
 	DeleteSNATRule(mark uint32) error
+
+	// InitService should add the basic TC configuration on Linux.
+	InitService(nodePortIPMap map[int][]net.IP, isIPv6 bool) error
+
+	// AddNodePort should add related configuration about the NodePort Service to TC on Linux.
+	AddNodePort(nodePortIPMap map[int][]net.IP, port uint16, protocol binding.Protocol) error
+
+	// DeleteNodePort should delete related configuration about the NodePort Service to TC on Linux.
+	DeleteNodePort(nodePortIPMap map[int][]net.IP, port uint16, protocol binding.Protocol) error
+
+	// AddClusterIPRoute should add route on k8s node for Service ClusterIP.
+	AddClusterIPRoute(svcIP net.IP, isIPv6 bool) error
+
+	// AddLoadBalancer should add related flows and configurations for LoadBalancer
+	AddLoadBalancer(port uint16, protocol binding.Protocol, externalIPs []string, isIPv6 bool) error
+
+	// DeleteLoadBalancer should delete related flows and configurations for LoadBalancer
+	DeleteLoadBalancer(port uint16, protocol binding.Protocol, externalIPs []string, isIPv6 bool) error
 
 	// Run starts the sync loop.
 	Run(stopCh <-chan struct{})

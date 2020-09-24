@@ -25,6 +25,7 @@ import (
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	proxy "antrea.io/antrea/third_party/proxy"
 	gomock "github.com/golang/mock/gomock"
+	v1 "k8s.io/api/core/v1"
 	net "net"
 	reflect "reflect"
 )
@@ -264,18 +265,18 @@ func (mr *MockClientMockRecorder) InstallClusterServiceCIDRFlows(arg0 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallClusterServiceCIDRFlows", reflect.TypeOf((*MockClient)(nil).InstallClusterServiceCIDRFlows), arg0)
 }
 
-// InstallClusterServiceFlows mocks base method
-func (m *MockClient) InstallClusterServiceFlows() error {
+// InstallDefaultServiceFlows mocks base method
+func (m *MockClient) InstallDefaultServiceFlows() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallClusterServiceFlows")
+	ret := m.ctrl.Call(m, "InstallDefaultServiceFlows")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// InstallClusterServiceFlows indicates an expected call of InstallClusterServiceFlows
-func (mr *MockClientMockRecorder) InstallClusterServiceFlows() *gomock.Call {
+// InstallDefaultServiceFlows indicates an expected call of InstallDefaultServiceFlows
+func (mr *MockClientMockRecorder) InstallDefaultServiceFlows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallClusterServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallClusterServiceFlows))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallDefaultServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallDefaultServiceFlows))
 }
 
 // InstallDefaultTunnelFlows mocks base method
@@ -416,6 +417,20 @@ func (m *MockClient) InstallSNATMarkFlows(arg0 net.IP, arg1 uint32) error {
 func (mr *MockClientMockRecorder) InstallSNATMarkFlows(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallSNATMarkFlows", reflect.TypeOf((*MockClient)(nil).InstallSNATMarkFlows), arg0, arg1)
+}
+
+// InstallServiceClassifierFlow mocks base method
+func (m *MockClient) InstallServiceClassifierFlow(arg0 openflow.GroupIDType, arg1 v1.ServiceType, arg2 net.IP, arg3 uint16, arg4 openflow.Protocol, arg5 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallServiceClassifierFlow", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallServiceClassifierFlow indicates an expected call of InstallServiceClassifierFlow
+func (mr *MockClientMockRecorder) InstallServiceClassifierFlow(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceClassifierFlow", reflect.TypeOf((*MockClient)(nil).InstallServiceClassifierFlow), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // InstallServiceFlows mocks base method
@@ -719,6 +734,20 @@ func (m *MockClient) UninstallSNATMarkFlows(arg0 uint32) error {
 func (mr *MockClientMockRecorder) UninstallSNATMarkFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallSNATMarkFlows", reflect.TypeOf((*MockClient)(nil).UninstallSNATMarkFlows), arg0)
+}
+
+// UninstallServiceClassifierFlow mocks base method
+func (m *MockClient) UninstallServiceClassifierFlow(arg0 net.IP, arg1 uint16, arg2 openflow.Protocol) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallServiceClassifierFlow", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallServiceClassifierFlow indicates an expected call of UninstallServiceClassifierFlow
+func (mr *MockClientMockRecorder) UninstallServiceClassifierFlow(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallServiceClassifierFlow", reflect.TypeOf((*MockClient)(nil).UninstallServiceClassifierFlow), arg0, arg1, arg2)
 }
 
 // UninstallServiceFlows mocks base method
