@@ -26,6 +26,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/winfirewall"
 )
@@ -35,6 +36,9 @@ const (
 	outboundFirewallRuleName = "Antrea: accept packets to local Pods"
 )
 
+// Client implements Interface.
+var _ Interface = &Client{}
+
 type Client struct {
 	nr          netroute.Interface
 	nodeConfig  *config.NodeConfig
@@ -43,8 +47,24 @@ type Client struct {
 	fwClient    *winfirewall.Client
 }
 
+func (c *Client) AddNodePortRoute() error {
+	return nil
+}
+
+func (c *Client) AddNodePort(nodeIPs []net.IP, svcInfo *types.ServiceInfo) error {
+	return nil
+}
+
+func (c *Client) DeleteNodePort(nodeIPs []net.IP, svcInfo *types.ServiceInfo) error {
+	return nil
+}
+
+func (c *Client) ReconcileNodePort(nodeIPs []net.IP, ports []*types.ServiceInfo) error {
+	return nil
+}
+
 // NewClient returns a route client.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
+func NewClient(nodePortVirtualIP net.IP, serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
 	nr := netroute.New()
 	return &Client{
 		nr:          nr,

@@ -87,9 +87,11 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
+	nodePortVirtualIP := net.ParseIP(o.config.NodePortVirtualIP)
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
+		nodePortVirtualIP,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
 
@@ -107,7 +109,7 @@ func run(o *Options) error {
 		TrafficEncapMode:  encapMode,
 		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
 
-	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT)
+	routeClient, err := route.NewClient(nodePortVirtualIP, serviceCIDRNet, networkConfig, o.config.NoSNAT)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
@@ -177,7 +179,15 @@ func run(o *Options) error {
 	}
 	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
+		var nodePortAddresses []*net.IPNet
+		for _, nodePortAddress := range o.config.NodePortAddresses {
+			_, ipNet, _ := net.ParseCIDR(nodePortAddress)
+			nodePortAddresses = append(nodePortAddresses, ipNet)
+		}
+		proxier, err = proxy.New(nodePortVirtualIP, nodePortAddresses, nodeConfig.Name, nodeConfig.PodCIDR, informerFactory, ofClient, routeClient)
+		if err != nil {
+			return fmt.Errorf("error creating Antrea Proxy: %w", err)
+		}
 	}
 	cniServer := cniserver.New(
 		o.config.CNISocket,

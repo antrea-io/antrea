@@ -945,6 +945,11 @@ func (data *TestData) createNginxClusterIPService(affinity bool) (*corev1.Servic
 	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP)
 }
 
+// createNginxNodePortService create a NodePort nginx service with the given name.
+func (data *TestData) createNginxNodePortService(affinity bool) (*corev1.Service, error) {
+	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeNodePort)
+}
+
 func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string) (*corev1.Service, error) {
 	svc, err := data.createService("nginx-loadbalancer", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeLoadBalancer)
 	if err != nil {

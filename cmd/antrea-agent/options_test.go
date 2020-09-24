@@ -5,9 +5,46 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vmware-tanzu/antrea/pkg/features"
 )
+
+func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
+	feature := map[string]bool{string(features.AntreaProxy): true}
+	err := features.DefaultMutableFeatureGate.SetFromMap(feature)
+	require.NoError(t, err)
+	require.True(t, features.DefaultFeatureGate.Enabled(features.AntreaProxy))
+	for name, tc := range map[string]struct {
+		virtualIPAddressConfig  string
+		nodePortAddressesConfig []string
+		expectedError           string
+	}{
+		"Valid case": {
+			virtualIPAddressConfig:  defaultNodePortVirtualIP,
+			nodePortAddressesConfig: []string{"10.10.0.1/80"},
+		},
+		"Invalid VirtualIPAddressConfig": {
+			virtualIPAddressConfig:  "10.10.1.1",
+			nodePortAddressesConfig: []string{"10.10.0.0/80"},
+			expectedError:           "NodePortVirtualIP 10.10.1.1 is not an valid link-local IP address",
+		},
+		"Invalid NodePortAddresses": {
+			virtualIPAddressConfig:  defaultNodePortVirtualIP,
+			nodePortAddressesConfig: []string{"10.10.0.0"},
+			expectedError:           "NodePortAddress is not valid, can not parse `10.10.0.0`: invalid CIDR address: 10.10.0.0",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			opts := newOptions()
+			opts.config.NodePortVirtualIP = tc.virtualIPAddressConfig
+			opts.config.NodePortAddresses = tc.nodePortAddressesConfig
+			if len(tc.expectedError) > 0 {
+				require.EqualError(t, opts.validateAntreaProxyConfig(), tc.expectedError)
+			}
+		})
+	}
+}
 
 func TestOptions_validateFlowExporterConfig(t *testing.T) {
 	// Enable flow exporter

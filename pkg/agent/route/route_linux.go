@@ -20,6 +20,7 @@ import (
 	"net"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/vishvananda/netlink"
@@ -28,9 +29,11 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
@@ -42,15 +45,24 @@ const (
 	// Antrea managed ipset.
 	// antreaPodIPSet contains all Pod CIDRs of this cluster.
 	antreaPodIPSet = "ANTREA-POD-IP"
+	// antreaNodePortClusterSet contains all Cluster type NodePort Services Addresses.
+	antreaNodePortClusterSet = "ANTREA-NODEPORT-CLUSTER"
+	// antreaNodePortLocalSet contains all Local type NodePort Services Addresses.
+	antreaNodePortLocalSet = "ANTREA-NODEPORT-LOCAL"
 	// antreaNodeIPSet contains all Node IPs of this cluster, except the Node itself.
 	antreaNodeIPSet = "ANTREA-NODE-IP"
 
 	// Antrea managed iptables chains.
-	antreaForwardChain     = "ANTREA-FORWARD"
-	antreaPreRoutingChain  = "ANTREA-PREROUTING"
-	antreaPostRoutingChain = "ANTREA-POSTROUTING"
-	antreaOutputChain      = "ANTREA-OUTPUT"
-	antreaMangleChain      = "ANTREA-MANGLE"
+	antreaForwardChain              = "ANTREA-FORWARD"
+	antreaPreRoutingChain           = "ANTREA-PREROUTING"
+	antreaNodePortServicesChain     = "ANTREA-NODEPORT"
+	antreaNodePortServicesMasqChain = "ANTREA-NODEPORT-MASQ"
+	antreaPostRoutingChain          = "ANTREA-POSTROUTING"
+	antreaOutputChain               = "ANTREA-OUTPUT"
+	antreaMangleChain               = "ANTREA-MANGLE"
+
+	localNodePortCtMark   = "0xf0"
+	clusterNodePortCtMark = "0xf1"
 )
 
 // Client implements Interface.
@@ -64,21 +76,23 @@ type Client struct {
 	serviceCIDR   *net.IPNet
 	ipt           *iptables.Client
 	// nodeRoutes caches ip routes to remote Pods. It's a map of podCIDR to routes.
-	nodeRoutes sync.Map
+	nodeRoutes        sync.Map
+	nodePortVirtualIP net.IP
 }
 
 // NewClient returns a route client.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
+func NewClient(nodePortVirtualIP net.IP, serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
 	ipt, err := iptables.New()
 	if err != nil {
 		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
 	}
 
 	return &Client{
-		serviceCIDR:   serviceCIDR,
-		networkConfig: networkConfig,
-		noSNAT:        noSNAT,
-		ipt:           ipt,
+		nodePortVirtualIP: nodePortVirtualIP,
+		serviceCIDR:       serviceCIDR,
+		networkConfig:     networkConfig,
+		noSNAT:            noSNAT,
+		ipt:               ipt,
 	}, nil
 }
 
@@ -107,6 +121,14 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 
 // initIPSet ensures that the required ipset exists and it has the initial members.
 func (c *Client) initIPSet() error {
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		if err := ipset.CreateIPSet(antreaNodePortClusterSet, ipset.HashIPPort); err != nil {
+			return err
+		}
+		if err := ipset.CreateIPSet(antreaNodePortLocalSet, ipset.HashIPPort); err != nil {
+			return err
+		}
+	}
 	// In policy-only mode, Node Pod CIDR is undefined.
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		return nil
@@ -151,22 +173,38 @@ func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
 // initIPTables ensure that the iptables infrastructure we use is set up.
 // It's idempotent and can safely be called on every startup.
 func (c *Client) initIPTables() error {
+	enableProxy := features.DefaultFeatureGate.Enabled(features.AntreaProxy)
 	// Create the antrea managed chains and link them to built-in chains.
 	// We cannot use iptables-restore for these jump rules because there
 	// are non antrea managed rules in built-in chains.
-	jumpRules := []struct{ table, srcChain, dstChain, comment string }{
-		{iptables.RawTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules"},
-		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
-		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules"},
-		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules"},
-		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"},
+	jumpRules := []struct {
+		need                               bool
+		table, srcChain, dstChain, comment string
+		prepend                            bool
+	}{
+		{true, iptables.RawTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules", false},
+		{true, iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
+		{true, iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules", false},
+		{true, iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules", false},
+		{true, iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules", false},
+		{enableProxy, iptables.NATTable, iptables.PreRoutingChain, antreaNodePortServicesChain, "Antrea: jump to Antrea NodePort Service rules", true},
+		{enableProxy, iptables.NATTable, iptables.OutputChain, antreaNodePortServicesChain, "Antrea: jump to Antrea NodePort Service rules", true},
+		{enableProxy, iptables.NATTable, iptables.PostRoutingChain, antreaNodePortServicesMasqChain, "Antrea: jump to Antrea NodePort Service masquerade rules", true},
 	}
 	for _, rule := range jumpRules {
+		ruleSpec := []string{
+			"-j", rule.dstChain,
+			"-m", "comment", "--comment", rule.comment,
+		}
+		if !rule.need {
+			_ = c.ipt.DeleteChain(rule.table, rule.dstChain)
+			_ = c.ipt.DeleteRule(rule.table, rule.srcChain, ruleSpec)
+			continue
+		}
 		if err := c.ipt.EnsureChain(rule.table, rule.dstChain); err != nil {
 			return err
 		}
-		ruleSpec := []string{"-j", rule.dstChain, "-m", "comment", "--comment", rule.comment}
-		if err := c.ipt.EnsureRule(rule.table, rule.srcChain, ruleSpec); err != nil {
+		if err := c.ipt.EnsureRule(rule.table, rule.srcChain, ruleSpec, rule.prepend); err != nil {
 			return err
 		}
 	}
@@ -248,6 +286,46 @@ func (c *Client) initIPTables() error {
 			"-j", iptables.MasqueradeTarget,
 		}...)
 	}
+	if enableProxy {
+		writeLine(iptablesData, iptables.MakeChainLine(antreaNodePortServicesChain))
+		writeLine(iptablesData, iptables.MakeChainLine(antreaNodePortServicesMasqChain))
+		writeLine(iptablesData, []string{
+			"-A", antreaNodePortServicesChain,
+			"-m", "set", "--match-set", antreaNodePortLocalSet, "dst,dst",
+			"-j", iptables.MarkTarget, "--set-mark", localNodePortCtMark,
+		}...)
+		writeLine(iptablesData, []string{
+			"-A", antreaNodePortServicesChain,
+			"-m", "set", "--match-set", antreaNodePortClusterSet, "dst,dst",
+			"-j", iptables.MarkTarget, "--set-mark", clusterNodePortCtMark,
+		}...)
+		writeLine(iptablesData, []string{
+			"-A", antreaNodePortServicesChain,
+			"-m", "mark", "--mark", localNodePortCtMark,
+			"-j", iptables.DNATTarget, "--to-destination", c.nodePortVirtualIP.String(),
+		}...)
+		writeLine(iptablesData, []string{
+			"-A", antreaNodePortServicesChain,
+			"-m", "mark", "--mark", clusterNodePortCtMark,
+			"-j", iptables.DNATTarget, "--to-destination", c.nodePortVirtualIP.String(),
+		}...)
+		writeLine(iptablesData,
+			"-A", antreaNodePortServicesMasqChain,
+			"-m", "comment", "--comment", `"Antrea: Masquerade NodePort packets with a loopback address"`,
+			"-s", "127.0.0.1",
+			"-d", c.nodePortVirtualIP.String(),
+			"-o", hostGateway,
+			"-j", iptables.MasqueradeTarget,
+		)
+		writeLine(iptablesData,
+			"-A", antreaNodePortServicesMasqChain,
+			"-m", "comment", "--comment", `"Antrea: Masquerade NodePort packets which target Service with Local externalTrafficPolicy"`,
+			"-m", "mark", "--mark", clusterNodePortCtMark,
+			"-d", c.nodePortVirtualIP.String(),
+			"-o", hostGateway,
+			"-j", iptables.MasqueradeTarget,
+		)
+	}
 	writeLine(iptablesData, "COMMIT")
 
 	// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
@@ -266,6 +344,20 @@ func (c *Client) initIPRoutes() error {
 		}
 	}
 	return nil
+}
+
+func generateNodePortIPSETEntries(nodeIP net.IP, svcInfos []*types.ServiceInfo) sets.String {
+	stringSet := sets.NewString()
+	for _, svcInfo := range svcInfos {
+		if svcInfo.NodePort() > 0 {
+			protocolPort := fmt.Sprintf("%s:%d", strings.ToLower(string(svcInfo.Protocol())), svcInfo.NodePort())
+			stringSet.Insert(
+				fmt.Sprintf("%s,%s", nodeIP.String(), protocolPort),
+				fmt.Sprintf("127.0.0.1,%s", protocolPort),
+			)
+		}
+	}
+	return stringSet
 }
 
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
@@ -319,6 +411,9 @@ func (c *Client) Reconcile(podCIDRs []string, remoteNodeIPs []string) error {
 	}
 	for _, route := range routes {
 		if reflect.DeepEqual(route.Dst, c.nodeConfig.PodCIDR) {
+			continue
+		}
+		if features.DefaultFeatureGate.Enabled(features.AntreaProxy) && route.Dst.Contains(c.nodePortVirtualIP) {
 			continue
 		}
 		if desiredPodCIDRs.Has(route.Dst.String()) {
@@ -471,6 +566,94 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 			}
 			return netlink.RouteDel(&rt)
 		}
+	}
+	return nil
+}
+
+func (c *Client) ReconcileNodePort(nodeIPs []net.IP, svcEntries []*types.ServiceInfo) error {
+	var cluster, local []*types.ServiceInfo
+	for _, entry := range svcEntries {
+		if entry.OnlyNodeLocalEndpoints() {
+			local = append(local, entry)
+		} else {
+			cluster = append(cluster, entry)
+		}
+	}
+	reconcile := func(setName string, desiredSvcEntries []*types.ServiceInfo) error {
+		existEntries, err := ipset.ListEntries(setName)
+		if err != nil {
+			return err
+		}
+		desiredEntries := sets.NewString()
+		for _, nodeIP := range nodeIPs {
+			desiredEntries.Insert(generateNodePortIPSETEntries(nodeIP, svcEntries).List()...)
+		}
+		for _, entry := range existEntries {
+			if desiredEntries.Has(entry) {
+				continue
+			}
+			klog.Infof("Deleting orphaned NodePort Service entry %s from ipset", entry)
+			if err := ipset.DelEntry(setName, entry); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := reconcile(antreaNodePortLocalSet, local); err != nil {
+		return err
+	}
+	if err := reconcile(antreaNodePortClusterSet, cluster); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) AddNodePortRoute() error {
+	nodePortVirtualNet := &net.IPNet{
+		IP:   c.nodePortVirtualIP,
+		Mask: net.IPv4Mask(255, 255, 255, 255),
+	}
+	route := &netlink.Route{
+		Dst:   nodePortVirtualNet,
+		Gw:    c.nodePortVirtualIP,
+		Flags: int(netlink.FLAG_ONLINK),
+	}
+	route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
+	if err := netlink.RouteReplace(route); err != nil {
+		return fmt.Errorf("failed to install NodePort route: %w", err)
+	}
+	c.nodeRoutes.Store(c.nodePortVirtualIP.String(), route)
+	return nil
+}
+
+func (c *Client) AddNodePort(nodeIPs []net.IP, svcInfo *types.ServiceInfo) error {
+	setName := antreaNodePortClusterSet
+	if svcInfo.OnlyNodeLocalEndpoints() {
+		setName = antreaNodePortLocalSet
+	}
+	for _, nodeIP := range nodeIPs {
+		if err := ipset.AddEntry(setName, fmt.Sprintf("%s,%s:%d", nodeIP, strings.ToLower(string(svcInfo.Protocol())), svcInfo.NodePort())); err != nil {
+			klog.Errorf("Error when adding NodePort to ipset %s: %v", setName, err)
+		}
+	}
+	if err := ipset.AddEntry(setName, fmt.Sprintf("%s,%s:%d", "127.0.0.1", strings.ToLower(string(svcInfo.Protocol())), svcInfo.NodePort())); err != nil {
+		klog.Errorf("Error when adding NodePort to ipset %s: %v", setName, err)
+	}
+	return nil
+}
+
+func (c *Client) DeleteNodePort(nodeIPs []net.IP, svcInfo *types.ServiceInfo) error {
+	setName := antreaNodePortClusterSet
+	if svcInfo.OnlyNodeLocalEndpoints() {
+		setName = antreaNodePortLocalSet
+	}
+	for _, nodeIP := range nodeIPs {
+		if err := ipset.DelEntry(setName, fmt.Sprintf("%s,%s:%d", nodeIP, strings.ToLower(string(svcInfo.Protocol())), svcInfo.NodePort())); err != nil {
+			klog.Errorf("Error when removing NodePort from ipset %s: %v", setName, err)
+		}
+	}
+	if err := ipset.DelEntry(setName, fmt.Sprintf("%s,%s:%d", "127.0.0.1", strings.ToLower(string(svcInfo.Protocol())), svcInfo.NodePort())); err != nil {
+		klog.Errorf("Error when removing NodePort from ipset %s: %v", setName, err)
 	}
 	return nil
 }

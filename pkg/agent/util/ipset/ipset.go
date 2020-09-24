@@ -28,6 +28,8 @@ const (
 	// The lookup time grows linearly with the number of the different prefix values added to the set.
 	HashNet SetType = "hash:net"
 	HashIP  SetType = "hash:ip"
+	// The hash:ip,port set type uses a hash to store IP address and protocol-port pairs in it.
+	HashIPPort SetType = "hash:ip,port"
 )
 
 // memberPattern is used to match the members part of ipset list result.

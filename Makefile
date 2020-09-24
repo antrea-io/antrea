@@ -255,7 +255,7 @@ build-ubuntu-coverage:
 .PHONY: manifest
 manifest:
 	@echo "===> Generating dev manifest for Antrea <==="
-	$(CURDIR)/hack/generate-manifest.sh --mode dev > build/yamls/antrea.yml
+	$(CURDIR)/hack/generate-manifest.sh --mode dev --proxy > build/yamls/antrea.yml
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --ipsec > build/yamls/antrea-ipsec.yml
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --cloud EKS --encap-mode networkPolicyOnly > build/yamls/antrea-eks.yml
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --cloud GKE --encap-mode noEncap > build/yamls/antrea-gke.yml

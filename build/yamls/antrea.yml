@@ -1042,7 +1042,7 @@ data:
     # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic.
-    #  AntreaProxy: false
+      AntreaProxy: true
 
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
@@ -1136,6 +1136,13 @@ data:
     # the flow collector.
     # Flow export frequency should be greater than or equal to 1.
     #flowExportFrequency: 12
+
+    # The virtual IP for NodePort Service support. It must be a link-local IP otherwise the Agents will report error.
+    #nodePortVirtualIP: 169.254.169.110
+
+    # A string slice of values which specify the addresses to use for NodePorts. Values may be valid IP blocks
+    # (e.g. 1.2.3.0/24, 1.2.3.4/32). The default empty string slice ([]) means to use all local addresses.
+    #nodePortAddresses: []
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -1192,7 +1199,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-t5k2d655gm
+  name: antrea-config-92f4dt72bg
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1299,7 +1306,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-t5k2d655gm
+          name: antrea-config-92f4dt72bg
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1548,7 +1555,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-t5k2d655gm
+          name: antrea-config-92f4dt72bg
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

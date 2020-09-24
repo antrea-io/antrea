@@ -42,6 +42,45 @@ func skipIfProxyDisabled(t *testing.T, data *TestData) {
 	}
 }
 
+func TestProxyNodePortService(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	skipIfProxyDisabled(t, data)
+	skipIfNumNodesLessThan(t, 2)
+
+	nodeName := nodeName(1)
+	require.NoError(t, data.createNginxPod("nginx", nodeName))
+	_, err = data.podWaitForIP(defaultTimeout, "nginx", testNamespace)
+	require.NoError(t, err)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, "nginx", testNamespace))
+	svc, err := data.createNginxNodePortService(true)
+	require.NoError(t, err)
+	require.NoError(t, data.createBusyboxPodOnNode("busybox", nodeName))
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, "busybox", testNamespace))
+	var nodePort string
+	for _, port := range svc.Spec.Ports {
+		if port.NodePort != 0 {
+			nodePort = fmt.Sprint(port.NodePort)
+			break
+		}
+	}
+	busyboxPod, err := data.podWaitFor(defaultTimeout, "busybox", testNamespace, func(pod *corev1.Pod) (bool, error) {
+		return pod.Status.Phase == corev1.PodRunning, nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, busyboxPod.Status)
+	_, _, err = data.runCommandFromPod(testNamespace, "busybox", busyboxContainerName, []string{"wget", "-O", "-", net.JoinHostPort(busyboxPod.Status.HostIP, nodePort), "-T", "1"})
+	require.NoError(t, err, "Service NodePort should be able to be connected from Pod")
+	_, _, _, err = RunCommandOnNode(masterNodeName(), strings.Join([]string{"wget", "-O", "-", net.JoinHostPort(busyboxPod.Status.HostIP, nodePort), "-T", "1"}, " "))
+	require.NoError(t, err, "Service NodePort should be able to be connected from Node IP address on Node which does not have Endpoint")
+	_, _, _, err = RunCommandOnNode(masterNodeName(), strings.Join([]string{"wget", "-O", "-", net.JoinHostPort("127.0.0.1", nodePort), "-T", "1"}, " "))
+	require.NoError(t, err, "Service NodePort should be able to be connected from loopback address on Node which does not have Endpoint")
+}
+
 func TestProxyServiceSessionAffinity(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
@@ -58,7 +97,7 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, "nginx", testNamespace))
 	svc, err := data.createNginxClusterIPService(true)
 	require.NoError(t, err)
-	ingressIPs := []string{"169.254.169.253", "169.254.169.254"}
+	ingressIPs := []string{"169.254.0.253", "169.254.0.254"}
 	_, err = data.createNginxLoadBalancerService(true, ingressIPs)
 	require.NoError(t, err)
 	require.NoError(t, data.createBusyboxPodOnNode("busybox", nodeName))
@@ -152,7 +191,7 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 	require.NoError(t, err)
 	svc, err := data.createNginxClusterIPService(false)
 	require.NoError(t, err)
-	ingressIPs := []string{"169.254.169.253", "169.254.169.254"}
+	ingressIPs := []string{"169.254.0.253", "169.254.0.254"}
 	_, err = data.createNginxLoadBalancerService(false, ingressIPs)
 	require.NoError(t, err)
 	agentName, err := data.getAntreaPodOnNode(nodeName)

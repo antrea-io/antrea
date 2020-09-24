@@ -39,6 +39,7 @@ const (
 	defaultTunnelType          = ovsconfig.GeneveTunnel
 	defaultFlowPollInterval    = 5 * time.Second
 	defaultFlowExportFrequency = 12
+	defaultNodePortVirtualIP   = "169.254.169.110"
 )
 
 type Options struct {
@@ -116,6 +117,9 @@ func (o *Options) validate(args []string) error {
 		// (but SNAT can be done by the primary CNI).
 		o.config.NoSNAT = true
 	}
+	if err := o.validateAntreaProxyConfig(); err != nil {
+		return fmt.Errorf("proxy config is invalid: %w", err)
+	}
 	if err := o.validateFlowExporterConfig(); err != nil {
 		return fmt.Errorf("Failed to validate flow exporter config: %v", err)
 	}
@@ -168,6 +172,12 @@ func (o *Options) setDefaults() {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}
 
+	if o.config.FeatureGates[string(features.AntreaProxy)] {
+		if len(o.config.NodePortVirtualIP) == 0 {
+			o.config.NodePortVirtualIP = defaultNodePortVirtualIP
+		}
+	}
+
 	if o.config.FeatureGates[string(features.FlowExporter)] {
 		if o.config.FlowPollInterval == "" {
 			o.pollInterval = defaultFlowPollInterval
@@ -177,6 +187,23 @@ func (o *Options) setDefaults() {
 			o.config.FlowExportFrequency = defaultFlowExportFrequency
 		}
 	}
+}
+
+func (o *Options) validateAntreaProxyConfig() error {
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		if o.config.NodePortVirtualIP != "" {
+			_, linkLocalNet, _ := net.ParseCIDR("169.0.0.1/8")
+			if !linkLocalNet.Contains(net.ParseIP(o.config.NodePortVirtualIP)) {
+				return fmt.Errorf("NodePortVirtualIP %s is not an valid link-local IP address", o.config.NodePortVirtualIP)
+			}
+		}
+		for _, nodePortAddress := range o.config.NodePortAddresses {
+			if _, _, err := net.ParseCIDR(nodePortAddress); err != nil {
+				return fmt.Errorf("NodePortAddress is not valid, can not parse `%s`: %w", nodePortAddress, err)
+			}
+		}
+	}
+	return nil
 }
 
 func (o *Options) validateFlowExporterConfig() error {

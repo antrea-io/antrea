@@ -24,11 +24,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
 // TestDeploy is a "no-op" test that simply performs setup and teardown.
@@ -319,6 +321,10 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 			if len(matches) == 0 {
 				continue
 			}
+			// The default VirtualNodePort IP.
+			if matches[1] == "169.254.169.110" {
+				matches[1] += "/32"
+			}
 			route := Route{}
 			if _, route.peerPodCIDR, err = net.ParseCIDR(matches[1]); err != nil {
 				return nil, fmt.Errorf("%s is not a valid net CIDR", matches[1])
@@ -330,15 +336,19 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		}
 		return routes, nil
 	}
-
 	expectedRtNumMin, expectedRtNumMax := clusterInfo.numNodes-1, clusterInfo.numNodes-1
+	featureGate, err := data.GetAgentFeatures(antreaNamespace)
+	require.NoError(t, err)
 	if encapMode == config.TrafficEncapModeNoEncap {
 		expectedRtNumMin, expectedRtNumMax = 0, 0
 
 	} else if encapMode == config.TrafficEncapModeHybrid {
 		expectedRtNumMin = 1
 	}
-
+	if featureGate.Enabled(features.AntreaProxy) {
+		expectedRtNumMax += 1
+		expectedRtNumMin += 1
+	}
 	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)
 	var routes []Route
 	if err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (found bool, err error) {
@@ -346,7 +356,6 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 		if err != nil {
 			return false, err
 		}
-
 		if len(routes) < expectedRtNumMin {
 			// Not enough routes, keep trying
 			return false, nil

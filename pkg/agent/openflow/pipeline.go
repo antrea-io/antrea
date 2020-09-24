@@ -304,10 +304,11 @@ type client struct {
 	// conjMatchFlowContext.
 	globalConjMatchFlowCache map[string]*conjMatchFlowContext
 	// replayMutex provides exclusive access to the OFSwitch to the ReplayFlows method.
-	replayMutex sync.RWMutex
-	nodeConfig  *config.NodeConfig
-	encapMode   config.TrafficEncapModeType
-	gatewayPort uint32 // OVSOFPort number
+	replayMutex       sync.RWMutex
+	nodeConfig        *config.NodeConfig
+	encapMode         config.TrafficEncapModeType
+	gatewayPort       uint32 // OVSOFPort number
+	nodePortVirtualIP net.IP // The virtual IP used for NodePort, it will be nil if Antrea Proxy is not enabled.
 	// packetInHandlers stores handler to process PacketIn event
 	packetInHandlers map[string]PacketInHandler
 }
@@ -795,6 +796,22 @@ func (c *client) arpResponderFlow(peerGatewayIP net.IP, category cookie.Category
 		Done()
 }
 
+func (c *client) arpNodePortVirtualResponderFlow() binding.Flow {
+	return c.pipeline[arpResponderTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
+		MatchARPOp(1).
+		MatchARPTpa(c.nodePortVirtualIP).
+		Action().Move(binding.NxmFieldSrcMAC, binding.NxmFieldDstMAC).
+		Action().SetSrcMAC(globalVirtualMAC).
+		Action().LoadARPOperation(2).
+		Action().Move(binding.NxmFieldARPSha, binding.NxmFieldARPTha).
+		Action().SetARPSha(globalVirtualMAC).
+		Action().Move(binding.NxmFieldARPSpa, binding.NxmFieldARPTpa).
+		Action().SetARPSpa(c.nodePortVirtualIP).
+		Action().OutputInPort().
+		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+		Done()
+}
+
 // arpResponderStaticFlow generates ARP reply for any ARP request with the same global virtual MAC.
 // This flow is used in policy-only mode, where traffic are routed via IP not MAC.
 func (c *client) arpResponderStaticFlow(category cookie.Category) binding.Flow {
@@ -979,7 +996,7 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 		MatchConjID(conjunctionID).
 		MatchPriority(ofPriority).
 		Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
-		Action().CT(true, nextTable, CtZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
+		Action().CT(true, nextTable, CtZone).                                     // CT action requires commit flag if actions other than NAT without arguments are specified.
 		LoadToLabelRange(uint64(conjunctionID), &labelRange).
 		CTDone().
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
@@ -1397,6 +1414,19 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 	return group
 }
 
+// serviceGatewayFlow replies Service packets back to external addresses without entering Gateway CTZone.
+func (c *client) serviceGatewayFlow() binding.Flow {
+	return c.pipeline[conntrackCommitTable].BuildFlow(priorityHigh).
+		MatchProtocol(binding.ProtocolIP).
+		MatchCTMark(ServiceCTMark, nil).
+		MatchCTStateNew(true).
+		MatchCTStateTrk(true).
+		MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
+		Action().GotoTable(L2ForwardingOutTable).
+		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+		Done()
+}
+
 // policyConjKeyFuncKeyFunc knows how to get key of a *policyRuleConjunction.
 func policyConjKeyFunc(obj interface{}) (string, error) {
 	conj := obj.(*policyRuleConjunction)
@@ -1472,7 +1502,7 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool) Client {
+func NewClient(bridgeName string, mgmtAddr string, nodePortVirtualIP net.IP, enableProxy, enableAntreaPolicy bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -1480,6 +1510,7 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 	)
 	c := &client{
 		bridge:                   bridge,
+		nodePortVirtualIP:        nodePortVirtualIP,
 		pipeline:                 generatePipeline(bridge, enableProxy, enableAntreaPolicy),
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),

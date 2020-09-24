@@ -42,7 +42,7 @@ type Client interface {
 	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType, gatewayOFPort uint32) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
-	InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
+	InstallGatewayFlows(nodeIP, gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
 
 	// InstallBridgeUplinkFlows installs Openflow flows between bridge local port and uplink port to support
 	// host networking. These flows are only needed on windows platform.
@@ -466,7 +466,7 @@ func (c *client) InstallClusterServiceCIDRFlows(serviceNet *net.IPNet, gatewayOF
 	return nil
 }
 
-func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
+func (c *client) InstallGatewayFlows(nodeIP, gatewayAddr net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
 	flows := []binding.Flow{
 		c.gatewayClassifierFlow(gatewayOFPort, cookie.Default),
 		c.gatewayIPSpoofGuardFlow(gatewayOFPort, cookie.Default),
@@ -475,7 +475,12 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 		c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default),
 		c.localProbeFlow(gatewayAddr, cookie.Default),
 	}
-
+	if c.enableProxy {
+		flows = append(flows,
+			c.serviceGatewayFlow(),
+			c.arpNodePortVirtualResponderFlow(),
+		)
+	}
 	// In NoEncap , no traffic from tunnel port
 	if c.encapMode.SupportsEncap() {
 		flows = append(flows, c.l3ToGatewayFlow(gatewayAddr, gatewayMAC, cookie.Default))
@@ -489,11 +494,11 @@ func (c *client) InstallGatewayFlows(gatewayAddr net.IP, gatewayMAC net.Hardware
 }
 
 func (c *client) InstallDefaultTunnelFlows(tunnelOFPort uint32) error {
-	flow := c.tunnelClassifierFlow(tunnelOFPort, cookie.Default)
-	if err := c.ofEntryOperations.Add(flow); err != nil {
+	flows := []binding.Flow{c.tunnelClassifierFlow(tunnelOFPort, cookie.Default)}
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
-	c.defaultTunnelFlows = []binding.Flow{flow}
+	c.defaultTunnelFlows = flows
 	return nil
 }
 

@@ -15,6 +15,8 @@
 package types
 
 import (
+	"sort"
+
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -25,20 +27,34 @@ import (
 type ServiceInfo struct {
 	*k8sproxy.BaseServiceInfo
 	// cache for performance
-	OFProtocol openflow.Protocol
+	OFProtocol      openflow.Protocol
+	ResourceVersion string
 }
 
 func (si *ServiceInfo) Equal(bSvcInfo *ServiceInfo) bool {
-	return si.SessionAffinityType() == bSvcInfo.SessionAffinityType() &&
-		si.StickyMaxAgeSeconds() == bSvcInfo.StickyMaxAgeSeconds() &&
-		si.OFProtocol == bSvcInfo.OFProtocol &&
-		si.Port() == bSvcInfo.Port() &&
-		len(si.LoadBalancerIPStrings()) == len(bSvcInfo.LoadBalancerIPStrings())
+	if si.ResourceVersion != bSvcInfo.ResourceVersion {
+		return false
+	}
+	if len(si.LoadBalancerIPStrings()) > 0 || len(bSvcInfo.LoadBalancerIPStrings()) > 0 {
+		if len(si.LoadBalancerIPStrings()) != len(bSvcInfo.LoadBalancerIPStrings()) {
+			return false
+		}
+		a := si.LoadBalancerIPStrings()
+		b := bSvcInfo.LoadBalancerIPStrings()
+		sort.Strings(a)
+		sort.Strings(b)
+		for i := range a {
+			if a[i] != b[i] {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // NewServiceInfo returns a new k8sproxy.ServicePort which abstracts a serviceInfo.
 func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo *k8sproxy.BaseServiceInfo) k8sproxy.ServicePort {
-	info := &ServiceInfo{BaseServiceInfo: baseInfo}
+	info := &ServiceInfo{BaseServiceInfo: baseInfo, ResourceVersion: service.ResourceVersion}
 	info.OFProtocol = openflow.ProtocolTCP
 	if port.Protocol == corev1.ProtocolUDP {
 		info.OFProtocol = openflow.ProtocolUDP

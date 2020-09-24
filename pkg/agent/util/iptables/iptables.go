@@ -36,6 +36,8 @@ const (
 	MasqueradeTarget = "MASQUERADE"
 	MarkTarget       = "MARK"
 	ConnTrackTarget  = "CT"
+	DNATTarget       = "DNAT"
+	SNATTarget       = "SNAT"
 	NoTrackTarget    = "NOTRACK"
 
 	PreRoutingChain  = "PREROUTING"
@@ -87,8 +89,19 @@ func (c *Client) EnsureChain(table string, chain string) error {
 	return nil
 }
 
-// ensureRule checks if target rule already exists, appends it if not.
-func (c *Client) EnsureRule(table string, chain string, ruleSpec []string) error {
+func (c *Client) DeleteChain(table string, chain string) error {
+	// Just try best to clear the chain before deleting it.
+	_ = c.ipt.ClearChain(table, chain)
+	return c.ipt.DeleteChain(table, chain)
+}
+
+func (c *Client) DeleteRule(table string, chain string, ruleSpec []string) error {
+	return c.ipt.Delete(table, chain, ruleSpec...)
+}
+
+// ensureRule checks if target rule already exists, add it if not. If prepend is true, the rule will be added to the top
+// of the chain. Otherwise, the rule will be appended to the chain.
+func (c *Client) EnsureRule(table string, chain string, ruleSpec []string, prepend bool) error {
 	exist, err := c.ipt.Exists(table, chain, ruleSpec...)
 	if err != nil {
 		return fmt.Errorf("error checking if rule %v exists in table %s chain %s: %v", ruleSpec, table, chain, err)
@@ -96,7 +109,13 @@ func (c *Client) EnsureRule(table string, chain string, ruleSpec []string) error
 	if exist {
 		return nil
 	}
-	if err := c.ipt.Append(table, chain, ruleSpec...); err != nil {
+	var f func() error
+	if !prepend {
+		f = func() error { return c.ipt.Append(table, chain, ruleSpec...) }
+	} else {
+		f = func() error { return c.ipt.Insert(table, chain, 1, ruleSpec...) }
+	}
+	if err := f(); err != nil {
 		return fmt.Errorf("error appending rule %v to table %s chain %s: %v", ruleSpec, table, chain, err)
 	}
 	klog.V(2).Infof("Appended rule %v to table %s chain %s", ruleSpec, table, chain)

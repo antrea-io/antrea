@@ -54,6 +54,7 @@ func (c *groupCounter) Get(svcPortName k8sproxy.ServicePortName) (binding.GroupI
 	} else if len(c.recycled) != 0 {
 		id = c.recycled[len(c.recycled)-1]
 		c.recycled = c.recycled[:len(c.recycled)-1]
+		c.groupMap[svcPortName] = id
 		return id, true
 	} else {
 		c.groupIDCounter += 1
