@@ -50,11 +50,11 @@ func (m *MockConnTrackDumper) EXPECT() *MockConnTrackDumperMockRecorder {
 }
 
 // DumpFlows mocks base method
-func (m *MockConnTrackDumper) DumpFlows(arg0 uint16) ([]*flowexporter.Connection, *flowexporter.ConntrackOccupancy, error) {
+func (m *MockConnTrackDumper) DumpFlows(arg0 uint16) ([]*flowexporter.Connection, int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DumpFlows", arg0)
 	ret0, _ := ret[0].([]*flowexporter.Connection)
-	ret1, _ := ret[1].(*flowexporter.ConntrackOccupancy)
+	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
@@ -63,6 +63,21 @@ func (m *MockConnTrackDumper) DumpFlows(arg0 uint16) ([]*flowexporter.Connection
 func (mr *MockConnTrackDumperMockRecorder) DumpFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlows", reflect.TypeOf((*MockConnTrackDumper)(nil).DumpFlows), arg0)
+}
+
+// GetMaxConnections mocks base method
+func (m *MockConnTrackDumper) GetMaxConnections() (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMaxConnections")
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMaxConnections indicates an expected call of GetMaxConnections
+func (mr *MockConnTrackDumperMockRecorder) GetMaxConnections() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxConnections", reflect.TypeOf((*MockConnTrackDumper)(nil).GetMaxConnections))
 }
 
 // MockNetFilterConnTrack is a mock of NetFilterConnTrack interface

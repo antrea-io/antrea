@@ -87,15 +87,10 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	mockNetlinkCT.EXPECT().Dial().Return(nil)
 	mockNetlinkCT.EXPECT().DumpFilter(conntrack.Filter{}).Return(testFlows, nil)
 
-	conns, conntrackMetrics, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
+	conns, totalConns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
 	assert.NoErrorf(t, err, "Dump flows function returned error: %v", err)
 	assert.Equal(t, 1, len(conns), "number of filtered connections should be equal")
-
-	maxConns, err := sysctl.GetSysctlNet("nf_conntrack_max")
-	require.NoError(t, err, "Cannot read nf_conntrack_max")
-	assert.Equal(t, maxConns, conntrackMetrics.MaxConnections, "Size of the conntrack table should be equal to nf_conntrack_max")
-
-	assert.Equal(t, len(testFlows), conntrackMetrics.TotalConnections, "Number of connections in conntrack table should be equal to testFlows")
+	assert.Equal(t, len(testFlows), totalConns, "Number of connections in conntrack table should be equal to testFlows")
 }
 
 func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
@@ -105,9 +100,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 
 	// Create mock interface
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
-	// Set expect call of dpctl/ct-get-maxconns for mock ovsCtlClient
-	maxConns := 300000
-	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/ct-get-maxconns", false).Return([]byte(strconv.Itoa(maxConns)), nil)
+
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
 	gwConfig := &config.GatewayConfig{
@@ -162,20 +155,19 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	}
 	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/dump-conntrack", false, "-m", "-s").Return(ovsctlCmdOutput, nil)
 
-	conns, conntrackMetrics, err := connDumper.DumpFlows(uint16(openflow.CtZone))
+	conns, totalConns, err := connDumper.DumpFlows(uint16(openflow.CtZone))
 	if err != nil {
 		t.Errorf("conntrackNetdev.DumpConnections function returned error: %v", err)
 	}
 	assert.Equal(t, len(conns), 1)
 	assert.Equal(t, conns[0], expConn, "filtered connection and expected connection should be same")
-	assert.Equal(t, len(outputFlow), conntrackMetrics.TotalConnections, "Number of connections in conntrack table should be equal to outputFlow")
-	assert.Equal(t, maxConns, conntrackMetrics.MaxConnections, "Size of the conntrack table should be equal to the previous hard-coded value")
+	assert.Equal(t, len(outputFlow), totalConns, "Number of connections in conntrack table should be equal to outputFlow")
 }
 
 func TestSetupConnTrackParameters(t *testing.T) {
 	err := setupConntrackParameters()
 	if err != nil {
-		t.Logf("Setup conntrack parameters function returned error: %v", err)
+		t.Skipf("Skipping test as trying to set up conntrack parameters returned an error: %v", err)
 	} else {
 		conntrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
 		require.NoError(t, err, "Cannot read nf_conntrack_acct")
@@ -184,4 +176,26 @@ func TestSetupConnTrackParameters(t *testing.T) {
 		require.NoError(t, err, "Cannot read nf_conntrack_timestamp")
 		assert.Equal(t, 1, conntrackTimestamping, "net.netfilter.nf_conntrack_timestamp value should be 1")
 	}
+}
+
+func TestConnTrackSystem_GetMaxConnections(t *testing.T) {
+	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, &net.IPNet{})
+	maxConns, err := connDumperDPSystem.GetMaxConnections()
+	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
+	expMaxConns, err := sysctl.GetSysctlNet("nf_conntrack_max")
+	require.NoError(t, err, "Cannot read nf_conntrack_max")
+	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to nf_conntrack_max")
+}
+
+func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
+	// Set expect call of dpctl/ct-get-maxconns for mock ovsCtlClient
+	expMaxConns := 300000
+	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/ct-get-maxconns", false).Return([]byte(strconv.Itoa(expMaxConns)), nil)
+	connDumper := NewConnTrackOvsAppCtl(&config.NodeConfig{}, &net.IPNet{}, mockOVSCtlClient)
+	maxConns, err := connDumper.GetMaxConnections()
+	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
+	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to the previous hard-coded value")
 }

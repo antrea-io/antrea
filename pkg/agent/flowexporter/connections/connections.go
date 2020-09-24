@@ -192,18 +192,22 @@ func (cs *ConnectionStore) Poll() (int, error) {
 	// We do not expect any error as resetConn is not returning any error
 	cs.ForAllConnectionsDo(resetConn)
 
-	filteredConns, conntrackOccupancyMetrics, err := cs.connDumper.DumpFlows(openflow.CtZone)
+	filteredConnsList, totalConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
 	if err != nil {
 		return 0, err
 	}
 	// Update only the Connection store. IPFIX records are generated based on Connection store.
-	for _, conn := range filteredConns {
+	for _, conn := range filteredConnsList {
 		cs.addOrUpdateConn(conn)
 	}
-	connsLen := len(filteredConns)
-	filteredConns = nil
-	metrics.MaxConnectionsInConnTrackTable.Set(float64(conntrackOccupancyMetrics.MaxConnections))
-	metrics.TotalConnectionsInConnTrackTable.Set(float64(conntrackOccupancyMetrics.TotalConnections))
+	connsLen := len(filteredConnsList)
+	filteredConnsList = nil
+	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))
+	maxConns, err := cs.connDumper.GetMaxConnections()
+	if err != nil {
+		return 0, err
+	}
+	metrics.MaxConnectionsInConnTrackTable.Set(float64(maxConns))
 
 	klog.V(2).Infof("Conntrack polling successful")
 

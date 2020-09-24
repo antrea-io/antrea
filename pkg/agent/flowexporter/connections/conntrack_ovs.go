@@ -58,23 +58,16 @@ func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet
 }
 
 // DumpFlows uses "ovs-appctl dpctl/dump-conntrack" to dump conntrack flows in the Antrea ZoneID.
-func (ct *connTrackOvsCtl) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, *flowexporter.ConntrackOccupancy, error) {
+func (ct *connTrackOvsCtl) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
 	conns, totalConns, err := ct.ovsAppctlDumpConnections(zoneFilter)
 	if err != nil {
-		klog.Errorf("Error when dumping flows from conntrack: %v", err)
-		return nil, nil, err
-	}
-
-	maxConns, err := getMaxConnectionsInConnTrack(ct.ovsctlClient)
-	if err != nil {
-		klog.Errorf("Error when getting max connections in conntrack: %v", err)
-		return nil, nil, err
+		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
 
 	filteredConns := filterAntreaConns(conns, ct.nodeConfig, ct.serviceCIDR, zoneFilter)
 	klog.V(2).Infof("FlowExporter considered flows: %d", len(filteredConns))
 
-	return filteredConns, &flowexporter.ConntrackOccupancy{MaxConnections: maxConns, TotalConnections: totalConns}, nil
+	return filteredConns, totalConns, nil
 }
 
 func (ct *connTrackOvsCtl) ovsAppctlDumpConnections(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
@@ -210,8 +203,8 @@ func lookupProtocolMap(name string) (uint8, error) {
 	return proto, nil
 }
 
-func getMaxConnectionsInConnTrack(ovsctlClient ovsctl.OVSCtlClient) (int, error) {
-	cmdOutput, execErr := ovsctlClient.RunAppctlCmd("dpctl/ct-get-maxconns", false)
+func (ct *connTrackOvsCtl) GetMaxConnections() (int, error) {
+	cmdOutput, execErr := ct.ovsctlClient.RunAppctlCmd("dpctl/ct-get-maxconns", false)
 	if execErr != nil {
 		return 0, fmt.Errorf("error when executing dpctl/ct-get-maxconns command: %v", execErr)
 	}

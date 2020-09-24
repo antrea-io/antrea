@@ -98,7 +98,7 @@ var (
 	TotalConnectionsInConnTrackTable = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Name:           "antrea_agent_conntrack_total_connection_count",
-			Help:           "Number of connections in the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configMap parameter in antrea-agent.conf.",
+			Help:           "Number of connections in the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.",
 			StabilityLevel: metrics.ALPHA,
 		},
 	)
@@ -106,7 +106,7 @@ var (
 	TotalAntreaConnectionsInConnTrackTable = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Name:           "antrea_agent_conntrack_antrea_connection_count",
-			Help:           "Number of connections in the Antrea ZoneID of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configMap parameter in antrea-agent.conf.",
+			Help:           "Number of connections in the Antrea ZoneID of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.",
 			StabilityLevel: metrics.ALPHA,
 		},
 	)
@@ -114,7 +114,7 @@ var (
 	MaxConnectionsInConnTrackTable = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Name:           "antrea_agent_conntrack_max_connection_count",
-			Help:           "Size of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configMap parameter in antrea-agent.conf.",
+			Help:           "Size of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.",
 			StabilityLevel: metrics.ALPHA,
 		},
 	)

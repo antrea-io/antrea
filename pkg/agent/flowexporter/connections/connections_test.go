@@ -314,21 +314,20 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, nil, testPollInterval)
 	// Hard-coded conntrack occupancy metrics for test
-	testConnectionMetric := &flowexporter.ConntrackOccupancy{
-		MaxConnections:   300000,
-		TotalConnections: 0,
-	}
-	mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testFlows, testConnectionMetric, nil)
+	TotalConnections := 0
+	MaxConnections := 300000
+	mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testFlows, TotalConnections, nil)
+	mockConnDumper.EXPECT().GetMaxConnections().Return(MaxConnections, nil)
 	connsLen, err := connStore.Poll()
 	require.Nil(t, err, fmt.Sprintf("Failed to add connections to connection store: %v", err))
 	assert.Equal(t, connsLen, len(testFlows), "expected connections should be equal to number of testFlows")
-	checkTotalConnectionsMetric(t, testConnectionMetric.TotalConnections)
-	checkMaxConnectionsMetric(t, testConnectionMetric.MaxConnections)
+	checkTotalConnectionsMetric(t, TotalConnections)
+	checkMaxConnectionsMetric(t, MaxConnections)
 }
 
 func checkAntreaConnectionMetrics(t *testing.T, numConns int) {
 	expectedAntreaConnectionCount := `
-	# HELP antrea_agent_conntrack_antrea_connection_count [ALPHA] Number of connections in the Antrea ZoneID of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configMap parameter in antrea-agent.conf.
+	# HELP antrea_agent_conntrack_antrea_connection_count [ALPHA] Number of connections in the Antrea ZoneID of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.
 	# TYPE antrea_agent_conntrack_antrea_connection_count gauge
 	`
 	expectedAntreaConnectionCount = expectedAntreaConnectionCount + fmt.Sprintf("antrea_agent_conntrack_antrea_connection_count %d\n", numConns)
@@ -338,7 +337,7 @@ func checkAntreaConnectionMetrics(t *testing.T, numConns int) {
 
 func checkTotalConnectionsMetric(t *testing.T, numConns int) {
 	expectedConnectionCount := `
-	# HELP antrea_agent_conntrack_total_connection_count [ALPHA] Number of connections in the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configMap parameter in antrea-agent.conf.
+	# HELP antrea_agent_conntrack_total_connection_count [ALPHA] Number of connections in the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.
 	# TYPE antrea_agent_conntrack_total_connection_count gauge
 	`
 	expectedConnectionCount = expectedConnectionCount + fmt.Sprintf("antrea_agent_conntrack_total_connection_count %d\n", numConns)
@@ -348,7 +347,7 @@ func checkTotalConnectionsMetric(t *testing.T, numConns int) {
 
 func checkMaxConnectionsMetric(t *testing.T, maxConns int) {
 	expectedMaxConnectionsCount := `
-	# HELP antrea_agent_conntrack_max_connection_count [ALPHA] Size of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configMap parameter in antrea-agent.conf.
+	# HELP antrea_agent_conntrack_max_connection_count [ALPHA] Size of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.
 	# TYPE antrea_agent_conntrack_max_connection_count gauge
 	`
 	expectedMaxConnectionsCount = expectedMaxConnectionsCount + fmt.Sprintf("antrea_agent_conntrack_max_connection_count %d\n", maxConns)
