@@ -80,15 +80,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	}
 	// Test the DumpFlows implementation of connTrackSystem
 	mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
-	connDumperDPSystem, err := NewConnTrackSystem(nodeConfig, serviceCIDR)
-	if err == nil {
-		conntrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
-		require.NoError(t, err, "Cannot read nf_conntrack_acct")
-		assert.Equal(t, 1, conntrackAcct, "net.netfilter.nf_conntrack_acct value should be 1")
-		conntrackTimestamping, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_timestamp")
-		require.NoError(t, err, "Cannot read nf_conntrack_timestamp")
-		assert.Equal(t, 1, conntrackTimestamping, "net.netfilter.nf_conntrack_timestamp value should be 1")
-	}
+	connDumperDPSystem := NewConnTrackSystem(nodeConfig, serviceCIDR)
 
 	connDumperDPSystem.connTrack = mockNetlinkCT
 	// Set expects for mocks
@@ -178,4 +170,18 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	assert.Equal(t, conns[0], expConn, "filtered connection and expected connection should be same")
 	assert.Equal(t, len(outputFlow), conntrackMetrics.TotalConnections, "Number of connections in conntrack table should be equal to outputFlow")
 	assert.Equal(t, maxConns, conntrackMetrics.MaxConnections, "Size of the conntrack table should be equal to the previous hard-coded value")
+}
+
+func TestSetupConnTrackParameters(t *testing.T) {
+	err := setupConntrackParameters()
+	if err != nil {
+		t.Logf("Setup conntrack parameters function returned error: %v", err)
+	} else {
+		conntrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
+		require.NoError(t, err, "Cannot read nf_conntrack_acct")
+		assert.Equal(t, 1, conntrackAcct, "net.netfilter.nf_conntrack_acct value should be 1")
+		conntrackTimestamping, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_timestamp")
+		require.NoError(t, err, "Cannot read nf_conntrack_timestamp")
+		assert.Equal(t, 1, conntrackTimestamping, "net.netfilter.nf_conntrack_timestamp value should be 1")
+	}
 }

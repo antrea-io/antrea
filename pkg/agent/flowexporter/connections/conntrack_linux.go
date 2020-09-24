@@ -37,14 +37,16 @@ type connTrackSystem struct {
 	connTrack   NetFilterConnTrack
 }
 
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) (*connTrackSystem, error) {
-	err := setupConntrackParameters()
-
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackSystem {
+	if err := setupConntrackParameters(); err != nil {
+		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
+		klog.Errorf("Error when setting up conntrack parameters, some information may be missing from exported flows: %v", err)
+	}
 	return &connTrackSystem{
 		nodeConfig,
 		serviceCIDR,
 		&netFilterConnTrack{},
-	}, err
+	}
 }
 
 // DumpFlows opens netlink connection and dumps all the flows in Antrea ZoneID of conntrack table.
@@ -156,17 +158,15 @@ func netlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 }
 
 func setupConntrackParameters() error {
-	// Ensure net.netfilter.nf_conntrack_acct value to be 1. This will enable flow exporter to export stats of connections.
-	// Do not fail, but continue after logging error as we can still dump flows with no stats.
-	acctErr := sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_acct", 1)
-	if acctErr != nil {
-		return acctErr
+	parametersWithErrors := []string{}
+	if sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_acct", 1) != nil {
+		parametersWithErrors = append(parametersWithErrors, "net.netfilter.nf_conntrack_acct")
 	}
-	// Ensure net.netfilter.nf_conntrack_timestamp value to be 1. This will enable flow exporter to export timestamps of connections.
-	// Do not fail, but continue after logging error as we can still dump flows with no timestamps.
-	timestampErr := sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_timestamp", 1)
-	if timestampErr != nil {
-		return timestampErr
+	if sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_timestamp", 1) != nil {
+		parametersWithErrors = append(parametersWithErrors, "net.netfilter.nf_conntrack_timestamp")
+	}
+	if len(parametersWithErrors) > 0 {
+		return fmt.Errorf("the following kernel parameters could not be verified / set: %v", parametersWithErrors)
 	}
 	return nil
 }

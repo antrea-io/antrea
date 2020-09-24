@@ -203,6 +203,6 @@ func InitializeConnectionMetrics() {
 		klog.Errorf("Failed to register antrea_agent_conntrack_antrea_connection_count with error: %v", err)
 	}
 	if err := legacyregistry.Register(MaxConnectionsInConnTrackTable); err != nil {
-		klog.Errorf("Failed to register antrea_agent_conntrack_antrea_connection_count with error: %v", err)
+		klog.Errorf("Failed to register antrea_agent_conntrack_max_connection_count with error: %v", err)
 	}
 }

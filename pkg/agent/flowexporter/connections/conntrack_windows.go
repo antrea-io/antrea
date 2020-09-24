@@ -23,6 +23,6 @@ import (
 )
 
 // TODO: Support FlowExporter feature for windows. We have to pass ovsctlClient when supported.
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) (*connTrackOvsCtl, error) {
-	return NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, nil), nil
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackOvsCtl {
+	return NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, nil)
 }
