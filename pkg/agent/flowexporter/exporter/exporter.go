@@ -18,10 +18,9 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
-	"strings"
-	"unicode"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
@@ -70,6 +69,7 @@ type flowExporter struct {
 	exportFrequency uint
 	pollCycle       uint
 	templateID      uint16
+	registry        ipfix.IPFIXRegistry
 }
 
 func genObservationID() (uint32, error) {
@@ -83,6 +83,8 @@ func genObservationID() (uint32, error) {
 }
 
 func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint) *flowExporter {
+	registry := ipfix.NewIPFIXRegistry()
+	registry.LoadRegistry()
 	return &flowExporter{
 		records,
 		nil,
@@ -90,6 +92,7 @@ func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint) *fl
 		exportFrequency,
 		0,
 		0,
+		registry,
 	}
 }
 
@@ -159,7 +162,6 @@ func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
 	exp.process = expProcess
 	exp.templateID = expProcess.NewTemplateID()
 
-	expProcess.LoadRegistries()
 	templateRec := ipfix.NewIPFIXTemplateRecord(uint16(len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements)), exp.templateID)
 
 	sentBytes, err := exp.sendTemplateRecord(templateRec)
@@ -197,7 +199,7 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 	}
 
 	for _, ie := range IANAInfoElements {
-		element, err := exp.process.GetIANARegistryInfoElement(ie, false)
+		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
 			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
 		}
@@ -206,10 +208,7 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 		}
 	}
 	for _, ie := range IANAReverseInfoElements {
-		split := strings.Split(ie, "_")
-		runeStr := []rune(split[1])
-		runeStr[0] = unicode.ToLower(runeStr[0])
-		element, err := exp.process.GetIANARegistryInfoElement(string(runeStr), true)
+		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.ReverseEnterpriseID)
 		if err != nil {
 			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
 		}
@@ -218,7 +217,7 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 		}
 	}
 	for _, ie := range AntreaInfoElements {
-		element, err := exp.process.GetAntreaRegistryInfoElement(ie, false)
+		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
 			return 0, fmt.Errorf("information element %s is not present in Antrea registry", ie)
 		}
