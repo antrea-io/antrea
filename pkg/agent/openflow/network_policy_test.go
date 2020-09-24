@@ -303,7 +303,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 		Priority:  &priorityRule2,
 		To:        parseAddresses([]string{"192.168.1.70"}),
 		FlowID:    ruleID2,
-		TableID:   ApplicationEgressRuleTable,
+		TableID:   DefaultTierEgressRuleTable,
 		PolicyRef: &v1beta1.NetworkPolicyReference{
 			Type:      v1beta1.AntreaNetworkPolicy,
 			Namespace: "ns1",
@@ -590,14 +590,14 @@ func prepareClient(ctrl *gomock.Controller) *client {
 	)
 	bridge := mocks.NewMockBridge(ctrl)
 	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	cnpOutTable = createMockTable(ctrl, ApplicationEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
+	cnpOutTable = createMockTable(ctrl, DefaultTierEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
 	outTable = createMockTable(ctrl, EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext)
 	outDropTable = createMockTable(ctrl, EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext)
 	metricTable = createMockTable(ctrl, EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext)
 	outAllowTable = createMockTable(ctrl, l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext)
 	c = &client{
 		pipeline: map[binding.TableIDType]binding.Table{
-			ApplicationEgressRuleTable: cnpOutTable,
+			DefaultTierEgressRuleTable: cnpOutTable,
 			EgressRuleTable:            outTable,
 			EgressDefaultTable:         outDropTable,
 			EgressMetricTable:          metricTable,

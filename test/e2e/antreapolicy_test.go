@@ -315,7 +315,7 @@ func testCNPDropEgress(t *testing.T) {
 func testCNPPriorityOverride(t *testing.T) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("cnp-priority1").
-		SetPriority(1.1).
+		SetPriority(1.01).
 		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
 	podZBIP, _ := podIPs["z/b"]
 	cidr := podZBIP + "/32"
@@ -325,7 +325,7 @@ func testCNPPriorityOverride(t *testing.T) {
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
 	builder2 = builder2.SetName("cnp-priority2").
-		SetPriority(1.2).
+		SetPriority(1.02).
 		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
 	// Medium priority. Allows traffic from z to x/a.
 	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
@@ -333,7 +333,7 @@ func testCNPPriorityOverride(t *testing.T) {
 
 	builder3 := &ClusterNetworkPolicySpecBuilder{}
 	builder3 = builder3.SetName("cnp-priority3").
-		SetPriority(1.3).
+		SetPriority(1.03).
 		SetAppliedToGroup(nil, map[string]string{"ns": "x"}, nil, nil)
 	// Lowest priority. Drops traffic from z to x.
 	builder3.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
@@ -387,8 +387,8 @@ func testCNPPriorityOverride(t *testing.T) {
 func testCNPTierOverride(t *testing.T) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("cnp-tier-emergency").
-		SetTier("Emergency").
-		SetPriority(1).
+		SetTier("emergency").
+		SetPriority(100).
 		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
 	podZBIP, _ := podIPs["z/b"]
 	cidr := podZBIP + "/32"
@@ -398,8 +398,8 @@ func testCNPTierOverride(t *testing.T) {
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
 	builder2 = builder2.SetName("cnp-tier-securityops").
-		SetTier("SecurityOps").
-		SetPriority(1).
+		SetTier("securityops").
+		SetPriority(10).
 		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
 	// Medium priority tier. Allows traffic from z to x/a.
 	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
@@ -407,7 +407,7 @@ func testCNPTierOverride(t *testing.T) {
 
 	builder3 := &ClusterNetworkPolicySpecBuilder{}
 	builder3 = builder3.SetName("cnp-tier-application").
-		SetTier("Application").
+		SetTier("application").
 		SetPriority(1).
 		SetAppliedToGroup(nil, map[string]string{"ns": "x"}, nil, nil)
 	// Lowest priority tier. Drops traffic from z to x.
@@ -433,17 +433,16 @@ func testCNPTierOverride(t *testing.T) {
 
 	testStepTwoCNP := []*TestStep{
 		{
-			"Two Policies with different tier priorities",
+			"Two Policies in different tiers",
 			reachabilityTwoCNPs,
 			[]metav1.Object{builder3.Get(), builder2.Get()},
 			80,
 			0,
 		},
 	}
-	// Create the Policies in specific order to make sure that priority re-assignments work as expected.
 	testStepAll := []*TestStep{
 		{
-			"All three Policies",
+			"All three Policies in different tiers",
 			reachabilityAllCNPs,
 			[]metav1.Object{builder3.Get(), builder1.Get(), builder2.Get()},
 			80,
@@ -455,6 +454,60 @@ func testCNPTierOverride(t *testing.T) {
 		{"CNP TierOverride All", testStepAll},
 	}
 	executeTests(t, testCase)
+}
+
+// testCNPTierOverride tests tier priority overriding in three Policies with custom created tiers.
+// Each CNP controls a smaller set of traffic patterns as tier priority increases.
+func testCNPCustomTiers(t *testing.T) {
+	// Create two custom tiers with tier priority immediately next to each other.
+	_, err := k8sUtils.CreateNewTier("high-priority", 245)
+	failOnError(err, t)
+	_, err = k8sUtils.CreateNewTier("low-priority", 246)
+	failOnError(err, t)
+
+	builder1 := &ClusterNetworkPolicySpecBuilder{}
+	builder1 = builder1.SetName("cnp-tier-high").
+		SetTier("high-priority").
+		SetPriority(100).
+		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
+	// Medium priority tier. Allows traffic from z to x/a.
+	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
+		nil, nil, secv1alpha1.RuleActionAllow)
+
+	builder2 := &ClusterNetworkPolicySpecBuilder{}
+	builder2 = builder2.SetName("cnp-tier-low").
+		SetTier("low-priority").
+		SetPriority(1).
+		SetAppliedToGroup(nil, map[string]string{"ns": "x"}, nil, nil)
+	// Lowest priority tier. Drops traffic from z to x.
+	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
+		nil, nil, secv1alpha1.RuleActionDrop)
+
+	reachabilityTwoCNPs := NewReachability(allPods, true)
+	reachabilityTwoCNPs.Expect(Pod("z/a"), Pod("x/b"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/a"), Pod("x/c"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/b"), Pod("x/b"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/b"), Pod("x/c"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/c"), Pod("x/b"), false)
+	reachabilityTwoCNPs.Expect(Pod("z/c"), Pod("x/c"), false)
+	testStepTwoCNP := []*TestStep{
+		{
+			"Two Policies in different tiers",
+			reachabilityTwoCNPs,
+			[]metav1.Object{builder2.Get(), builder1.Get()},
+			80,
+			0,
+		},
+	}
+	testCase := []*TestCase{
+		{"CNP Custom Tier priority", testStepTwoCNP},
+	}
+	executeTests(t, testCase)
+	// Cleanup customed tiers. CNPs created in those tiers need to be deleted first.
+	failOnError(k8sUtils.CleanCNPs(), t)
+	time.Sleep(networkPolicyDelay)
+	failOnError(k8sUtils.DeleteTier("high-priority"), t)
+	failOnError(k8sUtils.DeleteTier("low-priority"), t)
 }
 
 // testCNPPriorityConflictingRule tests that if there are two Policies in the cluster with rules that conflicts with
@@ -608,27 +661,8 @@ func executeTests(t *testing.T, testList []*TestCase) {
 		time.Sleep(networkPolicyDelay)
 		for _, step := range testCase.Steps {
 			log.Infof("running step %s of test case %s", step.Name, testCase.Name)
+			applyPolicies(t, step)
 			reachability := step.Reachability
-			for _, np := range step.Policies {
-				if cnp, ok := np.(*secv1alpha1.ClusterNetworkPolicy); ok {
-					log.Debugf("creating CNP %v", cnp.Name)
-					_, err := k8sUtils.CreateOrUpdateCNP(cnp)
-					failOnError(err, t)
-				} else if anp, ok := np.(*secv1alpha1.NetworkPolicy); ok {
-					log.Debugf("creating ANP %v in namespace %v", anp.Name, anp.Namespace)
-					_, err := k8sUtils.CreateOrUpdateANP(anp)
-					failOnError(err, t)
-				} else {
-					k8sNP, _ := np.(*v1net.NetworkPolicy)
-					log.Debugf("creating K8s NetworkPolicy %v in namespace %v", k8sNP.Name, k8sNP.Namespace)
-					_, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNP.Namespace, k8sNP)
-					failOnError(err, t)
-				}
-			}
-			if len(step.Policies) > 0 {
-				log.Debugf("Sleeping for %v for all policies to take effect", networkPolicyDelay)
-				time.Sleep(networkPolicyDelay)
-			}
 			start := time.Now()
 			k8sUtils.Validate(allPods, reachability, step.Port)
 			step.Duration = time.Now().Sub(start)
@@ -641,6 +675,29 @@ func executeTests(t *testing.T, testList []*TestCase) {
 		}
 	}
 	allTestList = append(allTestList, testList...)
+}
+
+func applyPolicies(t *testing.T, step *TestStep) {
+	for _, np := range step.Policies {
+		if cnp, ok := np.(*secv1alpha1.ClusterNetworkPolicy); ok {
+			log.Debugf("creating CNP %v", cnp.Name)
+			_, err := k8sUtils.CreateOrUpdateCNP(cnp)
+			failOnError(err, t)
+		} else if anp, ok := np.(*secv1alpha1.NetworkPolicy); ok {
+			log.Debugf("creating ANP %v in namespace %v", anp.Name, anp.Namespace)
+			_, err := k8sUtils.CreateOrUpdateANP(anp)
+			failOnError(err, t)
+		} else {
+			k8sNP, _ := np.(*v1net.NetworkPolicy)
+			log.Debugf("creating K8s NetworkPolicy %v in namespace %v", k8sNP.Name, k8sNP.Namespace)
+			_, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNP.Namespace, k8sNP)
+			failOnError(err, t)
+		}
+	}
+	if len(step.Policies) > 0 {
+		log.Debugf("Sleeping for %v for all policies to take effect", networkPolicyDelay)
+		time.Sleep(networkPolicyDelay)
+	}
 }
 
 // printResults summarizes test results for all the testcases
@@ -695,6 +752,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=CNPDropEgress", func(t *testing.T) { testCNPDropEgress(t) })
 		t.Run("Case=CNPPrioirtyOverride", func(t *testing.T) { testCNPPriorityOverride(t) })
 		t.Run("Case=CNPTierOverride", func(t *testing.T) { testCNPTierOverride(t) })
+		t.Run("Case=CNPCustomTiers", func(t *testing.T) { testCNPCustomTiers(t) })
 		t.Run("Case=CNPPriorityConflictingRule", func(t *testing.T) { testCNPPriorityConflictingRule(t) })
 		t.Run("Case=CNPRulePriority", func(t *testing.T) { testCNPRulePrioirty(t) })
 		t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })

@@ -16,7 +16,6 @@ package networkpolicy
 
 import (
 	"fmt"
-	"math"
 	"sort"
 
 	"k8s.io/klog"
@@ -25,32 +24,39 @@ import (
 )
 
 const (
-	PolicyBottomPriority  = uint16(100)
-	PolicyTopPriority     = uint16(65000)
-	InitialPriorityOffset = uint16(640)
-	InitialPriorityZones  = 100
+	PolicyBottomPriority     = uint16(100)
+	PolicyTopPriority        = uint16(65000)
+	PriorityOffsetSingleTier = float64(640)
+	TierOffsetSingleTier     = uint16(0)
+	PriorityOffsetMultiTier  = float64(20)
+	TierOffsetMultiTier      = uint16(250)
 )
 
-// InitialOFPriorityGetter is a function that will map types.Priority to a specific initial OpenFlow
-// priority in a table. It is used to space out the priorities in the OVS table and provide an initial
-// "guess" on the OpenFlow priority that can be assigned to the input Priority. If that OpenFlow
-// priority is not available, getInsertionPoint of priorityAssigner will then search for the appropriate
-// OpenFlow priority to insert the input Priority.
-type InitialOFPriorityGetter func(p types.Priority) uint16
+// InitialOFPriorityGetter is a heuristics function that will map types.Priority to a specific initial
+// OpenFlow priority in a table. It is used to space out the priorities in the OVS table and provide an
+// initial guess on the OpenFlow priority that can be assigned to the input Priority. If that OpenFlow
+// priority is not available, or if the surrounding priorities are out of place, getInsertionPoint()
+// will then search for the appropriate OpenFlow priority to insert the input Priority.
+type InitialOFPriorityGetter func(p types.Priority, isSingleTier bool) uint16
 
-// InitialOFPrioritySingleTierPerTable is an InitialOFPriorityGetter that can be used by OVS tables that
-// handles only one Antrea NetworkPolicy Tier. It roughly divides the table into 100 zones and computes
-// the initial OpenFlow priority based on rule priority.
-func InitialOFPrioritySingleTierPerTable(p types.Priority) uint16 {
-	priorityIndex := int32(math.Floor(p.PolicyPriority))
-	if priorityIndex > InitialPriorityZones-1 {
-		priorityIndex = InitialPriorityZones - 1
+// InitialOFPriority is an InitialOFPriorityGetter that can be used by OVS tables handling both single
+// and multiple Antrea NetworkPolicy Tiers. It computes the initial OpenFlow priority by offsetting
+// the tier priority, policy priority and rule priority with pre determined coefficients.
+func InitialOFPriority(p types.Priority, isSingleTier bool) uint16 {
+	tierOffsetBase := TierOffsetMultiTier
+	priorityOffsetBase := PriorityOffsetMultiTier
+	if isSingleTier {
+		tierOffsetBase = TierOffsetSingleTier
+		priorityOffsetBase = PriorityOffsetSingleTier
 	}
+	tierOffset := tierOffsetBase * uint16(p.TierPriority)
+	priorityOffset := uint16(p.PolicyPriority * priorityOffsetBase)
+	offSet := tierOffset + priorityOffset + uint16(p.RulePriority)
 	// Cannot return a negative OF priority.
-	if PolicyTopPriority-InitialPriorityOffset*uint16(priorityIndex) <= uint16(p.RulePriority) {
+	if PolicyTopPriority-PolicyBottomPriority < offSet {
 		return PolicyBottomPriority
 	}
-	return PolicyTopPriority - InitialPriorityOffset*uint16(priorityIndex) - uint16(p.RulePriority)
+	return PolicyTopPriority - offSet
 }
 
 // priorityAssigner is a struct that maintains the current mapping between types.Priority and
@@ -64,14 +70,18 @@ type priorityAssigner struct {
 	sortedOFPriorities []uint16
 	// initialOFPriorityFunc determines the initial OpenFlow priority to be checked for input Priorities.
 	initialOFPriorityFunc InitialOFPriorityGetter
+	// isSingleTier keeps track of if the priorityAssigner is responsible for handling more than one Tier in
+	// the OVS table that it manages.
+	isSingleTier bool
 }
 
-func newPriorityAssigner(initialOFPriorityFunc InitialOFPriorityGetter) *priorityAssigner {
+func newPriorityAssigner(initialOFPriorityFunc InitialOFPriorityGetter, isSingleTier bool) *priorityAssigner {
 	pa := &priorityAssigner{
 		priorityMap:           map[types.Priority]uint16{},
 		ofPriorityMap:         map[uint16]types.Priority{},
 		sortedOFPriorities:    []uint16{},
 		initialOFPriorityFunc: initialOFPriorityFunc,
+		isSingleTier:          isSingleTier,
 	}
 	return pa
 }
@@ -147,16 +157,18 @@ func (pa *priorityAssigner) getLastVacantOFPriority(ofPriority uint16) *uint16 {
 	return nil
 }
 
-// upperBoundOk returns if the Priorities *on* and after the input ofPriority are higher than the input Priority.
-func (pa *priorityAssigner) upperBoundOk(ofPriority uint16, p types.Priority) bool {
+// checkUpperBound returns if the Priorities *on* and after the input ofPriority are higher than the input Priority,
+// as well as the next occupied ofPriority.
+func (pa *priorityAssigner) checkUpperBound(ofPriority uint16, p types.Priority) (*uint16, bool) {
 	of, priority := pa.getNextOccupiedOFPriority(ofPriority)
-	return of == nil || p.Less(*priority)
+	return of, of == nil || p.Less(*priority)
 }
 
-// lowerBoundOk returns if the Priorities before the input ofPriority are lower than the input Priority.
-func (pa *priorityAssigner) lowerBoundOk(ofPriority uint16, p types.Priority) bool {
+// checkLowerBound returns if the Priorities before the input ofPriority are lower than the input Priority,
+// as well as the last occupied ofPriority.
+func (pa *priorityAssigner) checkLowerBound(ofPriority uint16, p types.Priority) (*uint16, bool) {
 	of, priority := pa.getLastOccupiedOFPriority(ofPriority)
-	return of == nil || priority.Less(p)
+	return of, of == nil || priority.Less(p)
 }
 
 // getInsertionPoint searches for the ofPriority to insert the input Priority in the table.
@@ -164,23 +176,31 @@ func (pa *priorityAssigner) lowerBoundOk(ofPriority uint16, p types.Priority) bo
 // and Priorities *on* and after the insertionPoint index is higher than the input Priority.
 // ofPriority returned will range from PolicyBottomPriority to PolicyTopPriority+1.
 func (pa *priorityAssigner) getInsertionPoint(p types.Priority) (uint16, bool) {
-	insertionPoint := pa.initialOFPriorityFunc(p)
+	insertionPoint := pa.initialOFPriorityFunc(p, pa.isSingleTier)
 	occupied, upwardSearching := false, false
 Loop:
 	for insertionPoint >= PolicyBottomPriority && insertionPoint <= PolicyTopPriority {
+		upperBound, upperOk := pa.checkUpperBound(insertionPoint, p)
+		lowerBound, lowerOk := pa.checkLowerBound(insertionPoint, p)
 		switch {
-		case pa.upperBoundOk(insertionPoint, p) && pa.lowerBoundOk(insertionPoint, p):
+		case upperOk && lowerOk:
 			if _, occupied = pa.ofPriorityMap[insertionPoint]; occupied && !upwardSearching {
+				// It might be the case that the ofPriority immediately lower than insertionPoint
+				// is unoccupied and fits the insertion criteria (upperOk and lowerOk). So continue
+				// searching instead of returning current insertionPoint, which will cause the
+				// Priority on current insertionPoint to be reassigned.
 				if insertionPoint != PolicyBottomPriority {
 					insertionPoint--
 					continue Loop
 				}
 			}
 			break Loop
-		case pa.upperBoundOk(insertionPoint, p):
-			insertionPoint--
-		case pa.lowerBoundOk(insertionPoint, p):
-			insertionPoint++
+		case upperOk:
+			// the Priority on lowerBound is higher than current Priority.
+			insertionPoint = *lowerBound - 1
+		case lowerOk:
+			// the Priority on upperBound is lower than current Priority.
+			insertionPoint = *upperBound + 1
 			upwardSearching = true
 		}
 	}
@@ -196,14 +216,14 @@ func (pa *priorityAssigner) reassignPriorities(insertionPoint uint16, p types.Pr
 	case (insertionPoint == PolicyBottomPriority || lastVacant == nil) && nextVacant != nil:
 		return pa.siftPrioritiesUp(insertionPoint, *nextVacant, p)
 	case (insertionPoint > PolicyTopPriority || nextVacant == nil) && lastVacant != nil:
-		return pa.siftPrioritiesDown(insertionPoint-uint16(1), *lastVacant, p)
+		return pa.siftPrioritiesDown(insertionPoint-1, *lastVacant, p)
 	case nextVacant != nil && lastVacant != nil:
 		costSiftUp := *nextVacant - insertionPoint
-		costSiftDown := insertionPoint - *lastVacant - uint16(1)
+		costSiftDown := insertionPoint - *lastVacant - 1
 		if costSiftUp < costSiftDown {
 			return pa.siftPrioritiesUp(insertionPoint, *nextVacant, p)
 		} else {
-			return pa.siftPrioritiesDown(insertionPoint-uint16(1), *lastVacant, p)
+			return pa.siftPrioritiesDown(insertionPoint-1, *lastVacant, p)
 		}
 	default:
 		return nil, map[uint16]uint16{}, nil, fmt.Errorf("no available Openflow priority left to insert priority %v", p)
@@ -275,6 +295,8 @@ func (pa *priorityAssigner) siftPrioritiesDown(insertionPoint, lastVacant uint16
 func (pa *priorityAssigner) GetOFPriority(p types.Priority) (*uint16, map[uint16]uint16, func(), error) {
 	if ofPriority, exists := pa.priorityMap[p]; exists {
 		return &ofPriority, nil, nil, nil
+	} else if uint16(len(pa.sortedOFPriorities)) == PolicyTopPriority-PolicyBottomPriority+1 {
+		return nil, nil, nil, fmt.Errorf("priorities are fully registered on this table")
 	}
 	insertionPoint, occupied := pa.getInsertionPoint(p)
 	if insertionPoint == PolicyBottomPriority || insertionPoint > PolicyTopPriority || occupied {
