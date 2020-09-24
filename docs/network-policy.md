@@ -48,6 +48,7 @@ Tiers as per their preference i.e. not be bound to 5 static tiering options
 as was the case initially.
 
 An example Tier might look like this:
+
 ```yaml
 apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
 kind: Tier
@@ -59,16 +60,20 @@ spec:
 ```
 
 Tiers have the following characteristics:
+
 - Policies can associate themselves with an existing Tier by setting the `tier`
   field in a Antrea NetworkPolicy CRD spec to the Tier's name.
 - A Tier must exist before an Antrea policy can reference it.
 - Policies associated with higher ordered (low `priority` value) Tiers are
   enforced first.
-- No two Tiers can be created with same priorities.
+- No two Tiers can be created with the same priority.
 - Updating the Tier's `priority` field is unsupported.
 - Deleting Tier with existing references from policies is not allowed.
-- Deleting system generated Tier resources is not allowed.
 
+### Static tiers
+
+Antrea release 0.9.x introduced support for 5 static tiers. These static tiers
+have been removed in favor of Tier CRDs as mentioned in the previous section.
 On startup, antrea-controller will create 5 Read-Only Tier resources
 corresponding to the static tiers for default consumption as shown below.
 
@@ -84,10 +89,6 @@ Any Antrea policy CRD referencing a static tier in its spec will now internally
 reference the corresponding Tier resource, thus maintaining the order of
 enforcement.
 
-### Static tiers
-
-Antrea release 0.9.x introduced support for 5 static tiers. These static tiers
-have been removed in favor of Tier CRDs as mentioned in the previous section.
 Previously, the static tiers created were as follows in the relative order of
 precedence:
 
@@ -120,6 +121,7 @@ belonging to a K8s NetworkPolicy.
 **Note**: ClusterNetworkPolicy is currently in "Alpha" stage. In order to
 enable them, edit the Controller and Agent configuration in the `antrea`
 ConfigMap as follows:
+
 ```yaml
    antrea-controller.conf: |
      featureGates:
@@ -140,6 +142,7 @@ ConfigMap as follows:
 ### The ClusterNetworkPolicy resource
 
 An example ClusterNetworkPolicy might look like this:
+
 ```yaml
 apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
 kind: ClusterNetworkPolicy
@@ -273,6 +276,7 @@ feature gate.
 ### The Antrea NetworkPolicy resource
 
 An example Antrea NetworkPolicy might look like this:
+
 ```yaml
 apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
 kind: NetworkPolicy
@@ -333,9 +337,9 @@ Antrea Policy CRDs are ordered based on priorities set at various levels.
 
 With the introduction of tiers, Antrea Policies, like ClusterNetworkPolicies,
 are first enforced based on the Tier to which they are associated. i.e. all
-policies belonging to a higher order Tier are enforced first, followed by
-policies belonging to the next ordered Tier and so on, until the lowest ordered
-"application" Tier policies are enforced.
+policies belonging to a high Tier are enforced first, followed by policies
+belonging to the next Tier and so on, until the "application" Tier policies
+are enforced.
 
 ### Ordering based on policy priority
 
