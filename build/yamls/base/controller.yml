@@ -76,18 +76,33 @@ webhooks:
   admissionReviewVersions: ["v1", "v1beta1"]
   sideEffects: None
   timeoutSeconds: 5
-- name: "cnpvalidator.antrea.tanzu.vmware.com"
+- name: "acnpvalidator.antrea.tanzu.vmware.com"
   clientConfig:
     service:
       name: "antrea"
       namespace: "kube-system"
-      path: "/validate/cnp"
+      path: "/validate/acnp"
   rules:
   - operations: ["CREATE", "UPDATE"]
     apiGroups: ["security.antrea.tanzu.vmware.com"]
     apiVersions: ["v1alpha1"]
     resources: ["clusternetworkpolicies"]
     scope: "Cluster"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  timeoutSeconds: 5
+- name: "anpvalidator.antrea.tanzu.vmware.com"
+  clientConfig:
+    service:
+      name: "antrea"
+      namespace: "kube-system"
+      path: "/validate/anp"
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["security.antrea.tanzu.vmware.com"]
+    apiVersions: ["v1alpha1"]
+    resources: ["networkpolicies"]
+    scope: "Namespaced"
   admissionReviewVersions: ["v1", "v1beta1"]
   sideEffects: None
   timeoutSeconds: 5

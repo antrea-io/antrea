@@ -367,12 +367,6 @@ spec:
                 minimum: 1
                 type: number
               tier:
-                enum:
-                - Emergency
-                - SecurityOps
-                - NetworkOps
-                - Platform
-                - Application
                 type: string
             required:
             - appliedTo
@@ -1619,8 +1613,8 @@ webhooks:
     service:
       name: antrea
       namespace: kube-system
-      path: /validate/cnp
-  name: cnpvalidator.antrea.tanzu.vmware.com
+      path: /validate/acnp
+  name: acnpvalidator.antrea.tanzu.vmware.com
   rules:
   - apiGroups:
     - security.antrea.tanzu.vmware.com
@@ -1632,5 +1626,27 @@ webhooks:
     resources:
     - clusternetworkpolicies
     scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/anp
+  name: anpvalidator.antrea.tanzu.vmware.com
+  rules:
+  - apiGroups:
+    - security.antrea.tanzu.vmware.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - networkpolicies
+    scope: Namespaced
   sideEffects: None
   timeoutSeconds: 5
