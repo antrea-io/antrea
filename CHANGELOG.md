@@ -11,6 +11,56 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.10.0 - 2020-09-24
+
+Includes all the bug fixes from [0.9.1], [0.9.2] and [0.9.3].
+
+Starting with Antrea 0.10.0, K8s version >= 1.16 is required.
+
+### Added
+
+- Add Antrea NetworkPolicy CRD API to define namespaced security policies which support additional features compared to K8s NetworkPolicies. ([#1117](https://github.com/vmware-tanzu/antrea/pull/1117) [#1194](https://github.com/vmware-tanzu/antrea/pull/1194), [@Dyanngg] [@abhiraut]) [Alpha - Feature Gate: `AntreaPolicy`]
+   * The `ClusterNetworkPolicy` Feature Gate has been removed, `AntreaPolicy` is used for both Antrea NetworkPolicies and ClusterNetworkPolicies
+   * Refer to the [Antrea Policy CRDs documentation] for information
+- Add "v1alpha1.stats.antrea.tanzu.vmware.com" API to query traffic statistics about NetworkPolicies (number of sessions / packets / bytes which are allowed or denied). ([#1172](https://github.com/vmware-tanzu/antrea/pull/1172) [#1221](https://github.com/vmware-tanzu/antrea/pull/1221) [#1140](https://github.com/vmware-tanzu/antrea/pull/1140), [@tnqn] [@weiqiangt]) [Alpha - Feature Gate: `NetworkPolicyStats`]
+   * The stats are aggregated from each Antrea Agent using an internal API in "controlplane.antrea.tanzu.vmware.com"
+- Add ability for users to define their own policy tiers using a Tier CRD. ([#926](https://github.com/vmware-tanzu/antrea/pull/926) [#1237](https://github.com/vmware-tanzu/antrea/pull/1237) [#1260](https://github.com/vmware-tanzu/antrea/pull/1260) [#1290](https://github.com/vmware-tanzu/antrea/pull/1290), [@abhiraut] [@Dyanngg])
+   * The 5 static tiers introduced in 0.9.x are mapped to read-only CRDs, in order to provide backwards-compatibility for clusters with existing tiered policies
+   * [Admission webhooks] ensure consistency across Tiers, NetworkPolicies and ClusterNetworkPolicies
+   * Refer to the [Antrea Policy CRDs documentation] for information
+- Support for ExternalEntity: rules in Antrea policies can select labelled non-Pod endpoints (e.g. VMs) which are represented by ExternalEntity CRD resources. ([#1084](https://github.com/vmware-tanzu/antrea/pull/1084), [@Dyanngg] [@suwang48404])
+- Support for querying the list of NetworkPolicies which are applied to a specific Pod, or which select a specific Pod in an ingress / egress rule. ([#1116](https://github.com/vmware-tanzu/antrea/pull/1116), [@jakesokol1] [@antoninbas]) [Alpha]
+   * New "/endpoint" API endpoint in Antrea Controller - API may change in future releases
+   * New "antctl query endpoint" command
+- Add Prometheus metrics for the connection tracking table (max size, total number of connections, total number of connections installed by Antrea) when `FlowExporter` is enabled. ([#1232](https://github.com/vmware-tanzu/antrea/pull/1232), [@dreamtalen])
+- Configure access to Antrea NetworkPolicy and ClusterNetworkPolicy APIs for [default cluster roles] (admin / edit / view) using [aggregated ClusterRoles]. ([#1206](https://github.com/vmware-tanzu/antrea/pull/1206), [@abhiraut])
+- Configure access to Traceflows API for [default cluster roles] (admin / edit / view) using [aggregated ClusterRoles]. ([#1231](https://github.com/vmware-tanzu/antrea/pull/1231), [@abhiraut])
+
+### Changed
+
+- Re-introduce legacy "networking.antrea.tanzu.vmware.com" internal API group which was previously removed in [0.9.3], to avoid upgrade issues. ([#1243](https://github.com/vmware-tanzu/antrea/pull/1243), [@tnqn])
+   * Users can safely upgrade from any 0.9.x release to 0.10.0 without disruption in NetworkPolicy enforcement, assuming the Antrea Controller is upgraded first.
+- Use the v1 version of "apiextensions.k8s.io" instead of "v1beta1"; v1 was introduced in K8s 1.15. ([#1009](https://github.com/vmware-tanzu/antrea/pull/1009), [@abhiraut])
+   * As part of this, the OpenAPI spec used for validation was improved for several of the Antrea CRDs
+- Use the v1 version of "rbac.authorization.k8s.io" instead of v1beta1; v1 was introduced in K8s 1.8. ([#1274](https://github.com/vmware-tanzu/antrea/pull/1274), [@abhiraut])
+- Change type of some Prometheus metrics from "summary" to "histogram", which may impact consumers of these metrics, which where incorrectly tagged as "STABLE" when they were first introduced. ([#1202](https://github.com/vmware-tanzu/antrea/pull/1202), [@dreamtalen])
+- Deprecate "antrea_agent_runtime_info" and "antrea_controller_runtime_info" metrics, which will be removed in 0.11; the same information can now be obtained from the instance label of the target. ([#1217](https://github.com/vmware-tanzu/antrea/pull/1217), [@srikartati])
+- Upgrade OVS version to 2.14.0 to pick up some recent patches. ([#1121](https://github.com/vmware-tanzu/antrea/pull/1121), [@lzhecheng])
+- Collect additional information in support bundle. ([#1145](https://github.com/vmware-tanzu/antrea/pull/1145), [@wenyingd])
+   * OVS logs, kubelet logs and host network configuration on Windows Nodes [Windows]
+   * Description of the ports associated with the OVS bridge
+- Restrict read permissions for the OVSDB file persisted on each Node. ([#1293](https://github.com/vmware-tanzu/antrea/pull/1293), [@antoninbas])
+- Add more consistent short names for Antrea NetworkPolicies ("anp") and ClusterNetworkPolicies ("acnp"). ([#1291](https://github.com/vmware-tanzu/antrea/pull/1291), [@abhiraut])
+- Add reference to the original user-defined policy object in the internal representation of policies computed by the Antrea Controller and served through the "controlplane.antrea.tanzu.vmware.com" internal API. ([#1258](https://github.com/vmware-tanzu/antrea/pull/1258), [@tnqn])
+- Remove dependency on "github.com/goccy/go-graphviz" in the Traceflow UI implementation: usage of cgo was creating issues when cross-compiling assets and some of the module's dependencies were distributed under copyleft licenses. ([#1127](https://github.com/vmware-tanzu/antrea/pull/1127), [@ZhangYW18])
+- Remove `serviceCIDR` Agent configuration parameter from Antrea manifests destined to public cloud K8s services (AKS, EKS, GKE) to avoid confusion: AntreaProxy is always enabled for those, which means that the parameter is not needed and will be ignored if provided. ([#1177](https://github.com/vmware-tanzu/antrea/pull/1177), [@jianjuns])
+- Add status message in Traceflow UI for running Traceflow requests. ([#1277](https://github.com/vmware-tanzu/antrea/pull/1277), [@ZhangYW18])
+- Optimize flow priority assignment for Antrea Policies when the Agent restarts. ([#1105](https://github.com/vmware-tanzu/antrea/pull/1105), [@Dyanngg])
+
+### Fixed
+
+- Periodically check timeout of running Traceflow requests to provide a useful status to users and avoid leaking data-plane tags. ([#1179](https://github.com/vmware-tanzu/antrea/pull/1179), [@jianjuns])
+
 ## 0.9.3 - 2020-09-03
 
 ### Changed
@@ -413,14 +463,24 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [Flow Exporter]: https://github.com/vmware-tanzu/antrea/blob/master/docs/network-flow-visibility.md
 [Elastic Stack]: https://www.elastic.co/elastic-stack
 [strongSwan]: https://www.strongswan.org/
+[Antrea Policy CRDs documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/network-policy.md
+[Default cluster roles]: https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles
+[Aggregated ClusterRoles]: https://kubernetes.io/docs/reference/access-authn-authz/rbac/#aggregated-clusterroles
+[Admission webhooks]: https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/
+
+[0.9.1]: #091---2020-08-21
+[0.9.2]: #092---2020-08-27
+[0.9.3]: #093---2020-09-03
 
 [@AbdYsn]: https://github.com/AbdYsn
 [@abhiraut]: https://github.com/abhiraut
 [@alex-vmw]: https://github.com/alex-vmw
 [@andrewsykim]: https://github.com/andrewsykim
 [@antoninbas]: https://github.com/antoninbas
+[@dreamtalen]: https://github.com/dreamtalen
 [@Dyanngg]: https://github.com/Dyanngg
 [@gran-vmv]: https://github.com/gran-vmv
+[@jakesokol1]: https://github.com/jakesokol1
 [@jianjuns]: https://github.com/jianjuns
 [@lzhecheng]: https://github.com/lzhecheng
 [@MatthewHinton56]: https://github.com/MatthewHinton56
