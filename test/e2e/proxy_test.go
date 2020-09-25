@@ -61,7 +61,7 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, "nginx", testNamespace))
 	svc, err := data.createNginxClusterIPService(true)
 	require.NoError(t, err)
-	ingressIPs := []string{"169.254.169.253", "169.254.169.254"}
+	ingressIPs := []string{"169.254.1.253", "169.254.1.254"}
 	_, err = data.createNginxLoadBalancerService(true, ingressIPs)
 	require.NoError(t, err)
 	require.NoError(t, data.createBusyboxPodOnNode("busybox", nodeName))
@@ -169,7 +169,7 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 	nginxIP := nginxIPs.ipv4.String()
 	svc, err := data.createNginxClusterIPService(false)
 	require.NoError(t, err)
-	ingressIPs := []string{"169.254.169.253", "169.254.169.254"}
+	ingressIPs := []string{"169.254.1.253", "169.254.1.254"}
 	_, err = data.createNginxLoadBalancerService(false, ingressIPs)
 	require.NoError(t, err)
 	agentName, err := data.getAntreaPodOnNode(nodeName)

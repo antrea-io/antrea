@@ -33,6 +33,11 @@ const (
 	// Allows to apply ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
 	AntreaPolicy featuregate.Feature = "AntreaPolicy"
 
+	// alpha: v0.10
+	// Enable EndpointSlice support in AntreaProxy. If AntreaProxy is not enabled, this
+	// flag will not take effect.
+	EndpointSlice featuregate.Feature = "EndpointSlice"
+
 	// alpha: v0.8
 	// beta: v0.11
 	// Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
@@ -68,6 +73,7 @@ var (
 	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		AntreaPolicy:       {Default: false, PreRelease: featuregate.Alpha},
 		AntreaProxy:        {Default: true, PreRelease: featuregate.Beta},
+		EndpointSlice:      {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats: {Default: false, PreRelease: featuregate.Alpha},

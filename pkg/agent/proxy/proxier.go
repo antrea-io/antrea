@@ -20,6 +20,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/api/discovery/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
@@ -41,9 +42,10 @@ const (
 
 // TODO: Add metrics
 type proxier struct {
-	once            sync.Once
-	endpointsConfig *config.EndpointsConfig
-	serviceConfig   *config.ServiceConfig
+	once                sync.Once
+	endpointSliceConfig *config.EndpointSliceConfig
+	endpointsConfig     *config.EndpointsConfig
+	serviceConfig       *config.ServiceConfig
 	// endpointsChanges and serviceChanges contains all changes to endpoints and
 	// services that happened since last syncProxyRules call. For a single object,
 	// changes are accumulated. Once both endpointsChanges and serviceChanges
@@ -64,11 +66,12 @@ type proxier struct {
 	// serviceStringMapMutex protects serviceStringMap object.
 	serviceStringMapMutex sync.Mutex
 
-	runner       *k8sproxy.BoundedFrequencyRunner
-	stopChan     <-chan struct{}
-	agentQuerier querier.AgentQuerier
-	ofClient     openflow.Client
-	isIPv6       bool
+	runner              *k8sproxy.BoundedFrequencyRunner
+	stopChan            <-chan struct{}
+	agentQuerier        querier.AgentQuerier
+	ofClient            openflow.Client
+	isIPv6              bool
+	enableEndpointSlice bool
 }
 
 func (p *proxier) isInitialized() bool {
@@ -105,6 +108,7 @@ func (p *proxier) removeStaleServices() {
 			}
 		}
 		delete(p.serviceInstalledMap, svcPortName)
+		delete(p.endpointInstalledMap, svcPortName)
 		p.deleteServiceByIP(svcInfo.String())
 		p.groupCounter.Recycle(svcPortName)
 	}
@@ -173,6 +177,49 @@ func smallSliceDifference(s1, s2 []string) []string {
 	}
 
 	return diff
+}
+
+// calculateServiceEndpointUpdateList calculates the Endpoints of the Service to be installed.
+// If Endpoints of the Service have changed, all current Endpoints of the Service will be returned. Otherwise, it will
+// return nil.
+func (p *proxier) calculateServiceEndpointUpdateList(svcPortName k8sproxy.ServicePortName) ([]k8sproxy.Endpoint, bool) {
+	if _, ok := p.serviceMap[svcPortName]; !ok { // The Service is not expected to be installed.
+		return nil, false
+	}
+	var needUpdate bool
+	endpointsExpected, ok := p.endpointsMap[svcPortName]
+	if !ok || len(endpointsExpected) == 0 { // No endpoint for this Service.
+		return nil, false
+	}
+	endpointInstalled, ok := p.endpointInstalledMap[svcPortName]
+	if !ok {
+		p.endpointInstalledMap[svcPortName] = map[string]struct{}{}
+		endpointInstalled = p.endpointInstalledMap[svcPortName]
+	}
+	var endpointUpdateList []k8sproxy.Endpoint
+	for _, endpoint := range endpointsExpected {
+		_, installed := endpointInstalled[endpoint.String()]
+		if !installed {
+			needUpdate = true
+		}
+		endpointUpdateList = append(endpointUpdateList, endpoint)
+	}
+	if !needUpdate {
+		endpointUpdateList = nil
+	}
+	return endpointUpdateList, needUpdate
+}
+
+func (p *proxier) installEndpoints(endpoints []k8sproxy.Endpoint, svcPortName k8sproxy.ServicePortName, svcInfo *types.ServiceInfo) error {
+	groupID, _ := p.groupCounter.Get(svcPortName)
+	if err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpoints, true); err != nil {
+		return err
+	}
+	err := p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, endpoints)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *proxier) installServices() {
@@ -276,6 +323,9 @@ func (p *proxier) installServices() {
 		}
 
 		p.serviceInstalledMap[svcPortName] = svcPort
+		for _, endpoint := range endpointUpdateList {
+			p.endpointInstalledMap[svcPortName][endpoint.String()] = struct{}{}
+		}
 		p.addServiceByIP(svcInfo.String(), svcPortName)
 	}
 }
@@ -323,6 +373,31 @@ func (p *proxier) OnEndpointsDelete(endpoints *corev1.Endpoints) {
 }
 
 func (p *proxier) OnEndpointsSynced() {
+	p.endpointsChanges.OnEndpointsSynced()
+	if p.isInitialized() {
+		p.runner.Run()
+	}
+}
+
+func (p *proxier) OnEndpointSliceAdd(endpointSlice *v1beta1.EndpointSlice) {
+	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, false) && p.isInitialized() {
+		p.runner.Run()
+	}
+}
+
+func (p *proxier) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice *v1beta1.EndpointSlice) {
+	if p.endpointsChanges.OnEndpointSliceUpdate(newEndpointSlice, false) && p.isInitialized() {
+		p.runner.Run()
+	}
+}
+
+func (p *proxier) OnEndpointSliceDelete(endpointSlice *v1beta1.EndpointSlice) {
+	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, true) && p.isInitialized() {
+		p.runner.Run()
+	}
+}
+
+func (p *proxier) OnEndpointSlicesSynced() {
 	p.endpointsChanges.OnEndpointsSynced()
 	if p.isInitialized() {
 		p.runner.Run()
@@ -383,7 +458,11 @@ func (p *proxier) deleteServiceByIP(serviceStr string) {
 func (p *proxier) Run(stopCh <-chan struct{}) {
 	p.once.Do(func() {
 		go p.serviceConfig.Run(stopCh)
-		go p.endpointsConfig.Run(stopCh)
+		if p.enableEndpointSlice {
+			go p.endpointSliceConfig.Run(stopCh)
+		} else {
+			go p.endpointsConfig.Run(stopCh)
+		}
 		p.stopChan = stopCh
 		p.SyncLoop()
 	})
@@ -393,6 +472,7 @@ func NewProxier(
 	hostname string,
 	informerFactory informers.SharedInformerFactory,
 	ofClient openflow.Client,
+	enableEndpointSlice bool,
 	isIPv6 bool) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
@@ -401,10 +481,10 @@ func NewProxier(
 
 	klog.Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
 	p := &proxier{
-		endpointsConfig:      config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
+		enableEndpointSlice:  enableEndpointSlice,
 		serviceConfig:        config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
-		endpointsChanges:     newEndpointsChangesTracker(hostname),
 		serviceChanges:       newServiceChangesTracker(recorder, isIPv6),
+		endpointsChanges:     newEndpointsChangesTracker(hostname, enableEndpointSlice),
 		serviceMap:           k8sproxy.ServiceMap{},
 		serviceInstalledMap:  k8sproxy.ServiceMap{},
 		endpointInstalledMap: map[k8sproxy.ServicePortName]map[string]struct{}{},
@@ -415,7 +495,13 @@ func NewProxier(
 		isIPv6:               isIPv6,
 	}
 	p.serviceConfig.RegisterEventHandler(p)
-	p.endpointsConfig.RegisterEventHandler(p)
+	if enableEndpointSlice {
+		p.endpointSliceConfig = config.NewEndpointSliceConfig(informerFactory.Discovery().V1beta1().EndpointSlices(), resyncPeriod)
+		p.endpointSliceConfig.RegisterEventHandler(p)
+	} else {
+		p.endpointsConfig = config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod)
+		p.endpointsConfig.RegisterEventHandler(p)
+	}
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, 0, 30*time.Second, -1)
 	return p
 }
@@ -424,10 +510,10 @@ func NewDualStackProxier(
 	hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) k8sproxy.Provider {
 
 	// Create an ipv4 instance of the single-stack proxier
-	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false)
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, true, false)
 
 	// Create an ipv6 instance of the single-stack proxier
-	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true)
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, true)
 
 	// Return a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances

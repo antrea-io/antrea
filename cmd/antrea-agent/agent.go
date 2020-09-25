@@ -185,9 +185,9 @@ func run(o *Options) error {
 		case v4Enabled && v6Enabled:
 			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
 		case v4Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false, true)
 		case v6Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true, true)
 		default:
 			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
 		}
