@@ -776,6 +776,14 @@ rules:
   - watch
   - list
 - apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
   - clusterinformation.antrea.tanzu.vmware.com
   resources:
   - antreaagentinfos
@@ -1044,6 +1052,10 @@ data:
     # Service traffic.
       AntreaProxy: true
 
+    # Enable EndpointSlice support in AntreaProxy. If AntreaProxy is not enabled, this
+    # flag will not take effect.
+    #  EndpointSlice: false
+
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
 
@@ -1187,7 +1199,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-2fm49f65tg
+  name: antrea-config-hhk748gttk
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1294,7 +1306,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-2fm49f65tg
+          name: antrea-config-hhk748gttk
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1545,7 +1557,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-2fm49f65tg
+          name: antrea-config-hhk748gttk
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

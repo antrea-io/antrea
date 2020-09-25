@@ -28,6 +28,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --proxy                       Generate a manifest with Antrea proxy enabled
+        --endpointslice               Generate a manifest with Antrea proxy and EndpointSlice support enabled
         --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
         --prometheus                  Generate a manifest with Antrea Controller and Agent Prometheus metrics listener enabled
         --keep                        Debug flag which will preserve the generated kustomization.yml
@@ -59,6 +60,7 @@ MODE="dev"
 KIND=false
 IPSEC=false
 PROXY=false
+ENDPOINTSLICE=false
 NP=false
 KEEP=false
 ENCAP_MODE=""
@@ -96,6 +98,11 @@ case $key in
     ;;
     --proxy)
     PROXY=true
+    shift
+    ;;
+    --endpointslice)
+    PROXY=true
+    ENDPOINTSLICE=true
     shift
     ;;
     --np)
@@ -216,6 +223,10 @@ fi
 
 if $PROXY; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: true/" antrea-agent.conf
+fi
+
+if $ENDPOINTSLICE; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
 fi
 
 if $NP; then

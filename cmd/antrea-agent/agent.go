@@ -177,7 +177,7 @@ func run(o *Options) error {
 	}
 	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
+		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient, features.DefaultFeatureGate.Enabled(features.EndpointSlice))
 	}
 	cniServer := cniserver.New(
 		o.config.CNISocket,
