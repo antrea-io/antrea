@@ -16,16 +16,18 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
-	"regexp"
 	"sort"
 	"strconv"
 	"time"
 
+	"github.com/vmware-tanzu/octant/pkg/action"
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
 	"github.com/vmware-tanzu/octant/pkg/view/component"
 	"github.com/vmware-tanzu/octant/pkg/view/flexlayout"
+	"k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
@@ -54,9 +56,6 @@ const (
 	phaseCol        = "Phase"
 	ageCol          = "Age"
 	traceNameCol    = "Trace Name"
-
-	namespaceStrPattern = `[a-z0-9]([-a-z0-9]*[a-z0-9])?`
-	podStrPattern       = `[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*`
 
 	TIME_FORMAT_YYYYMMDD_HHMMSS = "20060102-150405"
 )
@@ -89,19 +88,6 @@ func getDstType(tf *opsv1alpha1.Traceflow) string {
 	return ""
 }
 
-func regExpMatch(pattern, str string) bool {
-	match, err := regexp.MatchString(pattern, str)
-	if err != nil {
-		log.Printf("Failed to judge srcPod string pattern: %s", err)
-		return false
-	}
-	if !match {
-		log.Printf("Failed to match string %s and regExp pattern %s", str, pattern)
-		return false
-	}
-	return true
-}
-
 // actionHandler handlers clicks and actions from "Start New Trace" and "Generate Trace Graph" buttons.
 func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error {
 	actionName, err := request.Payload.String("action")
@@ -112,26 +98,40 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 
 	switch actionName {
 	case addTfAction:
-		// TODO Octant v0.13.1 does not support alerts, sending alerts is supported with Octant no earlier than v0.16.0.
-		// TODO After upgrading Octant, send alerts when one of the sanity checks for users' input fail to pass.
 		srcNamespace, err := request.Payload.String(srcNamespaceCol)
 		if err != nil {
 			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
 				"failed to get srcNamespace as string: %s", err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Failed to get source namespace as "+
+				"string: %s", err), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			return nil
 		}
-		if match := regExpMatch(namespaceStrPattern, srcNamespace); !match {
+		if errs := validation.ValidateNamespaceName(srcNamespace, false); len(errs) != 0 {
 			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
-				"failed to match namespace %s with K8s Namespace pattern %s", srcNamespace, namespaceStrPattern)
+				"failed to validate source namespace string %s, errs: %#v", srcNamespace, errs)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Invalid source namespace string, "+
+				"please check your input and submit again."), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			return nil
 		}
 
 		srcPod, err := request.Payload.String(srcPodCol)
 		if err != nil {
 			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
 				"failed to get srcPod as string: %s", err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Failed to get source pod as "+
+				"string: %s", err), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			return nil
 		}
-		if match := regExpMatch(podStrPattern, srcPod); !match {
+		if errs := validation.NameIsDNSSubdomain(srcPod, false); len(errs) != 0 {
 			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
-				"failed to match pod name %s with K8s Pod pattern %s", srcPod, podStrPattern)
+				"failed to validate source pod string %s, errs: %#v", srcPod, errs)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Invalid source pod string, "+
+				"please check your input and submit again."), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			return nil
 		}
 
 		// Judge the destination type and get destination according to the type.
@@ -139,28 +139,47 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		if err != nil || len(dstType) == 0 {
 			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
 				"failed to get dstType as string slice: %s", err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Invalid destination type choice, "+
+				"please check your input and submit again."), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			return nil
 		}
-		log.Printf("dstType %+v", dstType)
 		dst, err := request.Payload.String(dstCol)
 		if err != nil {
 			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
 				"failed to get dst as string: %s", err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Failed to get destination as "+
+				"string: %s", err), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			return nil
 		}
 		dstNamespace, err := request.Payload.OptionalString(dstNamespaceCol)
 		if err != nil {
 			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
 				"failed to get dstNamespace as string: %s", err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Failed to get destination namespace as "+
+				"string: %s", err), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			return nil
 		}
 		var destination opsv1alpha1.Destination
 		switch dstType[0] {
 		case opsv1alpha1.DstTypePod:
-			if match := regExpMatch(podStrPattern, dst); !match {
+			if errs := validation.NameIsDNSSubdomain(dst, false); len(errs) != 0 {
 				log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
-					"failed to match pod name %s with K8s Pod pattern %s", dst, podStrPattern)
+					"failed to validate destination pod string %s, errs: %#v", dst, errs)
+				alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Invalid destination pod string, "+
+					"please check your input and submit again."), action.DefaultAlertExpiration)
+				request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+				return nil
 			}
-			if match := regExpMatch(namespaceStrPattern, dstNamespace); !match {
+			if errs := validation.ValidateNamespaceName(dstNamespace, false); len(errs) != 0 {
 				log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
-					"failed to match namespace %s with K8s Namespace pattern %s", dstNamespace, namespaceStrPattern)
+					"failed to validate destination namespace string %s, errs: %#v", dstNamespace, errs)
+				alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Invalid destination namespace string, "+
+					"please check your input and submit again."), action.DefaultAlertExpiration)
+				request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+				return nil
 			}
 			destination = opsv1alpha1.Destination{
 				Namespace: dstNamespace,
@@ -171,18 +190,38 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 			if s == nil {
 				log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
 					"failed to get destination IP as a valid IPv4 IP: %s", err)
+				alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Invalid destination IPv4 string, "+
+					"please check your input and submit again."), action.DefaultAlertExpiration)
+				request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+				return nil
 			}
 			if s.To4() == nil {
 				log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
 					"failed to get destination IP as a valid IPv4 IP: %s", err)
+				alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Invalid destination IPv4 string, "+
+					"please check your input and submit again."), action.DefaultAlertExpiration)
+				request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+				return nil
 			}
 			destination = opsv1alpha1.Destination{
 				IP: dst,
 			}
 		case opsv1alpha1.DstTypeService:
-			if match := regExpMatch(namespaceStrPattern, dstNamespace); !match {
+			if errs := validation.ValidateNamespaceName(dstNamespace, false); len(errs) != 0 {
 				log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
-					"failed to match namespace %s with K8s Namespace pattern %s", dstNamespace, namespaceStrPattern)
+					"failed to validate destination namespace string %s, errs: %#v", dstNamespace, errs)
+				alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Invalid destination namespace string, "+
+					"please check your input and submit again."), action.DefaultAlertExpiration)
+				request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+				return nil
+			}
+			if errs := validation.NameIsDNS1035Label(dst, false); len(errs) != 0 {
+				log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
+					"failed to validate destination service string %s, errs: %#v", dst, errs)
+				alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Invalid destination service string, "+
+					"please check your input and submit again."), action.DefaultAlertExpiration)
+				request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+				return nil
 			}
 			destination = opsv1alpha1.Destination{
 				Namespace: dstNamespace,
@@ -190,21 +229,25 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 			}
 		}
 
+		// It is not required for users to input port numbers.
+		hasSrcPort, hasDstPort := true, true
 		srcPort, err := request.Payload.Uint16(srcPortCol)
 		if err != nil {
-			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
-				"failed to get srcPort as int: %s", err)
+			hasSrcPort = false
 		}
 		dstPort, err := request.Payload.Uint16(dstPortCol)
 		if err != nil {
-			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
-				"failed to get dstPort as int: %s", err)
+			hasDstPort = false
 		}
 
 		protocol, err := request.Payload.StringSlice(protocolCol)
 		if err != nil || len(protocol) == 0 {
 			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
 				"failed to get protocol as string slice: %s", err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Failed to get protocol as "+
+				"string: %s", err), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			return nil
 		}
 
 		// Judge whether the name of trace flow is duplicated.
@@ -215,6 +258,10 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		if tfOld.Name == tfName {
 			log.Printf("Invalid user input, CRD creation or Traceflow request may fail: "+
 				"duplicate traceflow \"%s\": same source pod and destination pod in less than one second: %+v. ", tfName, tfOld)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Duplicate traceflow: same source pod "+
+				"and destination pod in less than one second"), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			return nil
 		}
 
 		tf := &opsv1alpha1.Traceflow{
@@ -239,16 +286,23 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		case opsv1alpha1.TCPProtocol:
 			{
 				tf.Spec.Packet.TransportHeader.TCP = &opsv1alpha1.TCPHeader{
-					SrcPort: int32(srcPort),
-					DstPort: int32(dstPort),
-					Flags:   2,
+					Flags: 2,
+				}
+				if hasSrcPort {
+					tf.Spec.Packet.TransportHeader.TCP.SrcPort = int32(srcPort)
+				}
+				if hasDstPort {
+					tf.Spec.Packet.TransportHeader.TCP.DstPort = int32(dstPort)
 				}
 			}
 		case opsv1alpha1.UDPProtocol:
 			{
-				tf.Spec.Packet.TransportHeader.UDP = &opsv1alpha1.UDPHeader{
-					SrcPort: int32(srcPort),
-					DstPort: int32(dstPort),
+				tf.Spec.Packet.TransportHeader.UDP = &opsv1alpha1.UDPHeader{}
+				if hasSrcPort {
+					tf.Spec.Packet.TransportHeader.UDP.SrcPort = int32(srcPort)
+				}
+				if hasDstPort {
+					tf.Spec.Packet.TransportHeader.UDP.DstPort = int32(dstPort)
 				}
 			}
 		case opsv1alpha1.ICMPProtocol:
@@ -263,9 +317,15 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		tf, err = p.client.OpsV1alpha1().Traceflows().Create(ctx, tf, v1.CreateOptions{})
 		if err != nil {
 			log.Printf("Failed to create traceflow CRD \"%s\", err: %s", tfName, err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Failed to create traceflow CRD, "+
+				"err: %s", err), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
 			return nil
 		}
 		log.Printf("Create traceflow CRD \"%s\" successfully, Traceflow Results: %+v", tfName, tf)
+		alert := action.CreateAlert(action.AlertTypeSuccess, fmt.Sprintf("Traceflow \"%s\" is created successfully",
+			tfName), action.DefaultAlertExpiration)
+		request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
 		// Automatically delete the traceflow CRD after created for 300s(5min).
 		go func(tfName string) {
 			age := time.Second * 300
@@ -281,6 +341,9 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		p.graph, err = graphviz.GenGraph(p.lastTf)
 		if err != nil {
 			log.Printf("Failed to generate traceflow graph \"%s\", err: %s", tfName, err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Failed to generate traceflow graph, "+
+				"err: %s", err), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
 			return nil
 		}
 		return nil
@@ -288,6 +351,9 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		name, err := request.Payload.String(traceNameCol)
 		if err != nil {
 			log.Printf("Failed to get name at string: %s", err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Failed to get graph name as "+
+				"string: %s", err), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
 			return nil
 		}
 		// Invoke GenGraph to show
@@ -295,6 +361,9 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		tf, err := p.client.OpsV1alpha1().Traceflows().Get(ctx, name, v1.GetOptions{})
 		if err != nil {
 			log.Printf("Failed to get traceflow CRD \"%s\", err: %s ", name, err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Failed to get traceflow CRD, "+
+				"err: %s ", err), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
 			return nil
 		}
 		log.Printf("Get traceflow CRD \"%s\" successfully, Traceflow Results: %+v", name, tf)
@@ -302,6 +371,9 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		p.graph, err = graphviz.GenGraph(p.lastTf)
 		if err != nil {
 			log.Printf("Failed to generate traceflow graph \"%s\", err: %s", name, err)
+			alert := action.CreateAlert(action.AlertTypeError, fmt.Sprintf("Failed to generate traceflow graph, "+
+				"err: %s", err), action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
 			return nil
 		}
 		return nil

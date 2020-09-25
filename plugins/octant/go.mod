@@ -4,8 +4,8 @@ go 1.13
 
 require (
 	github.com/vmware-tanzu/antrea v0.0.0
-	github.com/vmware-tanzu/octant v0.13.1
-	k8s.io/apimachinery v0.19.0-alpha.3
+	github.com/vmware-tanzu/octant v0.16.1
+	k8s.io/apimachinery v0.19.0-beta.2
 	k8s.io/client-go v0.19.0-alpha.3
 )
 
