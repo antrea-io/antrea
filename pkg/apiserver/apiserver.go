@@ -205,7 +205,8 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		v := controllernetworkpolicy.NewNetworkPolicyValidator(c.networkPolicyController)
 		// Install handlers for NetworkPolicy related validation
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandleValidationNetworkPolicy(v))
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/cnp", webhook.HandleValidationNetworkPolicy(v))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/acnp", webhook.HandleValidationNetworkPolicy(v))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/anp", webhook.HandleValidationNetworkPolicy(v))
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
 			go c.networkPolicyController.InitializeTiers()

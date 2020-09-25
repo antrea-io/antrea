@@ -296,6 +296,17 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			},
 			resyncPeriod,
 		)
+		anpInformer.Informer().AddIndexers(
+			cache.Indexers{
+				TierIndex: func(obj interface{}) ([]string, error) {
+					anp, ok := obj.(*secv1alpha1.NetworkPolicy)
+					if !ok {
+						return []string{}, nil
+					}
+					return []string{anp.Spec.Tier}, nil
+				},
+			},
+		)
 		anpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addANP,

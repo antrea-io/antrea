@@ -28,7 +28,7 @@ import (
 
 func HandleValidationNetworkPolicy(v *networkpolicy.NetworkPolicyValidator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		klog.V(2).Info("Received request to validate Antrea NP/Tier CRD")
+		klog.V(2).Info("Received request to validate Antrea Policy/Tier CRD")
 		var reqBody []byte
 		if r.Body != nil {
 			reqBody, _ = ioutil.ReadAll(r.Body)
@@ -43,11 +43,6 @@ func HandleValidationNetworkPolicy(v *networkpolicy.NetworkPolicyValidator) http
 		if contentType != "application/json" {
 			klog.Errorf("Invalid content-Type=%s, expected application/json", contentType)
 			http.Error(w, "invalid Content-Type, expected `application/json`", http.StatusUnsupportedMediaType)
-			return
-		}
-		if r.URL.Path != "/validate/tier" && r.URL.Path != "/validate/cnp" {
-			klog.Errorf("Invalid path received for Antrea NP/Tier validation")
-			http.Error(w, "invalid path", http.StatusBadRequest)
 			return
 		}
 		var admissionResponse *admv1.AdmissionResponse
