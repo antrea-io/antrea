@@ -49,6 +49,12 @@ rules:
       - watch
       - list
   - apiGroups:
+      - controlplane.antrea.tanzu.vmware.com
+    resources:
+      - nodestatssummaries
+    verbs:
+      - create
+  - apiGroups:
       - authentication.k8s.io
     resources:
       - tokenreviews

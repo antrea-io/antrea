@@ -21,3 +21,5 @@ type AddressGroupExpansion interface{}
 type AppliedToGroupExpansion interface{}
 
 type NetworkPolicyExpansion interface{}
+
+type NodeStatsSummaryExpansion interface{}

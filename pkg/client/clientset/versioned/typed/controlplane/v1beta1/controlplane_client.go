@@ -27,6 +27,7 @@ type ControlplaneV1beta1Interface interface {
 	AddressGroupsGetter
 	AppliedToGroupsGetter
 	NetworkPoliciesGetter
+	NodeStatsSummariesGetter
 }
 
 // ControlplaneV1beta1Client is used to interact with features provided by the controlplane.antrea.tanzu.vmware.com group.
@@ -44,6 +45,10 @@ func (c *ControlplaneV1beta1Client) AppliedToGroups() AppliedToGroupInterface {
 
 func (c *ControlplaneV1beta1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {
 	return newNetworkPolicies(c, namespace)
+}
+
+func (c *ControlplaneV1beta1Client) NodeStatsSummaries() NodeStatsSummaryInterface {
+	return newNodeStatsSummaries(c)
 }
 
 // NewForConfig creates a new ControlplaneV1beta1Client for the given config.

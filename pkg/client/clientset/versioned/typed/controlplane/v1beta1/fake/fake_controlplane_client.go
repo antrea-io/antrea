@@ -38,6 +38,10 @@ func (c *FakeControlplaneV1beta1) NetworkPolicies(namespace string) v1beta1.Netw
 	return &FakeNetworkPolicies{c, namespace}
 }
 
+func (c *FakeControlplaneV1beta1) NodeStatsSummaries() v1beta1.NodeStatsSummaryInterface {
+	return &FakeNodeStatsSummaries{c}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeControlplaneV1beta1) RESTClient() rest.Interface {

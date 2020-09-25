@@ -39,6 +39,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
+	"github.com/vmware-tanzu/antrea/pkg/controller/stats"
 	"github.com/vmware-tanzu/antrea/pkg/controller/traceflow"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
@@ -125,6 +126,13 @@ func run(o *Options) error {
 		traceflowController = traceflow.NewTraceflowController(crdClient, podInformer, traceflowInformer)
 	}
 
+	// statsAggregator takes stats summaries from antrea-agents, aggregates them, and serves the Stats APIs with the
+	// aggregated data. For now it's only used for NetworkPolicy stats.
+	var statsAggregator *stats.Aggregator
+	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
+		statsAggregator = stats.NewAggregator(networkPolicyInformer, cnpInformer, anpInformer)
+	}
+
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		client,
 		aggregatorClient,
@@ -136,6 +144,7 @@ func run(o *Options) error {
 		controllerQuerier,
 		endpointQuerier,
 		networkPolicyController,
+		statsAggregator,
 		o.config.EnablePrometheusMetrics)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
@@ -166,6 +175,10 @@ func run(o *Options) error {
 
 	go apiServer.Run(stopCh)
 
+	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
+		go statsAggregator.Run(stopCh)
+	}
+
 	if o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
 	}
@@ -190,6 +203,7 @@ func createAPIServerConfig(kubeconfig string,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
+	statsAggregator *stats.Aggregator,
 	enableMetrics bool) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
@@ -238,6 +252,7 @@ func createAPIServerConfig(kubeconfig string,
 		appliedToGroupStore,
 		networkPolicyStore,
 		caCertController,
+		statsAggregator,
 		controllerQuerier,
 		endpointQuerier,
 		npController), nil

@@ -19,8 +19,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	metricsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/metrics/v1alpha1"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -285,5 +285,5 @@ type NetworkPolicyStats struct {
 	// The reference of the NetworkPolicy.
 	NetworkPolicy NetworkPolicyReference
 	// The stats of the NetworkPolicy.
-	TrafficStats metricsv1alpha1.TrafficStats
+	TrafficStats statsv1alpha1.TrafficStats
 }

@@ -46,6 +46,10 @@ const (
 	// alpha: v0.9
 	// Flow exporter exports IPFIX flow records of Antrea flows seen in conntrack module.
 	FlowExporter featuregate.Feature = "FlowExporter"
+
+	// alpha: v0.10
+	// Enable collecting and exposing NetworkPolicy statistics.
+	NetworkPolicyStats featuregate.Feature = "NetworkPolicyStats"
 )
 
 var (
@@ -60,10 +64,11 @@ var (
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
 	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-		AntreaPolicy: {Default: false, PreRelease: featuregate.Alpha},
-		AntreaProxy:  {Default: false, PreRelease: featuregate.Alpha},
-		Traceflow:    {Default: false, PreRelease: featuregate.Alpha},
-		FlowExporter: {Default: false, PreRelease: featuregate.Alpha},
+		AntreaPolicy:       {Default: false, PreRelease: featuregate.Alpha},
+		AntreaProxy:        {Default: false, PreRelease: featuregate.Alpha},
+		Traceflow:          {Default: false, PreRelease: featuregate.Alpha},
+		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
+		NetworkPolicyStats: {Default: false, PreRelease: featuregate.Alpha},
 	}
 )
 
