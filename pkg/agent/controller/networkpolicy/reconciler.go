@@ -297,6 +297,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 		RulePriority:   rule.Priority,
 	}
 	ofPriority, registered := pa.assigner.GetOFPriority(p)
+
 	if !registered {
 		allPrioritiesInPolicy := make([]types.Priority, rule.MaxPriority+1)
 		for i := int32(0); i <= rule.MaxPriority; i++ {
@@ -612,6 +613,11 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					PolicyRef:     newRule.SourceRef,
 					EnableLogging: newRule.EnableLogging,
 				}
+				if len(newRule.To.IPBlocks) > 0 {
+					to := ipBlocksToOFAddresses(newRule.To.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
+					ofRule.To = append(ofRule.To, to...)
+				}
+
 				err := r.idAllocator.allocateForRule(ofRule)
 				if err != nil {
 					return fmt.Errorf("error allocating Openflow ID")
