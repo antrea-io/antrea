@@ -46,6 +46,12 @@ func skipIfNumNodesLessThan(tb testing.TB, required int) {
 	}
 }
 
+func skipIfRunCoverage(tb testing.TB, reason string) {
+	if testOptions.enableCoverage {
+		tb.Skipf("Skipping test for the '%s' when run coverage: %s", tb.Name(), reason)
+	}
+}
+
 func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	tb.Logf("Applying Antrea YAML")
 	if err := data.deployAntrea(); err != nil {
@@ -63,21 +69,14 @@ func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 }
 
 func setupTest(tb testing.TB) (*TestData, error) {
-	data := &TestData{}
-	tb.Logf("Creating K8s clientset")
-	// TODO: it is probably not needed to re-create the clientset in each test, maybe we could
-	// just keep it in clusterInfo?
-	if err := data.createClient(); err != nil {
-		return nil, err
-	}
 	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
-	if err := ensureAntreaRunning(tb, data); err != nil {
+	if err := ensureAntreaRunning(tb, testData); err != nil {
 		return nil, err
 	}
-	if err := data.createTestNamespace(); err != nil {
+	if err := testData.createTestNamespace(); err != nil {
 		return nil, err
 	}
-	return data, nil
+	return testData, nil
 }
 
 func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error) {

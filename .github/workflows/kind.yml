@@ -26,16 +26,16 @@ jobs:
     outputs:
       has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
-  build-antrea-image:
+  build-antrea-coverage-image:
     name: Build Antrea image to be used for Kind e2e tests
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
-    - run: make
+    - run: make build-ubuntu-coverage
     - name: Save Antrea image to tarball
-      run:  docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+      run:  docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu-coverage:latest
     - name: Upload Antrea image for subsequent jobs
       uses: actions/upload-artifact@v1
       with:
@@ -44,7 +44,7 @@ jobs:
 
   test-e2e-encap:
     name: E2e tests on a Kind cluster on Linux
-    needs: build-antrea-image
+    needs: build-antrea-coverage-image
     runs-on: [ubuntu-18.04]
     steps:
     - name: Free disk space
@@ -72,7 +72,22 @@ jobs:
     - name: Run e2e tests
       run: |
         mkdir log
-        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-e2e-kind.sh --encap-mode encap
+        mkdir test-e2e-encap-coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage
+    - name: Tar coverage files
+      run: tar -czf test-e2e-encap-coverage.tar.gz test-e2e-encap-coverage
+    - name: Upload coverage for test-e2e-encap-coverage
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-e2e-encap-coverage
+        path: test-e2e-encap-coverage.tar.gz
+    - name: Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        file: '*antrea*'
+        flags: kind-e2e-tests
+        name: codecov-test-e2e-encap
+        directory: test-e2e-encap-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -85,7 +100,7 @@ jobs:
 
   test-e2e-encap-proxy:
     name: E2e tests on a Kind cluster on Linux with proxy enabled
-    needs: build-antrea-image
+    needs: build-antrea-coverage-image
     runs-on: [ubuntu-18.04]
     steps:
     - name: Free disk space
@@ -113,7 +128,22 @@ jobs:
     - name: Run e2e tests
       run: |
         mkdir log
-        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-e2e-kind.sh --encap-mode encap --proxy
+        mkdir test-e2e-encap-proxy-coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-proxy-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --proxy --coverage
+    - name: Tar coverage files
+      run: tar -czf test-e2e-encap-proxy-coverage.tar.gz test-e2e-encap-proxy-coverage
+    - name: Upload coverage for test-e2e-encap-proxy-coverage
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-e2e-encap-proxy-coverage
+        path: test-e2e-encap-proxy-coverage.tar.gz
+    - name: Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        file: '*antrea*'
+        flags: kind-e2e-tests
+        name: codecov-test-e2e-encap-proxy
+        directory: test-e2e-encap-proxy-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -126,7 +156,7 @@ jobs:
 
   test-e2e-noencap:
     name: E2e tests on a Kind cluster on Linux (noEncap)
-    needs: build-antrea-image
+    needs: build-antrea-coverage-image
     runs-on: [ubuntu-18.04]
     steps:
     - name: Free disk space
@@ -154,7 +184,22 @@ jobs:
     - name: Run e2e tests
       run: |
         mkdir log
-        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-e2e-kind.sh --encap-mode noEncap
+        mkdir test-e2e-noencap-coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-noencap-coverage ./ci/kind/test-e2e-kind.sh --encap-mode noEncap --coverage
+    - name: Tar coverage files
+      run: tar -czf test-e2e-noencap-coverage.tar.gz test-e2e-noencap-coverage
+    - name: Upload coverage for test-e2e-noencap-coverage
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-e2e-noencap-coverage
+        path: test-e2e-noencap-coverage.tar.gz
+    - name: Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        file: '*antrea*'
+        flags: kind-e2e-tests
+        name: codecov-test-e2e-noencap
+        directory: test-e2e-noencap-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -167,7 +212,7 @@ jobs:
 
   test-e2e-hybrid:
     name: E2e tests on a Kind cluster on Linux (hybrid)
-    needs: build-antrea-image
+    needs: build-antrea-coverage-image
     runs-on: [ubuntu-18.04]
     steps:
     - name: Free disk space
@@ -195,7 +240,22 @@ jobs:
     - name: Run e2e tests
       run: |
         mkdir log
-        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-e2e-kind.sh --encap-mode hybrid
+        mkdir test-e2e-hybrid-coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-hybrid-coverage ./ci/kind/test-e2e-kind.sh --encap-mode hybrid --coverage
+    - name: Tar coverage files
+      run: tar -czf test-e2e-hybrid-coverage.tar.gz test-e2e-hybrid-coverage
+    - name: Upload coverage for test-e2e-hybrid-coverage
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-e2e-hybrid-coverage
+        path: test-e2e-hybrid-coverage.tar.gz
+    - name: Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        file: '*antrea*'
+        flags: kind-e2e-tests
+        name: codecov-test-e2e-hybrid
+        directory: test-e2e-hybrid-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -208,7 +268,7 @@ jobs:
 
   test-e2e-encap-np:
     name: E2e tests on a Kind cluster on Linux with Antrea NetworkPolicies enabled
-    needs: build-antrea-image
+    needs: build-antrea-coverage-image
     runs-on: [ubuntu-18.04]
     steps:
     - name: Free disk space
@@ -236,7 +296,22 @@ jobs:
     - name: Run e2e tests
       run: |
         mkdir log
-        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-e2e-kind.sh --encap-mode encap --np
+        mkdir test-e2e-encap-np-coverage 
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-np-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --np --coverage
+    - name: Tar coverage files
+      run: tar -czf test-e2e-encap-np-coverage.tar.gz test-e2e-encap-np-coverage
+    - name: Upload coverage for test-e2e-encap-np-coverage
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-e2e-encap-np-coverage
+        path: test-e2e-encap-np-coverage.tar.gz
+    - name: Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        file: '*antrea*'
+        flags: kind-e2e-tests
+        name: codecov-test-e2e-np-encap
+        directory: test-e2e-encap-np-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -246,6 +321,22 @@ jobs:
       with:
         name: e2e-kind-hybrid.tar.gz
         path: log.tar.gz
+
+  build-antrea-image:
+    name: Build Antrea image to be used for Kind netpol tests
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+    - run: make
+    - name: Save Antrea image to tarball
+      run:  docker save -o antrea-ubuntu-netpol.tar antrea/antrea-ubuntu:latest
+    - name: Upload Antrea image for subsequent jobs
+      uses: actions/upload-artifact@v1
+      with:
+        name: antrea-ubuntu-netpol
+        path: antrea-ubuntu-netpol.tar
 
   test-netpol-tmp:
     name: Run experimental network policy tests (netpol) on Kind cluster
@@ -264,9 +355,9 @@ jobs:
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: antrea-ubuntu
+        name: antrea-ubuntu-netpol
     - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+      run:  docker load -i antrea-ubuntu-netpol/antrea-ubuntu-netpol.tar
     - name: Install Kind
       env:
         KIND_VERSION: v0.7.0

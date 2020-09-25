@@ -30,6 +30,11 @@ antrea-agent:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-agent
 
+.PHONY: antrea-agent-instr-binary
+antrea-agent-instr-binary:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antrea-agent-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-agent
+
 .PHONY: antrea-controller
 antrea-controller:
 	@mkdir -p $(BINDIR)
@@ -38,6 +43,11 @@ antrea-controller:
 .PHONY: .coverage
 .coverage:
 	mkdir -p $(CURDIR)/.coverage
+
+.PHONY: antrea-controller-instr-binary
+antrea-controller-instr-binary:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antrea-controller-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-controller
 
 .PHONY: antrea-cni
 antrea-cni:
@@ -227,6 +237,12 @@ build-windows:
 	docker build --pull -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
 	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) antrea/antrea-windows
 
+.PHONY: build-ubuntu-coverage
+build-ubuntu-coverage:
+	@echo "===> Building Antrea bins and antrea/antrea-ubuntu-coverage Docker image <==="
+	docker build -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage .
+	docker tag antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu-coverage
+
 .PHONY: manifest
 manifest:
 	@echo "===> Generating dev manifest for Antrea <==="
@@ -237,6 +253,11 @@ manifest:
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --cloud AKS --encap-mode networkPolicyOnly > build/yamls/antrea-aks.yml
 	$(CURDIR)/hack/generate-manifest-octant.sh --mode dev > build/yamls/antrea-octant.yml
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
+
+.PHONY: manifest-coverage
+manifest-coverage:
+	$(CURDIR)/hack/generate-manifest.sh --mode dev --coverage > build/yamls/antrea-coverage.yml
+	$(CURDIR)/hack/generate-manifest.sh --mode dev --ipsec --coverage > build/yamls/antrea-ipsec-coverage.yml
 
 .PHONY: octant-antrea-ubuntu
 octant-antrea-ubuntu:

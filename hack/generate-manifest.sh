@@ -35,6 +35,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
                                       This option will work only with 'dev' mode.
         --on-delete                   Generate a manifest with antrea-agent's update strategy set to OnDelete.
                                       This option will work only for Kind clusters (when using '--kind').
+        --coverage                    Generates a manifest which supports measuring code coverage of Antrea binaries.
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -64,6 +65,7 @@ CLOUD=""
 TUN_TYPE="geneve"
 VERBOSE_LOG=false
 ON_DELETE=false
+COVERAGE=false
 
 while [[ $# -gt 0 ]]
 do
@@ -112,6 +114,10 @@ case $key in
     ;;
     --on-delete)
     ON_DELETE=true
+    shift
+    ;;
+    --coverage)
+    COVERAGE=true
     shift
     ;;
     -h|--help)
@@ -253,6 +259,19 @@ if $IPSEC; then
     cd ..
 fi
 
+if $COVERAGE; then
+    mkdir coverage && cd coverage
+    cp ../../patches/coverage/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    # this runs antrea-controller via the instrumented binary.
+    $KUSTOMIZE edit add patch startControllerCov.yml
+    # this runs antrea-agent via the instrumented binary.
+    $KUSTOMIZE edit add patch startAgentCov.yml
+    BASE=../coverage
+    cd ..
+fi 
+
 if [[ $ENCAP_MODE == "networkPolicyOnly" ]] ; then
     mkdir chaining && cd chaining
     cp ../../patches/chaining/*.yml .
@@ -298,7 +317,12 @@ if $KIND; then
     # this adds a small delay before running the antrea-agent process, to give the antrea-ovs
     # container enough time to set up the br-phy bridge.
     # workaround for https://github.com/vmware-tanzu/antrea/issues/801
-    $KUSTOMIZE edit add patch startAgent.yml
+    if $COVERAGE; then
+        cp ../../patches/coverage/startAgentCov.yml .
+        $KUSTOMIZE edit add patch startAgentCov.yml 
+    else
+        $KUSTOMIZE edit add patch startAgent.yml
+    fi
     # change initContainer script and remove SYS_MODULE capability
     $KUSTOMIZE edit add patch installCni.yml
 
