@@ -22,10 +22,11 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--encap-mode <mode>] [--proxy] [--np] [--help|-h]
+_usage="Usage: $0 [--encap-mode <mode>] [--proxy] [--np] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
         --proxy                       Enables Antrea proxy.
         --np                          Enables Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs.
+        --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
         --help, -h                    Print this message and exit
 "
 
@@ -49,6 +50,7 @@ trap "quit" INT EXIT
 mode=""
 proxy=false
 np=false
+coverage=false
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -65,6 +67,10 @@ case $key in
     --encap-mode)
     mode="$2"
     shift 2
+    ;;
+    --coverage)
+    coverage=true
+    shift
     ;;
     -h|--help)
     print_usage
@@ -85,6 +91,10 @@ if $np; then
     # See https://github.com/vmware-tanzu/antrea/issues/897
     manifest_args="$manifest_args --np --tun vxlan"
 fi
+if $coverage; then
+    manifest_args="$manifest_args --coverage"
+    COMMON_IMAGES="busybox nginx antrea/antrea-ubuntu-coverage:latest"
+fi
 
 function run_test {
   current_mode=$1
@@ -93,9 +103,17 @@ function run_test {
   echo "creating test bed with args $args"
   eval "timeout 600 $TESTBED_CMD create kind --antrea-cni false $args"
 
-  $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
+  if $coverage; then
+      $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml 
+  else
+      $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
+  fi
   sleep 1
-  go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR
+  if $coverage; then
+      go test -v -timeout=40m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR
+  else
+      go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR
+  fi
   $TESTBED_CMD destroy kind
 }
 

@@ -187,9 +187,17 @@ func TestAntreaGracefulExit(t *testing.T) {
 
 	var gracePeriodSeconds int64 = 60
 	t.Logf("Deleting one Antrea Pod")
+	maxDeleteTimeout := 20 * time.Second
+	// When running Antrea instrumented binary to collect e2e coverage,
+	// we need to set the maxDeleteTimeout to a larger value
+	// since it needs to collect coverage data files
+	if testOptions.enableCoverage {
+		maxDeleteTimeout = 80 * time.Second
+	}
+
 	if timeToDelete, err := data.deleteAntreaAgentOnNode(nodeName(0), gracePeriodSeconds, defaultTimeout); err != nil {
 		t.Fatalf("Error when deleting Antrea Pod: %v", err)
-	} else if timeToDelete > 20*time.Second {
+	} else if timeToDelete > maxDeleteTimeout {
 		t.Errorf("Antrea Pod took too long to delete: %v", timeToDelete)
 	}
 	// At the moment we only check that the Pod terminates in a reasonable amout of time (less
@@ -505,6 +513,7 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 // the previous "round" which are no longer needed (e.g. in case of changes to the cluster / to
 // Network Policies) are removed correctly.
 func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
+	skipIfRunCoverage(t, "killAgent does not work with Coverage")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

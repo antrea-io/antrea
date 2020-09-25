@@ -240,6 +240,91 @@
           wrappers: []
           publishers: []
       - '{name}-{test_name}-for-pull-request':
+          test_name: e2e-coveage-pending-label
+          node: null
+          description: 'This is for marking PR as pending for e2e test with coverage.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-pending-label
+          trigger_phrase: null
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: false
+          admin_list: []
+          org_list: []
+          white_list: []
+          only_trigger_phrase: false
+          trigger_permit_all: true
+          status_context: jenkins-e2e-coverage
+          status_url: --none--
+          success_status: Pending test. Mark as failure. Add comment /test-e2e-coverage to trigger.
+          failure_status: Pending test. Mark as failure. Add comment /test-e2e-coverage to trigger.
+          error_status: Pending test. Mark as failure. Add comment /test-e2e-coverage to trigger.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: e2e-coverage
+          node: 'antrea-test-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-e2e-coverage
+          trigger_phrase: ^(?!Thanks for your PR).*/test-e2e-coverage.*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          status_context: jenkins-e2e-coverage
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-e2e-coverage to re-trigger.
+          error_status: Failed. Add comment /test-e2e-coverage to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 80
+              type: absolute
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: antrea-test-logs.tar.gz, e2e-coverage.tar.gz
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+          test_name: e2e-coverage-skip
+          node: null
+          description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
+          builders: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-e2e-coverage.*
+          white_list_target_branches: []
+          status_context: jenkins-e2e-coverage
+          status_url: --none--
+          success_status: Skipped test. Mark as succeeded.
+          failure_status: Skipped test. Mark as succeeded.
+          error_status: Skipped test. Mark as succeeded.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
           test_name: conformance-pending-label
           node: null
           description: 'This is for marking PR as pending for conformance test.'

@@ -1,0 +1,8 @@
+--config
+/etc/antrea/antrea-controller.conf
+--logtostderr=false
+--log_dir=/var/log/antrea
+--alsologtostderr
+--log_file_max_size=100
+--log_file_max_num=4
+

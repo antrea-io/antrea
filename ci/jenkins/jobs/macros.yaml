@@ -104,6 +104,14 @@
           ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e
 
 - builder:
+    name: builder-e2e-coverage
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --coverage
+
+- builder:
     name: builder-conformance
     builders:
       - shell: |-
