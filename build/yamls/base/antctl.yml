@@ -21,6 +21,15 @@ rules:
       - get
       - list
   - apiGroups:
+      - stats.antrea.tanzu.vmware.com
+    resources:
+      - networkpolicystats
+      - antreaclusternetworkpolicystats
+      - antreanetworkpolicystats
+    verbs:
+      - get
+      - list
+  - apiGroups:
       - system.antrea.tanzu.vmware.com
     resources:
       - controllerinfos

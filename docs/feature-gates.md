@@ -37,6 +37,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `AntreaPolicy`          | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                |       |
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9.0        | N/A          | N/A        | Yes                |       |
+| `NetworkPolicyStats`    | Agent + Controller | `false` | Alpha | v0.10.0       | N/A          | N/A        | No                 |       |
 
 ## Description and Requirements of Features
 
@@ -97,3 +98,38 @@ to a flow collector. Refer to this [document](network-flow-visibility.md) for mo
 
 This feature is currently only supported for Nodes running Linux.
 Windows support will be added in the future.
+
+### NetworkPolicyStats
+
+`NetworkPolicyStats` enables collecting NetworkPolicy statistics from
+antrea-agents and exposing them through Antrea Stats API, which can be accessed
+by kubectl get commands, e.g. `kubectl get networkpolicystats`. The statistical
+data includes total number of sessions, packets, and bytes allowed or denied by
+a NetworkPolicy. It is collected asynchronously so there may be a delay of up to
+1 minute for changes to be reflected in API responses. The feature supports K8s
+NetworkPolicies and Antrea native policies, the latter of which requires
+`AntreaPolicy` to be enabled. Usage examples:
+
+```bash
+# List stats of all K8s NetworkPolicies.
+> kubectl get networkpolicystats -A
+NAMESPACE     NAME                  SESSIONS   PACKETS   BYTES   CREATED AT
+default       access-nginx          3          36        5199    2020-09-07T13:19:38Z
+kube-system   access-dns            1          12        1221    2020-09-07T13:22:42Z
+
+# List stats of all Antrea ClusterNetworkPolicies.
+> kubectl get antreaclusternetworkpolicystats
+NAME                  SESSIONS   PACKETS   BYTES   CREATED AT
+cluster-deny-egress   3          36        5199    2020-09-07T13:19:38Z
+cluster-access-dns    10         120       12210   2020-09-07T13:22:42Z
+
+# List stats of all Antrea NetworkPolicies.
+> kubectl get antreanetworkpolicystats -A
+NAMESPACE     NAME                  SESSIONS   PACKETS   BYTES   CREATED AT
+default       access-http           3          36        5199    2020-09-07T13:19:38Z
+foo           bar                   1          12        1221    2020-09-07T13:22:42Z
+```
+
+#### Requirements for this Feature
+
+None

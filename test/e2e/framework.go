@@ -342,7 +342,7 @@ func (data *TestData) getAgentContainersRestartCount() (int, error) {
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
-	err := wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
+	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
 		daemonSet, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
@@ -807,11 +807,18 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1
 		// running as this is deleting a Pod manually, not upgrade.
 		// See https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#recreate-deployment.
 		// So we should ensure there's only 1 Pod and it's running.
-		if len(pods.Items) != 1 {
+		if len(pods.Items) != 1 || pods.Items[0].DeletionTimestamp != nil {
 			return false, nil
 		}
 		pod := pods.Items[0]
-		if pod.Status.Phase != corev1.PodRunning || pod.DeletionTimestamp != nil {
+		ready := false
+		for _, condition := range pod.Status.Conditions {
+			if condition.Type == corev1.PodReady {
+				ready = condition.Status == corev1.ConditionTrue
+				break
+			}
+		}
+		if !ready {
 			return false, nil
 		}
 		newPod = &pod
@@ -1138,16 +1145,17 @@ func (data *TestData) mutateAntreaConfigMap(mutatingFunc func(data map[string]st
 	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
 	}
-	if restartController {
-		_, err = data.restartAntreaControllerPod(defaultTimeout)
-		if err != nil {
-			return fmt.Errorf("error when restarting antrea-controller Pod: %v", err)
-		}
-	}
 	if restartAgent {
 		err = data.restartAntreaAgentPods(defaultTimeout)
 		if err != nil {
 			return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
+		}
+	}
+	// controller should be restarted after agents in case of dataplane disruption caused by agent restart on Kind cluster.
+	if restartController {
+		_, err = data.restartAntreaControllerPod(defaultTimeout)
+		if err != nil {
+			return fmt.Errorf("error when restarting antrea-controller Pod: %v", err)
 		}
 	}
 	return nil

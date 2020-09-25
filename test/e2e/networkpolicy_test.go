@@ -17,6 +17,9 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,6 +32,108 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 )
+
+func TestNetworkPolicyStats(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	if err := data.mutateAntreaConfigMap(func(data map[string]string) {
+		antreaControllerConf, _ := data["antrea-controller.conf"]
+		antreaControllerConf = strings.Replace(antreaControllerConf, "#  NetworkPolicyStats: false", "  NetworkPolicyStats: true", 1)
+		data["antrea-controller.conf"] = antreaControllerConf
+		antreaAgentConf, _ := data["antrea-agent.conf"]
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#  NetworkPolicyStats: false", "  NetworkPolicyStats: true", 1)
+		data["antrea-agent.conf"] = antreaAgentConf
+	}, true, true); err != nil {
+		t.Fatalf("Failed to enable NetworkPolicyStats feature: %v", err)
+	}
+
+	serverName, serverIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
+	defer cleanupFunc()
+
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	defer cleanupFunc()
+
+	np1, err := data.createNetworkPolicy("test-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		Ingress: []networkingv1.NetworkPolicyIngressRule{{
+			From: []networkingv1.NetworkPolicyPeer{{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"antrea-e2e": clientName,
+					},
+				}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(np1); err != nil {
+			t.Fatalf("Error when deleting network policy: %v", err)
+		}
+	}()
+	np2, err := data.createNetworkPolicy("test-networkpolicy-egress", &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+		Egress: []networkingv1.NetworkPolicyEgressRule{{
+			To: []networkingv1.NetworkPolicyPeer{{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"antrea-e2e": serverName,
+					},
+				}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(np2); err != nil {
+			t.Fatalf("Error when deleting network policy: %v", err)
+		}
+	}()
+
+	// Wait for a few seconds in case that connections are established before policies are enforced.
+	time.Sleep(2 * time.Second)
+
+	sessions := 10
+	var wg sync.WaitGroup
+	for i := 0; i < sessions; i++ {
+		wg.Add(1)
+		go func() {
+			cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIP)}
+			data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+		for _, np := range []string{"test-networkpolicy-ingress", "test-networkpolicy-egress"} {
+			metric, err := data.crdClient.StatsV1alpha1().NetworkPolicyStats(testNamespace).Get(context.TODO(), np, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+			t.Logf("Got NetworkPolicy metric: %v", metric)
+			if metric.TrafficStats.Sessions != int64(sessions) {
+				return false, nil
+			}
+			if metric.TrafficStats.Packets < metric.TrafficStats.Sessions || metric.TrafficStats.Bytes < metric.TrafficStats.Sessions {
+				return false, fmt.Errorf("Neither 'Packets' nor 'Bytes' should be smaller than 'Sessions'")
+			}
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatalf("Error when waiting for NetworkPolicy stats: %v", err)
+	}
+}
 
 func TestDifferentNamedPorts(t *testing.T) {
 	data, err := setupTest(t)
