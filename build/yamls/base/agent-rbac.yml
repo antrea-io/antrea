@@ -37,6 +37,14 @@ rules:
       - watch
       - list
   - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
       - clusterinformation.antrea.tanzu.vmware.com
     resources:
       - antreaagentinfos

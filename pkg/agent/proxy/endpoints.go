@@ -21,12 +21,19 @@ import (
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1beta1"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
+
+var supportedEndpointSliceAddressTypes = map[discovery.AddressType]struct{}{
+	discovery.AddressTypeIP:   {}, // IP is a deprecated address type
+	discovery.AddressTypeIPv4: {},
+	discovery.AddressTypeIPv6: {},
+}
 
 // endpointsChange describes an Endpoints change, previous is the state from before
 // all of them, current is state after applying all of those.
@@ -44,17 +51,23 @@ type endpointsChangesTracker struct {
 	// initialized tells whether Endpoints have been synced.
 	initialized bool
 	// changes contains endpoints changes since the last checkoutChanges call.
-	changes map[apimachinerytypes.NamespacedName]*endpointsChange
+	changes    map[apimachinerytypes.NamespacedName]*endpointsChange
+	sliceCache *EndpointSliceCache
 }
 
-func newEndpointsChangesTracker(hostname string) *endpointsChangesTracker {
-	return &endpointsChangesTracker{
+func newEndpointsChangesTracker(hostname string, enableEndpointSlice bool, isIPv6 bool) *endpointsChangesTracker {
+	tracker := &endpointsChangesTracker{
 		hostname: hostname,
 		changes:  map[apimachinerytypes.NamespacedName]*endpointsChange{},
 	}
+
+	if enableEndpointSlice {
+		tracker.sliceCache = NewEndpointSliceCache(hostname, isIPv6)
+	}
+	return tracker
 }
 
-// OnEndpointUpdate updates given Service's Endpoints change map based on the
+// OnEndpointUpdate updates the given Service's endpointsChange map based on the
 // <previous, current> Endpoints pair. It returns true if items changed,
 // otherwise it returns false.
 // Update can be used to add/update/delete items of EndpointsChangeMap.
@@ -95,9 +108,41 @@ func (t *endpointsChangesTracker) OnEndpointUpdate(previous, current *corev1.End
 	return len(t.changes) > 0
 }
 
+// EndpointSliceUpdate updates the given service's endpoints change map based on the <previous, current> endpoints pair.
+// It returns true if items changed, otherwise it returns false. Will add/update/delete items of endpointsChange Map.
+// If removeSlice is true, slice will be removed, otherwise it will be added or updated.
+func (t *endpointsChangesTracker) OnEndpointSliceUpdate(endpointSlice *discovery.EndpointSlice, removeSlice bool) bool {
+	// This should never happen.
+	if endpointSlice == nil {
+		klog.Error("Nil endpointSlice passed to EndpointSliceUpdate")
+		return false
+	}
+
+	if _, has := supportedEndpointSliceAddressTypes[endpointSlice.AddressType]; !has {
+		klog.V(4).Infof("EndpointSlice address type not supported: %s", endpointSlice.AddressType)
+		return false
+	}
+
+	if _, _, err := endpointSliceCacheKeys(endpointSlice); err != nil {
+		klog.Warningf("Error getting endpoint slice cache keys: %v", err)
+		return false
+	}
+
+	t.Lock()
+	defer t.Unlock()
+
+	changeNeeded := t.sliceCache.updatePending(endpointSlice, removeSlice)
+
+	return changeNeeded
+}
+
 func (t *endpointsChangesTracker) checkoutChanges() []*endpointsChange {
 	t.Lock()
 	defer t.Unlock()
+
+	if t.sliceCache != nil {
+		return t.sliceCache.checkoutChanges()
+	}
 
 	var changes []*endpointsChange
 	for _, change := range t.changes {
