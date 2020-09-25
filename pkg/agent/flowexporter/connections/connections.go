@@ -25,6 +25,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 )
@@ -147,6 +148,7 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 				}
 			}
 		}
+		metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
 		cs.connections[connKey] = *conn
@@ -190,16 +192,22 @@ func (cs *ConnectionStore) Poll() (int, error) {
 	// We do not expect any error as resetConn is not returning any error
 	cs.ForAllConnectionsDo(resetConn)
 
-	filteredConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
+	filteredConnsList, totalConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
 	if err != nil {
 		return 0, err
 	}
 	// Update only the Connection store. IPFIX records are generated based on Connection store.
-	for _, conn := range filteredConns {
+	for _, conn := range filteredConnsList {
 		cs.addOrUpdateConn(conn)
 	}
-	connsLen := len(filteredConns)
-	filteredConns = nil
+	connsLen := len(filteredConnsList)
+	filteredConnsList = nil
+	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))
+	maxConns, err := cs.connDumper.GetMaxConnections()
+	if err != nil {
+		return 0, err
+	}
+	metrics.MaxConnectionsInConnTrackTable.Set(float64(maxConns))
 
 	klog.V(2).Infof("Conntrack polling successful")
 
@@ -215,7 +223,7 @@ func (cs *ConnectionStore) DeleteConnectionByKey(connKey flowexporter.Connection
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 	delete(cs.connections, connKey)
-
+	metrics.TotalAntreaConnectionsInConnTrackTable.Dec()
 	return nil
 }
 

@@ -17,6 +17,7 @@
 package connections
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/ti-mo/conntrack"
@@ -37,13 +38,10 @@ type connTrackSystem struct {
 }
 
 func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackSystem {
-	// Ensure net.netfilter.nf_conntrack_acct value to be 1. This will enable flow exporter to export stats of connections.
-	// Do not fail, but continue after logging error as we can still dump flows with no stats.
-	sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_acct", 1)
-	// Ensure net.netfilter.nf_conntrack_timestamp value to be 1. This will enable flow exporter to export timestamps of connections.
-	// Do not fail, but continue after logging error as we can still dump flows with no timestamps.
-	sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_timestamp", 1)
-
+	if err := setupConntrackParameters(); err != nil {
+		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
+		klog.Errorf("Error when setting up conntrack parameters, some information may be missing from exported flows: %v", err)
+	}
 	return &connTrackSystem{
 		nodeConfig,
 		serviceCIDR,
@@ -52,12 +50,11 @@ func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *
 }
 
 // DumpFlows opens netlink connection and dumps all the flows in Antrea ZoneID of conntrack table.
-func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error) {
+func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
 	// Get connection to netlink socket
 	err := ct.connTrack.Dial()
 	if err != nil {
-		klog.Errorf("Error when getting netlink socket: %v", err)
-		return nil, err
+		return nil, 0, fmt.Errorf("error when getting netlink socket: %v", err)
 	}
 
 	// ZoneID filter is not supported currently in tl-mo/conntrack library.
@@ -65,13 +62,13 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 	// Dump all flows in the conntrack table for now.
 	conns, err := ct.connTrack.DumpFilter(conntrack.Filter{})
 	if err != nil {
-		klog.Errorf("Error when dumping flows from conntrack: %v", err)
-		return nil, err
+		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
+
 	filteredConns := filterAntreaConns(conns, ct.nodeConfig, ct.serviceCIDR, zoneFilter)
 	klog.V(2).Infof("No. of flow exporter considered flows in Antrea zoneID: %d", len(filteredConns))
 
-	return filteredConns, nil
+	return filteredConns, len(conns), nil
 }
 
 // NetFilterConnTrack interface helps for testing the code that contains the third party library functions ("github.com/ti-mo/conntrack")
@@ -149,4 +146,23 @@ func netlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 	}
 
 	return &newConn
+}
+
+func setupConntrackParameters() error {
+	parametersWithErrors := []string{}
+	if sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_acct", 1) != nil {
+		parametersWithErrors = append(parametersWithErrors, "net.netfilter.nf_conntrack_acct")
+	}
+	if sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_timestamp", 1) != nil {
+		parametersWithErrors = append(parametersWithErrors, "net.netfilter.nf_conntrack_timestamp")
+	}
+	if len(parametersWithErrors) > 0 {
+		return fmt.Errorf("the following kernel parameters could not be verified / set: %v", parametersWithErrors)
+	}
+	return nil
+}
+
+func (ct *connTrackSystem) GetMaxConnections() (int, error) {
+	maxConns, err := sysctl.GetSysctlNet("nf_conntrack_max")
+	return maxConns, err
 }

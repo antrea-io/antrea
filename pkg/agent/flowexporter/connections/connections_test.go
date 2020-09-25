@@ -17,18 +17,24 @@ package connections
 import (
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/component-base/metrics/legacyregistry"
+	"k8s.io/component-base/metrics/testutil"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	connectionstest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
+	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	proxytest "github.com/vmware-tanzu/antrea/pkg/agent/proxy/testing"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -56,6 +62,7 @@ func makeTuple(srcIP *net.IP, dstIP *net.IP, protoID uint8, srcPort uint16, dstP
 func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	metrics.InitializeConnectionMetrics()
 	// Create two flows; one is already in ConnectionStore and other one is new
 	refTime := time.Now()
 	// Flow-1, which is already in ConnectionStore
@@ -138,6 +145,8 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	// Add flow1conn to the Connection map
 	testFlow1Tuple := flowexporter.NewConnectionKey(&testFlow1)
 	connStore.connections[testFlow1Tuple] = oldTestFlow1
+	// For testing purposes, increment the metric
+	metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 
 	addOrUpdateConnTests := []struct {
 		flow flowexporter.Connection
@@ -170,6 +179,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		actualConn, ok := connStore.GetConnByKey(flowTuple)
 		assert.Equal(t, ok, true, "connection should be there in connection store")
 		assert.Equal(t, expConn, *actualConn, "Connections should be equal")
+		checkAntreaConnectionMetrics(t, len(connStore.connections))
 	}
 }
 
@@ -238,6 +248,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	metrics.InitializeConnectionMetrics()
 	// Create two flows; one is already in ConnectionStore and other one is new
 	testFlows := make([]*flowexporter.Connection, 2)
 	testFlowKeys := make([]*flowexporter.ConnectionKey, 2)
@@ -272,6 +283,8 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		connKey := flowexporter.NewConnectionKey(flow)
 		testFlowKeys[i] = &connKey
 	}
+	// For testing purposes, set the metric
+	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create ConnectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
@@ -286,5 +299,58 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		assert.Nil(t, err, "DeleteConnectionByKey should return nil")
 		_, exists := connStore.GetConnByKey(*testFlowKeys[i])
 		assert.Equal(t, exists, false, "connection should be deleted in connection store")
+		checkAntreaConnectionMetrics(t, len(connStore.connections))
 	}
+}
+
+func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	metrics.InitializeConnectionMetrics()
+
+	testFlows := make([]*flowexporter.Connection, 0)
+	// Create ConnectionStore
+	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
+	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, nil, testPollInterval)
+	// Hard-coded conntrack occupancy metrics for test
+	TotalConnections := 0
+	MaxConnections := 300000
+	mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testFlows, TotalConnections, nil)
+	mockConnDumper.EXPECT().GetMaxConnections().Return(MaxConnections, nil)
+	connsLen, err := connStore.Poll()
+	require.Nil(t, err, fmt.Sprintf("Failed to add connections to connection store: %v", err))
+	assert.Equal(t, connsLen, len(testFlows), "expected connections should be equal to number of testFlows")
+	checkTotalConnectionsMetric(t, TotalConnections)
+	checkMaxConnectionsMetric(t, MaxConnections)
+}
+
+func checkAntreaConnectionMetrics(t *testing.T, numConns int) {
+	expectedAntreaConnectionCount := `
+	# HELP antrea_agent_conntrack_antrea_connection_count [ALPHA] Number of connections in the Antrea ZoneID of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.
+	# TYPE antrea_agent_conntrack_antrea_connection_count gauge
+	`
+	expectedAntreaConnectionCount = expectedAntreaConnectionCount + fmt.Sprintf("antrea_agent_conntrack_antrea_connection_count %d\n", numConns)
+	err := testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedAntreaConnectionCount), "antrea_agent_conntrack_antrea_connection_count")
+	assert.NoError(t, err)
+}
+
+func checkTotalConnectionsMetric(t *testing.T, numConns int) {
+	expectedConnectionCount := `
+	# HELP antrea_agent_conntrack_total_connection_count [ALPHA] Number of connections in the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.
+	# TYPE antrea_agent_conntrack_total_connection_count gauge
+	`
+	expectedConnectionCount = expectedConnectionCount + fmt.Sprintf("antrea_agent_conntrack_total_connection_count %d\n", numConns)
+	err := testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedConnectionCount), "antrea_agent_conntrack_total_connection_count")
+	assert.NoError(t, err)
+}
+
+func checkMaxConnectionsMetric(t *testing.T, maxConns int) {
+	expectedMaxConnectionsCount := `
+	# HELP antrea_agent_conntrack_max_connection_count [ALPHA] Size of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.
+	# TYPE antrea_agent_conntrack_max_connection_count gauge
+	`
+	expectedMaxConnectionsCount = expectedMaxConnectionsCount + fmt.Sprintf("antrea_agent_conntrack_max_connection_count %d\n", maxConns)
+	err := testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedMaxConnectionsCount), "antrea_agent_conntrack_max_connection_count")
+	assert.NoError(t, err)
 }

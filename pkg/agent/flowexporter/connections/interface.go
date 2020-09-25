@@ -22,5 +22,8 @@ import (
 // netfilter socket (OVS kernel datapath) and ovs-appctl command (OVS userspace datapath).
 // In future, support will be extended to Windows.
 type ConnTrackDumper interface {
-	DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, error)
+	// DumpFlows returns a list of filtered connections and the number of total connections.
+	DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, int, error)
+	// GetMaxConnections returns the size of the connection tracking table.
+	GetMaxConnections() (int, error)
 }
