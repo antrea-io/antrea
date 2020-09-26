@@ -122,9 +122,9 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 			conn.DestinationPodNamespace = dIface.ContainerInterfaceConfig.PodNamespace
 		}
 		// Do not export flow records of connections whose destination is local Pod and source is remote Pod.
-		// We export flow records only form "source node", where the connection is originated from. This is to avoid
+		// We export flow records only from "source node", where the connection is originated from. This is to avoid
 		// 2 copies of flow records at flow collector. This restriction will be removed when flow records store network policy rule ID.
-		// TODO: Remove this when network policy rule ID are added to flow records.
+		// TODO: Remove this when network policy rule IDs are added to flow records.
 		if !srcFound && dstFound {
 			conn.DoExport = false
 		}
