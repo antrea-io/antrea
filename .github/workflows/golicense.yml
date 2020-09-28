@@ -13,7 +13,23 @@ on:
       - created
 
 jobs:
+  check-changes:
+    name: Check whether tests need to be run based on diff
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@master
+      id: check_diff
+      with:
+        args: docs/* ci/jenkins/* *.md
+    outputs:
+      has_changes: ${{ steps.check_diff.outputs.has_changes }}
+
   golicense:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name != 'pull_request' }}
     runs-on: [ubuntu-latest]
     steps:
     - name: Set up Go 1.13
