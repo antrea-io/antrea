@@ -59,7 +59,7 @@ git clone https://github.com/vmware-tanzu/antrea.git
 cd antrea
 cp docs/cookbooks/multus/test/Vagrantfile test/e2e/infra/vagrant/
 cd test/e2e/infra/vagrant
-./infra/vagrant/provision.sh
+./provision.sh
 ```
 
 The last command will take around 10 to 15 minutes to complete. After that, your
