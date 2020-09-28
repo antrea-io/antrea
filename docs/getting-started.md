@@ -1,4 +1,4 @@
-# Getting started
+# Getting Started
 
 Antrea is super easy to install. All the Antrea components are
 containerized and can be installed using the Kubernetes deployment
@@ -124,11 +124,6 @@ cluster, and enforce NetworkPolicies for the cluster.
 * To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
 * To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
 
-### Deploying Antrea with IPsec Encryption
-
-Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
-IPsec encryption enabled, please refer to this [guide](/docs/ipsec-tunnel.md).
-
 ### Deploying Antrea with Custom Certificates
 
 By default, Antrea generates the certificates needed for itself to run. To
@@ -138,3 +133,41 @@ provide your own certificates, please refer to [Securing Control Plane](/docs/se
 
 To use antctl, the Antrea command-line tool, please refer to this
 [guide](/docs/antctl.md).
+
+## Features
+
+### Antrea Network Policy
+Besides Kubernetes NetworkPolicy, Antrea also implements its own Network Policy
+CRDs, which provide advanced features including: policy priority, tiering, deny
+action, external entity, and policy statistics. For more information on usage of
+Antrea Network Policies, refer to the [Antrea Network Policy document](antrea-network-policy.md).
+
+### IPsec Encryption
+Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
+IPsec encryption enabled, please refer to [this guide](/docs/ipsec-tunnel.md).
+
+### Network Flow Visibility
+Antrea supports exporting network flow information using IPFIX, and provides a
+reference cookbook on how to visualize the exported network flows using Elastic
+Stack and Kibana dashboards. For more information, refer to the [network flow
+visibility document](network-flow-visibility.md).
+
+### Octant UI
+Antrea ships with an Octant UI plugin which can show runtime information of Antrea
+components and perform Antrea Traceflow operations. Refer to [this guide](octant-plugin-installation.md)
+to learn how to install Octant and the Antrea plugin.
+
+### OVS Hardware Offload
+Antrea can offload OVS flow processing to the NICs that support OVS kernel
+hardware offload using TC. The hardware offload can improve OVS performance
+significantly. For more information on how to configure OVS offload, refer to
+the [OVS hardware offload guide](ovs-offload.md).
+
+### Prometheus Metrics
+Antrea supports exporting metrics to Prometheus. For more information, refer to
+the [Prometheus integration document](prometheus-integration.md).
+
+### Traceflow
+Traceflow is a very useful network diagnosis feature in Antrea. It can trace
+and report the forwarding path of a specified packet in the Antrea network.
+For usage of this feature, refer to the [Traceflow user guide](traceflow-guide.md).

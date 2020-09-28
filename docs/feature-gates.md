@@ -65,7 +65,7 @@ handled by Antrea controller. `ClusterNetworkPolicy` is an Antrea-specific exten
 NetworkPolicies, which enables cluster admins to define security policies which
 apply to the entire cluster. `Antrea NetworkPolicy` also complements K8s NetworkPolicies
 by supporting policy priorities and rule actions.
-Refer to this [document](network-policy.md) for more information.
+Refer to this [document](antrea-network-policy.md) for more information.
 
 #### Requirements for this Feature
 
