@@ -1221,19 +1221,12 @@ func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *Po
 }
 
 func (data *TestData) runNetcatCommandFromTestPod(podName string, server string, port int) error {
-	var cmdStr string
 	// Retrying several times to avoid flakes as the test may involve DNS (coredns) and Service/Endpoints (kube-proxy).
-	if net.ParseIP(server).To4() != nil {
-		cmdStr = fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 %s %d && exit 0 || sleep 1; done; exit 1",
-			server, port)
-	} else {
-		cmdStr = fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 -6 %s %d && exit 0 || sleep 1; done; exit 1",
-			server, port)
-	}
 	cmd := []string{
 		"/bin/sh",
 		"-c",
-		cmdStr,
+		fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 %s %d && exit 0 || sleep 1; done; exit 1",
+			server, port),
 	}
 	stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
 	if err == nil {
