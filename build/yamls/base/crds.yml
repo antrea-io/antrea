@@ -335,56 +335,41 @@ spec:
                                   type: string
                                 port:
                                   x-kubernetes-int-or-string: true
-                          from:
-                            type: array
-                            items:
+                egress:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - action
+                    properties:
+                      # Ensure that Action field allows only ALLOW and DROP values
+                      action:
+                        type: string
+                        enum: ['Allow', 'Drop']
+                      ports:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
+                              type: string
+                            port:
+                              x-kubernetes-int-or-string: true
+                      to:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            podSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            namespaceSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            ipBlock:
                               type: object
                               properties:
-                                podSelector:
-                                  x-kubernetes-preserve-unknown-fields: true
-                                namespaceSelector:
-                                  x-kubernetes-preserve-unknown-fields: true
-                                ipBlock:
-                                  type: object
-                                  properties:
-                                    cidr:
-                                      type: string
-                                      format: cidr
-                    egress:
-                      type: array
-                      items:
-                        type: object
-                        required:
-                          - action
-                        properties:
-                          # Ensure that Action field allows only ALLOW and DROP values
-                          action:
-                            type: string
-                            enum: ['Allow', 'Drop']
-                          ports:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                protocol:
+                                cidr:
                                   type: string
-                                port:
-                                  x-kubernetes-int-or-string: true
-                          to:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                podSelector:
-                                  x-kubernetes-preserve-unknown-fields: true
-                                namespaceSelector:
-                                  x-kubernetes-preserve-unknown-fields: true
-                                ipBlock:
-                                  type: object
-                                  properties:
-                                    cidr:
-                                      type: string
-                                      format: cidr
+                                  format: cidr
   scope: Cluster
   names:
     plural: clusternetworkpolicies
