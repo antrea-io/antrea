@@ -42,15 +42,17 @@ func GetSysctlNet(sysctl string) (int, error) {
 	return val, nil
 }
 
-// SetSysctlNet modifies the specified sysctl nt.* settings to the new value
+// SetSysctlNet sets the specified sysctl net.* parameter to the new value.
 func SetSysctlNet(sysctl string, newVal int) error {
 	return ioutil.WriteFile(path.Join(sysctlNet, sysctl), []byte(strconv.Itoa(newVal)), 0640)
 }
 
+// EnsureSysctlNetValue checks if the specified sysctl net.* parameter is already set to the
+// provided value, and if not, it makes it so.
 func EnsureSysctlNetValue(sysctl string, value int) error {
 	val, err := GetSysctlNet(sysctl)
 	if err != nil {
-		// If permission error, please provide access to sysctl setting_
+		// If permission error, please provide access to sysctl setting
 		klog.Errorf("Error when getting %s: %v", sysctl, err)
 		return err
 	} else if val != value {

@@ -4,7 +4,7 @@ Antrea is super easy to install. All the Antrea components are
 containerized and can be installed using the Kubernetes deployment
 manifest.
 
-![antrea-demo](https://user-images.githubusercontent.com/2495809/71284428-8de47100-2317-11ea-86a0-f5ff673352ea.gif)
+![antrea-demo](https://user-images.githubusercontent.com/2495809/94325574-e7876500-ff53-11ea-9ecd-6dedef339fac.gif)
 
 ## Ensuring requirements are satisfied
 
