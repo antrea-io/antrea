@@ -140,9 +140,8 @@ spec:
                         properties:
                           ipBlock:
                             properties:
-                              port:
-                                x-kubernetes-int-or-string: true
-                              protocol:
+                              cidr:
+                                format: cidr
                                 type: string
                             type: object
                           namespaceSelector:

@@ -331,10 +331,9 @@ spec:
                             ipBlock:
                               type: object
                               properties:
-                                protocol:
+                                cidr:
                                   type: string
-                                port:
-                                  x-kubernetes-int-or-string: true
+                                  format: cidr
                 egress:
                   type: array
                   items:
