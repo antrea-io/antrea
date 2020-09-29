@@ -144,14 +144,14 @@ All of the above commands produce output similar to what is shown below:
 
 ## ClusterNetworkPolicy
 
-ClusterNetworkPolicy, one of the two Antrea Policy CRDs introduced, is a
-specification of how workloads within a cluster communicate with each other and
-other external endpoints. The ClusterNetworkPolicy is supposed to aid cluster
-admins to configure the security policy for the cluster, unlike K8s
-NetworkPolicy, which is aimed towards developers to secure their apps and
-affects Pods within the Namespace in which the K8s NetworkPolicy is created.
-Rules belonging to ClusterNetworkPolicies are enforced before any rule
-belonging to a K8s NetworkPolicy.
+Antrea ClusterNetworkPolicy (ACNP), one of the two Antrea Policy CRDs
+introduced, is a specification of how workloads within a cluster communicate
+with each other and other external endpoints. The ClusterNetworkPolicy is
+supposed to aid cluster admins to configure the security policy for the
+cluster, unlike K8s NetworkPolicy, which is aimed towards developers to secure
+their apps and affects Pods within the Namespace in which the K8s NetworkPolicy
+is created. Rules belonging to ClusterNetworkPolicies are enforced before any
+rule belonging to a K8s NetworkPolicy.
 
 **Note**: ClusterNetworkPolicy is currently in "Alpha" stage. In order to
 enable them, edit the Controller and Agent configuration in the `antrea`
@@ -240,9 +240,9 @@ can range from 1.0 to 10000.0.
 indeterministically. Users should therefore take care to use priorities to
 ensure the behavior they expect.
 
-**tier**: The `tier` field associates a CNP to an existing Tier. The `tier`
+**tier**: The `tier` field associates a ACNP to an existing Tier. The `tier`
 field can be set with the name of the Tier CRD to which this policy must be
-associated with. If not set, the CNP is associated with the lowest priority
+associated with. If not set, the ACNP is associated with the lowest priority
 default tier i.e. the "application" Tier.
 
 **ingress**: Each ClusterNetworkPolicy may consist of zero or more ordered
@@ -322,7 +322,7 @@ All of the above commands produce output similar to what is shown below:
 
 ## Antrea NetworkPolicy
 
-Antrea NetworkPolicy is another Policy CRD, which is similar to the
+Antrea NetworkPolicy (ANP) is another Policy CRD, which is similar to the
 ClusterNetworkPolicy CRD, however its scope is limited to a Namespace.
 The purpose of introducing this CRD is to allow admins to take advantage of
 advanced NetworkPolicy features and apply them within a Namespace to
@@ -438,9 +438,9 @@ set in each of the two resources.
 Within a policy, rules are enforced in the order in which they are set. For example,
 consider the following:
 
-- CNP1{tier: application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
+- ACNP1{tier: application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
 - ANP1{tier: application, priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
-- CNP3{tier: emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
+- ACNP3{tier: emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
 
 This translates to the following order:
 - Ingress rules: ir3.1 > ir3.2 > ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
