@@ -106,7 +106,6 @@ func skipIfAntreaPolicyDisabled(tb testing.TB, data *TestData) {
 	if !enabled {
 		tb.Skipf("Skipping test as it required CNP to be enabled")
 	}
-	tb.Skipf("Skipping test temporarily. Unskip with PR #1237")
 }
 
 func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) error {
