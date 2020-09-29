@@ -121,13 +121,13 @@ are the target of the policy, we have scheduled 2 `nginx` Pods on the same
 Node. They received IP addresses 10.10.1.2 and 10.10.1.3 from the Antrea CNI, so
 you will see these addresses show up in the OVS flows.
 
-## Antrea Network Policy CRD Implementation
+## Antrea NetworkPolicy CRD Implementation
 
 In addition to the above tables created for K8s NetworkPolicy, Antrea creates
-additional dedicated tables to support the [ClusterNetworkPolicy](antrea-network-policy.md) CRD
-([CnpEgressRuleTables] and [CnpIngressRuleTables]).
+additional dedicated tables to support the [Antrea NetworkPolicy CRDs](antrea-network-policy.md)
+([AntreaPolicyEgressRuleTables] and [AntreaPolicyIngressRuleTables]).
 
-Consider the following ClusterNetworkPolicy in the Application tier as an
+Consider the following Antrea ClusterNetworkPolicy (ACNP) in the Application tier as an
 example for the remainder of this document.
 
 ```yaml
@@ -137,7 +137,7 @@ metadata:
   name: cnp0
 spec:
   priority: 10
-  tier: Application
+  tier: application # defaults to application tier if not specified
   appliedTo:
     - podSelector:
         matchLabels:
@@ -162,12 +162,12 @@ spec:
           port: 53
 ```
 
-This CNP is applied to all Pods with the `app: server` label in all
+This ACNP is applied to all Pods with the `app: server` label in all
 Namespaces. For these Pods, it drops TCP traffic on port 80 from all
 Pods which have the `app: notClient` label. In addition to the ingress rules,
 this policy also allows egress UDP traffic on port 53 to all Pods with the
 label `app: dns`. Similar to K8s NetworkPolicy, Antrea will only install OVS
-flows for this CNP on Nodes for which some of the Pods are the target of the
+flows for this ACNP on Nodes for which some of the Pods are the target of the
 policy. Thus, we have scheduled three Pods (appServer, appDns, appNotClient)
 on the same Node and they have the following IP addresses:
 - appServer: 10.10.1.6
@@ -351,7 +351,7 @@ service.
 If you dump the flows for this table, you should see something like this:
 ```
 1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105
-2. table=40, priority=0 actions=goto_table:50
+2. table=40, priority=0 actions=goto_table:45
 ```
 
 In the example above, 10.96.0.0/12 is the service CIDR (this is the default
@@ -377,34 +377,33 @@ In the future this table may support an additional mode of operations, in which
 it will implement kube-proxy functionality and take care of performing
 load-balancing / DNAT on traffic destined to services.
 
-### CnpEgressRuleTables (45-49)
+### AntreaPolicyEgressRuleTables (45, 49)
 
-For these tables, you will need to keep in mind the CNP [specification](#antrea-network-policy-crd-implementation)
+For these two tables, you will need to keep in mind the ACNP
+[specification](#antrea-networkpolicy-crd-implementation)
 that we are using.
 
-These tables are used to implement the egress rules across all ClusterNetworkPolicies.
-Depending on the tier to which the CNP belongs to, the rules will be installed
-in a table corresponding to that tier. The egress CNP table to tier mappings is as
-follows:
+These two tables are used to implement the egress rules across all Antrea 
+ClusterNetworkPolicies and Antrea NetworkPolicies.
+Depending on the tier to which the ACNP or ANP belongs to, the rules will be 
+installed in a table corresponding to that tier. The egress table to tier mappings 
+is as follows:
 ```
-1. Emergency tier -> EmergencyEgressRuleTable(45)
-2. SecurityOps tier -> SecurityOpsEgressRuleTable(46)
-3. NetworkOps tier -> NetworkOpsEgressRuleTable(47)
-4. Platform tier -> PlatformEgressRuleTable(48)
-5. Application tier -> ApplicationEgressRuleTable(49)
+Application tier -> DefaultTierEgressRuleTable(49)
+All other tiers  -> MultiTierEgressRuleTable(45)
 ```
-Since the example CNP resides in the Application tier, if you dump the flows for
+Since the example ACNP resides in the Application tier, if you dump the flows for
 table 49, you should see something like this:
 ```
 1. table=49, priority=64990,ct_state=-new+est,ip actions=resubmit(,70)
-2. table=49, priority=11800,conj_id=2,ip actions=load:0x2->NXM_NX_REG6[],resubmit(,70)
-3. table=49, priority=11800,ip,nw_src=10.10.1.6 actions=conjunction(2,1/3)
-4. table=49, priority=11800,ip,nw_dst=10.10.1.8 actions=conjunction(2,2/3)
-5. table=49, priority=11800,udp,tp_dst=53 actions=conjunction(2,3/3)
+2. table=49, priority=58600,conj_id=2,ip actions=load:0x2->NXM_NX_REG6[],resubmit(,70)
+3. table=49, priority=58600,ip,nw_src=10.10.1.6 actions=conjunction(2,1/3)
+4. table=49, priority=58600,ip,nw_dst=10.10.1.8 actions=conjunction(2,2/3)
+5. table=49, priority=58600,udp,tp_dst=53 actions=conjunction(2,3/3)
 6. table=49, priority=0 actions=resubmit(,50)
 ```
 
-Similar to K8s NetworkPolicy implementation, CnpEgressRuleTables also rely on
+Similar to K8s NetworkPolicy implementation, AntreaPolicyEgressRuleTables also rely on
 the OVS built-in `conjunction` action to implement policies efficiently.
 The above example flows read as follow: if the source IP address is in set
 {10.10.1.6}, and the destination IP address is in the set {10.10.1.8}, and the
@@ -414,12 +413,12 @@ to the next tier in precedence, or in the case of the Application tier (lowest
 precedence), go to the [EgressRuleTable].
 
 If the `conjunction` action is matched, packets are "allowed" or "dropped"
-based on the `action` field of the CNP rule. If allowed, they follow a similar
+based on the `action` field of the policy rule. If allowed, they follow a similar
 path as described in the following [EgressRuleTable] section.
 
-Unlike the default of K8s NetworkPolicies, ClusterNetworkPolicy has no such
-default rules. Hence, they are evaluated as-is, and there is no need for a
-CnpEgressDefaultTable.
+Unlike the default of K8s NetworkPolicies, ClusterNetworkPolicy and Antrea NetworkPolicy
+have no such default rules. Hence, they are evaluated as-is, and there is no need for a
+AntreaPolicyEgressDefaultTable.
 
 ### EgressRuleTable (50)
 
@@ -581,35 +580,32 @@ non-ARP and non-IP (assuming any can be received by the switch) is actually
 dropped much earlier in the pipeline ([SpoofGuardTable]). In the future, we may
 need to support more cases for L2 multicast / broadcast traffic.
 
-### CnpIngressRuleTables (85-89)
+### AntreaPolicyIngressRuleTables (85, 89)
 
-These tables are very similar to [CnpEgressRuleTables], but implement the ingress
-rules of the CNP. Depending on the tier to which the CNP belongs to, the rules will
-be installed in a table corresponding to that tier. The ingress CNP table to tier
-mappings is as follows:
+These two tables are very similar to [AntreaPolicyEgressRuleTables], but implement
+the ingress rules of Antrea Policies. Depending on the tier to which the policy belongs
+to, the rules will be installed in a table corresponding to that tier.
+The ingress table to tier mappings is as follows:
 
 ```
-1. Emergency tier -> EmergencyIngressRuleTable(85)
-2. SecurityOps tier -> SecurityOpsIngressRuleTable(86)
-3. NetworkOps tier -> NetworkOpsIngressRuleTable(87)
-4. Platform tier -> PlatformIngressRuleTable(88)
-5. Application tier -> ApplicationIngressRuleTable(89)
+Application tier -> DefaultTierIngressRuleTable(89)
+All other tiers  -> MultiTierIngressRuleTable(85)
 ```
 
-Again for this table, you will need to keep in mind the CNP
-[specification](#antrea-network-policy-crd-implementation) that we are using.
-Since the example CNP resides in the Application tier, if you dump the flows
+Again for these two tables, you will need to keep in mind the ACNP
+[specification](#antrea-networkpolicy-crd-implementation) that we are using.
+Since the example ACNP resides in the Application tier, if you dump the flows
 for table 89, you should see something like this:
 ```
 1. table=89, priority=64990,ct_state=-new+est,ip actions=resubmit(,105)
-2. table=89, priority=11800,conj_id=1,ip actions=drop
-3. table=89, priority=11800,ip,nw_src=10.10.1.7 actions=conjunction(1,1/3)
-4. table=89, priority=11800,ip,reg1=0x19c actions=conjunction(1,2/3)
-5. table=89, priority=11800,tcp,tp_dst=80 actions=conjunction(1,3/3)
+2. table=89, priority=58600,conj_id=1,ip actions=drop
+3. table=89, priority=58600,ip,nw_src=10.10.1.7 actions=conjunction(1,1/3)
+4. table=89, priority=58600,ip,reg1=0x19c actions=conjunction(1,2/3)
+5. table=89, priority=58600,tcp,tp_dst=80 actions=conjunction(1,3/3)
 6. table=89, priority=0 actions=resubmit(,90)
 ```
 
-As for [CnpEgressRuleTables], flow 1 (highest priority) ensures that for
+As for [AntreaPolicyEgressRuleTables], flow 1 (highest priority) ensures that for
 established connections packets go straight to [L2ForwardingOutTable],
 with no other match required.
 
@@ -617,15 +613,15 @@ The rest of the flows read as follows: if the source IP address is in set
 {10.10.1.7}, and the destination OF port is in the set {412} (which
 correspond to IP addresses {10.10.1.6}), and the destination TCP port
 is in the set {80}, then use `conjunction` action with id 1, which drops the
-packet. Otherwise, go to the next CnpIngressRuleTable belonging to the next
+packet. Otherwise, go to the next AntreaPolicyRuleTable belonging to the next
 tier in precedence, or in the case of the Application tier (lowest precedence),
 go to the [IngressRuleTable]. One notable difference is how we use OF ports to
 identify the destination of the traffic, while we use IP addresses in
-[CnpEgressRuleTable] to identify the source of the traffic. More details
+[AntreaPolicyEgressRuleTable] to identify the source of the traffic. More details
 regarding this can be found in the following [IngressRuleTable] section.
 
-As seen in [CnpEgressRuleTables], the default action is to evaluate K8s Network
-Policy [IngressRuleTable] and a CnpIngressDefaultTable does not exist.
+As seen in [AntreaPolicyEgressRuleTable], the default action is to evaluate K8s
+Network Policy [IngressRuleTable] and a AntreaPolicyIngressDefaultTable does not exist.
 
 ### IngressRuleTable (90)
 
@@ -736,12 +732,12 @@ resolved by the "dmac" table, [L2ForwardingCalcTable]). IP packets for which
 [ConntrackTable]: #conntracktable-30
 [ConntrackStateTable]: #conntrackstatetable-31
 [DNATTable]: #dnattable-40
-[CnpEgressRuleTables]: #cnpegressruletables-45-49
+[AntreaPolicyEgressRuleTables]: #antreapolicyegressruletables-45-49
 [EgressRuleTable]: #egressruletable-50
 [EgressDefaultTable]: #egressdefaulttable-60
 [L3ForwardingTable]: #l3forwardingtable-70
 [L2ForwardingCalcTable]: #l2forwardingcalctable-80
-[CnpIngressRuleTables]: #cnpingressruletables-85-89
+[AntreaPolicyIngressRuleTables]: #antreapolicyingressruletables-85-89
 [IngressRuleTable]: #ingressruletable-90
 [IngressDefaultTable]: #ingressdefaulttable-100
 [ConntrackCommitTable]: #conntrackcommittable-105
