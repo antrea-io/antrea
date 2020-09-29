@@ -7,13 +7,16 @@
 - [Tier](#tier)
   - [Tier CRDs](#tier-crds)
   - [Static tiers](#static-tiers)
+  - [kubectl commands for Tier](#kubectl-commands-for-tier)
 - [ClusterNetworkPolicy](#clusternetworkpolicy)
   - [The ClusterNetworkPolicy resource](#the-clusternetworkpolicy-resource)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
+  - [kubectl commands for ClusterNetworkPolicy](#kubectl-commands-for-clusternetworkpolicy)
 - [Antrea NetworkPolicy](#antrea-networkpolicy)
   - [The Antrea NetworkPolicy resource](#the-antrea-networkpolicy-resource)
   - [Key differences from ClusterNetworkPolicy](#key-differences-from-clusternetworkpolicy)
+  - [kubectl commands for Antrea NetworkPolicy](#kubectl-commands-for-antrea-networkpolicy)
 - [Antrea Policy ordering based on priorities](#antrea-policy-ordering-based-on-priorities)
   - [Ordering based on Tier priority](#ordering-based-on-tier-priority)
   - [Ordering based on policy priority](#ordering-based-on-policy-priority)
@@ -109,6 +112,35 @@ the "Application" tier. Even though the policies associated with the
 still enforced before K8s NetworkPolicies. Thus, admin-created tiered Antrea
 Policy CRDs have a higher precedence than developer-created K8s
 NetworkPolicies.
+
+### kubectl commands for Tier
+
+The following kubectl commands can be used to retrieve Tier CRDs:
+
+```
+    # Use long name
+    kubectl get tiers
+
+    # Use long name with API Group
+    kubectl get tiers.security.antrea.tanzu.vmware.com
+
+    # Use short name
+    kubectl get tr
+
+    # Use short name with API Group
+    kubectl get tr.security.antrea.tanzu.vmware.com
+```
+
+All of the above commands produce output similar to what is shown below:
+
+```
+    NAME          PRIORITY   AGE
+    application   250        27h
+    emergency     5          27h
+    networkops    100        27h
+    platform      150        27h
+    securityops   50         27h
+```
 
 ## ClusterNetworkPolicy
 
@@ -263,6 +295,31 @@ since Pod IPs are ephemeral and unpredictable.
 - Rules assume the priority in which they are written. i.e. rule set at top
   takes precedence over a rule set below it.
 
+### kubectl commands for ClusterNetworkPolicy
+
+The following kubectl commands can be used to retrieve ACNP CRDs:
+
+```
+    # Use long name
+    kubectl get clusternetworkpolicies
+
+    # Use long name with API Group
+    kubectl get clusternetworkpolicies.security.antrea.tanzu.vmware.com
+
+    # Use short name
+    kubectl get acnp
+
+    # Use short name with API Group
+    kubectl get acnp.security.antrea.tanzu.vmware.com
+```
+
+All of the above commands produce output similar to what is shown below:
+
+```
+    NAME       TIER        PRIORITY   AGE
+    test-cnp   emergency   5          54s
+```
+
 ## Antrea NetworkPolicy
 
 Antrea NetworkPolicy is another Policy CRD, which is similar to the
@@ -331,6 +388,28 @@ Policy CRDs.
 - `podSelector` without a `namespaceSelector`, set within a NetworkPolicy Peer
   of any rule, selects Pods from the Namespace in which the Antrea
   NetworkPolicy is created. This behavior is similar to the K8s NetworkPolicy.
+
+### kubectl commands for Antrea NetworkPolicy
+
+The following kubectl commands can be used to retrieve ANP CRDs:
+
+```
+    # Use long name with API Group
+    kubectl get networkpolicies.security.antrea.tanzu.vmware.com
+
+    # Use short name
+    kubectl get anp
+
+    # Use short name with API Group
+    kubectl get anp.security.antrea.tanzu.vmware.com
+```
+
+All of the above commands produce output similar to what is shown below:
+
+```
+    NAME       TIER          PRIORITY   AGE
+    test-anp   securityops   5          5s
+```
 
 ## Antrea Policy ordering based on priorities
 
