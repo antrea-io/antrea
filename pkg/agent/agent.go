@@ -568,18 +568,11 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return fmt.Errorf("failed to get local IPNet:  %v", err)
 	}
 
-	mtu, err := i.getNodeMTU(localIntf)
-	if err != nil {
-		return err
-	}
-	klog.Infof("Setting Node MTU=%d", mtu)
-
 	i.nodeConfig = &config.NodeConfig{
 		Name:            nodeName,
 		OVSBridge:       i.ovsBridge,
 		DefaultTunName:  defaultTunInterfaceName,
 		NodeIPAddr:      localAddr,
-		NodeMTU:         mtu,
 		UplinkNetConfig: new(config.AdapterNetConfig)}
 
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
@@ -610,25 +603,31 @@ func (i *Initializer) initNodeLocalConfig() error {
 				klog.V(2).Infof("Configure IPv6 Subnet CIDR %s on this Node", localSubnet.String())
 			}
 		}
-		return nil
+	} else {
+		// Spec.PodCIDR can be empty due to misconfiguration.
+		if node.Spec.PodCIDR == "" {
+			klog.Errorf("Spec.PodCIDR is empty for Node %s. Please make sure --allocate-node-cidrs is enabled "+
+				"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", nodeName)
+			return fmt.Errorf("CIDR string is empty for node %s", nodeName)
+		}
+		_, localSubnet, err := net.ParseCIDR(node.Spec.PodCIDR)
+		if err != nil {
+			klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
+			return err
+		}
+		if localSubnet.IP.To4() != nil {
+			i.nodeConfig.PodIPv4CIDR = localSubnet
+		} else {
+			i.nodeConfig.PodIPv6CIDR = localSubnet
+		}
 	}
 
-	// Spec.PodCIDR can be empty due to misconfiguration.
-	if node.Spec.PodCIDR == "" {
-		klog.Errorf("Spec.PodCIDR is empty for Node %s. Please make sure --allocate-node-cidrs is enabled "+
-			"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", nodeName)
-		return fmt.Errorf("CIDR string is empty for node %s", nodeName)
-	}
-	_, localSubnet, err := net.ParseCIDR(node.Spec.PodCIDR)
+	mtu, err := i.getNodeMTU(localIntf)
 	if err != nil {
-		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
 		return err
 	}
-	if localSubnet.IP.To4() != nil {
-		i.nodeConfig.PodIPv4CIDR = localSubnet
-	} else {
-		i.nodeConfig.PodIPv6CIDR = localSubnet
-	}
+	i.nodeConfig.NodeMTU = mtu
+	klog.Infof("Setting Node MTU=%d", mtu)
 	return nil
 }
 
@@ -750,6 +749,9 @@ func (i *Initializer) getNodeMTU(localIntf *net.Interface) (int, error) {
 	}
 	if i.networkConfig.EnableIPSecTunnel {
 		mtu -= config.IpsecESPOverhead
+	}
+	if i.nodeConfig.PodIPv6CIDR != nil {
+		mtu -= config.IPv6ExtraOverhead
 	}
 	return mtu, nil
 }
