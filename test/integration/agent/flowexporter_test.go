@@ -17,6 +17,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
 )
 
 const testPollInterval = 0 // Not used in the test, hence 0.
@@ -163,4 +164,18 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Test for build flow records
 	flowRecords := flowrecords.NewFlowRecords(connStore)
 	testBuildFlowRecords(t, flowRecords, testConns, testConnKeys)
+}
+
+func TestSetupConnTrackParameters(t *testing.T) {
+	err := connections.SetupConntrackParameters()
+	if err != nil {
+		t.Skipf("Skipping test as trying to set up conntrack parameters returned an error: %v", err)
+	} else {
+		conntrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
+		require.NoError(t, err, "Cannot read nf_conntrack_acct")
+		assert.Equal(t, 1, conntrackAcct, "net.netfilter.nf_conntrack_acct value should be 1")
+		conntrackTimestamping, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_timestamp")
+		require.NoError(t, err, "Cannot read nf_conntrack_timestamp")
+		assert.Equal(t, 1, conntrackTimestamping, "net.netfilter.nf_conntrack_timestamp value should be 1")
+	}
 }

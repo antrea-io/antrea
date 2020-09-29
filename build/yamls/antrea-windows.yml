@@ -23,6 +23,9 @@ data:
     # Service traffic.
       AntreaProxy: true
 
+    # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
+    #  FlowExporter: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     #ovsBridge: br-int
@@ -52,6 +55,21 @@ data:
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     #enablePrometheusMetrics: false
+
+    # Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also enables
+    # the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge. If no L4 transport proto is given,
+    # we consider tcp as default.
+    #flowCollectorAddr: ""
+
+    # Provide flow poll interval as a duration string. This determines how often the flow exporter dumps connections from the conntrack module.
+    # Flow poll interval should be greater than or equal to 1s (one second).
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    #flowPollInterval: "5s"
+
+    # Provide flow export frequency, which is the number of poll cycles elapsed before flow exporter exports flow records to
+    # the flow collector.
+    # Flow export frequency should be greater than or equal to 1.
+    #flowExportFrequency: 12
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -70,7 +88,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-4f6g849tgk
+  name: antrea-windows-config-5ht8dmf8tk
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -158,7 +176,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-4f6g849tgk
+          name: antrea-windows-config-5ht8dmf8tk
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

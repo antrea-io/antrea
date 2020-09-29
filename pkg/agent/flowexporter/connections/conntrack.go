@@ -29,7 +29,7 @@ import (
 func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsctlClient ovsctl.OVSCtlClient, ovsDatapathType string) ConnTrackDumper {
 	var connTrackDumper ConnTrackDumper
 	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
-		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDR)
+		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDR, ovsctlClient)
 	} else if ovsDatapathType == ovsconfig.OVSDatapathNetdev {
 		connTrackDumper = NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, ovsctlClient)
 	}
