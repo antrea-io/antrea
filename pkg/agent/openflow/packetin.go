@@ -15,6 +15,9 @@
 package openflow
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
@@ -46,61 +49,64 @@ func (c *client) RegisterPacketInHandler(packetHandlerReason uint8, packetHandle
 	c.packetInHandlers[packetHandlerReason][packetHandlerName] = handler
 }
 
+type FeatureStartPacketIn interface {
+	ConfigPacketIn()
+	ListenPacketIn()
+}
+
+type featureStartPacketIn struct {
+	reason        uint8
+	subscribeCh   chan *ofctrl.PacketIn
+	stopCh        <-chan struct{}
+	packetInQueue *workqueue.Type
+}
+
+func (f *featureStartPacketIn) ConfigPacketIn() {
+	f.subscribeCh = make(chan *ofctrl.PacketIn)
+	f.packetInQueue = workqueue.NewNamed(string(f.reason))
+}
+
+func (f *featureStartPacketIn) ListenPacketIn() {
+	for {
+		select {
+		case pktIn := <-f.subscribeCh:
+			// Ensure that the queue doesn't grow too big. This is NOT to provide an exact guarantee.
+			if f.packetInQueue.Len() < packetInQueueSize {
+				f.packetInQueue.Add(pktIn)
+			} else {
+				klog.Warningf("Max packetInQueue size exceeded.")
+			}
+		case <-f.stopCh:
+			f.packetInQueue.ShutDown()
+			return
+		}
+	}
+}
+
 func (c *client) StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{}) {
 	if len(c.packetInHandlers) == 0 || len(packetInStartedReason) == 0 {
 		return
 	}
-	// Subscribe packetin for TraceFlow with reason[0], corresponding to reason 1 action in ovs
-	tfCh := make(chan *ofctrl.PacketIn)
-	err := c.SubscribePacketIn(packetInStartedReason[0], tfCh)
-	if err != nil {
-		klog.Errorf("Subscribe Traceflow PacketIn failed %+v", err)
-		return
-	}
-	tfPacketInQueue := workqueue.NewNamed("traceflow")
-	go c.parsePacketIn(tfPacketInQueue, packetInStartedReason[0])
 
-	// Subscribe packetin for NetworkPolicy with reason[1], corresponding to reason 0 no_match in ovs
-	npCh := make(chan *ofctrl.PacketIn)
-	err = c.SubscribePacketIn(packetInStartedReason[1], npCh)
-	if err != nil {
-		klog.Errorf("Subscribe NetworkPolicy PacketIn failed %+v", err)
-		return
-	}
-	npPacketInQueue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "networkpolicy")
-	go c.parsePacketInRateLimiting(npPacketInQueue, packetInStartedReason[1])
-
-	for {
-		// Prioritize traceflow over networkpolicy
-		select {
-		case tfPktIn := <-tfCh:
-			// Ensure that the queue doesn't grow too big. This is NOT to provide an exact guarantee.
-			if tfPacketInQueue.Len() < packetInQueueSize {
-				tfPacketInQueue.Add(tfPktIn)
-			} else {
-				klog.Warningf("Max packetInQueue size exceeded.")
-			}
-			continue
-		default:
-		}
-		select {
-		case tfPktIn := <-tfCh:
-			// Ensure that the queue doesn't grow too big. This is NOT to provide an exact guarantee.
-			if tfPacketInQueue.Len() < packetInQueueSize {
-				tfPacketInQueue.Add(tfPktIn)
-			} else {
-				klog.Warningf("Max packetInQueue size exceeded.")
-			}
-			continue
-		case npPktIn := <-npCh:
-			npPacketInQueue.Add(npPktIn)
-			continue
-		case <-stopCh:
-			tfPacketInQueue.ShutDown()
-			npPacketInQueue.ShutDown()
-			return
+	// Iterate through each feature that starts packetin. Subscribe with their specified reason.
+	for _, reason := range packetInStartedReason {
+		featurePacketIn := &featureStartPacketIn{reason: reason, stopCh: stopCh}
+		err := c.subscribeFeaturePacketIn(featurePacketIn)
+		if err != nil {
+			klog.Errorf("received error %+v while subscribing packetin for each feature", err)
 		}
 	}
+}
+
+func (c *client) subscribeFeaturePacketIn(featurePacketIn *featureStartPacketIn) error {
+	featurePacketIn.ConfigPacketIn()
+	err := c.SubscribePacketIn(featurePacketIn.reason, featurePacketIn.subscribeCh)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Subscribe %d PacketIn failed %+v", featurePacketIn.reason, err))
+	}
+	go c.parsePacketIn(featurePacketIn.packetInQueue, featurePacketIn.reason)
+	featurePacketIn.ListenPacketIn()
+	return nil
 }
 
 func (c *client) parsePacketIn(packetInQueue workqueue.Interface, packetHandlerReason uint8) {
@@ -122,31 +128,5 @@ func (c *client) parsePacketIn(packetInQueue workqueue.Interface, packetHandlerR
 				klog.Errorf("PacketIn handler %s failed to process packet: %+v", name, err)
 			}
 		}
-	}
-}
-
-func (c *client) parsePacketInRateLimiting(packetInQueue workqueue.RateLimitingInterface, packetHandlerReason uint8) {
-	for {
-		obj, quit := packetInQueue.Get()
-		if quit {
-			break
-		}
-		packetInQueue.Done(obj)
-		pktIn, ok := obj.(*ofctrl.PacketIn)
-		if !ok {
-			klog.Errorf("Invalid packetin data in queue, skipping.")
-			// remove rate limit tracking for invalid packetin
-			packetInQueue.Forget(obj)
-			continue
-		}
-		// Use corresponding handlers subscribed to the reason to handle PacketIn
-		for name, handler := range c.packetInHandlers[packetHandlerReason] {
-			err := handler.HandlePacketIn(pktIn)
-			if err != nil {
-				klog.Errorf("PacketIn handler %s failed to process packet: %+v", name, err)
-			}
-		}
-		// reset rate limit tracking for succeeded objects
-		packetInQueue.Forget(obj)
 	}
 }

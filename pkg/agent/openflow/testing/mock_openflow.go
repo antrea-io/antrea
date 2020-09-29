@@ -124,20 +124,6 @@ func (mr *MockClientMockRecorder) Disconnect() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Disconnect", reflect.TypeOf((*MockClient)(nil).Disconnect))
 }
 
-// GetAntreaPolicyConfig mocks base method
-func (m *MockClient) GetAntreaPolicyConfig() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAntreaPolicyConfig")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// GetAntreaPolicyConfig indicates an expected call of GetAntreaPolicyConfig
-func (mr *MockClientMockRecorder) GetAntreaPolicyConfig() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAntreaPolicyConfig", reflect.TypeOf((*MockClient)(nil).GetAntreaPolicyConfig))
-}
-
 // GetFlowTableStatus mocks base method
 func (m *MockClient) GetFlowTableStatus() []openflow.TableStatus {
 	m.ctrl.T.Helper()
@@ -194,18 +180,19 @@ func (mr *MockClientMockRecorder) GetPolicyFromConjunction(arg0 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPolicyFromConjunction", reflect.TypeOf((*MockClient)(nil).GetPolicyFromConjunction), arg0)
 }
 
-// GetPriorityFromConjunction mocks base method
-func (m *MockClient) GetPriorityFromConjunction(arg0 uint32) string {
+// GetPolicyInfoFromConjunction mocks base method
+func (m *MockClient) GetPolicyInfoFromConjunction(arg0 uint32) (string, string) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPriorityFromConjunction", arg0)
+	ret := m.ctrl.Call(m, "GetPolicyInfoFromConjunction", arg0)
 	ret0, _ := ret[0].(string)
-	return ret0
+	ret1, _ := ret[1].(string)
+	return ret0, ret1
 }
 
-// GetPriorityFromConjunction indicates an expected call of GetPriorityFromConjunction
-func (mr *MockClientMockRecorder) GetPriorityFromConjunction(arg0 interface{}) *gomock.Call {
+// GetPolicyInfoFromConjunction indicates an expected call of GetPolicyInfoFromConjunction
+func (mr *MockClientMockRecorder) GetPolicyInfoFromConjunction(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPriorityFromConjunction", reflect.TypeOf((*MockClient)(nil).GetPriorityFromConjunction), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPolicyInfoFromConjunction", reflect.TypeOf((*MockClient)(nil).GetPolicyInfoFromConjunction), arg0)
 }
 
 // GetTunnelVirtualMAC mocks base method

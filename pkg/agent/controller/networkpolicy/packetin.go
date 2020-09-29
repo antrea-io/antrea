@@ -43,7 +43,7 @@ var (
 // logInfo will be set by retrieving info from packetin and register
 type logInfo struct {
 	tableName   string // name of the table sending packetin
-	npName      string // namespace/name for Antrea NetworkPolicy and name for Antrea ClusterNetworkPolicy
+	npRef       string // Network Policy name reference for Antrea NetworkPolicy
 	disposition string // Allow/Drop of the rule sending packetin
 	ofPriority  string // openflow priority of the flow sending packetin
 	srcIP       string // source IP of the traffic logged
@@ -69,10 +69,10 @@ func initLogger() error {
 	// Use lumberjack log file rotation
 	AntreaPolicyLogger.SetOutput(&lumberjack.Logger{
 		Filename:   logDir + logfileName,
-		MaxSize:    500, // megabytes after which new file is created
-		MaxBackups: 3,   // number of backups
-		MaxAge:     28,  //days
-		Compress:   true,
+		MaxSize:    500,  // allow max 500 megabytes for one log file
+		MaxBackups: 3,    // allow max 3 old log file backups
+		MaxAge:     28,   // allow max 28 days maintenance of old log files
+		Compress:   true, // compress the old log files for backup
 	})
 	klog.V(2).Info("Initialized Antrea Policy Logger for audit logging")
 	return nil
@@ -87,7 +87,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 	ob := new(logInfo)
 
-	// Get network policy log info
+	// Get Network Policy log info
 	err := getNetworkPolicyInfo(pktIn, c, ob)
 	if err != nil {
 		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
@@ -100,7 +100,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	}
 
 	// Store log file
-	AntreaPolicyLogger.Printf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npName, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
+	AntreaPolicyLogger.Printf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
 	return nil
 }
 
@@ -114,13 +114,13 @@ func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchFie
 func getMatch(matchers *ofctrl.Matchers, tableID binding.TableIDType) *ofctrl.MatchField {
 	var match *ofctrl.MatchField
 	// Get match from ingress/egress reg
-	for _, table := range openflow.GetCNPEgressTables() {
+	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable, openflow.EgressDefaultTable) {
 		if tableID == table {
 			match = getMatchRegField(matchers, uint32(openflow.EgressReg))
 			break
 		}
 	}
-	for _, table := range openflow.GetCNPIngressTables() {
+	for _, table := range append(openflow.GetAntreaPolicyIngressTables(), openflow.IngressRuleTable, openflow.IngressDefaultTable) {
 		if tableID == table {
 			match = getMatchRegField(matchers, uint32(openflow.IngressReg))
 			break
@@ -152,20 +152,16 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	// Set match to corresponding ingress/egress reg
 	match = getMatch(matchers, tableID)
 
-	// Get network policy full name, CNP is not namespaced
+	// Get Network Policy full name and OF priority of the conjunction
 	info, err := getInfoInReg(match, nil)
 	if err != nil {
 		return errors.New(fmt.Sprintf("received error while unloading conjunction id from reg: %v", err))
 	}
-	npRef := c.ofClient.GetPolicyFromConjunction(info)
-	ob.npName = npRef.ToString()
-
-	// Get OF priority of the conjunction
-	ob.ofPriority = c.ofClient.GetPriorityFromConjunction(info)
+	ob.npRef, ob.ofPriority = c.ofClient.GetPolicyInfoFromConjunction(info)
 
 	// Get disposition Allow or Drop
-	match = getMatchRegField(matchers, uint32(openflow.DispositionReg))
-	info, err = getInfoInReg(match, nil)
+	match = getMatchRegField(matchers, uint32(openflow.DispositionMarkReg))
+	info, err = getInfoInReg(match, openflow.APDispositionMarkRange.ToNXRange())
 	if err != nil {
 		return errors.New(fmt.Sprintf("received error while unloading disposition from reg: %v", err))
 	}

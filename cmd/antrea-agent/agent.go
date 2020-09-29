@@ -170,7 +170,6 @@ func run(o *Options) error {
 		nodeConfig.Name,
 		podUpdates,
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
-
 	isChaining := false
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
@@ -255,9 +254,16 @@ func run(o *Options) error {
 	}
 	go apiServer.Run(stopCh)
 
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) || features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		packetInReason := []uint8{uint8(openflow.PacketInReasonTF), uint8(openflow.PacketInReasonNP)}
-		go ofClient.StartPacketInHandler(packetInReason, stopCh)
+	// Start PacketIn for features and specify their own reason.
+	var packetInReasons []uint8
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		packetInReasons = append(packetInReasons, uint8(openflow.PacketInReasonTF))
+	}
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		packetInReasons = append(packetInReasons, uint8(openflow.PacketInReasonNP))
+	}
+	if len(packetInReasons) > 0 {
+		go ofClient.StartPacketInHandler(packetInReasons, stopCh)
 	}
 
 	// Initialize flow exporter to start go routines to poll conntrack flows and export IPFIX flow records

@@ -191,7 +191,7 @@ func (rt regType) reg() string {
 
 const (
 	// marksReg stores traffic-source mark and pod-found mark.
-	// traffic-source resides in [0..15], pod-found resides in [16].
+	// traffic-source resides in [0..15], pod-found resides in [16], Antrea Policy disposition Allow or Drop in [21]
 	marksReg        regType = 0
 	portCacheReg    regType = 1
 	swapReg         regType = 2
@@ -200,7 +200,6 @@ const (
 	serviceLearnReg         = endpointPortReg // Use reg4[16..18] to store endpoint selection states.
 	EgressReg       regType = 5
 	IngressReg      regType = 6
-	DispositionReg  regType = 7 // Stores Allow or Drop
 	TraceflowReg    regType = 9 // Use reg9[28..31] to store traceflow dataplaneTag.
 	// cnpDropConjunctionIDReg reuses reg3 which will also be used for storing endpoint IP to store the rule ID. Since
 	// the service selection will finish when a packet hitting NetworkPolicy related rules, there is no conflict.
@@ -227,9 +226,11 @@ const (
 	snatCTMark    = 0x40
 	ServiceCTMark = 0x21
 
-	// disposition marks the flow action stored in DispositionReg
-	DispositionAllow uint32 = 1
-	DispositionDrop  uint32 = 2
+	// disposition is loaded in marksReg [21]
+	DispositionMarkReg regType = 0
+	// disposition marks the flow action as either Allow or Drop
+	DispositionAllow = 0b0
+	DispositionDrop  = 0b1
 )
 
 var DispositionToString = map[uint32]string{
@@ -238,6 +239,8 @@ var DispositionToString = map[uint32]string{
 }
 
 var (
+	// APDispositionMarkRange takes the 21 to 28 bits of register marksReg to indicate disposition of Antrea Policy.
+	APDispositionMarkRange = binding.Range{21, 21}
 	// ofPortMarkRange takes the 16th bit of register marksReg to indicate if the ofPort number of an interface
 	// is found or not. Its value is 0x1 if yes.
 	ofPortMarkRange = binding.Range{16, 16}
@@ -675,7 +678,7 @@ func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cooki
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		Action().MoveRange(regName, tunMetadataName, OfTraceflowMarkRange, OfTraceflowMarkRange).
 		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
-		Action().SendToController(1).
+		Action().SendToController(uint8(PacketInReasonTF)).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -990,9 +993,9 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
 			MatchConjID(conjunctionID).
 			MatchPriority(ofPriority).
-			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).           // Traceflow.
-			Action().LoadRegRange(int(DispositionReg), DispositionAllow, binding.Range{0, 31}). //AntreaPolicy
-			Action().SendToController(0).
+			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).       // Traceflow.
+			Action().LoadRegRange(int(marksReg), DispositionAllow, APDispositionMarkRange). //AntreaPolicy
+			Action().SendToController(uint8(PacketInReasonNP)).
 			Action().CT(true, nextTable, CtZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
 			LoadToLabelRange(uint64(conjunctionID), &labelRange).
 			CTDone().
@@ -1029,8 +1032,8 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 			Action().LoadRegRange(int(cnpDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
 			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Logging
 			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
-			Action().LoadRegRange(int(DispositionReg), DispositionDrop, binding.Range{0, 31}). //Logging
-			Action().SendToController(0).
+			Action().LoadRegRange(int(marksReg), DispositionDrop, APDispositionMarkRange). //Logging
+			Action().SendToController(uint8(PacketInReasonNP)).
 			Action().GotoTable(metricTableID).
 			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 			Done()
