@@ -367,14 +367,30 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 		// first time we get the DaemonSet's Status, we would return immediately instead of
 		// waiting.
 		desiredNumber := int32(clusterInfo.numNodes)
-		if daemonSet.Status.NumberAvailable == desiredNumber &&
-			daemonSet.Status.UpdatedNumberScheduled == desiredNumber {
-			// Success
-			return true, nil
+		if daemonSet.Status.NumberAvailable != desiredNumber ||
+			daemonSet.Status.UpdatedNumberScheduled != desiredNumber {
+			return false, nil
 		}
 
-		// Keep trying
-		return false, nil
+		// Make sure that all antrea-agent Pods are not terminating. This is required because NumberAvailable of
+		// DaemonSet counts Pods even if they are terminating. Deleting antrea-agent Pods directly does not cause the
+		// number to decrease if the process doesn't quit immediately, e.g. when the signal is caught by bincover
+		// program and triggers coverage calculation.
+		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: "app=antrea,component=antrea-agent",
+		})
+		if err != nil {
+			return false, fmt.Errorf("failed to list antrea-agent Pods: %v", err)
+		}
+		if len(pods.Items) != clusterInfo.numNodes {
+			return false, nil
+		}
+		for _, pod := range pods.Items {
+			if pod.DeletionTimestamp != nil {
+				return false, nil
+			}
+		}
+		return true, nil
 	})
 	if err == wait.ErrWaitTimeout {
 		return fmt.Errorf("antrea-agent DaemonSet not ready within %v", defaultTimeout)
