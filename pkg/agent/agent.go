@@ -584,6 +584,13 @@ func (i *Initializer) initNodeLocalConfig() error {
 		NodeIPAddr:      localAddr,
 		UplinkNetConfig: new(config.AdapterNetConfig)}
 
+	mtu, err := i.getNodeMTU(localIntf)
+	if err != nil {
+		return err
+	}
+	i.nodeConfig.NodeMTU = mtu
+	klog.Infof("Setting Node MTU=%d", mtu)
+
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		return nil
 	}
@@ -612,31 +619,24 @@ func (i *Initializer) initNodeLocalConfig() error {
 				klog.V(2).Infof("Configure IPv6 Subnet CIDR %s on this Node", localSubnet.String())
 			}
 		}
-	} else {
-		// Spec.PodCIDR can be empty due to misconfiguration.
-		if node.Spec.PodCIDR == "" {
-			klog.Errorf("Spec.PodCIDR is empty for Node %s. Please make sure --allocate-node-cidrs is enabled "+
-				"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", nodeName)
-			return fmt.Errorf("CIDR string is empty for node %s", nodeName)
-		}
-		_, localSubnet, err := net.ParseCIDR(node.Spec.PodCIDR)
-		if err != nil {
-			klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
-			return err
-		}
-		if localSubnet.IP.To4() != nil {
-			i.nodeConfig.PodIPv4CIDR = localSubnet
-		} else {
-			i.nodeConfig.PodIPv6CIDR = localSubnet
-		}
+		return nil
 	}
-
-	mtu, err := i.getNodeMTU(localIntf)
+	// Spec.PodCIDR can be empty due to misconfiguration.
+	if node.Spec.PodCIDR == "" {
+		klog.Errorf("Spec.PodCIDR is empty for Node %s. Please make sure --allocate-node-cidrs is enabled "+
+			"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", nodeName)
+		return fmt.Errorf("CIDR string is empty for node %s", nodeName)
+	}
+	_, localSubnet, err := net.ParseCIDR(node.Spec.PodCIDR)
 	if err != nil {
+		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
 		return err
 	}
-	i.nodeConfig.NodeMTU = mtu
-	klog.Infof("Setting Node MTU=%d", mtu)
+	if localSubnet.IP.To4() != nil {
+		i.nodeConfig.PodIPv4CIDR = localSubnet
+	} else {
+		i.nodeConfig.PodIPv6CIDR = localSubnet
+	}
 	return nil
 }
 
@@ -725,12 +725,12 @@ func (i *Initializer) getNodeMTU(localIntf *net.Interface) (int, error) {
 		} else if i.networkConfig.TunnelType == ovsconfig.GRETunnel {
 			mtu -= config.GREOverhead
 		}
+		if i.nodeConfig.NodeIPAddr.IP.To4() == nil {
+			mtu -= config.IPv6ExtraOverhead
+		}
 	}
 	if i.networkConfig.EnableIPSecTunnel {
 		mtu -= config.IpsecESPOverhead
-	}
-	if i.nodeConfig.PodIPv6CIDR != nil {
-		mtu -= config.IPv6ExtraOverhead
 	}
 	return mtu, nil
 }
