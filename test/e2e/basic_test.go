@@ -294,6 +294,17 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
+	if len(clusterInfo.podV4NetworkCIDR) != 0 {
+		t.Logf("Running IPv4 test")
+		testReconcileGatewayRoutesOnStartup(t, data, false)
+	}
+	if len(clusterInfo.podV6NetworkCIDR) != 0 {
+		t.Logf("Running IPv6 test")
+		testReconcileGatewayRoutesOnStartup(t, data, true)
+	}
+}
+
+func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bool) {
 	encapMode, err := data.GetEncapMode()
 	if err != nil {
 		t.Fatalf(" failed to get encap mode, err %v", err)
@@ -318,8 +329,14 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
 	}
+
 	getGatewayRoutes := func() (routes []Route, err error) {
-		cmd := fmt.Sprintf("ip route list dev %s", antreaGWName)
+		var cmd string
+		if !isIPv6 {
+			cmd = fmt.Sprintf("ip route list dev %s", antreaGWName)
+		} else {
+			cmd = fmt.Sprintf("ip -6 route list dev %s", antreaGWName)
+		}
 		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)
 		if err != nil {
 			return nil, fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
@@ -383,14 +400,24 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	}
 	// A dummy route
 	routeToAdd := &Route{}
-	_, routeToAdd.peerPodCIDR, _ = net.ParseCIDR("99.99.99.0/24")
-	routeToAdd.peerPodGW = net.ParseIP("99.99.99.1")
+	if !isIPv6 {
+		_, routeToAdd.peerPodCIDR, _ = net.ParseCIDR("99.99.99.0/24")
+		routeToAdd.peerPodGW = net.ParseIP("99.99.99.1")
+	} else {
+		_, routeToAdd.peerPodCIDR, _ = net.ParseCIDR("fe80::0/112")
+		routeToAdd.peerPodGW = net.ParseIP("fe80::1")
+	}
 
 	// We run the ip command from the antrea-agent container for delete / add since they need to
 	// be run as root and the antrea-agent container is privileged. If we used RunCommandOnNode,
 	// we may need to use "sudo" for some providers (e.g. vagrant).
 	deleteGatewayRoute := func(route *Route) error {
-		cmd := []string{"ip", "route", "del", route.peerPodCIDR.String()}
+		var cmd []string
+		if !isIPv6 {
+			cmd = []string{"ip", "route", "del", route.peerPodCIDR.String()}
+		} else {
+			cmd = []string{"ip", "-6", "route", "del", route.peerPodCIDR.String()}
+		}
 		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
 		if err != nil {
 			return fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
@@ -399,7 +426,12 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	}
 
 	addGatewayRoute := func(route *Route) error {
-		cmd := []string{"ip", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
+		var cmd []string
+		if !isIPv6 {
+			cmd = []string{"ip", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
+		} else {
+			cmd = []string{"ip", "-6", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
+		}
 		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
 		if err != nil {
 			return fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
