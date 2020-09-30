@@ -240,7 +240,7 @@ can range from 1.0 to 10000.0.
 indeterministically. Users should therefore take care to use priorities to
 ensure the behavior they expect.
 
-**tier**: The `tier` field associates a ACNP to an existing Tier. The `tier`
+**tier**: The `tier` field associates an ACNP to an existing Tier. The `tier`
 field can be set with the name of the Tier CRD to which this policy must be
 associated with. If not set, the ACNP is associated with the lowest priority
 default tier i.e. the "application" Tier.
