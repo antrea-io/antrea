@@ -156,7 +156,7 @@ jobs:
       run: make test-tidy
 
   verify:
-    name: Verify common spelling mistakes and table of content
+    name: Verify docs and spelling
     runs-on: [ubuntu-18.04]
     steps:
 
