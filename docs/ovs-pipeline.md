@@ -17,6 +17,8 @@
   "proxy" for the local gateway when receiving tunnelled traffic and directly
   take care of the packet forwarding. At the moment, we use an hard-coded value
   of aa:bb:cc:dd:ee:ff.
+* *Antrea-native Policies*: Antrea ClusterNetworkPolicy and Antrea NetworkPolicy
+  CRDs, as documented [here](network-policy.md).
 * *`normal` action*: OpenFlow defines this action to submit a packet to "the
   traditional non-OpenFlow pipeline of the switch". That is, if a flow uses this
   action, then the packets in the flow go through the switch in the same way
@@ -121,10 +123,10 @@ are the target of the policy, we have scheduled 2 `nginx` Pods on the same
 Node. They received IP addresses 10.10.1.2 and 10.10.1.3 from the Antrea CNI, so
 you will see these addresses show up in the OVS flows.
 
-## Antrea NetworkPolicy CRD Implementation
+## Antrea-native Policies Implementation
 
 In addition to the above tables created for K8s NetworkPolicy, Antrea creates
-additional dedicated tables to support the [Antrea NetworkPolicy CRDs](antrea-network-policy.md)
+additional dedicated tables to support the [Antrea-native policies](antrea-network-policy.md)
 ([AntreaPolicyEgressRuleTables] and [AntreaPolicyIngressRuleTables]).
 
 Consider the following Antrea ClusterNetworkPolicy (ACNP) in the Application tier as an
@@ -383,8 +385,7 @@ For these two tables, you will need to keep in mind the ACNP
 [specification](#antrea-networkpolicy-crd-implementation)
 that we are using.
 
-These two tables are used to implement the egress rules across all Antrea 
-ClusterNetworkPolicies and Antrea NetworkPolicies.
+These two tables are used to implement the egress rules across all Antrea-native policies.
 Depending on the tier to which the ACNP or ANP belongs to, the rules will be 
 installed in a table corresponding to that tier. The egress table to tier mappings 
 is as follows:
@@ -416,8 +417,8 @@ If the `conjunction` action is matched, packets are "allowed" or "dropped"
 based on the `action` field of the policy rule. If allowed, they follow a similar
 path as described in the following [EgressRuleTable] section.
 
-Unlike the default of K8s NetworkPolicies, ClusterNetworkPolicy and Antrea NetworkPolicy
-have no such default rules. Hence, they are evaluated as-is, and there is no need for a
+Unlike the default of K8s NetworkPolicies, Antrea-native policies have no such 
+default rules. Hence, they are evaluated as-is, and there is no need for a
 AntreaPolicyEgressDefaultTable.
 
 ### EgressRuleTable (50)
@@ -583,8 +584,8 @@ need to support more cases for L2 multicast / broadcast traffic.
 ### AntreaPolicyIngressRuleTables (85, 89)
 
 These two tables are very similar to [AntreaPolicyEgressRuleTables], but implement
-the ingress rules of Antrea Policies. Depending on the tier to which the policy belongs
-to, the rules will be installed in a table corresponding to that tier.
+the ingress rules of Antrea-native Policies. Depending on the tier to which the policy
+belongs to, the rules will be installed in a table corresponding to that tier.
 The ingress table to tier mappings is as follows:
 
 ```
