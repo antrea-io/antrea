@@ -28,6 +28,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 )
 
+var (
+	k8sNPMaxPriority = int32(-1)
+)
+
 func TestAddressGroupIndexFunc(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -385,14 +389,26 @@ func TestRuleCacheReplaceNetworkPolicies(t *testing.T) {
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
 		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1},
 		AppliedToGroups: []string{"addressGroup1"},
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type:      v1beta1.K8sNetworkPolicy,
+			Namespace: "ns1",
+			Name:      "name1",
+			UID:       "policy1",
+		},
 	}
 	networkPolicy2 := &v1beta1.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
 		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1},
 		AppliedToGroups: []string{"addressGroup2"},
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type:      v1beta1.K8sNetworkPolicy,
+			Namespace: "ns1",
+			Name:      "name1",
+			UID:       "policy1",
+		},
 	}
-	rule1 := toRule(networkPolicyRule1, networkPolicy1)
-	rule2 := toRule(networkPolicyRule1, networkPolicy2)
+	rule1 := toRule(networkPolicyRule1, networkPolicy1, k8sNPMaxPriority)
+	rule2 := toRule(networkPolicyRule1, networkPolicy2, k8sNPMaxPriority)
 	tests := []struct {
 		name               string
 		rules              []*rule
@@ -530,14 +546,26 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1", Namespace: "ns1", Name: "name1"},
 		Rules:           nil,
 		AppliedToGroups: []string{"appliedToGroup1"},
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type:      v1beta1.K8sNetworkPolicy,
+			Namespace: "ns1",
+			Name:      "name1",
+			UID:       "policy1",
+		},
 	}
 	networkPolicy2 := &v1beta1.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy2", Namespace: "ns2", Name: "name2"},
 		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1, *networkPolicyRule2},
 		AppliedToGroups: []string{"appliedToGroup1"},
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type:      v1beta1.K8sNetworkPolicy,
+			Namespace: "ns2",
+			Name:      "name2",
+			UID:       "policy2",
+		},
 	}
-	rule1 := toRule(networkPolicyRule1, networkPolicy2)
-	rule2 := toRule(networkPolicyRule2, networkPolicy2)
+	rule1 := toRule(networkPolicyRule1, networkPolicy2, k8sNPMaxPriority)
+	rule2 := toRule(networkPolicyRule2, networkPolicy2, k8sNPMaxPriority)
 	tests := []struct {
 		name               string
 		args               *v1beta1.NetworkPolicy
@@ -904,20 +932,38 @@ func TestRuleCacheUpdateNetworkPolicy(t *testing.T) {
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
 		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1},
 		AppliedToGroups: []string{"addressGroup1"},
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type:      v1beta1.K8sNetworkPolicy,
+			Namespace: "ns1",
+			Name:      "name1",
+			UID:       "policy1",
+		},
 	}
 	networkPolicy2 := &v1beta1.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
 		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1},
 		AppliedToGroups: []string{"addressGroup2"},
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type:      v1beta1.K8sNetworkPolicy,
+			Namespace: "ns1",
+			Name:      "name1",
+			UID:       "policy1",
+		},
 	}
 	networkPolicy3 := &v1beta1.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
 		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1, *networkPolicyRule2},
 		AppliedToGroups: []string{"addressGroup1"},
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type:      v1beta1.K8sNetworkPolicy,
+			Namespace: "ns1",
+			Name:      "name1",
+			UID:       "policy1",
+		},
 	}
-	rule1 := toRule(networkPolicyRule1, networkPolicy1)
-	rule2 := toRule(networkPolicyRule1, networkPolicy2)
-	rule3 := toRule(networkPolicyRule2, networkPolicy3)
+	rule1 := toRule(networkPolicyRule1, networkPolicy1, k8sNPMaxPriority)
+	rule2 := toRule(networkPolicyRule1, networkPolicy2, k8sNPMaxPriority)
+	rule3 := toRule(networkPolicyRule2, networkPolicy3, k8sNPMaxPriority)
 	tests := []struct {
 		name               string
 		rules              []*rule

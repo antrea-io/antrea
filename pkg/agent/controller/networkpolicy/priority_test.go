@@ -28,10 +28,11 @@ var (
 	p1121 = types.Priority{TierPriority: 1, PolicyPriority: 1.2, RulePriority: 1}
 	p1130 = types.Priority{TierPriority: 1, PolicyPriority: 1.3, RulePriority: 0}
 	p1131 = types.Priority{TierPriority: 1, PolicyPriority: 1.3, RulePriority: 1}
+	p1132 = types.Priority{TierPriority: 1, PolicyPriority: 1.3, RulePriority: 2}
+	p1133 = types.Priority{TierPriority: 1, PolicyPriority: 1.3, RulePriority: 3}
 	p1140 = types.Priority{TierPriority: 1, PolicyPriority: 1.4, RulePriority: 0}
 	p1141 = types.Priority{TierPriority: 1, PolicyPriority: 1.4, RulePriority: 1}
-	p1160 = types.Priority{TierPriority: 1, PolicyPriority: 1.6, RulePriority: 0}
-	p1161 = types.Priority{TierPriority: 1, PolicyPriority: 1.6, RulePriority: 1}
+	p1142 = types.Priority{TierPriority: 1, PolicyPriority: 1.4, RulePriority: 2}
 	p190  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 0}
 	p191  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 1}
 	p192  = types.Priority{TierPriority: 1, PolicyPriority: 9, RulePriority: 2}
@@ -45,7 +46,7 @@ func TestUpdatePriorityAssignment(t *testing.T) {
 		argsOFPriorities    []uint16
 		expectedPriorityMap map[types.Priority]uint16
 		expectedOFMap       map[uint16]types.Priority
-		expectedSorted      []uint16
+		expectedSorted      types.ByPriority
 	}{
 		{
 			"in-order",
@@ -53,7 +54,7 @@ func TestUpdatePriorityAssignment(t *testing.T) {
 			[]uint16{10000, 9999, 9998},
 			map[types.Priority]uint16{p110: 10000, p1120: 9999, p1121: 9998},
 			map[uint16]types.Priority{10000: p110, 9999: p1120, 9998: p1121},
-			[]uint16{9998, 9999, 10000},
+			[]types.Priority{p1121, p1120, p110},
 		},
 		{
 			"reverse-order",
@@ -61,7 +62,7 @@ func TestUpdatePriorityAssignment(t *testing.T) {
 			[]uint16{9998, 9999, 10000},
 			map[types.Priority]uint16{p110: 10000, p1120: 9999, p1121: 9998},
 			map[uint16]types.Priority{10000: p110, 9999: p1120, 9998: p1121},
-			[]uint16{9998, 9999, 10000},
+			[]types.Priority{p1121, p1120, p110},
 		},
 	}
 	for _, tt := range tests {
@@ -72,273 +73,219 @@ func TestUpdatePriorityAssignment(t *testing.T) {
 			}
 			assert.Equalf(t, tt.expectedPriorityMap, pa.priorityMap, "Got unexpected priorityMap")
 			assert.Equalf(t, tt.expectedOFMap, pa.ofPriorityMap, "Got unexpected ofPriorityMap")
-			assert.Equalf(t, tt.expectedSorted, pa.sortedOFPriorities, "Got unexpected sortedOFPriorities")
+			assert.Equalf(t, tt.expectedSorted, pa.sortedPriorities, "Got unexpected sortedPriorities")
 		})
 	}
 }
 
-func TestGetInsertionPoint(t *testing.T) {
+func TestReassignBoundaryPriorities(t *testing.T) {
+	prioritiesToRegister := []types.Priority{p1133, p1132, p1131, p1130}
 	tests := []struct {
 		name                 string
-		argsPriorities       []types.Priority
-		argsOFPriorities     []uint16
-		insertingPriority    types.Priority
-		initialOFPriority    uint16
-		expectInsertionPoint uint16
-		expectOccupied       bool
+		lowerBound           uint16
+		upperBound           uint16
+		originalPriorities   []types.Priority
+		originalOfPriorities []uint16
+		expectedPriorityMap  map[types.Priority]uint16
+		expectedUpdates      map[types.Priority]*PriorityUpdate
 	}{
 		{
-			"spot-on",
-			[]types.Priority{},
-			[]uint16{},
-			p110,
-			10000,
-			10000,
-			false,
-		},
-		{
-			"stepped-on-toes-lower",
-			[]types.Priority{p110},
-			[]uint16{10000},
-			p1120,
-			10000,
-			9999,
-			false,
-		},
-		{
-			"stepped-on-toes-higher",
-			[]types.Priority{p1120},
-			[]uint16{10000},
-			p110,
+			"push-down-single",
 			10000,
 			10001,
-			false,
+			[]types.Priority{p1140, p1121, p1120},
+			[]uint16{10000, 10001, 10002},
+			map[types.Priority]uint16{
+				p1140: 9996, p1133: 9997, p1132: 9998, p1131: 9999, p1130: 10000, p1121: 10001, p1120: 10002},
+			map[types.Priority]*PriorityUpdate{p1140: {10000, 9996}},
 		},
 		{
-			"search-up",
-			[]types.Priority{p1120, p1121, p1130, p1131},
-			[]uint16{10000, 9999, 9998, 9997},
-			p110,
-			9998,
+			"push-down-multiple",
+			10000,
 			10001,
-			false,
-		},
-		{
-			"search-down",
-			[]types.Priority{p1120, p1121, p1130},
-			[]uint16{10000, 9999, 9998},
-			p1131,
-			10000,
-			9997,
-			false,
-		},
-		{
-			"find-insertion-up",
-			[]types.Priority{p110, p1120, p1130, p1131},
-			[]uint16{10000, 9999, 9998, 9997},
-			p1121,
-			9997,
-			9999,
-			true,
-		},
-		{
-			"find-insertion-down",
-			[]types.Priority{p110, p1120, p1130, p1131},
-			[]uint16{10000, 9999, 9998, 9997},
-			p1121,
-			10000,
-			9999,
-			true,
-		},
-		{
-			"upper-bound",
-			[]types.Priority{p1120, p1121, p1130},
-			[]uint16{PolicyTopPriority, PolicyTopPriority - 1, PolicyTopPriority - 2},
-			p110,
-			PolicyTopPriority - 2,
-			PolicyTopPriority + 1,
-			false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(func(p types.Priority, isSingleTier bool) uint16 {
-				return tt.initialOFPriority
-			}, true)
-			for i := 0; i < len(tt.argsPriorities); i++ {
-				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
-			}
-			got, occupied := pa.getInsertionPoint(tt.insertingPriority)
-			assert.Equalf(t, tt.expectInsertionPoint, got, "Got unexpected insertion point")
-			assert.Equalf(t, tt.expectOccupied, occupied, "Insertion point occupied status is unexpected")
-		})
-	}
-}
-
-func TestReassignPriorities(t *testing.T) {
-
-	tests := []struct {
-		name                string
-		argsPriorities      []types.Priority
-		argsOFPriorities    []uint16
-		insertingPriorities []types.Priority
-		insertionPoints     []uint16
-		expectedAssigned    []uint16
-		expectedUpdates     []map[uint16]uint16
-	}{
-		{
-			"sift-down-at-upper-bound",
-			[]types.Priority{p191, p193},
-			[]uint16{PolicyTopPriority, PolicyTopPriority - 1},
-			[]types.Priority{p190, p192},
-			[]uint16{PolicyTopPriority + 1, PolicyTopPriority - 1},
-			[]uint16{PolicyTopPriority, PolicyTopPriority - 2},
-			[]map[uint16]uint16{
-				{
-					PolicyTopPriority:     PolicyTopPriority - 1,
-					PolicyTopPriority - 1: PolicyTopPriority - 2,
-				},
-				{
-					PolicyTopPriority - 2: PolicyTopPriority - 3,
-				},
+			[]types.Priority{p190, p1140, p1121, p1120},
+			[]uint16{9998, 10000, 10001, 10002},
+			map[types.Priority]uint16{
+				p190: 9995, p1140: 9996, p1133: 9997, p1132: 9998,
+				p1131: 9999, p1130: 10000, p1121: 10001, p1120: 10002},
+			map[types.Priority]*PriorityUpdate{
+				p1140: {10000, 9996},
+				p190:  {9998, 9995},
 			},
 		},
 		{
-			"sift-up-at-lower-bound",
-			[]types.Priority{p1130, p1120},
-			[]uint16{PolicyBottomPriority, PolicyBottomPriority + 1},
-			[]types.Priority{p1121, p1131},
-			[]uint16{PolicyBottomPriority + 1, PolicyBottomPriority},
-			[]uint16{PolicyBottomPriority + 1, PolicyBottomPriority},
-			[]map[uint16]uint16{
-				{
-					PolicyBottomPriority + 1: PolicyBottomPriority + 2,
-				},
-				{
-					PolicyBottomPriority:     PolicyBottomPriority + 1,
-					PolicyBottomPriority + 1: PolicyBottomPriority + 2,
-					PolicyBottomPriority + 2: PolicyBottomPriority + 3,
-				},
+			"push-up-single",
+			10000,
+			10002,
+			[]types.Priority{p1142, p1141, p1140, p1121},
+			[]uint16{9998, 9999, 10000, 10002},
+			map[types.Priority]uint16{
+				p1142: 9998, p1141: 9999, p1140: 10000, p1133: 10001,
+				p1132: 10002, p1131: 10003, p1130: 10004, p1121: 10005},
+			map[types.Priority]*PriorityUpdate{p1121: {10002, 10005}},
+		},
+		{
+			"push-up-multiple",
+			10000,
+			10002,
+			[]types.Priority{p1142, p1141, p1140, p1121, p1120},
+			[]uint16{9998, 9999, 10000, 10002, 10003},
+			map[types.Priority]uint16{
+				p1142: 9998, p1141: 9999, p1140: 10000, p1133: 10001,
+				p1132: 10002, p1131: 10003, p1130: 10004, p1121: 10005, p1120: 10006},
+			map[types.Priority]*PriorityUpdate{
+				p1121: {10002, 10005},
+				p1120: {10003, 10006},
 			},
 		},
 		{
-			"sift-based-on-cost",
-			[]types.Priority{p110, p1121, p1131},
-			[]uint16{10000, 9999, 9998},
-			[]types.Priority{p1130, p1120},
-			[]uint16{9999, 10000},
-			[]uint16{9998, 10000},
-			[]map[uint16]uint16{
-				{9998: 9997}, {10000: 10001},
+			"push-to-both-directions",
+			10000,
+			10002,
+			[]types.Priority{p193, p192, p191, p190, p1141, p1140, p1121, p1120},
+			[]uint16{9994, 9995, 9996, 9997, 9999, 10000, 10002, 10003},
+			map[types.Priority]uint16{
+				p193: 9994, p192: 9995, p191: 9996, p190: 9997, p1141: 9998, p1140: 9999,
+				p1133: 10000, p1132: 10001, p1131: 10002, p1130: 10003,
+				p1121: 10004, p1120: 10005},
+			map[types.Priority]*PriorityUpdate{
+				p1141: {9999, 9998},
+				p1140: {10000, 9999},
+				p1121: {10002, 10004},
+				p1120: {10003, 10005},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pa := newPriorityAssigner(InitialOFPriority, true)
-			for i := 0; i < len(tt.argsPriorities); i++ {
-				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
+			for i, p := range tt.originalOfPriorities {
+				pa.updatePriorityAssignment(p, tt.originalPriorities[i])
 			}
-			for i := 0; i < len(tt.insertingPriorities); i++ {
-				got, updates, _, err := pa.reassignPriorities(tt.insertionPoints[i], tt.insertingPriorities[i])
-				assert.Equalf(t, err, nil, "Error occurred in reassigning priorities")
-				assert.Equalf(t, tt.expectedAssigned[i], *got, "Got unexpected assigned priority")
-				assert.Equalf(t, tt.expectedUpdates[i], updates, "Got unexpected priority updates")
-			}
+			priorityUpdates := map[types.Priority]*PriorityUpdate{}
+			err := pa.reassignBoundaryPriorities(tt.lowerBound, tt.upperBound, prioritiesToRegister, priorityUpdates)
+			assert.Equalf(t, nil, err, "Error occurred in reassignment")
+			assert.Equalf(t, tt.expectedPriorityMap, pa.priorityMap, "priorityMap unexpected after reassignment")
+			assert.Equalf(t, tt.expectedUpdates, priorityUpdates, "priority updates unexpected after reassignment")
 		})
 	}
 }
 
-func TestRegisterPrioritiesAndRelease(t *testing.T) {
-	pa := newPriorityAssigner(InitialOFPriority, true)
-	priorites := []types.Priority{p1160, p1141, p1140, p1130, p1121, p1120, p110}
-	err := pa.RegisterPriorities(priorites)
-	assert.Equalf(t, err, nil, "Error occurred in registering priorities")
-	expectedPriorityMap := map[types.Priority]uint16{}
-	ofPriorities := make([]uint16, len(priorites))
-	for i, p := range priorites {
-		ofPriority := pa.initialOFPriorityFunc(p, true)
-		expectedPriorityMap[p] = ofPriority
-		ofPriorities[i] = ofPriority
-	}
-	assert.Equalf(t, expectedPriorityMap, pa.priorityMap, "Got unexpected priorityMap")
-
-	pa.Release(ofPriorities[0])
-	pa.Release(ofPriorities[2])
-	pa.Release(ofPriorities[5])
-	expectedOFMap := map[uint16]types.Priority{
-		ofPriorities[1]: p1141, ofPriorities[3]: p1130, ofPriorities[4]: p1121, ofPriorities[6]: p110,
-	}
-	expectedPriorityMap = map[types.Priority]uint16{
-		p110: ofPriorities[6], p1121: ofPriorities[4], p1130: ofPriorities[3], p1141: ofPriorities[1],
-	}
-	expectedSorted := []uint16{ofPriorities[1], ofPriorities[3], ofPriorities[4], ofPriorities[6]}
-	assert.Equalf(t, expectedOFMap, pa.ofPriorityMap, "Got unexpected priorityMap")
-	assert.Equalf(t, expectedPriorityMap, pa.priorityMap, "Got unexpected ofPriorityMap")
-	assert.Equalf(t, expectedSorted, pa.sortedOFPriorities, "Got unexpected sortedOFPriorities")
-}
-
-func TestRevertUpdates(t *testing.T) {
+func TestInsertConsecutivePriorities(t *testing.T) {
+	prioritiesToRegister := []types.Priority{p1133, p1132, p1131, p1130}
+	insertionLow := InitialOFPriority(prioritiesToRegister[0], true)
+	insertionHigh := InitialOFPriority(prioritiesToRegister[3], true)
 	tests := []struct {
-		name                string
-		insertionPoint      uint16
-		extraPriority       types.Priority
-		originalPriorityMap map[types.Priority]uint16
-		originalOFMap       map[uint16]types.Priority
-		originalSorted      []uint16
+		name                  string
+		originalPriorities    []types.Priority
+		originalOfPriorities  []uint16
+		expectedOFPriorityMap map[uint16]types.Priority
 	}{
 		{
-			"single-update-up",
-			9999,
-			p1121,
-			map[types.Priority]uint16{p1120: 9999, p1130: 9998},
-			map[uint16]types.Priority{9999: p1120, 9998: p1130},
-			[]uint16{9998, 9999},
-		},
-		{
-			"multiple-updates-up",
-			9997,
-			p1131,
-			map[types.Priority]uint16{
-				p1120: 9999, p1121: 9998, p1130: 9997, p1140: 9996, p1141: 9995, p1160: 9994, p1161: 9993},
+			"empty-map",
+			[]types.Priority{},
+			[]uint16{},
 			map[uint16]types.Priority{
-				9999: p1120, 9998: p1121, 9997: p1130, 9996: p1140, 9995: p1141, 9994: p1160, 9993: p1161},
-			[]uint16{9993, 9994, 9995, 9996, 9997, 9998, 9999},
+				insertionLow: p1133, insertionLow + 1: p1132, insertionLow + 2: p1131, insertionHigh: p1130,
+			},
 		},
 		{
-			"single-update-down",
-			9999,
-			p1121,
-			map[types.Priority]uint16{p1120: 10000, p1130: 9999},
-			map[uint16]types.Priority{10000: p1120, 9999: p1130},
-			[]uint16{9999, 10000},
-		},
-		{
-			"multiple-updates-down",
-			9998,
-			p1131,
-			map[types.Priority]uint16{
-				p1120: 10000, p1121: 9999, p1130: 9998, p1140: 9997, p1141: 9996, p1160: 9995},
+			"irrelevant-high-priority",
+			[]types.Priority{p110},
+			[]uint16{insertionLow + 100},
 			map[uint16]types.Priority{
-				10000: p1120, 9999: p1121, 9998: p1130, 9997: p1140, 9996: p1141, 9995: p1160},
-			[]uint16{9995, 9996, 9997, 9998, 9999, 10000},
+				insertionLow: p1133, insertionLow + 1: p1132, insertionLow + 2: p1131, insertionHigh: p1130,
+				insertionLow + 100: p110,
+			},
+		},
+		{
+			"irrelevant-low-priority",
+			[]types.Priority{p1140},
+			[]uint16{insertionLow - 100},
+			map[uint16]types.Priority{
+				insertionLow - 100: p1140,
+				insertionLow:       p1133, insertionLow + 1: p1132, insertionLow + 2: p1131, insertionHigh: p1130,
+			},
+		},
+		{
+			"irrelevant-surrounding-priorities",
+			[]types.Priority{p1141, p1140, p1121, p1120},
+			[]uint16{insertionLow - 100, insertionLow - 99, insertionLow + 99, insertionLow + 100},
+			map[uint16]types.Priority{
+				insertionLow - 100: p1141, insertionLow - 99: p1140,
+				insertionLow: p1133, insertionLow + 1: p1132, insertionLow + 2: p1131, insertionHigh: p1130,
+				insertionLow + 99: p1121, insertionLow + 100: p1120,
+			},
+		},
+		{
+			"overlapping-low-priorities",
+			[]types.Priority{p1141, p1140},
+			[]uint16{insertionLow + 1, insertionLow + 2},
+			map[uint16]types.Priority{
+				insertionLow + 1: p1141, insertionLow + 2: p1140,
+				insertionLow + 3 + zoneOffset: p1133, insertionLow + 4 + zoneOffset: p1132,
+				insertionLow + 5 + zoneOffset: p1131, insertionLow + 6 + zoneOffset: p1130,
+			},
+		},
+		{
+			"overlapping-high-priorities",
+			[]types.Priority{p1121, p1120},
+			[]uint16{insertionLow + 1, insertionLow + 2},
+			map[uint16]types.Priority{
+				insertionLow - zoneOffset - 3: p1133, insertionLow - zoneOffset - 2: p1132,
+				insertionLow - zoneOffset - 1: p1131, insertionLow - zoneOffset: p1130,
+				insertionLow + 1: p1121, insertionLow + 2: p1120,
+			},
+		},
+		{
+			"clutch-priorities",
+			[]types.Priority{p1141, p1140, p1121, p1120},
+			[]uint16{insertionLow + 1, insertionLow + 2, insertionLow + 9, insertionLow + 10},
+			map[uint16]types.Priority{
+				insertionLow + 1: p1141, insertionLow + 2: p1140,
+				insertionLow + 4: p1133, insertionLow + 5: p1132, insertionLow + 6: p1131, insertionLow + 7: p1130,
+				insertionLow + 9: p1121, insertionLow + 10: p1120,
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(func(p types.Priority, isSingleTier bool) uint16 {
-				return tt.insertionPoint
-			}, true)
-			for ofPriority, p := range tt.originalOFMap {
-				pa.updatePriorityAssignment(ofPriority, p)
+			pa := newPriorityAssigner(InitialOFPriority, true)
+			for i, p := range tt.originalOfPriorities {
+				pa.updatePriorityAssignment(p, tt.originalPriorities[i])
 			}
-			_, _, revertFunc, _ := pa.GetOFPriority(tt.extraPriority)
-			revertFunc()
-			assert.Equalf(t, tt.originalPriorityMap, pa.priorityMap, "Got unexpected priorityMap")
-			assert.Equalf(t, tt.originalOFMap, pa.ofPriorityMap, "Got unexpected ofPriorityMap")
-			assert.Equalf(t, tt.originalSorted, pa.sortedOFPriorities, "Got unexpected sortedOFPriorities")
+			priorityUpdates := map[types.Priority]*PriorityUpdate{}
+			err := pa.insertConsecutivePriorities(prioritiesToRegister, priorityUpdates)
+			assert.Equalf(t, nil, err, "Error occurred in priority insertion")
+			assert.Equalf(t, tt.expectedOFPriorityMap, pa.ofPriorityMap, "priorityMap unexpected after insertion")
 		})
 	}
+}
+
+func TestRegisterPrioritiesAndRevert(t *testing.T) {
+	pa := newPriorityAssigner(InitialOFPriority, false)
+	prioritiesToRegister := []types.Priority{p1132, p1131, p1130, p190, p191}
+	insertionPoint1132 := InitialOFPriority(p1132, false)
+	insertionPoint191 := InitialOFPriority(p191, false)
+	pa.updatePriorityAssignment(insertionPoint1132-1, p1140)
+	pa.updatePriorityAssignment(insertionPoint1132+2, p1121)
+	pa.updatePriorityAssignment(insertionPoint1132+3, p1120)
+
+	expectedOFMapAfterRegister := map[uint16]types.Priority{
+		insertionPoint1132 - 2: p1140,
+		insertionPoint1132 - 1: p1132, insertionPoint1132: p1131, insertionPoint1132 + 1: p1130,
+		insertionPoint1132 + 2: p1121, insertionPoint1132 + 3: p1120,
+		insertionPoint191: p191, insertionPoint191 + 1: p190,
+	}
+	_, revertFunc, err := pa.RegisterPriorities(prioritiesToRegister)
+	assert.Equalf(t, nil, err, "Error occurred in priority registration")
+	assert.Equalf(t, expectedOFMapAfterRegister, pa.ofPriorityMap, "priorityMap unexpected after registration")
+
+	expectedOFMapAfterRevert := map[uint16]types.Priority{
+		insertionPoint1132 - 1: p1140, insertionPoint1132 + 2: p1121, insertionPoint1132 + 3: p1120,
+	}
+	revertFunc()
+	assert.Equalf(t, expectedOFMapAfterRevert, pa.ofPriorityMap, "priorityMap unexpected after revert")
 }
 
 func generatePriorities(start, end int32) []types.Priority {
@@ -352,10 +299,14 @@ func generatePriorities(start, end int32) []types.Priority {
 func TestRegisterAllOFPriorities(t *testing.T) {
 	pa := newPriorityAssigner(InitialOFPriority, true)
 	maxPriorities := generatePriorities(int32(PolicyBottomPriority), int32(PolicyTopPriority))
-	err := pa.RegisterPriorities(maxPriorities)
+	_, _, err := pa.RegisterPriorities(maxPriorities)
 	assert.Equalf(t, nil, err, "Error occurred in registering max number of allowed priorities")
 
-	extraPriority := types.Priority{TierPriority: 1, PolicyPriority: 5, RulePriority: int32(PolicyTopPriority) - int32(PolicyBottomPriority) + 1}
-	_, _, _, err = pa.GetOFPriority(extraPriority)
+	extraPriority := types.Priority{
+		TierPriority:   1,
+		PolicyPriority: 5,
+		RulePriority:   int32(PolicyTopPriority) - int32(PolicyBottomPriority) + 1,
+	}
+	_, _, err = pa.RegisterPriorities([]types.Priority{extraPriority})
 	assert.Errorf(t, err, "Error should be raised after max number of priorities are registered")
 }

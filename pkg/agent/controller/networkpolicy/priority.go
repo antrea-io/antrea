@@ -24,18 +24,36 @@ import (
 )
 
 const (
+	MaxUint16                = ^uint16(0)
 	PolicyBottomPriority     = uint16(100)
 	PolicyTopPriority        = uint16(65000)
+	zoneOffset               = uint16(5)
 	PriorityOffsetSingleTier = float64(640)
 	TierOffsetSingleTier     = uint16(0)
 	PriorityOffsetMultiTier  = float64(20)
 	TierOffsetMultiTier      = uint16(250)
 )
 
+// PriorityUpdate stores the original and updated ofPriority of a Priority.
+type PriorityUpdate struct {
+	Original uint16
+	Updated  uint16
+}
+
+// priorityUpdatesToOFUpdates converts a map of Priority and its ofPriority update to a map
+// of ofPriority updates.
+func priorityUpdatesToOFUpdates(allUpdates map[types.Priority]*PriorityUpdate) map[uint16]uint16 {
+	processed := map[uint16]uint16{}
+	for _, update := range allUpdates {
+		processed[update.Original] = update.Updated
+	}
+	return processed
+}
+
 // InitialOFPriorityGetter is a heuristics function that will map types.Priority to a specific initial
 // OpenFlow priority in a table. It is used to space out the priorities in the OVS table and provide an
 // initial guess on the OpenFlow priority that can be assigned to the input Priority. If that OpenFlow
-// priority is not available, or if the surrounding priorities are out of place, getInsertionPoint()
+// priority is not available, or if the surrounding priorities are out of place, insertConsecutivePriorities()
 // will then search for the appropriate OpenFlow priority to insert the input Priority.
 type InitialOFPriorityGetter func(p types.Priority, isSingleTier bool) uint16
 
@@ -59,15 +77,16 @@ func InitialOFPriority(p types.Priority, isSingleTier bool) uint16 {
 	return PolicyTopPriority - offSet
 }
 
-// priorityAssigner is a struct that maintains the current mapping between types.Priority and
-// OpenFlow priorities in a single OVS table. It also knows how to re-assign priorities if certain section overflows.
+// priorityAssigner is a struct that maintains the current boundaries of
+// all ClusterNetworkPolicy categories/priorities and rule priorities, and knows
+// how to re-assign priorities if certain section overflows.
 type priorityAssigner struct {
-	// priorityMap maintains the current mapping of known Priorities to OpenFlow priorities.
+	// priorityMap maintains the current mapping between a known Priority to OpenFlow priority.
 	priorityMap map[types.Priority]uint16
 	// ofPriorityMap maintains the current mapping of OpenFlow priorities in the table to Priorities.
 	ofPriorityMap map[uint16]types.Priority
-	// sortedPriorities maintains a slice of sorted OpenFlow priorities in the table that are occupied.
-	sortedOFPriorities []uint16
+	// sortedPriorities maintains a list of sorted Priorities currently registered in the table.
+	sortedPriorities types.ByPriority
 	// initialOFPriorityFunc determines the initial OpenFlow priority to be checked for input Priorities.
 	initialOFPriorityFunc InitialOFPriorityGetter
 	// isSingleTier keeps track of if the priorityAssigner is responsible for handling more than one Tier in
@@ -79,7 +98,7 @@ func newPriorityAssigner(initialOFPriorityFunc InitialOFPriorityGetter, isSingle
 	pa := &priorityAssigner{
 		priorityMap:           map[types.Priority]uint16{},
 		ofPriorityMap:         map[uint16]types.Priority{},
-		sortedOFPriorities:    []uint16{},
+		sortedPriorities:      []types.Priority{},
 		initialOFPriorityFunc: initialOFPriorityFunc,
 		isSingleTier:          isSingleTier,
 	}
@@ -87,264 +106,212 @@ func newPriorityAssigner(initialOFPriorityFunc InitialOFPriorityGetter, isSingle
 }
 
 // updatePriorityAssignment updates all the local maps to correlate input ofPriority and Priority.
-// TODO: Add performance benchmark for priority allocation and ways to optimize sortedOFPriorities.
 func (pa *priorityAssigner) updatePriorityAssignment(ofPriority uint16, p types.Priority) {
-	if _, exists := pa.ofPriorityMap[ofPriority]; !exists {
-		// idx is the insertion point for the newly allocated ofPriority.
-		idx := sort.Search(len(pa.sortedOFPriorities), func(i int) bool { return ofPriority <= pa.sortedOFPriorities[i] })
-		pa.sortedOFPriorities = append(pa.sortedOFPriorities, 0)
-		// Move elements starting from idx back one position to make room for the inserting ofPriority.
-		copy(pa.sortedOFPriorities[idx+1:], pa.sortedOFPriorities[idx:])
-		pa.sortedOFPriorities[idx] = ofPriority
+	if _, exists := pa.priorityMap[p]; !exists {
+		// idx is the insertion point for the newly registered Priority.
+		idx := sort.Search(len(pa.sortedPriorities), func(i int) bool { return p.Less(pa.sortedPriorities[i]) })
+		pa.sortedPriorities = append(pa.sortedPriorities, types.Priority{})
+		// Move elements starting from idx back one position to make room for the inserting Priority.
+		copy(pa.sortedPriorities[idx+1:], pa.sortedPriorities[idx:])
+		pa.sortedPriorities[idx] = p
 	}
 	pa.ofPriorityMap[ofPriority] = p
 	pa.priorityMap[p] = ofPriority
 }
 
-// getNextOccupiedOFPriority returns the first ofPriority higher than the input ofPriority that is
-// currently occupied in the table, as well as the corresponding Priority.
-// Note that if the input ofPriority itself is occupied, this function will return that ofPriority
-// and the Priority that maps to it currently. The search is based on sortedOFPriorities as it assumes
-// the table is sparse in most cases.
-func (pa *priorityAssigner) getNextOccupiedOFPriority(ofPriority uint16) (*uint16, *types.Priority) {
-	idx := sort.Search(len(pa.sortedOFPriorities), func(i int) bool { return ofPriority <= pa.sortedOFPriorities[i] })
-	if idx < len(pa.sortedOFPriorities) {
-		nextOccupied := pa.sortedOFPriorities[idx]
-		priority := pa.ofPriorityMap[nextOccupied]
-		return &nextOccupied, &priority
-	}
-	return nil, nil
-}
-
 // getNextVacantOFPriority returns the first higher ofPriority that is currently vacant in the table,
-// starting from the input ofPriority.
-// Note that if the input ofPriority itself is vacant, it will simply return that ofPriority.
-// The search is incrementally against all ofPriorities available as it assumes the table is sparse in most cases.
-func (pa *priorityAssigner) getNextVacantOFPriority(ofPriority uint16) *uint16 {
-	for i := ofPriority; i <= PolicyTopPriority; i++ {
-		// input ofPriority will be greater than or equal to PolicyBottomPriority
-		if _, exists := pa.ofPriorityMap[i]; !exists {
-			return &i
+// starting from, but not including, the input ofPriority. It also returns the distance between input
+// ofPriority and next vacant ofPriority, as well as all the registered Priorities in between.
+func (pa *priorityAssigner) getNextVacantOFPriority(ofPriority uint16) (*uint16, uint16, types.ByPriority) {
+	var prioritiesInBetween types.ByPriority
+	for i := ofPriority + 1; i <= PolicyTopPriority; i++ {
+		p, exists := pa.ofPriorityMap[i]
+		if !exists && i <= PolicyTopPriority {
+			return &i, i - ofPriority, prioritiesInBetween
+		} else {
+			prioritiesInBetween = append(prioritiesInBetween, p)
 		}
 	}
-	return nil
-}
-
-// getLastOccupiedOFPriority returns the first ofPriority lower than the input ofPriority that is
-// currently occupied in the table, as well as the corresponded Priority.
-// Note that the function must return a ofPriority that is lower than the input ofPriority.
-// The search is based on sortedOFPriorities as it assumes the table is sparse in most cases.
-func (pa *priorityAssigner) getLastOccupiedOFPriority(ofPriority uint16) (*uint16, *types.Priority) {
-	idx := sort.Search(len(pa.sortedOFPriorities), func(i int) bool { return ofPriority <= pa.sortedOFPriorities[i] })
-	if idx > 0 {
-		lastOccupied := pa.sortedOFPriorities[idx-1]
-		priority := pa.ofPriorityMap[lastOccupied]
-		return &lastOccupied, &priority
-	}
-	return nil, nil
+	return nil, MaxUint16, prioritiesInBetween
 }
 
 // getLastVacantOFPriority returns the first lower ofPriority that is currently vacant in the table,
-// starting from the ofPriority one below the input.
-// The search is incrementally against all ofPriorities available as it assumes the table is sparse in most cases.
-func (pa *priorityAssigner) getLastVacantOFPriority(ofPriority uint16) *uint16 {
+// starting from, but not including, the input ofPriority. It also returns the distance between input
+// ofPriority and last vacant ofPriority, as well as all the registered Priorities in between.
+func (pa *priorityAssigner) getLastVacantOFPriority(ofPriority uint16) (*uint16, uint16, types.ByPriority) {
+	var prioritiesInBetween types.ByPriority
 	for i := ofPriority - 1; i >= PolicyBottomPriority; i-- {
-		// ofPriority-1 will be less than or equal to PolicyTopPriority
-		if _, exists := pa.ofPriorityMap[i]; !exists {
-			return &i
+		p, exists := pa.ofPriorityMap[i]
+		if !exists && i >= PolicyBottomPriority {
+			sort.Sort(prioritiesInBetween)
+			return &i, ofPriority - i, prioritiesInBetween
+		} else {
+			prioritiesInBetween = append(prioritiesInBetween, p)
 		}
+	}
+	return nil, MaxUint16, prioritiesInBetween
+}
+
+// reassignBoundaryPriorities reassigns Priorities from lowerBound / upperBound or both, to make room for
+// new Priorities to be registered. It also records all the priority updates due to the reassignment in the
+// map updates which is passed to it as parameter.
+func (pa *priorityAssigner) reassignBoundaryPriorities(lowerBound, upperBound uint16, prioritiesToRegister types.ByPriority,
+	updates map[types.Priority]*PriorityUpdate) error {
+	// gap keeps track of the vacant ofPriority thus far between lowerBound and upperBound.
+	gap := upperBound - lowerBound - 1
+	target := uint16(len(prioritiesToRegister))
+	// siftedPrioritiesLow and siftedPrioritiesHigh keeps track of Priorities that needs to be reassigned,
+	// below the lowerBound and above the upperBound, respectively.
+	var siftedPrioritiesLow, siftedPrioritiesHigh types.ByPriority
+	lowerBound, upperBound = lowerBound+1, upperBound-1
+	for gap < target {
+		lastVacant, costSiftDown, prioritiesDown := pa.getLastVacantOFPriority(lowerBound)
+		nextVacant, costSiftUp, prioritiesUp := pa.getNextVacantOFPriority(upperBound)
+		if costSiftUp < costSiftDown {
+			siftedPrioritiesHigh = append(siftedPrioritiesHigh, prioritiesUp...)
+			upperBound = *nextVacant
+		} else if costSiftDown < MaxUint16 {
+			siftedPrioritiesLow = append(prioritiesDown, siftedPrioritiesLow...)
+			lowerBound = *lastVacant
+		} else {
+			return fmt.Errorf("failed to push boundary priorities to either direction")
+		}
+		gap++
+	}
+	allPriorities := append(siftedPrioritiesLow, prioritiesToRegister...)
+	allPriorities = append(allPriorities, siftedPrioritiesHigh...)
+	reassignedPriorities := append(siftedPrioritiesLow, siftedPrioritiesHigh...)
+	// record the ofPriorities of the reassigned Priorities before the reassignment.
+	for _, p := range reassignedPriorities {
+		// if exists (the Priority has already been reassigned in a previous step), the original
+		// ofPriority of that Priority would have been recorded.
+		if _, exists := updates[p]; !exists {
+			updates[p] = &PriorityUpdate{Original: pa.priorityMap[p]}
+		}
+	}
+	// assign ofPriorities by the order of siftedPrioritiesLow, prioritiesToRegister and siftedPrioritiesHigh.
+	for i, p := range allPriorities {
+		pa.updatePriorityAssignment(lowerBound+uint16(i), p)
+	}
+	// record the ofPriorities of the reassigned Priorities after the reassignment.
+	for _, p := range reassignedPriorities {
+		updates[p].Updated = pa.priorityMap[p]
 	}
 	return nil
 }
 
-// checkUpperBound returns if the Priorities *on* and after the input ofPriority are higher than the input Priority,
-// as well as the next occupied ofPriority.
-func (pa *priorityAssigner) checkUpperBound(ofPriority uint16, p types.Priority) (*uint16, bool) {
-	of, priority := pa.getNextOccupiedOFPriority(ofPriority)
-	return of, of == nil || p.Less(*priority)
+// GetOFPriority returns if the Priority is registered with the priorityAssigner,
+// and retrieves the corresponding ofPriority.
+func (pa *priorityAssigner) GetOFPriority(p types.Priority) (uint16, bool) {
+	of, registered := pa.priorityMap[p]
+	return of, registered
 }
 
-// checkLowerBound returns if the Priorities before the input ofPriority are lower than the input Priority,
-// as well as the last occupied ofPriority.
-func (pa *priorityAssigner) checkLowerBound(ofPriority uint16, p types.Priority) (*uint16, bool) {
-	of, priority := pa.getLastOccupiedOFPriority(ofPriority)
-	return of, of == nil || priority.Less(p)
+// RegisterPriorities registers a list of Priorities with the priorityAssigner. It allocates ofPriorities for
+// input Priorities that are not yet registered. It also returns the ofPriority updates if there are reassignments,
+// as well as a revert function that can undo the registration if any error occurred in data plane.
+func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) (map[uint16]uint16, func(), error) {
+	// create a zero-length slice with the same underlying array
+	prioritiesToRegister := priorities[:0]
+	for _, p := range priorities {
+		if _, exists := pa.priorityMap[p]; !exists {
+			prioritiesToRegister = append(prioritiesToRegister, p)
+		}
+	}
+	numPriorityToRegister := len(prioritiesToRegister)
+	if numPriorityToRegister == 0 {
+		return nil, nil, nil
+	} else if uint16(numPriorityToRegister+len(pa.sortedPriorities)) > PolicyTopPriority-PolicyBottomPriority+1 {
+		return nil, nil, fmt.Errorf("number of priorities to be registered is greater than available openflow priorities")
+	}
+	sort.Sort(types.ByPriority(prioritiesToRegister))
+	var consecutivePriorities [][]types.Priority
+	// break the Priorities into lists of consecutive Priorities.
+	for i, j := 0, 1; j <= numPriorityToRegister; j++ {
+		if j == numPriorityToRegister || !prioritiesToRegister[j].IsConsecutive(prioritiesToRegister[j-1]) {
+			consecutivePriorities = append(consecutivePriorities, prioritiesToRegister[i:j])
+			i = j
+		}
+	}
+	return pa.registerConsecutivePriorities(consecutivePriorities)
 }
 
-// getInsertionPoint searches for the ofPriority to insert the input Priority in the table.
-// It is guaranteed that the Priorities before the insertionPoint index is lower than the input Priority,
-// and Priorities *on* and after the insertionPoint index is higher than the input Priority.
-// ofPriority returned will range from PolicyBottomPriority to PolicyTopPriority+1.
-func (pa *priorityAssigner) getInsertionPoint(p types.Priority) (uint16, bool) {
-	insertionPoint := pa.initialOFPriorityFunc(p, pa.isSingleTier)
-	occupied, upwardSearching := false, false
-Loop:
-	for insertionPoint >= PolicyBottomPriority && insertionPoint <= PolicyTopPriority {
-		upperBound, upperOk := pa.checkUpperBound(insertionPoint, p)
-		lowerBound, lowerOk := pa.checkLowerBound(insertionPoint, p)
-		switch {
-		case upperOk && lowerOk:
-			if _, occupied = pa.ofPriorityMap[insertionPoint]; occupied && !upwardSearching {
-				// It might be the case that the ofPriority immediately lower than insertionPoint
-				// is unoccupied and fits the insertion criteria (upperOk and lowerOk). So continue
-				// searching instead of returning current insertionPoint, which will cause the
-				// Priority on current insertionPoint to be reassigned.
-				if insertionPoint != PolicyBottomPriority {
-					insertionPoint--
-					continue Loop
+// registerConsecutivePriorities registers lists of consecutive Priorities with the priorityAssigner.
+func (pa *priorityAssigner) registerConsecutivePriorities(consecutivePriorities [][]types.Priority) (map[uint16]uint16, func(), error) {
+	allPriorityUpdates := map[types.Priority]*PriorityUpdate{}
+	revertFunc := func() {
+		// in case of error, all new Priorities need to be unregistered.
+		for _, newPriorities := range consecutivePriorities {
+			for _, p := range newPriorities {
+				if of, exist := pa.priorityMap[p]; exist {
+					pa.unregisterPriority(p)
+					pa.deletePriorityMapping(of, p)
 				}
 			}
-			break Loop
-		case upperOk:
-			// the Priority on lowerBound is higher than current Priority.
-			insertionPoint = *lowerBound - 1
-		case lowerOk:
-			// the Priority on upperBound is lower than current Priority.
-			insertionPoint = *upperBound + 1
-			upwardSearching = true
+		}
+		// all reassigned Priorities need to be assigned back to the original ofPriorities.
+		for p, update := range allPriorityUpdates {
+			if of, ok := pa.priorityMap[p]; ok {
+				pa.deletePriorityMapping(of, p)
+			}
+			pa.ofPriorityMap[update.Original] = p
+			pa.priorityMap[p] = update.Original
 		}
 	}
-	return insertionPoint, occupied
+	for _, priorities := range consecutivePriorities {
+		if err := pa.insertConsecutivePriorities(priorities, allPriorityUpdates); err != nil {
+			// if failure occurred at any point, revert Priorities registered so far.
+			revertFunc()
+			return nil, nil, err
+		}
+	}
+	return priorityUpdatesToOFUpdates(allPriorityUpdates), revertFunc, nil
 }
 
-// reassignPriorities re-arranges current Priority mappings to make place for the inserting Priority. It sifts
-// existing priorties up or down based on cost (how many priorities it needs to move). siftPrioritiesDown is used
-// as a tie-breaker. An error should only be returned if all the available ofPriorities in the table are occupied.
-func (pa *priorityAssigner) reassignPriorities(insertionPoint uint16, p types.Priority) (*uint16, map[uint16]uint16, func(), error) {
-	nextVacant, lastVacant := pa.getNextVacantOFPriority(insertionPoint), pa.getLastVacantOFPriority(insertionPoint)
+// insertConsecutivePriorities inserts a list of consecutive Priorities into the ofPriority space.
+// It first identifies the lower and upper bound for insertion, by obtaining the ofPriorities of
+// registered Priority that is immediately lower and higher than the inserting Priorities. It then
+// decides the range to register new Priorities, and reassign existing ones if necessary.
+func (pa *priorityAssigner) insertConsecutivePriorities(priorities types.ByPriority, updates map[types.Priority]*PriorityUpdate) error {
+	numPriorities := len(priorities)
+	pLow, pHigh := priorities[0], priorities[numPriorities-1]
+	insertionPointLow := pa.initialOFPriorityFunc(pLow, pa.isSingleTier)
+	insertionPointHigh := pa.initialOFPriorityFunc(pHigh, pa.isSingleTier)
+	// get the index for inserting the lowest Priority into the registered Priorities.
+	insertionIdx := sort.Search(len(pa.sortedPriorities), func(i int) bool { return pLow.Less(pa.sortedPriorities[i]) })
+	upperBound, lowerBound := PolicyTopPriority, PolicyBottomPriority
+	if insertionIdx > 0 {
+		// set lowerBound to the ofPriority of the registered Priority that is immediately lower than the inserting Priorities.
+		lowerBound = pa.priorityMap[pa.sortedPriorities[insertionIdx-1]]
+	}
+	if insertionIdx < len(pa.sortedPriorities) {
+		// set upperBound to the ofPriority of the registered Priority that is immediately higher than the inserting Priorities.
+		upperBound = pa.priorityMap[pa.sortedPriorities[insertionIdx]]
+	}
+	// not enough space to insert Priorities.
+	if upperBound-lowerBound-1 <= uint16(numPriorities) {
+		return pa.reassignBoundaryPriorities(lowerBound, upperBound, priorities, updates)
+	}
 	switch {
-	case (insertionPoint == PolicyBottomPriority || lastVacant == nil) && nextVacant != nil:
-		return pa.siftPrioritiesUp(insertionPoint, *nextVacant, p)
-	case (insertionPoint > PolicyTopPriority || nextVacant == nil) && lastVacant != nil:
-		return pa.siftPrioritiesDown(insertionPoint-1, *lastVacant, p)
-	case nextVacant != nil && lastVacant != nil:
-		costSiftUp := *nextVacant - insertionPoint
-		costSiftDown := insertionPoint - *lastVacant - 1
-		if costSiftUp < costSiftDown {
-			return pa.siftPrioritiesUp(insertionPoint, *nextVacant, p)
+	// ofPriorities provided by the heuristic function are good.
+	case insertionPointLow > lowerBound && insertionPointHigh < upperBound:
+		break
+	// there are some overlaps between upper/lowerBound and insertionPointLow/High, and the window between
+	// upper/lowerBound is large. Assign Priorities by offsetting the upper/lowerBound, depending on where
+	// the overlap is. The rational is that overlapped Priorities would most likely to be more adjacent to
+	// the registering Priorities.
+	case upperBound-lowerBound-1 >= uint16(numPriorities)+2*zoneOffset:
+		if insertionPointLow <= lowerBound {
+			insertionPointLow = lowerBound + zoneOffset + 1
 		} else {
-			return pa.siftPrioritiesDown(insertionPoint-1, *lastVacant, p)
+			insertionPointLow = upperBound - zoneOffset - uint16(len(priorities))
 		}
+	// when the window between upper/lowerBound is small, simply put the Priorities in the middle of the window.
 	default:
-		return nil, map[uint16]uint16{}, nil, fmt.Errorf("no available Openflow priority left to insert priority %v", p)
+		insertionPointLow = lowerBound + (upperBound-lowerBound-uint16(numPriorities))/2 + 1
 	}
-}
-
-// siftPrioritiesUp moves all consecutive occupied ofPriorities and corresponding Priorities up by one ofPriority,
-// starting from the insertionPoint. It also assigns the freed ofPriority to the input Priority.
-func (pa *priorityAssigner) siftPrioritiesUp(insertionPoint, nextVacant uint16, p types.Priority) (*uint16, map[uint16]uint16, func(), error) {
-	priorityReassignments := map[uint16]uint16{}
-	if insertionPoint >= nextVacant {
-		return nil, priorityReassignments, nil, fmt.Errorf("failed to determine the range for sifting priorities up")
-	}
-	for i := nextVacant; i > insertionPoint; i-- {
-		p, _ := pa.ofPriorityMap[i-1]
-		pa.updatePriorityAssignment(i, p)
-		priorityReassignments[i-1] = i
-		klog.V(4).Infof("Original priority %v now needs to be re-assigned %v", i-1, i)
-	}
-	pa.updatePriorityAssignment(insertionPoint, p)
-	revertFunc := func() {
-		delete(pa.priorityMap, p)
-		for original := insertionPoint; original < nextVacant; original++ {
-			updated := original + 1
-			p := pa.ofPriorityMap[updated]
-			// nextVacant was allocated because of the reassignment and needs to be released when reverting.
-			if updated == nextVacant {
-				pa.Release(updated)
-			}
-			pa.ofPriorityMap[original] = p
-			pa.priorityMap[p] = original
-		}
-	}
-	return &insertionPoint, priorityReassignments, revertFunc, nil
-}
-
-// siftPrioritiesDown moves all consecutive occupied ofPriorities and corresponding Priorities down by one ofPriority,
-// starting from the insertionPoint. It also assigns the freed ofPriority to the input Priority.
-func (pa *priorityAssigner) siftPrioritiesDown(insertionPoint, lastVacant uint16, p types.Priority) (*uint16, map[uint16]uint16, func(), error) {
-	priorityReassignments := map[uint16]uint16{}
-	if insertionPoint <= lastVacant {
-		return nil, priorityReassignments, nil, fmt.Errorf("failed to determine the range for sifting priorities down")
-	}
-	for i := lastVacant; i < insertionPoint; i++ {
-		p, _ := pa.ofPriorityMap[i+1]
-		pa.updatePriorityAssignment(i, p)
-		priorityReassignments[i+1] = i
-		klog.V(4).Infof("Original priority %v now needs to be re-assigned %v", i+1, i)
-	}
-	pa.updatePriorityAssignment(insertionPoint, p)
-	revertFunc := func() {
-		delete(pa.priorityMap, p)
-		for original := insertionPoint; original > lastVacant; original-- {
-			updated := original - 1
-			p := pa.ofPriorityMap[updated]
-			// lastVacant was allocated because of the reassignment and needs to be released when reverting.
-			if updated == lastVacant {
-				pa.Release(updated)
-			}
-			pa.ofPriorityMap[original] = p
-			pa.priorityMap[p] = original
-		}
-	}
-	return &insertionPoint, priorityReassignments, revertFunc, nil
-}
-
-// GetOFPriority retrieves the OFPriority for the input Priority to be installed,
-// and returns installed priorities that need to be re-assigned if necessary.
-func (pa *priorityAssigner) GetOFPriority(p types.Priority) (*uint16, map[uint16]uint16, func(), error) {
-	if ofPriority, exists := pa.priorityMap[p]; exists {
-		return &ofPriority, nil, nil, nil
-	} else if uint16(len(pa.sortedOFPriorities)) == PolicyTopPriority-PolicyBottomPriority+1 {
-		return nil, nil, nil, fmt.Errorf("priorities are fully registered on this table")
-	}
-	insertionPoint, occupied := pa.getInsertionPoint(p)
-	if insertionPoint == PolicyBottomPriority || insertionPoint > PolicyTopPriority || occupied {
-		return pa.reassignPriorities(insertionPoint, p)
-	}
-	pa.updatePriorityAssignment(insertionPoint, p)
-	return &insertionPoint, nil, nil, nil
-}
-
-// RegisterPriorities registers a list of Priorities to be created with the priorityAssigner.
-// It is used to populate the priorityMap in case of batch rule adds. Note that this function assumes
-// that the pa.ofPriorityMap is empty at the time when it is called.
-func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) error {
-	if len(pa.ofPriorityMap) != 0 {
-		return fmt.Errorf("cannot batch register priorities with a non empty priority map")
-	}
-	sort.Sort(types.ByPriority(priorities))
-	// Remove any duplicated Priority in the sorted slice.
-	if len(priorities) > 1 {
-		j := 1
-		for i := 1; i < len(priorities); i++ {
-			if !priorities[i].Equals(priorities[i-1]) {
-				priorities[j] = priorities[i]
-				j++
-			}
-		}
-		priorities = priorities[0:j]
-	}
-	if uint16(len(priorities)) > PolicyTopPriority-PolicyBottomPriority+1 {
-		return fmt.Errorf("number of priorities to register is greater than available OpenFlow priorities on the table")
-	}
-	for i := len(priorities) - 1; i >= 0; i-- {
-		insertionPoint, _ := pa.getInsertionPoint(priorities[i])
-		if insertionPoint-PolicyBottomPriority <= uint16(i) {
-			// There are just enough or not enough vacant ofPriorities (from insertionPoint to PolicyBottomPriority)
-			// to register the remaining Priorities. All ofPriorities from PolicyBottomPriority to
-			// (PolicyBottomPriority + numRemainingPriorities) will be occupied to register the
-			// remaining Priorities starting from this Priority.
-			priorities = priorities[:i+1]
-			for j := 0; j < len(priorities); j++ {
-				pa.updatePriorityAssignment(PolicyBottomPriority+uint16(j), priorities[j])
-			}
-			break
-		} else {
-			// There are enough vacant ofPriorities (from insertionPoint to PolicyBottomPriority) to register the
-			// remaining Priorities. Hence the Priority at index i can be safely put at insertionPoint.
-			pa.updatePriorityAssignment(insertionPoint, priorities[i])
-		}
+	for i := 0; i < len(priorities); i++ {
+		pa.updatePriorityAssignment(insertionPointLow+uint16(i), priorities[i])
 	}
 	return nil
 }
@@ -353,11 +320,24 @@ func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) erro
 func (pa *priorityAssigner) Release(ofPriority uint16) {
 	priority, exists := pa.ofPriorityMap[ofPriority]
 	if !exists {
-		klog.V(2).Infof("OpenFlow priority %v not known to this table, skip releasing priority", ofPriority)
+		klog.V(2).Infof("OF priority %v not known, skip releasing priority", ofPriority)
 		return
 	}
+	pa.deletePriorityMapping(ofPriority, priority)
+	pa.unregisterPriority(priority)
+}
+
+// deletePriorityMapping removes the Priority <-> ofPriority mapping from the input
+func (pa *priorityAssigner) deletePriorityMapping(ofPriority uint16, priority types.Priority) {
 	delete(pa.priorityMap, priority)
 	delete(pa.ofPriorityMap, ofPriority)
-	idxToDel := sort.Search(len(pa.sortedOFPriorities), func(i int) bool { return ofPriority <= pa.sortedOFPriorities[i] })
-	pa.sortedOFPriorities = append(pa.sortedOFPriorities[:idxToDel], pa.sortedOFPriorities[idxToDel+1:]...)
+}
+
+// unregisterPriority unregisters the Priority from the known Priorities.
+func (pa *priorityAssigner) unregisterPriority(priority types.Priority) {
+	idxToDel := sort.Search(len(pa.sortedPriorities), func(i int) bool { return priority.Less(pa.sortedPriorities[i]) }) - 1
+	if idxToDel < 0 || !priority.Equals(pa.sortedPriorities[idxToDel]) {
+		return
+	}
+	pa.sortedPriorities = append(pa.sortedPriorities[:idxToDel], pa.sortedPriorities[idxToDel+1:]...)
 }
