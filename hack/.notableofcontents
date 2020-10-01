@@ -2,12 +2,12 @@ docs/aks-installation.md
 docs/architecture.md
 docs/assets/README.md
 docs/assets/logo/README.md
-docs/cloud.md
 docs/code-generation.md
 docs/configuration.md
 docs/cookbooks/multus/README.md
 docs/cookbooks/multus/build/cni-dhcp-daemon/README.md
 docs/eks-installation.md
+docs/eks-terraform.md
 docs/feature-gates.md
 docs/getting-started.md
 docs/github-labels.md
