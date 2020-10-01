@@ -194,9 +194,9 @@ func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
 	var err error
 	// export logs before deleting Antrea
 	if enableIPSec {
-		exportLogs(t, data, "beforeEnableIPSec", false)
+		exportLogs(t, data, "beforeRedeployAntreaWithIPSecEnabled", false)
 	} else {
-		exportLogs(t, data, "beforeDisableIPSec", false)
+		exportLogs(t, data, "beforeRedploy", false)
 	}
 	t.Logf("Deleting Antrea Agent DaemonSet")
 	if err = data.deleteAntrea(defaultTimeout); err != nil {
