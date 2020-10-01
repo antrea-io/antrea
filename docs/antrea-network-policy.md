@@ -1,4 +1,4 @@
-# Antrea Policy CRDs
+# Antrea Network Policy CRDs
 
 ## Table of Contents
 
