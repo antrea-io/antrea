@@ -124,7 +124,7 @@ you will see these addresses show up in the OVS flows.
 ## Antrea Network Policy CRD Implementation
 
 In addition to the above tables created for K8s NetworkPolicy, Antrea creates
-additional dedicated tables to support the [ClusterNetworkPolicy](network-policy.md) CRD
+additional dedicated tables to support the [ClusterNetworkPolicy](antrea-network-policy.md) CRD
 ([CnpEgressRuleTables] and [CnpIngressRuleTables]).
 
 Consider the following ClusterNetworkPolicy in the Application tier as an
