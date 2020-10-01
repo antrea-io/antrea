@@ -138,6 +138,8 @@ function configure_networks {
     num_networks=$((num_networks+1))
   fi
 
+  control_plane_ip=$(docker inspect $CLUSTER_NAME-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
+
   i=0
   for node in $nodes; do
     network=${networks[i]}
@@ -155,6 +157,8 @@ function configure_networks {
 
     # change kubelet config before reset network
     docker exec -t $node sed -i "s/node-ip=.*/node-ip=$node_ip/g" /var/lib/kubelet/kubeadm-flags.env
+    # this is needed to ensure that the worker node can still connect to the apiserver
+    docker exec -t $node bash -c "echo '$control_plane_ip $CLUSTER_NAME-control-plane' >> /etc/hosts"
     docker exec -t $node pkill kubelet
     docker exec -t $node pkill kube-proxy
     i=$((i+1))
