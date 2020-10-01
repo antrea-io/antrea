@@ -191,23 +191,31 @@ so their source IP will be rewritten to the Node's IP before going out.
 
 ### ClusterIP Service
 
-<img src="/docs/assets/service_walk.svg.png" width="600" alt="Antrea Service Traffic Walk">
+Antrea supports two ways to implement Services of type ClusterIP - leveraging
+`kube-proxy`, or AntreaProxy that implements load balancing for ClusterIP
+Service traffic with OVS.
 
-At the moment, Antrea leverages `kube-proxy` to serve traffic for ClusterIP and
-NodePort type Services. The packets from a Pod to a Service's ClusterIP will be
-forwarded through the `antrea-gw0` port, then `kube-proxy` will select one Service
-backend Pod to be the connection's destination and DNAT the packets to the Pod's
-IP and port. If the destination Pod is on the local Node the packets will be
-forwarded to the Pod directly; if it is on another Node the packets will be sent
-to that Node via the tunnel.
+When leveraging `kube-proxy`, Antrea Agent adds OVS flows to forward the packets
+from a Pod to a Service's ClusterIP to the `antrea-gw0` port, then `kube-proxy`
+will intercept the packets and select one Service endpoint to be the
+connection's destination and DNAT the packets to the endpoint's IP and port. If
+the destination endpoint is a local Pod, the packets will be forwarded to the
+Pod directly; if it is on another Node the packets will be sent to that Node via
+the tunnel.
+
+<img src="/docs/assets/service_walk.svg.png" width="600" alt="Antrea Service Traffic Walk">
 
 `kube-proxy` can be used in any supported mode: user-space iptables, or IPVS.
 See the [Kubernetes Service documentation](https://kubernetes.io/docs/concepts/services-networking/service)
 for more details.
 
-In the future, Antrea will also implement ClusterIP Service with OVS, and make
-it a configurable option. This should help achieve better performance than
-`kube-proxy` when `kube-proxy` is used in the user-space or iptables modes.
+When AntreaProxy is enabled, Antrea Agent will add OVS flows that implement
+load balancing and DNAT for the ClusterIP Service traffic. In this way, Service
+traffic load balancing is done inside OVS together with the rest of the
+forwarding, and it can achieve better performance than using `kube-proxy`, as
+there is no extra overhead of forwarding Service traffic to the host's network
+stack and iptables processing. The AntreaProxy implementation in Antrea Agent
+leverages some `kube-proxy` packages to watch and process Service Endpoints.
 
 ### NetworkPolicy
 
@@ -244,31 +252,6 @@ NetworkPolicy implementation.
 
 As described earlier, Antrea Controller leverages the Kubernetes apiserver
 library to build the API and communication channel to Agents.
-
-### IPsec encryption
-
-Antrea supports encrypting GRE tunnel traffic with IPsec ESP. The IPsec
-implementation leverages [OVS IPsec](http://docs.openvswitch.org/en/latest/tutorials/ipsec)
-and leverages [strongSwan](https://www.strongswan.org) as the IKE daemon.
-
-To enable IPsec, an extra container -`antrea-ovs-ipsec` - must be added to the
-Antrea Agent DaemonSet, which runs the `ovs-monitor-ipsec` and strongSwan
-daemons. Antrea now supports only using pre-shared key (PSK) for IKE
-authentication, and the PSK string must be passed to Antrea Agent using an
-environment variable - `ANTREA_IPSEC_PSK`. The PSK string can be specified in
-the [Antrea IPsec deployment yaml](/build/yamls/antrea-ipsec.yml), which creates
-a Kubernetes Secret to save the PSK value and populates it to the
-`ANTREA_IPSEC_PSK` environment variable of the Antrea Agent container.
-
-When IPsec is enabled, Antrea Agent will create a separate GRE tunnel port on
-the OVS bridge for each remote Node, and write the PSK string and the remote Node
-IP address to two OVS interface options of the tunnel interface. Then
-`ovs-monitor-ipsec` can detect the tunnel and create IPsec Security Policies
-with PSK for the remote Node, and strongSwan can create the IPsec Security
-Associations based on the Security Policies. These additional tunnel ports are
-not used to send traffic to a remote Node - the tunnel traffic is still output
-to the default tunnel port (`antrea-tun0`) with OVS flow based tunneling. However, the
-traffic from a remote Node will be received from the Node's IPsec tunnel port.
 
 ### Hybrid, NoEncap, NetworkPolicyOnly TrafficEncapMode
 Besides the default `Encap` mode, which always creates overlay tunnels among
@@ -307,3 +290,62 @@ for more information.
 [Antrea for AKS
 Engine](https://github.com/Azure/aks-engine/blob/master/docs/topics/features.md#feat-antrea)
 and [Antrea EKS support](eks-installation.md) work in `NetworkPolicyOnly` mode.
+
+## Features
+
+### Antrea Network Policy
+Besides Kubernetes NetworkPolicy, Antrea supports two extra types of
+Network Policies available as CRDs - Antrea Namespaced NetworkPolicy and
+ClusterNetworkPolicy. The former is scoped to a specific Namespace, while the
+latter is scoped to the whole cluster. These two types of Network Policies
+extend Kubernetes NetworkPolicy with advanced features including: policy
+priority, tiering, deny action, external entity, and policy statistics. For more
+information about Antrea network policies, refer to the [Antrea Network Policy document](antrea-network-policy.md).
+
+Just like for Kubernetes NetworkPolicies, Antrea Controller transforms Antrea
+NetworkPolicies and ClusterNetworkPolicies to internal NetworkPolicy,
+AddressGroup and AppliedToGroup objects, and disseminates them to Antrea
+Agents. Antrea Agents create OVS flows to enforce the NetworkPolicies applied
+to the local Pods on their Nodes.
+
+### IPsec encryption
+Antrea supports encrypting GRE tunnel traffic with IPsec ESP. The IPsec
+implementation leverages [OVS IPsec](http://docs.openvswitch.org/en/latest/tutorials/ipsec)
+and leverages [strongSwan](https://www.strongswan.org) as the IKE daemon.
+
+To enable IPsec, an extra container -`antrea-ovs-ipsec` - must be added to the
+Antrea Agent DaemonSet, which runs the `ovs-monitor-ipsec` and strongSwan
+daemons. Antrea now supports only using pre-shared key (PSK) for IKE
+authentication, and the PSK string must be passed to Antrea Agent using an
+environment variable - `ANTREA_IPSEC_PSK`. The PSK string can be specified in
+the [Antrea IPsec deployment yaml](/build/yamls/antrea-ipsec.yml), which creates
+a Kubernetes Secret to save the PSK value and populates it to the
+`ANTREA_IPSEC_PSK` environment variable of the Antrea Agent container.
+
+When IPsec is enabled, Antrea Agent will create a separate GRE tunnel port on
+the OVS bridge for each remote Node, and write the PSK string and the remote
+Node IP address to two OVS interface options of the tunnel interface. Then
+`ovs-monitor-ipsec` can detect the tunnel and create IPsec Security Policies
+with PSK for the remote Node, and strongSwan can create the IPsec Security
+Associations based on the Security Policies. These additional tunnel ports are
+not used to send traffic to a remote Node - the tunnel traffic is still output
+to the default tunnel port (`antrea-tun0`) with OVS flow based tunneling.
+However, the traffic from a remote Node will be received from the Node's IPsec
+tunnel port.
+
+### Network flow visibility
+Antrea supports exporting network flow information with Kubernetes context
+using IPFIX. The exported network flows can be visualized using Elastic Stack
+and Kibana dashboards. For more information, refer to the [network flow
+visibility document](network-flow-visibility.md).
+
+### Windows Node
+On a Windows Node, Antrea acts very much like it does on a Linux Node. Antrea
+Agent and OVS are still run on the Node, Windows Pods are still connected to the
+OVS bridge, and Pod networking is still mostly implemented with OVS flows. Even
+the OVS flows are mostly the same as those on a Linux Node. The main differences
+in the Antrea implementation for Window Node are: how Antrea Agent and OVS
+daemons are run and managed, how the OVS bridge is configured and Pod network
+interfaces are connected to the bridge, and how host network routing and SNAT
+are implemented. For more information about the Antrea Windows implementation,
+refer to the [Windows design document](windows-design.md).
