@@ -29,6 +29,8 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+	nodeipamcontroller "k8s.io/kubernetes/pkg/controller/nodeipam"
+	"k8s.io/kubernetes/pkg/controller/nodeipam/ipam"
 
 	"github.com/vmware-tanzu/antrea/pkg/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
@@ -187,9 +189,31 @@ func run(o *Options) error {
 		go traceflowController.Run(stopCh)
 	}
 
+	startNodeIPAMController(client, informerFactory, stopCh)
+
 	<-stopCh
 	klog.Info("Stopping Antrea controller")
 	return nil
+}
+
+func startNodeIPAMController(client clientset.Interface, informerFactory informers.SharedInformerFactory, stopCh <-chan struct{}) error {
+	_, ipv4Net, _ := net.ParseCIDR("172.100.0.0/16")
+	clusterCIDRs := []*net.IPNet{ipv4Net}
+	nodeCIDRMaskSizes := []int{24}
+	nodeIPAMController, err := nodeipamcontroller.NewNodeIpamController(
+		informerFactory.Core().V1().Nodes(),
+		nil,
+		client,
+		clusterCIDRs,
+		nil,
+		nil,
+		nodeCIDRMaskSizes,
+		ipam.RangeAllocatorType,
+	)
+	if err == nil {
+		go nodeIPAMController.Run(stopCh)
+	}
+	return err
 }
 
 func createAPIServerConfig(kubeconfig string,
