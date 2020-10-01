@@ -18,7 +18,7 @@
   take care of the packet forwarding. At the moment, we use an hard-coded value
   of aa:bb:cc:dd:ee:ff.
 * *Antrea-native Policies*: Antrea ClusterNetworkPolicy and Antrea NetworkPolicy
-  CRDs, as documented [here](network-policy.md).
+  CRDs, as documented [here](antrea-network-policy.md).
 * *`normal` action*: OpenFlow defines this action to submit a packet to "the
   traditional non-OpenFlow pipeline of the switch". That is, if a flow uses this
   action, then the packets in the flow go through the switch in the same way
