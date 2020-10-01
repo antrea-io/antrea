@@ -32,11 +32,14 @@ LABEL description="A Docker image based on Ubuntu 20.04 which includes Open vSwi
 COPY --from=ovs-debs /tmp/ovs-debs/* /tmp/ovs-debs/
 COPY charon-logging.conf /tmp
 
+# Install OVS debs, iptables, logrotate, and strongSwan; update the OVS
+# logrotate config file; update the strongSwan logging config.
 # We clean-up apt cache after installing packages to reduce the size of the
-# final image
+# final image.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends iptables libstrongswan-standard-plugins && \
+    apt-get install -y --no-install-recommends iptables logrotate libstrongswan-standard-plugins && \
     (dpkg -i /tmp/ovs-debs/*.deb || apt-get -f -y --no-install-recommends install) && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
+    sed -i "/rotate /a\    #size 100M" /etc/logrotate.d/openvswitch-switch && \
     sed -i "/^.*filelog.*{/r /tmp/charon-logging.conf" /etc/strongswan.d/charon-logging.conf && \
     rm -rf /tmp/*

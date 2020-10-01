@@ -149,6 +149,7 @@ spec:
             requests:
               cpu: "200m"
           command: ["start_ovs"]
+          args: ["--log_file_max_size=100", "--log_file_max_num=4"]
           securityContext:
             # capabilities required by OVS daemons
             capabilities:
