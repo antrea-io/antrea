@@ -8,14 +8,14 @@
   - [Tier CRDs](#tier-crds)
   - [Static tiers](#static-tiers)
   - [kubectl commands for Tier](#kubectl-commands-for-tier)
-- [ClusterNetworkPolicy](#clusternetworkpolicy)
-  - [The ClusterNetworkPolicy resource](#the-clusternetworkpolicy-resource)
+- [Antrea ClusterNetworkPolicy](#antrea-clusternetworkpolicy)
+  - [The Antrea ClusterNetworkPolicy resource](#the-antrea-clusternetworkpolicy-resource)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
-  - [kubectl commands for ClusterNetworkPolicy](#kubectl-commands-for-clusternetworkpolicy)
+  - [kubectl commands for Antrea ClusterNetworkPolicy](#kubectl-commands-for-antrea-clusternetworkpolicy)
 - [Antrea NetworkPolicy](#antrea-networkpolicy)
   - [The Antrea NetworkPolicy resource](#the-antrea-networkpolicy-resource)
-  - [Key differences from ClusterNetworkPolicy](#key-differences-from-clusternetworkpolicy)
+  - [Key differences from Antrea ClusterNetworkPolicy](#key-differences-from-antrea-clusternetworkpolicy)
   - [kubectl commands for Antrea NetworkPolicy](#kubectl-commands-for-antrea-networkpolicy)
 - [Antrea Policy ordering based on priorities](#antrea-policy-ordering-based-on-priorities)
   - [Ordering based on Tier priority](#ordering-based-on-tier-priority)
@@ -115,7 +115,7 @@ NetworkPolicies.
 
 ### kubectl commands for Tier
 
-The following kubectl commands can be used to retrieve Tier CRDs:
+The following kubectl commands can be used to retrieve Tier resources:
 
 ```
     # Use long name
@@ -142,7 +142,7 @@ All of the above commands produce output similar to what is shown below:
     securityops   50         27h
 ```
 
-## ClusterNetworkPolicy
+## Antrea ClusterNetworkPolicy
 
 Antrea ClusterNetworkPolicy (ACNP), one of the two Antrea Policy CRDs
 introduced, is a specification of how workloads within a cluster communicate
@@ -174,7 +174,7 @@ ConfigMap as follows:
        AntreaPolicy: true
 ```
 
-### The ClusterNetworkPolicy resource
+### The Antrea ClusterNetworkPolicy resource
 
 An example ClusterNetworkPolicy might look like this:
 
@@ -295,9 +295,9 @@ since Pod IPs are ephemeral and unpredictable.
 - Rules assume the priority in which they are written. i.e. rule set at top
   takes precedence over a rule set below it.
 
-### kubectl commands for ClusterNetworkPolicy
+### kubectl commands for Antrea ClusterNetworkPolicy
 
-The following kubectl commands can be used to retrieve ACNP CRDs:
+The following kubectl commands can be used to retrieve ACNP resources:
 
 ```
     # Use long name
@@ -375,7 +375,7 @@ spec:
             port: 5978
 ```
 
-### Key differences from ClusterNetworkPolicy
+### Key differences from Antrea ClusterNetworkPolicy
 
 Antrea NetworkPolicy shares it's spec with ClusterNetworkPolicy. However,
 the following documents some of the key differences between the two Antrea
@@ -391,7 +391,7 @@ Policy CRDs.
 
 ### kubectl commands for Antrea NetworkPolicy
 
-The following kubectl commands can be used to retrieve ANP CRDs:
+The following kubectl commands can be used to retrieve ANP resources:
 
 ```
     # Use long name with API Group
@@ -429,7 +429,7 @@ Within a tier, Antrea Policy CRDs are ordered by the `priority` at the policy
 level. Thus, the policy with the highest precedence (lowest priority number
 value) is enforced first. This ordering is performed solely based on the
 `priority` assigned as opposed to the "Kind" of the resource, i.e. the relative
-ordering between a [ClusterNetworkPolicy resource](#clusternetworkpolicy) and an [Antrea NetworkPolicy
+ordering between a [ClusterNetworkPolicy resource](#antrea-clusternetworkpolicy) and an [Antrea NetworkPolicy
 resource](#antrea-networkpolicy) within a Tier depends only on the `priority`
 set in each of the two resources.
 
