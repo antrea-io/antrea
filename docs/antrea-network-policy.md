@@ -211,6 +211,7 @@ spec:
         ports:
           - protocol: TCP
             port: 8080
+        name: AllowFromFrontend
     egress:
       - action: Drop
         to:
@@ -219,6 +220,7 @@ spec:
         ports:
           - protocol: TCP
             port: 5978
+        name: DropToThirdParty
 ```
 
 **spec**: The ClusterNetworkPolicy `spec` has all the information needed to
@@ -251,6 +253,7 @@ default tier i.e. the "application" Tier.
 **ingress**: Each ClusterNetworkPolicy may consist of zero or more ordered
 set of ingress rules. Each rule, depending on the `action` field of the rule,
 allows or drops traffic which matches both the `from` and `ports` sections.
+Also, each rule has a `name` field which describes the intention of this rule.
 The example policy contains a single rule, which allows matched traffic on a
 single port, from one of two sources: the first specified by a `podSelector`
 and the second specified by a combination of a `podSelector` and a
@@ -260,9 +263,10 @@ be enforced in the order in which they are written.
 
 **egress**: Each ClusterNetworkPolicy may consist of zero or more ordered set
 of egress rules. Each rule, depending on the `action` field of the rule, allows
-or drops traffic which matches both the `to` and `ports` sections. The example
-policy contains a single rule, which drops matched traffic on a single port,
-to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
+or drops traffic which matches both the `to` and `ports` sections. Also, each 
+rule has a `name` field which describes the intention of this rule.
+The example policy contains a single rule, which drops matched traffic on a 
+single port, to the 10.0.10.0/24 subnet specified by the `ipBlock` field. 
 **Note**: The order in which the egress rules are set matter, i.e. rules will
 be enforced in the order in which they are written.
 
@@ -368,6 +372,7 @@ spec:
         ports:
           - protocol: TCP
             port: 8080
+        name: AllowFromFrontend
     egress:
       - action: Drop
         to:
@@ -376,6 +381,7 @@ spec:
         ports:
           - protocol: TCP
             port: 5978
+        name: DropToThirdParty
 ```
 
 ### Key differences from Antrea ClusterNetworkPolicy

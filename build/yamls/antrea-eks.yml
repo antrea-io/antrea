@@ -108,6 +108,8 @@ spec:
                             type: string
                         type: object
                       type: array
+                    ruleName:
+                      type: string
                     to:
                       items:
                         properties:
@@ -159,6 +161,8 @@ spec:
                             type: string
                         type: object
                       type: array
+                    ruleName:
+                      type: string
                   required:
                   - action
                   type: object
@@ -289,6 +293,8 @@ spec:
                             type: string
                         type: object
                       type: array
+                    ruleName:
+                      type: string
                     to:
                       items:
                         properties:
@@ -344,6 +350,8 @@ spec:
                             type: string
                         type: object
                       type: array
+                    ruleName:
+                      type: string
                   required:
                   - action
                   type: object

@@ -338,6 +338,8 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                      ruleName:
+                        type: string
                 egress:
                   type: array
                   items:
@@ -373,6 +375,8 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                      ruleName:
+                        type: string
   scope: Cluster
   names:
     plural: clusternetworkpolicies
@@ -471,6 +475,8 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                      ruleName:
+                        type: string
                 egress:
                   type: array
                   items:
@@ -508,6 +514,8 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                      ruleName:
+                        type: string
   scope: Namespaced
   names:
     plural: networkpolicies
