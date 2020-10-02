@@ -74,7 +74,7 @@ func initLogger() error {
 		MaxAge:     28,   // allow max 28 days maintenance of old log files
 		Compress:   true, // compress the old log files for backup
 	})
-	klog.V(2).Info("Initialized Antrea Policy Logger for audit logging")
+	klog.V(2).Info("Initialized Antrea-native Policy Logger for audit logging")
 	return nil
 }
 
