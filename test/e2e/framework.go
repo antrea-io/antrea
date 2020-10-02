@@ -107,11 +107,12 @@ var provider providers.ProviderInterface
 
 // TestData stores the state required for each test case.
 type TestData struct {
-	kubeConfig       *restclient.Config
-	clientset        kubernetes.Interface
-	aggregatorClient aggregatorclientset.Interface
-	securityClient   secv1alpha1.SecurityV1alpha1Interface
-	crdClient        crdclientset.Interface
+	kubeConfig         *restclient.Config
+	clientset          kubernetes.Interface
+	aggregatorClient   aggregatorclientset.Interface
+	securityClient     secv1alpha1.SecurityV1alpha1Interface
+	crdClient          crdclientset.Interface
+	logsDirForTestCase string
 }
 
 var testData *TestData
