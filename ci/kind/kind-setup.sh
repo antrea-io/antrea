@@ -94,9 +94,9 @@ function configure_networks {
   # Inject allow all iptables to preempt docker bridge isolation rules
   if [[ ! -z $SUBNETS ]]; then
     set +e
-    sudo iptables -C DOCKER-USER -j ACCEPT > /dev/null 2>&1
+    docker run --net=host --privileged antrea/ethtool:latest iptables -C DOCKER-USER -j ACCEPT > /dev/null 2>&1
     if [[ $? -ne 0 ]]; then
-      sudo iptables -I DOCKER-USER -j ACCEPT
+      docker run --net=host --privileged antrea/ethtool:latest iptables -I DOCKER-USER -j ACCEPT
     fi
     set -e
   fi
