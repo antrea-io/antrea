@@ -109,6 +109,8 @@ mkdir antrea-test-logs
 go test -count=1 -v -run=TestDeletePod github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs
 ```
 
+If the user provides a log directory which was used for a previous run, existing 
+contents (subdirectories for each test case) will be overridden.  
 By default the description and logs for Antrea Pods are only written to disk if a
 test fails. You can choose to dump this information unconditionally with
 `--logs-export-on-success`.
