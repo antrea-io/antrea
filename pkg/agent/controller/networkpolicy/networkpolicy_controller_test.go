@@ -146,7 +146,7 @@ func newPolicyRule(direction v1beta1.Direction, from []string, to []string, serv
 	}
 }
 
-func getNetworkPolicyWithMultipleRules(uid string, from, to, appliedTo []string, services []v1beta1.Service) *v1beta1.NetworkPolicy {
+func newNetworkPolicyWithMultipleRules(uid string, from, to, appliedTo []string, services []v1beta1.Service) *v1beta1.NetworkPolicy {
 	networkPolicyRule1 := v1beta1.NetworkPolicyRule{
 		Direction: v1beta1.DirectionIn,
 		From:      v1beta1.NetworkPolicyPeer{AddressGroups: from},
@@ -406,7 +406,7 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	go controller.Run(stopCh)
 
 	// Test NetworkPolicyInfoQuerier functions when the NetworkPolicy has multiple rules.
-	policy1 := getNetworkPolicyWithMultipleRules("policy1", []string{"addressGroup1"}, []string{"addressGroup2"}, []string{"appliedToGroup1"}, services)
+	policy1 := newNetworkPolicyWithMultipleRules("policy1", []string{"addressGroup1"}, []string{"addressGroup2"}, []string{"appliedToGroup1"}, services)
 	networkPolicyWatcher.Add(policy1)
 	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2")}))
@@ -554,7 +554,7 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	checkNetworkPolicyMetrics()
 
 	// Test adding policy2 with multiple rules
-	policy2 := getNetworkPolicyWithMultipleRules("policy2", []string{"addressGroup2"}, []string{"addressGroup2"}, []string{"appliedToGroup2"}, services)
+	policy2 := newNetworkPolicyWithMultipleRules("policy2", []string{"addressGroup2"}, []string{"addressGroup2"}, []string{"appliedToGroup2"}, services)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("3.3.3.3"), *newAddressGroupMemberPod("4.4.4.4")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns2")}))
