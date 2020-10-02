@@ -24,6 +24,8 @@ import (
 type Interface interface {
 	// ClusterGroups returns a ClusterGroupInformer.
 	ClusterGroups() ClusterGroupInformer
+	// Egresses returns a EgressInformer.
+	Egresses() EgressInformer
 	// ExternalEntities returns a ExternalEntityInformer.
 	ExternalEntities() ExternalEntityInformer
 }
@@ -42,6 +44,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // ClusterGroups returns a ClusterGroupInformer.
 func (v *version) ClusterGroups() ClusterGroupInformer {
 	return &clusterGroupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// Egresses returns a EgressInformer.
+func (v *version) Egresses() EgressInformer {
+	return &egressInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // ExternalEntities returns a ExternalEntityInformer.

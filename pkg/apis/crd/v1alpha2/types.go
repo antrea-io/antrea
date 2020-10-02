@@ -170,3 +170,54 @@ type ClusterGroupList struct {
 
 	Items []ClusterGroup `json:"items,omitempty"`
 }
+
+// AppliedTo selects the entities to which a policy is applied.
+type AppliedTo struct {
+	// Select Pods matched by this selector. If set with NamespaceSelector,
+	// Pods are matched from Namespaces matched by the NamespaceSelector;
+	// otherwise, Pods are matched from all Namespaces.
+	// +optional
+	PodSelector *metav1.LabelSelector `json:"podSelector,omitempty"`
+	// Select all Pods from Namespaces matched by this selector. If set with
+	// PodSelector, Pods are matched from Namespaces matched by the
+	// NamespaceSelector.
+	// +optional
+	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+	// Groups is the set of ClusterGroup names.
+	// +optional
+	Groups []string `json:"groups,omitempty"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Egress defines which egress (SNAT) IP the traffic from the selected Pods to
+// the external network should use.
+type Egress struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of Egress.
+	Spec EgressSpec `json:"spec"`
+}
+
+// EgressSpec defines the desired state for Egress.
+type EgressSpec struct {
+	// AppliedTo selects Pods to which the Egress will be applied.
+	AppliedTo AppliedTo `json:"appliedTo"`
+	// EgressIP specifies the SNAT IP address for the selected workloads.
+	EgressIP string `json:"egressIP"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type EgressList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Egress `json:"items"`
+}
