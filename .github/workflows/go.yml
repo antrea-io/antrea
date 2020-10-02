@@ -155,8 +155,8 @@ jobs:
     - name: Check tidy
       run: make test-tidy
 
-  verify-spelling:
-    name: Verify common spelling mistakes
+  verify:
+    name: Verify docs and spelling
     runs-on: [ubuntu-18.04]
     steps:
 
@@ -169,4 +169,4 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Run verify scripts
-      run: make verify-spelling
+      run: make verify

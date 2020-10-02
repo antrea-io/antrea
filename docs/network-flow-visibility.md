@@ -1,22 +1,31 @@
 # Network Flow Visibility in Antrea
 
 ## Table of Contents
+
+<!-- toc -->
 - [Overview](#overview)
 - [Flow Exporter feature](#flow-exporter-feature)
-  * [Configuration](#configuration)
-  * [Supported capabilities](#supported-capabilities)
+  - [Configuration](#configuration)
+  - [IPFIX Information Elements (IEs) in a Flow Record](#ipfix-information-elements-ies-in-a-flow-record)
+    - [IEs from IANA-assigned IE registry](#ies-from-iana-assigned-ie-registry)
+    - [IEs from Reverse IANA-assigned IE Registry](#ies-from-reverse-iana-assigned-ie-registry)
+    - [IEs from Antrea IE Registry](#ies-from-antrea-ie-registry)
+  - [Supported capabilities](#supported-capabilities)
+    - [Types of Flows and Associated Information](#types-of-flows-and-associated-information)
+    - [Connection Metrics](#connection-metrics)
 - [ELK Flow Collector](#elk-flow-collector)
-  * [Purpose](#purpose)
-  * [About Elastic Stack](#about-elastic-stack)
-  * [Deployment Steps](#deployment-steps)
-  * [Pre-built Dashboards](#pre-built-dashboards)
-    + [Overview](#overview-1)
-    + [Flows](#flows)
+  - [Purpose](#purpose)
+  - [About Elastic Stack](#about-elastic-stack)
+  - [Deployment Steps](#deployment-steps)
+  - [Pre-built Dashboards](#pre-built-dashboards)
+    - [Overview](#overview-1)
+    - [Flows](#flows)
       - [Pod-to-Pod Traffic](#pod-to-pod-traffic)
       - [Pod-to-Service Traffic](#pod-to-service-traffic)
-    + [Flow Records](#flow-records)
-    + [Node Throughput](#node-throughput)
-      
+    - [Flow Records](#flow-records)
+    - [Node Throughput](#node-throughput)
+<!-- /toc -->
+
 ## Overview
 [Antrea](architecture.md) is a Kubernetes network plugin that provides network
 connectivity and security features for Pod workloads. Considering the scale and

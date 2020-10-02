@@ -2,13 +2,14 @@
 
 ## Table of Contents
 
+<!-- toc -->
 - [Summary](#summary)
 - [Tier](#tier)
   - [Tier CRDs](#tier-crds)
-  - [Static Tiers](#static-tiers)
+  - [Static tiers](#static-tiers)
 - [ClusterNetworkPolicy](#clusternetworkpolicy)
   - [The ClusterNetworkPolicy resource](#the-clusternetworkpolicy-resource)
-  - [Behavior of to and from selectors](#behavior-of-to-and-from-selectors)
+  - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
 - [Antrea NetworkPolicy](#antrea-networkpolicy)
   - [The Antrea NetworkPolicy resource](#the-antrea-networkpolicy-resource)
@@ -20,6 +21,7 @@
 - [RBAC](#rbac)
 - [Notes](#notes)
 - [Known Issues](#known-issues)
+<!-- /toc -->
 
 ## Summary
 
@@ -229,7 +231,7 @@ to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
 **Note**: The order in which the egress rules are set matter, i.e. rules will
 be enforced in the order in which they are written.
 
-### Behavior of `to` and `from` selectors
+### Behavior of *to* and *from* selectors
 
 There are four kinds of selectors that can be specified in an ingress `from`
 section or egress `to` section:
