@@ -18,14 +18,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
+	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query network policy rules in current agent.
-func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
+func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		npFilter := NewFilterFromURLQuery(r.URL.Query())
 
@@ -57,23 +59,18 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 
 // From user shorthand input to cpv1beta1.NetworkPolicyType
 var mapToNetworkPolicyType = map[string]cpv1beta1.NetworkPolicyType{
-	"np":    cpv1beta1.K8sNetworkPolicy,
 	"NP":    cpv1beta1.K8sNetworkPolicy,
-	"k8snp": cpv1beta1.K8sNetworkPolicy,
-	"K8snp": cpv1beta1.K8sNetworkPolicy,
-	"K8sNP": cpv1beta1.K8sNetworkPolicy,
-	"cnp":   cpv1beta1.AntreaClusterNetworkPolicy,
-	"CNP":   cpv1beta1.AntreaClusterNetworkPolicy,
-	"anp":   cpv1beta1.AntreaNetworkPolicy,
+	"K8SNP": cpv1beta1.K8sNetworkPolicy,
+	"ACNP":  cpv1beta1.AntreaClusterNetworkPolicy,
 	"ANP":   cpv1beta1.AntreaNetworkPolicy,
 }
 
 // Create a Network Policy Filter from URL Query
-func NewFilterFromURLQuery(query url.Values) *cpv1beta1.NetworkPolicyQueryFilter {
-	return &cpv1beta1.NetworkPolicyQueryFilter{
+func NewFilterFromURLQuery(query url.Values) *querier.NetworkPolicyQueryFilter {
+	return &querier.NetworkPolicyQueryFilter{
 		Name:       query.Get("name"),
 		Namespace:  query.Get("namespace"),
 		Pod:        query.Get("pod"),
-		SourceType: mapToNetworkPolicyType[query.Get("reference")],
+		SourceType: mapToNetworkPolicyType[strings.ToUpper(query.Get("reference"))],
 	}
 }

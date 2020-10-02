@@ -26,10 +26,11 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
+	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	aqtest "github.com/vmware-tanzu/antrea/pkg/agent/querier/testing"
 	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
 )
 
@@ -146,7 +147,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		if tc.expectedStatus != http.StatusNotFound {
 			ofc := oftest.NewMockClient(ctrl)
 			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
-			npq.EXPECT().GetNetworkPolicy(cpv1beta1.NetworkPolicyQueryFilter{Name: tc.name, Namespace: tc.namespace}).Return(testNetworkPolicy).Times(1)
+			npq.EXPECT().GetNetworkPolicy(querier.NetworkPolicyQueryFilter{Name: tc.name, Namespace: tc.namespace}).Return(testNetworkPolicy).Times(1)
 			ofc.EXPECT().GetNetworkPolicyFlowKeys(tc.name, tc.namespace).Return(testFlowKeys).Times(1)
 			q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
 			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
@@ -154,7 +155,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpResults[i], nil).Times(1)
 			}
 		} else {
-			npq.EXPECT().GetNetworkPolicy(cpv1beta1.NetworkPolicyQueryFilter{Name: tc.name, Namespace: tc.namespace}).Return(nil).Times(1)
+			npq.EXPECT().GetNetworkPolicy(querier.NetworkPolicyQueryFilter{Name: tc.name, Namespace: tc.namespace}).Return(nil).Times(1)
 		}
 
 		runHTTPTest(t, &tc, q)
@@ -189,7 +190,7 @@ func TestTableFlows(t *testing.T) {
 
 }
 
-func runHTTPTest(t *testing.T, tc *testCase, aq querier.AgentQuerier) {
+func runHTTPTest(t *testing.T, tc *testCase, aq agentquerier.AgentQuerier) {
 	handler := HandleFunc(aq)
 	req, err := http.NewRequest(http.MethodGet, tc.query, nil)
 	assert.Nil(t, err)

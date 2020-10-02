@@ -31,6 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 const (
@@ -154,7 +155,7 @@ type ruleCache struct {
 	podUpdates <-chan v1beta1.PodReference
 }
 
-func (c *ruleCache) getNetworkPolicies(npFilter v1beta1.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+func (c *ruleCache) getNetworkPolicies(npFilter querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
 	var ret []v1beta1.NetworkPolicy
 	c.policyMapLock.RLock()
 	defer c.policyMapLock.RUnlock()
@@ -167,7 +168,7 @@ func (c *ruleCache) getNetworkPolicies(npFilter v1beta1.NetworkPolicyQueryFilter
 }
 
 // If this npr(Network Policy Reference) can match the npFilter(Network Policy Filter)
-func (c *ruleCache) networkPolicyMatchFilter(npFilter v1beta1.NetworkPolicyQueryFilter, npr v1beta1.NetworkPolicyReference) bool {
+func (c *ruleCache) networkPolicyMatchFilter(npFilter querier.NetworkPolicyQueryFilter, npr v1beta1.NetworkPolicyReference) bool {
 	return (npFilter.Name == "" || npFilter.Name == npr.Name) &&
 		(npFilter.Namespace == "" || npFilter.Namespace == npr.Namespace) &&
 		(npFilter.SourceType == "" || string(npFilter.SourceType) == string(npr.Type))
@@ -175,7 +176,7 @@ func (c *ruleCache) networkPolicyMatchFilter(npFilter v1beta1.NetworkPolicyQuery
 
 // getNetworkPolicy looks up and returns the cached NetworkPolicy.
 // nil is returned if the specified NetworkPolicy is not found.
-func (c *ruleCache) getNetworkPolicy(npFilter v1beta1.NetworkPolicyQueryFilter) *v1beta1.NetworkPolicy {
+func (c *ruleCache) getNetworkPolicy(npFilter querier.NetworkPolicyQueryFilter) *v1beta1.NetworkPolicy {
 	var npUID string
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
@@ -233,7 +234,7 @@ func addRuleToNetworkPolicy(np *v1beta1.NetworkPolicy, rule *rule) *v1beta1.Netw
 
 }
 
-func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter v1beta1.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
 	var groups []string
 	memberPod := &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{Name: pod, Namespace: namespace}}
 	c.podSetLock.RLock()

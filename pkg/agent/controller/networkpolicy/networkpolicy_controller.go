@@ -32,6 +32,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 const (
@@ -291,18 +292,18 @@ func (c *Controller) GetAppliedToGroupNum() int {
 // GetNetworkPolicies returns the requested NetworkPolicies.
 // This func will return all NetworkPolicies that can match all provided attributes in NetworkPolicyQueryFilter.
 // These not provided attributes in NetworkPolicyQueryFilter means match all.
-func (c *Controller) GetNetworkPolicies(npFilter v1beta1.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+func (c *Controller) GetNetworkPolicies(npFilter querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
 	return c.ruleCache.getNetworkPolicies(npFilter)
 }
 
 // GetAppliedToNetworkPolicies returns the NetworkPolicies applied to the Pod and match the filter.
-func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string, npFilter v1beta1.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string, npFilter querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
 	return c.ruleCache.getAppliedNetworkPolicies(pod, namespace, npFilter)
 }
 
 // GetNetworkPolicy looks up and returns the cached NetworkPolicy which first match the filter.
 // nil is returned if the specified NetworkPolicy is not found.
-func (c *Controller) GetNetworkPolicy(npFilter v1beta1.NetworkPolicyQueryFilter) *v1beta1.NetworkPolicy {
+func (c *Controller) GetNetworkPolicy(npFilter querier.NetworkPolicyQueryFilter) *v1beta1.NetworkPolicy {
 	return c.ruleCache.getNetworkPolicy(npFilter)
 }
 
