@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
+	v1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -55,6 +56,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=core.antrea.tanzu.vmware.com, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("externalentities"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().ExternalEntities().Informer()}, nil
+
+		// Group=core.antrea.tanzu.vmware.com, Version=v1alpha2
+	case v1alpha2.SchemeGroupVersion.WithResource("externalentities"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha2().ExternalEntities().Informer()}, nil
 
 		// Group=ops.antrea.tanzu.vmware.com, Version=v1alpha1
 	case opsv1alpha1.SchemeGroupVersion.WithResource("traceflows"):

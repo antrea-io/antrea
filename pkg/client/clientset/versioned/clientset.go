@@ -22,6 +22,7 @@ import (
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
 	controlplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1"
 	corev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha1"
+	corev1alpha2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha2"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
@@ -36,6 +37,7 @@ type Interface interface {
 	ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface
 	ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface
 	CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface
+	CoreV1alpha2() corev1alpha2.CoreV1alpha2Interface
 	OpsV1alpha1() opsv1alpha1.OpsV1alpha1Interface
 	SecurityV1alpha1() securityv1alpha1.SecurityV1alpha1Interface
 	StatsV1alpha1() statsv1alpha1.StatsV1alpha1Interface
@@ -49,6 +51,7 @@ type Clientset struct {
 	clusterinformationV1beta1 *clusterinformationv1beta1.ClusterinformationV1beta1Client
 	controlplaneV1beta1       *controlplanev1beta1.ControlplaneV1beta1Client
 	coreV1alpha1              *corev1alpha1.CoreV1alpha1Client
+	coreV1alpha2              *corev1alpha2.CoreV1alpha2Client
 	opsV1alpha1               *opsv1alpha1.OpsV1alpha1Client
 	securityV1alpha1          *securityv1alpha1.SecurityV1alpha1Client
 	statsV1alpha1             *statsv1alpha1.StatsV1alpha1Client
@@ -68,6 +71,11 @@ func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta
 // CoreV1alpha1 retrieves the CoreV1alpha1Client
 func (c *Clientset) CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface {
 	return c.coreV1alpha1
+}
+
+// CoreV1alpha2 retrieves the CoreV1alpha2Client
+func (c *Clientset) CoreV1alpha2() corev1alpha2.CoreV1alpha2Interface {
+	return c.coreV1alpha2
 }
 
 // OpsV1alpha1 retrieves the OpsV1alpha1Client
@@ -123,6 +131,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.coreV1alpha2, err = corev1alpha2.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	cs.opsV1alpha1, err = opsv1alpha1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -154,6 +166,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.NewForConfigOrDie(c)
 	cs.controlplaneV1beta1 = controlplanev1beta1.NewForConfigOrDie(c)
 	cs.coreV1alpha1 = corev1alpha1.NewForConfigOrDie(c)
+	cs.coreV1alpha2 = corev1alpha2.NewForConfigOrDie(c)
 	cs.opsV1alpha1 = opsv1alpha1.NewForConfigOrDie(c)
 	cs.securityV1alpha1 = securityv1alpha1.NewForConfigOrDie(c)
 	cs.statsV1alpha1 = statsv1alpha1.NewForConfigOrDie(c)
@@ -169,6 +182,7 @@ func New(c rest.Interface) *Clientset {
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.New(c)
 	cs.controlplaneV1beta1 = controlplanev1beta1.New(c)
 	cs.coreV1alpha1 = corev1alpha1.New(c)
+	cs.coreV1alpha2 = corev1alpha2.New(c)
 	cs.opsV1alpha1 = opsv1alpha1.New(c)
 	cs.securityV1alpha1 = securityv1alpha1.New(c)
 	cs.statsV1alpha1 = statsv1alpha1.New(c)

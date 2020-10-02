@@ -836,8 +836,8 @@ func groupMembersToOFAddresses(groupMemberSet v1beta1.GroupMemberSet) []types.Ad
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0, len(groupMemberSet))
 	for _, member := range groupMemberSet {
-		for _, ep := range member.Endpoints {
-			addresses = append(addresses, openflow.NewIPAddress(net.IP(ep.IP)))
+		for _, ip := range member.IPs {
+			addresses = append(addresses, openflow.NewIPAddress(net.IP(ip)))
 		}
 	}
 	return addresses
@@ -931,12 +931,10 @@ func resolveService(service *v1beta1.Service, member *v1beta1.GroupMember) *v1be
 	if service.Port == nil || service.Port.Type == intstr.Int {
 		return service
 	}
-	for _, ep := range member.Endpoints {
-		for _, port := range ep.Ports {
-			if port.Name == service.Port.StrVal && port.Protocol == *service.Protocol {
-				resolvedPort := intstr.FromInt(int(port.Port))
-				return &v1beta1.Service{Protocol: service.Protocol, Port: &resolvedPort}
-			}
+	for _, port := range member.Ports {
+		if port.Name == service.Port.StrVal && port.Protocol == *service.Protocol {
+			resolvedPort := intstr.FromInt(int(port.Port))
+			return &v1beta1.Service{Protocol: service.Protocol, Port: &resolvedPort}
 		}
 	}
 	klog.Warningf("Can not resolve port %s for endpoints %v", service.Port.StrVal, member)

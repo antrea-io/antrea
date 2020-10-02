@@ -21,7 +21,6 @@ package networkpolicy
 import (
 	"fmt"
 	"net"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,13 +46,15 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	corev1a1informers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/core/v1alpha1"
+	corev1a2informers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/core/v1alpha2"
 	secinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security/v1alpha1"
 	corev1a1listers "github.com/vmware-tanzu/antrea/pkg/client/listers/core/v1alpha1"
+	corev1a2listers "github.com/vmware-tanzu/antrea/pkg/client/listers/core/v1alpha2"
 	seclisters "github.com/vmware-tanzu/antrea/pkg/client/listers/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -127,10 +128,17 @@ type NetworkPolicyController struct {
 	// namespaceListerSynced is a function which returns true if the Namespace shared informer has been synced at least once.
 	namespaceListerSynced cache.InformerSynced
 
-	externalEntityInformer corev1a1informers.ExternalEntityInformer
+	externalEntityV1Informer corev1a1informers.ExternalEntityInformer
+	// externalEntityV1Lister is able to list/get v1alpha1 ExternalEntities and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	externalEntityV1Lister corev1a1listers.ExternalEntityLister
+	// externalEntityV1Synced is a function which returns true if the v1alpha1 ExternalEntity shared informer has been synced at least once.
+	externalEntityV1Synced cache.InformerSynced
+
+	externalEntityInformer corev1a2informers.ExternalEntityInformer
 	// externalEntityLister is able to list/get ExternalEntities and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
-	externalEntityLister corev1a1listers.ExternalEntityLister
+	externalEntityLister corev1a2listers.ExternalEntityLister
 	// externalEntitySynced is a function which returns true if the ExternalEntity shared informer has been synced at least once.
 	externalEntitySynced cache.InformerSynced
 
@@ -198,7 +206,8 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	crdClient versioned.Interface,
 	podInformer coreinformers.PodInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
-	externalEntityInformer corev1a1informers.ExternalEntityInformer,
+	externalEntityV1Informer corev1a1informers.ExternalEntityInformer,
+	externalEntityInformer corev1a2informers.ExternalEntityInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	cnpInformer secinformers.ClusterNetworkPolicyInformer,
 	anpInformer secinformers.NetworkPolicyInformer,
@@ -215,6 +224,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		namespaceInformer:          namespaceInformer,
 		namespaceLister:            namespaceInformer.Lister(),
 		namespaceListerSynced:      namespaceInformer.Informer().HasSynced,
+		externalEntityV1Informer:   externalEntityV1Informer,
+		externalEntityV1Lister:     externalEntityV1Informer.Lister(),
+		externalEntityV1Synced:     externalEntityV1Informer.Informer().HasSynced,
 		externalEntityInformer:     externalEntityInformer,
 		externalEntityLister:       externalEntityInformer.Lister(),
 		externalEntitySynced:       externalEntityInformer.Informer().HasSynced,
@@ -312,6 +324,14 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 				AddFunc:    n.addANP,
 				UpdateFunc: n.updateANP,
 				DeleteFunc: n.deleteANP,
+			},
+			resyncPeriod,
+		)
+		externalEntityV1Informer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addExternalEntity,
+				UpdateFunc: n.updateExternalEntity,
+				DeleteFunc: n.deleteExternalEntity,
 			},
 			resyncPeriod,
 		)
@@ -436,9 +456,9 @@ func (n *NetworkPolicyController) createAppliedToGroup(npNsName string, pSel, nS
 // GroupSelector object and returns true, if and only if the labels
 // match any of the selector criteria present in the GroupSelector.
 func (n *NetworkPolicyController) labelsMatchGroupSelector(obj metav1.Object, ns *v1.Namespace, sel *antreatypes.GroupSelector) bool {
-	objSelector := sel.PodSelector
-	if _, ok := obj.(*v1alpha1.ExternalEntity); ok {
-		objSelector = sel.ExternalEntitySelector
+	objSelector := sel.ExternalEntitySelector
+	if _, ok := obj.(*v1.Pod); ok {
+		objSelector = sel.PodSelector
 	}
 	if sel.Namespace != "" {
 		if sel.Namespace != obj.GetNamespace() {
@@ -929,111 +949,6 @@ func (n *NetworkPolicyController) deletePod(old interface{}) {
 	}
 }
 
-// addExternalEntity retrieves all AddressGroups and AppliedToGroups which match the ExternalEnitty's
-// labels and enqueues the groups key for further processing.
-func (n *NetworkPolicyController) addExternalEntity(obj interface{}) {
-	defer n.heartbeat("addExternalEntity")
-	ee := obj.(*v1alpha1.ExternalEntity)
-	klog.V(2).Infof("Processing ExternalEntity %s/%s ADD event, labels: %v", ee.Namespace, ee.Name, ee.Labels)
-	// Find all AppliedToGroup keys which match the ExternalEntity's labels.
-	appliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(ee)
-	// Find all AddressGroup keys which match the ExternalEntity's labels.
-	addressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(ee)
-	// Enqueue groups to their respective queues for group processing.
-	for group := range appliedToGroupKeySet {
-		n.enqueueAppliedToGroup(group)
-	}
-	for group := range addressGroupKeySet {
-		n.enqueueAddressGroup(group)
-	}
-}
-
-// updateExternalEntity retrieves all AddressGroups and AppliedToGroups which match the
-// updated and old ExternalEntity's labels and enqueues the group keys for further
-// processing.
-func (n *NetworkPolicyController) updateExternalEntity(oldObj, curObj interface{}) {
-	defer n.heartbeat("updateExternalEntity")
-	oldEE := oldObj.(*v1alpha1.ExternalEntity)
-	curEE := curObj.(*v1alpha1.ExternalEntity)
-	klog.V(2).Infof("Processing ExternalEntity %s/%s UPDATE event, labels: %v", curEE.Namespace, curEE.Name, curEE.Labels)
-	// No need to trigger processing of groups if there is no change in the
-	// ExternalEntity labels or ExternalEntity's Endpoints.
-	labelsEqual := labels.Equals(labels.Set(oldEE.Labels), labels.Set(curEE.Labels))
-	specEqual := reflect.DeepEqual(oldEE.Spec, curEE.Spec)
-	// TODO: Right now two ExternalEntities are only considered equal if the list of Endpoints and
-	//  all NamedPorts in each Endpoint are of the exact order. Considering implementing custom compare
-	//  method for the ExternalEntity spec to solve this and improve performance.
-	if labelsEqual && specEqual {
-		klog.V(4).Infof("No change in ExternalEntity %s/%s. Skipping NetworkPolicy evaluation.", curEE.Namespace, curEE.Name)
-		return
-	}
-	// Find groups matching the old ExternalEntity's labels.
-	oldAppliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(oldEE)
-	oldAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(oldEE)
-	// Find groups matching the new ExternalEntity's labels.
-	curAppliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(curEE)
-	curAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(curEE)
-	// Create set to hold the group keys to enqueue.
-	var appliedToGroupKeys sets.String
-	var addressGroupKeys sets.String
-	// AppliedToGroup keys must be enqueued only if the ExternalEntity's spec has changed or
-	// if ExternalEntity's label change causes it to match new Groups.
-	if !specEqual {
-		appliedToGroupKeys = oldAppliedToGroupKeySet.Union(curAppliedToGroupKeySet)
-	} else if !labelsEqual {
-		// No need to enqueue common AppliedToGroups as they already have latest Pod
-		// information.
-		appliedToGroupKeys = oldAppliedToGroupKeySet.Difference(curAppliedToGroupKeySet).Union(curAppliedToGroupKeySet.Difference(oldAppliedToGroupKeySet))
-	}
-	// AddressGroup keys must be enqueued only if the ExternalEntity's spec has changed or
-	// if ExternalEntity's label change causes it to match new Groups.
-	if !specEqual {
-		addressGroupKeys = oldAddressGroupKeySet.Union(curAddressGroupKeySet)
-	} else if !labelsEqual {
-		// No need to enqueue common AddressGroups as they already have latest Pod
-		// information.
-		addressGroupKeys = oldAddressGroupKeySet.Difference(curAddressGroupKeySet).Union(curAddressGroupKeySet.Difference(oldAddressGroupKeySet))
-	}
-	for group := range appliedToGroupKeys {
-		n.enqueueAppliedToGroup(group)
-	}
-	for group := range addressGroupKeys {
-		n.enqueueAddressGroup(group)
-	}
-}
-
-// deleteExternalEntity retrieves all AddressGroups and AppliedToGroups which match the ExternalEntity's
-// labels and enqueues the groups key for further processing.
-func (n *NetworkPolicyController) deleteExternalEntity(old interface{}) {
-	ee, ok := old.(*v1alpha1.ExternalEntity)
-	if !ok {
-		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			klog.Errorf("Error decoding object when deleting ExternalEntity, invalid type: %v", old)
-			return
-		}
-		ee, ok = tombstone.Obj.(*v1alpha1.ExternalEntity)
-		if !ok {
-			klog.Errorf("Error decoding object tombstone when deleting ExternalEntity, invalid type: %v", tombstone.Obj)
-			return
-		}
-	}
-	defer n.heartbeat("deleteExternalEntity")
-
-	klog.V(2).Infof("Processing ExternalEntity %s/%s DELETE event, labels: %v", ee.Namespace, ee.Name, ee.Labels)
-	// Find all AppliedToGroup keys which match the Pod's labels.
-	appliedToGroupKeys := n.filterAppliedToGroupsForPodOrExternalEntity(ee)
-	// Find all AddressGroup keys which match the Pod's labels.
-	addressGroupKeys := n.filterAddressGroupsForPodOrExternalEntity(ee)
-	// Enqueue groups to their respective queues for group processing.
-	for group := range appliedToGroupKeys {
-		n.enqueueAppliedToGroup(group)
-	}
-	for group := range addressGroupKeys {
-		n.enqueueAddressGroup(group)
-	}
-}
-
 // addNamespace retrieves all AddressGroups which match the Namespace
 // labels and enqueues the group keys for further processing.
 func (n *NetworkPolicyController) addNamespace(obj interface{}) {
@@ -1401,40 +1316,38 @@ func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *controlplane.Gr
 	return memberPod
 }
 
-func externalEntityToGroupMember(ee *v1alpha1.ExternalEntity) *controlplane.GroupMember {
+func externalEntityToGroupMember(ee *v1alpha2.ExternalEntity) *controlplane.GroupMember {
 	memberEntity := &controlplane.GroupMember{}
-	for _, endpoint := range ee.Spec.Endpoints {
-		var namedPorts []controlplane.NamedPort
-		for _, port := range endpoint.Ports {
-			namedPorts = append(namedPorts, controlplane.NamedPort{
-				Port:     port.Port,
-				Name:     port.Name,
-				Protocol: controlplane.Protocol(port.Protocol),
-			})
-		}
-		ep := controlplane.Endpoint{
-			IP:    ipStrToIPAddress(endpoint.IP),
-			Ports: namedPorts,
-		}
-		memberEntity.Endpoints = append(memberEntity.Endpoints, ep)
+	var namedPorts []controlplane.NamedPort
+	var ipAddr []controlplane.IPAddress
+	for _, port := range ee.Spec.Ports {
+		namedPorts = append(namedPorts, controlplane.NamedPort{
+			Port:     port.Port,
+			Name:     port.Name,
+			Protocol: controlplane.Protocol(port.Protocol),
+		})
 	}
-	entityRef := controlplane.ExternalEntityReference{
-		Name:      ee.Name,
-		Namespace: ee.Namespace,
+	for _, ep := range ee.Spec.Endpoints {
+		ipAddr = append(ipAddr, ipStrToIPAddress(ep.IP))
 	}
-	memberEntity.ExternalEntity = &entityRef
+	memberEntity.Ports = namedPorts
+	memberEntity.IPs = ipAddr
 	return memberEntity
 }
 
-func (n *NetworkPolicyController) processSelector(groupSelector antreatypes.GroupSelector) ([]*v1.Pod, []*v1alpha1.ExternalEntity) {
+func (n *NetworkPolicyController) processSelector(groupSelector antreatypes.GroupSelector) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
 	var pods []*v1.Pod
-	var externalEntities []*v1alpha1.ExternalEntity
+	var externalEntities []*v1alpha2.ExternalEntity
 	if groupSelector.Namespace != "" {
 		// Namespace presence indicates Pods and ExternalEnitities must be selected from the same Namespace.
 		if groupSelector.PodSelector != nil {
 			pods, _ = n.podLister.Pods(groupSelector.Namespace).List(groupSelector.PodSelector)
 		} else if groupSelector.ExternalEntitySelector != nil {
 			externalEntities, _ = n.externalEntityLister.ExternalEntities(groupSelector.Namespace).List(groupSelector.ExternalEntitySelector)
+			eev1, _ := n.externalEntityV1Lister.ExternalEntities(groupSelector.Namespace).List(groupSelector.ExternalEntitySelector)
+			for _, ee := range eev1 {
+				externalEntities = append(externalEntities, externalEntityV1Alpha1ToAlpha2(ee))
+			}
 		}
 	} else if groupSelector.NamespaceSelector != nil && (groupSelector.PodSelector != nil || groupSelector.ExternalEntitySelector != nil) {
 		// Pods and ExternalEntities must be selected from Namespaces matching nsSelector.
@@ -1446,6 +1359,10 @@ func (n *NetworkPolicyController) processSelector(groupSelector antreatypes.Grou
 			} else if groupSelector.ExternalEntitySelector != nil {
 				nsExtEntities, _ := n.externalEntityLister.ExternalEntities(ns.Name).List(groupSelector.ExternalEntitySelector)
 				externalEntities = append(externalEntities, nsExtEntities...)
+				eev1, _ := n.externalEntityV1Lister.ExternalEntities(ns.Name).List(groupSelector.ExternalEntitySelector)
+				for _, ee := range eev1 {
+					externalEntities = append(externalEntities, externalEntityV1Alpha1ToAlpha2(ee))
+				}
 			}
 		}
 	} else if groupSelector.NamespaceSelector != nil {
@@ -1461,6 +1378,10 @@ func (n *NetworkPolicyController) processSelector(groupSelector antreatypes.Grou
 		pods, _ = n.podLister.Pods("").List(groupSelector.PodSelector)
 	} else if groupSelector.ExternalEntitySelector != nil {
 		externalEntities, _ = n.externalEntityLister.ExternalEntities("").List(groupSelector.ExternalEntitySelector)
+		eev1, _ := n.externalEntityV1Lister.ExternalEntities("").List(groupSelector.ExternalEntitySelector)
+		for _, ee := range eev1 {
+			externalEntities = append(externalEntities, externalEntityV1Alpha1ToAlpha2(ee))
+		}
 	}
 	return pods, externalEntities
 }

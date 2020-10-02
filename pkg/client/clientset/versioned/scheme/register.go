@@ -20,6 +20,7 @@ import (
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	controlplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	corev1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
+	corev1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
@@ -38,6 +39,7 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 	clusterinformationv1beta1.AddToScheme,
 	controlplanev1beta1.AddToScheme,
 	corev1alpha1.AddToScheme,
+	corev1alpha2.AddToScheme,
 	opsv1alpha1.AddToScheme,
 	securityv1alpha1.AddToScheme,
 	statsv1alpha1.AddToScheme,

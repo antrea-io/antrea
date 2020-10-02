@@ -194,7 +194,7 @@ spec:
     singular: externalentity
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1alpha2
     schema:
       openAPIV3Schema:
         properties:
@@ -208,21 +208,21 @@ spec:
                       type: string
                     name:
                       type: string
-                    ports:
-                      items:
-                        properties:
-                          name:
-                            type: string
-                          port:
-                            x-kubernetes-int-or-string: true
-                          protocol:
-                            type: string
-                        type: object
-                      type: array
                   type: object
                 type: array
               externalNode:
                 type: string
+              ports:
+                items:
+                  properties:
+                    name:
+                      type: string
+                    port:
+                      x-kubernetes-int-or-string: true
+                    protocol:
+                      type: string
+                  type: object
+                type: array
             type: object
         type: object
     served: true
