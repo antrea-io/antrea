@@ -37,9 +37,8 @@ func newAddressGroupMemberPod(ip string) *controlplane.GroupMemberPod {
 
 func newAddressGroupMemberExternalEntity(ip string) *controlplane.GroupMember {
 	return &controlplane.GroupMember{
-		Endpoints: []controlplane.Endpoint{
-			{IP: controlplane.IPAddress(net.ParseIP(ip))},
-		},
+		IPs: []controlplane.IPAddress{
+			controlplane.IPAddress(net.ParseIP(ip))},
 	}
 }
 

@@ -24,6 +24,8 @@ import (
 	fakecontrolplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1/fake"
 	corev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha1"
 	fakecorev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha1/fake"
+	corev1alpha2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha2"
+	fakecorev1alpha2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha2/fake"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1"
 	fakeopsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1/fake"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
@@ -99,6 +101,11 @@ func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta
 // CoreV1alpha1 retrieves the CoreV1alpha1Client
 func (c *Clientset) CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface {
 	return &fakecorev1alpha1.FakeCoreV1alpha1{Fake: &c.Fake}
+}
+
+// CoreV1alpha2 retrieves the CoreV1alpha2Client
+func (c *Clientset) CoreV1alpha2() corev1alpha2.CoreV1alpha2Interface {
+	return &fakecorev1alpha2.FakeCoreV1alpha2{Fake: &c.Fake}
 }
 
 // OpsV1alpha1 retrieves the OpsV1alpha1Client

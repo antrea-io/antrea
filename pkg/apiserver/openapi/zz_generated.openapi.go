@@ -43,7 +43,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AppliedToGroup":                    schema_pkg_apis_controlplane_v1beta1_AppliedToGroup(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AppliedToGroupList":                schema_pkg_apis_controlplane_v1beta1_AppliedToGroupList(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AppliedToGroupPatch":               schema_pkg_apis_controlplane_v1beta1_AppliedToGroupPatch(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.Endpoint":                          schema_pkg_apis_controlplane_v1beta1_Endpoint(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.ExternalEntityReference":           schema_pkg_apis_controlplane_v1beta1_ExternalEntityReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.GroupMember":                       schema_pkg_apis_controlplane_v1beta1_GroupMember(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.GroupMemberPod":                    schema_pkg_apis_controlplane_v1beta1_GroupMemberPod(ref),
@@ -1150,41 +1149,6 @@ func schema_pkg_apis_controlplane_v1beta1_AppliedToGroupPatch(ref common.Referen
 	}
 }
 
-func schema_pkg_apis_controlplane_v1beta1_Endpoint(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "Endpoint represents an external endpoint.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"ip": {
-						SchemaProps: spec.SchemaProps{
-							Description: "IP is the IP address of the Endpoint.",
-							Type:        []string{"string"},
-							Format:      "byte",
-						},
-					},
-					"ports": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Ports is the list NamedPort of the Endpoint.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NamedPort"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NamedPort"},
-	}
-}
-
 func schema_pkg_apis_controlplane_v1beta1_ExternalEntityReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -1231,14 +1195,28 @@ func schema_pkg_apis_controlplane_v1beta1_GroupMember(ref common.ReferenceCallba
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.ExternalEntityReference"),
 						},
 					},
-					"endpoints": {
+					"ips": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Endpoints maintains a list of EndPoints associated with this groupMember.",
+							Description: "IP is the IP address of the Endpoints associated with the GroupMember.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.Endpoint"),
+										Type:   []string{"string"},
+										Format: "byte",
+									},
+								},
+							},
+						},
+					},
+					"ports": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ports is the list NamedPort of the GroupMember.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NamedPort"),
 									},
 								},
 							},
@@ -1248,7 +1226,7 @@ func schema_pkg_apis_controlplane_v1beta1_GroupMember(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.Endpoint", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.ExternalEntityReference", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.PodReference"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.ExternalEntityReference", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NamedPort", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.PodReference"},
 	}
 }
 

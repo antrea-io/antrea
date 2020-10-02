@@ -525,7 +525,7 @@ metadata:
 spec:
   group: core.antrea.tanzu.vmware.com
   versions:
-    - name: v1alpha1
+    - name: v1alpha2
       served: true
       storage: true
       schema:
@@ -545,17 +545,17 @@ spec:
                         format: ipv4
                       name:
                         type: string
-                      ports:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            protocol:
-                              type: string
-                            port:
-                              x-kubernetes-int-or-string: true
-                            name:
-                              type: string
+                ports:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      protocol:
+                        type: string
+                      port:
+                        x-kubernetes-int-or-string: true
+                      name:
+                        type: string
                 externalNode:
                   type: string
   scope: Namespaced
