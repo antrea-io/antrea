@@ -2,6 +2,7 @@
 
 ## Table of Contents
 
+<!-- toc -->
 - [Looking at the Antrea logs](#looking-at-the-antrea-logs)
 - [Accessing the antrea-controller API](#accessing-the-antrea-controller-api)
   - [Using antctl](#using-antctl)
@@ -12,7 +13,7 @@
   - [Directly accessing the antrea-agent API](#directly-accessing-the-antrea-agent-api)
 - [Troubleshooting Open vSwitch](#troubleshooting-open-vswitch)
 - [Troubleshooting with antctl](#troubleshooting-with-antctl)
-
+<!-- /toc -->
 
 ## Looking at the Antrea logs
 

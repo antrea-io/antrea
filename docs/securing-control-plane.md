@@ -7,12 +7,14 @@ that Antrea requires and how to configure and rotate them for Antrea.
 
 ## Table of Contents
 
+<!-- toc -->
 - [What certificates are required by Antrea](#what-certificates-are-required-by-antrea)
 - [How certificates are used by Antrea](#how-certificates-are-used-by-antrea)
 - [Providing your own certificates](#providing-your-own-certificates)
   - [Using kubectl](#using-kubectl)
   - [Using cert-manager](#using-cert-manager)
 - [Certificate rotation](#certificate-rotation)
+<!-- /toc -->
 
 ## What certificates are required by Antrea
 
