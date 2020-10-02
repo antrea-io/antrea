@@ -33,10 +33,11 @@ $GOPATH/bin/client-gen \
   --input "controlplane/v1beta1" \
   --input "controlplane/v1beta2" \
   --input "system/v1beta1" \
-  --input "security/v1alpha1" \
   --input "core/v1alpha2" \
+  --input "security/v1alpha1" \
   --input "ops/v1alpha1" \
   --input "stats/v1alpha1" \
+  --input "egress/v1alpha1" \
   --output-package "${ANTREA_PKG}/pkg/client/clientset" \
   --plural-exceptions "NetworkPolicyStats:NetworkPolicyStats" \
   --plural-exceptions "AntreaNetworkPolicyStats:AntreaNetworkPolicyStats" \
@@ -45,17 +46,21 @@ $GOPATH/bin/client-gen \
 
 # Generate listers with K8s codegen tools.
 $GOPATH/bin/lister-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/egress/v1alpha1" \
   --output-package "${ANTREA_PKG}/pkg/client/listers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 # Generate informers with K8s codegen tools.
 $GOPATH/bin/informer-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/egress/v1alpha1" \
   --versioned-clientset-package "${ANTREA_PKG}/pkg/client/clientset/versioned" \
   --listers-package "${ANTREA_PKG}/pkg/client/listers" \
   --output-package "${ANTREA_PKG}/pkg/client/informers" \
@@ -67,11 +72,12 @@ $GOPATH/bin/deepcopy-gen \
   --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/stats" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/egress/v1alpha1" \
   -O zz_generated.deepcopy \
   --go-header-file hack/boilerplate/license_header.go.txt
 

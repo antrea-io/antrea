@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	controlplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	controlplanev1beta2 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	corev1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
+	egressv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/egress/v1alpha1"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
@@ -40,6 +41,7 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 	controlplanev1beta1.AddToScheme,
 	controlplanev1beta2.AddToScheme,
 	corev1alpha2.AddToScheme,
+	egressv1alpha1.AddToScheme,
 	opsv1alpha1.AddToScheme,
 	securityv1alpha1.AddToScheme,
 	statsv1alpha1.AddToScheme,

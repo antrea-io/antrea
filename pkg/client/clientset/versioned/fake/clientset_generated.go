@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import (
 	fakecontrolplanev1beta2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2/fake"
 	corev1alpha2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha2"
 	fakecorev1alpha2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha2/fake"
+	egressv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/egress/v1alpha1"
+	fakeegressv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/egress/v1alpha1/fake"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1"
 	fakeopsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1/fake"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
@@ -106,6 +108,11 @@ func (c *Clientset) ControlplaneV1beta2() controlplanev1beta2.ControlplaneV1beta
 // CoreV1alpha2 retrieves the CoreV1alpha2Client
 func (c *Clientset) CoreV1alpha2() corev1alpha2.CoreV1alpha2Interface {
 	return &fakecorev1alpha2.FakeCoreV1alpha2{Fake: &c.Fake}
+}
+
+// EgressV1alpha1 retrieves the EgressV1alpha1Client
+func (c *Clientset) EgressV1alpha1() egressv1alpha1.EgressV1alpha1Interface {
+	return &fakeegressv1alpha1.FakeEgressV1alpha1{Fake: &c.Fake}
 }
 
 // OpsV1alpha1 retrieves the OpsV1alpha1Client

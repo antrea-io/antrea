@@ -163,3 +163,20 @@ type ClusterGroupList struct {
 
 	Items []ClusterGroup `json:"items,omitempty"`
 }
+
+// AppliedTo selects the entities to which a policy is applied.
+type AppliedTo struct {
+	// Select Pods matched by this selector. If set with NamespaceSelector,
+	// Pods are matched from Namespaces matched by the NamespaceSelector;
+	// otherwise, Pods are matched from all Namespaces.
+	// +optional
+	PodSelector *metav1.LabelSelector `json:"podSelector,omitempty"`
+	// Select all Pods from Namespaces matched by this selector. If set with
+	// PodSelector, Pods are matched from Namespaces matched by the
+	// NamespaceSelector.
+	// +optional
+	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+	// Groups is the set of ClusterGroup names.
+	// +optional
+	Groups []string `json:"groups,omitempty"`
+}

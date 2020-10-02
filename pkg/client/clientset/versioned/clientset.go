@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	controlplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1"
 	controlplanev1beta2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
 	corev1alpha2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha2"
+	egressv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/egress/v1alpha1"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
@@ -38,6 +39,7 @@ type Interface interface {
 	ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface
 	ControlplaneV1beta2() controlplanev1beta2.ControlplaneV1beta2Interface
 	CoreV1alpha2() corev1alpha2.CoreV1alpha2Interface
+	EgressV1alpha1() egressv1alpha1.EgressV1alpha1Interface
 	OpsV1alpha1() opsv1alpha1.OpsV1alpha1Interface
 	SecurityV1alpha1() securityv1alpha1.SecurityV1alpha1Interface
 	StatsV1alpha1() statsv1alpha1.StatsV1alpha1Interface
@@ -52,6 +54,7 @@ type Clientset struct {
 	controlplaneV1beta1       *controlplanev1beta1.ControlplaneV1beta1Client
 	controlplaneV1beta2       *controlplanev1beta2.ControlplaneV1beta2Client
 	coreV1alpha2              *corev1alpha2.CoreV1alpha2Client
+	egressV1alpha1            *egressv1alpha1.EgressV1alpha1Client
 	opsV1alpha1               *opsv1alpha1.OpsV1alpha1Client
 	securityV1alpha1          *securityv1alpha1.SecurityV1alpha1Client
 	statsV1alpha1             *statsv1alpha1.StatsV1alpha1Client
@@ -76,6 +79,11 @@ func (c *Clientset) ControlplaneV1beta2() controlplanev1beta2.ControlplaneV1beta
 // CoreV1alpha2 retrieves the CoreV1alpha2Client
 func (c *Clientset) CoreV1alpha2() corev1alpha2.CoreV1alpha2Interface {
 	return c.coreV1alpha2
+}
+
+// EgressV1alpha1 retrieves the EgressV1alpha1Client
+func (c *Clientset) EgressV1alpha1() egressv1alpha1.EgressV1alpha1Interface {
+	return c.egressV1alpha1
 }
 
 // OpsV1alpha1 retrieves the OpsV1alpha1Client
@@ -135,6 +143,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.egressV1alpha1, err = egressv1alpha1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	cs.opsV1alpha1, err = opsv1alpha1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -167,6 +179,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 	cs.controlplaneV1beta1 = controlplanev1beta1.NewForConfigOrDie(c)
 	cs.controlplaneV1beta2 = controlplanev1beta2.NewForConfigOrDie(c)
 	cs.coreV1alpha2 = corev1alpha2.NewForConfigOrDie(c)
+	cs.egressV1alpha1 = egressv1alpha1.NewForConfigOrDie(c)
 	cs.opsV1alpha1 = opsv1alpha1.NewForConfigOrDie(c)
 	cs.securityV1alpha1 = securityv1alpha1.NewForConfigOrDie(c)
 	cs.statsV1alpha1 = statsv1alpha1.NewForConfigOrDie(c)
@@ -183,6 +196,7 @@ func New(c rest.Interface) *Clientset {
 	cs.controlplaneV1beta1 = controlplanev1beta1.New(c)
 	cs.controlplaneV1beta2 = controlplanev1beta2.New(c)
 	cs.coreV1alpha2 = corev1alpha2.New(c)
+	cs.egressV1alpha1 = egressv1alpha1.New(c)
 	cs.opsV1alpha1 = opsv1alpha1.New(c)
 	cs.securityV1alpha1 = securityv1alpha1.New(c)
 	cs.statsV1alpha1 = statsv1alpha1.New(c)
