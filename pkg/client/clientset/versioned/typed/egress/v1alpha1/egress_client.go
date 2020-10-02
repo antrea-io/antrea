@@ -32,8 +32,8 @@ type EgressV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *EgressV1alpha1Client) Egresses(namespace string) EgressInterface {
-	return newEgresses(c, namespace)
+func (c *EgressV1alpha1Client) Egresses() EgressInterface {
+	return newEgresses(c)
 }
 
 // NewForConfig creates a new EgressV1alpha1Client for the given config.

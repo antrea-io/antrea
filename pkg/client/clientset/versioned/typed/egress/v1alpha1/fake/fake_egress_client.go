@@ -26,8 +26,8 @@ type FakeEgressV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeEgressV1alpha1) Egresses(namespace string) v1alpha1.EgressInterface {
-	return &FakeEgresses{c, namespace}
+func (c *FakeEgressV1alpha1) Egresses() v1alpha1.EgressInterface {
+	return &FakeEgresses{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

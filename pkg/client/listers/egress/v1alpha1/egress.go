@@ -27,8 +27,8 @@ import (
 type EgressLister interface {
 	// List lists all Egresses in the indexer.
 	List(selector labels.Selector) (ret []*v1alpha1.Egress, err error)
-	// Egresses returns an object that can list and get Egresses.
-	Egresses(namespace string) EgressNamespaceLister
+	// Get retrieves the Egress from the index for a given name.
+	Get(name string) (*v1alpha1.Egress, error)
 	EgressListerExpansion
 }
 
@@ -50,38 +50,9 @@ func (s *egressLister) List(selector labels.Selector) (ret []*v1alpha1.Egress, e
 	return ret, err
 }
 
-// Egresses returns an object that can list and get Egresses.
-func (s *egressLister) Egresses(namespace string) EgressNamespaceLister {
-	return egressNamespaceLister{indexer: s.indexer, namespace: namespace}
-}
-
-// EgressNamespaceLister helps list and get Egresses.
-type EgressNamespaceLister interface {
-	// List lists all Egresses in the indexer for a given namespace.
-	List(selector labels.Selector) (ret []*v1alpha1.Egress, err error)
-	// Get retrieves the Egress from the indexer for a given namespace and name.
-	Get(name string) (*v1alpha1.Egress, error)
-	EgressNamespaceListerExpansion
-}
-
-// egressNamespaceLister implements the EgressNamespaceLister
-// interface.
-type egressNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all Egresses in the indexer for a given namespace.
-func (s egressNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.Egress, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.Egress))
-	})
-	return ret, err
-}
-
-// Get retrieves the Egress from the indexer for a given namespace and name.
-func (s egressNamespaceLister) Get(name string) (*v1alpha1.Egress, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+// Get retrieves the Egress from the index for a given name.
+func (s *egressLister) Get(name string) (*v1alpha1.Egress, error) {
+	obj, exists, err := s.indexer.GetByKey(name)
 	if err != nil {
 		return nil, err
 	}

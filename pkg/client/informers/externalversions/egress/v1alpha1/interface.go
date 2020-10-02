@@ -39,5 +39,5 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 
 // Egresses returns a EgressInformer.
 func (v *version) Egresses() EgressInformer {
-	return &egressInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &egressInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
