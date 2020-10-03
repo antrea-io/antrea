@@ -1444,7 +1444,10 @@ spec:
           readOnly: true
         - mountPath: /run/xtables.lock
           name: xtables-lock
-      - command:
+      - args:
+        - --log_file_max_size=100
+        - --log_file_max_num=4
+        command:
         - start_ovs
         image: antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
