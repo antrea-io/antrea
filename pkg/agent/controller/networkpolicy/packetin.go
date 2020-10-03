@@ -112,21 +112,18 @@ func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchFie
 // getMatch receives ofctrl matchers and table id, match field.
 // Modifies match field to Ingress/Egress register based on tableID.
 func getMatch(matchers *ofctrl.Matchers, tableID binding.TableIDType) *ofctrl.MatchField {
-	var match *ofctrl.MatchField
 	// Get match from ingress/egress reg
 	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable, openflow.EgressDefaultTable) {
 		if tableID == table {
-			match = getMatchRegField(matchers, uint32(openflow.EgressReg))
-			break
+			return getMatchRegField(matchers, uint32(openflow.EgressReg))
 		}
 	}
 	for _, table := range append(openflow.GetAntreaPolicyIngressTables(), openflow.IngressRuleTable, openflow.IngressDefaultTable) {
 		if tableID == table {
-			match = getMatchRegField(matchers, uint32(openflow.IngressReg))
-			break
+			return getMatchRegField(matchers, uint32(openflow.IngressReg))
 		}
 	}
-	return match
+	return nil
 }
 
 // getInfoInReg unloads and returns data stored in the match field.
