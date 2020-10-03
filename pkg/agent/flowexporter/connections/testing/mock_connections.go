@@ -116,17 +116,17 @@ func (mr *MockNetFilterConnTrackMockRecorder) Dial() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dial", reflect.TypeOf((*MockNetFilterConnTrack)(nil).Dial))
 }
 
-// DumpFilterInCtZone mocks base method
-func (m *MockNetFilterConnTrack) DumpFilterInCtZone(arg0 uint16) ([]*flowexporter.Connection, error) {
+// DumpFlowsInCtZone mocks base method
+func (m *MockNetFilterConnTrack) DumpFlowsInCtZone(arg0 uint16) ([]*flowexporter.Connection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DumpFilterInCtZone", arg0)
+	ret := m.ctrl.Call(m, "DumpFlowsInCtZone", arg0)
 	ret0, _ := ret[0].([]*flowexporter.Connection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// DumpFilterInCtZone indicates an expected call of DumpFilterInCtZone
-func (mr *MockNetFilterConnTrackMockRecorder) DumpFilterInCtZone(arg0 interface{}) *gomock.Call {
+// DumpFlowsInCtZone indicates an expected call of DumpFlowsInCtZone
+func (mr *MockNetFilterConnTrackMockRecorder) DumpFlowsInCtZone(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFilterInCtZone", reflect.TypeOf((*MockNetFilterConnTrack)(nil).DumpFilterInCtZone), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlowsInCtZone", reflect.TypeOf((*MockNetFilterConnTrack)(nil).DumpFlowsInCtZone), arg0)
 }

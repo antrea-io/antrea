@@ -61,7 +61,7 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 	// ZoneID filter is not supported currently in tl-mo/conntrack library.
 	// Link to issue: https://github.com/ti-mo/conntrack/issues/23
 	// Dump all flows in the conntrack table for now.
-	conns, err := ct.connTrack.DumpFilterInCtZone(zoneFilter)
+	conns, err := ct.connTrack.DumpFlowsInCtZone(zoneFilter)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
@@ -75,7 +75,7 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 // NetFilterConnTrack interface helps for testing the code that contains the third party library functions ("github.com/ti-mo/conntrack")
 type NetFilterConnTrack interface {
 	Dial() error
-	DumpFilterInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error)
+	DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error)
 }
 
 type netFilterConnTrack struct {
@@ -92,9 +92,8 @@ func (nfct *netFilterConnTrack) Dial() error {
 	return nil
 }
 
-func (nfct *netFilterConnTrack) DumpFilterInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error) {
-	filter := conntrack.Filter{}
-	conns, err := nfct.netlinkConn.DumpFilter(filter)
+func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error) {
+	conns, err := nfct.netlinkConn.DumpFilter(conntrack.Filter{})
 	if err != nil {
 		return nil, err
 	}

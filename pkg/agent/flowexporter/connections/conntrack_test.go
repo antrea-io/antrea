@@ -84,7 +84,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	connDumperDPSystem.connTrack = mockNetlinkCT
 	// Set expects for mocks
 	mockNetlinkCT.EXPECT().Dial().Return(nil)
-	mockNetlinkCT.EXPECT().DumpFilterInCtZone(uint16(openflow.CtZone)).Return(testFlows, nil)
+	mockNetlinkCT.EXPECT().DumpFlowsInCtZone(uint16(openflow.CtZone)).Return(testFlows, nil)
 
 	conns, totalConns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
 	assert.NoErrorf(t, err, "Dump flows function returned error: %v", err)

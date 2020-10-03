@@ -23,7 +23,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
-// TODO: Support FlowExporter feature for windows. We have to pass ovsctlClient when supported.
 func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsctlClient ovsctl.OVSCtlClient) *connTrackOvsCtl {
 	return NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, ovsctlClient)
 }
