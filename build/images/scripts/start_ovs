@@ -7,8 +7,57 @@ source /usr/share/openvswitch/scripts/ovs-lib
 CONTAINER_NAME="antrea-ovs"
 OVS_RUN_DIR="/var/run/openvswitch"
 OVS_DB_FILE="${OVS_RUN_DIR}/conf.db"
+OVS_LOGROTATE_CONF="/etc/logrotate.d/openvswitch-switch"
 
-set -euo pipefail
+hw_offload="false"
+log_file_max_num=0
+log_file_max_size=0
+
+function usage {
+    echo "start_ovs"
+    echo -e "  -h|--help\t\t \tPrint help message"
+    echo -e "  --hw-offload\t\t \tEnable OVS hardware offload"
+    echo -e "  --log_file_max_num=<uint> \tMaximum number of log files to be kept for an OVS daemon. Value 0 means keeping the current value"
+    echo -e "  --log_file_max_size=<uint> \tMaximum size (in megabytes) of an OVS log file. Value 0 means keeping the current value"
+}
+
+while (( "$#" )); do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --hw-offload)
+      hw_offload="true"
+      ;;
+    --log_file_max_num=*)
+      log_file_max_num=$1
+      log_file_max_num=${log_file_max_num#"--log_file_max_num="}
+      ;;
+    --log_file_max_size=*)
+      log_file_max_size=$1
+      log_file_max_size=${log_file_max_size#"--log_file_max_size="}
+      ;;
+    -*|--*) # unsupported flags
+      echo "Error: unsupported flag $1" >&2
+      exit 1
+      ;;
+    *) # standalone arguments are not supported
+      echo "Error: unsupported argument $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+function update_logrotate_config_file {
+    if [ $log_file_max_num -gt 0 ]; then
+        sed -i "s/.*rotate .*/    rotate $log_file_max_num/" $OVS_LOGROTATE_CONF
+    fi
+    if [ $log_file_max_size -gt 0 ]; then
+        sed -i "s/.*size .*/    size $log_file_max_size\M/" $OVS_LOGROTATE_CONF
+    fi
+}
 
 # We once (issue #870) observed that ovsdb-server failed to restart with error:
 # "ovsdb-server: /var/run/openvswitch/ovsdb-server.pid: pidfile check failed
@@ -21,8 +70,6 @@ function cleanup_ovs_run_files {
     rm -rf ${OVS_RUN_DIR}/.conf.db.*~lock~
 }
 
-# start_ovs takes one parameter: a boolean value which indicates whether OVS
-# kernel HW offload should be enabled.
 function start_ovs {
     offload=$1
     if daemon_is_running ovsdb-server; then
@@ -42,7 +89,7 @@ function start_ovs {
         # restoring flows.
         ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait="true"
         log_info $CONTAINER_NAME "ovs-vswitchd set hw-offload to $offload"
-        ovs-vsctl --no-wait set open_vswitch . other_config:hw-offload="$offload"
+        ovs-vsctl --no-wait set open_vswitch . other_config:hw-offload=$offload
         /usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server --system-id=random start --db-file=$OVS_DB_FILE
         log_info $CONTAINER_NAME "Started ovs-vswitchd"
     fi
@@ -63,29 +110,34 @@ function quit {
     exit 0
 }
 
+set -euo pipefail
+
 # Do not trap EXIT as it would then ignore the "exit 0" statement in quit and
 # exit with code 128 + SIGNAL
 trap "quit" INT TERM
 
+update_logrotate_config_file
+
 cleanup_ovs_run_files
 
-offload=false
-if [ $# == 1 ] && [ -n "$1" ] && [ "$1" == "--hw-offload" ]; then
-    offload=true
-fi
-
-start_ovs $offload
+start_ovs $hw_offload
 
 # Restrict read permissions for "others"
 # See discussion in https://github.com/vmware-tanzu/antrea/issues/1292
 chmod 0640 $OVS_DB_FILE
 
-log_info $CONTAINER_NAME "Started the loop that checks OVS status every 30 seconds"
+# Check OVS status every 30 seconds
+CHECK_OVS_INTERVAL=30
+# Run logrotate every hour
+LOG_ROTATE_INTERVAL=60*60
+counter=0
+
+log_info $CONTAINER_NAME "Started the loop that checks OVS status every $CHECK_OVS_INTERVAL seconds"
 while true; do
     # we run sleep in the background so that we can immediately exit when we
     # receive SIGINT / SIGTERM
     # see https://stackoverflow.com/questions/32041674/linux-how-to-kill-sleep
-    sleep 30 &
+    sleep $CHECK_OVS_INTERVAL &
     SLEEP_PID=$!
     wait $SLEEP_PID
 
@@ -93,6 +145,10 @@ while true; do
         # OVS was stopped in the container.
         log_warning $CONTAINER_NAME "OVS was stopped. Starting it again"
 
-        start_ovs $offload
+        start_ovs $hw_offload
+    fi
+
+    if [ $((++counter % (LOG_ROTATE_INTERVAL / CHECK_OVS_INTERVAL))) == 0 ]; then
+       logrotate $OVS_LOGROTATE_CONF
     fi
 done
