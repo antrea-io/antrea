@@ -15,7 +15,7 @@ antrea-octant-plugin depends on the Antrea monitoring CRDs (AntreaControllerInfo
 To run Octant together with antrea-octant-plugin, please make sure you have these CRDs defined in you K8s cluster.
 
 If Antrea is deployed before antrea-octant-plugin starts by using the standard deployment yaml, these
-CRDs should already be added. If not, please refer to [antrea.yaml](/build/yamls/antrea.yml) to
+CRDs should already be added. If not, please refer to [antrea.yaml](build/yamls/antrea-octant.yml) to
 create these CRDs first.
 
 ### Deploy Octant and antrea-octant-plugin as a Pod
