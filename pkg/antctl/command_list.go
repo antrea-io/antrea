@@ -112,6 +112,10 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 		if def.commandGroup == query {
 			continue
 		}
+		if mode == runtime.ModeController && def.use == "log-level" {
+			// log-level command does not support remote execution.
+			continue
+		}
 		if mode == runtime.ModeAgent && def.agentEndpoint != nil ||
 			mode == runtime.ModeController && def.controllerEndpoint != nil {
 			var currentCommand []string

@@ -731,6 +731,7 @@ rules:
   - /agentinfo
   - /addressgroups
   - /appliedtogroups
+  - /loglevel
   - /networkpolicies
   - /ovsflows
   - /ovstracing

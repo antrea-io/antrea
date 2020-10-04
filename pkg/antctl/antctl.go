@@ -59,7 +59,45 @@ var CommandList = &commandList{
 				},
 				addonTransform: version.AgentTransform,
 			},
+
 			transformedResponse: reflect.TypeOf(version.Response{}),
+		},
+		{
+			use:   "log-level",
+			short: "Show or set log verbosity level",
+			long:  "Show or set the log verbosity level of ${component}",
+			example: `  Show the current log verbosity level
+  $ antctl log-level
+  Set the log verbosity level to 2
+  $ antctl log-level 2`,
+			commandGroup: flat,
+			controllerEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/loglevel",
+					params: []flagInfo{
+						{
+							name:  "level",
+							usage: "The integer log verbosity level to set",
+							arg:   true,
+						},
+					},
+					outputType: single,
+				},
+			},
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/loglevel",
+					params: []flagInfo{
+						{
+							name:  "level",
+							usage: "The integer log verbosity level to set",
+							arg:   true,
+						},
+					},
+					outputType: single,
+				},
+			},
+			transformedResponse: reflect.TypeOf(0),
 		},
 		{
 			use:     "networkpolicy",
