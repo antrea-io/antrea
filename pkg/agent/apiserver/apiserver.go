@@ -40,6 +40,7 @@ import (
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/loglevel"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
@@ -69,6 +70,7 @@ func (s *agentAPIServer) Run(stopCh <-chan struct{}) error {
 }
 
 func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, s *genericapiserver.GenericAPIServer) {
+	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/agentinfo", agentinfo.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/podinterfaces", podinterface.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/networkpolicies", networkpolicy.HandleFunc(aq))
