@@ -15,6 +15,7 @@ running in two different modes:
 <!-- toc -->
 - [Installation](#installation)
 - [Usage](#usage)
+  - [Showing or changing log verbosity level](#showing-or-changing-log-verbosity-level)
   - [Collecting support information](#collecting-support-information)
   - [controllerinfo and agentinfo commands](#controllerinfo-and-agentinfo-commands)
   - [NetworkPolicy commands](#networkpolicy-commands)
@@ -74,6 +75,25 @@ one by setting the `KUBECONFIG` environment variable or with `--kubeconfig`
 
 The following sub-sections introduce a few commands which are useful for
 troubleshooting the Antrea system.
+
+### Showing or changing log verbosity level
+Starting from version 0.10.0, Antrea supports showing or changing the log
+verbosity level of Antrea Controller or Agent using the `antctl log-level`
+command. The command can only run locally inside the `antrea-controller` or
+`antrea-agent` container.
+
+The following command prints the current log verbosity level:
+
+```bash
+antctl log-level
+```
+
+This command updates the log verbosity level (the `level` argument must be an
+integer):
+
+```bash
+antctl log-level <level>
+```
 
 ### Collecting support information
 

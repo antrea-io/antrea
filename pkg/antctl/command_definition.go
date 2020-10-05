@@ -687,8 +687,12 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 
 	if addonTransform == nil { // Decode the data if there is no AddonTransform.
 		obj, err = cd.decode(resp, single)
+		if err == io.EOF {
+			// No response returned.
+			return nil
+		}
 		if err != nil {
-			return fmt.Errorf("error when decoding response: %w", err)
+			return fmt.Errorf("error when decoding response %v: %w", resp, err)
 		}
 	} else {
 		obj, err = addonTransform(resp, single)
@@ -721,15 +725,18 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 
 func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (map[string]string, error) {
 	argMap := make(map[string]string)
-	if len(args) > 0 {
-		argMap["name"] = args[0]
-	}
 	if endpoint := cd.getEndpoint(); endpoint != nil {
 		for _, f := range endpoint.flags() {
-			vs, err := cmd.Flags().GetString(f.name)
-			if err == nil && len(vs) != 0 {
-				argMap[f.name] = vs
-				continue
+			if f.arg {
+				if len(args) > 0 {
+					argMap[f.name] = args[0]
+				}
+			} else {
+				vs, err := cmd.Flags().GetString(f.name)
+				if err == nil && len(vs) != 0 {
+					argMap[f.name] = vs
+					continue
+				}
 			}
 		}
 	}

@@ -38,6 +38,7 @@ import (
 	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/endpoint"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/loglevel"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/webhook"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
@@ -225,6 +226,7 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 }
 
 func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
+	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		// Get new NetworkPolicyValidator
