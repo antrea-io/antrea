@@ -23,5 +23,6 @@ docs/ovs-offload.md
 docs/ovs-pipeline.md
 docs/policy-only.md
 docs/prometheus-integration.md
+docs/security.md
 docs/windows-design.md
 docs/windows.md
