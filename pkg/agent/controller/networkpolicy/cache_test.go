@@ -110,6 +110,62 @@ func TestAppliedToGroupIndexFunc(t *testing.T) {
 	}
 }
 
+func TestGetMaxPriority(t *testing.T) {
+	networkPolicyRule1 := &v1beta1.NetworkPolicyRule{
+		Direction: v1beta1.DirectionIn,
+		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+		To:        v1beta1.NetworkPolicyPeer{},
+		Services:  nil,
+	}
+	networkPolicyRule2 := &v1beta1.NetworkPolicyRule{
+		Direction: v1beta1.DirectionIn,
+		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
+		To:        v1beta1.NetworkPolicyPeer{},
+		Services:  nil,
+		Priority:  0,
+	}
+	networkPolicyRule3 := &v1beta1.NetworkPolicyRule{
+		Direction: v1beta1.DirectionIn,
+		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup3"}},
+		To:        v1beta1.NetworkPolicyPeer{},
+		Services:  nil,
+		Priority:  1,
+	}
+	networkPolicyRule4 := &v1beta1.NetworkPolicyRule{
+		Direction: v1beta1.DirectionOut,
+		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup4"}},
+		To:        v1beta1.NetworkPolicyPeer{},
+		Services:  nil,
+		Priority:  0,
+	}
+	k8sNP := &v1beta1.NetworkPolicy{
+		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
+		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1},
+		AppliedToGroups: []string{"addressGroup1"},
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type:      v1beta1.K8sNetworkPolicy,
+			Namespace: "ns1",
+			Name:      "name1",
+			UID:       "policy1",
+		},
+	}
+	acnpPriority, acnpTier := 1.0, int32(250)
+	antreaNP := &v1beta1.NetworkPolicy{
+		ObjectMeta:      metav1.ObjectMeta{UID: "policy2"},
+		Priority:        &acnpPriority,
+		TierPriority:    &acnpTier,
+		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule2, *networkPolicyRule3, *networkPolicyRule4},
+		AppliedToGroups: []string{"addressGroup1"},
+		SourceRef: &v1beta1.NetworkPolicyReference{
+			Type: v1beta1.AntreaClusterNetworkPolicy,
+			Name: "acnp1",
+			UID:  "policy-acnp",
+		},
+	}
+	assert.Equal(t, int32(-1), getMaxPriority(k8sNP), "got unexpected maxPriority for K8s NetworkPolicy")
+	assert.Equal(t, int32(1), getMaxPriority(antreaNP), "got unexpected maxPriority for AntreaPolicy")
+}
+
 type dirtyRuleRecorder struct {
 	rules   sets.String
 	eventCh chan string

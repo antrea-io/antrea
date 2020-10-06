@@ -139,20 +139,18 @@ func TestReassignBoundaryPriorities(t *testing.T) {
 			},
 		},
 		{
-			"push-to-both-directions",
+			"reassign-minimum-possible",
 			10000,
 			10002,
-			[]types.Priority{p193, p192, p191, p190, p1141, p1140, p1121, p1120},
-			[]uint16{9994, 9995, 9996, 9997, 9999, 10000, 10002, 10003},
+			[]types.Priority{p193, p192, p191, p190, p1140, p1121, p1120},
+			[]uint16{9994, 9995, 9996, 9997, 10000, 10002, 10003},
 			map[types.Priority]uint16{
-				p193: 9994, p192: 9995, p191: 9996, p190: 9997, p1141: 9998, p1140: 9999,
-				p1133: 10000, p1132: 10001, p1131: 10002, p1130: 10003,
-				p1121: 10004, p1120: 10005},
+				p193: 9994, p192: 9995, p191: 9996, p190: 9997, p1140: 10000,
+				p1133: 10001, p1132: 10002, p1131: 10003, p1130: 10004,
+				p1121: 10005, p1120: 10006},
 			map[types.Priority]*PriorityUpdate{
-				p1141: {9999, 9998},
-				p1140: {10000, 9999},
-				p1121: {10002, 10004},
-				p1120: {10003, 10005},
+				p1121: {10002, 10005},
+				p1120: {10003, 10006},
 			},
 		},
 	}
@@ -238,7 +236,7 @@ func TestInsertConsecutivePriorities(t *testing.T) {
 			},
 		},
 		{
-			"clutch-priorities",
+			"priorities-with-small-gap",
 			[]types.Priority{p1141, p1140, p1121, p1120},
 			[]uint16{insertionLow + 1, insertionLow + 2, insertionLow + 9, insertionLow + 10},
 			map[uint16]types.Priority{
@@ -288,17 +286,17 @@ func TestRegisterPrioritiesAndRevert(t *testing.T) {
 	assert.Equalf(t, expectedOFMapAfterRevert, pa.ofPriorityMap, "priorityMap unexpected after revert")
 }
 
-func generatePriorities(start, end int32) []types.Priority {
+func generatePriorities(tierPriority, start, end int32, policyPriority float64) []types.Priority {
 	priorities := make([]types.Priority, end-start+1)
 	for i := start; i <= end; i++ {
-		priorities[i-start] = types.Priority{TierPriority: 1, PolicyPriority: 5, RulePriority: i - start}
+		priorities[i-start] = types.Priority{TierPriority: tierPriority, PolicyPriority: policyPriority, RulePriority: i - start}
 	}
 	return priorities
 }
 
 func TestRegisterAllOFPriorities(t *testing.T) {
 	pa := newPriorityAssigner(InitialOFPriority, true)
-	maxPriorities := generatePriorities(int32(PolicyBottomPriority), int32(PolicyTopPriority))
+	maxPriorities := generatePriorities(250, int32(PolicyBottomPriority), int32(PolicyTopPriority), 5)
 	_, _, err := pa.RegisterPriorities(maxPriorities)
 	assert.Equalf(t, nil, err, "Error occurred in registering max number of allowed priorities")
 
@@ -307,6 +305,18 @@ func TestRegisterAllOFPriorities(t *testing.T) {
 		PolicyPriority: 5,
 		RulePriority:   int32(PolicyTopPriority) - int32(PolicyBottomPriority) + 1,
 	}
+	_, _, err = pa.RegisterPriorities([]types.Priority{extraPriority})
+	assert.Errorf(t, err, "Error should be raised after max number of priorities are registered")
+
+	pa = newPriorityAssigner(InitialOFPriority, false)
+	consecPriorities1 := generatePriorities(5, int32(PolicyBottomPriority), 10000, 5)
+	_, _, err = pa.RegisterPriorities(consecPriorities1)
+
+	assert.Equalf(t, nil, err, "Error occurred before registering max number of allowed priorities")
+	consecPriorities2 := generatePriorities(10, 10001, int32(PolicyTopPriority), 5)
+	_, _, err = pa.RegisterPriorities(consecPriorities2)
+	assert.Equalf(t, nil, err, "Error occurred in registering max number of allowed priorities")
+
 	_, _, err = pa.RegisterPriorities([]types.Priority{extraPriority})
 	assert.Errorf(t, err, "Error should be raised after max number of priorities are registered")
 }
