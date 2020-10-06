@@ -25,9 +25,73 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
+
+func TestExternalEntityV1Alpha1ToAlpha2(t *testing.T) {
+	eev1 := v1alpha1.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eeTest",
+			Namespace: "nsA",
+			Labels:    map[string]string{"purpose": "test"},
+		},
+		Spec: v1alpha1.ExternalEntitySpec{
+			Endpoints: []v1alpha1.Endpoint{
+				{
+					IP:   "1.1.1.1",
+					Name: "vm1",
+					Ports: []v1alpha1.NamedPort{
+						{
+							Protocol: k8sProtocolTCP,
+							Port:     80,
+							Name:     "http",
+						},
+					},
+				},
+				{
+					IP:   "1.1.1.2",
+					Name: "vm2",
+					Ports: []v1alpha1.NamedPort{
+						{
+							Protocol: k8sProtocolTCP,
+							Port:     80,
+							Name:     "http",
+						},
+					},
+				},
+			},
+		},
+	}
+	eev2 := v1alpha2.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eeTest",
+			Namespace: "nsA",
+			Labels:    map[string]string{"purpose": "test"},
+		},
+		Spec: v1alpha2.ExternalEntitySpec{
+			Endpoints: []v1alpha2.Endpoint{
+				{
+					IP:   "1.1.1.1",
+					Name: "vm1",
+				},
+				{
+					IP:   "1.1.1.2",
+					Name: "vm2",
+				},
+			},
+			Ports: []v1alpha2.NamedPort{
+				{
+					Protocol: k8sProtocolTCP,
+					Port:     80,
+					Name:     "http",
+				},
+			},
+		},
+	}
+	assert.Equal(t, eev2, *externalEntityV1Alpha1ToAlpha2(&eev1))
+}
 
 func TestAddExternalEntity(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{
