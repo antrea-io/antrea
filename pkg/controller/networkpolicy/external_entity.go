@@ -31,6 +31,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 )
 
+// externalEntityV1Alpha1ToAlpha2 converts a v1alpha1.ExternalEntity object to a
+// v1alpha2.ExternalEntity object.
 func externalEntityV1Alpha1ToAlpha2(ee *v1alpha1.ExternalEntity) *v1alpha2.ExternalEntity {
 	var ports []v1alpha2.NamedPort
 	var endpoints []v1alpha2.Endpoint

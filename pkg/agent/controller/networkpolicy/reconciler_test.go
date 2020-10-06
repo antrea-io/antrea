@@ -959,6 +959,121 @@ func TestGroupPodsByServices(t *testing.T) {
 	}
 }
 
+func TestGroupMembersByServices(t *testing.T) {
+	numberedServices := []v1beta1.Service{serviceTCP80, serviceTCP443}
+	numberedServicesKey := normalizeServices(numberedServices)
+	namedServices := []v1beta1.Service{serviceHTTP, serviceHTTPS}
+
+	tests := []struct {
+		name                     string
+		services                 []v1beta1.Service
+		members                  v1beta1.GroupMemberSet
+		wantMembersByServicesMap map[servicesKey]v1beta1.GroupMemberSet
+		wantServicesMap          map[servicesKey][]v1beta1.Service
+	}{
+		{
+			name:     "numbered ports",
+			services: numberedServices,
+			members: v1beta1.NewGroupMemberSet(
+				&v1beta1.GroupMember{
+					IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.1"))},
+				},
+				&v1beta1.GroupMember{
+					IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.2"))},
+				},
+			),
+			wantMembersByServicesMap: map[servicesKey]v1beta1.GroupMemberSet{
+				numberedServicesKey: v1beta1.NewGroupMemberSet(
+					&v1beta1.GroupMember{
+						IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.1"))},
+					},
+					&v1beta1.GroupMember{
+						IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.2"))},
+					},
+				),
+			},
+			wantServicesMap: map[servicesKey][]v1beta1.Service{
+				numberedServicesKey: numberedServices,
+			},
+		},
+		{
+			name:     "named ports",
+			services: namedServices,
+			members: v1beta1.NewGroupMemberSet(
+				&v1beta1.GroupMember{
+					IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.1"))},
+					Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+				},
+				&v1beta1.GroupMember{
+					IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.2"))},
+					Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+				},
+				&v1beta1.GroupMember{
+					IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.3"))},
+					Ports: []v1beta1.NamedPort{{Port: 8080, Name: "http", Protocol: protocolTCP}},
+				},
+				&v1beta1.GroupMember{
+					IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.4"))},
+					Ports: []v1beta1.NamedPort{{Port: 443, Name: "https", Protocol: protocolTCP}},
+				},
+				&v1beta1.GroupMember{
+					IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.5"))},
+				},
+				&v1beta1.GroupMember{
+					IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.6"))},
+					Ports: []v1beta1.NamedPort{{Port: 443, Name: "foo", Protocol: protocolTCP}},
+				},
+			),
+			wantMembersByServicesMap: map[servicesKey]v1beta1.GroupMemberSet{
+				normalizeServices([]v1beta1.Service{serviceTCP80, serviceHTTPS}): v1beta1.NewGroupMemberSet(
+					&v1beta1.GroupMember{
+						IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.1"))},
+						Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+					},
+					&v1beta1.GroupMember{
+						IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.2"))},
+						Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+					},
+				),
+				normalizeServices([]v1beta1.Service{serviceTCP8080, serviceHTTPS}): v1beta1.NewGroupMemberSet(
+					&v1beta1.GroupMember{
+						IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.3"))},
+						Ports: []v1beta1.NamedPort{{Port: 8080, Name: "http", Protocol: protocolTCP}},
+					},
+				),
+				normalizeServices([]v1beta1.Service{serviceHTTP, serviceTCP443}): v1beta1.NewGroupMemberSet(
+					&v1beta1.GroupMember{
+						IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.4"))},
+						Ports: []v1beta1.NamedPort{{Port: 443, Name: "https", Protocol: protocolTCP}},
+					},
+				),
+				normalizeServices([]v1beta1.Service{serviceHTTP, serviceHTTPS}): v1beta1.NewGroupMemberSet(
+					&v1beta1.GroupMember{
+						IPs: []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.5"))},
+					},
+					&v1beta1.GroupMember{
+						IPs:   []v1beta1.IPAddress{v1beta1.IPAddress(net.ParseIP("1.1.1.6"))},
+						Ports: []v1beta1.NamedPort{{Port: 443, Name: "foo", Protocol: protocolTCP}},
+					},
+				),
+			},
+			wantServicesMap: map[servicesKey][]v1beta1.Service{
+				normalizeServices([]v1beta1.Service{serviceTCP80, serviceHTTPS}):   {serviceTCP80, serviceHTTPS},
+				normalizeServices([]v1beta1.Service{serviceTCP8080, serviceHTTPS}): {serviceTCP8080, serviceHTTPS},
+				normalizeServices([]v1beta1.Service{serviceHTTP, serviceTCP443}):   {serviceHTTP, serviceTCP443},
+				normalizeServices([]v1beta1.Service{serviceHTTP, serviceHTTPS}):    {serviceHTTP, serviceHTTPS},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotMembersByServicesMap, gotServicesMap := groupMembersByServices(tt.services, tt.members)
+			assert.Equal(t, tt.wantMembersByServicesMap, gotMembersByServicesMap)
+			assert.Equal(t, tt.wantServicesMap, gotServicesMap)
+		})
+	}
+}
+
 func BenchmarkNormalizeServices(b *testing.B) {
 	services := []v1beta1.Service{serviceTCP80, serviceTCP8080}
 
