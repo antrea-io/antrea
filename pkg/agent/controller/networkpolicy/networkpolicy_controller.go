@@ -54,6 +54,9 @@ const (
 //              b. Notify dirty rules
 //
 type Controller struct {
+	// antreaPolicyEnabled indicates whether Antrea NetworkPolicy and
+	// ClusterNetworkPolicy are enabled.
+	antreaPolicyEnabled bool
 	// antreaClientProvider provides interfaces to get antreaClient, which can be
 	// used to watch Antrea AddressGroups, AppliedToGroups, and NetworkPolicies.
 	// We need to get antreaClient dynamically because the apiserver cert can be
@@ -81,11 +84,13 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
-	podUpdates <-chan v1beta1.PodReference) *Controller {
+	podUpdates <-chan v1beta1.PodReference,
+	antreaPolicyEnabled bool) *Controller {
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
 		reconciler:           newReconciler(ofClient, ifaceStore),
+		antreaPolicyEnabled:  antreaPolicyEnabled,
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
 	// Create a WaitGroup that is used to block network policy workers from asynchronously processing
@@ -113,6 +118,11 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
 			}
+			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta1.K8sNetworkPolicy {
+				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
+					policy.SourceRef.ToString())
+				return nil
+			}
 			c.ruleCache.AddNetworkPolicy(policy)
 			klog.Infof("NetworkPolicy %s applied to Pods on this Node", policy.SourceRef.ToString())
 			return nil
@@ -122,6 +132,11 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
 			}
+			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta1.K8sNetworkPolicy {
+				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
+					policy.SourceRef.ToString())
+				return nil
+			}
 			c.ruleCache.UpdateNetworkPolicy(policy)
 			return nil
 		},
@@ -129,6 +144,11 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			policy, ok := obj.(*v1beta1.NetworkPolicy)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
+			}
+			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta1.K8sNetworkPolicy {
+				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
+					policy.SourceRef.ToString())
+				return nil
 			}
 			c.ruleCache.DeleteNetworkPolicy(policy)
 			klog.Infof("NetworkPolicy %s no longer applied to Pods on this Node", policy.SourceRef.ToString())
@@ -141,6 +161,11 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 				policies[i], ok = objs[i].(*v1beta1.NetworkPolicy)
 				if !ok {
 					return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", objs[i])
+				}
+				if !c.antreaPolicyEnabled && policies[i].SourceRef.Type != v1beta1.K8sNetworkPolicy {
+					klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
+						policies[i].SourceRef.ToString())
+					return nil
 				}
 				klog.Infof("NetworkPolicy %s applied to Pods on this Node", policies[i].SourceRef.ToString())
 			}
