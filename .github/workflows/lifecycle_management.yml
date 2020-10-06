@@ -9,7 +9,7 @@ jobs:
     if: github.repository == 'vmware-tanzu/antrea'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v3
+      - uses: actions/stale@v3.0.8
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           stale-issue-message: 'This issue is stale because it has been open 180 days with no activity. Remove stale label or comment, or this will be closed in 180 days'
@@ -22,6 +22,7 @@ jobs:
           exempt-pr-labels: 'lifecycle/frozen'
           remove-stale-when-updated: true
           debug-only: false
+          operations-per-run: 200
   skip:
     if: github.repository != 'vmware-tanzu/antrea'
     runs-on: ubuntu-latest
