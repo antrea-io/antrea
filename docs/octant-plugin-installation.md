@@ -22,7 +22,7 @@ create these CRDs first.
 
 You can follow the sample below to run Octant and antrea-octant-plugin in Pod.
 In this example, we expose UI as a NodePort service for accessing externally.
-You can update [antrea-octant.yaml](build/yamls/antrea-octant.yml) according to
+You can update [antrea-octant.yaml](/build/yamls/antrea-octant.yml) according to
 your environment and preference.
 
 1. Create a secret that contains your kubeconfig.
