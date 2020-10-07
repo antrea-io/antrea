@@ -52,16 +52,16 @@ as was the case initially.
 
 An example Tier might look like this:
 
-```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
-kind: Tier
-metadata:
-  name: mytier
-spec:
-  priority: 10
-  description: "my custom tier"
-```
-
+    ```yaml
+        apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+        kind: Tier
+        metadata:
+          name: mytier
+        spec:
+          priority: 10
+          description: "my custom tier"
+    ```
+    
 Tiers have the following characteristics:
 
 - Policies can associate themselves with an existing Tier by setting the `tier`
@@ -80,13 +80,13 @@ have been removed in favor of Tier CRDs as mentioned in the previous section.
 On startup, antrea-controller will create 5 Read-Only Tier resources
 corresponding to the static tiers for default consumption as shown below.
 
-```
-    Emergency -> Tier name "emergency" with priority "5"
-    SecurityOps -> Tier name "securityops" with priority "50"
-    NetworkOps -> Tier name "networkops" with priority "100"
-    Platform -> Tier name "platform" with priority "150"
-    Application -> Tier name "application" with priority "250"
-```
+    ```
+        Emergency -> Tier name "emergency" with priority "5"
+        SecurityOps -> Tier name "securityops" with priority "50"
+        NetworkOps -> Tier name "networkops" with priority "100"
+        Platform -> Tier name "platform" with priority "150"
+        Application -> Tier name "application" with priority "250"
+    ```
 
 Any Antrea policy CRD referencing a static tier in its spec will now internally
 reference the corresponding Tier resource, thus maintaining the order of
@@ -95,9 +95,9 @@ enforcement.
 Previously, the static tiers created were as follows in the relative order of
 precedence:
 
-```
-    Emergency > SecurityOps > NetworkOps > Platform > Application  
-```
+    ```
+        Emergency > SecurityOps > NetworkOps > Platform > Application  
+    ```
 
 Thus, all Antrea Policy resources associated with "Emergency" tier will be
 enforced before any other Antrea Policy resource associated with any other
@@ -125,66 +125,66 @@ belonging to a K8s NetworkPolicy.
 enable them, edit the Controller and Agent configuration in the `antrea`
 ConfigMap as follows:
 
-```yaml
-   antrea-controller.conf: |
-     featureGates:
-       # Enable AntreaPolicy feature to complement K8s NetworkPolicy
-       # for cluster admins to define security policies which apply to the
-       # entire cluster.
-       AntreaPolicy: true
-```
-```yaml
-   antrea-agent.conf: |
-     featureGates:
-       # Enable AntreaPolicy feature to complement K8s NetworkPolicy
-       # for cluster admins to define security policies which apply to the
-       # entire cluster.
-       AntreaPolicy: true
-```
+    ```yaml
+       antrea-controller.conf: |
+         featureGates:
+           # Enable AntreaPolicy feature to complement K8s NetworkPolicy
+           # for cluster admins to define security policies which apply to the
+           # entire cluster.
+           AntreaPolicy: true
+    ```
+    ```yaml
+       antrea-agent.conf: |
+         featureGates:
+           # Enable AntreaPolicy feature to complement K8s NetworkPolicy
+           # for cluster admins to define security policies which apply to the
+           # entire cluster.
+           AntreaPolicy: true
+    ```
 
 ### The ClusterNetworkPolicy resource
 
 An example ClusterNetworkPolicy might look like this:
 
-```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
-kind: ClusterNetworkPolicy
-metadata:
-  name: test-cnp
-spec:
-    priority: 5
-    tier: securityops
-    appliedTo:
-      - podSelector:
-          matchLabels:
-            role: db
-      - namespaceSelector:
-          matchLabels:
-            env: prod
-    ingress:
-      - action: Allow
-        from:
+    ```yaml
+    apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+    kind: ClusterNetworkPolicy
+    metadata:
+      name: test-cnp
+    spec:
+        priority: 5
+        tier: securityops
+        appliedTo:
           - podSelector:
-              matchLabels:
-                role: frontend
-          - podSelector:
-              matchLabels:
-                role: nondb
-            namespaceSelector:
               matchLabels:
                 role: db
-        ports:
-          - protocol: TCP
-            port: 8080
-    egress:
-      - action: Drop
-        to:
-          - ipBlock:
-              cidr: 10.0.10.0/24
-        ports:
-          - protocol: TCP
-            port: 5978
-```
+          - namespaceSelector:
+              matchLabels:
+                env: prod
+        ingress:
+          - action: Allow
+            from:
+              - podSelector:
+                  matchLabels:
+                    role: frontend
+              - podSelector:
+                  matchLabels:
+                    role: nondb
+                namespaceSelector:
+                  matchLabels:
+                    role: db
+            ports:
+              - protocol: TCP
+                port: 8080
+        egress:
+          - action: Drop
+            to:
+              - ipBlock:
+                  cidr: 10.0.10.0/24
+            ports:
+              - protocol: TCP
+                port: 5978
+    ```
 
 **spec**: The ClusterNetworkPolicy `spec` has all the information needed to
 define a cluster-wide security policy.
@@ -280,43 +280,43 @@ feature gate.
 
 An example Antrea NetworkPolicy might look like this:
 
-```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
-kind: NetworkPolicy
-metadata:
-  name: test-anp
-  namespace: default
-spec:
-    priority: 5
-    tier: securityops
-    appliedTo:
-      - podSelector:
-          matchLabels:
-            role: db
-    ingress:
-      - action: Allow
-        from:
+    ```yaml
+    apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+    kind: NetworkPolicy
+    metadata:
+      name: test-anp
+      namespace: default
+    spec:
+        priority: 5
+        tier: securityops
+        appliedTo:
           - podSelector:
-              matchLabels:
-                role: frontend
-          - podSelector:
-              matchLabels:
-                role: nondb
-            namespaceSelector:
               matchLabels:
                 role: db
-        ports:
-          - protocol: TCP
-            port: 8080
-    egress:
-      - action: Drop
-        to:
-          - ipBlock:
-              cidr: 10.0.10.0/24
-        ports:
-          - protocol: TCP
-            port: 5978
-```
+        ingress:
+          - action: Allow
+            from:
+              - podSelector:
+                  matchLabels:
+                    role: frontend
+              - podSelector:
+                  matchLabels:
+                    role: nondb
+                namespaceSelector:
+                  matchLabels:
+                    role: db
+            ports:
+              - protocol: TCP
+                port: 8080
+        egress:
+          - action: Drop
+            to:
+              - ipBlock:
+                  cidr: 10.0.10.0/24
+            ports:
+              - protocol: TCP
+                port: 5978
+    ```
 
 ### Key differences from ClusterNetworkPolicy
 
