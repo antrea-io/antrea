@@ -236,6 +236,11 @@ message NetworkPolicyRule {
 
   // EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.
   optional bool enableLogging = 7;
+
+  // AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
+  // Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
+  // that this Rule is referred to.
+  repeated string appliedToGroups = 8;
 }
 
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.

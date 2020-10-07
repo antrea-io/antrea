@@ -45,7 +45,9 @@ type NetworkPolicySpec struct {
 	// Priority specfies the order of the NetworkPolicy relative to other
 	// NetworkPolicies.
 	Priority float64 `json:"priority"`
-	// Select workloads on which the rules will be applied to.
+	// Select workloads on which the rules will be applied to. Cannot be set in
+	// conjunction with AppliedTo in each rule.
+	// +optional
 	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
 	// Set of ingress rules evaluated based on the order in which they are set.
 	// Currently Ingress rule supports setting the `From` field but not the `To`
@@ -110,6 +112,10 @@ type Rule struct {
 	// EnableLogging is used to indicate if agent should generate logs
 	// when rules are matched. Should be default to false.
 	EnableLogging bool `json:"enableLogging"`
+	// Select workloads on which this rule will be applied to. Cannot be set in
+	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
+	// +optional
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.
@@ -208,7 +214,8 @@ type ClusterNetworkPolicySpec struct {
 	// Priority specfies the order of the ClusterNetworkPolicy relative to
 	// other AntreaClusterNetworkPolicies.
 	Priority float64 `json:"priority"`
-	// Select workloads on which the rules will be applied to.
+	// Select workloads on which the rules will be applied to. Cannot be set in
+	// conjunction with AppliedTo in each rule.
 	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
 	// Set of ingress rules evaluated based on the order in which they are set.
 	// Currently Ingress rule supports setting the `From` field but not the `To`

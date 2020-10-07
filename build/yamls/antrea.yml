@@ -109,8 +109,20 @@ spec:
                       - Allow
                       - Drop
                       type: string
+<<<<<<< HEAD
                     enableLogging:
                       type: boolean
+=======
+                    appliedTo:
+                      items:
+                        properties:
+                          namespaceSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                          podSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
+>>>>>>> Add appliedTo field in rules and update validationWebook
                     name:
                       type: string
                     ports:
@@ -149,8 +161,20 @@ spec:
                       - Allow
                       - Drop
                       type: string
+<<<<<<< HEAD
                     enableLogging:
                       type: boolean
+=======
+                    appliedTo:
+                      items:
+                        properties:
+                          namespaceSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                          podSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
+>>>>>>> Add appliedTo field in rules and update validationWebook
                     from:
                       items:
                         properties:
@@ -327,8 +351,19 @@ spec:
                       - Allow
                       - Drop
                       type: string
+<<<<<<< HEAD
                     enableLogging:
                       type: boolean
+=======
+                    appliedTo:
+                      items:
+                        properties:
+                          podSelector:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
+>>>>>>> Add appliedTo field in rules and update validationWebook
                     name:
                       type: string
                     ports:
@@ -369,8 +404,19 @@ spec:
                       - Allow
                       - Drop
                       type: string
+<<<<<<< HEAD
                     enableLogging:
                       type: boolean
+=======
+                    appliedTo:
+                      items:
+                        properties:
+                          podSelector:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
+>>>>>>> Add appliedTo field in rules and update validationWebook
                     from:
                       items:
                         properties:
@@ -411,7 +457,6 @@ spec:
               tier:
                 type: string
             required:
-            - appliedTo
             - priority
             type: object
           status:

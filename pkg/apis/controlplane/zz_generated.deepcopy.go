@@ -538,6 +538,11 @@ func (in *NetworkPolicyRule) DeepCopyInto(out *NetworkPolicyRule) {
 		*out = new(v1alpha1.RuleAction)
 		**out = **in
 	}
+	if in.AppliedToGroups != nil {
+		in, out := &in.AppliedToGroups, &out.AppliedToGroups
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

@@ -198,6 +198,10 @@ type NetworkPolicyRule struct {
 	Action *secv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1.RuleAction"`
 	// EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.
 	EnableLogging bool `json:"enableLogging" protobuf:"varint,7,opt,name=enableLogging"`
+	// AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
+	// Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
+	// that this Rule is referred to.
+	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,8,opt,name=appliedToGroups"`
 }
 
 // Protocol defines network protocols supported for things like container ports.
