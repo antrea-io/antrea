@@ -15,7 +15,7 @@ it requires Antrea-proxy to load balance Pod-to-Service traffic.
 
 <img src="/docs/assets/policy-only-cni.svg" width="600" alt="Antrea Switched CNI">
 
-The above diagram depicts a routed CNI network topology on the left, and what it looks like 
+The above diagram depicts a routed CNI network topology on the left, and what it looks like
 after Antrea inserts the OVS bridge into the data path.
 
 The diagram on the left illustrates a routed CNI network topology such as AWS EKS.
@@ -28,15 +28,15 @@ traffic, even within the same worker Node must traverse first to the host networ
 routed by it.
 
 When the container runtime instantiates a Pod, it first calls the primary CNI to configure Pod's
-IP, route table, DNS etc, and then connects Pod to host network with a PtP device such as a 
+IP, route table, DNS etc, and then connects Pod to host network with a PtP device such as a
 veth-pair. When Antrea is chained with this primary CNI, container runtime then calls
 Antrea Agent, and the Antrea Agent attaches Pod's PtP device to the OVS bridge, and moves the host
 route to the Pod to local host gateway(``antrea-gw0``) interface from the PtP device. This is
 illustrated by the diagram on the right.
 
-Antrea needs to satisfy that 
+Antrea needs to satisfy that
 1. All IP packets, sent on ``antrea-gw0`` in the host network, are received by the Pods exactly the same
-as if the OVS bridge had not been inserted. 
+as if the OVS bridge had not been inserted.
 1. All IP packets, sent by Pods, are received by other Pods or the host network exactly
 the same as if OVS bridge had not been inserted.
 1. There are no requirements on Pod MAC addresses as all MAC addresses stays within the OVS bridge.

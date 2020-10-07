@@ -1,8 +1,8 @@
 # Issue Management
 
 This document further describes the developer workflow and how issues are
-managed as introduced in [CONTRIBUTING.md](../CONTRIBUTING.md). Please read
-[CONTRIBUTING.md](../CONTRIBUTING.md) first before proceeding.
+managed as introduced in [CONTRIBUTING.md](/CONTRIBUTING.md). Please read
+[CONTRIBUTING.md](/CONTRIBUTING.md) first before proceeding.
 
 <!-- toc -->
 - [Developer Workflow Overview](#developer-workflow-overview)
@@ -44,7 +44,7 @@ processes described here will aid in accomplishing these goals.
 ## Creating New Issues and PRs
 
 Creating new issues and PRs is covered in detail in
-[CONTRIBUTING.md](../CONTRIBUTING.md).
+[CONTRIBUTING.md](/CONTRIBUTING.md).
 
 ## Good First Issues and Help Wanted
 
@@ -108,7 +108,7 @@ an opportunity to appeal the reason supplied.
 
 A PR is triaged in the following way:
 
-1. Automation will ensure that the submitter has signed the [CLA](../CONTRIBUTING.md#cla).
+1. Automation will ensure that the submitter has signed the [CLA](/CONTRIBUTING.md#cla).
 2. Automation will run CI tests against the submission to ensure compliance.
 3. Apply [`size/<size>`](#size) label to the submission. (TODO: we plan to
    automate this with a GitHub action and apply size based on lines of code).
@@ -126,7 +126,7 @@ already been assigned and apply the `lifecycle/active` label to signal that the
 issue is actively being worked on.
 
 Making code changes is covered in detail in
-[CONTRIBUTING.md](../CONTRIBUTING.md#github-workflow).
+[CONTRIBUTING.md](/CONTRIBUTING.md#github-workflow).
 
 If the issue kind is a `kind/bug`, ensure that the issue can be reproduced. If
 not, assign the `triage/not-reproducible` and request feedback from the original
@@ -297,7 +297,7 @@ To create a support issue or PR:
 * answer all of the questions in the support issue template
 * to provide comprehensive information about your cluster that will be useful in
   identifying and resolving the issue, you may want to consider producing a
-  ["support bundle"](antctl.md/#collecting-support-information) and uploading it
+  ["support bundle"](/docs/antctl.md/#collecting-support-information) and uploading it
   to a publicly-accessible location. **Be aware that the generated support
   bundle includes a lot of information, including logs, so please ensure that
   you do not share anything sensitive.**
