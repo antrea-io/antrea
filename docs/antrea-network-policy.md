@@ -53,13 +53,13 @@ as was the case initially.
 An example Tier might look like this:
 
 ```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
-kind: Tier
-metadata:
-  name: mytier
-spec:
-  priority: 10
-  description: "my custom tier"
+   apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+   kind: Tier
+     metadata:
+       name: mytier
+     spec:
+       priority: 10
+       description: "my custom tier"
 ```
 
 Tiers have the following characteristics:
