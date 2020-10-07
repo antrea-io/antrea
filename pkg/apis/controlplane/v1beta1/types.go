@@ -182,6 +182,7 @@ type NetworkPolicy struct {
 	// Rules is a list of rules to be applied to the selected Pods.
 	Rules []NetworkPolicyRule `json:"rules,omitempty" protobuf:"bytes,2,rep,name=rules"`
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
+	// Cannot be set in conjunction with any NetworkPolicyRule.AppliedToGroups in Rules.
 	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,3,rep,name=appliedToGroups"`
 	// Priority represents the relative priority of this Network Policy as compared to
 	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
@@ -220,6 +221,10 @@ type NetworkPolicyRule struct {
 	// action “nil” defaults to Allow action, which would be the case for rules created for
 	// K8s Network Policy.
 	Action *secv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1.RuleAction"`
+	// AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
+	// Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
+	// that this Rule is referred to.
+	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,7,opt,name=appliedToGroups"`
 }
 
 // Protocol defines network protocols supported for things like container ports.

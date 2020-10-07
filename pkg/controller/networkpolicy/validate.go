@@ -88,7 +88,8 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaPolicy(op, curCNP.Spec.Tier)
+		spec := curCNP.Spec
+		msg, allowed = v.validateAntreaPolicy(op, spec.Tier, spec.AppliedTo, append(spec.Ingress, spec.Egress...))
 	case "NetworkPolicy":
 		klog.V(2).Info("Validating Antrea NetworkPolicy CRD")
 		var curANP, oldANP secv1alpha1.NetworkPolicy
@@ -104,7 +105,8 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaPolicy(op, curANP.Spec.Tier)
+		spec := curANP.Spec
+		msg, allowed = v.validateAntreaPolicy(op, spec.Tier, spec.AppliedTo, append(spec.Ingress, spec.Egress...))
 	}
 	if msg != "" {
 		result = &metav1.Status{
@@ -118,20 +120,28 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 }
 
 // validateAntreaPolicy validates the admission of a Antrea NetworkPolicy CRDs
-func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier string) (string, bool) {
-	allowed := true
-	reason := ""
+func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier string, specAppliedTo []secv1alpha1.NetworkPolicyPeer,
+	allRules []secv1alpha1.Rule) (string, bool) {
+	allowed, reason := true, ""
 	switch op {
 	case admv1.Create, admv1.Update:
-		// "tier" must exist before referencing
-		if tier == "" || staticTierSet.Has(tier) {
-			// Empty Tier name corresponds to default Tier
-			break
+		// "tier" must exist before referencing. Empty Tier name corresponds to default Tier.
+		if tier != "" && !staticTierSet.Has(tier) && !v.tierExists(tier) {
+			allowed, reason = false, fmt.Sprintf("tier %s does not exist", tier)
 		}
-		if ok := v.tierExists(tier); !ok {
-			allowed = false
-			reason = fmt.Sprintf("tier %s does not exist", tier)
+    appliedToInSpec, appliedToInRules := specAppliedTo != nil, false
+    for i, rule := range allRules {
+    	if i == 0 {
+    		appliedToInRules = rule.AppliedTo != nil
 		}
+    	if (rule.AppliedTo != nil) != appliedToInRules {
+			allowed, reason = false, fmt.Sprintf("appliedTo field does not appear consistently in all rules")
+			return reason, allowed
+		}
+	}
+    if appliedToInSpec == appliedToInRules {
+		allowed, reason = false, fmt.Sprintf("appliedTo is set in both spec and rules")
+	}
 	case admv1.Delete:
 		// Delete of Antrea Policies have no validation
 		allowed = true

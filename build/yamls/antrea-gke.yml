@@ -99,6 +99,15 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          namespaceSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                          podSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     ports:
                       items:
                         properties:
@@ -135,6 +144,15 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          namespaceSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                          podSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     from:
                       items:
                         properties:
@@ -277,6 +295,14 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          podSelector:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     ports:
                       items:
                         properties:
@@ -315,6 +341,14 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          podSelector:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     from:
                       items:
                         properties:
@@ -353,7 +387,6 @@ spec:
               tier:
                 type: string
             required:
-            - appliedTo
             - priority
             type: object
         type: object

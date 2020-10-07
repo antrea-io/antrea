@@ -334,6 +334,16 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                      appliedTo:
+                        type: array
+                        items:
+                          type: object
+                          # Ensure that rule AppliedTo does not allow IPBlock field
+                          properties:
+                            podSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            namespaceSelector:
+                              x-kubernetes-preserve-unknown-fields: true
                 egress:
                   type: array
                   items:
@@ -369,6 +379,16 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                      appliedTo:
+                        type: array
+                        items:
+                          type: object
+                          # Ensure that rule AppliedTo does not allow IPBlock field
+                          properties:
+                            podSelector:
+                              x-kubernetes-preserve-unknown-fields: true
+                            namespaceSelector:
+                              x-kubernetes-preserve-unknown-fields: true
   scope: Cluster
   names:
     plural: clusternetworkpolicies
@@ -407,9 +427,8 @@ spec:
           type: object
           properties:
             spec:
-              # Ensure that Spec.AppliedTo and Spec.Priority fields are set
+              # Ensure that Spec.Priority field is set
               required:
-                - appliedTo
                 - priority
               type: object
               properties:
@@ -467,6 +486,15 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                      appliedTo:
+                        type: array
+                        items:
+                          type: object
+                          # Ensure that rule AppliedTo does not allow NamespaceSelector/IPBlock field
+                          properties:
+                            podSelector:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
                 egress:
                   type: array
                   items:
@@ -504,6 +532,15 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                      appliedTo:
+                        type: array
+                        items:
+                          type: object
+                          # Ensure that rule AppliedTo does not allow NamespaceSelector/IPBlock field
+                          properties:
+                            podSelector:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
   scope: Namespaced
   names:
     plural: networkpolicies
