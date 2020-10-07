@@ -27,6 +27,9 @@ NUM_WORKERS=2
 SUBNETS=""
 ENCAP_MODE=""
 PROXY=false
+PROMETHEUS=false
+
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 set -eo pipefail
 function echoerr {
@@ -46,6 +49,7 @@ where:
   --encap-mode: inter-node pod traffic encap mode, default is encap
   --proxy: enable Antrea proxy, default is false
   --antrea-cni: specifies install Antrea CNI in kind cluster, default is true.
+  --prometheus: enable Prometheus metrics listener for Antrea Controller and Agents, default is false
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
   --images: specifies images loaded to kind cluster, default is $IMAGES
   --subnets: a subnet creates a separate docker bridge network with assigned subnet that worker nodes may connect to. Default is empty all worker
@@ -266,8 +270,15 @@ EOF
     if [[ $PROXY == true ]]; then
       cmd+=" --proxy"
     fi
+    if [[ $PROMETHEUS == true ]]; then
+      cmd+=" --prometheus"
+    fi
     echo "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
     eval "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
+
+    if [[ $PROMETHEUS == true ]]; then
+      kubectl apply --context kind-$CLUSTER_NAME -f $THIS_DIR/../../build/yamls/antrea-prometheus-rbac.yml
+    fi
   fi
 
   # wait for cluster info
@@ -314,7 +325,11 @@ while [[ $# -gt 0 ]]
       ;;
     --proxy)
       PROXY=true
-      shift 2
+      shift
+      ;;
+    --prometheus)
+      PROMETHEUS=true
+      shift
       ;;
     --subnets)
       SUBNETS="$2"

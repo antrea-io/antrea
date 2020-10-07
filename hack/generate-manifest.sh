@@ -29,6 +29,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --proxy                       Generate a manifest with Antrea proxy enabled
         --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
+        --prometheus                  Generate a manifest with Antrea Controller and Agent Prometheus metrics listener enabled
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
@@ -66,6 +67,7 @@ TUN_TYPE="geneve"
 VERBOSE_LOG=false
 ON_DELETE=false
 COVERAGE=false
+PROMETHEUS=false
 
 while [[ $# -gt 0 ]]
 do
@@ -98,6 +100,10 @@ case $key in
     ;;
     --np)
     NP=true
+    shift
+    ;;
+    --prometheus)
+    PROMETHEUS=true
     shift
     ;;
     --keep)
@@ -215,6 +221,11 @@ fi
 if $NP; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-controller.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
+fi
+
+if $PROMETHEUS; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enablePrometheusMetrics[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enablePrometheusMetrics: true/" antrea-controller.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enablePrometheusMetrics[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enablePrometheusMetrics: true/" antrea-agent.conf
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then

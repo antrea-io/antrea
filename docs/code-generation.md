@@ -1,4 +1,4 @@
-# Code Generation
+# Code and Documentation Generation
 
 ## CNI
 
@@ -28,3 +28,14 @@ generated in a sub-package called `testing`. For example, the mock code for the 
 `pkg/foo/bar` will be generated to `pkg/foo/bar/testing/mock_bar.go`, and you can import it via `pkg/foo/bar/testing`.
 
 Same as above, you can re-generate the mock source code (with `mockgen`) by invoking `make codegen`.
+
+## Generated Documentation
+
+[Prometheus integration document](/docs/prometheus-integration.md) contains a 
+list of supported metrics, which could be affected by third party component 
+changes. The collection of metrics is done from a running Kind deployment, in 
+order to reflect the current list of metrics which is exposed by Antrea 
+Controller and Agents.
+
+To regenerate the metrics list within the document, use [make-metrics-doc.sh](/hack/make-metrics-doc.sh)
+with document location as a parameter.
