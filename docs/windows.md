@@ -27,7 +27,7 @@ directly without Pod, please see [Manually run kube-proxy and antrea-agent on Wi
 section for details.
 
 ### Antrea Windows demo
-Watch this [demo video](https://www.youtube.com/watch?v=xjhizZ3BJzQ) of running
+Watch this [demo video](https://www.youtube.com/watch?v=NjeVPGgaNFU) of running
 Antrea in a Kubernetes cluster with both Linux and Windows nodes. The demo also
 shows the Antrea OVS bridge configuration on a Windows Node, NetworkPolicy
 enforcement for Windows Pods, and Antrea Traceflow from Octant. Note, OVS driver
