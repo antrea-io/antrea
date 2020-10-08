@@ -383,6 +383,16 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in 
 	return nil
 }
 
+func Convert_controlplane_NetworkPolicy_To_v1beta1_NetworkPolicy(in *controlplane.NetworkPolicy, out *NetworkPolicy, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	out.Rules = *(*[]NetworkPolicyRule)(unsafe.Pointer(&in.Rules))
+	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
+	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
+	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))
+	out.SourceRef = (*NetworkPolicyReference)(unsafe.Pointer(in.SourceRef))
+	return nil
+}
+
 func Convert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(in *controlplane.NetworkPolicyRule, out *NetworkPolicyRule, s conversion.Scope) error {
 	out.Direction = Direction(in.Direction)
 	if err := Convert_controlplane_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(&in.From, &out.From, s); err != nil {

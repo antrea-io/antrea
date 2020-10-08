@@ -114,6 +114,7 @@ func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *controlplane.NetworkPolicy
 	out.AppliedToGroups = in.AppliedToGroups
 	out.Priority = in.Priority
 	out.TierPriority = in.TierPriority
+	out.AppliedToPerRule = in.AppliedToPerRule
 }
 
 // NetworkPolicyKeyFunc knows how to get the key of a NetworkPolicy.

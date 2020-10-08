@@ -182,10 +182,9 @@ type NetworkPolicy struct {
 	// Rules is a list of rules to be applied to the selected Pods.
 	Rules []NetworkPolicyRule `json:"rules,omitempty" protobuf:"bytes,2,rep,name=rules"`
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
-	// Cannot be set in conjunction with any NetworkPolicyRule.AppliedToGroups in Rules.
 	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,3,rep,name=appliedToGroups"`
 	// Priority represents the relative priority of this Network Policy as compared to
-	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+	// other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.
 	Priority *float64 `json:"priority,omitempty" protobuf:"fixed64,4,opt,name=priority"`
 	// TierPriority represents the priority of the Tier associated with this Network
 	// Policy. The TierPriority will remain nil for K8s NetworkPolicy.

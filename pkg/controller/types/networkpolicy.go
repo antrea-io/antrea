@@ -94,7 +94,7 @@ type AddressGroup struct {
 // NetworkPolicy describes what network traffic is allowed for a set of GroupMembers.
 type NetworkPolicy struct {
 	SpanMeta
-	// UID of the internal Network Policy.
+	// UID of the internal NetworkPolicy.
 	UID types.UID
 	// Name of the internal Network Policy, must be unique across all Network Policy types.
 	Name string
@@ -102,8 +102,8 @@ type NetworkPolicy struct {
 	Generation int64
 	// Reference to the original Network Policy.
 	SourceRef *controlplane.NetworkPolicyReference
-	// Priority represents the relative priority of this Network Policy as compared to
-	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+	// Priority represents the relative priority of this NetworkPolicy as compared to
+	// other NetworkPolicies. Priority will be unset (nil) for K8s NetworkPolicy.
 	Priority *float64
 	// Rules is a list of rules to be applied to the selected GroupMembers.
 	Rules []controlplane.NetworkPolicyRule
@@ -112,4 +112,7 @@ type NetworkPolicy struct {
 	// TierPriority represents the priority of the Tier associated with this Network
 	// Policy.
 	TierPriority *int32
+	// AppliedToPerRule tracks if appliedTo is set per rule basis rather than in policy spec.
+	// Must be false for K8s NetworkPolicy.
+	AppliedToPerRule bool
 }

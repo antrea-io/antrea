@@ -159,6 +159,9 @@ type NetworkPolicy struct {
 	TierPriority *int32
 	// Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
 	SourceRef *NetworkPolicyReference
+	// AppliedToPerRule tracks if appliedTo is set per rule basis rather than in policy spec.
+	// Must be false for K8s NetworkPolicy.
+	AppliedToPerRule bool
 }
 
 // Direction defines traffic direction of NetworkPolicyRule.
