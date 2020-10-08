@@ -42,6 +42,7 @@ import (
 	opslisters "github.com/vmware-tanzu/antrea/pkg/client/listers/ops/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 type icmpType uint8
@@ -76,6 +77,7 @@ type Controller struct {
 	traceflowListerSynced  cache.InformerSynced
 	ovsBridgeClient        ovsconfig.OVSBridgeClient
 	ofClient               openflow.Client
+	networkPolicyQuerier   querier.AgentNetworkPolicyInfoQuerier
 	interfaceStore         interfacestore.InterfaceStore
 	networkConfig          *config.NetworkConfig
 	nodeConfig             *config.NodeConfig
@@ -95,6 +97,7 @@ func NewTraceflowController(
 	traceflowClient clientsetversioned.Interface,
 	traceflowInformer opsinformers.TraceflowInformer,
 	client openflow.Client,
+	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
@@ -108,6 +111,7 @@ func NewTraceflowController(
 		traceflowListerSynced: traceflowInformer.Informer().HasSynced,
 		ovsBridgeClient:       ovsBridgeClient,
 		ofClient:              client,
+		networkPolicyQuerier:  npQuerier,
 		interfaceStore:        interfaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,

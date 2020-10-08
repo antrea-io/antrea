@@ -35,6 +35,7 @@ type AgentNetworkPolicyInfoQuerier interface {
 	GetAddressGroups() []cpv1beta.AddressGroup
 	GetAppliedToGroups() []cpv1beta.AppliedToGroup
 	GetAppliedNetworkPolicies(pod, namespace string, npFilter *NetworkPolicyQueryFilter) []cpv1beta.NetworkPolicy
+	GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *cpv1beta.NetworkPolicyReference
 }
 
 type ControllerNetworkPolicyInfoQuerier interface {

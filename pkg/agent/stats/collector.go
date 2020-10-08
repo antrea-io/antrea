@@ -26,6 +26,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
@@ -52,18 +53,20 @@ type Collector struct {
 	// antrea-controller.
 	antreaClientProvider agent.AntreaClientProvider
 	// ofClient is the Openflow interface that can fetch the statistic of the Openflow entries.
-	ofClient openflow.Client
+	ofClient             openflow.Client
+	networkPolicyQuerier querier.AgentNetworkPolicyInfoQuerier
 	// lastStatsCollection is the last statistics that has been reported to antrea-controller successfully.
 	// It is used to calculate the delta of the statistics that will be reported.
 	lastStatsCollection *statsCollection
 }
 
-func NewCollector(antreaClientProvider agent.AntreaClientProvider, ofClient openflow.Client) *Collector {
+func NewCollector(antreaClientProvider agent.AntreaClientProvider, ofClient openflow.Client, npQuerier querier.AgentNetworkPolicyInfoQuerier) *Collector {
 	nodeName, _ := env.GetNodeName()
 	manager := &Collector{
 		nodeName:             nodeName,
 		antreaClientProvider: antreaClientProvider,
 		ofClient:             ofClient,
+		networkPolicyQuerier: npQuerier,
 	}
 	return manager
 }
@@ -99,16 +102,12 @@ func (m *Collector) Run(stopCh <-chan struct{}) {
 // collect collects the stats of Openflow rules, maps them to the stats of NetworkPolicies.
 // It returns a map from NetworkPolicyReferences to their stats.
 func (m *Collector) collect() *statsCollection {
-	// TODO: The following process is not atomic, there's a chance that the ofID is released and reused by another
-	//  NetworkPolicy rule in-between, leading to incorrect metrics. We should return relevant NetworkPolicy references
-	//  along with metrics to avoid it.
 	ruleStatsMap := m.ofClient.NetworkPolicyMetrics()
 	npStatsMap := map[types.UID]*statsv1alpha1.TrafficStats{}
 	acnpStatsMap := map[types.UID]*statsv1alpha1.TrafficStats{}
 	anpStatsMap := map[types.UID]*statsv1alpha1.TrafficStats{}
 	for ofID, ruleStats := range ruleStatsMap {
-		policyRef := m.ofClient.GetPolicyFromConjunction(ofID)
-		// Same as above, this may be because the NetworkPolicy is removed right after the metrics are fetched.
+		policyRef := m.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ofID)
 		if policyRef == nil {
 			klog.Infof("Cannot find NetworkPolicy that has ofID %v", ofID)
 			continue

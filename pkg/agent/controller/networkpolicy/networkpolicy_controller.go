@@ -322,6 +322,17 @@ func (c *Controller) GetAppliedToGroups() []v1beta2.AppliedToGroup {
 	return c.ruleCache.GetAppliedToGroups()
 }
 
+func (c *Controller) GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *v1beta2.NetworkPolicyReference {
+	rule, err := c.reconciler.GetRuleByFlowID(ruleFlowID)
+	if err != nil {
+		klog.Errorf("Error when getting network policy by rule flow ID: %v", err)
+	}
+	if rule == nil {
+		return nil
+	}
+	return rule.PolicyRef
+}
+
 func (c *Controller) GetControllerConnectionStatus() bool {
 	// When the watchers are connected, controller connection status is true. Otherwise, it is false.
 	return c.addressGroupWatcher.isConnected() && c.appliedToGroupWatcher.isConnected() && c.networkPolicyWatcher.isConnected()
@@ -364,6 +375,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
+
+	klog.Infof("Starting IDAllocator worker now to maintain async rule cache.")
+	go wait.Until(c.reconciler.GetIDAllocatorWorker(), time.Second, stopCh)
 
 	<-stopCh
 }
