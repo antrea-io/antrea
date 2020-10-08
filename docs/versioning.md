@@ -143,7 +143,7 @@ Each Antrea minor release should support [maintained K8s
 releases](https://kubernetes.io/docs/setup/release/version-skew-policy/#supported-versions)
 at the time of release (3 up to K8s 1.19, 4 after that). For example, at the
 time that Antrea 0.10 was released, the latest K8s version was 1.19; as a result
-we guarantee that 0.10 supports at least 1.19, 1.18 and 1.17 (in practice is
+we guarantee that 0.10 supports at least 1.19, 1.18 and 1.17 (in practice it
 also supports K8s 1.16).
 
 In addition, we strive to support the K8s versions used by default in
@@ -167,7 +167,7 @@ Stable metrics are guaranteed to not change; specifically, stability means:
 
 Eventually, even a stable metric can be deleted. In this case, the metric must
 be marked as deprecated first and the metric must stay deprecated for at least
-one minor release. The [CHANGELOG] must announced both metric deprecations and
+one minor release. The [CHANGELOG] must announce both metric deprecations and
 metric deletions.
 
 Before deprecation:
@@ -209,7 +209,7 @@ removal of new versions for this API must respect the ["graceful" upgrade
 guarantee](#antrea-upgrade-and-supported-version-skew). The `controlplane` API
 (which is exposed using the aggregation layer) is often referred to as an
 "internal" API as it is used by the Antrea components to communicate with each
-other, and is usually noit consummed by end users, e.g. cluster admins. However,
+other, and is usually not consummed by end users, e.g. cluster admins. However,
 this API may also be used for integration with other software, which is why we
 abide to the same deprecation policy as for other more "user-facing" APIs
 (e.g. Antrea-native policy CRDs).
