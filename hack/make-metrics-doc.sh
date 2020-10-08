@@ -65,7 +65,7 @@ function format_metrics() {
                 	last_pfx=$metric_pfx
         	fi
 	        metric_help=$(grep " $metric " <<< $metrics_help | sed "s/.*$metric //")
-        	echo "**$metric:** $metric_help"
+        	echo "- **$metric:** $metric_help"
 	done
 }
 
