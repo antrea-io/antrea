@@ -1442,7 +1442,7 @@ func schema_pkg_apis_controlplane_v1beta1_NetworkPolicy(ref common.ReferenceCall
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Priority represents the relative priority of this Network Policy as compared to other Network Policies. Priority will be unset (nil) for K8s Network Policy.",
+							Description: "Priority represents the relative priority of this Network Policy as compared to other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.",
 							Type:        []string{"number"},
 							Format:      "double",
 						},
@@ -1458,6 +1458,13 @@ func schema_pkg_apis_controlplane_v1beta1_NetworkPolicy(ref common.ReferenceCall
 						SchemaProps: spec.SchemaProps{
 							Description: "Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.",
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyReference"),
+						},
+					},
+					"appliedToPerRule": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AppliedToPerRule tracks if appliedTo is set per rule basis rather than in policy spec. Must be false for K8s NetworkPolicy.",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},

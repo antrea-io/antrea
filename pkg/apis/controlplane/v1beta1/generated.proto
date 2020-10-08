@@ -188,7 +188,7 @@ message NetworkPolicy {
   repeated string appliedToGroups = 3;
 
   // Priority represents the relative priority of this Network Policy as compared to
-  // other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+  // other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.
   optional double priority = 4;
 
   // TierPriority represents the priority of the Tier associated with this Network
@@ -197,6 +197,10 @@ message NetworkPolicy {
 
   // Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
   optional NetworkPolicyReference sourceRef = 6;
+
+  // AppliedToPerRule tracks if appliedTo is set per rule basis rather than in policy spec.
+  // Must be false for K8s NetworkPolicy.
+  optional bool appliedToPerRule = 7;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

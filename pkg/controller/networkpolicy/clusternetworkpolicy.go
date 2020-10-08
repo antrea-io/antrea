@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
@@ -123,35 +124,54 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 // in case of ADD event or modified and store the updated instance, in case
 // of an UPDATE event.
 func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.ClusterNetworkPolicy) *antreatypes.NetworkPolicy {
-	appliedToGroupNames := make([]string, 0, len(cnp.Spec.AppliedTo))
-	// Create AppliedToGroup for each AppliedTo present in
-	// ClusterNetworkPolicy spec.
+	appliedToPerRule := cnp.Spec.AppliedTo == nil
+	// appliedToGroupNames tracks all distinct appliedToGroups referred by the ClusterNetworkPolicy,
+	// both in the spec section and in ingress/egress rules.
+	appliedToGroupNamesSet := sets.String{}
+	// Create AppliedToGroup for each AppliedTo present in ClusterNetworkPolicy spec.
 	for _, at := range cnp.Spec.AppliedTo {
-		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector))
+		appliedToGroupNamesSet.Insert(n.createAppliedToGroup(
+			"", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector))
 	}
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(cnp.Spec.Ingress)+len(cnp.Spec.Egress))
-	// Compute NetworkPolicyRule for Egress Rule.
+	// Compute NetworkPolicyRule for Ingress Rule.
 	for idx, ingressRule := range cnp.Spec.Ingress {
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports)
+		appliedToGroupNamesForRule := make([]string, len(ingressRule.AppliedTo))
+		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
+		for i, at := range ingressRule.AppliedTo {
+			atGroup := n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
+			appliedToGroupNamesForRule[i] = atGroup
+			appliedToGroupNamesSet.Insert(atGroup)
+		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
-			Direction: controlplane.DirectionIn,
-			From:      *n.toAntreaPeerForCRD(ingressRule.From, cnp, controlplane.DirectionIn, namedPortExists),
-			Services:  services,
-			Action:    ingressRule.Action,
-			Priority:  int32(idx),
+			Direction:       controlplane.DirectionIn,
+			From:            *n.toAntreaPeerForCRD(ingressRule.From, cnp, controlplane.DirectionIn, namedPortExists),
+			Services:        services,
+			Action:          ingressRule.Action,
+			Priority:        int32(idx),
+			AppliedToGroups: appliedToGroupNamesForRule,
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
 	for idx, egressRule := range cnp.Spec.Egress {
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports)
+		appliedToGroupNamesForRule := make([]string, len(egressRule.AppliedTo))
+		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
+		for i, at := range egressRule.AppliedTo {
+			atGroup := n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
+			appliedToGroupNamesForRule[i] = atGroup
+			appliedToGroupNamesSet.Insert(atGroup)
+		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
-			Direction: controlplane.DirectionOut,
-			To:        *n.toAntreaPeerForCRD(egressRule.To, cnp, controlplane.DirectionOut, namedPortExists),
-			Services:  services,
-			Action:    egressRule.Action,
-			Priority:  int32(idx),
+			Direction:       controlplane.DirectionOut,
+			To:              *n.toAntreaPeerForCRD(egressRule.To, cnp, controlplane.DirectionOut, namedPortExists),
+			Services:        services,
+			Action:          egressRule.Action,
+			Priority:        int32(idx),
+			AppliedToGroups: appliedToGroupNamesForRule,
 		})
 	}
 	tierPriority := n.getTierPriority(cnp.Spec.Tier)
@@ -163,11 +183,12 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			Name: cnp.Name,
 			UID:  cnp.UID,
 		},
-		UID:             cnp.UID,
-		AppliedToGroups: appliedToGroupNames,
-		Rules:           rules,
-		Priority:        &cnp.Spec.Priority,
-		TierPriority:    &tierPriority,
+		UID:              cnp.UID,
+		AppliedToGroups:  appliedToGroupNamesSet.List(),
+		Rules:            rules,
+		Priority:         &cnp.Spec.Priority,
+		TierPriority:     &tierPriority,
+		AppliedToPerRule: appliedToPerRule,
 	}
 	return internalNetworkPolicy
 }
