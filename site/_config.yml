@@ -6,7 +6,7 @@ description: Validate your Kubernetes configuration
 url: https://github.com/vmware-tanzu/antrea
 logo: antrea-logo.svg
 twitter:
-  username: projectoctant
+  username: projectantrea
   card: summary
 vm_logo: vm-logo.png
 gh_repo: https://github.com/vmware-tanzu/antrea
@@ -23,7 +23,7 @@ footer:
 footer_social_links:
   Twitter:
     fa_icon: fab fa-twitter
-    url: https://github.com/vmware/projectantrea
+    url: https://twitter.com/projectantrea
   Slack:
     fa_icon: fab fa-slack
     url: https://kubernetes.slack.com/archives/CR2J23M0X
