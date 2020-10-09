@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -148,13 +149,12 @@ func testInvalidACNPNoPriority(t *testing.T) {
 	invalidNpErr := errors.New("invalid Antrea ClusterNetworkPolicy accepted")
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-no-priority").SetAppliedToGroup(map[string]string{"pod": "a"}, nil, nil, nil)
-	np := metav1.Object{builder.Get()}
-	if acnp, ok := np.(*secv1alpha1.ClusterNetworkPolicy); ok {
-		log.Debugf("creating ACNP %v", acnp.Name)
-		_, err := k8sUtils.CreateOrUpdateCNP(acnp)
-		if err != nil {
-			failOnError(invalidNpErr, t)
-		}
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	_, err := k8sUtils.CreateOrUpdateCNP(acnp)
+	// Above creation of ACNP must fail as it is an invalid spec.
+	if err == nil {
+		failOnError(invalidNpErr, t)
 	}
 }
 
