@@ -46,7 +46,7 @@ type ExternalEntitySpec struct {
 type Endpoint struct {
 	// IP associated with this endpoint.
 	IP string `json:"ip,omitempty"`
-	// Name identifies this endpoint. Could be the interface name in case of VMs.
+	// Name identifies this endpoint. Could be the network interface name in case of VMs.
 	// +optional
 	Name string `json:"name,omitempty"`
 }
