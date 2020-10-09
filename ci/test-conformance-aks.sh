@@ -21,7 +21,6 @@ function echoerr {
 }
 
 REGION="westus"
-K8S_VERSION="1.16.10"
 RESOURCE_GROUP="antrea-ci-rg"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
@@ -38,7 +37,7 @@ Setup a AKS cluster to run K8s e2e community tests (Conformance & Network Policy
 
         --cluster-name           The cluster name to be used for the generated AKS cluster. Must be specified if not run in Jenkins environment.
         --kubeconfig             Path to save kubeconfig of generated AKS cluster.
-        --k8s-version            AKS K8s cluster version. Defaults to 1.16.10.
+        --k8s-version            AKS K8s cluster version. Defaults to first supported version in the Azure region.
         --azure-app-id           Azure Service Principal Application ID.
         --azure-tenant-id        Azure Service Principal Tenant ID.
         --azure-password         Azure Service Principal Password.
@@ -131,6 +130,10 @@ function setup_aks() {
 
     echo '=== Creating a resource group ==='
     az group create --name ${RESOURCE_GROUP} --location $REGION
+
+    if [[ -z ${K8S_VERSION+x} ]]; then
+        K8S_VERSION=$(az aks get-versions -l ${REGION} | grep "orchestratorVersion" | head -n1 | cut -d'"' -f4)
+    fi
 
     echo '=== Creating a cluster in AKS ==='
     az aks create \
