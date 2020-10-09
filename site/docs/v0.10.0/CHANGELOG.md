@@ -11,13 +11,6 @@ Some experimental features can be enabled / disabled using [Feature Gates](featu
 
 ## Unreleased
 
-## 0.10.1 - 2020-09-30
-
-### Fixed
-
-- Fix OpenAPI spec for the ClusterNetworkPolicy CRD: the incorrect spec was causing all CNPs with egress rules to be rejected by kubectl and the K8s apiserver. ([#1314](https://github.com/vmware-tanzu/antrea/pull/1314), [@abhiraut])
-   * this only affects users which enable the `AntreaPolicy` Feature Gate in their cluster and create ClusterNetworkPolicies
-
 ## 0.10.0 - 2020-09-24
 
 Includes all the bug fixes from [0.9.1], [0.9.2] and [0.9.3].
