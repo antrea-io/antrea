@@ -289,9 +289,8 @@ spec:
           type: object
           properties:
             spec:
-              # Ensure that Spec.AppliedTo and Spec.Priority fields are set
+              # Ensure that Spec.Priority field is set
               required:
-                - appliedTo
                 - priority
               type: object
               properties:

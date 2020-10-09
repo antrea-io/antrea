@@ -48,7 +48,7 @@ type NetworkPolicySpec struct {
 	// Select workloads on which the rules will be applied to. Cannot be set in
 	// conjunction with AppliedTo in each rule.
 	// +optional
-	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
 	// Set of ingress rules evaluated based on the order in which they are set.
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.
@@ -115,7 +115,7 @@ type Rule struct {
 	// Select workloads on which this rule will be applied to. Cannot be set in
 	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
 	// +optional
-	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.
@@ -143,6 +143,7 @@ type NetworkPolicyPeer struct {
 	// ExternalEntities are matched from Namespaces matched by the
 	// NamespaceSelector.
 	// Cannot be set with any other selector except NamespaceSelector.
+	// +optional
 	ExternalEntitySelector *metav1.LabelSelector `json:"externalEntitySelector,omitempty"`
 }
 
@@ -216,7 +217,8 @@ type ClusterNetworkPolicySpec struct {
 	Priority float64 `json:"priority"`
 	// Select workloads on which the rules will be applied to. Cannot be set in
 	// conjunction with AppliedTo in each rule.
-	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
+	// +optional
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
 	// Set of ingress rules evaluated based on the order in which they are set.
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.

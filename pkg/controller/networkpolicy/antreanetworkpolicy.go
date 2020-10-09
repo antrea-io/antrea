@@ -138,11 +138,11 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 	for idx, ingressRule := range np.Spec.Ingress {
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports)
-		appliedToGroupNamesForRule := make([]string, len(ingressRule.AppliedTo))
+		var appliedToGroupNamesForRule []string
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
-		for i, at := range ingressRule.AppliedTo {
+		for _, at := range ingressRule.AppliedTo {
 			atGroup := n.createAppliedToGroup(np.Namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
-			appliedToGroupNamesForRule[i] = atGroup
+			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
 			appliedToGroupNamesSet.Insert(atGroup)
 		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
@@ -159,11 +159,11 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 	for idx, egressRule := range np.Spec.Egress {
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports)
-		appliedToGroupNamesForRule := make([]string, len(egressRule.AppliedTo))
+		var appliedToGroupNamesForRule []string
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
-		for i, at := range egressRule.AppliedTo {
+		for _, at := range egressRule.AppliedTo {
 			atGroup := n.createAppliedToGroup(np.Namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
-			appliedToGroupNamesForRule[i] = atGroup
+			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
 			appliedToGroupNamesSet.Insert(atGroup)
 		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
