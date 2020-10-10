@@ -97,8 +97,9 @@ func (ct *connTrackOvsCtl) ovsAppctlDumpConnections(zoneFilter uint16) ([]*flowe
 }
 
 // flowStringToAntreaConnection parses the flow string and converts to Antrea connection.
+// TODO: Flow string doesn't contain stoptime field, need to investigate how stop time is recorded and dumped.
 // Example of flow string:
-// "tcp,orig=(src=127.0.0.1,dst=8.7.6.5,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=8.7.6.5,dst=127.0.0.1,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397"
+// "tcp,orig=(src=10.10.1.2,dst=10.10.1.3,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=10.10.1.3,dst=10.10.1.2,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397"
 func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter.Connection, error) {
 	conn := flowexporter.Connection{}
 	flowSlice := strings.Split(flow, ",")
