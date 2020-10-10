@@ -15,7 +15,6 @@
 package e2e
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -146,7 +145,7 @@ func cleanupDefaultDenyNPs(k8s *KubernetesUtils, namespaces []string) error {
 }
 
 func testInvalidACNPNoPriority(t *testing.T) {
-	invalidNpErr := errors.New("invalid Antrea ClusterNetworkPolicy accepted")
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy accepted")
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-no-priority").SetAppliedToGroup(map[string]string{"pod": "a"}, nil, nil, nil)
 	acnp := builder.Get()
@@ -750,7 +749,7 @@ func TestAntreaPolicy(t *testing.T) {
 	defer teardownTest(t, data)
 	initialize(t, data)
 
-	t.Run("TestGroupValidateACNP", func(t *testing.T) {
+	t.Run("TestGroupValidateAntreaNativePolicies", func(t *testing.T) {
 		t.Run("Case=ACNPNoPriority", func(t *testing.T) { testInvalidACNPNoPriority(t) })
 	})
 
