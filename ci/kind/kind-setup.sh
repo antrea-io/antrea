@@ -29,6 +29,12 @@ ENCAP_MODE=""
 PROXY=false
 PROMETHEUS=false
 
+# The kind api versino changed between 3 and 4
+KIND_API_VERSION="kind.sigs.k8s.io/v1alpha3"
+if [[ ! `kind version | grep -q 9` ]] ; then 
+    KIND_API_VERSION="kind.x-k8s.io/v1alpha4"
+fi
+
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 set -eo pipefail
@@ -228,7 +234,7 @@ function create {
   config_file="/tmp/kind.yml"
   cat <<EOF > $config_file
 kind: Cluster
-apiVersion: kind.sigs.k8s.io/v1alpha3
+apiVersion: ${KIND_API_VERSION}
 networking:
   disableDefaultCNI: true
   podSubnet: $POD_CIDR
