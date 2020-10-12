@@ -462,6 +462,20 @@ func (mr *MockFlowMockRecorder) GetBundleMessage(arg0 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessage", reflect.TypeOf((*MockFlow)(nil).GetBundleMessage), arg0)
 }
 
+// IsDropFlow mocks base method
+func (m *MockFlow) IsDropFlow() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsDropFlow")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsDropFlow indicates an expected call of IsDropFlow
+func (mr *MockFlowMockRecorder) IsDropFlow() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDropFlow", reflect.TypeOf((*MockFlow)(nil).IsDropFlow))
+}
+
 // KeyString mocks base method
 func (m *MockFlow) KeyString() string {
 	m.ctrl.T.Helper()

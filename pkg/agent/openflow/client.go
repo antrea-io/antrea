@@ -735,7 +735,7 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 	}
 	c.conjMatchFlowLock.Lock()
 	defer c.conjMatchFlowLock.Unlock()
-	flows = []binding.Flow{}
+	// Copy default drop rules
 	for _, ctx := range c.globalConjMatchFlowCache {
 		if ctx.dropFlow != nil {
 			flows = append(
@@ -745,6 +745,20 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 					SetHardTimeout(300).
 					Action().SendToController(uint8(PacketInReasonTF)).
 					Done())
+		}
+	}
+	// Copy Antrea NetworkPolicy drop rules
+	for _, conj := range c.policyCache.List() {
+		for _, flow := range conj.(*policyRuleConjunction).metricFlows {
+			if flow.IsDropFlow() {
+				flows = append(
+					flows,
+					flow.CopyToBuilder(priorityNormal+2, false).
+						MatchIPDscp(dataplaneTag).
+						SetHardTimeout(300).
+						Action().SendToController(1).
+						Done())
+			}
 		}
 	}
 	return c.AddAll(flows)
