@@ -170,6 +170,9 @@ spec:
                 type: number
               tier:
                 type: string
+            required:
+            - appliedTo
+            - priority
             type: object
         type: object
     served: true
