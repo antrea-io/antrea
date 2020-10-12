@@ -7,13 +7,16 @@
 - [Tier](#tier)
   - [Tier CRDs](#tier-crds)
   - [Static tiers](#static-tiers)
-- [ClusterNetworkPolicy](#clusternetworkpolicy)
-  - [The ClusterNetworkPolicy resource](#the-clusternetworkpolicy-resource)
+  - [kubectl commands for Tier](#kubectl-commands-for-tier)
+- [Antrea ClusterNetworkPolicy](#antrea-clusternetworkpolicy)
+  - [The Antrea ClusterNetworkPolicy resource](#the-antrea-clusternetworkpolicy-resource)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
+  - [kubectl commands for Antrea ClusterNetworkPolicy](#kubectl-commands-for-antrea-clusternetworkpolicy)
 - [Antrea NetworkPolicy](#antrea-networkpolicy)
   - [The Antrea NetworkPolicy resource](#the-antrea-networkpolicy-resource)
-  - [Key differences from ClusterNetworkPolicy](#key-differences-from-clusternetworkpolicy)
+  - [Key differences from Antrea ClusterNetworkPolicy](#key-differences-from-antrea-clusternetworkpolicy)
+  - [kubectl commands for Antrea NetworkPolicy](#kubectl-commands-for-antrea-networkpolicy)
 - [Antrea Policy ordering based on priorities](#antrea-policy-ordering-based-on-priorities)
   - [Ordering based on Tier priority](#ordering-based-on-tier-priority)
   - [Ordering based on policy priority](#ordering-based-on-policy-priority)
@@ -110,16 +113,45 @@ still enforced before K8s NetworkPolicies. Thus, admin-created tiered Antrea
 Policy CRDs have a higher precedence than developer-created K8s
 NetworkPolicies.
 
-## ClusterNetworkPolicy
+### kubectl commands for Tier
 
-ClusterNetworkPolicy, one of the two Antrea Policy CRDs introduced, is a
-specification of how workloads within a cluster communicate with each other and
-other external endpoints. The ClusterNetworkPolicy is supposed to aid cluster
-admins to configure the security policy for the cluster, unlike K8s
-NetworkPolicy, which is aimed towards developers to secure their apps and
-affects Pods within the Namespace in which the K8s NetworkPolicy is created.
-Rules belonging to ClusterNetworkPolicies are enforced before any rule
-belonging to a K8s NetworkPolicy.
+The following kubectl commands can be used to retrieve Tier resources:
+
+```
+    # Use long name
+    kubectl get tiers
+
+    # Use long name with API Group
+    kubectl get tiers.security.antrea.tanzu.vmware.com
+
+    # Use short name
+    kubectl get tr
+
+    # Use short name with API Group
+    kubectl get tr.security.antrea.tanzu.vmware.com
+```
+
+All of the above commands produce output similar to what is shown below:
+
+```
+    NAME          PRIORITY   AGE
+    application   250        27h
+    emergency     5          27h
+    networkops    100        27h
+    platform      150        27h
+    securityops   50         27h
+```
+
+## Antrea ClusterNetworkPolicy
+
+Antrea ClusterNetworkPolicy (ACNP), one of the two Antrea Policy CRDs
+introduced, is a specification of how workloads within a cluster communicate
+with each other and other external endpoints. The ClusterNetworkPolicy is
+supposed to aid cluster admins to configure the security policy for the
+cluster, unlike K8s NetworkPolicy, which is aimed towards developers to secure
+their apps and affects Pods within the Namespace in which the K8s NetworkPolicy
+is created. Rules belonging to ClusterNetworkPolicies are enforced before any
+rule belonging to a K8s NetworkPolicy.
 
 **Note**: ClusterNetworkPolicy is currently in "Alpha" stage. In order to
 enable them, edit the Controller and Agent configuration in the `antrea`
@@ -142,7 +174,7 @@ ConfigMap as follows:
        AntreaPolicy: true
 ```
 
-### The ClusterNetworkPolicy resource
+### The Antrea ClusterNetworkPolicy resource
 
 An example ClusterNetworkPolicy might look like this:
 
@@ -208,9 +240,9 @@ can range from 1.0 to 10000.0.
 indeterministically. Users should therefore take care to use priorities to
 ensure the behavior they expect.
 
-**tier**: The `tier` field associates a CNP to an existing Tier. The `tier`
+**tier**: The `tier` field associates an ACNP to an existing Tier. The `tier`
 field can be set with the name of the Tier CRD to which this policy must be
-associated with. If not set, the CNP is associated with the lowest priority
+associated with. If not set, the ACNP is associated with the lowest priority
 default tier i.e. the "application" Tier.
 
 **ingress**: Each ClusterNetworkPolicy may consist of zero or more ordered
@@ -263,9 +295,34 @@ since Pod IPs are ephemeral and unpredictable.
 - Rules assume the priority in which they are written. i.e. rule set at top
   takes precedence over a rule set below it.
 
+### kubectl commands for Antrea ClusterNetworkPolicy
+
+The following kubectl commands can be used to retrieve ACNP resources:
+
+```
+    # Use long name
+    kubectl get clusternetworkpolicies
+
+    # Use long name with API Group
+    kubectl get clusternetworkpolicies.security.antrea.tanzu.vmware.com
+
+    # Use short name
+    kubectl get acnp
+
+    # Use short name with API Group
+    kubectl get acnp.security.antrea.tanzu.vmware.com
+```
+
+All of the above commands produce output similar to what is shown below:
+
+```
+    NAME       TIER        PRIORITY   AGE
+    test-cnp   emergency   5          54s
+```
+
 ## Antrea NetworkPolicy
 
-Antrea NetworkPolicy is another Policy CRD, which is similar to the
+Antrea NetworkPolicy (ANP) is another Policy CRD, which is similar to the
 ClusterNetworkPolicy CRD, however its scope is limited to a Namespace.
 The purpose of introducing this CRD is to allow admins to take advantage of
 advanced NetworkPolicy features and apply them within a Namespace to
@@ -318,7 +375,7 @@ spec:
             port: 5978
 ```
 
-### Key differences from ClusterNetworkPolicy
+### Key differences from Antrea ClusterNetworkPolicy
 
 Antrea NetworkPolicy shares it's spec with ClusterNetworkPolicy. However,
 the following documents some of the key differences between the two Antrea
@@ -331,6 +388,28 @@ Policy CRDs.
 - `podSelector` without a `namespaceSelector`, set within a NetworkPolicy Peer
   of any rule, selects Pods from the Namespace in which the Antrea
   NetworkPolicy is created. This behavior is similar to the K8s NetworkPolicy.
+
+### kubectl commands for Antrea NetworkPolicy
+
+The following kubectl commands can be used to retrieve ANP resources:
+
+```
+    # Use long name with API Group
+    kubectl get networkpolicies.security.antrea.tanzu.vmware.com
+
+    # Use short name
+    kubectl get anp
+
+    # Use short name with API Group
+    kubectl get anp.security.antrea.tanzu.vmware.com
+```
+
+All of the above commands produce output similar to what is shown below:
+
+```
+    NAME       TIER          PRIORITY   AGE
+    test-anp   securityops   5          5s
+```
 
 ## Antrea Policy ordering based on priorities
 
@@ -350,7 +429,7 @@ Within a tier, Antrea Policy CRDs are ordered by the `priority` at the policy
 level. Thus, the policy with the highest precedence (lowest priority number
 value) is enforced first. This ordering is performed solely based on the
 `priority` assigned as opposed to the "Kind" of the resource, i.e. the relative
-ordering between a [ClusterNetworkPolicy resource](#clusternetworkpolicy) and an [Antrea NetworkPolicy
+ordering between a [ClusterNetworkPolicy resource](#antrea-clusternetworkpolicy) and an [Antrea NetworkPolicy
 resource](#antrea-networkpolicy) within a Tier depends only on the `priority`
 set in each of the two resources.
 
@@ -359,9 +438,9 @@ set in each of the two resources.
 Within a policy, rules are enforced in the order in which they are set. For example,
 consider the following:
 
-- CNP1{tier: application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
+- ACNP1{tier: application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
 - ANP1{tier: application, priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
-- CNP3{tier: emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
+- ACNP3{tier: emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
 
 This translates to the following order:
 - Ingress rules: ir3.1 > ir3.2 > ir1.1 -> ir1.2 -> ir2.1 -> ir2.2
