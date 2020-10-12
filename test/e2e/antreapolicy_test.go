@@ -144,6 +144,19 @@ func cleanupDefaultDenyNPs(k8s *KubernetesUtils, namespaces []string) error {
 	return nil
 }
 
+func testInvalidACNPNoPriority(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy accepted")
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-no-priority").SetAppliedToGroup(map[string]string{"pod": "a"}, nil, nil, nil)
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	_, err := k8sUtils.CreateOrUpdateCNP(acnp)
+	// Above creation of ACNP must fail as it is an invalid spec.
+	if err == nil {
+		failOnError(invalidNpErr, t)
+	}
+}
+
 // testCNPAllowXBtoA tests traffic from X/B to pods with label A, after applying the default deny
 // k8s NetworkPolicies in all namespaces and CNP to allow X/B to A.
 func testCNPAllowXBtoA(t *testing.T) {
@@ -735,6 +748,10 @@ func TestAntreaPolicy(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	initialize(t, data)
+
+	t.Run("TestGroupValidateAntreaNativePolicies", func(t *testing.T) {
+		t.Run("Case=ACNPNoPriority", func(t *testing.T) { testInvalidACNPNoPriority(t) })
+	})
 
 	t.Run("TestGroupDefaultDENY", func(t *testing.T) {
 		// testcases below require default deny k8s NetworkPolicies to work
