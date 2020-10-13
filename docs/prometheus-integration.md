@@ -125,156 +125,159 @@ used by the Antrea components.
 Below is a list of metrics, provided by the components and by 3rd parties.
 
 ## Antrea Agent Metrics
-**antrea_agent_conntrack_antrea_connection_count:** Number of connections
+- **antrea_agent_conntrack_antrea_connection_count:** Number of connections
 in the Antrea ZoneID of the conntrack table. This metric gets updated at
 an interval specified by flowPollInterval, a configuration parameter for
 the Agent.
-**antrea_agent_conntrack_max_connection_count:** Size of the conntrack
+- **antrea_agent_conntrack_max_connection_count:** Size of the conntrack
 table. This metric gets updated at an interval specified by flowPollInterval,
 a configuration parameter for the Agent.
-**antrea_agent_conntrack_total_connection_count:** Number of connections in
-the conntrack table. This metric gets updated at an interval specified by
-flowPollInterval, a configuration parameter for the Agent.
-**antrea_agent_egress_networkpolicy_rule_count:** Number of egress
+- **antrea_agent_conntrack_total_connection_count:** Number of connections
+in the conntrack table. This metric gets updated at an interval specified
+by flowPollInterval, a configuration parameter for the Agent.
+- **antrea_agent_egress_networkpolicy_rule_count:** Number of egress
 networkpolicy rules on local node which are managed by the Antrea Agent.
-**antrea_agent_ingress_networkpolicy_rule_count:** Number of ingress
+- **antrea_agent_ingress_networkpolicy_rule_count:** Number of ingress
 networkpolicy rules on local node which are managed by the Antrea Agent.
-**antrea_agent_local_pod_count:** Number of pods on local node which are
+- **antrea_agent_local_pod_count:** Number of pods on local node which are
 managed by the Antrea Agent.
-**antrea_agent_networkpolicy_count:** Number of networkpolicies on local
+- **antrea_agent_networkpolicy_count:** Number of networkpolicies on local
 node which are managed by the Antrea Agent.
-**antrea_agent_ovs_flow_count:** Flow count for each OVS flow table. The
+- **antrea_agent_ovs_flow_count:** Flow count for each OVS flow table. The
 TableID is used as a label.
-**antrea_agent_ovs_flow_ops_count:** Number of OVS flow operations, partitioned
-by operation type (add, modify and delete).
-**antrea_agent_ovs_flow_ops_error_count:** Number of OVS flow operation
+- **antrea_agent_ovs_flow_ops_count:** Number of OVS flow operations,
+partitioned by operation type (add, modify and delete).
+- **antrea_agent_ovs_flow_ops_error_count:** Number of OVS flow operation
 errors, partitioned by operation type (add, modify and delete).
-**antrea_agent_ovs_flow_ops_latency_milliseconds:** The latency of OVS flow
-operations, partitioned by operation type (add, modify and delete).
-**antrea_agent_ovs_total_flow_count:** Total flow count of all OVS flow tables.
-**antrea_agent_runtime_info:** Antrea agent runtime info (Deprecated since
+- **antrea_agent_ovs_flow_ops_latency_milliseconds:** The latency of OVS
+flow operations, partitioned by operation type (add, modify and delete).
+- **antrea_agent_ovs_total_flow_count:** Total flow count of all OVS flow
+tables.
+- **antrea_agent_runtime_info:** Antrea agent runtime info (Deprecated since
 Antrea 0.10.0), defined as labels. The value of the gauge is always set to 1.
 
 ## Antrea Controller Metrics
-**antrea_controller_address_group_processed:** The total number of
+- **antrea_controller_address_group_processed:** The total number of
 address-group processed
-**antrea_controller_address_group_sync_duration_milliseconds:** The duration
+- **antrea_controller_address_group_sync_duration_milliseconds:** The duration
 of syncing address-group
-**antrea_controller_applied_to_group_processed:** The total number of
+- **antrea_controller_applied_to_group_processed:** The total number of
 applied-to-group processed
-**antrea_controller_applied_to_group_sync_duration_milliseconds:** The
+- **antrea_controller_applied_to_group_sync_duration_milliseconds:** The
 duration of syncing applied-to-group
-**antrea_controller_length_address_group_queue:** The length of
+- **antrea_controller_length_address_group_queue:** The length of
 AddressGroupQueue
-**antrea_controller_length_applied_to_group_queue:** The length of
+- **antrea_controller_length_applied_to_group_queue:** The length of
 AppliedToGroupQueue
-**antrea_controller_length_network_policy_queue:** The length of
+- **antrea_controller_length_network_policy_queue:** The length of
 InternalNetworkPolicyQueue
-**antrea_controller_network_policy_processed:** The total number of
+- **antrea_controller_network_policy_processed:** The total number of
 internal-networkpolicy processed
-**antrea_controller_network_policy_sync_duration_milliseconds:** The duration
-of syncing internal-networkpolicy
-**antrea_controller_runtime_info:** Antrea controller runtime info (Deprecated
-since Antrea 0.10.0), defined as labels. The value of the gauge is always
-set to 1.
+- **antrea_controller_network_policy_sync_duration_milliseconds:** The
+duration of syncing internal-networkpolicy
+- **antrea_controller_runtime_info:** Antrea controller runtime info
+(Deprecated since Antrea 0.10.0), defined as labels. The value of the gauge
+is always set to 1.
 
 ## Common Metrics Provided by Infrastructure
 ## Apiserver Metrics
-**apiserver_audit_event_total:** Counter of audit events generated and sent
-to the audit backend.
-**apiserver_audit_requests_rejected_total:** Counter of apiserver requests
+- **apiserver_audit_event_total:** Counter of audit events generated and
+sent to the audit backend.
+- **apiserver_audit_requests_rejected_total:** Counter of apiserver requests
 rejected due to an error in audit logging backend.
-**apiserver_client_certificate_expiration_seconds:** Distribution of the
+- **apiserver_client_certificate_expiration_seconds:** Distribution of the
 remaining lifetime on the certificate used to authenticate a request.
-**apiserver_current_inflight_requests:** Maximal number of currently used
+- **apiserver_current_inflight_requests:** Maximal number of currently used
 inflight request limit of this apiserver per request kind in last second.
-**apiserver_envelope_encryption_dek_cache_fill_percent:** Percent of the
+- **apiserver_envelope_encryption_dek_cache_fill_percent:** Percent of the
 cache slots currently occupied by cached DEKs.
-**apiserver_longrunning_gauge:** Gauge of all active long-running apiserver
+- **apiserver_longrunning_gauge:** Gauge of all active long-running apiserver
 requests broken out by verb, group, version, resource, scope and component. Not
 all requests are tracked this way.
-**apiserver_registered_watchers:** Number of currently registered watchers
+- **apiserver_registered_watchers:** Number of currently registered watchers
 for a given resources
-**apiserver_request_duration_seconds:** Response latency distribution in
+- **apiserver_request_duration_seconds:** Response latency distribution in
 seconds for each verb, dry run value, group, version, resource, subresource,
 scope and component.
-**apiserver_request_total:** Counter of apiserver requests broken out for
-each verb, dry run value, group, version, resource, scope, component, and
-HTTP response contentType and code.
-**apiserver_response_sizes:** Response size distribution in bytes for each
+- **apiserver_request_total:** Counter of apiserver requests broken out
+for each verb, dry run value, group, version, resource, scope, component,
+and HTTP response contentType and code.
+- **apiserver_response_sizes:** Response size distribution in bytes for each
 group, version, verb, resource, subresource, scope and component.
-**apiserver_storage_data_key_generation_duration_seconds:** Latencies in
+- **apiserver_storage_data_key_generation_duration_seconds:** Latencies in
 seconds of data encryption key(DEK) generation operations.
-**apiserver_storage_data_key_generation_failures_total:** Total number of
+- **apiserver_storage_data_key_generation_failures_total:** Total number of
 failed data encryption key(DEK) generation operations.
-**apiserver_storage_envelope_transformation_cache_misses_total:** Total
+- **apiserver_storage_envelope_transformation_cache_misses_total:** Total
 number of cache misses while accessing key decryption key(KEK).
-**apiserver_watch_events_sizes:** Watch event size distribution in bytes
-**apiserver_watch_events_total:** Number of events sent in watch clients
+- **apiserver_watch_events_sizes:** Watch event size distribution in bytes
+- **apiserver_watch_events_total:** Number of events sent in watch clients
 
 ## Authenticated Metrics
-**authenticated_user_requests:** Counter of authenticated requests broken
+- **authenticated_user_requests:** Counter of authenticated requests broken
 out by username.
 
 ## Authentication Metrics
-**authentication_attempts:** Counter of authenticated attempts.
-**authentication_duration_seconds:** Authentication duration in seconds
+- **authentication_attempts:** Counter of authenticated attempts.
+- **authentication_duration_seconds:** Authentication duration in seconds
 broken out by result.
-**authentication_token_cache_active_fetch_count:**
-**authentication_token_cache_fetch_total:**
-**authentication_token_cache_request_duration_seconds:**
-**authentication_token_cache_request_total:**
+- **authentication_token_cache_active_fetch_count:**
+- **authentication_token_cache_fetch_total:**
+- **authentication_token_cache_request_duration_seconds:**
+- **authentication_token_cache_request_total:**
 
 ## Go Metrics
-**go_gc_duration_seconds:** A summary of the GC invocation durations.
-**go_goroutines:** Number of goroutines that currently exist.
-**go_info:** Information about the Go environment.
-**go_memstats_alloc_bytes:** Number of bytes allocated and still in use.
-**go_memstats_alloc_bytes_total:** Total number of bytes allocated, even
+- **go_gc_duration_seconds:** A summary of the GC invocation durations.
+- **go_goroutines:** Number of goroutines that currently exist.
+- **go_info:** Information about the Go environment.
+- **go_memstats_alloc_bytes:** Number of bytes allocated and still in use.
+- **go_memstats_alloc_bytes_total:** Total number of bytes allocated, even
 if freed.
-**go_memstats_buck_hash_sys_bytes:** Number of bytes used by the profiling
+- **go_memstats_buck_hash_sys_bytes:** Number of bytes used by the profiling
 bucket hash table.
-**go_memstats_frees_total:** Total number of frees.
-**go_memstats_gc_cpu_fraction:** The fraction of this program's available
+- **go_memstats_frees_total:** Total number of frees.
+- **go_memstats_gc_cpu_fraction:** The fraction of this program's available
 CPU time used by the GC since the program started.
-**go_memstats_gc_sys_bytes:** Number of bytes used for garbage collection
+- **go_memstats_gc_sys_bytes:** Number of bytes used for garbage collection
 system metadata.
-**go_memstats_heap_alloc_bytes:** Number of heap bytes allocated and still
+- **go_memstats_heap_alloc_bytes:** Number of heap bytes allocated and still
 in use.
-**go_memstats_heap_idle_bytes:** Number of heap bytes waiting to be used.
-**go_memstats_heap_inuse_bytes:** Number of heap bytes that are in use.
-**go_memstats_heap_objects:** Number of allocated objects.
-**go_memstats_heap_released_bytes:** Number of heap bytes released to OS.
-**go_memstats_heap_sys_bytes:** Number of heap bytes obtained from system.
-**go_memstats_last_gc_time_seconds:** Number of seconds since 1970 of last
+- **go_memstats_heap_idle_bytes:** Number of heap bytes waiting to be used.
+- **go_memstats_heap_inuse_bytes:** Number of heap bytes that are in use.
+- **go_memstats_heap_objects:** Number of allocated objects.
+- **go_memstats_heap_released_bytes:** Number of heap bytes released to OS.
+- **go_memstats_heap_sys_bytes:** Number of heap bytes obtained from system.
+- **go_memstats_last_gc_time_seconds:** Number of seconds since 1970 of last
 garbage collection.
-**go_memstats_lookups_total:** Total number of pointer lookups.
-**go_memstats_mallocs_total:** Total number of mallocs.
-**go_memstats_mcache_inuse_bytes:** Number of bytes in use by mcache
+- **go_memstats_lookups_total:** Total number of pointer lookups.
+- **go_memstats_mallocs_total:** Total number of mallocs.
+- **go_memstats_mcache_inuse_bytes:** Number of bytes in use by mcache
 structures.
-**go_memstats_mcache_sys_bytes:** Number of bytes used for mcache structures
+- **go_memstats_mcache_sys_bytes:** Number of bytes used for mcache structures
 obtained from system.
-**go_memstats_mspan_inuse_bytes:** Number of bytes in use by mspan structures.
-**go_memstats_mspan_sys_bytes:** Number of bytes used for mspan structures
+- **go_memstats_mspan_inuse_bytes:** Number of bytes in use by mspan
+structures.
+- **go_memstats_mspan_sys_bytes:** Number of bytes used for mspan structures
 obtained from system.
-**go_memstats_next_gc_bytes:** Number of heap bytes when next garbage
+- **go_memstats_next_gc_bytes:** Number of heap bytes when next garbage
 collection will take place.
-**go_memstats_other_sys_bytes:** Number of bytes used for other system
+- **go_memstats_other_sys_bytes:** Number of bytes used for other system
 allocations.
-**go_memstats_stack_inuse_bytes:** Number of bytes in use by the stack
+- **go_memstats_stack_inuse_bytes:** Number of bytes in use by the stack
 allocator.
-**go_memstats_stack_sys_bytes:** Number of bytes obtained from system for
+- **go_memstats_stack_sys_bytes:** Number of bytes obtained from system for
 stack allocator.
-**go_memstats_sys_bytes:** Number of bytes obtained from system.
-**go_threads:** Number of OS threads created.
+- **go_memstats_sys_bytes:** Number of bytes obtained from system.
+- **go_threads:** Number of OS threads created.
 
 ## Process Metrics
-**process_cpu_seconds_total:** Total user and system CPU time spent in seconds.
-**process_max_fds:** Maximum number of open file descriptors.
-**process_open_fds:** Number of open file descriptors.
-**process_resident_memory_bytes:** Resident memory size in bytes.
-**process_start_time_seconds:** Start time of the process since unix epoch
+- **process_cpu_seconds_total:** Total user and system CPU time spent
 in seconds.
-**process_virtual_memory_bytes:** Virtual memory size in bytes.
-**process_virtual_memory_max_bytes:** Maximum amount of virtual memory
+- **process_max_fds:** Maximum number of open file descriptors.
+- **process_open_fds:** Number of open file descriptors.
+- **process_resident_memory_bytes:** Resident memory size in bytes.
+- **process_start_time_seconds:** Start time of the process since unix epoch
+in seconds.
+- **process_virtual_memory_bytes:** Virtual memory size in bytes.
+- **process_virtual_memory_max_bytes:** Maximum amount of virtual memory
 available in bytes.
