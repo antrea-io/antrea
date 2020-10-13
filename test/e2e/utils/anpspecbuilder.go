@@ -29,8 +29,8 @@ type AntreaNetworkPolicySpecBuilder struct {
 }
 
 type ANPRuleAppliedToSpec struct {
-	podSelector         map[string]string
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement
+	PodSelector         map[string]string
+	PodSelectorMatchExp *[]metav1.LabelSelectorRequirement
 }
 
 func (b *AntreaNetworkPolicySpecBuilder) Get() *secv1alpha1.NetworkPolicy {
@@ -139,7 +139,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 		}
 	}
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.podSelector, at.podSelectorMatchExp))
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp))
 	}
 	var policyPeer []secv1alpha1.NetworkPolicyPeer
 	if ps != nil || ns != nil || ipBlock != nil {

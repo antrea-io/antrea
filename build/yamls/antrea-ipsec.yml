@@ -109,10 +109,6 @@ spec:
                       - Allow
                       - Drop
                       type: string
-<<<<<<< HEAD
-                    enableLogging:
-                      type: boolean
-=======
                     appliedTo:
                       items:
                         properties:
@@ -122,7 +118,8 @@ spec:
                             x-kubernetes-preserve-unknown-fields: true
                         type: object
                       type: array
->>>>>>> Add appliedTo field in rules and update validationWebook
+                    enableLogging:
+                      type: boolean
                     name:
                       type: string
                     ports:
@@ -161,10 +158,6 @@ spec:
                       - Allow
                       - Drop
                       type: string
-<<<<<<< HEAD
-                    enableLogging:
-                      type: boolean
-=======
                     appliedTo:
                       items:
                         properties:
@@ -174,7 +167,8 @@ spec:
                             x-kubernetes-preserve-unknown-fields: true
                         type: object
                       type: array
->>>>>>> Add appliedTo field in rules and update validationWebook
+                    enableLogging:
+                      type: boolean
                     from:
                       items:
                         properties:
@@ -350,10 +344,6 @@ spec:
                       - Allow
                       - Drop
                       type: string
-<<<<<<< HEAD
-                    enableLogging:
-                      type: boolean
-=======
                     appliedTo:
                       items:
                         properties:
@@ -362,7 +352,8 @@ spec:
                             x-kubernetes-preserve-unknown-fields: true
                         type: object
                       type: array
->>>>>>> Add appliedTo field in rules and update validationWebook
+                    enableLogging:
+                      type: boolean
                     name:
                       type: string
                     ports:
@@ -403,10 +394,6 @@ spec:
                       - Allow
                       - Drop
                       type: string
-<<<<<<< HEAD
-                    enableLogging:
-                      type: boolean
-=======
                     appliedTo:
                       items:
                         properties:
@@ -415,7 +402,8 @@ spec:
                             x-kubernetes-preserve-unknown-fields: true
                         type: object
                       type: array
->>>>>>> Add appliedTo field in rules and update validationWebook
+                    enableLogging:
+                      type: boolean
                     from:
                       items:
                         properties:

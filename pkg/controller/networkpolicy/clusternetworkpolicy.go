@@ -125,8 +125,8 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 // of an UPDATE event.
 func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.ClusterNetworkPolicy) *antreatypes.NetworkPolicy {
 	appliedToPerRule := cnp.Spec.AppliedTo == nil
-	// appliedToGroupNames tracks all distinct appliedToGroups referred by the ClusterNetworkPolicy,
-	// both in the spec section and in ingress/egress rules.
+	// appliedToGroupNames tracks all distinct appliedToGroups referred to by the ClusterNetworkPolicy,
+	// either in the spec section or in ingress/egress rules.
 	appliedToGroupNamesSet := sets.String{}
 	// Create AppliedToGroup for each AppliedTo present in ClusterNetworkPolicy spec.
 	for _, at := range cnp.Spec.AppliedTo {

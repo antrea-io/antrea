@@ -28,10 +28,10 @@ type ClusterNetworkPolicySpecBuilder struct {
 }
 
 type ACNPRuleAppliedToSpec struct {
-	podSelector         map[string]string
-	nsSelector          map[string]string
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement
-	nsSelectorMatchExp  *[]metav1.LabelSelectorRequirement
+	PodSelector         map[string]string
+	NSSelector          map[string]string
+	PodSelectorMatchExp *[]metav1.LabelSelectorRequirement
+	NSSelectorMatchExp  *[]metav1.LabelSelectorRequirement
 }
 
 func (b *ClusterNetworkPolicySpecBuilder) Get() *secv1alpha1.ClusterNetworkPolicy {
@@ -160,7 +160,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 		}
 	}
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.podSelector, at.nsSelector, at.podSelectorMatchExp, at.nsSelectorMatchExp))
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp))
 	}
 	var policyPeer []secv1alpha1.NetworkPolicyPeer
 	if ps != nil || ns != nil || ipBlock != nil {

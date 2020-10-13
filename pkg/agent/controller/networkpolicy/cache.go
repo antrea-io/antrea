@@ -528,7 +528,7 @@ func (c *ruleCache) DeleteAppliedToGroup(group *v1beta.AppliedToGroup) error {
 	return nil
 }
 
-// toRule converts v1beta1.NetworkPolicyRule to *rule.
+// toRule converts v1beta.NetworkPolicyRule to *rule.
 func toRule(r *v1beta.NetworkPolicyRule, policy *v1beta.NetworkPolicy, maxPriority int32) *rule {
 	appliedToGroups := policy.AppliedToGroups
 	if policy.AppliedToPerRule {

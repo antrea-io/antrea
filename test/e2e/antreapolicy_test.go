@@ -1022,6 +1022,62 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	failOnError(k8sUtils.CleanCNPs(), t)
 }
 
+func testAppliedToPerRule(t *testing.T) {
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName("y", "np1").SetPriority(1.0)
+	anpATGrp1 := ANPRuleAppliedToSpec{PodSelector: map[string]string{"pod": "a"}, PodSelectorMatchExp: nil}
+	anpATGrp2 := ANPRuleAppliedToSpec{PodSelector: map[string]string{"pod": "b"}, PodSelectorMatchExp: nil}
+	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+		nil, nil, []ANPRuleAppliedToSpec{anpATGrp1}, secv1alpha1.RuleActionDrop, "")
+	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "z"},
+		nil, nil, []ANPRuleAppliedToSpec{anpATGrp2}, secv1alpha1.RuleActionDrop, "")
+
+	reachability := NewReachability(allPods, true)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), false)
+	reachability.Expect(Pod("z/b"), Pod("y/b"), false)
+	testStep := []*TestStep{
+		{
+			"Port 80",
+			reachability,
+			[]metav1.Object{builder.Get()},
+			80,
+			0,
+		},
+	}
+
+	builder2 := &ClusterNetworkPolicySpecBuilder{}
+	builder2 = builder2.SetName("cnp1").SetPriority(1.0)
+	cnpATGrp1 := ACNPRuleAppliedToSpec{PodSelector: map[string]string{"pod": "a"}, PodSelectorMatchExp: nil}
+	cnpATGrp2 := ACNPRuleAppliedToSpec{
+		PodSelector: map[string]string{"pod": "b"}, NSSelector: map[string]string{"ns": "y"},
+		PodSelectorMatchExp: nil, NSSelectorMatchExp: nil}
+	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+		nil, nil, []ACNPRuleAppliedToSpec{cnpATGrp1}, secv1alpha1.RuleActionDrop, "")
+	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "z"},
+		nil, nil, []ACNPRuleAppliedToSpec{cnpATGrp2}, secv1alpha1.RuleActionDrop, "")
+
+	reachability2 := NewReachability(allPods, true)
+	reachability2.Expect(Pod("x/b"), Pod("x/a"), false)
+	reachability2.Expect(Pod("x/b"), Pod("y/a"), false)
+	reachability2.Expect(Pod("x/b"), Pod("z/a"), false)
+	reachability2.Expect(Pod("z/b"), Pod("y/b"), false)
+	testStep2 := []*TestStep{
+		{
+			"Port 80",
+			reachability2,
+			[]metav1.Object{builder2.Get()},
+			80,
+			0,
+		},
+	}
+
+	testCase := []*TestCase{
+		{"ANP AppliedTo per rule", testStep},
+		{"ACNP AppliedTo per rule", testStep2},
+	}
+	executeTests(t, testCase)
+}
+
 // executeTests runs all the tests in testList and prints results
 func executeTests(t *testing.T, testList []*TestCase) {
 	for _, testCase := range testList {
@@ -1153,6 +1209,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=CNPPriorityConflictingRule", func(t *testing.T) { testCNPPriorityConflictingRule(t) })
 		t.Run("Case=CNPRulePriority", func(t *testing.T) { testCNPRulePrioirty(t) })
 		t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })
+		t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })
 	})
 	// print results for reachability tests
 	printResults()
