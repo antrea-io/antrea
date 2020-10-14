@@ -37,7 +37,7 @@ that are likely to be included.
 
 Unlike minor releases, patch releases should not contain miscellaneous feature
 additions or improvements. No incompatibilities should ever be introduced
-between patch version of the same minor version. API groups / versions must not
+between patch versions of the same minor version. API groups / versions must not
 be introduced or removed as part of patch releases.
 
 Patch releases are intended for important bug fixes to recent minor versions,
@@ -65,7 +65,7 @@ For every Antrea minor release, the stability level of supported features may be
 updated (from `Alpha` to `Beta` or from `Beta` to `GA`). Refer to the the
 [CHANGELOG] for information about feature stability level for each release. For
 features controlled by a feature gate, this information is also present in a
-more structured way in [features-gates.md](features-gate.md).
+more structured way in [feature-gates.md](feature-gates.md).
 
 ## Release cycle
 
@@ -91,7 +91,7 @@ cadence, this means that each minor release receives approximately 3 months of
 patch support. This may seem short, but was done on purpose to encourage users
 to upgrade Antrea often and avoid potential incompatibility issues. In the
 future, we may reduce our release cadence for minor releases and simultaneously
-increase the support windows for each release.
+increase the support window for each release.
 
 ## Antrea upgrade and supported version skew
 
@@ -131,10 +131,10 @@ revisit this policy as well.
 When directly applying a newer Antrea YAML manifest, as provided for each
 [release](https://github.com/vmware-tanzu/antrea/releases), there is no
 guarantee that the Antrea Controller will be upgraded first. In practice, the
-Controller would be upgraded simultaneously with the first Agents to be upgraded
-by the rolling update of the Agent DaemonSet. This may create some transient
-issues and compromise the "graceful" upgrade. For upgrade scenarios, we
-therefore recommend that you "split-up" the manifest to ensure that the
+Controller would be upgraded simultaneously with the first Agent(s) to be
+upgraded by the rolling update of the Agent DaemonSet. This may create some
+transient issues and compromise the "graceful" upgrade. For upgrade scenarios,
+we therefore recommend that you "split-up" the manifest to ensure that the
 Controller is upgraded first.
 
 ## Supported K8s versions
@@ -147,7 +147,7 @@ we guarantee that 0.10 supports at least 1.19, 1.18 and 1.17 (in practice it
 also supports K8s 1.16).
 
 In addition, we strive to support the K8s versions used by default in
-cloud-managed K8s services ([EKS], [AKS] and [GKE (regular channel)]). 
+cloud-managed K8s services ([EKS], [AKS] and [GKE] regular channel).
 
 ## Deprecation policies
 
@@ -216,7 +216,7 @@ abide to the same deprecation policy as for other more "user-facing" APIs
 
 K8s has a [moratorium](https://github.com/kubernetes/kubernetes/issues/52185) on
 the removal of API object versions that have been persisted to storage. At the
-moment, node of Antrea APIServices (which use the aggregation layer) persist
+moment, none of Antrea APIServices (which use the aggregation layer) persist
 objects to storage. So the only objects we need to worry about are
 CustomeResources, which are persisted by the K8s apiserver. For them, we adopt
 the following rules:
