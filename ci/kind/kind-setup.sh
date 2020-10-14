@@ -52,8 +52,8 @@ where:
   --prometheus: enable Prometheus metrics listener for Antrea Controller and Agents, default is false
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
   --images: specifies images loaded to kind cluster, default is $IMAGES
-  --subnets: a subnet creates a separate docker bridge network with assigned subnet that worker nodes may connect to. Default is empty all worker
-    Node connected to docker0 bridge network
+  --subnets: a subnet creates a separate docker bridge network (named 'antrea-<idx>') with assigned subnet that worker nodes may connect to. Default is empty: all worker
+    Node connected to default docker bridge network created by Kind.
 "
 
 function print_usage {
@@ -84,19 +84,19 @@ function modify {
 
 function configure_networks {
   echo "Configuring networks"
-  networks=$(docker network ls -f name=$CLUSTER_NAME --format '{{.Name}}')
+  networks=$(docker network ls -f name=antrea --format '{{.Name}}')
   networks="$(echo $networks)"
   if [[ -z $SUBNETS ]] && [[ -z $networks ]]; then
-    echo "Using default docker bridges"
+    echo "Using default kind docker network"
     return
   fi
 
   # Inject allow all iptables to preempt docker bridge isolation rules
   if [[ ! -z $SUBNETS ]]; then
     set +e
-    sudo iptables -C DOCKER-USER -j ACCEPT > /dev/null 2>&1
+    docker run --net=host --privileged antrea/ethtool:latest iptables -C DOCKER-USER -j ACCEPT > /dev/null 2>&1
     if [[ $? -ne 0 ]]; then
-      sudo iptables -I DOCKER-USER -j ACCEPT
+      docker run --net=host --privileged antrea/ethtool:latest iptables -I DOCKER-USER -j ACCEPT
     fi
     set -e
   fi
@@ -105,7 +105,7 @@ function configure_networks {
   nodes="$(kind get nodes --name $CLUSTER_NAME | grep worker)"
   node_cnt=$(kind get nodes --name $CLUSTER_NAME | grep worker | wc -l)
   nodes=$(echo $nodes)
-  networks+=" bridge"
+  networks+=" kind"
   echo "removing worker nodes $nodes from networks $networks"
   for n in $networks; do
     rm_nodes=$(docker network inspect $n --format '{{range $i, $conf:=.Containers}}{{$conf.Name}} {{end}}')
@@ -115,7 +115,7 @@ function configure_networks {
         echo "disconnected worker $rn from network $n"
       fi
     done
-    if [[ $n != "bridge" ]]; then
+    if [[ $n != "kind" ]]; then
       docker network rm $n > /dev/null 2>&1
       echo "removed network $n"
     fi
@@ -125,7 +125,7 @@ function configure_networks {
   i=0
   networks=()
   for s in $SUBNETS; do
-    network=$CLUSTER_NAME-$i
+    network=antrea-$i
     echo "creating network $network with $s"
     docker network create -d bridge --subnet $s $network >/dev/null 2>&1
     networks+=($network)
@@ -134,9 +134,11 @@ function configure_networks {
 
   num_networks=${#networks[@]}
   if [[ $num_networks -eq 0 ]]; then
-    networks+=("bridge")
+    networks+=("kind")
     num_networks=$((num_networks+1))
   fi
+
+  control_plane_ip=$(docker inspect $CLUSTER_NAME-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
 
   i=0
   for node in $nodes; do
@@ -155,6 +157,8 @@ function configure_networks {
 
     # change kubelet config before reset network
     docker exec -t $node sed -i "s/node-ip=.*/node-ip=$node_ip/g" /var/lib/kubelet/kubeadm-flags.env
+    # this is needed to ensure that the worker node can still connect to the apiserver
+    docker exec -t $node bash -c "echo '$control_plane_ip $CLUSTER_NAME-control-plane' >> /etc/hosts"
     docker exec -t $node pkill kubelet
     docker exec -t $node pkill kube-proxy
     i=$((i+1))
@@ -177,7 +181,7 @@ function configure_networks {
 }
 
 function delete_networks {
-  networks=$(docker network ls -f name=$CLUSTER_NAME --format '{{.Name}}')
+  networks=$(docker network ls -f name=antrea --format '{{.Name}}')
   networks="$(echo $networks)"
   if [[ ! -z $networks ]]; then
     docker network rm $networks > /dev/null 2>&1
@@ -228,7 +232,7 @@ function create {
   config_file="/tmp/kind.yml"
   cat <<EOF > $config_file
 kind: Cluster
-apiVersion: kind.sigs.k8s.io/v1alpha3
+apiVersion: kind.x-k8s.io/v1alpha4
 networking:
   disableDefaultCNI: true
   podSubnet: $POD_CIDR
@@ -241,7 +245,7 @@ EOF
   kind create cluster --name $CLUSTER_NAME --config $config_file
 
   # force coredns to run on control-plane node because it
-  # is attached to docker0 bridge and uses host dns.
+  # is attached to kind bridge and uses host dns.
   # Worker Node may be configured to attach to custom bridges
   # which use dockerd as dns, causing coredns to detect
   # dns loop and crash
