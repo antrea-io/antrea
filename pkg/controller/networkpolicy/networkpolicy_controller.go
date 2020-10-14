@@ -1318,14 +1318,14 @@ func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *controlplane.Gr
 
 func externalEntityToGroupMember(ee *v1alpha2.ExternalEntity) *controlplane.GroupMember {
 	memberEntity := &controlplane.GroupMember{}
-	var namedPorts []controlplane.NamedPort
+	namedPorts := make([]controlplane.NamedPort, len(ee.Spec.Ports))
 	var ipAddr []controlplane.IPAddress
-	for _, port := range ee.Spec.Ports {
-		namedPorts = append(namedPorts, controlplane.NamedPort{
+	for i, port := range ee.Spec.Ports {
+		namedPorts[i] = controlplane.NamedPort{
 			Port:     port.Port,
 			Name:     port.Name,
 			Protocol: controlplane.Protocol(port.Protocol),
-		})
+		}
 	}
 	for _, ep := range ee.Spec.Endpoints {
 		ipAddr = append(ipAddr, ipStrToIPAddress(ep.IP))

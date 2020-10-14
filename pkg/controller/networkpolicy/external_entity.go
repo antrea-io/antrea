@@ -32,7 +32,9 @@ import (
 )
 
 // externalEntityV1Alpha1ToAlpha2 converts a v1alpha1.ExternalEntity object to a
-// v1alpha2.ExternalEntity object.
+// v1alpha2.ExternalEntity object. Note that spec.ports in v1alpha2.ExternalEntity
+// will be set to the ports of the first Endpoint in v1alpha1.ExternalEntity,
+// as all ports specs in v1alpha1.ExternalEntity Endpoints are assumed to be the same.
 func externalEntityV1Alpha1ToAlpha2(ee *v1alpha1.ExternalEntity) *v1alpha2.ExternalEntity {
 	var ports []v1alpha2.NamedPort
 	var endpoints []v1alpha2.Endpoint
@@ -119,7 +121,7 @@ func (n *NetworkPolicyController) updateExternalEntity(oldObj, curObj interface{
 	if !specEqual {
 		appliedToGroupKeys = oldAppliedToGroupKeySet.Union(curAppliedToGroupKeySet)
 	} else if !labelsEqual {
-		// No need to enqueue common AppliedToGroups as they already have latest Pod
+		// No need to enqueue common AppliedToGroups as they already have latest ExternalEntity
 		// information.
 		appliedToGroupKeys = oldAppliedToGroupKeySet.Difference(curAppliedToGroupKeySet).Union(curAppliedToGroupKeySet.Difference(oldAppliedToGroupKeySet))
 	}
@@ -128,7 +130,7 @@ func (n *NetworkPolicyController) updateExternalEntity(oldObj, curObj interface{
 	if !specEqual {
 		addressGroupKeys = oldAddressGroupKeySet.Union(curAddressGroupKeySet)
 	} else if !labelsEqual {
-		// No need to enqueue common AddressGroups as they already have latest Pod
+		// No need to enqueue common AddressGroups as they already have latest ExternalEntity
 		// information.
 		addressGroupKeys = oldAddressGroupKeySet.Difference(curAddressGroupKeySet).Union(curAddressGroupKeySet.Difference(oldAddressGroupKeySet))
 	}
@@ -152,8 +154,11 @@ func (n *NetworkPolicyController) deleteExternalEntity(old interface{}) {
 		}
 		ee, ok = tombstone.Obj.(*v1alpha2.ExternalEntity)
 		if !ok {
-			klog.Errorf("Error decoding object tombstone when deleting ExternalEntity, invalid type: %v", tombstone.Obj)
-			return
+			ee, ok = tombstone.Obj.(*v1alpha1.ExternalEntity)
+			if !ok {
+				klog.Errorf("Error decoding object tombstone when deleting ExternalEntity, invalid type: %v", tombstone.Obj)
+				return
+			}
 		}
 	}
 	defer n.heartbeat("deleteExternalEntity")
