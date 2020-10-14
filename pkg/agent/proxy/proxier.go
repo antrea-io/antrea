@@ -98,16 +98,16 @@ func (p *proxier) removeStaleServices() {
 				}
 			}
 		}
+		groupID, _ := p.groupCounter.Get(svcPortName)
+		if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
+			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
+			continue
+		}
 		for _, endpoint := range p.endpointsMap[svcPortName] {
 			if err := p.ofClient.UninstallEndpointFlows(svcInfo.OFProtocol, endpoint); err != nil {
 				klog.Errorf("Failed to remove flows of Service Endpoints %v: %v", svcPortName, err)
 				continue
 			}
-		}
-		groupID, _ := p.groupCounter.Get(svcPortName)
-		if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
-			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
-			continue
 		}
 		delete(p.serviceInstalledMap, svcPortName)
 		p.deleteServiceByIP(svcInfo.String())
@@ -218,9 +218,9 @@ func (p *proxier) syncProxyRules() {
 	staleEndpoints := p.endpointsChanges.Update(p.endpointsMap)
 	p.serviceChanges.Update(p.serviceMap)
 
-	p.removeStaleEndpoints(staleEndpoints)
 	p.removeStaleServices()
 	p.installServices()
+	p.removeStaleEndpoints(staleEndpoints)
 }
 
 func (p *proxier) SyncLoop() {
