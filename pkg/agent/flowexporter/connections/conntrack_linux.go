@@ -26,7 +26,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
 // connTrackSystem implements ConnTrackDumper. This is for linux kernel datapath.
@@ -38,7 +37,7 @@ type connTrackSystem struct {
 	connTrack   NetFilterConnTrack
 }
 
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, _ ovsctl.OVSCtlClient) *connTrackSystem {
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackSystem {
 	if err := SetupConntrackParameters(); err != nil {
 		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
 		klog.Errorf("Error when setting up conntrack parameters, some information may be missing from exported flows: %v", err)
@@ -164,6 +163,6 @@ func SetupConntrackParameters() error {
 }
 
 func (ct *connTrackSystem) GetMaxConnections() (int, error) {
-	maxConns, err := sysctl.GetSysctlNet("nf_conntrack_max")
+	maxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
 	return maxConns, err
 }

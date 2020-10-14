@@ -23,6 +23,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsctlClient ovsctl.OVSCtlClient) *connTrackOvsCtl {
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackOvsCtl {
+	ovsctlClient := ovsctl.NewClient(nodeConfig.OVSBridge)
 	return NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, ovsctlClient)
 }

@@ -79,7 +79,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	}
 	// Test the DumpFlows implementation of connTrackSystem
 	mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
-	connDumperDPSystem := NewConnTrackSystem(nodeConfig, serviceCIDR, nil)
+	connDumperDPSystem := NewConnTrackSystem(nodeConfig, serviceCIDR)
 
 	connDumperDPSystem.connTrack = mockNetlinkCT
 	// Set expects for mocks
@@ -164,12 +164,12 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 }
 
 func TestConnTrackSystem_GetMaxConnections(t *testing.T) {
-	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, &net.IPNet{}, nil)
+	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, &net.IPNet{})
 	maxConns, err := connDumperDPSystem.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
-	expMaxConns, err := sysctl.GetSysctlNet("nf_conntrack_max")
-	require.NoError(t, err, "Cannot read nf_conntrack_max")
-	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to nf_conntrack_max")
+	expMaxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
+	require.NoError(t, err, "Cannot read netfilter/nf_conntrack_max")
+	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to netfilter/nf_conntrack_max")
 }
 
 func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
