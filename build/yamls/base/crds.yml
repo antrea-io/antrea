@@ -338,7 +338,7 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
-                      ruleName:
+                      name:
                         type: string
                 egress:
                   type: array
@@ -375,7 +375,7 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
-                      ruleName:
+                      name:
                         type: string
   scope: Cluster
   names:
@@ -475,7 +475,7 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
-                      ruleName:
+                      name:
                         type: string
                 egress:
                   type: array
@@ -514,7 +514,7 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
-                      ruleName:
+                      name:
                         type: string
   scope: Namespaced
   names:

@@ -88,7 +88,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaPolicy(op, curCNP.Spec.Tier)
+		msg, allowed = v.validateAntreaPolicy(op, curCNP.Spec.Tier, curCNP.Spec.Ingress, curCNP.Spec.Egress)
 	case "NetworkPolicy":
 		klog.V(2).Info("Validating Antrea NetworkPolicy CRD")
 		var curANP, oldANP secv1alpha1.NetworkPolicy
@@ -104,7 +104,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaPolicy(op, curANP.Spec.Tier)
+		msg, allowed = v.validateAntreaPolicy(op, curANP.Spec.Tier, curANP.Spec.Ingress, curANP.Spec.Egress)
 	}
 	if msg != "" {
 		result = &metav1.Status{
@@ -118,11 +118,16 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 }
 
 // validateAntreaPolicy validates the admission of a Antrea NetworkPolicy CRDs
-func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier string) (string, bool) {
+func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier string, ingress, egress []secv1alpha1.Rule) (string, bool) {
 	allowed := true
 	reason := ""
 	switch op {
 	case admv1.Create, admv1.Update:
+		if ruleNameUnique := v.validateRuleName(ingress, egress); !ruleNameUnique {
+			allowed = false
+			reason = fmt.Sprint("rules names must be unique within the policy")
+			break
+		}
 		// "tier" must exist before referencing
 		if tier == "" || staticTierSet.Has(tier) {
 			// Empty Tier name corresponds to default Tier
@@ -137,6 +142,24 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier s
 		allowed = true
 	}
 	return reason, allowed
+}
+
+// validateRuleName validates if the name of each rule is unique within a policy
+func (v *NetworkPolicyValidator) validateRuleName(ingress, egress []secv1alpha1.Rule) bool {
+	uniqueRuleName := sets.NewString()
+	isUnique := func(rules []secv1alpha1.Rule) bool {
+		for _, rule := range rules {
+			if uniqueRuleName.Has(rule.Name) {
+				return false
+			}
+			if rule.Name != "" {
+				uniqueRuleName.Insert(rule.Name)
+			}
+		}
+		return true
+	}
+	return isUnique(ingress) && isUnique(egress)
+
 }
 
 // validateTier validates the admission of a Tier resource
