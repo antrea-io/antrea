@@ -127,7 +127,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
 	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
 	// TODO: Enhance the integration test by testing service.
-	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, nil, nil, testPollInterval)
+	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, nil, testPollInterval)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)

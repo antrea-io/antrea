@@ -91,10 +91,12 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		TupleReply:      revTuple2,
 		IsActive:        true,
 	}
+	// To test service name mapping
 	tuple3, revTuple3 := makeTuple(&net.IP{10, 10, 10, 10}, &net.IP{20, 20, 20, 20}, 6, 5000, 80)
 	testFlow3 := flowexporter.Connection{
 		TupleOrig:  tuple3,
 		TupleReply: revTuple3,
+		Mark:       openflow.ServiceCTMark,
 		IsActive:   true,
 	}
 	// Create copy of old conntrack flow for testing purposes.
@@ -124,10 +126,6 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		IP:                       net.IP{8, 7, 6, 5},
 		ContainerInterfaceConfig: podConfigFlow2,
 	}
-	serviceCIDR := &net.IPNet{
-		IP:   net.IP{20, 20, 20, 0},
-		Mask: net.IPMask(net.ParseIP("255.255.255.0").To4()),
-	}
 	servicePortName := k8sproxy.ServicePortName{
 		NamespacedName: types.NamespacedName{
 			Namespace: "serviceNS1",
@@ -140,7 +138,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	mockProxier := proxytest.NewMockProxier(ctrl)
-	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, serviceCIDR, mockProxier, testPollInterval)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, mockProxier, testPollInterval)
 
 	// Add flow1conn to the Connection map
 	testFlow1Tuple := flowexporter.NewConnectionKey(&testFlow1)
@@ -223,7 +221,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	// Create ConnectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, nil, testPollInterval)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, testPollInterval)
 	// Add flows to the Connection store
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = *flow
@@ -288,7 +286,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	// Create ConnectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, nil, testPollInterval)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, testPollInterval)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = *flow
@@ -312,7 +310,7 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	// Create ConnectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, nil, testPollInterval)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, testPollInterval)
 	// Hard-coded conntrack occupancy metrics for test
 	TotalConnections := 0
 	MaxConnections := 300000
