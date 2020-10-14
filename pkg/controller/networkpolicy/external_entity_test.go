@@ -426,7 +426,16 @@ func TestDeleteExternalEntity(t *testing.T) {
 			} else if eev1, ok := tt.addedExternalEntity.(*v1alpha1.ExternalEntity); ok {
 				npc.externalEntityV1Store.Delete(eev1)
 			}
+
 			npc.deleteExternalEntity(tt.addedExternalEntity)
+			_, addrGroups := getQueuedGroups(npc)
+			if tt.inAddressGroupMatch {
+				assert.Equal(t, true, addrGroups.Has(inGroupID))
+			}
+			if tt.outAddressGroupMatch {
+				assert.Equal(t, true, addrGroups.Has(outGroupID))
+			}
+
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
 			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
