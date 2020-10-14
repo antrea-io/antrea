@@ -290,3 +290,29 @@ type NetworkPolicyNodeStatus struct {
 	// The generation realized by the Node.
 	Generation int64
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// Group is the message format of antrea/pkg/controller/types.Group in an API response.
+type Group struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// GroupMembers is a list of resources selected by this group.
+	GroupMembers []GroupMember
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// GroupPatch describes the incremental update of an Group.
+type GroupPatch struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	AddedGroupMembers   []GroupMember
+	RemovedGroupMembers []GroupMember
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// GroupList is a list of Group objects.
+type GroupList struct {
+	metav1.TypeMeta
+	metav1.ListMeta
+	Items []Group
+}

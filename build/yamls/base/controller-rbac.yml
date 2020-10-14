@@ -148,6 +148,7 @@ rules:
     - core.antrea.tanzu.vmware.com
     resources:
       - externalentities
+      - clustergroups
     verbs:
       - get
       - watch

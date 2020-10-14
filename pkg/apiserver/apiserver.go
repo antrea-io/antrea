@@ -16,6 +16,7 @@ package apiserver
 
 import (
 	"context"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/group"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -80,6 +81,7 @@ type ExtraConfig struct {
 	addressGroupStore             storage.Interface
 	appliedToGroupStore           storage.Interface
 	networkPolicyStore            storage.Interface
+	groupStore                    storage.Interface
 	controllerQuerier             querier.ControllerQuerier
 	endpointQuerier               controllernetworkpolicy.EndpointQuerier
 	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
@@ -117,7 +119,7 @@ type completedConfig struct {
 
 func NewConfig(
 	genericConfig *genericapiserver.Config,
-	addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface,
+	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore storage.Interface,
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
 	controllerQuerier querier.ControllerQuerier,
@@ -136,6 +138,7 @@ func NewConfig(
 			endpointQuerier:               endpointQuerier,
 			networkPolicyController:       npController,
 			networkPolicyStatusController: networkPolicyStatusController,
+			groupStore:                    groupStore,
 		},
 	}
 }
@@ -148,6 +151,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	addressGroupStorage := addressgroup.NewREST(c.extraConfig.addressGroupStore)
 	appliedToGroupStorage := appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
 	networkPolicyStorage := networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
+	groupStorage := group.NewREST(c.extraConfig.groupStore)
 	networkPolicyStatusStorage := networkpolicy.NewStatusREST(c.extraConfig.networkPolicyStatusController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
@@ -163,6 +167,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["networkpolicies"] = networkPolicyStorage
 	cpv1beta2Storage["networkpolicies/status"] = networkPolicyStatusStorage
 	cpv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
+	cpv1beta2Storage["groups"] = groupStorage
 	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpv1beta2Storage
 
 	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to
@@ -253,6 +258,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandleValidationNetworkPolicy(v))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/acnp", webhook.HandleValidationNetworkPolicy(v))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/anp", webhook.HandleValidationNetworkPolicy(v))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandleValidationNetworkPolicy(v))
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
 			go c.networkPolicyController.InitializeTiers()

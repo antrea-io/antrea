@@ -302,3 +302,32 @@ type NetworkPolicyNodeStatus struct {
 	// The generation realized by the Node.
 	Generation int64 `json:"generation,omitempty" protobuf:"varint,2,opt,name=generation"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:onlyVerbs=list,get,watch
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// Group is the message format of antrea/pkg/controller/types.Group in an API response.
+type Group struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// GroupMembers is list of resources selected by this group.
+	GroupMembers []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,2,rep,name=groupMembers"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// GroupPatch describes the incremental update of an Group.
+type GroupPatch struct {
+	metav1.TypeMeta     `json:",inline"`
+	metav1.ObjectMeta   `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	AddedGroupMembers   []GroupMember `json:"addedGroupMembers,omitempty" protobuf:"bytes,2,rep,name=addedGroupMembers"`
+	RemovedGroupMembers []GroupMember `json:"removedGroupMembers,omitempty" protobuf:"bytes,3,rep,name=removedGroupMembers"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// GroupList is a list of Group objects.
+type GroupList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	Items           []Group `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
