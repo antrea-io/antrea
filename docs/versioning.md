@@ -218,7 +218,7 @@ K8s has a [moratorium](https://github.com/kubernetes/kubernetes/issues/52185) on
 the removal of API object versions that have been persisted to storage. At the
 moment, none of Antrea APIServices (which use the aggregation layer) persist
 objects to storage. So the only objects we need to worry about are
-CustomeResources, which are persisted by the K8s apiserver. For them, we adopt
+CustomResources, which are persisted by the K8s apiserver. For them, we adopt
 the following rules:
 
  * Alpha API versions may be removed at any time.
