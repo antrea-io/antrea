@@ -246,7 +246,7 @@ function deliver_antrea {
         echo "=== Antrea Image build failed ==="
         exit 1
     fi
-    
+
     antrea_yml="antrea.yml"
     if [[ "$COVERAGE" == true ]]; then
         make manifest-coverage -C $GIT_CHECKOUT_DIR
@@ -258,15 +258,15 @@ function deliver_antrea {
     # Configure and append antrea-prometheus.yml to antrea.yml
     sed -i "s|#enablePrometheusMetrics: false|enablePrometheusMetrics: true|g" $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
     echo "---" >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
-    cat $GIT_CHECKOUT_DIR/build/yamls/antrea-prometheus.yml >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml 
+    cat $GIT_CHECKOUT_DIR/build/yamls/antrea-prometheus.yml >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
 
     echo "====== Delivering Antrea to all the Nodes ======"
     export KUBECONFIG=${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig
     DOCKER_IMG_VERSION=$CLUSTER
-   
+
     if [[ "$COVERAGE" == true ]]; then
         docker save -o antrea-ubuntu-coverage.tar antrea/antrea-ubuntu-coverage:${DOCKER_IMG_VERSION}
-    else 
+    else
         docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
     fi
 
@@ -404,7 +404,19 @@ function garbage_collection() {
     echo "=== Auto cleanup starts ==="
     export KUBECONFIG=$KUBECONFIG_PATH
 
-    kubectl get namespace -l antrea-ci | awk '$3 ~ "[0-9][hd]" || $3 ~ "[6-9][0-9]m" || $3 ~ "1[0-9][0-9]m" && $2 ~ "Active" {print $1}' | while read cluster; do
+    kubectl get ns -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 ~ "matrix" && $2 > 14400 {print $1}' | while read cluster; do
+        echo "=== Currently ${cluster} has been live for more than 4h ==="
+        kubectl delete ns ${cluster}
+        echo "=== Old namespace ${cluster} has been deleted !!! ==="
+    done
+
+    kubectl get ns -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 ~ "whole-conformance" && $2 > 7200 {print $1}' | while read cluster; do
+        echo "=== Currently ${cluster} has been live for more than 2h ==="
+        kubectl delete ns ${cluster}
+        echo "=== Old namespace ${cluster} has been deleted !!! ==="
+    done
+
+    kubectl get ns -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 !~ "matrix" && $1 !~ "whole-conformance" && $2 > 3600 {print $1}' | while read cluster; do
         echo "=== Currently ${cluster} has been live for more than 1h ==="
         kubectl delete ns ${cluster}
         echo "=== Old namespace ${cluster} has been deleted !!! ==="
