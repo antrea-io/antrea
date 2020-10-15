@@ -1286,17 +1286,17 @@ func (mr *MockFlowBuilderMockRecorder) MatchCTLabelRange(arg0, arg1, arg2 interf
 }
 
 // MatchCTMark mocks base method
-func (m *MockFlowBuilder) MatchCTMark(arg0 uint32) openflow.FlowBuilder {
+func (m *MockFlowBuilder) MatchCTMark(arg0 uint32, arg1 *uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTMark", arg0)
+	ret := m.ctrl.Call(m, "MatchCTMark", arg0, arg1)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // MatchCTMark indicates an expected call of MatchCTMark
-func (mr *MockFlowBuilderMockRecorder) MatchCTMark(arg0 interface{}) *gomock.Call {
+func (mr *MockFlowBuilderMockRecorder) MatchCTMark(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTMark), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTMark), arg0, arg1)
 }
 
 // MatchCTProtocol mocks base method
