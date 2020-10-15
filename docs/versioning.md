@@ -154,8 +154,8 @@ cloud-managed K8s services ([EKS], [AKS] and [GKE] regular channel).
 ### Prometheus metrics deprecation policy
 
 Antrea follows a similar policy as
-[Kubernetes](https://cloud.google.com/kubernetes-engine/docs/release-notes) for
-metrics deprecation.
+[Kubernetes](https://kubernetes.io/docs/concepts/cluster-administration/system-metrics/#metric-lifecycle)
+for metrics deprecation.
 
 Alpha metrics have no stability guarantees; as such they can be modified or
 deleted at any time.
