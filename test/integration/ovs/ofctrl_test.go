@@ -887,7 +887,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal+10).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-			MatchCTMark(gatewayCTMark).
+			MatchCTMark(gatewayCTMark, nil).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
 			Action().GotoTable(table.GetNext()).
 			Done(),
@@ -903,7 +903,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
-			MatchCTMark(gatewayCTMark).
+			MatchCTMark(gatewayCTMark, nil).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
 			Action().LoadRange(binding.NxmFieldDstMAC, gwMACData, binding.Range{0, 47}).
 			Action().GotoTable(table.GetNext()).
