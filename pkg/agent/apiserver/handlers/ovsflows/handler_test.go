@@ -147,7 +147,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		if tc.expectedStatus != http.StatusNotFound {
 			ofc := oftest.NewMockClient(ctrl)
 			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
-			npq.EXPECT().GetNetworkPolicy(querier.NetworkPolicyQueryFilter{Name: tc.name, Namespace: tc.namespace}).Return(testNetworkPolicy).Times(1)
+			npq.EXPECT().GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: tc.name, Namespace: tc.namespace}).Return(testNetworkPolicy).Times(1)
 			ofc.EXPECT().GetNetworkPolicyFlowKeys(tc.name, tc.namespace).Return(testFlowKeys).Times(1)
 			q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
 			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
@@ -155,7 +155,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpResults[i], nil).Times(1)
 			}
 		} else {
-			npq.EXPECT().GetNetworkPolicy(querier.NetworkPolicyQueryFilter{Name: tc.name, Namespace: tc.namespace}).Return(nil).Times(1)
+			npq.EXPECT().GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: tc.name, Namespace: tc.namespace}).Return(nil).Times(1)
 		}
 
 		runHTTPTest(t, &tc, q)

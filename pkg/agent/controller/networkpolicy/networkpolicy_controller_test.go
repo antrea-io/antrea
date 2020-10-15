@@ -204,7 +204,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 		t.Fatalf("Expected no update, got %v", ruleID)
 	case <-time.After(time.Millisecond * 100):
 	}
-	assert.Equal(t, policy1, controller.GetNetworkPolicy(querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}))
+	assert.Equal(t, policy1, controller.GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}))
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 0, controller.GetAddressGroupNum())
 	assert.Equal(t, 0, controller.GetAppliedToGroupNum())
@@ -287,7 +287,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 		t.Fatalf("Expected no update, got %v", ruleID)
 	case <-time.After(time.Millisecond * 100):
 	}
-	assert.Equal(t, policy1, controller.GetNetworkPolicy(querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}))
+	assert.Equal(t, policy1, controller.GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}))
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
@@ -452,8 +452,8 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 			t.Fatal("Expected two rule updates, got timeout")
 		}
 	}
-	assert.ElementsMatch(t, policy1.Rules, controller.GetNetworkPolicy(querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}).Rules)
-	assert.ElementsMatch(t, policy1.AppliedToGroups, controller.GetNetworkPolicy(querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}).AppliedToGroups)
+	assert.ElementsMatch(t, policy1.Rules, controller.GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}).Rules)
+	assert.ElementsMatch(t, policy1.AppliedToGroups, controller.GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}).AppliedToGroups)
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 2, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
@@ -509,7 +509,7 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 		egressRuleCount := 0
 
 		// Get all networkpolicies
-		networkpolicies := controller.GetNetworkPolicies(querier.NetworkPolicyQueryFilter{})
+		networkpolicies := controller.GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{})
 		for _, networkpolicy := range networkpolicies {
 			for _, rule := range networkpolicy.Rules {
 				if rule.Direction == v1beta1.DirectionIn {

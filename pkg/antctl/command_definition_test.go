@@ -158,6 +158,7 @@ foo2
 							Services:  nil,
 						},
 					},
+					SourceType: cpv1beta1.K8sNetworkPolicy,
 				},
 				{
 					Rules: []rule.Response{
@@ -173,11 +174,12 @@ foo2
 					AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c"},
 					Name:            "GroupName1",
 					NameSpace:       "Namespace2",
+					SourceType:      cpv1beta1.AntreaNetworkPolicy,
 				},
 			},
-			expected: `NAMESPACE  NAME       APPLIED-TO                                       RULES SOURCE-TYPE
-Namespace1 GroupName2 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1     <NONE>     
-Namespace2 GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2     <NONE>     
+			expected: `NAMESPACE  NAME       APPLIED-TO                                       RULES SOURCE-TYPE        
+Namespace1 GroupName2 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1     K8sNetworkPolicy   
+Namespace2 GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2     AntreaNetworkPolicy
 `,
 		},
 		{

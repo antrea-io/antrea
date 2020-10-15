@@ -105,11 +105,11 @@ var CommandList = &commandList{
 			short:   "Print NetworkPolicies",
 			long:    "Print NetworkPolicies in ${component}. 'namespace' is required if 'pod' is provided.",
 			example: `  Get a specific NetworkPolicy
-  $ antctl get networkpolicy np1 -n ns1 -r acnp
+  $ antctl get networkpolicy np1 -n ns1 -T acnp
   Get the list of NetworkPolicies in a Namespace
   $ antctl get networkpolicy -n ns1
   Get the list of NetworkPolicies with a specific source Type
-  $ antctl get networkpolicy -r acnp
+  $ antctl get networkpolicy -T acnp
   Get the list of all NetworkPolicies
   $ antctl get networkpolicy
   Get the list of NetworkPolicies applied to a Pod (supported by agent only)
@@ -143,9 +143,9 @@ var CommandList = &commandList{
 							shorthand: "p",
 						},
 						{
-							name:      "reference",
-							usage:     "Get NetworkPolicies with specific reference. Reference means its source network policy: K8sNP, ACNP, ANP",
-							shorthand: "r",
+							name:      "type",
+							usage:     "Get NetworkPolicies with specific type. Type means the type of its source network policy: K8sNP, ACNP, ANP",
+							shorthand: "T",
 						},
 					},
 					outputType: multiple,

@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -29,24 +30,23 @@ import (
 // to query network policy rules in current agent.
 func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		npFilter := NewFilterFromURLQuery(r.URL.Query())
+		npFilter, err := newFilterFromURLQuery(r.URL.Query())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		var obj interface{}
 		npq := aq.GetNetworkPolicyInfoQuerier()
 		var nps []cpv1beta1.NetworkPolicy
 
 		if npFilter.Pod != "" {
-			if npFilter.Namespace == "" {
-				http.Error(w, "With a pod name, namespace must be provided", http.StatusBadRequest)
-				return
-			} else {
-				interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(npFilter.Pod, npFilter.Namespace)
-				if len(interfaces) > 0 {
-					nps = npq.GetAppliedNetworkPolicies(npFilter.Pod, npFilter.Namespace, *npFilter)
-				}
+			interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(npFilter.Pod, npFilter.Namespace)
+			if len(interfaces) > 0 {
+				nps = npq.GetAppliedNetworkPolicies(npFilter.Pod, npFilter.Namespace, npFilter)
 			}
 		} else {
-			nps = npq.GetNetworkPolicies(*npFilter)
+			nps = npq.GetNetworkPolicies(npFilter)
 		}
 
 		obj = cpv1beta1.NetworkPolicyList{Items: nps}
@@ -66,11 +66,23 @@ var mapToNetworkPolicyType = map[string]cpv1beta1.NetworkPolicyType{
 }
 
 // Create a Network Policy Filter from URL Query
-func NewFilterFromURLQuery(query url.Values) *querier.NetworkPolicyQueryFilter {
+func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter, error) {
+	namespace := query.Get("namespace")
+	pod := query.Get("pod")
+	if pod != "" && namespace == "" {
+		return nil, fmt.Errorf("with a pod name, namespace must be provided")
+	}
+
+	strSourceType := strings.ToUpper(query.Get("type"))
+	npSourceType, ok := mapToNetworkPolicyType[strSourceType]
+	if strSourceType != "" && !ok {
+		return nil, fmt.Errorf("invalid reference type. It should be K8sNP, ACNP or ANP")
+	}
+
 	return &querier.NetworkPolicyQueryFilter{
 		Name:       query.Get("name"),
-		Namespace:  query.Get("namespace"),
-		Pod:        query.Get("pod"),
-		SourceType: mapToNetworkPolicyType[strings.ToUpper(query.Get("reference"))],
-	}
+		Namespace:  namespace,
+		Pod:        pod,
+		SourceType: npSourceType,
+	}, nil
 }

@@ -31,11 +31,11 @@ type NetworkPolicyInfoQuerier interface {
 type AgentNetworkPolicyInfoQuerier interface {
 	NetworkPolicyInfoQuerier
 	GetControllerConnectionStatus() bool
-	GetNetworkPolicies(npFilter NetworkPolicyQueryFilter) []cpv1beta1.NetworkPolicy
+	GetNetworkPolicies(npFilter *NetworkPolicyQueryFilter) []cpv1beta1.NetworkPolicy
 	GetAddressGroups() []cpv1beta1.AddressGroup
 	GetAppliedToGroups() []cpv1beta1.AppliedToGroup
-	GetNetworkPolicy(npFilter NetworkPolicyQueryFilter) *cpv1beta1.NetworkPolicy
-	GetAppliedNetworkPolicies(pod, namespace string, npFilter NetworkPolicyQueryFilter) []cpv1beta1.NetworkPolicy
+	GetNetworkPolicy(npFilter *NetworkPolicyQueryFilter) *cpv1beta1.NetworkPolicy
+	GetAppliedNetworkPolicies(pod, namespace string, npFilter *NetworkPolicyQueryFilter) []cpv1beta1.NetworkPolicy
 }
 
 type ControllerNetworkPolicyInfoQuerier interface {
@@ -74,16 +74,16 @@ func GetVersion() string {
 }
 
 // NetworkPolicyQueryFilter is used to filter the result while retrieve network policy
-// Not settled attributes means match all.
+// An empty attribute, which won't be used as a condition, means match all.
 // e.g SourceType = "" means all type network policy will be retrieved
 // Can have more attributes in future if more args are required
 type NetworkPolicyQueryFilter struct {
 	// Name of the network policy.
-	Name string `protobuf:"bytes,1,opt,name=name"`
+	Name string
 	// Namespace of the NetworkPolicy.
-	Namespace string `protobuf:"bytes,2,opt,name=namespace"`
+	Namespace string
 	// Name of the pod that the network policy is applied on.
-	Pod string `protobuf:"bytes,3,opt,name=pod"`
+	Pod string
 	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, CNP, ANP)
-	SourceType cpv1beta1.NetworkPolicyType `protobuf:"bytes,4,opt,name=sourceType,casttype=NetworkPolicyType"`
+	SourceType cpv1beta1.NetworkPolicyType
 }

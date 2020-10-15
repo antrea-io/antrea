@@ -143,7 +143,7 @@ type ruleCache struct {
 
 	policyMapLock sync.RWMutex
 	// policyMap is a map using NetworkPolicy UID as the key.
-	policyMap map[string]v1beta1.NetworkPolicyReference
+	policyMap map[string]*v1beta1.NetworkPolicyReference
 
 	// rules is a storage that supports listing rules using multiple indexing functions.
 	// rules is thread-safe.
@@ -155,7 +155,7 @@ type ruleCache struct {
 	podUpdates <-chan v1beta1.PodReference
 }
 
-func (c *ruleCache) getNetworkPolicies(npFilter querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+func (c *ruleCache) getNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
 	var ret []v1beta1.NetworkPolicy
 	c.policyMapLock.RLock()
 	defer c.policyMapLock.RUnlock()
@@ -168,15 +168,15 @@ func (c *ruleCache) getNetworkPolicies(npFilter querier.NetworkPolicyQueryFilter
 }
 
 // If this npr(Network Policy Reference) can match the npFilter(Network Policy Filter)
-func (c *ruleCache) networkPolicyMatchFilter(npFilter querier.NetworkPolicyQueryFilter, npr v1beta1.NetworkPolicyReference) bool {
+func (c *ruleCache) networkPolicyMatchFilter(npFilter *querier.NetworkPolicyQueryFilter, npr *v1beta1.NetworkPolicyReference) bool {
 	return (npFilter.Name == "" || npFilter.Name == npr.Name) &&
 		(npFilter.Namespace == "" || npFilter.Namespace == npr.Namespace) &&
-		(npFilter.SourceType == "" || string(npFilter.SourceType) == string(npr.Type))
+		(npFilter.SourceType == "" || npFilter.SourceType == npr.Type)
 }
 
 // getNetworkPolicy looks up and returns the cached NetworkPolicy.
 // nil is returned if the specified NetworkPolicy is not found.
-func (c *ruleCache) getNetworkPolicy(npFilter querier.NetworkPolicyQueryFilter) *v1beta1.NetworkPolicy {
+func (c *ruleCache) getNetworkPolicy(npFilter *querier.NetworkPolicyQueryFilter) *v1beta1.NetworkPolicy {
 	var npUID string
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
@@ -234,7 +234,7 @@ func addRuleToNetworkPolicy(np *v1beta1.NetworkPolicy, rule *rule) *v1beta1.Netw
 
 }
 
-func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
 	var groups []string
 	memberPod := &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{Name: pod, Namespace: namespace}}
 	c.podSetLock.RLock()
@@ -251,7 +251,7 @@ func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter qu
 		for _, ruleObj := range rules {
 			rule := ruleObj.(*rule)
 			np, ok := npMap[string(rule.PolicyUID)]
-			if c.networkPolicyMatchFilter(npFilter, *rule.SourceRef) {
+			if c.networkPolicyMatchFilter(npFilter, rule.SourceRef) {
 				np = addRuleToNetworkPolicy(np, rule)
 				if !ok {
 					// First rule for this NetworkPolicy
@@ -348,7 +348,7 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta1.PodRef
 	cache := &ruleCache{
 		podSetByGroup:     make(map[string]v1beta1.GroupMemberPodSet),
 		addressSetByGroup: make(map[string]v1beta1.GroupMemberSet),
-		policyMap:         make(map[string]v1beta1.NetworkPolicyReference),
+		policyMap:         make(map[string]*v1beta1.NetworkPolicyReference),
 		rules:             rules,
 		dirtyRuleHandler:  dirtyRuleHandler,
 		podUpdates:        podUpdate,
@@ -651,7 +651,7 @@ func (c *ruleCache) AddNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 }
 
 func (c *ruleCache) addNetworkPolicyLocked(policy *v1beta1.NetworkPolicy) error {
-	c.policyMap[string(policy.UID)] = *policy.SourceRef
+	c.policyMap[string(policy.UID)] = policy.SourceRef
 	metrics.NetworkPolicyCount.Inc()
 	return c.UpdateNetworkPolicy(policy)
 }
