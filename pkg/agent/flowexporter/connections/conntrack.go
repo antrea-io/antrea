@@ -22,7 +22,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
 // InitializeConnTrackDumper initializes the ConnTrackDumper interface for different OS and datapath types.
@@ -31,8 +30,7 @@ func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.I
 	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
 		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDR)
 	} else if ovsDatapathType == ovsconfig.OVSDatapathNetdev {
-		ovsctlClient := ovsctl.NewClient(nodeConfig.OVSBridge)
-		connTrackDumper = NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, ovsctlClient)
+		connTrackDumper = NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR)
 	}
 	return connTrackDumper
 }

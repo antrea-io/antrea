@@ -46,10 +46,8 @@ type connTrackOvsCtl struct {
 	ovsctlClient ovsctl.OVSCtlClient
 }
 
-func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsctlClient ovsctl.OVSCtlClient) *connTrackOvsCtl {
-	if ovsctlClient == nil {
-		return nil
-	}
+func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackOvsCtl {
+	ovsctlClient := ovsctl.NewClient(nodeConfig.OVSBridge)
 
 	return &connTrackOvsCtl{
 		nodeConfig,
@@ -97,7 +95,6 @@ func (ct *connTrackOvsCtl) ovsAppctlDumpConnections(zoneFilter uint16) ([]*flowe
 }
 
 // flowStringToAntreaConnection parses the flow string and converts to Antrea connection.
-// TODO: Flow string doesn't contain stoptime field, need to investigate how stop time is recorded and dumped.
 // Example of flow string:
 // "tcp,orig=(src=10.10.1.2,dst=10.10.1.3,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=10.10.1.3,dst=10.10.1.2,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397"
 func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter.Connection, error) {
@@ -105,20 +102,20 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 	flowSlice := strings.Split(flow, ",")
 	isReply := false
 	inZone := false
-	var err error
 	for _, fs := range flowSlice {
 		// Indicator to populate reply or reverse fields
 		if strings.Contains(fs, "reply") {
 			isReply = true
 		}
 		switch {
-		case !strings.Contains(fs, "="):
+		case hasAnyProto(fs):
 			// Proto identifier
-			conn.TupleOrig.Protocol, err = lookupProtocolMap(fs)
+			proto, err := lookupProtocolMap(fs)
 			if err != nil {
 				return nil, err
 			}
-			conn.TupleReply.Protocol = conn.TupleOrig.Protocol
+			conn.TupleReply.Protocol = proto
+			conn.TupleOrig.Protocol = proto
 		case strings.Contains(fs, "src"):
 			fields := strings.Split(fs, "=")
 			if !isReply {
@@ -191,6 +188,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 				return nil, fmt.Errorf("parsing start time %s failed", timeString)
 			}
 			conn.StartTime = val
+		// TODO: We didn't find stoptime related field in flow string right now, need to investigate how stoptime is recorded and dumped.
 		case strings.Contains(fs, "status"):
 			fields := strings.Split(fs, "=")
 			conn.StatusFlag = statusStringToStateflag(fields[len(fields)-1])
@@ -231,6 +229,15 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 	klog.V(2).Infof("Convert flow string: %v into connection: %+v", flow, conn)
 
 	return &conn, nil
+}
+
+func hasAnyProto(text string) bool {
+	for proto := range protocols {
+		if strings.Contains(strings.ToLower(text), proto) {
+			return true
+		}
+	}
+	return false
 }
 
 // lookupProtocolMap returns protocol identifier given protocol name

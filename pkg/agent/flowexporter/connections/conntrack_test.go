@@ -114,7 +114,11 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		Mask: net.IPMask{255, 255, 255, 0},
 	}
 
-	connDumper := NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, mockOVSCtlClient)
+	connDumper := &connTrackOvsCtl{
+		nodeConfig,
+		serviceCIDR,
+		mockOVSCtlClient,
+	}
 	// Set expect call for mock ovsCtlClient
 	ovsctlCmdOutput := []byte("tcp,orig=(src=127.0.0.1,dst=127.0.0.1,sport=45218,dport=2379,packets=320108,bytes=24615344),reply=(src=127.0.0.1,dst=127.0.0.1,sport=2379,dport=45218,packets=239595,bytes=24347883),start=2020-07-24T05:07:03.998,id=3750535678,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86399,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
 		"tcp,orig=(src=127.0.0.1,dst=8.7.6.5,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=8.7.6.5,dst=127.0.0.1,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
@@ -179,7 +183,11 @@ func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 	// Set expect call of dpctl/ct-get-maxconns for mock ovsCtlClient
 	expMaxConns := 300000
 	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/ct-get-maxconns", false).Return([]byte(strconv.Itoa(expMaxConns)), nil)
-	connDumper := NewConnTrackOvsAppCtl(&config.NodeConfig{}, &net.IPNet{}, mockOVSCtlClient)
+	connDumper := &connTrackOvsCtl{
+		&config.NodeConfig{},
+		&net.IPNet{},
+		mockOVSCtlClient,
+	}
 	maxConns, err := connDumper.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
 	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to the previous hard-coded value")
