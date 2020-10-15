@@ -20,18 +20,18 @@ import (
 	"sort"
 	"strconv"
 
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 type GroupMemberPod struct {
-	Pod *cpv1beta1.PodReference `json:"pod,omitempty"`
+	Pod *cpv1beta.PodReference `json:"pod,omitempty"`
 	// IP maintains the IPAddress associated with the Pod.
 	IP string `json:"ip,omitempty"`
 	// Ports maintain the named port mapping of this Pod.
-	Ports []cpv1beta1.NamedPort `json:"ports,omitempty"`
+	Ports []cpv1beta.NamedPort `json:"ports,omitempty"`
 }
 
-func GroupMemberPodTransform(pod cpv1beta1.GroupMemberPod) GroupMemberPod {
+func GroupMemberPodTransform(pod cpv1beta.GroupMemberPod) GroupMemberPod {
 	var ipStr string
 	if len(pod.IP) != 0 {
 		ipStr = net.IP(pod.IP).String()

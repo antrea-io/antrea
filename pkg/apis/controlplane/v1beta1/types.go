@@ -73,17 +73,25 @@ type ExternalEntityReference struct {
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
 }
 
+// Endpoint represents an external endpoint.
+type Endpoint struct {
+	// IP is the IP address of the Endpoint.
+	IP IPAddress `json:"ip,omitempty" protobuf:"bytes,1,opt,name=ip"`
+	// Ports is the list NamedPort of the Endpoint.
+	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,2,rep,name=ports"`
+}
+
 // GroupMember represents resource member to be populated in Groups.
 // This supersedes GroupMemberPod, and will eventually replace it.
 type GroupMember struct {
 	// Pod maintains the reference to the Pod.
 	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
+
 	// ExternalEntity maintains the reference to the ExternalEntity.
 	ExternalEntity *ExternalEntityReference `json:"externalEntity,omitempty" protobuf:"bytes,2,opt,name=externalEntity"`
-	// IP is the IP address of the Endpoints associated with the GroupMember.
-	IPs []IPAddress `json:"ips,omitempty" protobuf:"bytes,3,rep,name=ips"`
-	// Ports is the list NamedPort of the GroupMember.
-	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,4,rep,name=ports"`
+
+	// Endpoints maintains a list of EndPoints associated with this groupMember.
+	Endpoints []Endpoint `json:"endpoints,omitempty" protobuf:"bytes,3,rep,name=endpoints"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

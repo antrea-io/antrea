@@ -558,6 +558,39 @@ spec:
                         type: string
                 externalNode:
                   type: string
+    - name: v1alpha1
+      served: true
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                endpoints:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      ip:
+                        type: string
+                        format: ipv4
+                      name:
+                        type: string
+                      ports:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
+                              type: string
+                            port:
+                              x-kubernetes-int-or-string: true
+                            name:
+                              type: string
+                externalNode:
+                  type: string
   scope: Namespaced
   names:
     plural: externalentities

@@ -22,6 +22,8 @@ import (
 	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1/fake"
 	controlplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1"
 	fakecontrolplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1/fake"
+	controlplanev1beta2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	fakecontrolplanev1beta2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2/fake"
 	corev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha1"
 	fakecorev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha1/fake"
 	corev1alpha2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha2"
@@ -96,6 +98,11 @@ func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.Cluste
 // ControlplaneV1beta1 retrieves the ControlplaneV1beta1Client
 func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface {
 	return &fakecontrolplanev1beta1.FakeControlplaneV1beta1{Fake: &c.Fake}
+}
+
+// ControlplaneV1beta2 retrieves the ControlplaneV1beta2Client
+func (c *Clientset) ControlplaneV1beta2() controlplanev1beta2.ControlplaneV1beta2Interface {
+	return &fakecontrolplanev1beta2.FakeControlplaneV1beta2{Fake: &c.Fake}
 }
 
 // CoreV1alpha1 retrieves the CoreV1alpha1Client

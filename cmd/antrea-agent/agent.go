@@ -41,7 +41,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/stats"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
@@ -162,7 +162,7 @@ func run(o *Options) error {
 	// podUpdates is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated Pods.
-	podUpdates := make(chan v1beta1.PodReference, 100)
+	podUpdates := make(chan v1beta2.PodReference, 100)
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,

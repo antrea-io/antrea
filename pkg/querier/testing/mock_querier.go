@@ -21,7 +21,7 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	v1beta2 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	reflect "reflect"
 )
 
@@ -63,10 +63,10 @@ func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetAddressGroupNum() *g
 }
 
 // GetAddressGroups mocks base method
-func (m *MockAgentNetworkPolicyInfoQuerier) GetAddressGroups() []v1beta1.AddressGroup {
+func (m *MockAgentNetworkPolicyInfoQuerier) GetAddressGroups() []v1beta2.AddressGroup {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAddressGroups")
-	ret0, _ := ret[0].([]v1beta1.AddressGroup)
+	ret0, _ := ret[0].([]v1beta2.AddressGroup)
 	return ret0
 }
 
@@ -77,10 +77,10 @@ func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetAddressGroups() *gom
 }
 
 // GetAppliedNetworkPolicies mocks base method
-func (m *MockAgentNetworkPolicyInfoQuerier) GetAppliedNetworkPolicies(arg0, arg1 string) []v1beta1.NetworkPolicy {
+func (m *MockAgentNetworkPolicyInfoQuerier) GetAppliedNetworkPolicies(arg0, arg1 string) []v1beta2.NetworkPolicy {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAppliedNetworkPolicies", arg0, arg1)
-	ret0, _ := ret[0].([]v1beta1.NetworkPolicy)
+	ret0, _ := ret[0].([]v1beta2.NetworkPolicy)
 	return ret0
 }
 
@@ -105,10 +105,10 @@ func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetAppliedToGroupNum() 
 }
 
 // GetAppliedToGroups mocks base method
-func (m *MockAgentNetworkPolicyInfoQuerier) GetAppliedToGroups() []v1beta1.AppliedToGroup {
+func (m *MockAgentNetworkPolicyInfoQuerier) GetAppliedToGroups() []v1beta2.AppliedToGroup {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAppliedToGroups")
-	ret0, _ := ret[0].([]v1beta1.AppliedToGroup)
+	ret0, _ := ret[0].([]v1beta2.AppliedToGroup)
 	return ret0
 }
 
@@ -133,10 +133,10 @@ func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetControllerConnection
 }
 
 // GetNetworkPolicies mocks base method
-func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicies(arg0 string) []v1beta1.NetworkPolicy {
+func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicies(arg0 string) []v1beta2.NetworkPolicy {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNetworkPolicies", arg0)
-	ret0, _ := ret[0].([]v1beta1.NetworkPolicy)
+	ret0, _ := ret[0].([]v1beta2.NetworkPolicy)
 	return ret0
 }
 
@@ -147,10 +147,10 @@ func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetNetworkPolicies(arg0
 }
 
 // GetNetworkPolicy mocks base method
-func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicy(arg0, arg1 string) *v1beta1.NetworkPolicy {
+func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicy(arg0, arg1 string) *v1beta2.NetworkPolicy {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNetworkPolicy", arg0, arg1)
-	ret0, _ := ret[0].(*v1beta1.NetworkPolicy)
+	ret0, _ := ret[0].(*v1beta2.NetworkPolicy)
 	return ret0
 }
 

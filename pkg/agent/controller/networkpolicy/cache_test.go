@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 var (
@@ -51,7 +51,7 @@ func TestAddressGroupIndexFunc(t *testing.T) {
 			"two-groups",
 			&rule{
 				ID:   "foo",
-				From: v1beta1.NetworkPolicyPeer{AddressGroups: []string{"group1", "group2"}},
+				From: v1beta2.NetworkPolicyPeer{AddressGroups: []string{"group1", "group2"}},
 			},
 			[]string{"group1", "group2"},
 			nil,
@@ -111,53 +111,53 @@ func TestAppliedToGroupIndexFunc(t *testing.T) {
 }
 
 func TestGetMaxPriority(t *testing.T) {
-	networkPolicyRule1 := &v1beta1.NetworkPolicyRule{
-		Direction: v1beta1.DirectionIn,
-		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-		To:        v1beta1.NetworkPolicyPeer{},
+	networkPolicyRule1 := &v1beta2.NetworkPolicyRule{
+		Direction: v1beta2.DirectionIn,
+		From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+		To:        v1beta2.NetworkPolicyPeer{},
 		Services:  nil,
 	}
-	networkPolicyRule2 := &v1beta1.NetworkPolicyRule{
-		Direction: v1beta1.DirectionIn,
-		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
-		To:        v1beta1.NetworkPolicyPeer{},
+	networkPolicyRule2 := &v1beta2.NetworkPolicyRule{
+		Direction: v1beta2.DirectionIn,
+		From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
+		To:        v1beta2.NetworkPolicyPeer{},
 		Services:  nil,
 		Priority:  0,
 	}
-	networkPolicyRule3 := &v1beta1.NetworkPolicyRule{
-		Direction: v1beta1.DirectionIn,
-		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup3"}},
-		To:        v1beta1.NetworkPolicyPeer{},
+	networkPolicyRule3 := &v1beta2.NetworkPolicyRule{
+		Direction: v1beta2.DirectionIn,
+		From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup3"}},
+		To:        v1beta2.NetworkPolicyPeer{},
 		Services:  nil,
 		Priority:  1,
 	}
-	networkPolicyRule4 := &v1beta1.NetworkPolicyRule{
-		Direction: v1beta1.DirectionOut,
-		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup4"}},
-		To:        v1beta1.NetworkPolicyPeer{},
+	networkPolicyRule4 := &v1beta2.NetworkPolicyRule{
+		Direction: v1beta2.DirectionOut,
+		From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup4"}},
+		To:        v1beta2.NetworkPolicyPeer{},
 		Services:  nil,
 		Priority:  0,
 	}
-	k8sNP := &v1beta1.NetworkPolicy{
+	k8sNP := &v1beta2.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
-		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1},
+		Rules:           []v1beta2.NetworkPolicyRule{*networkPolicyRule1},
 		AppliedToGroups: []string{"addressGroup1"},
-		SourceRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "name1",
 			UID:       "policy1",
 		},
 	}
 	acnpPriority, acnpTier := 1.0, int32(250)
-	antreaNP := &v1beta1.NetworkPolicy{
+	antreaNP := &v1beta2.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy2"},
 		Priority:        &acnpPriority,
 		TierPriority:    &acnpTier,
-		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule2, *networkPolicyRule3, *networkPolicyRule4},
+		Rules:           []v1beta2.NetworkPolicyRule{*networkPolicyRule2, *networkPolicyRule3, *networkPolicyRule4},
 		AppliedToGroups: []string{"addressGroup1"},
-		SourceRef: &v1beta1.NetworkPolicyReference{
-			Type: v1beta1.AntreaClusterNetworkPolicy,
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type: v1beta2.AntreaClusterNetworkPolicy,
 			Name: "acnp1",
 			UID:  "policy-acnp",
 		},
@@ -180,40 +180,40 @@ func (r *dirtyRuleRecorder) Record(ruleID string) {
 	r.eventCh <- ruleID
 }
 
-func newAppliedToGroupMember(name, namespace string, containerPorts ...v1beta1.NamedPort) *v1beta1.GroupMemberPod {
-	return &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{Name: name, Namespace: namespace}, Ports: containerPorts}
+func newAppliedToGroupMember(name, namespace string, containerPorts ...v1beta2.NamedPort) *v1beta2.GroupMemberPod {
+	return &v1beta2.GroupMemberPod{Pod: &v1beta2.PodReference{Name: name, Namespace: namespace}, Ports: containerPorts}
 }
 
-func newAddressGroupMember(ip string) *v1beta1.GroupMember {
-	return (&v1beta1.GroupMemberPod{IP: v1beta1.IPAddress(net.ParseIP(ip))}).ToGroupMember()
+func newAddressGroupMember(ip string) *v1beta2.GroupMember {
+	return (&v1beta2.GroupMemberPod{IP: v1beta2.IPAddress(net.ParseIP(ip))}).ToGroupMember()
 }
 
-func newAddressGroupMemberPod(ip string) *v1beta1.GroupMemberPod {
-	return &v1beta1.GroupMemberPod{IP: v1beta1.IPAddress(net.ParseIP(ip))}
+func newAddressGroupMemberPod(ip string) *v1beta2.GroupMemberPod {
+	return &v1beta2.GroupMemberPod{IP: v1beta2.IPAddress(net.ParseIP(ip))}
 }
 
 func TestRuleCacheAddAddressGroup(t *testing.T) {
 	rule1 := &rule{
 		ID:   "rule1",
-		From: v1beta1.NetworkPolicyPeer{AddressGroups: []string{"group1"}},
+		From: v1beta2.NetworkPolicyPeer{AddressGroups: []string{"group1"}},
 	}
 	rule2 := &rule{
 		ID:   "rule2",
-		From: v1beta1.NetworkPolicyPeer{AddressGroups: []string{"group1", "group2"}},
+		From: v1beta2.NetworkPolicyPeer{AddressGroups: []string{"group1", "group2"}},
 	}
 	tests := []struct {
 		name               string
 		rules              []*rule
-		args               *v1beta1.AddressGroup
-		expectedAddresses  []*v1beta1.GroupMember
+		args               *v1beta2.AddressGroup
+		expectedAddresses  []*v1beta2.GroupMember
 		expectedDirtyRules sets.String
 	}{
 		{
 			"zero-rule",
 			[]*rule{rule1, rule2},
-			&v1beta1.AddressGroup{
+			&v1beta2.AddressGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "group0"},
-				Pods:       []v1beta1.GroupMemberPod{},
+				Pods:       []v1beta2.GroupMemberPod{},
 			},
 			nil,
 			sets.NewString(),
@@ -221,21 +221,21 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 		{
 			"one-rule",
 			[]*rule{rule1, rule2},
-			&v1beta1.AddressGroup{
+			&v1beta2.AddressGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "group2"},
-				Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
+				Pods:       []v1beta2.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
 			},
-			[]*v1beta1.GroupMember{newAddressGroupMember("1.1.1.1")},
+			[]*v1beta2.GroupMember{newAddressGroupMember("1.1.1.1")},
 			sets.NewString("rule2"),
 		},
 		{
 			"two-rules",
 			[]*rule{rule1, rule2},
-			&v1beta1.AddressGroup{
+			&v1beta2.AddressGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "group1"},
-				Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2")},
+				Pods:       []v1beta2.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2")},
 			},
-			[]*v1beta1.GroupMember{newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")},
+			[]*v1beta2.GroupMember{newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")},
 			sets.NewString("rule1", "rule2"),
 		},
 	}
@@ -259,9 +259,9 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 	}
 }
 
-func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, chan v1beta1.PodReference) {
+func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, chan v1beta2.PodReference) {
 	recorder := newDirtyRuleRecorder()
-	ch := make(chan v1beta1.PodReference, 100)
+	ch := make(chan v1beta2.PodReference, 100)
 	c := newRuleCache(recorder.Record, ch)
 	return c, recorder, ch
 }
@@ -278,56 +278,56 @@ func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 	tests := []struct {
 		name               string
 		rules              []*rule
-		preExistingGroups  map[string]v1beta1.GroupMemberPodSet
-		args               []*v1beta1.AppliedToGroup
-		expectedGroups     map[string]v1beta1.GroupMemberPodSet
+		preExistingGroups  map[string]v1beta2.GroupMemberPodSet
+		args               []*v1beta2.AppliedToGroup
+		expectedGroups     map[string]v1beta2.GroupMemberPodSet
 		expectedDirtyRules sets.String
 	}{
 		{
 			"stale-group-can-be-cleaned",
 			[]*rule{},
-			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
-			[]*v1beta1.AppliedToGroup{},
-			map[string]v1beta1.GroupMemberPodSet{},
+			map[string]v1beta2.GroupMemberPodSet{"group1": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
+			[]*v1beta2.AppliedToGroup{},
+			map[string]v1beta2.GroupMemberPodSet{},
 			sets.NewString(),
 		},
 		{
 			"existing-group-can-be-updated",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
-			[]*v1beta1.AppliedToGroup{
+			map[string]v1beta2.GroupMemberPodSet{"group1": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
+			[]*v1beta2.AppliedToGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "group1"},
-					Pods:       []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1"), *newAppliedToGroupMember("pod2", "ns1")},
+					Pods:       []v1beta2.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1"), *newAppliedToGroupMember("pod2", "ns1")},
 				},
 			},
-			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1"))},
+			map[string]v1beta2.GroupMemberPodSet{"group1": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1"))},
 			sets.NewString("rule1", "rule2"),
 		},
 		{
 			"unchanged-group-can-be-skipped",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{"group2": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
-			[]*v1beta1.AppliedToGroup{
+			map[string]v1beta2.GroupMemberPodSet{"group2": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
+			[]*v1beta2.AppliedToGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "group2"},
-					Pods:       []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
+					Pods:       []v1beta2.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
 				},
 			},
-			map[string]v1beta1.GroupMemberPodSet{"group2": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
+			map[string]v1beta2.GroupMemberPodSet{"group2": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
 			sets.NewString(),
 		},
 		{
 			"new-group-can-be-added",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{},
-			[]*v1beta1.AppliedToGroup{
+			map[string]v1beta2.GroupMemberPodSet{},
+			[]*v1beta2.AppliedToGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "group2"},
-					Pods:       []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1"), *newAppliedToGroupMember("pod2", "ns1")},
+					Pods:       []v1beta2.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1"), *newAppliedToGroupMember("pod2", "ns1")},
 				},
 			},
-			map[string]v1beta1.GroupMemberPodSet{"group2": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1"))},
+			map[string]v1beta2.GroupMemberPodSet{"group2": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1"))},
 			sets.NewString("rule2"),
 		},
 	}
@@ -353,65 +353,65 @@ func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 	rule1 := &rule{
 		ID:   "rule1",
-		From: v1beta1.NetworkPolicyPeer{AddressGroups: []string{"group1"}},
+		From: v1beta2.NetworkPolicyPeer{AddressGroups: []string{"group1"}},
 	}
 	rule2 := &rule{
 		ID:   "rule2",
-		From: v1beta1.NetworkPolicyPeer{AddressGroups: []string{"group1", "group2"}},
+		From: v1beta2.NetworkPolicyPeer{AddressGroups: []string{"group1", "group2"}},
 	}
 	tests := []struct {
 		name               string
 		rules              []*rule
-		preExistingGroups  map[string]v1beta1.GroupMemberSet
-		args               []*v1beta1.AddressGroup
-		expectedGroups     map[string]v1beta1.GroupMemberSet
+		preExistingGroups  map[string]v1beta2.GroupMemberSet
+		args               []*v1beta2.AddressGroup
+		expectedGroups     map[string]v1beta2.GroupMemberSet
 		expectedDirtyRules sets.String
 	}{
 		{
 			"stale-group-can-be-cleaned",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
-			[]*v1beta1.AddressGroup{},
-			map[string]v1beta1.GroupMemberSet{},
+			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
+			[]*v1beta2.AddressGroup{},
+			map[string]v1beta2.GroupMemberSet{},
 			sets.NewString(),
 		},
 		{
 			"existing-group-can-be-updated",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
-			[]*v1beta1.AddressGroup{
+			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
+			[]*v1beta2.AddressGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "group1"},
-					Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.2"), *newAddressGroupMemberPod("1.1.1.3")},
+					Pods:       []v1beta2.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.2"), *newAddressGroupMemberPod("1.1.1.3")},
 				},
 			},
-			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"), newAddressGroupMember("1.1.1.3"))},
+			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"), newAddressGroupMember("1.1.1.3"))},
 			sets.NewString("rule1", "rule2"),
 		},
 		{
 			"unchanged-group-can-be-skipped",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
-			[]*v1beta1.AddressGroup{
+			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
+			[]*v1beta2.AddressGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "group1"},
-					Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
+					Pods:       []v1beta2.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
 				},
 			},
-			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
+			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
 			sets.NewString(),
 		},
 		{
 			"new-group-can-be-added",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberSet{},
-			[]*v1beta1.AddressGroup{
+			map[string]v1beta2.GroupMemberSet{},
+			[]*v1beta2.AddressGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "group2"},
-					Pods:       []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.2")},
+					Pods:       []v1beta2.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.2")},
 				},
 			},
-			map[string]v1beta1.GroupMemberSet{"group2": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"))},
+			map[string]v1beta2.GroupMemberSet{"group2": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"))},
 			sets.NewString("rule2"),
 		},
 	}
@@ -435,29 +435,29 @@ func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 }
 
 func TestRuleCacheReplaceNetworkPolicies(t *testing.T) {
-	networkPolicyRule1 := &v1beta1.NetworkPolicyRule{
-		Direction: v1beta1.DirectionIn,
-		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-		To:        v1beta1.NetworkPolicyPeer{},
+	networkPolicyRule1 := &v1beta2.NetworkPolicyRule{
+		Direction: v1beta2.DirectionIn,
+		From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+		To:        v1beta2.NetworkPolicyPeer{},
 		Services:  nil,
 	}
-	networkPolicy1 := &v1beta1.NetworkPolicy{
+	networkPolicy1 := &v1beta2.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
-		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1},
+		Rules:           []v1beta2.NetworkPolicyRule{*networkPolicyRule1},
 		AppliedToGroups: []string{"addressGroup1"},
-		SourceRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "name1",
 			UID:       "policy1",
 		},
 	}
-	networkPolicy2 := &v1beta1.NetworkPolicy{
+	networkPolicy2 := &v1beta2.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
-		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1},
+		Rules:           []v1beta2.NetworkPolicyRule{*networkPolicyRule1},
 		AppliedToGroups: []string{"addressGroup2"},
-		SourceRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "name1",
 			UID:       "policy1",
@@ -468,35 +468,35 @@ func TestRuleCacheReplaceNetworkPolicies(t *testing.T) {
 	tests := []struct {
 		name               string
 		rules              []*rule
-		args               []*v1beta1.NetworkPolicy
+		args               []*v1beta2.NetworkPolicy
 		expectedRules      []*rule
 		expectedDirtyRules sets.String
 	}{
 		{
 			"stale-policy-can-be-cleaned",
 			[]*rule{rule1},
-			[]*v1beta1.NetworkPolicy{},
+			[]*v1beta2.NetworkPolicy{},
 			[]*rule{},
 			sets.NewString(rule1.ID),
 		},
 		{
 			"existing-policy-can-be-updated",
 			[]*rule{rule1},
-			[]*v1beta1.NetworkPolicy{networkPolicy2},
+			[]*v1beta2.NetworkPolicy{networkPolicy2},
 			[]*rule{rule2},
 			sets.NewString(rule1.ID, rule2.ID),
 		},
 		{
 			"unchanged-policy-can-be-skipped",
 			[]*rule{rule1},
-			[]*v1beta1.NetworkPolicy{networkPolicy1},
+			[]*v1beta2.NetworkPolicy{networkPolicy1},
 			[]*rule{rule1},
 			sets.NewString(),
 		},
 		{
 			"new-policy-can-be-added",
 			[]*rule{},
-			[]*v1beta1.NetworkPolicy{networkPolicy1},
+			[]*v1beta2.NetworkPolicy{networkPolicy1},
 			[]*rule{rule1},
 			sets.NewString(rule1.ID),
 		},
@@ -530,16 +530,16 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 	tests := []struct {
 		name               string
 		rules              []*rule
-		args               *v1beta1.AppliedToGroup
-		expectedPods       []*v1beta1.GroupMemberPod
+		args               *v1beta2.AppliedToGroup
+		expectedPods       []*v1beta2.GroupMemberPod
 		expectedDirtyRules sets.String
 	}{
 		{
 			"zero-rule",
 			[]*rule{rule1, rule2},
-			&v1beta1.AppliedToGroup{
+			&v1beta2.AppliedToGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "group0"},
-				Pods:       []v1beta1.GroupMemberPod{},
+				Pods:       []v1beta2.GroupMemberPod{},
 			},
 			nil,
 			sets.NewString(),
@@ -547,21 +547,21 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 		{
 			"one-rule",
 			[]*rule{rule1, rule2},
-			&v1beta1.AppliedToGroup{
+			&v1beta2.AppliedToGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "group2"},
-				Pods:       []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
+				Pods:       []v1beta2.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
 			},
-			[]*v1beta1.GroupMemberPod{newAppliedToGroupMember("pod1", "ns1")},
+			[]*v1beta2.GroupMemberPod{newAppliedToGroupMember("pod1", "ns1")},
 			sets.NewString("rule2"),
 		},
 		{
 			"two-rules",
 			[]*rule{rule1, rule2},
-			&v1beta1.AppliedToGroup{
+			&v1beta2.AppliedToGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "group1"},
-				Pods:       []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1"), *newAppliedToGroupMember("pod2", "ns1")},
+				Pods:       []v1beta2.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1"), *newAppliedToGroupMember("pod2", "ns1")},
 			},
-			[]*v1beta1.GroupMemberPod{newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1")},
+			[]*v1beta2.GroupMemberPod{newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1")},
 			sets.NewString("rule1", "rule2"),
 		},
 	}
@@ -586,35 +586,35 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 }
 
 func TestRuleCacheAddNetworkPolicy(t *testing.T) {
-	networkPolicyRule1 := &v1beta1.NetworkPolicyRule{
-		Direction: v1beta1.DirectionIn,
-		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-		To:        v1beta1.NetworkPolicyPeer{},
+	networkPolicyRule1 := &v1beta2.NetworkPolicyRule{
+		Direction: v1beta2.DirectionIn,
+		From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+		To:        v1beta2.NetworkPolicyPeer{},
 		Services:  nil,
 	}
-	networkPolicyRule2 := &v1beta1.NetworkPolicyRule{
-		Direction: v1beta1.DirectionIn,
-		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
-		To:        v1beta1.NetworkPolicyPeer{},
+	networkPolicyRule2 := &v1beta2.NetworkPolicyRule{
+		Direction: v1beta2.DirectionIn,
+		From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
+		To:        v1beta2.NetworkPolicyPeer{},
 		Services:  nil,
 	}
-	networkPolicy1 := &v1beta1.NetworkPolicy{
+	networkPolicy1 := &v1beta2.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1", Namespace: "ns1", Name: "name1"},
 		Rules:           nil,
 		AppliedToGroups: []string{"appliedToGroup1"},
-		SourceRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "name1",
 			UID:       "policy1",
 		},
 	}
-	networkPolicy2 := &v1beta1.NetworkPolicy{
+	networkPolicy2 := &v1beta2.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy2", Namespace: "ns2", Name: "name2"},
-		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1, *networkPolicyRule2},
+		Rules:           []v1beta2.NetworkPolicyRule{*networkPolicyRule1, *networkPolicyRule2},
 		AppliedToGroups: []string{"appliedToGroup1"},
-		SourceRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns2",
 			Name:      "name2",
 			UID:       "policy2",
@@ -624,7 +624,7 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 	rule2 := toRule(networkPolicyRule2, networkPolicy2, k8sNPMaxPriority)
 	tests := []struct {
 		name               string
-		args               *v1beta1.NetworkPolicy
+		args               *v1beta2.NetworkPolicy
 		expectedRules      []*rule
 		expectedDirtyRules sets.String
 	}{
@@ -672,14 +672,14 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name               string
 		rules              []*rule
-		args               *v1beta1.NetworkPolicy
+		args               *v1beta2.NetworkPolicy
 		expectedRules      []*rule
 		expectedDirtyRules sets.String
 	}{
 		{
 			"delete-zero-rule",
 			[]*rule{rule1, rule2, rule3},
-			&v1beta1.NetworkPolicy{
+			&v1beta2.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{UID: "policy0", Namespace: "ns0", Name: "name0"},
 			},
 			[]*rule{rule1, rule2, rule3},
@@ -688,7 +688,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 		{
 			"delete-one-rule",
 			[]*rule{rule1, rule2, rule3},
-			&v1beta1.NetworkPolicy{
+			&v1beta2.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{UID: "policy1", Namespace: "ns1", Name: "name1"},
 			},
 			[]*rule{rule2, rule3},
@@ -697,7 +697,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 		{
 			"delete-two-rule",
 			[]*rule{rule1, rule2, rule3},
-			&v1beta1.NetworkPolicy{
+			&v1beta2.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{UID: "policy2", Namespace: "ns2", Name: "name2"},
 			},
 			[]*rule{rule1},
@@ -724,26 +724,26 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 }
 
 func TestRuleCacheGetCompletedRule(t *testing.T) {
-	addressGroup1 := v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("1.1.1.2"))
-	addressGroup2 := v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.3"), newAddressGroupMember("1.1.1.2"))
-	appliedToGroup1 := v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1"))
-	appliedToGroup2 := v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod3", "ns1"), newAppliedToGroupMember("pod2", "ns1"))
+	addressGroup1 := v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("1.1.1.2"))
+	addressGroup2 := v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.3"), newAddressGroupMember("1.1.1.2"))
+	appliedToGroup1 := v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns1"))
+	appliedToGroup2 := v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod3", "ns1"), newAppliedToGroupMember("pod2", "ns1"))
 	rule1 := &rule{
 		ID:              "rule1",
-		Direction:       v1beta1.DirectionIn,
-		From:            v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+		Direction:       v1beta2.DirectionIn,
+		From:            v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
 	rule2 := &rule{
 		ID:              "rule2",
-		Direction:       v1beta1.DirectionOut,
-		To:              v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},
+		Direction:       v1beta2.DirectionOut,
+		To:              v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},
 		AppliedToGroups: []string{"appliedToGroup1", "appliedToGroup2"},
 	}
 	rule3 := &rule{
 		ID:              "rule3",
-		Direction:       v1beta1.DirectionIn,
-		From:            v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2", "addressGroup3"}},
+		Direction:       v1beta2.DirectionIn,
+		From:            v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2", "addressGroup3"}},
 		AppliedToGroups: []string{"appliedToGroup1", "appliedToGroup2"},
 	}
 	tests := []struct {
@@ -829,9 +829,9 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 	tests := []struct {
 		name               string
 		rules              []*rule
-		podSetByGroup      map[string]v1beta1.GroupMemberPodSet
-		args               *v1beta1.AppliedToGroupPatch
-		expectedPods       []*v1beta1.GroupMemberPod
+		podSetByGroup      map[string]v1beta2.GroupMemberPodSet
+		args               *v1beta2.AppliedToGroupPatch
+		expectedPods       []*v1beta2.GroupMemberPod
 		expectedDirtyRules sets.String
 		expectedErr        bool
 	}{
@@ -839,9 +839,9 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 			"non-existing-group",
 			nil,
 			nil,
-			&v1beta1.AppliedToGroupPatch{
+			&v1beta2.AppliedToGroupPatch{
 				ObjectMeta: metav1.ObjectMeta{Name: "group0"},
-				AddedPods:  []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
+				AddedPods:  []v1beta2.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
 			},
 			nil,
 			sets.NewString(),
@@ -850,26 +850,26 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 		{
 			"add-and-remove-pods-affecting-one-rule",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{"group2": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
-			&v1beta1.AppliedToGroupPatch{
+			map[string]v1beta2.GroupMemberPodSet{"group2": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
+			&v1beta2.AppliedToGroupPatch{
 				ObjectMeta:  metav1.ObjectMeta{Name: "group2"},
-				AddedPods:   []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns1"), *newAppliedToGroupMember("pod3", "ns3")},
-				RemovedPods: []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
+				AddedPods:   []v1beta2.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns1"), *newAppliedToGroupMember("pod3", "ns3")},
+				RemovedPods: []v1beta2.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
 			},
-			[]*v1beta1.GroupMemberPod{newAppliedToGroupMember("pod2", "ns1"), newAppliedToGroupMember("pod3", "ns3")},
+			[]*v1beta2.GroupMemberPod{newAppliedToGroupMember("pod2", "ns1"), newAppliedToGroupMember("pod3", "ns3")},
 			sets.NewString("rule2"),
 			false,
 		},
 		{
 			"add-and-remove-pods-affecting-two-rule",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{"group1": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
-			&v1beta1.AppliedToGroupPatch{
+			map[string]v1beta2.GroupMemberPodSet{"group1": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
+			&v1beta2.AppliedToGroupPatch{
 				ObjectMeta:  metav1.ObjectMeta{Name: "group1"},
-				AddedPods:   []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns1"), *newAppliedToGroupMember("pod3", "ns3")},
-				RemovedPods: []v1beta1.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
+				AddedPods:   []v1beta2.GroupMemberPod{*newAppliedToGroupMember("pod2", "ns1"), *newAppliedToGroupMember("pod3", "ns3")},
+				RemovedPods: []v1beta2.GroupMemberPod{*newAppliedToGroupMember("pod1", "ns1")},
 			},
-			[]*v1beta1.GroupMemberPod{newAppliedToGroupMember("pod2", "ns1"), newAppliedToGroupMember("pod3", "ns3")},
+			[]*v1beta2.GroupMemberPod{newAppliedToGroupMember("pod2", "ns1"), newAppliedToGroupMember("pod3", "ns3")},
 			sets.NewString("rule1", "rule2"),
 			false,
 		},
@@ -897,18 +897,18 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 func TestRuleCachePatchAddressGroup(t *testing.T) {
 	rule1 := &rule{
 		ID:   "rule1",
-		From: v1beta1.NetworkPolicyPeer{AddressGroups: []string{"group1"}},
+		From: v1beta2.NetworkPolicyPeer{AddressGroups: []string{"group1"}},
 	}
 	rule2 := &rule{
 		ID: "rule2",
-		To: v1beta1.NetworkPolicyPeer{AddressGroups: []string{"group1", "group2"}},
+		To: v1beta2.NetworkPolicyPeer{AddressGroups: []string{"group1", "group2"}},
 	}
 	tests := []struct {
 		name               string
 		rules              []*rule
-		addressSetByGroup  map[string]v1beta1.GroupMemberSet
-		args               *v1beta1.AddressGroupPatch
-		expectedAddresses  []*v1beta1.GroupMember
+		addressSetByGroup  map[string]v1beta2.GroupMemberSet
+		args               *v1beta2.AddressGroupPatch
+		expectedAddresses  []*v1beta2.GroupMember
 		expectedDirtyRules sets.String
 		expectedErr        bool
 	}{
@@ -916,9 +916,9 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 			"non-existing-group",
 			nil,
 			nil,
-			&v1beta1.AddressGroupPatch{
+			&v1beta2.AddressGroupPatch{
 				ObjectMeta: metav1.ObjectMeta{Name: "group0"},
-				AddedPods:  []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2")},
+				AddedPods:  []v1beta2.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2")},
 			},
 			nil,
 			sets.NewString(),
@@ -927,26 +927,26 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 		{
 			"add-and-remove-addresses-affecting-one-rule",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberSet{"group2": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
-			&v1beta1.AddressGroupPatch{
+			map[string]v1beta2.GroupMemberSet{"group2": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
+			&v1beta2.AddressGroupPatch{
 				ObjectMeta:  metav1.ObjectMeta{Name: "group2"},
-				AddedPods:   []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("2.2.2.2"), *newAddressGroupMemberPod("3.3.3.3")},
-				RemovedPods: []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
+				AddedPods:   []v1beta2.GroupMemberPod{*newAddressGroupMemberPod("2.2.2.2"), *newAddressGroupMemberPod("3.3.3.3")},
+				RemovedPods: []v1beta2.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
 			},
-			[]*v1beta1.GroupMember{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
+			[]*v1beta2.GroupMember{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
 			sets.NewString("rule2"),
 			false,
 		},
 		{
 			"add-and-remove-addresses-affecting-two-rule",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberSet{"group1": v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
-			&v1beta1.AddressGroupPatch{
+			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
+			&v1beta2.AddressGroupPatch{
 				ObjectMeta:  metav1.ObjectMeta{Name: "group1"},
-				AddedPods:   []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("2.2.2.2"), *newAddressGroupMemberPod("3.3.3.3")},
-				RemovedPods: []v1beta1.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
+				AddedPods:   []v1beta2.GroupMemberPod{*newAddressGroupMemberPod("2.2.2.2"), *newAddressGroupMemberPod("3.3.3.3")},
+				RemovedPods: []v1beta2.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1")},
 			},
-			[]*v1beta1.GroupMember{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
+			[]*v1beta2.GroupMember{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
 			sets.NewString("rule1", "rule2"),
 			false,
 		},
@@ -972,46 +972,46 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 }
 
 func TestRuleCacheUpdateNetworkPolicy(t *testing.T) {
-	networkPolicyRule1 := &v1beta1.NetworkPolicyRule{
-		Direction: v1beta1.DirectionIn,
-		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-		To:        v1beta1.NetworkPolicyPeer{},
+	networkPolicyRule1 := &v1beta2.NetworkPolicyRule{
+		Direction: v1beta2.DirectionIn,
+		From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+		To:        v1beta2.NetworkPolicyPeer{},
 		Services:  nil,
 	}
-	networkPolicyRule2 := &v1beta1.NetworkPolicyRule{
-		Direction: v1beta1.DirectionIn,
-		From:      v1beta1.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
-		To:        v1beta1.NetworkPolicyPeer{},
+	networkPolicyRule2 := &v1beta2.NetworkPolicyRule{
+		Direction: v1beta2.DirectionIn,
+		From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
+		To:        v1beta2.NetworkPolicyPeer{},
 		Services:  nil,
 	}
-	networkPolicy1 := &v1beta1.NetworkPolicy{
+	networkPolicy1 := &v1beta2.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
-		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1},
+		Rules:           []v1beta2.NetworkPolicyRule{*networkPolicyRule1},
 		AppliedToGroups: []string{"addressGroup1"},
-		SourceRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "name1",
 			UID:       "policy1",
 		},
 	}
-	networkPolicy2 := &v1beta1.NetworkPolicy{
+	networkPolicy2 := &v1beta2.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
-		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1},
+		Rules:           []v1beta2.NetworkPolicyRule{*networkPolicyRule1},
 		AppliedToGroups: []string{"addressGroup2"},
-		SourceRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "name1",
 			UID:       "policy1",
 		},
 	}
-	networkPolicy3 := &v1beta1.NetworkPolicy{
+	networkPolicy3 := &v1beta2.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1"},
-		Rules:           []v1beta1.NetworkPolicyRule{*networkPolicyRule1, *networkPolicyRule2},
+		Rules:           []v1beta2.NetworkPolicyRule{*networkPolicyRule1, *networkPolicyRule2},
 		AppliedToGroups: []string{"addressGroup1"},
-		SourceRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "name1",
 			UID:       "policy1",
@@ -1023,7 +1023,7 @@ func TestRuleCacheUpdateNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name               string
 		rules              []*rule
-		args               *v1beta1.NetworkPolicy
+		args               *v1beta2.NetworkPolicy
 		expectedRules      []*rule
 		expectedDirtyRules sets.String
 	}{
@@ -1073,32 +1073,32 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 	tests := []struct {
 		name               string
 		rules              []*rule
-		podSetByGroup      map[string]v1beta1.GroupMemberPodSet
-		podUpdate          v1beta1.PodReference
+		podSetByGroup      map[string]v1beta2.GroupMemberPodSet
+		podUpdate          v1beta2.PodReference
 		expectedDirtyRules sets.String
 	}{
 		{
 			"non-matching-group",
 			nil,
 			nil,
-			v1beta1.PodReference{Name: "foo", Namespace: "bar"},
+			v1beta2.PodReference{Name: "foo", Namespace: "bar"},
 			sets.NewString(),
 		},
 		{
 			"matching-one-group-affecting-one-rule",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{"group2": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
-			v1beta1.PodReference{Name: "pod1", Namespace: "ns1"},
+			map[string]v1beta2.GroupMemberPodSet{"group2": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))},
+			v1beta2.PodReference{Name: "pod1", Namespace: "ns1"},
 			sets.NewString("rule2"),
 		},
 		{
 			"matching-two-groups-affecting-two-rules",
 			[]*rule{rule1, rule2},
-			map[string]v1beta1.GroupMemberPodSet{
-				"group1": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1")),
-				"group2": v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1")),
+			map[string]v1beta2.GroupMemberPodSet{
+				"group1": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1")),
+				"group2": v1beta2.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1")),
 			},
-			v1beta1.PodReference{Name: "pod1", Namespace: "ns1"},
+			v1beta2.PodReference{Name: "pod1", Namespace: "ns1"},
 			sets.NewString("rule1", "rule2"),
 		},
 	}

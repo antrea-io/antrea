@@ -99,6 +99,15 @@ message AppliedToGroupPatch {
   repeated GroupMember removedGroupMembers = 5;
 }
 
+// Endpoint represents an external endpoint.
+message Endpoint {
+  // IP is the IP address of the Endpoint.
+  optional bytes ip = 1;
+
+  // Ports is the list NamedPort of the Endpoint.
+  repeated NamedPort ports = 2;
+}
+
 // ExternalEntityReference represents a ExternalEntity Reference.
 message ExternalEntityReference {
   // The name of this ExternalEntity.
@@ -117,11 +126,8 @@ message GroupMember {
   // ExternalEntity maintains the reference to the ExternalEntity.
   optional ExternalEntityReference externalEntity = 2;
 
-  // IP is the IP address of the Endpoints associated with the GroupMember.
-  repeated bytes ips = 3;
-
-  // Ports is the list NamedPort of the GroupMember.
-  repeated NamedPort ports = 4;
+  // Endpoints maintains a list of EndPoints associated with this groupMember.
+  repeated Endpoint endpoints = 3;
 }
 
 // GroupMemberPod represents a GroupMember related to Pods.
