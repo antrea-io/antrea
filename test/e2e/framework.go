@@ -127,6 +127,17 @@ type PodIPs struct {
 	ipStrings []string
 }
 
+func (p PodIPs) String() string {
+	res := ""
+	if p.ipv4 != nil {
+		res += fmt.Sprintf("IPv4: %s, ", p.ipv4.String())
+	}
+	if p.ipv6 != nil {
+		res += fmt.Sprintf("IPv6: %s, ", p.ipv6.String())
+	}
+	return fmt.Sprintf("%sIP strings: %s", res, strings.Join(p.ipStrings, ", "))
+}
+
 func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
 	if len(p.ipStrings) == 0 && len(p1.ipStrings) == 0 {
 		return true
