@@ -177,10 +177,12 @@ func (b *ofFlowBuilder) MatchCTStateInv(set bool) FlowBuilder {
 	return b
 }
 
-// MatchCTMark adds match condition for matching ct_mark.
-func (b *ofFlowBuilder) MatchCTMark(value uint32) FlowBuilder {
+// MatchCTMark adds match condition for matching ct_mark. If mask is nil, the mask should be not set in the OpenFlow
+// message which is sent to OVS, and OVS should match the value exactly.
+func (b *ofFlowBuilder) MatchCTMark(value uint32, mask *uint32) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("ct_mark=%d", value))
 	b.ofFlow.Match.CtMark = value
+	b.ofFlow.Match.CtMarkMask = mask
 	return b
 }
 
@@ -477,7 +479,7 @@ func (b *ofFlowBuilder) Cookie(cookieID uint64) FlowBuilder {
 
 // CookieMask sets cookie mask for the flow entry.
 func (b *ofFlowBuilder) CookieMask(cookieMask uint64) FlowBuilder {
-	b.Flow.CookieMask = cookieMask
+	b.Flow.CookieMask = &cookieMask
 	return b
 }
 
