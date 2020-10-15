@@ -140,9 +140,9 @@ func normalizeGroupMember(member *GroupMember) groupMemberKey {
 		b.WriteString(member.ExternalEntity.Namespace)
 		b.WriteString(delimiter)
 		b.WriteString(member.ExternalEntity.Name)
-	} else if len(member.IPs) != 0 {
-		for _, ip := range member.IPs {
-			b.Write(ip)
+	} else if len(member.Endpoints) != 0 {
+		for _, ep := range member.Endpoints {
+			b.Write(ep.IP)
 		}
 	}
 	return groupMemberKey(b.String())

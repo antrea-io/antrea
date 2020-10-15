@@ -227,6 +227,39 @@ spec:
         type: object
     served: true
     storage: true
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              endpoints:
+                items:
+                  properties:
+                    ip:
+                      format: ipv4
+                      type: string
+                    name:
+                      type: string
+                    ports:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          port:
+                            x-kubernetes-int-or-string: true
+                          protocol:
+                            type: string
+                        type: object
+                      type: array
+                  type: object
+                type: array
+              externalNode:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: false
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -916,6 +949,7 @@ rules:
   resourceNames:
   - v1alpha1.stats.antrea.tanzu.vmware.com
   - v1beta1.system.antrea.tanzu.vmware.com
+  - v1beta2.controlplane.antrea.tanzu.vmware.com
   - v1beta1.controlplane.antrea.tanzu.vmware.com
   - v1beta1.networking.antrea.tanzu.vmware.com
   resources:
@@ -1355,6 +1389,21 @@ spec:
     name: antrea
     namespace: kube-system
   version: v1beta1
+  versionPriority: 100
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    app: antrea
+  name: v1beta2.controlplane.antrea.tanzu.vmware.com
+spec:
+  group: controlplane.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  service:
+    name: antrea
+    namespace: kube-system
+  version: v1beta2
   versionPriority: 100
 ---
 apiVersion: apps/v1

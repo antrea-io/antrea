@@ -20,7 +20,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 type Response struct {
@@ -29,7 +29,7 @@ type Response struct {
 }
 
 func listTransform(l interface{}) (interface{}, error) {
-	groups := l.(*cpv1beta1.AppliedToGroupList)
+	groups := l.(*cpv1beta.AppliedToGroupList)
 	result := []Response{}
 	for _, group := range groups.Items {
 		o, _ := objectTransform(&group)
@@ -39,7 +39,7 @@ func listTransform(l interface{}) (interface{}, error) {
 }
 
 func objectTransform(o interface{}) (interface{}, error) {
-	group := o.(*cpv1beta1.AppliedToGroup)
+	group := o.(*cpv1beta.AppliedToGroup)
 	var pods []common.GroupMemberPod
 	for _, pod := range group.Pods {
 		pods = append(pods, common.GroupMemberPodTransform(pod))
@@ -49,8 +49,8 @@ func objectTransform(o interface{}) (interface{}, error) {
 
 func Transform(reader io.Reader, single bool) (interface{}, error) {
 	return transform.GenericFactory(
-		reflect.TypeOf(cpv1beta1.AppliedToGroup{}),
-		reflect.TypeOf(cpv1beta1.AppliedToGroupList{}),
+		reflect.TypeOf(cpv1beta.AppliedToGroup{}),
+		reflect.TypeOf(cpv1beta.AppliedToGroupList{}),
 		objectTransform,
 		listTransform,
 	)(reader, single)

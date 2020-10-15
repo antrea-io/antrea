@@ -20,16 +20,17 @@ import "fmt"
 func (g *GroupMember) ToGroupMemberPod() *GroupMemberPod {
 	return &GroupMemberPod{
 		Pod:   g.Pod,
-		IP:    g.IPs[0],
-		Ports: g.Ports,
+		IP:    g.Endpoints[0].IP,
+		Ports: g.Endpoints[0].Ports,
 	}
 }
 
 func (p *GroupMemberPod) ToGroupMember() *GroupMember {
 	return &GroupMember{
-		Pod:   p.Pod,
-		IPs:   []IPAddress{p.IP},
-		Ports: p.Ports,
+		Pod: p.Pod,
+		Endpoints: []Endpoint{
+			{IP: p.IP, Ports: p.Ports},
+		},
 	}
 }
 
