@@ -517,7 +517,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Done(),
 			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 				MatchCTStateTrk(true).
-				MatchCTMark(serviceCTMark).
+				MatchCTMark(serviceCTMark, nil).
 				MatchRegRange(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Action().GotoTable(connectionTrackCommitTable.GetNext()).
@@ -534,7 +534,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 	return append(flows,
 		connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-			MatchCTMark(gatewayCTMark).
+			MatchCTMark(gatewayCTMark, nil).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
 			Action().GotoTable(connectionTrackStateTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -584,7 +584,7 @@ func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr, category cooki
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	macData, _ := strconv.ParseUint(strings.Replace(gatewayMAC.String(), ":", "", -1), 16, 64)
 	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchCTMark(gatewayCTMark).
+		MatchCTMark(gatewayCTMark, nil).
 		MatchCTStateNew(false).MatchCTStateTrk(true).
 		Action().LoadRange(binding.NxmFieldDstMAC, macData, binding.Range{0, 47}).
 		Action().GotoTable(connectionTrackStateTable.GetNext()).
@@ -597,7 +597,7 @@ func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr, category cooki
 func (c *client) serviceLBBypassFlow() binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchCTMark(serviceCTMark).
+		MatchCTMark(serviceCTMark, nil).
 		MatchCTStateNew(false).MatchCTStateTrk(true).
 		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 		Action().GotoTable(EgressRuleTable).
@@ -1178,7 +1178,7 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 		c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).
 			MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
-			MatchCTMark(snatCTMark).
+			MatchCTMark(snatCTMark, nil).
 			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
 			Action().LoadRange(binding.NxmFieldDstMAC, vMACInt, binding.Range{0, 47}).
 			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
@@ -1189,7 +1189,7 @@ func (c *client) bridgeAndUplinkFlows(uplinkOfport uint32, bridgeLocalPort uint3
 		c.pipeline[conntrackStateTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
-			MatchCTMark(snatCTMark).
+			MatchCTMark(snatCTMark, nil).
 			Action().GotoTable(ctStateNext).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
@@ -1222,7 +1222,7 @@ func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputP
 		c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
-			MatchCTMark(gatewayCTMark).
+			MatchCTMark(gatewayCTMark, nil).
 			Action().GotoTable(l2ForwardingCalcTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),

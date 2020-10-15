@@ -92,7 +92,7 @@ func (t *ofTable) BuildFlow(priority uint16) FlowBuilder {
 
 // DumpFlows dumps all existing Openflow entries from OFSwitch using cookie ID and table ID as filters.
 func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates, error) {
-	ofStats, err := t.Table.Switch.DumpFlowStats(cookieID, cookieMask, nil, &t.TableId)
+	ofStats, err := t.Table.Switch.DumpFlowStats(cookieID, &cookieMask, nil, &t.TableId)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +297,7 @@ func (b *OFBridge) Disconnect() error {
 // DumpFlows queries the Openflow entries from OFSwitch, the filter of the query is Openflow cookieID. The result is
 // a map from flow cookieID to FlowStates.
 func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates, error) {
-	ofStats, err := b.ofSwitch.DumpFlowStats(cookieID, cookieMask, nil, nil)
+	ofStats, err := b.ofSwitch.DumpFlowStats(cookieID, &cookieMask, nil, nil)
 	if err != nil {
 		return nil, err
 	}
