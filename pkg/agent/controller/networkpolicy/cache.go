@@ -64,6 +64,8 @@ type rule struct {
 	Action *secv1alpha1.RuleAction
 	// Priority of this rule within the NetworkPolicy. Defaults to -1 for K8s NetworkPolicy.
 	Priority int32
+	// The highest rule Priority within the NetworkPolicy. Defaults to -1 for K8s NetworkPolicy.
+	MaxPriority int32
 	// Priority of the NetworkPolicy to which this rule belong. nil for K8s NetworkPolicy.
 	PolicyPriority *float64
 	// Priority of the tier that the NetworkPolicy belongs to. nil for K8s NetworkPolicy.
@@ -560,7 +562,7 @@ func (c *ruleCache) DeleteAppliedToGroup(group *v1beta1.AppliedToGroup) error {
 }
 
 // toRule converts v1beta1.NetworkPolicyRule to *rule.
-func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
+func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy, maxPriority int32) *rule {
 	rule := &rule{
 		Direction:       r.Direction,
 		From:            r.From,
@@ -577,7 +579,23 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy) *rule {
 	rule.ID = hashRule(rule)
 	rule.PolicyNamespace = policy.Namespace
 	rule.PolicyName = policy.Name
+	rule.MaxPriority = maxPriority
 	return rule
+}
+
+// getMaxPriority returns the highest rule priority for v1beta1.NetworkPolicy that is created
+// by Antrea-native policies. For K8s NetworkPolicies, it always returns -1.
+func getMaxPriority(policy *v1beta1.NetworkPolicy) int32 {
+	if policy.SourceRef.Type == v1beta1.K8sNetworkPolicy {
+		return -1
+	}
+	maxPriority := int32(-1)
+	for _, r := range policy.Rules {
+		if r.Priority > maxPriority {
+			maxPriority = r.Priority
+		}
+	}
+	return maxPriority
 }
 
 // GetNetworkPolicyNum gets the number of NetworkPolicy.
@@ -637,8 +655,9 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 		ruleByID[r.(*rule).ID] = r
 	}
 
+	maxPriority := getMaxPriority(policy)
 	for i := range policy.Rules {
-		r := toRule(&policy.Rules[i], policy)
+		r := toRule(&policy.Rules[i], policy, maxPriority)
 		if _, exists := ruleByID[r.ID]; exists {
 			// If rule already exists, remove it from the map so the ones left finally are orphaned.
 			klog.V(2).Infof("Rule %v was not changed", r.ID)

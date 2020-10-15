@@ -81,6 +81,19 @@ func (p *Priority) Equals(p2 Priority) bool {
 	return p.TierPriority == p2.TierPriority && p.PolicyPriority == p2.PolicyPriority && p.RulePriority == p2.RulePriority
 }
 
+// InSamePriorityZone returns true if two Priorities are of the same Tier and same priority at policy level.
+func (p *Priority) InSamePriorityZone(p2 Priority) bool {
+	return p.PolicyPriority == p2.PolicyPriority && p.TierPriority == p2.TierPriority
+}
+
+// IsConsecutive returns true if two Priorties are immediately next to each other.
+func (p *Priority) IsConsecutive(p2 Priority) bool {
+	if !p.InSamePriorityZone(p2) {
+		return false
+	}
+	return p.RulePriority-p2.RulePriority == 1 || p2.RulePriority-p.RulePriority == 1
+}
+
 // ByPriority sorts a list of Priority by their relative TierPriority, PolicyPriority and RulePriority, in that order.
 // It implements sort.Interface.
 type ByPriority []Priority
