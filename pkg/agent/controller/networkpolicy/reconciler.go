@@ -270,20 +270,32 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 		PolicyPriority: *rule.PolicyPriority,
 		RulePriority:   rule.Priority,
 	}
-	ofPriority, priorityUpdates, revertFunc, err := pa.assigner.GetOFPriority(p)
-	if err != nil {
-		return nil, err
-	}
-	// Re-assign installed priorities on OVS
-	if len(priorityUpdates) > 0 {
-		err := r.ofClient.ReassignFlowPriorities(priorityUpdates, table)
+	ofPriority, registered := pa.assigner.GetOFPriority(p)
+	if !registered {
+		allPrioritiesInPolicy := make([]types.Priority, rule.MaxPriority+1)
+		for i := int32(0); i <= rule.MaxPriority; i++ {
+			allPrioritiesInPolicy[i] = types.Priority{
+				TierPriority:   *rule.TierPriority,
+				PolicyPriority: *rule.PolicyPriority,
+				RulePriority:   i,
+			}
+		}
+		priorityUpdates, revertFunc, err := pa.assigner.RegisterPriorities(allPrioritiesInPolicy)
 		if err != nil {
-			revertFunc()
 			return nil, err
 		}
+		// Re-assign installed priorities on OVS
+		if len(priorityUpdates) > 0 {
+			err := r.ofClient.ReassignFlowPriorities(priorityUpdates, table)
+			if err != nil {
+				revertFunc()
+				return nil, err
+			}
+		}
+		ofPriority, _ = pa.assigner.GetOFPriority(p)
 	}
-	klog.V(2).Infof("Assigning OFPriority %v for rule %v", *ofPriority, rule.ID)
-	return ofPriority, nil
+	klog.V(2).Infof("Assigning OFPriority %v for rule %v", ofPriority, rule.ID)
+	return &ofPriority, nil
 }
 
 // BatchReconcile reconciles the desired state of the provided CompletedRules
@@ -341,7 +353,7 @@ func (r *reconciler) registerOFPriorities(rules []*CompletedRule) error {
 		}
 	}
 	for tableID, priorities := range prioritiesToRegister {
-		if err := r.priorityAssigners[tableID].assigner.RegisterPriorities(priorities); err != nil {
+		if _, _, err := r.priorityAssigners[tableID].assigner.RegisterPriorities(priorities); err != nil {
 			return err
 		}
 	}
