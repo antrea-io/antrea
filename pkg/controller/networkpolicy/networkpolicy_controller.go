@@ -50,10 +50,8 @@ import (
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	corev1a1informers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/core/v1alpha1"
 	corev1a2informers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/core/v1alpha2"
 	secinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security/v1alpha1"
-	corev1a1listers "github.com/vmware-tanzu/antrea/pkg/client/listers/core/v1alpha1"
 	corev1a2listers "github.com/vmware-tanzu/antrea/pkg/client/listers/core/v1alpha2"
 	seclisters "github.com/vmware-tanzu/antrea/pkg/client/listers/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
@@ -128,13 +126,6 @@ type NetworkPolicyController struct {
 	// namespaceListerSynced is a function which returns true if the Namespace shared informer has been synced at least once.
 	namespaceListerSynced cache.InformerSynced
 
-	externalEntityV1Informer corev1a1informers.ExternalEntityInformer
-	// externalEntityV1Lister is able to list/get v1alpha1 ExternalEntities and is populated by the shared informer passed to
-	// NewNetworkPolicyController.
-	externalEntityV1Lister corev1a1listers.ExternalEntityLister
-	// externalEntityV1Synced is a function which returns true if the v1alpha1 ExternalEntity shared informer has been synced at least once.
-	externalEntityV1Synced cache.InformerSynced
-
 	externalEntityInformer corev1a2informers.ExternalEntityInformer
 	// externalEntityLister is able to list/get ExternalEntities and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
@@ -206,7 +197,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	crdClient versioned.Interface,
 	podInformer coreinformers.PodInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
-	externalEntityV1Informer corev1a1informers.ExternalEntityInformer,
 	externalEntityInformer corev1a2informers.ExternalEntityInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	cnpInformer secinformers.ClusterNetworkPolicyInformer,
@@ -224,9 +214,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		namespaceInformer:          namespaceInformer,
 		namespaceLister:            namespaceInformer.Lister(),
 		namespaceListerSynced:      namespaceInformer.Informer().HasSynced,
-		externalEntityV1Informer:   externalEntityV1Informer,
-		externalEntityV1Lister:     externalEntityV1Informer.Lister(),
-		externalEntityV1Synced:     externalEntityV1Informer.Informer().HasSynced,
 		externalEntityInformer:     externalEntityInformer,
 		externalEntityLister:       externalEntityInformer.Lister(),
 		externalEntitySynced:       externalEntityInformer.Informer().HasSynced,
@@ -324,14 +311,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 				AddFunc:    n.addANP,
 				UpdateFunc: n.updateANP,
 				DeleteFunc: n.deleteANP,
-			},
-			resyncPeriod,
-		)
-		externalEntityV1Informer.Informer().AddEventHandlerWithResyncPeriod(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addExternalEntity,
-				UpdateFunc: n.updateExternalEntity,
-				DeleteFunc: n.deleteExternalEntity,
 			},
 			resyncPeriod,
 		)
@@ -1344,10 +1323,6 @@ func (n *NetworkPolicyController) processSelector(groupSelector antreatypes.Grou
 			pods, _ = n.podLister.Pods(groupSelector.Namespace).List(groupSelector.PodSelector)
 		} else if groupSelector.ExternalEntitySelector != nil {
 			externalEntities, _ = n.externalEntityLister.ExternalEntities(groupSelector.Namespace).List(groupSelector.ExternalEntitySelector)
-			eev1, _ := n.externalEntityV1Lister.ExternalEntities(groupSelector.Namespace).List(groupSelector.ExternalEntitySelector)
-			for _, ee := range eev1 {
-				externalEntities = append(externalEntities, externalEntityV1Alpha1ToAlpha2(ee))
-			}
 		}
 	} else if groupSelector.NamespaceSelector != nil && (groupSelector.PodSelector != nil || groupSelector.ExternalEntitySelector != nil) {
 		// Pods and ExternalEntities must be selected from Namespaces matching nsSelector.
@@ -1359,10 +1334,6 @@ func (n *NetworkPolicyController) processSelector(groupSelector antreatypes.Grou
 			} else if groupSelector.ExternalEntitySelector != nil {
 				nsExtEntities, _ := n.externalEntityLister.ExternalEntities(ns.Name).List(groupSelector.ExternalEntitySelector)
 				externalEntities = append(externalEntities, nsExtEntities...)
-				eev1, _ := n.externalEntityV1Lister.ExternalEntities(ns.Name).List(groupSelector.ExternalEntitySelector)
-				for _, ee := range eev1 {
-					externalEntities = append(externalEntities, externalEntityV1Alpha1ToAlpha2(ee))
-				}
 			}
 		}
 	} else if groupSelector.NamespaceSelector != nil {
@@ -1378,10 +1349,6 @@ func (n *NetworkPolicyController) processSelector(groupSelector antreatypes.Grou
 		pods, _ = n.podLister.Pods("").List(groupSelector.PodSelector)
 	} else if groupSelector.ExternalEntitySelector != nil {
 		externalEntities, _ = n.externalEntityLister.ExternalEntities("").List(groupSelector.ExternalEntitySelector)
-		eev1, _ := n.externalEntityV1Lister.ExternalEntities("").List(groupSelector.ExternalEntitySelector)
-		for _, ee := range eev1 {
-			externalEntities = append(externalEntities, externalEntityV1Alpha1ToAlpha2(ee))
-		}
 	}
 	return pods, externalEntities
 }

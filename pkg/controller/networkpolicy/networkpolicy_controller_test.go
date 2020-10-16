@@ -37,7 +37,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
@@ -65,7 +65,6 @@ var (
 type networkPolicyController struct {
 	*NetworkPolicyController
 	podStore                   cache.Store
-	externalEntityV1Store      cache.Store
 	externalEntityStore        cache.Store
 	namespaceStore             cache.Store
 	networkPolicyStore         cache.Store
@@ -91,7 +90,6 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		crdClient,
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
-		crdInformerFactory.Core().V1alpha1().ExternalEntities(),
 		crdInformerFactory.Core().V1alpha2().ExternalEntities(),
 		informerFactory.Networking().V1().NetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
@@ -109,7 +107,6 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),
-		crdInformerFactory.Core().V1alpha1().ExternalEntities().Informer().GetStore(),
 		crdInformerFactory.Core().V1alpha2().ExternalEntities().Informer().GetStore(),
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
@@ -1578,14 +1575,14 @@ func TestFilterAddressGroupsForPodOrExternalEntity(t *testing.T) {
 	pod1.Labels = map[string]string{"purpose": "test-select"}
 	pod2 := getPod("pod2", "ns1", "node1", "1.1.1.2", false)
 	pod3 := getPod("pod3", "ns2", "node1", "1.1.1.3", false)
-	ee1 := &v1alpha1.ExternalEntity{
+	ee1 := &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ee1",
 			Namespace: "ns1",
 			Labels:    map[string]string{"platform": "aws"},
 		},
 	}
-	ee2 := &v1alpha1.ExternalEntity{
+	ee2 := &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ee2",
 			Namespace: "ns1",
@@ -1682,14 +1679,14 @@ func TestFilterAppliedToGroupsForPodOrExternalEntity(t *testing.T) {
 	pod1.Labels = map[string]string{"purpose": "test-select"}
 	pod2 := getPod("pod2", "ns1", "node1", "1.1.1.2", false)
 	pod3 := getPod("pod3", "ns2", "node1", "1.1.1.3", false)
-	ee1 := &v1alpha1.ExternalEntity{
+	ee1 := &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ee1",
 			Namespace: "ns1",
 			Labels:    map[string]string{"platform": "aws"},
 		},
 	}
-	ee2 := &v1alpha1.ExternalEntity{
+	ee2 := &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ee2",
 			Namespace: "ns1",
