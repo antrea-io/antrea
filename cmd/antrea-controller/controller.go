@@ -92,7 +92,6 @@ func run(o *Options) error {
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	cnpInformer := crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
-	externalEntityV1Informer := crdInformerFactory.Core().V1alpha1().ExternalEntities()
 	externalEntityInformer := crdInformerFactory.Core().V1alpha2().ExternalEntities()
 	anpInformer := crdInformerFactory.Security().V1alpha1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Security().V1alpha1().Tiers()
@@ -107,7 +106,6 @@ func run(o *Options) error {
 		crdClient,
 		podInformer,
 		namespaceInformer,
-		externalEntityV1Informer,
 		externalEntityInformer,
 		networkPolicyInformer,
 		cnpInformer,

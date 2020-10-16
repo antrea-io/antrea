@@ -27,39 +27,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 )
-
-// externalEntityV1Alpha1ToAlpha2 converts a v1alpha1.ExternalEntity object to a
-// v1alpha2.ExternalEntity object. Note that spec.ports in v1alpha2.ExternalEntity
-// will be set to the ports of the first Endpoint in v1alpha1.ExternalEntity,
-// as all ports specs in v1alpha1.ExternalEntity Endpoints are assumed to be the same.
-func externalEntityV1Alpha1ToAlpha2(ee *v1alpha1.ExternalEntity) *v1alpha2.ExternalEntity {
-	var ports []v1alpha2.NamedPort
-	var endpoints []v1alpha2.Endpoint
-	for i, ep := range ee.Spec.Endpoints {
-		if i == 0 {
-			for _, p := range ep.Ports {
-				ports = append(ports, v1alpha2.NamedPort{
-					Protocol: p.Protocol, Port: p.Port, Name: p.Name,
-				})
-			}
-		}
-		endpoints = append(endpoints, v1alpha2.Endpoint{
-			IP: ep.IP, Name: ep.Name,
-		})
-	}
-	return &v1alpha2.ExternalEntity{
-		TypeMeta:   ee.TypeMeta,
-		ObjectMeta: ee.ObjectMeta,
-		Spec: v1alpha2.ExternalEntitySpec{
-			Endpoints:    endpoints,
-			Ports:        ports,
-			ExternalNode: ee.Spec.ExternalNode,
-		},
-	}
-}
 
 // addExternalEntity retrieves all AddressGroups and AppliedToGroups which match the ExternalEnitty's
 // labels and enqueues the groups key for further processing.
@@ -94,10 +63,6 @@ func (n *NetworkPolicyController) updateExternalEntity(oldObj, curObj interface{
 	var specEqual bool
 	if oldEEObj, ok := oldEE.(*v1alpha2.ExternalEntity); ok {
 		curEEObj := curEE.(*v1alpha2.ExternalEntity)
-		specEqual = reflect.DeepEqual(oldEEObj.Spec, curEEObj.Spec)
-	} else {
-		oldEEObj := oldEE.(*v1alpha1.ExternalEntity)
-		curEEObj := curEE.(*v1alpha1.ExternalEntity)
 		specEqual = reflect.DeepEqual(oldEEObj.Spec, curEEObj.Spec)
 	}
 	// TODO: Right now two ExternalEntities are only considered equal if the list of Endpoints and
@@ -154,11 +119,8 @@ func (n *NetworkPolicyController) deleteExternalEntity(old interface{}) {
 		}
 		ee, ok = tombstone.Obj.(*v1alpha2.ExternalEntity)
 		if !ok {
-			ee, ok = tombstone.Obj.(*v1alpha1.ExternalEntity)
-			if !ok {
-				klog.Errorf("Error decoding object tombstone when deleting ExternalEntity, invalid type: %v", tombstone.Obj)
-				return
-			}
+			klog.Errorf("Error decoding object tombstone when deleting ExternalEntity, invalid type: %v", tombstone.Obj)
+			return
 		}
 	}
 	defer n.heartbeat("deleteExternalEntity")
