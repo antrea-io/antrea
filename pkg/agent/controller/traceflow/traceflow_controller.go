@@ -318,6 +318,9 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	c.injectedTags[tf.Status.DataplaneTag] = tf.Name
 	c.injectedTagsMutex.Unlock()
 
+	var srcTCPPort, dstTCPPort, srcUDPPort, dstUDPPort, idICMP, sequenceICMP uint16
+	var flagsTCP uint8
+
 	// Calculate destination MAC/IP.
 	dstMAC := ""
 	dstIP := tf.Spec.Destination.IP
@@ -347,6 +350,7 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 			return err
 		}
 		dstIP = dstSvc.Spec.ClusterIP
+		flagsTCP = 2
 	}
 	// Check encap status if no dstMAC found which means the destination is Service or the destination Pod/IP is not on local Node.
 	if dstMAC == "" {
@@ -366,25 +370,19 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	if tf.Spec.Packet.IPHeader.Protocol == 0 {
 		tf.Spec.Packet.IPHeader.Protocol = 1
 	}
-	TCPSrcPort := uint16(0)
-	TCPDstPort := uint16(0)
-	TCPFlags := uint8(0)
-	UDPSrcPort := uint16(0)
-	UDPDstPort := uint16(0)
-	ICMPID := uint16(0)
-	ICMPSequence := uint16(0)
+
 	if tf.Spec.Packet.TransportHeader.TCP != nil {
-		TCPSrcPort = uint16(tf.Spec.Packet.TransportHeader.TCP.SrcPort)
-		TCPDstPort = uint16(tf.Spec.Packet.TransportHeader.TCP.DstPort)
-		TCPFlags = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
+		srcTCPPort = uint16(tf.Spec.Packet.TransportHeader.TCP.SrcPort)
+		dstTCPPort = uint16(tf.Spec.Packet.TransportHeader.TCP.DstPort)
+		flagsTCP = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
 	}
 	if tf.Spec.Packet.TransportHeader.UDP != nil {
-		UDPSrcPort = uint16(tf.Spec.Packet.TransportHeader.UDP.SrcPort)
-		UDPDstPort = uint16(tf.Spec.Packet.TransportHeader.UDP.DstPort)
+		srcUDPPort = uint16(tf.Spec.Packet.TransportHeader.UDP.SrcPort)
+		dstUDPPort = uint16(tf.Spec.Packet.TransportHeader.UDP.DstPort)
 	}
 	if tf.Spec.Packet.TransportHeader.ICMP != nil {
-		ICMPID = uint16(tf.Spec.Packet.TransportHeader.ICMP.ID)
-		ICMPSequence = uint16(tf.Spec.Packet.TransportHeader.ICMP.Sequence)
+		idICMP = uint16(tf.Spec.Packet.TransportHeader.ICMP.ID)
+		sequenceICMP = uint16(tf.Spec.Packet.TransportHeader.ICMP.Sequence)
 	}
 	return c.ofClient.SendTraceflowPacket(
 		tf.Status.DataplaneTag,
@@ -395,15 +393,15 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		uint8(tf.Spec.Packet.IPHeader.Protocol),
 		uint8(tf.Spec.Packet.IPHeader.TTL),
 		uint16(tf.Spec.Packet.IPHeader.Flags),
-		TCPSrcPort,
-		TCPDstPort,
-		TCPFlags,
-		UDPSrcPort,
-		UDPDstPort,
+		srcTCPPort,
+		dstTCPPort,
+		flagsTCP,
+		srcUDPPort,
+		dstUDPPort,
 		uint8(icmpEchoRequestType),
 		uint8(icmpEchoRequestCode),
-		ICMPID,
-		ICMPSequence,
+		idICMP,
+		sequenceICMP,
 		uint32(podInterfaces[0].OFPort),
 		-1)
 }
