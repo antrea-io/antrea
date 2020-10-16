@@ -48,7 +48,23 @@ type AgentConfig struct {
 	// Make sure it doesn't conflict with your existing interfaces.
 	// Defaults to antrea-gw0.
 	HostGateway string `yaml:"hostGateway,omitempty"`
-	// Encapsulation mode for communication between Pods across Nodes, supported values:
+	// Determines how traffic is encapsulated. It has the following options:
+	// encap(default):    Inter-node Pod traffic is always encapsulated and Pod to external network
+	//                    traffic is SNAT'd.
+	// noEncap:           Inter-node Pod traffic is not encapsulated; Pod to exteranl network traffic is
+	//                    SNAT'd if noSNAT is not set to true. Underlying network must be capable of
+	//                    supporting Pod traffic across IP subnets.
+	// hybrid:            noEncap if source and destination Nodes are on the same subnet, otherwise encap.
+	// networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod
+	//                    IPAM and connectivity to the primary CNI.
+	TrafficEncapMode string `yaml:"trafficEncapMode,omitempty"`
+	// Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to the external network.
+	// This option is for the noEncap traffic mode only, and the default value is false. In the noEncap
+	// mode, if the cluster's Pod CIDR is reachable from the external network, then the Pod traffic to
+	// the external network needs not be SNAT'd. In the networkPolicyOnly mode, antrea-agent never
+	// performs SNAT and this option will be ignored; for other modes it must be set to false.
+	NoSNAT bool `yaml:"noSNAT,omitempty"`
+	// Tunnel protocols used for encapsulating traffic across Nodes. Supported values:
 	// - geneve (default)
 	// - vxlan
 	// - gre
@@ -74,13 +90,6 @@ type AgentConfig struct {
 	// through an environment variable: ANTREA_IPSEC_PSK.
 	// Defaults to false.
 	EnableIPSecTunnel bool `yaml:"enableIPSecTunnel,omitempty"`
-	// Determines how traffic is encapsulated. It has the following options
-	// Encap(default): Inter-node Pod traffic is always encapsulated and Pod to outbound traffic is masqueraded.
-	// NoEncap: Inter-node Pod traffic is not encapsulated, but Pod to outbound traffic is masqueraded.
-	//          Underlying network must be capable of supporting Pod traffic across IP subnet.
-	// Hybrid: noEncap if worker Nodes on same subnet, otherwise encap.
-	// NetworkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod IPAM and connectivity to primary CNI.
-	TrafficEncapMode string `yaml:"trafficEncapMode,omitempty"`
 	// APIPort is the port for the antrea-agent APIServer to serve on.
 	// Defaults to 10350.
 	APIPort int `yaml:"apiPort,omitempty"`

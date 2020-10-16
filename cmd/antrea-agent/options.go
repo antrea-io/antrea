@@ -105,8 +105,16 @@ func (o *Options) validate(args []string) error {
 			return fmt.Errorf("Mode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
 		}
 		if o.config.EnableIPSecTunnel {
-			return fmt.Errorf("IPSec tunnel may only be enabled on %s mode", config.TrafficEncapModeEncap)
+			return fmt.Errorf("IPsec tunnel may only be enabled in %s mode", config.TrafficEncapModeEncap)
 		}
+	}
+	if o.config.NoSNAT && !(encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeNetworkPolicyOnly) {
+		return fmt.Errorf("noSNAT is only applicable to the %s mode", config.TrafficEncapModeNoEncap)
+	}
+	if encapMode == config.TrafficEncapModeNetworkPolicyOnly {
+		// In the NetworkPolicyOnly mode, Antrea will not perform SNAT
+		// (but SNAT can be done by the primary CNI).
+		o.config.NoSNAT = true
 	}
 	if err := o.validateFlowExporterConfig(); err != nil {
 		return fmt.Errorf("Failed to validate flow exporter config: %v", err)
@@ -144,6 +152,9 @@ func (o *Options) setDefaults() {
 	if o.config.HostGateway == "" {
 		o.config.HostGateway = defaultHostGateway
 	}
+	if o.config.TrafficEncapMode == "" {
+		o.config.TrafficEncapMode = config.TrafficEncapModeEncap.String()
+	}
 	if o.config.TunnelType == "" {
 		o.config.TunnelType = defaultTunnelType
 	}
@@ -152,9 +163,6 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.ServiceCIDR == "" {
 		o.config.ServiceCIDR = defaultServiceCIDR
-	}
-	if o.config.TrafficEncapMode == "" {
-		o.config.TrafficEncapMode = config.TrafficEncapModeEncap.String()
 	}
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaAgentAPIPort
