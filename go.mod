@@ -17,7 +17,7 @@ require (
 	github.com/confluentinc/bincover v0.0.0-20200910210245-839e88185831
 	github.com/containernetworking/cni v0.7.1
 	github.com/containernetworking/plugins v0.8.2-0.20190724153215-ded2f1757770
-	github.com/contiv/libOpenflow v0.0.0-20200728044739-7c6534390721
+	github.com/contiv/libOpenflow v0.0.0-20201014051314-c1702744526c
 	github.com/contiv/ofnet v0.0.0-00010101000000-000000000000
 	github.com/coreos/go-iptables v0.4.5
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
@@ -64,7 +64,7 @@ require (
 replace (
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20201014035400-bf2f1685b6fd
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20201015012029-21df99f8161d
 	// fake.NewSimpleClientset is quite slow when it's initialized with massive objects due to
 	// https://github.com/kubernetes/kubernetes/issues/89574. It takes more than tens of minutes to
 	// init a fake client with 200k objects, which makes it hard to run the NetworkPolicy scale test.

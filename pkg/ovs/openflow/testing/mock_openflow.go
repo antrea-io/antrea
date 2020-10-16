@@ -1495,6 +1495,20 @@ func (mr *MockFlowBuilderMockRecorder) MatchDstMAC(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstMAC", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstMAC), arg0)
 }
 
+// MatchDstPort mocks base method
+func (m *MockFlowBuilder) MatchDstPort(arg0 uint16, arg1 *uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchDstPort", arg0, arg1)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchDstPort indicates an expected call of MatchDstPort
+func (mr *MockFlowBuilderMockRecorder) MatchDstPort(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstPort), arg0, arg1)
+}
+
 // MatchIPDscp mocks base method
 func (m *MockFlowBuilder) MatchIPDscp(arg0 byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -1579,20 +1593,6 @@ func (mr *MockFlowBuilderMockRecorder) MatchRegRange(arg0, arg1, arg2 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchRegRange", reflect.TypeOf((*MockFlowBuilder)(nil).MatchRegRange), arg0, arg1, arg2)
 }
 
-// MatchSCTPDstPort mocks base method
-func (m *MockFlowBuilder) MatchSCTPDstPort(arg0 uint16) openflow.FlowBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchSCTPDstPort", arg0)
-	ret0, _ := ret[0].(openflow.FlowBuilder)
-	return ret0
-}
-
-// MatchSCTPDstPort indicates an expected call of MatchSCTPDstPort
-func (mr *MockFlowBuilderMockRecorder) MatchSCTPDstPort(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSCTPDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSCTPDstPort), arg0)
-}
-
 // MatchSrcIP mocks base method
 func (m *MockFlowBuilder) MatchSrcIP(arg0 net.IP) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -1635,20 +1635,6 @@ func (mr *MockFlowBuilderMockRecorder) MatchSrcMAC(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSrcMAC", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSrcMAC), arg0)
 }
 
-// MatchTCPDstPort mocks base method
-func (m *MockFlowBuilder) MatchTCPDstPort(arg0 uint16) openflow.FlowBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchTCPDstPort", arg0)
-	ret0, _ := ret[0].(openflow.FlowBuilder)
-	return ret0
-}
-
-// MatchTCPDstPort indicates an expected call of MatchTCPDstPort
-func (mr *MockFlowBuilderMockRecorder) MatchTCPDstPort(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTCPDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTCPDstPort), arg0)
-}
-
 // MatchTunMetadata mocks base method
 func (m *MockFlowBuilder) MatchTunMetadata(arg0 int, arg1 uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -1661,20 +1647,6 @@ func (m *MockFlowBuilder) MatchTunMetadata(arg0 int, arg1 uint32) openflow.FlowB
 func (mr *MockFlowBuilderMockRecorder) MatchTunMetadata(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunMetadata", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunMetadata), arg0, arg1)
-}
-
-// MatchUDPDstPort mocks base method
-func (m *MockFlowBuilder) MatchUDPDstPort(arg0 uint16) openflow.FlowBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchUDPDstPort", arg0)
-	ret0, _ := ret[0].(openflow.FlowBuilder)
-	return ret0
-}
-
-// MatchUDPDstPort indicates an expected call of MatchUDPDstPort
-func (mr *MockFlowBuilderMockRecorder) MatchUDPDstPort(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchUDPDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchUDPDstPort), arg0)
 }
 
 // SetHardTimeout mocks base method
