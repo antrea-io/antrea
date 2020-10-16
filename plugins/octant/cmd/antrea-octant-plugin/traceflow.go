@@ -241,6 +241,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 				tf.Spec.Packet.TransportHeader.TCP = &opsv1alpha1.TCPHeader{
 					SrcPort: int32(srcPort),
 					DstPort: int32(dstPort),
+					Flags:   2,
 				}
 			}
 		case opsv1alpha1.UDPProtocol:
