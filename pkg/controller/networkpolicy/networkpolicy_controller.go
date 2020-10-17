@@ -1280,11 +1280,9 @@ func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *controlplane.Gr
 			}
 		}
 	}
-
 	if includeIP {
 		memberPod.IP = ipStrToIPAddress(pod.Status.PodIP)
 	}
-
 	if includePodRef {
 		podRef := controlplane.PodReference{
 			Name:      pod.Name,
@@ -1298,7 +1296,7 @@ func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *controlplane.Gr
 func externalEntityToGroupMember(ee *v1alpha2.ExternalEntity) *controlplane.GroupMember {
 	memberEntity := &controlplane.GroupMember{}
 	namedPorts := make([]controlplane.NamedPort, len(ee.Spec.Ports))
-	var ipAddr []controlplane.IPAddress
+	var ips []controlplane.IPAddress
 	for i, port := range ee.Spec.Ports {
 		namedPorts[i] = controlplane.NamedPort{
 			Port:     port.Port,
@@ -1307,10 +1305,15 @@ func externalEntityToGroupMember(ee *v1alpha2.ExternalEntity) *controlplane.Grou
 		}
 	}
 	for _, ep := range ee.Spec.Endpoints {
-		ipAddr = append(ipAddr, ipStrToIPAddress(ep.IP))
+		ips = append(ips, ipStrToIPAddress(ep.IP))
 	}
+	eeRef := controlplane.ExternalEntityReference{
+		Name:      ee.Name,
+		Namespace: ee.Namespace,
+	}
+	memberEntity.ExternalEntity = &eeRef
 	memberEntity.Ports = namedPorts
-	memberEntity.IPs = ipAddr
+	memberEntity.IPs = ips
 	return memberEntity
 }
 

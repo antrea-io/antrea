@@ -5,11 +5,13 @@ on:
     - master
     - release-*
     - ipv6
+    - api-change-controlplane-v1beta2
   push:
     branches:
     - master
     - release-*
     - ipv6
+    - api-change-controlplane-v1beta2
 jobs:
 
 
