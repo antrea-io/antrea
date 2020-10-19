@@ -394,7 +394,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		// Get addresses that in From IPBlock but not in Except IPBlocks.
 		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks)
 
-		podsByServicesMap, servicesMap := groupPodsByServices(rule.Services, rule.Pods)
+		podsByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.TargetMembers)
 
 		for svcKey, pods := range podsByServicesMap {
 			ofPorts := r.getPodOFPorts(pods)
@@ -411,7 +411,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			}
 		}
 	} else {
-		ips := r.getPodIPs(rule.Pods)
+		ips := r.getPodIPs(rule.TargetMembers)
 		lastRealized.podIPs = ips
 		from := ipsToOFAddresses(ips)
 		memberByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.ToAddresses)
@@ -518,7 +518,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 		addedFrom := groupMembersToOFAddresses(newRule.FromAddresses.Difference(lastRealized.FromAddresses))
 		deletedFrom := groupMembersToOFAddresses(lastRealized.FromAddresses.Difference(newRule.FromAddresses))
 
-		podsByServicesMap, servicesMap := groupPodsByServices(newRule.Services, newRule.Pods)
+		podsByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.TargetMembers)
 		for svcKey, pods := range podsByServicesMap {
 			newOFPorts := r.getPodOFPorts(pods)
 			ofID, exists := lastRealized.ofIDs[svcKey]
@@ -555,7 +555,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 			lastRealized.podOFPorts[svcKey] = newOFPorts
 		}
 	} else {
-		newIPs := r.getPodIPs(newRule.Pods)
+		newIPs := r.getPodIPs(newRule.TargetMembers)
 		from := ipsToOFAddresses(newIPs)
 		addedFrom := ipsToOFAddresses(newIPs.Difference(lastRealized.podIPs))
 		deletedFrom := ipsToOFAddresses(lastRealized.podIPs.Difference(newIPs))
@@ -708,79 +708,44 @@ func (r *reconciler) Forget(ruleID string) error {
 	return nil
 }
 
-func (r *reconciler) getPodOFPorts(pods v1beta2.GroupMemberPodSet) sets.Int32 {
+func (r *reconciler) getPodOFPorts(members v1beta2.GroupMemberSet) sets.Int32 {
 	ofPorts := sets.NewInt32()
-	for _, pod := range pods {
-		ifaces := r.ifaceStore.GetContainerInterfacesByPod(pod.Pod.Name, pod.Pod.Namespace)
+	for _, m := range members {
+		if m.Pod == nil {
+			continue
+		}
+		ifaces := r.ifaceStore.GetContainerInterfacesByPod(m.Pod.Name, m.Pod.Namespace)
 		if len(ifaces) == 0 {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
-			klog.Infof("Can't find interface for Pod %s/%s, skipping", pod.Pod.Namespace, pod.Pod.Name)
+			klog.Infof("Can't find interface for Pod %s/%s, skipping", m.Pod.Namespace, m.Pod.Name)
 			continue
 		}
 		for _, iface := range ifaces {
-			klog.V(2).Infof("Got OFPort %v for Pod %s/%s", iface.OFPort, pod.Pod.Namespace, pod.Pod.Name)
+			klog.V(2).Infof("Got OFPort %v for Pod %s/%s", iface.OFPort, m.Pod.Namespace, m.Pod.Name)
 			ofPorts.Insert(iface.OFPort)
 		}
 	}
 	return ofPorts
 }
 
-func (r *reconciler) getPodIPs(pods v1beta2.GroupMemberPodSet) sets.String {
+func (r *reconciler) getPodIPs(members v1beta2.GroupMemberSet) sets.String {
 	ips := sets.NewString()
-	for _, pod := range pods {
-		ifaces := r.ifaceStore.GetContainerInterfacesByPod(pod.Pod.Name, pod.Pod.Namespace)
+	for _, m := range members {
+		if m.Pod == nil {
+			continue
+		}
+		ifaces := r.ifaceStore.GetContainerInterfacesByPod(m.Pod.Name, m.Pod.Namespace)
 		if len(ifaces) == 0 {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
-			klog.Infof("Can't find interface for Pod %s/%s, skipping", pod.Pod.Namespace, pod.Pod.Name)
+			klog.Infof("Can't find interface for Pod %s/%s, skipping", m.Pod.Namespace, m.Pod.Name)
 			continue
 		}
 		for _, iface := range ifaces {
-			klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IP, pod.Pod.Namespace, pod.Pod.Name)
+			klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IP, m.Pod.Namespace, m.Pod.Name)
 			ips.Insert(iface.IP.String())
 		}
 	}
 	return ips
-}
-
-// groupPodsByServices groups the provided Pods based on their services resolving result.
-// A map of servicesKey to the Pod groups and a map of servicesKey to the services resolving result will be returned.
-func groupPodsByServices(services []v1beta2.Service, pods v1beta2.GroupMemberPodSet) (map[servicesKey]v1beta2.GroupMemberPodSet, map[servicesKey][]v1beta2.Service) {
-	podsByServicesMap := map[servicesKey]v1beta2.GroupMemberPodSet{}
-	servicesMap := map[servicesKey][]v1beta2.Service{}
-
-	// If there is no named port in services, all Pods are in same group.
-	namedPortServiceExist := false
-	for _, svc := range services {
-		if svc.Port != nil && svc.Port.Type == intstr.String {
-			namedPortServiceExist = true
-			break
-		}
-	}
-	if !namedPortServiceExist {
-		svcKey := normalizeServices(services)
-		podsByServicesMap[svcKey] = pods
-		servicesMap[svcKey] = services
-		return podsByServicesMap, servicesMap
-	}
-
-	// Reuse the slice to avoid memory reallocations in the following loop. The
-	// optimization makes difference as the number of Pods might get up to tens
-	// of thousands.
-	resolvedServices := make([]v1beta2.Service, len(services))
-	for podKey, pod := range pods {
-		for i := range services {
-			resolvedServices[i] = *resolveServiceForPod(&services[i], pod)
-		}
-		svcKey := normalizeServices(resolvedServices)
-		if _, exists := podsByServicesMap[svcKey]; !exists {
-			podsByServicesMap[svcKey] = v1beta2.NewGroupMemberPodSet()
-			// Copy resolvedServices as it may be updated in next iteration.
-			servicesMap[svcKey] = make([]v1beta2.Service, len(resolvedServices))
-			copy(servicesMap[svcKey], resolvedServices)
-		}
-		podsByServicesMap[svcKey][podKey] = pod
-	}
-	return podsByServicesMap, servicesMap
 }
 
 // groupMembersByServices groups the provided groupMembers based on their services resolving result.
@@ -903,25 +868,6 @@ func filterUnresolvablePort(in []v1beta2.Service) []v1beta2.Service {
 		out = append(out, s)
 	}
 	return out
-}
-
-// resolveServiceForPod resolves the port name of the provided service to a port number
-// for the provided Pod.
-func resolveServiceForPod(service *v1beta2.Service, pod *v1beta2.GroupMemberPod) *v1beta2.Service {
-	// If port is not specified or is already a number, return it as is.
-	if service.Port == nil || service.Port.Type == intstr.Int {
-		return service
-	}
-	for _, port := range pod.Ports {
-		if port.Name == service.Port.StrVal && port.Protocol == *service.Protocol {
-			resolvedPort := intstr.FromInt(int(port.Port))
-			return &v1beta2.Service{Protocol: service.Protocol, Port: &resolvedPort}
-		}
-	}
-	klog.Warningf("Can not resolve port %s for Pod %v", service.Port.StrVal, pod)
-	// If not resolvable, return it as is.
-	// The Pods that cannot resolve it will be grouped together.
-	return service
 }
 
 // resolveService resolves the port name of the provided service to a port number for the provided groupMember.

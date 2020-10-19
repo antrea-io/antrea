@@ -187,14 +187,14 @@ Namespace2 GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2     Ant
 			rawResponseData: []addressgroup.Response{
 				{
 					Name: "GroupName1",
-					Pods: []common.GroupMemberPod{
+					Pods: []common.GroupMember{
 						{IP: "127.0.0.1"}, {IP: "192.168.0.1"}, {IP: "127.0.0.2"},
 						{IP: "127.0.0.3"}, {IP: "10.0.0.3"}, {IP: "127.0.0.5"}, {IP: "127.0.0.6"},
 					},
 				},
 				{
 					Name: "GroupName2",
-					Pods: []common.GroupMemberPod{},
+					Pods: []common.GroupMember{},
 				},
 			},
 			expected: `NAME       POD-IPS                                           
@@ -206,7 +206,7 @@ GroupName2 <NONE>
 			name: "StructureData-AppliedToGroup-Single-NoSummary",
 			rawResponseData: appliedtogroup.Response{
 				Name: "GroupName",
-				Pods: []common.GroupMemberPod{
+				Pods: []common.GroupMember{
 					{Pod: &cpv1beta.PodReference{
 						Name:      "nginx-6db489d4b7-324rc",
 						Namespace: "PodNamespace",
@@ -230,7 +230,7 @@ GroupName PodNamespace/nginx-6db489d4b7-324rc + 1 more...
 			name: "StructureData-AppliedToGroup-Single-EmptyRespCase",
 			rawResponseData: appliedtogroup.Response{
 				Name: "GroupName",
-				Pods: []common.GroupMemberPod{},
+				Pods: []common.GroupMember{},
 			},
 			expected: `NAME      PODS  
 GroupName <NONE>

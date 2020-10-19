@@ -24,8 +24,8 @@ import (
 )
 
 type Response struct {
-	Name string                  `json:"name" yaml:"name"`
-	Pods []common.GroupMemberPod `json:"pods,omitempty"`
+	Name string               `json:"name" yaml:"name"`
+	Pods []common.GroupMember `json:"pods,omitempty"`
 }
 
 func listTransform(l interface{}) (interface{}, error) {
@@ -40,8 +40,8 @@ func listTransform(l interface{}) (interface{}, error) {
 
 func objectTransform(o interface{}) (interface{}, error) {
 	group := o.(*cpv1beta.AddressGroup)
-	var pods []common.GroupMemberPod
-	for _, pod := range group.Pods {
+	var pods []common.GroupMember
+	for _, pod := range group.GroupMembers {
 		pods = append(pods, common.GroupMemberPodTransform(pod))
 	}
 	return Response{Name: group.Name, Pods: pods}, nil
