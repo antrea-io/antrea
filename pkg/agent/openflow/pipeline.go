@@ -1054,19 +1054,19 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue 
 		fb = fb.MatchProtocol(binding.ProtocolTCP)
 		portValue := matchValue.(uint16)
 		if portValue > 0 {
-			fb = fb.MatchTCPDstPort(portValue)
+			fb = fb.MatchDstPort(portValue, nil)
 		}
 	case MatchUDPDstPort:
 		fb = fb.MatchProtocol(binding.ProtocolUDP)
 		portValue := matchValue.(uint16)
 		if portValue > 0 {
-			fb = fb.MatchUDPDstPort(portValue)
+			fb = fb.MatchDstPort(portValue, nil)
 		}
 	case MatchSCTPDstPort:
 		fb = fb.MatchProtocol(binding.ProtocolSCTP)
 		portValue := matchValue.(uint16)
 		if portValue > 0 {
-			fb = fb.MatchSCTPDstPort(portValue)
+			fb = fb.MatchDstPort(portValue, nil)
 		}
 	}
 	return fb
@@ -1248,15 +1248,9 @@ func (c *client) l3ToExternalFlows(nodeIP net.IP, localSubnet net.IPNet, outputP
 // loadBalancerServiceFromOutsideFlow generates the flow to forward LoadBalancer service traffic from outside node
 // to gateway. kube-proxy will then handle the traffic.
 func (c *client) loadBalancerServiceFromOutsideFlow(uplinkPort uint32, gwPort uint32, svcIP net.IP, svcPort uint16, protocol binding.Protocol) binding.Flow {
-	flowBuilder := c.pipeline[uplinkTable].BuildFlow(priorityHigh)
-	if protocol == binding.ProtocolTCP {
-		flowBuilder = flowBuilder.MatchTCPDstPort(svcPort)
-	} else if protocol == binding.ProtocolUDP {
-		flowBuilder = flowBuilder.MatchUDPDstPort(svcPort)
-	} else if protocol == binding.ProtocolSCTP {
-		flowBuilder = flowBuilder.MatchSCTPDstPort(svcPort)
-	}
-	return flowBuilder.
+	return c.pipeline[uplinkTable].BuildFlow(priorityHigh).
+		MatchProtocol(protocol).
+		MatchDstPort(svcPort, nil).
 		MatchInPort(uplinkPort).
 		MatchDstIP(svcIP).
 		Action().Output(int(gwPort)).
@@ -1272,18 +1266,17 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 	learnFlowBuilder := c.pipeline[serviceLBTable].BuildFlow(priorityLow).
 		MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLearn, serviceLearnRegRange).
 		MatchDstIP(svcIP).
+		MatchProtocol(protocol).
+		MatchDstPort(svcPort, nil).
 		Cookie(cookieID)
 	learnFlowBuilderLearnAction := learnFlowBuilder.
 		Action().Learn(sessionAffinityTable, priorityNormal, affinityTimeout, 0, cookieID).
 		DeleteLearned()
 	if protocol == binding.ProtocolTCP {
-		learnFlowBuilder.MatchTCPDstPort(svcPort)
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedTCPDstPort()
 	} else if protocol == binding.ProtocolUDP {
-		learnFlowBuilder.MatchUDPDstPort(svcPort)
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedUDPDstPort()
 	} else if protocol == binding.ProtocolSCTP {
-		learnFlowBuilder.MatchSCTPDstPort(svcPort)
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedSCTPDstPort()
 	}
 	return learnFlowBuilderLearnAction.
@@ -1302,21 +1295,14 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 // serviceLBFlow generates the flow which uses the specific group to do Endpoint
 // selection.
 func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol) binding.Flow {
-	lbFlowBuilder := c.pipeline[serviceLBTable].BuildFlow(priorityNormal)
-	if protocol == binding.ProtocolTCP {
-		lbFlowBuilder = lbFlowBuilder.MatchTCPDstPort(svcPort)
-	} else if protocol == binding.ProtocolUDP {
-		lbFlowBuilder = lbFlowBuilder.MatchUDPDstPort(svcPort)
-	} else if protocol == binding.ProtocolSCTP {
-		lbFlowBuilder = lbFlowBuilder.MatchSCTPDstPort(svcPort)
-	}
-	lbFlow := lbFlowBuilder.
+	return c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
+		MatchProtocol(protocol).
+		MatchDstPort(svcPort, nil).
 		MatchDstIP(svcIP).
 		MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLB, serviceLearnRegRange).
 		Action().Group(groupID).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
-	return lbFlow
 }
 
 // endpointDNATFlow generates the flow which transforms the Service Cluster IP
