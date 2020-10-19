@@ -531,7 +531,7 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 		Cookie(getCookieID()).
 		MatchProtocol(binding.ProtocolTCP).
 		MatchDstIP(net.ParseIP("10.96.0.10")).
-		MatchTCPDstPort(uint16(53)).
+		MatchDstPort(uint16(53), nil).
 		MatchReg(3, uint32(0xfff2)).
 		Action().Group(groupID).Done()
 	expectedFlows := []*ExpectFlow{
@@ -966,7 +966,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			MatchIPDscp(ipDscp).
 			Action().GotoTable(table.GetNext()).
 			Done(),
-		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchTCPDstPort(uint16(8080)).
+		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolTCP).Cookie(getCookieID()).MatchDstPort(uint16(8080), nil).
 			Action().Conjunction(uint32(1001), uint8(3), uint8(3)).Done(),
 		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchSrcIP(podIP).
 			Action().Conjunction(uint32(1001), uint8(1), uint8(3)).Done(),
