@@ -371,33 +371,16 @@ func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 	return b
 }
 
-// MatchTCPDstPort adds match condition for matching TCP destination port.
-func (b *ofFlowBuilder) MatchTCPDstPort(port uint16) FlowBuilder {
-	b.MatchProtocol(ProtocolTCP)
-	b.Match.TcpDstPort = port
-	// According to ovs-ofctl(8) man page, "tp_dst" is deprecated and "tcp_dst",
-	// "udp_dst", "sctp_dst" should be used for the destination port of TCP, UDP,
-	// SCTP respectively. However, OVS command line tools like ovs-ofctl and
-	// ovs-appctl still print flows with "tp_dst", so we also  use "tp_dst" in flow
-	// matching string, as flow matching string can be used to look up matched
-	// flows from these tools' outputs.
-	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
-	return b
-}
-
-// MatchUDPDstPort adds match condition for matching UDP destination port.
-func (b *ofFlowBuilder) MatchUDPDstPort(port uint16) FlowBuilder {
-	b.MatchProtocol(ProtocolUDP)
-	b.Match.UdpDstPort = port
-	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
-	return b
-}
-
-// MatchSCTPDstPort adds match condition for matching SCTP destination port.
-func (b *ofFlowBuilder) MatchSCTPDstPort(port uint16) FlowBuilder {
-	b.MatchProtocol(ProtocolSCTP)
-	b.Match.SctpDstPort = port
-	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
+// MatchDstPort adds match condition for matching destination port in transport layer. OVS will match the port exactly
+// if portMask is nil.
+func (b *ofFlowBuilder) MatchDstPort(port uint16, portMask *uint16) FlowBuilder {
+	b.Match.DstPort = port
+	b.Match.DstPortMask = portMask
+	matchStr := fmt.Sprintf("tp_dst=0x%x", port)
+	if portMask != nil {
+		matchStr = fmt.Sprintf("%s/0x%x", matchStr, portMask)
+	}
+	b.matchers = append(b.matchers, matchStr)
 	return b
 }
 
