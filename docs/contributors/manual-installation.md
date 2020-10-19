@@ -57,7 +57,7 @@ kubectl config --kubeconfig=antrea-controller.kubeconfig set-context antrea-cont
 kubectl config --kubeconfig=antrea-controller.kubeconfig use-context antrea-controller@kubernetes
 ```
 
-3. Create the `antrea-controller` config file, see [Configuration](configuration.md) for details.
+3. Create the `antrea-controller` config file, see [Configuration](/docs/configuration.md) for details.
 ```shell script
 cat >antrea-controller.conf <<EOF
 clientConnection:
@@ -104,7 +104,7 @@ kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig set-context antrea-ag
 kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig use-context antrea-agent@antrea
 ```
 
-4. Create the `antrea-agent` config file, see [Configuration](configuration.md) for details.
+4. Create the `antrea-agent` config file, see [Configuration](/docs/configuration.md) for details.
 ```shell script
 cat >antrea-agent.conf <<EOF
 clientConnection:

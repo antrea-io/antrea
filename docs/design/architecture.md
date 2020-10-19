@@ -14,7 +14,7 @@ of networking and security features and services on top of Open vSwitch.
 
 Some information in this document and in particular when it comes to the Antrea
 Agent is specific to running Antrea on Linux Nodes. For information about how
-Antrea is run on Windows Nodes, please refer to [windows-design.md](windows-design.md).
+Antrea is run on Windows Nodes, please refer to the [Windows design document](windows-design.md).
 
 ## Components
 
@@ -279,17 +279,18 @@ that routes Pod traffic directly to the destination Node without going through
 the extra hop of the Node network router. Antrea Agent also creates the iptables
 (MASQUERADE) rule for SNAT of Pod-to-external traffic.
 
-[Antrea supports GKE](gke-installation.md) with `NoEncap` mode.
+[Antrea supports GKE](/docs/gke-installation.md) with `NoEncap` mode.
 
 * ***NetworkPolicyOnly*** Inter-Node Pod traffic is neither tunneled nor routed
 by Antrea. Antrea just implements NetworkPolicies for Pod traffic, but relies on
 another cloud CNI and cloud network to implement Pod IPAM and cross-Node traffic
-forwarding. Refer to the [NetworkPolicyOnly mode design doc](policy-only.md)
+forwarding. Refer to the [NetworkPolicyOnly mode design document](policy-only.md)
 for more information.
 
 [Antrea for AKS
 Engine](https://github.com/Azure/aks-engine/blob/master/docs/topics/features.md#feat-antrea)
-and [Antrea EKS support](eks-installation.md) work in `NetworkPolicyOnly` mode.
+and [Antrea EKS support](/docs/eks-installation.md) work in `NetworkPolicyOnly`
+mode.
 
 ## Features
 
@@ -300,7 +301,7 @@ ClusterNetworkPolicy. The former is scoped to a specific Namespace, while the
 latter is scoped to the whole cluster. These two types of Network Policies
 extend Kubernetes NetworkPolicy with advanced features including: policy
 priority, tiering, deny action, external entity, and policy statistics. For more
-information about Antrea network policies, refer to the [Antrea Network Policy document](antrea-network-policy.md).
+information about Antrea network policies, refer to the [Antrea Network Policy document](docs/antrea-network-policy.md).
 
 Just like for Kubernetes NetworkPolicies, Antrea Controller transforms Antrea
 NetworkPolicies and ClusterNetworkPolicies to internal NetworkPolicy,
@@ -337,7 +338,7 @@ tunnel port.
 Antrea supports exporting network flow information with Kubernetes context
 using IPFIX. The exported network flows can be visualized using Elastic Stack
 and Kibana dashboards. For more information, refer to the [network flow
-visibility document](network-flow-visibility.md).
+visibility document](/docs/network-flow-visibility.md).
 
 ### Windows Node
 On a Windows Node, Antrea acts very much like it does on a Linux Node. Antrea

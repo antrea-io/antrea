@@ -39,6 +39,7 @@ your environment and preference.
     ```bash
     kubectl apply -f build/yamls/antrea-octant.yml
     ```
+
 4. You can get the NodePort of antrea-octant service via kubectl.
 
     ```bash
@@ -72,7 +73,7 @@ yaml with `kubectl`.
 
 ### Deploy Octant and antrea-octant-plugin as a process
 
-Refer to [Octant README](https://github.com/vmware-tanzu/octant/blob/master/README.md#installation) for 
+Refer to [Octant README](https://github.com/vmware-tanzu/octant/blob/master/README.md#installation) for
 detailed installation instructions.
 
 You can follow the steps listed below to install octant and antrea-octant-plugin on linux.
@@ -80,11 +81,14 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
 1. Get and install Octant v0.13.1.
 
     Depending on your linux operating system, to install Octant v0.13.1, you can use either
+
     ```bash
     wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.deb
     dpkg -i octant_0.13.1_Linux-64bit.deb
     ```
+
     or
+
     ```bash
     wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.rpm
     rpm -i octant_0.13.1_Linux-64bit.rpm

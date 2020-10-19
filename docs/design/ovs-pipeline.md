@@ -126,7 +126,7 @@ you will see these addresses show up in the OVS flows.
 ## Antrea-native Policies Implementation
 
 In addition to the above tables created for K8s NetworkPolicy, Antrea creates
-additional dedicated tables to support the [Antrea-native policies](antrea-network-policy.md)
+additional dedicated tables to support the [Antrea-native policies](/docs/antrea-network-policy.md)
 ([AntreaPolicyEgressRuleTables] and [AntreaPolicyIngressRuleTables]).
 
 Consider the following Antrea ClusterNetworkPolicy (ACNP) in the Application tier as an

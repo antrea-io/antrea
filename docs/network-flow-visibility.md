@@ -27,7 +27,7 @@
 <!-- /toc -->
 
 ## Overview
-[Antrea](architecture.md) is a Kubernetes network plugin that provides network
+[Antrea](design/architecture.md) is a Kubernetes network plugin that provides network
 connectivity and security features for Pod workloads. Considering the scale and
 dynamism of Kubernetes workloads in a cluster, Network Flow Visibility helps in
 the management and configuration of Kubernetes resources such as Network Policy,

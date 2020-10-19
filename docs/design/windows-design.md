@@ -1,14 +1,14 @@
 # Running Antrea on Windows
 
 Antrea supports running on Windows worker Nodes. On Windows Nodes, Antrea sets up an overlay
-network to forward packets between Nodes and implements NetworkPolicies. 
+network to forward packets between Nodes and implements NetworkPolicies.
 
 ## Design
 
 On Windows, the Host Networking Service (HNS) is a necessary component to support container
 networking. For Antrea on Windows, "Transparent" mode is chosen for the HNS network. In this
 mode, containers will be directly connected to the physical network through an **external**
-Hyper-V switch. 
+Hyper-V switch.
 
 OVS is working as a forwarding extension for the external Hyper-V switch which was created by
 HNS. Hence, the packets that are sent from/to the containers can be processed by OVS.
@@ -38,11 +38,11 @@ by kube-proxy.
 HNS Network is created during the Antrea Agent initialization phase, and it should be created before
 the OVS bridge is created. This is because OVS is working as the Hyper-V Switch Extension, and the
 ovs-vswitchd process cannot work correctly until the OVS Extension is enabled on the new created
-Hyper-V Switch. 
+Hyper-V Switch.
 
 When creating the HNS Network, the local subnet CIDR and the uplink network adapter are required.
 Antrea Agent finds the network adapter from the Windows host using the Node's internal IP as a filter,
-and retrieves the local Subnet CIDR from the Node spec. 
+and retrieves the local Subnet CIDR from the Node spec.
 
 After the HNS Network is created, OVS extension should be enabled at once on the Hyper-V Switch.
 
@@ -50,13 +50,13 @@ After the HNS Network is created, OVS extension should be enabled at once on the
 
 [**host-local**](https://github.com/containernetworking/plugins/tree/master/plugins/ipam/host-local)
 plugin is used to provide IPAM for containers, and the address is allocated from the subnet CIDR
-configured on the HNS Network. 
+configured on the HNS Network.
 
 Windows HNS Endpoint is leveraged as the vNIC for each container. A single HNS Endpoint with the
 IP allocated by the IPAM plugin is created for each Pod. The HNS Endpoint should be attached to all
 containers in the same Pod to ensure that the network configuration can be correctly accessed (this
 operation is to make sure the DNS configuration is readable from all containers).
- 
+
 One OVS internal port with the same name as the HNS Endpoint is also needed, in order to handle
 container traffic with OpenFlow rules. OpenFlow entries are installed to implement Pod-to-Pod,
 Pod-to-external and Pod-to-ClusterIP-Service connectivity.
@@ -78,7 +78,7 @@ installed in order to output these packets to the host on the gateway port. To e
 correctly on the host, the IP-Forwarding feature should be enabled on the network adapter of the
 gateway port.
 
-A routing entry for traffic from the Node to the local Pod subnet is needed on the Windows host to ensure 
+A routing entry for traffic from the Node to the local Pod subnet is needed on the Windows host to ensure
 that the packet can enter the OVS pipeline on the gateway port. This routing entry is added when "antrea-gw0"
 is created.
 
@@ -92,19 +92,19 @@ Tunnel port configuration should be similar to Antrea on Linux:
 * a flow-based tunnel with the appropriate remote address is created for each Node in the cluster with OpenFlow.
 
 The only difference with Antrea on Linux is that the tunnel local address is required when creating the tunnel
-port (provided with `local_ip` option). This local address is the one configured on the OVS bridge. 
+port (provided with `local_ip` option). This local address is the one configured on the OVS bridge.
 
 ### OVS bridge interface configuration
 
 Since OVS is also responsible for taking charge of the network of the host, an interface for the OVS bridge
 is required on which the host network settings are configured. It is created and enabled when creating
-the OVS bridge, and the MAC address should be changed to be the same as the uplink interface. Then the IP 
+the OVS bridge, and the MAC address should be changed to be the same as the uplink interface. Then the IP
 address and the route entries originally configured on the uplink interface should also be migrated to
 the interface.
 
 The packets that are sent to/from the Windows host should be forwarded on this interface. So the OVS bridge
 is also a valid entry point into the OVS pipeline. A special ofport number 65534 (named as LOCAL) for the
-OVS bridge is used in OpenFlow spec. 
+OVS bridge is used in OpenFlow spec.
 
 In the OVS `Classifier` table, new OpenFlow entries are needed to match the packets from this interface.
 There are two kinds of packets entering OVS pipeline from this interface:
@@ -120,7 +120,7 @@ the OVS pipeline and output to the backend Pod finally.
 After the OVS bridge is created, the original physical adapter is added to the OVS bridge as the uplink interface.
 The uplink interface is used to support traffic from Pods accessing external addresses. The packet is always
 output to the uplink interface if it is sent to an external address and is entering OVS from the bridge
-interface. 
+interface.
 
 We should differentiate the traffic if it is entering OVS from the uplink interface in OVS `Classifier`
 table. There are two kinds of packets entering the OVS bridge from the uplink interface:
@@ -133,7 +133,7 @@ For 2, the packets are output to the OVS bridge interface directly.
 
 ### SNAT configuration
 SNAT is an important feature of the Antrea Agent on Windows Nodes, required to support Pods accessing external
-addresses. It is implemented using OpenFlow. 
+addresses. It is implemented using OpenFlow.
 
 To support this feature, two additional marks are introduced:
 * The 17th bit of NXM Register0 is set  for Pod-to-external traffic. This bit is set in the `L3Forwarding` table,
@@ -145,7 +145,7 @@ To support this feature, two additional marks are introduced:
 The following changes in the OVS pipeline are needed:
 
 * Identify the packet that is sent from local Pod-to-external address and set the SNAT bit in the register
- in the `L3Forwarding` table. The packet should have these characteristics: 
+ in the `L3Forwarding` table. The packet should have these characteristics:
   1) it enters the OVS pipeline from a local Pod,
   2) the destination IP address does not meet any of these conditions: cluster IP (local or any of the remote
   Subnet CIDR), or Node's internal IP,
@@ -159,7 +159,7 @@ The following changes in the OVS pipeline are needed:
 * Rewrite the dMAC with the global virtual MAC (aa:bb:cc:dd:ee:ff) in the `ConntrackState` table if the packet
  is from the uplink interface and has the SNAT ct_mark.
 * Forward the packet to the `DNAT` table in the `ConntrackState` table if it has the SNAT ct_mark but is not
- from the uplink interface. 
+ from the uplink interface.
 
 Following is an example for SNAT relevant OpenFlow entries.
 ```
@@ -212,7 +212,7 @@ OVS is running as 2 Windows Services: one for ovsdb-server and one for ovs-vswit
 
 ### Pod-to-Pod Traffic
 
-The intra-Node Pod-to-Pod traffic and inter-Node Pod-to-Pod traffic are the same as Antrea on Linux. 
+The intra-Node Pod-to-Pod traffic and inter-Node Pod-to-Pod traffic are the same as Antrea on Linux.
 It is processed and forwarded by OVS, and controlled with OpenFlow entries.
 
 ### Service Traffic
@@ -228,7 +228,7 @@ to select the backend endpoint and performs DNAT on the traffic.
 
 The Pod-to-external traffic is SNATed in OVS using the Node's internal IP first, and then it leaves
 the OVS pipeline on the gateway interface. As IP-Forwarding on the gateway interface is enabled, the packet
-is forwarded to the OVS bridge interface and enters OVS for the second time. 
+is forwarded to the OVS bridge interface and enters OVS for the second time.
 When the packet enters OVS at the second time, the dMAC is changed to an appropriate value using the host
 network stack. And OVS outputs the packet to the uplink interface directly.
 

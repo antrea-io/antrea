@@ -26,12 +26,12 @@ To get started, let's ensure you have completed the following prerequisites for
 contributing to project Antrea:
 1. Read and observe the [code of conduct](CODE_OF_CONDUCT.md).
 2. Sign the [CLA](#cla).
-3. Check out the [Architecture document](/docs/architecture.md) for the Antrea
+3. Check out the [Architecture document](/docs/design/architecture.md) for the Antrea
    architecture and design.
 4. Set up necessary [accounts](#accounts-setup).
-5. Set up your [development environment](docs/manual-installation.md)
+5. Set up your [development environment](docs/contributors/manual-installation.md)
 
-Now that you're setup, skip ahead to learn how to [contribute](#contribute). 
+Now that you're setup, skip ahead to learn how to [contribute](#contribute).
 
 ### CLA
 
@@ -183,7 +183,7 @@ For more information about the tests we run as part of CI, please refer to
 
 We use labels and workflows (some manual, some automated with GitHub Actions) to
 help us manage triage, prioritize, and track issue progress. For a detailed
-discussion, see [docs/issue-management.md](docs/issue-management.md).
+discussion, see [docs/issue-management.md](docs/contributors/issue-management.md).
 
 ### Filing An Issue
 
@@ -210,7 +210,7 @@ labels are included on your issue:
   area label will identify the area of interest an issue or PR belongs in and
   will ensure the appropriate reviewers shepherd the issue or PR through to its
   closure. For an overview of areas, see the 
-  [`docs/github-labels.md`](docs/github-labels.md).
+  [`docs/github-labels.md`](docs/contributors/github-labels.md).
 * **size** (optional) -- if you have an idea of the size (lines of code, complexity,
   effort) of the issue, you can label it using a [size label](#size). The size
   can be updated during backlog grooming by contributors. This estimate is used
@@ -238,18 +238,18 @@ triage labels.
 Use a `kind` label to describe the kind of issue or PR you are submitting. Valid
 kinds include:
 
-* [`kind/api-change`](docs/issue-management.md#api-change) -- for api changes
-* [`kind/bug`](docs/issue-management.md#bug) -- for filing a bug
-* [`kind/cleanup`](docs/issue-management.md#cleanup) -- for code cleanup and organization
-* [`kind/deprecation`](docs/issue-management.md#deprecation) -- for deprecating a feature
-* [`kind/design`](docs/issue-management.md#design) -- for proposing a design or architectural change
-* [`kind/documentation`](docs/issue-management.md#documentation) -- for updating documentation
-* [`kind/failing-test`](docs/issue-management.md#failing-test) -- for reporting a failed test (may
+* [`kind/api-change`](docs/contributors/issue-management.md#api-change) -- for api changes
+* [`kind/bug`](docs/contributors/issue-management.md#bug) -- for filing a bug
+* [`kind/cleanup`](docs/contributors/issue-management.md#cleanup) -- for code cleanup and organization
+* [`kind/deprecation`](docs/contributors/issue-management.md#deprecation) -- for deprecating a feature
+* [`kind/design`](docs/contributors/issue-management.md#design) -- for proposing a design or architectural change
+* [`kind/documentation`](docs/contributors/issue-management.md#documentation) -- for updating documentation
+* [`kind/failing-test`](docs/contributors/issue-management.md#failing-test) -- for reporting a failed test (may
   create with automation in future)
-* [`kind/feature`](docs/issue-management.md#feature) -- for proposing a feature
-* [`kind/support`](docs/issue-management.md#support) -- to request support. You may also get support by
+* [`kind/feature`](docs/contributors/issue-management.md#feature) -- for proposing a feature
+* [`kind/support`](docs/contributors/issue-management.md#support) -- to request support. You may also get support by
   using our [Slack](https://kubernetes.slack.com/archives/CR2J23M0X) channel for
   interactive help. If you have not set up the appropriate accounts, please
   follow the instructions in [accounts setup](#accounts-setup).
 
-For more details on how we manage issues, please read our [Issue Management doc](docs/issue-management.md).
+For more details on how we manage issues, please read our [Issue Management doc](docs/contributors/issue-management.md).
