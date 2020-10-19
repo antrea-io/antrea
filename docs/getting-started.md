@@ -108,7 +108,7 @@ To build the image locally, you can follow the instructions in the [Contributor
 Guide](/CONTRIBUTING.md#building-and-testing-your-change).
 
 Antrea components can also be run manually as processes for development
-purposes. See [Manual Installation](/docs/manual-installation.md) for
+purposes. See [Manual Installation](contributors/manual-installation.md) for
 information.
 
 ### Deploying Antrea in Kind
