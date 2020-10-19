@@ -135,3 +135,29 @@
           fi
           echo "=== FAILURE !!! ==="
           exit 1
+
+- builder:
+    name: builder-matrix
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          TEST_FAIL_E2E=0
+          TEST_FAIL_NP=0
+          TEST_FAIL_CONFORMANCE=0
+          export JOB_NAME="matrix-${TEST_OS}-k8s-${K8S_VERSION//./-}-build-num"
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'whole-conformance' --test-only || TEST_FAIL_CONFORMANCE=1
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'networkpolicy' --test-only || TEST_FAIL_NP=1
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --test-only || TEST_FAIL_E2E=1
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --cleanup-only
+          if [ "${TEST_FAIL_E2E}" -eq 1 ]; then
+            echo "E2E Test failed!"
+          fi
+          if [ "${TEST_FAIL_NP}" -eq 1 ]; then
+            echo "Network Policy Test failed!"
+          fi
+          if [ "${TEST_FAIL_CONFORMANCE}" -eq 1 ]; then
+            echo "Whole Conformance Test failed!"
+          fi
+          exit $((TEST_FAIL_E2E + TEST_FAIL_NP + TEST_FAIL_CONFORMANCE))

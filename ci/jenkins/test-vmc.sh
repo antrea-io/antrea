@@ -30,6 +30,7 @@ RUN_GARBAGE_COLLECTION=false
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 COVERAGE=false
+RUN_TEST_ONLY=false
 TESTCASE=""
 SECRET_EXIST=false
 TEST_FAILURE=false
@@ -37,7 +38,7 @@ CLUSTER_READY=false
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|whole-conformance|networkpolicy>]
-                  [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage]
+                  [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only]
 
 Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, whole Conformance & Network Policy).
 
@@ -49,7 +50,8 @@ Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, whole Conf
         --garbage-collection     Do garbage collection to clean up some unused testbeds.
         --setup-only             Only perform setting up the cluster and run test.
         --cleanup-only           Only perform cleaning up the cluster.
-        --coverage               Run e2e with coverage."
+        --coverage               Run e2e with coverage.
+        --test-only              Only run test on current cluster. Not set up/clean up the cluster."
 
 function print_usage {
     echoerr "$_usage"
@@ -98,6 +100,9 @@ case $key in
     ;;
     --coverage)
     COVERAGE=true
+    ;;
+    --test-only)
+    RUN_TEST_ONLY=true
     shift
     ;;
     -h|--help)
@@ -143,6 +148,13 @@ function saveLogs() {
 
 function setup_cluster() {
     export KUBECONFIG=$KUBECONFIG_PATH
+    if [ -z $K8S_VERSION ]; then
+      export K8S_VERSION=v1.17.3
+    fi
+    if [ -z $TEST_OS ]; then
+      export TEST_OS=ubuntu-1804
+    fi
+    export OVA_TEMPLATE_NAME=${TEST_OS}-kube-${K8S_VERSION}
     rm -rf ${GIT_CHECKOUT_DIR}/jenkins || true
 
     echo '=== Generate key pair ==='
@@ -154,6 +166,8 @@ function setup_cluster() {
     mkdir -p ${GIT_CHECKOUT_DIR}/jenkins/out
     cp ${GIT_CHECKOUT_DIR}/ci/cluster-api/vsphere/templates/* ${GIT_CHECKOUT_DIR}/jenkins/out
     sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/K8SVERSION/${K8S_VERSION}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/OVATEMPLATENAME/${OVA_TEMPLATE_NAME}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s/CLUSTERNAME/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s|SSHAUTHORIZEDKEYS|${publickey}|g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/namespace.yaml
@@ -169,7 +183,7 @@ function setup_cluster() {
     kubectl apply -f "${GIT_CHECKOUT_DIR}/jenkins/out/namespace.yaml"
     kubectl apply -f "${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml"
 
-    echo '=== Wait for for 10 min to get workload cluster secret ==='
+    echo '=== Wait for 10 min to get workload cluster secret ==='
     for t in {1..10}
     do
         sleep 1m
@@ -279,8 +293,14 @@ function deliver_antrea {
         if [[ "$COVERAGE" == true ]]; then
             antrea_image="antrea-ubuntu-coverage"
         fi
-        rsync -avr --progress --inplace -e "ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" $antrea_image.tar capv@${IP}:/home/capv/$antrea_image.tar
-        ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $antrea_image | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/$antrea_image.tar ; sudo ctr -n=k8s.io images tag docker.io/antrea/$antrea_image:${DOCKER_IMG_VERSION} docker.io/antrea/$antrea_image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi" || true
+        ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IP}
+        scp -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $antrea_image.tar capv@${IP}:/home/capv
+        if [ $TEST_OS == 'centos-7' ]; then
+            ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
+            ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $antrea_image | awk '{print \$3}' | xargs -r crictl rmi ; ctr -n=k8s.io images import /home/capv/$antrea_image.tar ; ctr -n=k8s.io images tag docker.io/antrea/$antrea_image:${DOCKER_IMG_VERSION} docker.io/antrea/$antrea_image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+        else
+            ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $antrea_image | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/$antrea_image.tar ; sudo ctr -n=k8s.io images tag docker.io/antrea/$antrea_image:${DOCKER_IMG_VERSION} docker.io/antrea/$antrea_image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+        fi
     done
 }
 
@@ -318,7 +338,7 @@ function run_e2e {
     echo "=== Master node ip: ${master_ip} ==="
     sed -i "s/MASTERNODEIP/${master_ip}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
     echo "=== Move kubeconfig to master ==="
-    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${master_ip} "mkdir -p .kube"
+    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${master_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
     scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${master_ip}:~/.kube/config
     sed -i "s/CONTROLPLANENODE/${master_name}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
     echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
@@ -370,7 +390,7 @@ function run_conformance {
 
     master_ip="$(kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}')"
     echo "=== Move kubeconfig to master ==="
-    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${master_ip} "mkdir -p .kube"
+    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${master_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
     scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${master_ip}:~/.kube/config
 
     if [[ "$TESTCASE" == "conformance" ]]; then
@@ -455,15 +475,23 @@ fi
 if [[ "$TESTCASE" == "integration" ]]; then
     run_integration
 elif [[ "$TESTCASE" == "e2e" ]]; then
-    setup_cluster
-    deliver_antrea
-    run_e2e
-    cleanup_cluster
+    if [[ "$RUN_TEST_ONLY" == true ]]; then
+        run_e2e
+    else
+        setup_cluster
+        deliver_antrea
+        run_e2e
+        cleanup_cluster
+    fi
 else
-    setup_cluster
-    deliver_antrea
-    run_conformance
-    cleanup_cluster
+    if [[ "$RUN_TEST_ONLY" == true ]]; then
+        run_conformance
+    else
+        setup_cluster
+        deliver_antrea
+        run_conformance
+        cleanup_cluster
+    fi
 fi
 
 if [[ "$TEST_FAILURE" == true ]]; then
