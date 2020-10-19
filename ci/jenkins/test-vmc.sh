@@ -404,19 +404,19 @@ function garbage_collection() {
     echo "=== Auto cleanup starts ==="
     export KUBECONFIG=$KUBECONFIG_PATH
 
-    kubectl get ns -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 ~ "matrix" && $2 > 14400 {print $1}' | while read cluster; do
+    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 ~ "matrix" && $2 > 14400 {print $1}' | while read cluster; do
         echo "=== Currently ${cluster} has been live for more than 4h ==="
         kubectl delete ns ${cluster}
         echo "=== Old namespace ${cluster} has been deleted !!! ==="
     done
 
-    kubectl get ns -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 ~ "whole-conformance" && $2 > 7200 {print $1}' | while read cluster; do
+    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 ~ "whole-conformance" && $2 > 7200 {print $1}' | while read cluster; do
         echo "=== Currently ${cluster} has been live for more than 2h ==="
         kubectl delete ns ${cluster}
         echo "=== Old namespace ${cluster} has been deleted !!! ==="
     done
 
-    kubectl get ns -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 !~ "matrix" && $1 !~ "whole-conformance" && $2 > 3600 {print $1}' | while read cluster; do
+    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 !~ "matrix" && $1 !~ "whole-conformance" && $2 > 3600 {print $1}' | while read cluster; do
         echo "=== Currently ${cluster} has been live for more than 1h ==="
         kubectl delete ns ${cluster}
         echo "=== Old namespace ${cluster} has been deleted !!! ==="
