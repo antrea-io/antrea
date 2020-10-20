@@ -62,6 +62,7 @@ const (
 	NxmFieldARPOp       = "NXM_OF_ARP_OP"
 	NxmFieldReg         = "NXM_NX_REG"
 	NxmFieldTunMetadata = "NXM_NX_TUN_METADATA"
+	NxmFieldIPToS       = "NXM_OF_IP_TOS"
 )
 
 const (
