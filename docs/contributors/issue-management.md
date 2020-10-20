@@ -19,6 +19,7 @@ managed as introduced in [CONTRIBUTING.md](/CONTRIBUTING.md). Please read
     - [Cleanup](#cleanup)
     - [Feature](#feature)
     - [Deprecation](#deprecation)
+    - [Task](#task)
     - [Design](#design)
     - [Documentation](#documentation)
     - [Failing Test](#failing-test)
@@ -238,6 +239,18 @@ To create a deprecation issue or PR:
   * explain why the feature is being deprecated
   * discuss time-to-live for the feature and when deprecation will take place
   * discuss any impacts to existing APIs
+
+#### Task
+
+A `kind/task` label categorizes an issue or PR as related to a "routine"
+maintenance task for the project, e.g. upgrading a software dependency or
+enabling a new CI job.
+
+To create a task issue or PR:
+
+* label your issue or PR with `kind/task`
+* describe your task in the issue or PR body, being sure to include the reason
+  for the task and the possible impacts of the change
 
 #### Design
 
