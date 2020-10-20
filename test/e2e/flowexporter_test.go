@@ -31,10 +31,8 @@ import (
 // TestFlowExporter runs flow exporter to export flow records for flows.
 // Flows are deployed between Pods on same node.
 func TestFlowExporter(t *testing.T) {
-	// TODO: remove this limitation after flow_exporter supports IPv6
-	skipIfIPv6Cluster(t)
-	skipIfNotIPv4Cluster(t)
-	data, err := setupTestWithIPFIXCollector(t)
+	// Should I add skipBenchmark as this runs iperf?
+	data, err, isIPv6 := setupTestWithIPFIXCollector(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
@@ -103,9 +101,12 @@ func TestFlowExporter(t *testing.T) {
 		t.Fatalf("Error when waiting for network policy to be realized: %v", err)
 	}
 	t.Log("Network policies are realized.")
-	podAIPStr := podAIP.ipv4.String()
-	podBIPStr := podBIP.ipv4.String()
-	checkRecordsWithPodIPs(t, data, podAIPStr, podBIPStr, false)
+
+	if !isIPv6 {
+		checkRecordsWithPodIPs(t, data, podAIP.ipv4.String(), podBIP.ipv4.String(), isIPv6)
+	} else {
+		checkRecordsWithPodIPs(t, data, podAIP.ipv6.String(), podBIP.ipv6.String(), isIPv6)
+	}
 }
 
 func checkRecordsWithPodIPs(t *testing.T, data *TestData, podAIP string, podBIP string, isIPv6 bool) {
@@ -236,7 +237,12 @@ func checkRecordsWithPodIPs(t *testing.T, data *TestData, podAIP string, podBIP 
 			}
 		}
 	}
-	assert.Equal(t, templateRecords, clusterInfo.numNodes, "Each agent should send out template record")
+	expectedNumTemplateRecords := clusterInfo.numNodes
+	if len(clusterInfo.podV4NetworkCIDR) != 0 && len(clusterInfo.podV6NetworkCIDR) != 0 {
+		expectedNumTemplateRecords = clusterInfo.numNodes * 2
+	}
+	assert.Equal(t, expectedNumTemplateRecords, templateRecords, "Each agent should send out a template record per supported family address")
+
 	// Single iperf resulting in two connections with separate ports. Suspecting second flow to be control flow to exchange
 	// stats info. As 5s is export interval and iperf traffic runs for 10s, we expect 4 records.
 	assert.GreaterOrEqual(t, dataRecordsIntraNode, 4, "Iperf flow should have expected number of flow records")

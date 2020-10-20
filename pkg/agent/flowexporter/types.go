@@ -70,4 +70,5 @@ type FlowRecord struct {
 	PrevBytes          uint64
 	PrevReversePackets uint64
 	PrevReverseBytes   uint64
+	IsIPv6             bool
 }

@@ -25,12 +25,12 @@ import (
 )
 
 // InitializeConnTrackDumper initializes the ConnTrackDumper interface for different OS and datapath types.
-func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsDatapathType string, isAntreaProxyEnabled bool) ConnTrackDumper {
+func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, ovsDatapathType string, isAntreaProxyEnabled bool) ConnTrackDumper {
 	var connTrackDumper ConnTrackDumper
 	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
-		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDR, isAntreaProxyEnabled)
+		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDRv4, serviceCIDRv6, isAntreaProxyEnabled)
 	} else if ovsDatapathType == ovsconfig.OVSDatapathNetdev {
-		connTrackDumper = NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, isAntreaProxyEnabled)
+		connTrackDumper = NewConnTrackOvsAppCtl(nodeConfig, serviceCIDRv4, serviceCIDRv6, isAntreaProxyEnabled)
 	}
 	return connTrackDumper
 }
