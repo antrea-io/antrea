@@ -1,8 +1,8 @@
 # Issue Management
 
 This document further describes the developer workflow and how issues are
-managed as introduced in [CONTRIBUTING.md](../CONTRIBUTING.md). Please read
-[CONTRIBUTING.md](../CONTRIBUTING.md) first before proceeding.
+managed as introduced in [CONTRIBUTING.md](../CONTRIBUTING). Please read
+[CONTRIBUTING.md](../CONTRIBUTING) first before proceeding.
 
 <!-- toc -->
 - [Developer Workflow Overview](#developer-workflow-overview)
@@ -44,7 +44,7 @@ processes described here will aid in accomplishing these goals.
 ## Creating New Issues and PRs
 
 Creating new issues and PRs is covered in detail in
-[CONTRIBUTING.md](../CONTRIBUTING.md).
+[CONTRIBUTING.md](../CONTRIBUTING).
 
 ## Good First Issues and Help Wanted
 
@@ -108,7 +108,7 @@ an opportunity to appeal the reason supplied.
 
 A PR is triaged in the following way:
 
-1. Automation will ensure that the submitter has signed the [CLA](../CONTRIBUTING.md#cla).
+1. Automation will ensure that the submitter has signed the [CLA](../CONTRIBUTING#cla).
 2. Automation will run CI tests against the submission to ensure compliance.
 3. Apply [`size/<size>`](#size) label to the submission. (TODO: we plan to
    automate this with a GitHub action and apply size based on lines of code).
@@ -126,7 +126,7 @@ already been assigned and apply the `lifecycle/active` label to signal that the
 issue is actively being worked on.
 
 Making code changes is covered in detail in
-[CONTRIBUTING.md](../CONTRIBUTING.md#github-workflow).
+[CONTRIBUTING.md](../CONTRIBUTING#github-workflow).
 
 If the issue kind is a `kind/bug`, ensure that the issue can be reproduced. If
 not, assign the `triage/not-reproducible` and request feedback from the original
@@ -389,4 +389,3 @@ determine the number of features included in a milestone.
 * `priority/critical-urgent` -- highest priority. Must be actively worked on as someone's top priority right now.
 * `priority/important-longterm` -- important over the long term, but may not be staffed and/or may need multiple releases to complete.
 * `priority/import-soon` -- must be staffed and worked on either currently, or very soon, ideally in time for the next release.
-

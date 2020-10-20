@@ -1,4 +1,5 @@
 @import "./site/settings/variables";
+@import "./site/settings/highlights";
 
 // 3rd party
 @import "./bootstrap-4.1.3/bootstrap.scss";
@@ -23,6 +24,7 @@
 @import "./site/objects/button";
 @import "./site/objects/thumbnail-grid";
 @import "./site/objects/post";
+@import "./site/objects/presentation";
 
 // Utilities
 @import "./site/utilities/image";
