@@ -16,7 +16,7 @@ There are four components which need to be deployed in order to run Antrea:
 
 Prior to bringing up the individual components, follow the common steps:
 
-* Ensure Go v1.13 is [installed](https://golang.org/doc/install)
+* Ensure Go v1.15 is [installed](https://golang.org/doc/install)
 
 * Git clone your forked Antrea repository and `cd` into the `antrea` directory
     ```

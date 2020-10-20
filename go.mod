@@ -1,6 +1,6 @@
 module github.com/vmware-tanzu/antrea
 
-go 1.13
+go 1.15
 
 require (
 	github.com/Mellanox/sriovnet v1.0.1

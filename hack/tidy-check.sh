@@ -30,7 +30,7 @@ SUM_FILE="$PROJECT_DIR/go.sum"
 TMP_DIR="$THIS_DIR/.tmp.tidy-check"
 TMP_MOD_FILE="$TMP_DIR/go.mod"
 TMP_SUM_FILE="$TMP_DIR/go.sum"
-TARGET_GO_VERSION="1.13"
+TARGET_GO_VERSION="1.15"
 TARGET_GO_VERSION_PATTERN="go$TARGET_GO_VERSION*"
 
 # if Go environment variable is set, use it as it is, otherwise default to "go"
