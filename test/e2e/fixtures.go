@@ -129,7 +129,7 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error) {
 		return nil, err
 	}
 	// Create pod using ipfix collector image
-	if err := data.createPodOnNode("ipfix-collector", masterNodeName(), ipfixCollectorImage, nil, nil, nil, nil, true); err != nil {
+	if err := data.createPodOnNode("ipfix-collector", masterNodeName(), ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Fatalf("Error when creating the ipfix collector Pod: %v", err)
 	}
 	ipfixCollectorIP, err := data.podWaitForIP(defaultTimeout, "ipfix-collector", testNamespace)

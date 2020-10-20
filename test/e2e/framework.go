@@ -545,7 +545,8 @@ func getImageName(uri string) string {
 
 // createPodOnNode creates a pod in the test namespace with a container whose type is decided by imageName.
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createPodOnNode(name string, nodeName string, image string, command []string, args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool) error {
+// mutateFunc can be used to customize the Pod if the other parameters don't meet the requirements.
+func (data *TestData) createPodOnNode(name string, nodeName string, image string, command []string, args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(*corev1.Pod)) error {
 	// image could be a fully qualified URI which can't be used as container name and label value,
 	// extract the image name from it.
 	imageName := getImageName(image)
@@ -588,6 +589,9 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 		},
 		Spec: podSpec,
 	}
+	if mutateFunc != nil {
+		mutateFunc(pod)
+	}
 	if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
 		return err
 	}
@@ -598,7 +602,7 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, nodeName, "busybox", []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false)
+	return data.createPodOnNode(name, nodeName, "busybox", []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
 }
 
 // createBusyboxPod creates a Pod in the test namespace with a single busybox container.
@@ -615,7 +619,7 @@ func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
 			ContainerPort: 80,
 			Protocol:      corev1.ProtocolTCP,
 		},
-	}, false)
+	}, false, nil)
 }
 
 // createNginxPod creates a Pod in the test namespace with a single nginx container.
@@ -634,7 +638,7 @@ func (data *TestData) createServerPod(name string, portName string, portNum int,
 		// If hostPort is to be set, it must match the container port number.
 		port.HostPort = int32(portNum)
 	}
-	return data.createPodOnNode(name, "", image, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false)
+	return data.createPodOnNode(name, "", image, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, nil)
 }
 
 // deletePod deletes a Pod in the test namespace.
