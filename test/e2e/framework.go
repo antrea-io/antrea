@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -40,11 +41,13 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/component-base/featuregate"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/test/e2e/providers"
 )
 
@@ -72,6 +75,9 @@ const (
 	antreaAgentCovBinary      string = "antrea-agent-coverage"
 	antreaControllerCovFile   string = "antrea-controller.cov.out"
 	antreaAgentCovFile        string = "antrea-agent.cov.out"
+
+	antreaAgentConfName      string = "antrea-agent.conf"
+	antreaControllerConfName string = "antrea-controller.conf"
 
 	nameSuffixLength int = 8
 )
@@ -1140,6 +1146,38 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 		}
 	}
 	return config.TrafficEncapModeInvalid, fmt.Errorf("antrea-conf config map is not found")
+}
+
+func (data *TestData) getFeatures(confName string, antreaNamespace string) (featuregate.FeatureGate, error) {
+	featureGate := features.DefaultMutableFeatureGate.DeepCopy()
+	cfgMap, err := data.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		return nil, err
+	}
+	var cfg interface{}
+	if err := yaml.Unmarshal([]byte(cfgMap.Data[confName]), &cfg); err != nil {
+		return nil, err
+	}
+	rawFeatureGateMap, ok := cfg.(map[interface{}]interface{})["featureGates"]
+	if !ok || rawFeatureGateMap == nil {
+		return featureGate, nil
+	}
+	featureGateMap := make(map[string]bool)
+	for k, v := range rawFeatureGateMap.(map[interface{}]interface{}) {
+		featureGateMap[k.(string)] = v.(bool)
+	}
+	if err := featureGate.SetFromMap(featureGateMap); err != nil {
+		return nil, err
+	}
+	return featureGate, nil
+}
+
+func (data *TestData) GetAgentFeatures(antreaNamespace string) (featuregate.FeatureGate, error) {
+	return data.getFeatures(antreaAgentConfName, antreaNamespace)
+}
+
+func (data *TestData) GetControllerFeatures(antreaNamespace string) (featuregate.FeatureGate, error) {
+	return data.getFeatures(antreaControllerConfName, antreaNamespace)
 }
 
 func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*corev1.ConfigMap, error) {

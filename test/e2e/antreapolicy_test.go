@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	. "github.com/vmware-tanzu/antrea/test/e2e/utils"
 )
 
@@ -89,21 +89,10 @@ func initialize(t *testing.T, data *TestData) {
 	podIPs = *ips
 }
 
-func isAntreaPolicyEnabled(data *TestData) (bool, error) {
-	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
-	if err != nil {
-		return false, fmt.Errorf("failed to get ConfigMap: %v", err)
-	}
-	antreaControllerConf, _ := configMap.Data["antrea-controller.conf"]
-	return strings.Contains(antreaControllerConf, "AntreaPolicy: true"), nil
-}
-
 func skipIfAntreaPolicyDisabled(tb testing.TB, data *TestData) {
-	enabled, err := isAntreaPolicyEnabled(data)
-	if err != nil {
+	if featureGate, err := data.GetControllerFeatures(antreaNamespace); err != nil {
 		tb.Fatalf("Cannot determine if CNP enabled: %v", err)
-	}
-	if !enabled {
+	} else if !featureGate.Enabled(features.AntreaPolicy) {
 		tb.Skipf("Skipping test as it required CNP to be enabled")
 	}
 }
