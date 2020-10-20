@@ -26,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 )
 
@@ -44,8 +43,6 @@ func TestTraceflowIntraNode(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
-	skipIfEncapModeIs(t, data, []config.TrafficEncapModeType{config.TrafficEncapModeNoEncap, config.TrafficEncapModeNetworkPolicyOnly})
 
 	if err = data.enableTraceflow(t); err != nil {
 		t.Fatal("Error when enabling Traceflow")

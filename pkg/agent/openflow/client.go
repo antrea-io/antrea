@@ -508,6 +508,13 @@ func (c *client) InstallBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uin
 }
 
 func (c *client) initialize() error {
+	if c.enableTLVMap {
+		// Set up Traceflow TLV map. This command uses Nicira extensions to OpenFlow and requires Open
+		// vSwitch 2.5 or later.
+		if err := c.InitialTLVMap(); err != nil {
+			return fmt.Errorf("failed to install TLV map: %v", err)
+		}
+	}
 	if err := c.ofEntryOperations.AddAll(c.defaultFlows()); err != nil {
 		return fmt.Errorf("failed to install default flows: %v", err)
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/component-base/metrics/testutil"
 
@@ -35,6 +36,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
@@ -88,13 +90,14 @@ type testConfig struct {
 	tunnelOFPort uint32
 	serviceCIDR  *net.IPNet
 	globalMAC    net.HardwareAddr
+	enableTLVMap bool
 }
 
 func TestConnectivityFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeNoEncap}, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -120,8 +123,40 @@ func TestConnectivityFlows(t *testing.T) {
 	}
 }
 
+func TestConnectivityFlowsWithTLVMap(t *testing.T) {
+	// Initialize ovs metrics (Prometheus) to test them
+	metrics.InitializeOVSMetrics()
+	defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Traceflow, true)()
+
+	c = ofClient.NewClient(br, bridgeMgmtAddr, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, TunnelType: ovsconfig.GeneveTunnel}, true, false)
+	err := ofTestUtils.PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	defer func() {
+		err = c.Disconnect()
+		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
+		err = ofTestUtils.DeleteOVSBridge(br)
+		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+	}()
+
+	config := prepareConfiguration()
+	config.enableTLVMap = true
+	for _, f := range []func(t *testing.T, config *testConfig){
+		testInitialize,
+		testInstallGatewayFlows,
+		testInstallServiceFlows,
+		testInstallTunnelFlows,
+		testInstallNodeFlows,
+		testInstallPodFlows,
+		testUninstallPodFlows,
+		testUninstallNodeFlows,
+		testExternalFlows,
+	} {
+		f(t, config)
+	}
+}
+
 func TestReplayFlowsConnectivityFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeNoEncap}, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -148,7 +183,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeNoEncap}, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -242,15 +277,11 @@ func testInitialize(t *testing.T, config *testConfig) {
 }
 
 func testInstallTunnelFlows(t *testing.T, config *testConfig) {
-	err := c.InitialTLVMap()
-	if err != nil {
-		t.Fatalf("Failed to install TLV Map: %v", err)
-	}
-	err = c.InstallDefaultTunnelFlows(config.tunnelOFPort)
+	err := c.InstallDefaultTunnelFlows(config.tunnelOFPort)
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries for tunnel port: %v", err)
 	}
-	for _, tableFlow := range prepareTunnelFlows(config.tunnelOFPort, config.globalMAC) {
+	for _, tableFlow := range prepareTunnelFlows(config.tunnelOFPort, config.globalMAC, config.enableTLVMap) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -271,7 +302,7 @@ func testInstallNodeFlows(t *testing.T, config *testConfig) {
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for node connectivity: %v", err)
 		}
-		for _, tableFlow := range prepareNodeFlows(config.tunnelOFPort, node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac) {
+		for _, tableFlow := range prepareNodeFlows(config.tunnelOFPort, node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac, config.enableTLVMap) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 		}
 	}
@@ -283,7 +314,7 @@ func testUninstallNodeFlows(t *testing.T, config *testConfig) {
 		if err != nil {
 			t.Fatalf("Failed to uninstall Openflow entries for node connectivity: %v", err)
 		}
-		for _, tableFlow := range prepareNodeFlows(config.tunnelOFPort, node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac) {
+		for _, tableFlow := range prepareNodeFlows(config.tunnelOFPort, node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac, config.enableTLVMap) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, false, tableFlow.flows)
 		}
 	}
@@ -317,7 +348,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeNoEncap}, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -434,7 +465,7 @@ type svcConfig struct {
 }
 
 func TestProxyServiceFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeNoEncap}, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -903,21 +934,29 @@ func prepareGatewayFlows(gwIP net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, v
 	}
 }
 
-func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableFlows {
+func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr, enableTLVMap bool) []expectTableFlows {
+	traceflowAction := ""
+	if enableTLVMap {
+		traceflowAction = "move:NXM_NX_TUN_METADATA0[28..31]->NXM_NX_REG9[28..31],"
+	}
 	return []expectTableFlows{
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,in_port=%d", tunnelPort),
-					ActStr:   "load:0->NXM_NX_REG0[0..15],load:0x1->NXM_NX_REG0[19],goto_table:30",
+					ActStr:   fmt.Sprintf("%sload:0->NXM_NX_REG0[0..15],load:0x1->NXM_NX_REG0[19],goto_table:30", traceflowAction),
 				},
 			},
 		},
 	}
 }
 
-func prepareNodeFlows(tunnelPort uint32, peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, localGwMAC net.HardwareAddr) []expectTableFlows {
+func prepareNodeFlows(tunnelPort uint32, peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, localGwMAC net.HardwareAddr, enableTLVMap bool) []expectTableFlows {
+	traceflowAction := ""
+	if enableTLVMap {
+		traceflowAction = "move:NXM_NX_REG9[28..31]->NXM_NX_TUN_METADATA0[28..31],"
+	}
 	return []expectTableFlows{
 		{
 			uint8(20),
@@ -933,7 +972,7 @@ func prepareNodeFlows(tunnelPort uint32, peerSubnet net.IPNet, peerGwIP, peerNod
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,ip,nw_dst=%s", peerSubnet.String()),
-					ActStr:   fmt.Sprintf("dec_ttl,set_field:%s->eth_src,set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],set_field:%s->tun_dst,goto_table:105", localGwMAC.String(), vMAC.String(), tunnelPort, peerNodeIP.String()),
+					ActStr:   fmt.Sprintf("%sdec_ttl,set_field:%s->eth_src,set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],set_field:%s->tun_dst,goto_table:105", traceflowAction, localGwMAC.String(), vMAC.String(), tunnelPort, peerNodeIP.String()),
 				},
 			},
 		},

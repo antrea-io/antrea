@@ -31,6 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
@@ -282,6 +283,7 @@ type flowCategoryCache struct {
 type client struct {
 	enableProxy                                   bool
 	enableAntreaPolicy                            bool
+	enableTLVMap                                  bool
 	roundInfo                                     types.RoundInfo
 	cookieAllocator                               cookie.Allocator
 	bridge                                        binding.Bridge
@@ -437,7 +439,7 @@ func (c *client) defaultFlows() (flows []binding.Flow) {
 func (c *client) tunnelClassifierFlow(tunnelOFPort uint32, category cookie.Category) binding.Flow {
 	flowBuilder := c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
 		MatchInPort(tunnelOFPort)
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+	if c.enableTLVMap {
 		regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
 		tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
 		flowBuilder = flowBuilder.Action().MoveRange(tunMetadataName, regName, OfTraceflowMarkRange, OfTraceflowMarkRange)
@@ -632,14 +634,11 @@ func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
 // traceflowL2ForwardOutputFlow generates Traceflow specific flow that outputs traceflow packets to OVS port and Antrea
 // Agent after L2forwarding calculation.
 func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cookie.Category) binding.Flow {
-	regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
-	tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
 	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
 		MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
 		SetHardTimeout(300).
 		MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().MoveRange(regName, tunMetadataName, OfTraceflowMarkRange, OfTraceflowMarkRange).
 		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
 		Action().SendToController(1).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -720,9 +719,16 @@ func (c *client) l3FwdFlowToRemote(
 	tunnelPeer net.IP,
 	tunOFPort uint32,
 	category cookie.Category) binding.Flow {
-	return c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchDstIPNet(peerSubnet).
-		Action().DecTTL().
+	flowBuilder := c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		MatchDstIPNet(peerSubnet)
+	if c.enableTLVMap {
+		// OVS register fields are initialized to 0, which is the value that will be used for non-Traceflow traffic.
+		// All Geneve overlay traffic is required to have tun_metadata0 to fix issue #1357
+		regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
+		tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
+		flowBuilder = flowBuilder.Action().MoveRange(regName, tunMetadataName, OfTraceflowMarkRange, OfTraceflowMarkRange)
+	}
+	return flowBuilder.Action().DecTTL().
 		// Rewrite src MAC to local gateway MAC and rewrite dst MAC to virtual MAC.
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(globalVirtualMAC).
@@ -1449,7 +1455,7 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool) Client {
+func NewClient(bridgeName, mgmtAddr string, networkConfig *config.NetworkConfig, enableProxy, enableAntreaPolicy bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -1469,5 +1475,6 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 	c.ofEntryOperations = c
 	c.enableProxy = enableProxy
 	c.enableAntreaPolicy = enableAntreaPolicy
+	c.enableTLVMap = networkConfig.TrafficEncapMode.SupportsEncap() && networkConfig.TunnelType == ovsconfig.GeneveTunnel && features.DefaultFeatureGate.Enabled(features.Traceflow)
 	return c
 }

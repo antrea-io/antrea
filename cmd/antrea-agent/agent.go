@@ -89,7 +89,12 @@ func run(o *Options) error {
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
+	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
+	networkConfig := &config.NetworkConfig{
+		TunnelType:        ovsconfig.TunnelType(o.config.TunnelType),
+		TrafficEncapMode:  encapMode,
+		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
+	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, networkConfig,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
 
@@ -101,12 +106,6 @@ func run(o *Options) error {
 	}
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
-	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
-	networkConfig := &config.NetworkConfig{
-		TunnelType:        ovsconfig.TunnelType(o.config.TunnelType),
-		TrafficEncapMode:  encapMode,
-		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
-
 	routeClient, err := route.NewClient(serviceCIDRNet, encapMode, o.config.NoSNAT)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
