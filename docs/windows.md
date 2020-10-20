@@ -1,45 +1,52 @@
 # Deploying Antrea on Windows
 
 ## Overview
-Antrea supports Windows worker Node. On Windows Node, Antrea sets up an overlay
-network to forward packets between Nodes and implements NetworkPolicies. Currently
-Geneve, VXLAN, and STT tunnels are supported.
+Antrea can manage the container networking needs of Windows worker nodes.
+
+On Windows, Antrea sets up an overlay network to forward packets between Nodes, while also implementing NetworkPolicies.
+
+Currently Geneve, VXLAN, and STT tunnels are supported.
 
 This page shows how to install antrea-agent on Windows Nodes and register the
 Node to an existing Kubernetes cluster.
 
-For the detailed design of how antrea-agent works on Windows, please refer to
+For a detailed design of how antrea-agent works on Windows, please refer to
 the [design doc](design/windows-design.md).
 
 ### Components that run on Windows
 
-The following components should be configured and run on the Windows Node.
-* [kubernetes components](https://kubernetes.io/docs/setup/production-environment/windows/user-guide-windows-nodes/)
+The following components need to be configured to run antrea as the networking provider for a Windows Node:
+
+* standard [kubernetes components](https://kubernetes.io/docs/setup/production-environment/windows/user-guide-windows-nodes/)
 * OVS daemons
 * antrea-agent
 * kube-proxy
 
-antrea-agent and kube-proxy run as processes on host and are managed by
-management Pods. It is recommended to run OVS daemons as Windows services.
+The `antrea-agent` and `kube-proxy` both run as processes on the host, and are managed by management Pods.
+It is recommended to run OVS daemons as Windows services.
+
 If you don't want to run antrea-agent and kube-proxy from the management Pods
 Antrea also provides scripts which help install and run these two components
 directly without Pod, please see [Manually run kube-proxy and antrea-agent on Windows worker Nodes](#Manually-run-kube-proxy-and-antrea-agent-on-Windows-worker-Nodes)
 section for details.
 
 ### Antrea Windows demo
-Watch this [demo video](https://www.youtube.com/watch?v=NjeVPGgaNFU) of running
-Antrea in a Kubernetes cluster with both Linux and Windows nodes. The demo also
-shows the Antrea OVS bridge configuration on a Windows Node, NetworkPolicy
-enforcement for Windows Pods, and Antrea Traceflow from Octant. Note, OVS driver
-and daemons are pre-installed on the Windows Nodes in the demo.
 
-## Deploying Antrea on Windows Worker Node
+To see more, you can check out this [demo video](https://www.youtube.com/watch?v=NjeVPGgaNFU) of running
+Antrea in a Kubernetes cluster with both Linux and Windows nodes.   In this demo, we also go over:
+
+- the Antrea OVS bridge configuration on a Windows Node
+- How NetworkPolicy enforcement works for Windows Pods
+- How to leverage Antrea's Traceflow with Octant
+
+Note, OVS driver and daemons are pre-installed on the Windows Nodes in the demo - so you'll need to get some components up and running before you can replicate it locally.  We'll describe that further in the next section.
+
+## Instructions for deploying Antrea on Windows Worker Nodes
 
 ### Prerequisites
-* Obtain a Windows Server 2019 license (or higher) in order to configure the
-  Windows Node that hosts Windows containers. And install the latest Windows
+* Obtain a Windows Server 2019 license (or higher) in order to configure the Windows Node that hosts Windows containers,  installed with the latest Windows
   updates.
-* Deploy a Linux-based Kubernetes cluster.
+* A "starter" Linux-based Kubernetes cluster with no CNI (you can set this up with a single Kubeadm node). 
 * Install [Hyper-V](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-the-hyper-v-role-on-windows-server)
   with management tools.
 * Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
