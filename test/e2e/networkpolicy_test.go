@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -267,6 +268,152 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 
 	if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err == nil {
 		t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", clientName, serverIP, serverPort)
+	}
+}
+
+// TestEgressToServerInCIDRBlock is a duplicate of upstream test case "should allow egress access to server in CIDR block
+// [Feature:NetworkPolicy]", which is currently buggy in v1.19 release for clusters which use IPv6.
+// This should be deleted when upstream is updated.
+// https://github.com/kubernetes/kubernetes/blob/v1.20.0-alpha.0/test/e2e/network/network_policy.go#L1365
+// https://github.com/kubernetes/kubernetes/pull/93583
+func TestEgressToServerInCIDRBlock(t *testing.T) {
+	skipIfNotIPv6Cluster(t)
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	workerNode := workerNodeName(1)
+	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode)
+	defer cleanupFunc()
+	serverBName, serverBIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode)
+	defer cleanupFunc()
+
+	clientA, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode)
+	defer cleanupFunc()
+	var serverCIDR string
+	var serverAIP, serverBIP string
+	if serverAIPs.ipv6 == nil {
+		t.Fatal("server IPv6 address is empty")
+	}
+	serverCIDR = fmt.Sprintf("%s/128", serverAIPs.ipv6.String())
+	serverAIP = serverAIPs.ipv6.String()
+	serverBIP = serverBIPs.ipv6.String()
+
+	if err := data.runNetcatCommandFromTestPod(clientA, serverAIP, 80); err != nil {
+		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
+	}
+	if err := data.runNetcatCommandFromTestPod(clientA, serverBIP, 80); err != nil {
+		t.Fatalf("%s should be able to netcat %s", clientA, serverBName)
+	}
+
+	np, err := data.createNetworkPolicy("allow-client-a-via-cidr-egress-rule", &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"antrea-e2e": clientA,
+			},
+		},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+		Egress: []networkingv1.NetworkPolicyEgressRule{
+			{
+				To: []networkingv1.NetworkPolicyPeer{
+					{
+						IPBlock: &networkingv1.IPBlock{
+							CIDR: serverCIDR,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	cleanupNP := func() {
+		if err = data.deleteNetworkpolicy(np); err != nil {
+			t.Errorf("Error when deleting network policy: %v", err)
+		}
+	}
+	defer cleanupNP()
+
+	if err := data.runNetcatCommandFromTestPod(clientA, serverAIP, 80); err != nil {
+		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
+	}
+	if err := data.runNetcatCommandFromTestPod(clientA, serverBIP, 80); err == nil {
+		t.Fatalf("%s should not be able to netcat %s", clientA, serverBName)
+	}
+}
+
+// TestEgressToServerInCIDRBlockWithException is a duplicate of upstream test case "should allow egress access to server
+// in CIDR block [Feature:NetworkPolicy]", which is currently buggy in v1.19 release for clusters which use IPv6.
+// This should be deleted when upstream is updated.
+// https://github.com/kubernetes/kubernetes/blob/v1.20.0-alpha.0/test/e2e/network/network_policy.go#L1444
+// https://github.com/kubernetes/kubernetes/pull/93583
+func TestEgressToServerInCIDRBlockWithException(t *testing.T) {
+	skipIfNotIPv6Cluster(t)
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	workerNode := workerNodeName(1)
+	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode)
+	defer cleanupFunc()
+
+	clientA, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode)
+	defer cleanupFunc()
+	var serverAAllowCIDR string
+	var serverAExceptList []string
+	var serverAIP string
+	if serverAIPs.ipv6 == nil {
+		t.Fatal("server IPv6 address is empty")
+	}
+	_, serverAAllowSubnet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", serverAIPs.ipv6.String(), 64))
+	if err != nil {
+		t.Fatalf("could not parse allow subnet")
+	}
+	serverAAllowCIDR = serverAAllowSubnet.String()
+	serverAExceptList = []string{fmt.Sprintf("%s/%d", serverAIPs.ipv6.String(), 128)}
+	serverAIP = serverAIPs.ipv6.String()
+
+	if err := data.runNetcatCommandFromTestPod(clientA, serverAIP, 80); err != nil {
+		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
+	}
+
+	np, err := data.createNetworkPolicy("deny-client-a-via-except-cidr-egress-rule", &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"antrea-e2e": clientA,
+			},
+		},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+		Egress: []networkingv1.NetworkPolicyEgressRule{
+			{
+				To: []networkingv1.NetworkPolicyPeer{
+					{
+						IPBlock: &networkingv1.IPBlock{
+							CIDR:   serverAAllowCIDR,
+							Except: serverAExceptList,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	cleanupNP := func() {
+		if err = data.deleteNetworkpolicy(np); err != nil {
+			t.Errorf("Error when deleting network policy: %v", err)
+		}
+	}
+	defer cleanupNP()
+
+	if err := data.runNetcatCommandFromTestPod(clientA, serverAIP, 80); err == nil {
+		t.Fatalf("%s should not be able to netcat %s", clientA, serverAName)
 	}
 }
 
