@@ -30,11 +30,24 @@ import (
 )
 
 var (
-	IANAInfoElements = []string{
+	IANAInfoElementsIPv4 = []string{
 		"flowStartSeconds",
 		"flowEndSeconds",
 		"sourceIPv4Address",
 		"destinationIPv4Address",
+		"sourceTransportPort",
+		"destinationTransportPort",
+		"protocolIdentifier",
+		"packetTotalCount",
+		"octetTotalCount",
+		"packetDeltaCount",
+		"octetDeltaCount",
+	}
+	IANAInfoElementsIPv6 = []string{
+		"flowStartSeconds",
+		"flowEndSeconds",
+		"sourceIPv6Address",
+		"destinationIPv6Address",
 		"sourceTransportPort",
 		"destinationTransportPort",
 		"protocolIdentifier",
@@ -70,6 +83,7 @@ type flowExporter struct {
 	pollCycle       uint
 	templateID      uint16
 	registry        ipfix.IPFIXRegistry
+	addrFamily      string
 }
 
 func genObservationID() (uint32, error) {
@@ -82,7 +96,7 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
-func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint) *flowExporter {
+func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint, addrFamily string) *flowExporter {
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
 	return &flowExporter{
@@ -93,6 +107,7 @@ func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint) *fl
 		0,
 		0,
 		registry,
+		addrFamily,
 	}
 }
 
@@ -162,6 +177,10 @@ func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
 	exp.process = expProcess
 	exp.templateID = expProcess.NewTemplateID()
 
+	IANAInfoElements := IANAInfoElementsIPv4
+	if exp.addrFamily == "ipv6" {
+		IANAInfoElements = IANAInfoElementsIPv6
+	}
 	templateRec := ipfix.NewIPFIXTemplateRecord(uint16(len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements)), exp.templateID)
 
 	sentBytes, err := exp.sendTemplateRecord(templateRec)
@@ -198,6 +217,10 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 		return 0, fmt.Errorf("error when writing template header: %v", err)
 	}
 
+	IANAInfoElements := IANAInfoElementsIPv4
+	if exp.addrFamily == "ipv6" {
+		IANAInfoElements = IANAInfoElementsIPv6
+	}
 	for _, ie := range IANAInfoElements {
 		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
@@ -208,7 +231,7 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 		}
 	}
 	for _, ie := range IANAReverseInfoElements {
-		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.ReverseEnterpriseID)
+		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID)
 		if err != nil {
 			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
 		}
@@ -250,6 +273,10 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 		case "sourceIPv4Address":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.SourceAddress)
 		case "destinationIPv4Address":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleReply.SourceAddress)
+		case "sourceIPv6Address":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.SourceAddress)
+		case "destinationIPv6Address":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleReply.SourceAddress)
 		case "sourceTransportPort":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.SourcePort)

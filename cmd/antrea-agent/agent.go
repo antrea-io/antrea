@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"regexp"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -278,9 +279,20 @@ func run(o *Options) error {
 
 	// Initialize flow exporter to start go routines to poll conntrack flows and export IPFIX flow records
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		match, err := regexp.MatchString("\\[.*\\]:.*", o.config.FlowCollectorAddr)
+		if err != nil {
+			return fmt.Errorf("Failed to parse FlowCollectorAddr: %s", o.config.FlowCollectorAddr)
+		}
+		svcCIDR := serviceCIDRNet
+		addrFamily := "ipv4"
+		if match {
+			svcCIDR = serviceCIDRNetv6
+			addrFamily = "ipv6"
+		}
 		connStore := connections.NewConnectionStore(
-			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, o.config.OVSDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
+			connections.InitializeConnTrackDumper(nodeConfig, svcCIDR, o.config.OVSDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
 			ifaceStore,
+			svcCIDR,
 			proxier,
 			o.pollInterval)
 		pollDone := make(chan struct{})
@@ -288,7 +300,8 @@ func run(o *Options) error {
 
 		flowExporter := exporter.NewFlowExporter(
 			flowrecords.NewFlowRecords(connStore),
-			o.config.FlowExportFrequency)
+			o.config.FlowExportFrequency,
+			addrFamily)
 		go wait.Until(func() { flowExporter.Export(o.flowCollector, stopCh, pollDone) }, 0, stopCh)
 	}
 

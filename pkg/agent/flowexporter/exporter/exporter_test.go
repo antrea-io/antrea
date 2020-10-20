@@ -34,6 +34,18 @@ const (
 )
 
 func TestFlowExporter_sendTemplateRecord(t *testing.T) {
+	for _, tc := range []struct {
+		ianaIE     []string
+		addrFamily string
+	}{
+		{IANAInfoElementsIPv4, "ipv4"},
+		{IANAInfoElementsIPv6, "ipv6"},
+	} {
+		testFlowExporter_sendTemplateRecord(t, tc.ianaIE, tc.addrFamily)
+	}
+}
+
+func testFlowExporter_sendTemplateRecord(t *testing.T, ianaIE []string, addrFamily string) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -48,15 +60,16 @@ func TestFlowExporter_sendTemplateRecord(t *testing.T) {
 		0,
 		testTemplateID,
 		mockIPFIXRegistry,
+		addrFamily,
 	}
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Only the element name is needed, other arguments have dummy values.
 	elemList := make([]*ipfixentities.InfoElement, 0)
-	for _, ie := range IANAInfoElements {
+	for _, ie := range ianaIE {
 		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAEnterpriseID, 0))
 	}
 	for _, ie := range IANAReverseInfoElements {
-		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.ReverseEnterpriseID, 0))
+		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAReversedEnterpriseID, 0))
 	}
 	for _, ie := range AntreaInfoElements {
 		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0))
@@ -66,17 +79,17 @@ func TestFlowExporter_sendTemplateRecord(t *testing.T) {
 	var templateRecord ipfixentities.Record
 
 	mockTempRec.EXPECT().PrepareRecord().Return(tempBytes, nil)
-	for i, ie := range IANAInfoElements {
+	for i, ie := range ianaIE {
 		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[i], nil)
 		mockTempRec.EXPECT().AddInfoElement(elemList[i], nil).Return(tempBytes, nil)
 	}
 	for i, ie := range IANAReverseInfoElements {
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.ReverseEnterpriseID).Return(elemList[i+len(IANAInfoElements)], nil)
-		mockTempRec.EXPECT().AddInfoElement(elemList[i+len(IANAInfoElements)], nil).Return(tempBytes, nil)
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[i+len(ianaIE)], nil)
+		mockTempRec.EXPECT().AddInfoElement(elemList[i+len(ianaIE)], nil).Return(tempBytes, nil)
 	}
 	for i, ie := range AntreaInfoElements {
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(IANAInfoElements)+len(IANAReverseInfoElements)], nil)
-		mockTempRec.EXPECT().AddInfoElement(elemList[i+len(IANAInfoElements)+len(IANAReverseInfoElements)], nil).Return(tempBytes, nil)
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaIE)+len(IANAReverseInfoElements)], nil)
+		mockTempRec.EXPECT().AddInfoElement(elemList[i+len(ianaIE)+len(IANAReverseInfoElements)], nil).Return(tempBytes, nil)
 	}
 	mockTempRec.EXPECT().GetRecord().Return(templateRecord)
 	mockTempRec.EXPECT().GetTemplateElements().Return(elemList)
@@ -89,12 +102,26 @@ func TestFlowExporter_sendTemplateRecord(t *testing.T) {
 		t.Errorf("Error in sending templated record: %v", err)
 	}
 
-	assert.Equal(t, len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements), len(flowExp.elementsList), flowExp.elementsList, "flowExp.elementsList and template record should have same number of elements")
+	assert.Equal(t, len(ianaIE)+len(IANAReverseInfoElements)+len(AntreaInfoElements), len(flowExp.elementsList), flowExp.elementsList, "flowExp.elementsList and template record should have same number of elements")
 }
 
 // TestFlowExporter_sendDataRecord tests essentially if element names in the switch-case matches globals
 // IANAInfoElements and AntreaInfoElements.
 func TestFlowExporter_sendDataRecord(t *testing.T) {
+	for _, tc := range []struct {
+		ianaIE     []string
+		addrFamily string
+		srcAddr    string
+		dstAddr    string
+	}{
+		{IANAInfoElementsIPv4, "ipv4", "sourceIPv4Address", "destinationIPv4Address"},
+		{IANAInfoElementsIPv6, "ipv6", "sourceIPv6Address", "destinationIPv6Address"},
+	} {
+		testFlowExporter_sendDataRecord(t, tc.ianaIE, tc.addrFamily, tc.srcAddr, tc.dstAddr)
+	}
+}
+
+func testFlowExporter_sendDataRecord(t *testing.T, ianaIE []string, addrFamily string, srcAddr string, dstAddr string) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -134,15 +161,15 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 	}
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Need only element name and other are dummys
-	elemList := make([]*ipfixentities.InfoElement, len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements))
-	for i, ie := range IANAInfoElements {
+	elemList := make([]*ipfixentities.InfoElement, len(ianaIE)+len(IANAReverseInfoElements)+len(AntreaInfoElements))
+	for i, ie := range ianaIE {
 		elemList[i] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
 	}
 	for i, ie := range IANAReverseInfoElements {
-		elemList[i+len(IANAInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.ReverseEnterpriseID, 0)
+		elemList[i+len(ianaIE)] = ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAReversedEnterpriseID, 0)
 	}
 	for i, ie := range AntreaInfoElements {
-		elemList[i+len(IANAInfoElements)+len(IANAReverseInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
+		elemList[i+len(ianaIE)+len(IANAReverseInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
 	}
 
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
@@ -156,6 +183,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 		0,
 		testTemplateID,
 		mockIPFIXRegistry,
+		addrFamily,
 	}
 	// Expect calls required
 	var dataRecord ipfixentities.Record
@@ -164,7 +192,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 		switch ieName := ie.Name; ieName {
 		case "flowStartSeconds", "flowEndSeconds":
 			mockDataRec.EXPECT().AddInfoElement(ie, time.Time{}.Unix()).Return(tempBytes, nil)
-		case "sourceIPv4Address", "destinationIPv4Address":
+		case srcAddr, dstAddr:
 			mockDataRec.EXPECT().AddInfoElement(ie, nil).Return(tempBytes, nil)
 		case "destinationClusterIP":
 			mockDataRec.EXPECT().AddInfoElement(ie, net.IP{0, 0, 0, 0}).Return(tempBytes, nil)

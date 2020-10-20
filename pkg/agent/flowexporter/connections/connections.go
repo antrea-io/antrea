@@ -16,6 +16,7 @@ package connections
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -39,16 +40,18 @@ type ConnectionStore struct {
 	connections   map[flowexporter.ConnectionKey]flowexporter.Connection
 	connDumper    ConnTrackDumper
 	ifaceStore    interfacestore.InterfaceStore
+	serviceCIDR   *net.IPNet
 	antreaProxier proxy.Proxier
 	pollInterval  time.Duration
 	mutex         sync.Mutex
 }
 
-func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, proxier proxy.Proxier, pollInterval time.Duration) *ConnectionStore {
+func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, serviceCIDR *net.IPNet, proxier proxy.Proxier, pollInterval time.Duration) *ConnectionStore {
 	return &ConnectionStore{
 		connections:   make(map[flowexporter.ConnectionKey]flowexporter.Connection),
 		connDumper:    connTrackDumper,
 		ifaceStore:    ifaceStore,
+		serviceCIDR:   serviceCIDR,
 		antreaProxier: proxier,
 		pollInterval:  pollInterval,
 	}
@@ -189,7 +192,11 @@ func (cs *ConnectionStore) Poll() (int, error) {
 	// We do not expect any error as resetConn is not returning any error
 	cs.ForAllConnectionsDo(resetConn)
 
-	filteredConnsList, totalConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
+	var zone uint16 = openflow.CtZone
+	if cs.serviceCIDR != nil && cs.serviceCIDR.IP.To4() == nil {
+		zone = openflow.CtZoneV6
+	}
+	filteredConnsList, totalConns, err := cs.connDumper.DumpFlows(zone)
 	if err != nil {
 		return 0, err
 	}
