@@ -358,17 +358,28 @@ func (a *ofLearnAction) MatchEthernetProtocolIP() LearnAction {
 
 // MatchTransportDst specifies that the transport layer destination field
 // {tcp|udp}_dst in the learned flow must match the same field of the packet
-// currently being processed. It only accepts ProtocolTCP or ProtocolUDP,
-// otherwise this does nothing.
+// currently being processed. It only accepts ProtocolTCP, ProtocolUDP, or
+// ProtocolSCTP, otherwise this does nothing.
 func (a *ofLearnAction) MatchTransportDst(protocol Protocol) LearnAction {
-	if protocol != ProtocolTCP && protocol != ProtocolUDP && protocol != ProtocolSCTP {
+	var ipProtoValue int
+	switch protocol {
+	case ProtocolTCP:
+		ipProtoValue = ofctrl.IP_PROTO_TCP
+	case ProtocolUDP:
+		ipProtoValue = ofctrl.IP_PROTO_UDP
+	case ProtocolSCTP:
+		ipProtoValue = ofctrl.IP_PROTO_SCTP
+	default:
+		// Return directly if the protocol is not acceptable.
 		return a
 	}
 	a.MatchEthernetProtocolIP()
 	ipTypeVal := make([]byte, 2)
-	ipTypeVal[1] = byte(ofctrl.IP_PROTO_TCP)
+	ipTypeVal[1] = byte(ipProtoValue)
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_PROTO"}, 1*8, nil, ipTypeVal)
-	fieldName := fmt.Sprintf("NXM_OF_%s_DST", strings.ToUpper(string(protocol)))
+	// OXM_OF fields support TCP, UDP and SCTP, but NXM_OF fields only support TCP and UDP. So here using "OXM_OF_" to
+	// generate the field name.
+	fieldName := fmt.Sprintf("OXM_OF_%s_DST", strings.ToUpper(string(protocol)))
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: fieldName}, 2*8, &ofctrl.LearnField{Name: fieldName}, nil)
 	return a
 }
