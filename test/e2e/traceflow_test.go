@@ -201,7 +201,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 			name: "intraNodeUDPDstIPTraceflow",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2])),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2].ipv4.String())),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -250,7 +250,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 			name: "intraNodeICMPDstIPTraceflow",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2])),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2].ipv4.String())),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{

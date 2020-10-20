@@ -64,6 +64,12 @@ func skipIfIPv6Cluster(tb testing.TB) {
 	}
 }
 
+func skipIfNotIPv6Cluster(tb testing.TB) {
+	if clusterInfo.podV6NetworkCIDR == "" {
+		tb.Skipf("Skipping test as it is not needed in IPv4 cluster")
+	}
+}
+
 func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	tb.Logf("Applying Antrea YAML")
 	if err := data.deployAntrea(); err != nil {
