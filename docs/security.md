@@ -38,7 +38,7 @@ use a
 and restrict the set of allowed
 [volumes](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#volumes-and-file-systems)
 to exclude `hostPath`. **This guidance applies to all multi-tenancy clusters and
-is not specific to Antrea.**. To quote the K8s documentation:
+is not specific to Antrea.** To quote the K8s documentation:
 
 > There are many ways a container with unrestricted access to the host
   filesystem can escalate privileges, including reading data from other

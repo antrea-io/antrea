@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"os/exec"
 	"reflect"
 	"sync"
 
@@ -90,20 +89,6 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 	// Sets up the IP routes and IP rule required to route packets in host network.
 	if err := c.initIPRoutes(); err != nil {
 		return fmt.Errorf("failed to initialize ip routes: %v", err)
-	}
-
-	// send_redirects must be disabled because packets from hostGateway are
-	// routed back to it. Otherwise redirect packets will be sent to source
-	// Pods.
-	// send_redirects for the interface will be enabled if at least one of
-	// conf/{all,interface}/send_redirects is set to TRUE, so "all" and the
-	// interface must be disabled together.
-	// See https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt.
-	if err := disableICMPSendRedirects("all"); err != nil {
-		return err
-	}
-	if err := disableICMPSendRedirects(nodeConfig.GatewayConfig.Name); err != nil {
-		return err
 	}
 
 	return nil
@@ -348,16 +333,6 @@ func writeLine(buf *bytes.Buffer, words ...string) {
 			buf.WriteByte('\n')
 		}
 	}
-}
-
-func disableICMPSendRedirects(intfName string) error {
-	cmdStr := fmt.Sprintf("echo 0 > /proc/sys/net/ipv4/conf/%s/send_redirects", intfName)
-	cmd := exec.Command("/bin/sh", "-c", cmdStr)
-	if err := cmd.Run(); err != nil {
-		klog.Errorf("Failed to disable send_redirect for interface %s: %v", intfName, err)
-		return err
-	}
-	return nil
 }
 
 // MigrateRoutesToGw moves routes (including assigned IP addresses if any) from link linkName to
