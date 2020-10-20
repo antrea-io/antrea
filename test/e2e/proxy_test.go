@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
 type expectTableFlows struct {
@@ -33,21 +35,11 @@ type expectTableFlows struct {
 }
 
 func skipIfProxyDisabled(t *testing.T, data *TestData) {
-	if enabled, err := proxyEnabled(data); err != nil {
+	if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
 		t.Fatalf("Error when detecting proxy: %v", err)
-	} else if !enabled {
+	} else if !featureGate.Enabled(features.AntreaProxy) {
 		t.Skip()
 	}
-}
-
-func proxyEnabled(data *TestData) (bool, error) {
-	key := "resubmit(,40),resubmit(,41)"
-	agentName, err := data.getAntreaPodOnNode(masterNodeName())
-	if err != nil {
-		return false, err
-	}
-	table31Output, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, "table=31"})
-	return strings.Contains(table31Output, key), err
 }
 
 func TestProxyServiceSessionAffinity(t *testing.T) {
