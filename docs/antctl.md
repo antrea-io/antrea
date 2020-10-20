@@ -12,7 +12,11 @@ running in two different modes:
 
 ## Table of Contents
 
+<<<<<<< HEAD
 <!-- toc -->
+=======
+<<<<<<< HEAD
+>>>>>>> 2ef4f1dde048770fa727933f25136db0172a0ff2
 - [Installation](#installation)
 - [Usage](#usage)
   - [Showing or changing log verbosity level](#showing-or-changing-log-verbosity-level)
@@ -24,7 +28,22 @@ running in two different modes:
   - [Dumping OVS flows](#dumping-ovs-flows)
   - [OVS packet tracing](#ovs-packet-tracing)
   - [Traceflow](#traceflow)
+<<<<<<< HEAD
 <!-- /toc -->
+=======
+=======
+- [Antctl](#antctl)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Usage](#usage)
+    - [Collecting support information](#collecting-support-information)
+    - [`controllerinfo` and `agentinfo` commands](#controllerinfo-and-agentinfo-commands)
+    - [NetworkPolicy commands](#networkpolicy-commands)
+    - [Dumping Pod network interface information](#dumping-pod-network-interface-information)
+    - [Dumping OVS flows](#dumping-ovs-flows)
+    - [OVS packet tracing](#ovs-packet-tracing)
+>>>>>>> 20a514be374e60734d7ed8d9fd8c8239856f76c5
+>>>>>>> 2ef4f1dde048770fa727933f25136db0172a0ff2
 
 ## Installation
 
@@ -46,7 +65,7 @@ appropriate one for your machine. For example:
 On Mac & Linux:
 
 ```bash
-curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/v0.5.0/antctl-$(uname)-x86_64"
+curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/v0.8.2/antctl-$(uname)-x86_64"
 chmod +x ./antctl
 mv ./antctl /some-dir-in-your-PATH/antctl
 antctl version
@@ -57,7 +76,7 @@ For Linux, we also publish binaries for Arm-based systems.
 On Windows, using PowerShell:
 
 ```powershell
-Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/v0.5.0/antctl-windows-x86_64.exe -Outfile antctl.exe
+Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/v0.8.2/antctl-windows-x86_64.exe -Outfile antctl.exe
 Move-Item .\antctl.exe c:\some-dir-in-your-PATH\antctl.exe
 antctl version
 ```
@@ -368,6 +387,7 @@ will not be conducted. Besides, users can specify header protocol (ICMP, TCP and
 source/destination ports and TCP flags.
 
 e.g.
+
 ```bash
 $ antctl traceflow -S busybox0 -D busybox1
 name: default-busybox0-to-default-busybox1-fpllngzi

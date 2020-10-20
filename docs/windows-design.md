@@ -18,7 +18,7 @@ configuration (e.g., IP, MAC and routing entries) on the host network adapter is
 this new interface. Some extra OpenFlow entries are needed to ensure the host traffic can be
 forwarded correctly.
 
-<img src="assets/hns_integration.svg" width="600" alt="HNS Integration">
+![HNS Integration](assets/hns_integration.svg.png) 
 
 SNAT based on OpenFlow is needed to make sure the containers can access the external address.
 The SNATed address is using the IP configured on the OVS bridge. Some additional OpenFlow entries
@@ -162,6 +162,7 @@ The following changes in the OVS pipeline are needed:
  from the uplink interface. 
 
 Following is an example for SNAT relevant OpenFlow entries.
+
 ```
 Classifier Table: 0
 table=0, priority=200, in_port=$uplink, ip actions=load:0x3->NXM_NX_REG0[0..15],goto_table:30
@@ -194,6 +195,7 @@ table=110, priority=200,ip,reg0=0x20000/0x20000 actions=output:antrea-gw0
 ### Using Windows named pipe for internal connections
 Named pipe is used for local connections on Windows Nodes instead of Unix Domain Socket (UDS). It is used in
 these scenarios:
+
 * OVSDB connection
 * OpenFlow connection
 * The connection between CNI plugin and CNI server
@@ -236,7 +238,7 @@ The corresponding reply traffic will enter OVS on the uplink interface. It will 
 the destination IP will be translated back to the original Pod's IP within the ct context. Then it will be
 output to the Pod.
 
-<img src="assets/windows_external_traffic.svg" width="600" alt="Traffic to external">
+![Traffic to External](assets/windows_external_traffic.svg.png) 
 
 ### Host Traffic
 
