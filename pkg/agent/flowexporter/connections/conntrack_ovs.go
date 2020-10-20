@@ -226,7 +226,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 	conn.IsActive = true
 	conn.DoExport = true
 
-	klog.V(2).Infof("Convert flow string: %v into connection: %+v", flow, conn)
+	klog.V(5).Infof("Converted flow string: %v into connection: %+v", flow, conn)
 
 	return &conn, nil
 }
@@ -264,6 +264,7 @@ func (ct *connTrackOvsCtl) GetMaxConnections() (int, error) {
 }
 
 func statusStringToStateflag(status string) uint32 {
+	// Mapping is defined at https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/netfilter/nf_conntrack_common.h#L42
 	stateMap := map[string]uint32{
 		"EXPECTED":      uint32(1),
 		"SEEN_REPLY":    uint32(1 << 1),
