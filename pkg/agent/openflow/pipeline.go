@@ -29,7 +29,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/features"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -282,6 +281,7 @@ type flowCategoryCache struct {
 type client struct {
 	enableProxy                                   bool
 	enableAntreaPolicy                            bool
+	enableTLVMap                                  bool
 	roundInfo                                     types.RoundInfo
 	cookieAllocator                               cookie.Allocator
 	bridge                                        binding.Bridge
@@ -437,7 +437,7 @@ func (c *client) defaultFlows() (flows []binding.Flow) {
 func (c *client) tunnelClassifierFlow(tunnelOFPort uint32, category cookie.Category) binding.Flow {
 	flowBuilder := c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
 		MatchInPort(tunnelOFPort)
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+	if c.enableTLVMap {
 		regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
 		tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
 		flowBuilder = flowBuilder.Action().MoveRange(tunMetadataName, regName, OfTraceflowMarkRange, OfTraceflowMarkRange)
@@ -622,9 +622,13 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, categ
 
 // l2ForwardOutputFlow generates the flow that outputs packets to OVS port after L2 forwarding calculation.
 func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
-	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
+	flowBuilder := c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange)
+	if c.enableTLVMap {
+		tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
+		flowBuilder = flowBuilder.Action().LoadRange(tunMetadataName, 0, OfTraceflowMarkRange)
+	}
+	return flowBuilder.Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -632,15 +636,17 @@ func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
 // traceflowL2ForwardOutputFlow generates Traceflow specific flow that outputs traceflow packets to OVS port and Antrea
 // Agent after L2forwarding calculation.
 func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cookie.Category) binding.Flow {
-	regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
-	tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
-	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
+	flowBuilder := c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
 		MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
 		SetHardTimeout(300).
 		MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().MoveRange(regName, tunMetadataName, OfTraceflowMarkRange, OfTraceflowMarkRange).
-		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
+		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange)
+	if c.enableTLVMap {
+		regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
+		tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
+		flowBuilder = flowBuilder.Action().MoveRange(regName, tunMetadataName, OfTraceflowMarkRange, OfTraceflowMarkRange)
+	}
+	return flowBuilder.Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
 		Action().SendToController(1).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
@@ -1449,7 +1455,7 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool) Client {
+func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool, enableTLVMap bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -1469,5 +1475,6 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 	c.ofEntryOperations = c
 	c.enableProxy = enableProxy
 	c.enableAntreaPolicy = enableAntreaPolicy
+	c.enableTLVMap = enableTLVMap
 	return c
 }

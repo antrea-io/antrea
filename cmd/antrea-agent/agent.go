@@ -89,9 +89,11 @@ func run(o *Options) error {
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
+	enableTLVMap := features.DefaultFeatureGate.Enabled(features.Traceflow)
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
-		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
+		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
+		enableTLVMap)
 
 	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
 	// NetworkPolicy stats.

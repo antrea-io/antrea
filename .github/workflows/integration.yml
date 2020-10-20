@@ -13,10 +13,12 @@ jobs:
     name: Integration tests
     runs-on: [ubuntu-18.04]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v2.3.3
     - uses: actions/setup-go@v1
       with:
         go-version: 1.13
+    - name: show git-show
+      run: git show --numstat
     - name: Run integration tests
       run: make docker-test-integration
     - name: Code coverage
