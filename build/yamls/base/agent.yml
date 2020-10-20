@@ -109,7 +109,7 @@ spec:
             periodSeconds: 10
             failureThreshold: 5
           securityContext:
-            # antrea-agent needs to manipulate "/proc/sys/net/ipv4/conf/XXX/send_redirects".
+            # antrea-agent needs to perform sysctl configuration.
             privileged: true
           volumeMounts:
           - name: antrea-config
