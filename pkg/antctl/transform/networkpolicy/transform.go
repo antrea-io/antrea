@@ -22,27 +22,27 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/rule"
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 type Response struct {
-	NameSpace       string                      `json:"namespace" yaml:"namespace"`
-	Name            string                      `json:"name" yaml:"name"`
-	TierPriority    int32                       `json:"tierPriority" yaml:"tierPriority"`
-	Priority        float64                     `json:"priority" yaml:"priority"`
-	Rules           []rule.Response             `json:"rules" yaml:"rules"`
-	AppliedToGroups []string                    `json:"appliedToGroups" yaml:"appliedToGroups"`
-	SourceType      cpv1beta1.NetworkPolicyType `json:"sourceNetworkPolicyType" yaml:"sourceNetworkPolicyType"`
+	NameSpace       string                     `json:"namespace" yaml:"namespace"`
+	Name            string                     `json:"name" yaml:"name"`
+	TierPriority    int32                      `json:"tierPriority" yaml:"tierPriority"`
+	Priority        float64                    `json:"priority" yaml:"priority"`
+	Rules           []rule.Response            `json:"rules" yaml:"rules"`
+	AppliedToGroups []string                   `json:"appliedToGroups" yaml:"appliedToGroups"`
+	SourceType      cpv1beta.NetworkPolicyType `json:"sourceNetworkPolicyType" yaml:"sourceNetworkPolicyType"`
 }
 
 func objectTransform(o interface{}) (interface{}, error) {
-	policy := o.(*cpv1beta1.NetworkPolicy)
+	policy := o.(*cpv1beta.NetworkPolicy)
 	rules, _ := rule.ObjectTransform(&policy.Rules)
 	if policy.AppliedToGroups == nil {
 		policy.AppliedToGroups = []string{}
 	}
 
-	if policy.SourceRef.Type == cpv1beta1.K8sNetworkPolicy {
+	if policy.SourceRef.Type == cpv1beta.K8sNetworkPolicy {
 		return Response{
 			NameSpace:       policy.Namespace,
 			Name:            policy.Name,
@@ -66,7 +66,7 @@ func objectTransform(o interface{}) (interface{}, error) {
 }
 
 func listTransform(l interface{}) (interface{}, error) {
-	policyList := l.(*cpv1beta1.NetworkPolicyList)
+	policyList := l.(*cpv1beta.NetworkPolicyList)
 	result := []Response{}
 	for _, item := range policyList.Items {
 		o, _ := objectTransform(&item)
@@ -77,8 +77,8 @@ func listTransform(l interface{}) (interface{}, error) {
 
 func Transform(reader io.Reader, single bool) (interface{}, error) {
 	return transform.GenericFactory(
-		reflect.TypeOf(cpv1beta1.NetworkPolicy{}),
-		reflect.TypeOf(cpv1beta1.NetworkPolicyList{}),
+		reflect.TypeOf(cpv1beta.NetworkPolicy{}),
+		reflect.TypeOf(cpv1beta.NetworkPolicyList{}),
 		objectTransform,
 		listTransform,
 	)(reader, single)
