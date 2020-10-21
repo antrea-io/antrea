@@ -67,7 +67,7 @@ type Controller struct {
 	nodeListerSynced cache.InformerSynced
 	queue            workqueue.RateLimitingInterface
 	// installedNodes records routes and flows installation states of Nodes.
-	// The key is the host name of the Node, the value is the podCIDR of the Node.
+	// The key is the host name of the Node, the value is the nodeRouteInfo of the Node.
 	// A node will be in the map after its flows and routes are installed successfully.
 	installedNodes *sync.Map
 }
@@ -114,8 +114,15 @@ func NewNodeRouteController(
 	return controller
 }
 
+// nodeRouteInfo is the route related information extracted from corev1.Node.
+type nodeRouteInfo struct {
+	podCIDR   *net.IPNet
+	nodeIP    net.IP
+	gatewayIP net.IP
+}
+
 // enqueueNode adds an object to the controller work queue
-// obj could be an *corev1.Node, or a DeletionFinalStateUnknown item.
+// obj could be a *corev1.Node, or a DeletionFinalStateUnknown item.
 func (c *Controller) enqueueNode(obj interface{}) {
 	node, isNode := obj.(*corev1.Node)
 	if !isNode {
@@ -148,7 +155,7 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 
 	// We iterate over all current Nodes, including the Node on which this agent is
 	// running, so the route to local Pods will be desired as well.
-	var desiredPodCIDRs []string
+	var desiredPodCIDRs, desiredRemoteNodeIPs []string
 	for _, node := range nodes {
 		// PodCIDR is allocated by K8s NodeIpamController asynchronously so it's possible we see a Node
 		// with no PodCIDR set when it just joins the cluster.
@@ -156,10 +163,20 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 			continue
 		}
 		desiredPodCIDRs = append(desiredPodCIDRs, node.Spec.PodCIDR)
+
+		if node.Name == c.nodeConfig.Name {
+			continue
+		}
+		nodeIP, err := GetNodeAddr(node)
+		if err != nil {
+			klog.Errorf("Failed to retrieve IP address of Node %s: %v", node.Name, err)
+			continue
+		}
+		desiredRemoteNodeIPs = append(desiredRemoteNodeIPs, nodeIP.String())
 	}
 
 	// routeClient will remove orphaned routes whose destinations are not in desiredPodCIDRs.
-	if err := c.routeClient.Reconcile(desiredPodCIDRs); err != nil {
+	if err := c.routeClient.Reconcile(desiredPodCIDRs, desiredRemoteNodeIPs); err != nil {
 		return err
 	}
 	return nil
@@ -353,13 +370,13 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 func (c *Controller) deleteNodeRoute(nodeName string) error {
 	klog.Infof("Deleting routes and flows to Node %s", nodeName)
 
-	podCIDR, installed := c.installedNodes.Load(nodeName)
+	obj, installed := c.installedNodes.Load(nodeName)
 	if !installed {
 		// Route is not added for this Node.
 		return nil
 	}
-
-	if err := c.routeClient.DeleteRoutes(podCIDR.(*net.IPNet)); err != nil {
+	nodeRouteInfo := obj.(*nodeRouteInfo)
+	if err := c.routeClient.DeleteRoutes(nodeRouteInfo.podCIDR, nodeRouteInfo.nodeIP); err != nil {
 		return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 	}
 
@@ -435,7 +452,11 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	if err := c.routeClient.AddRoutes(peerPodCIDR, peerNodeIP, peerGatewayIP); err != nil {
 		return err
 	}
-	c.installedNodes.Store(nodeName, peerPodCIDR)
+	c.installedNodes.Store(nodeName, &nodeRouteInfo{
+		podCIDR:   peerPodCIDR,
+		nodeIP:    peerNodeIP,
+		gatewayIP: peerGatewayIP,
+	})
 	return err
 }
 

@@ -32,6 +32,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 func ExecOutputTrim(cmd string) (string, error) {
@@ -92,29 +93,39 @@ func TestInitialize(t *testing.T) {
 
 	tcs := []struct {
 		// variations
-		mode   config.TrafficEncapModeType
-		noSNAT bool
+		networkConfig        *config.NetworkConfig
+		noSNAT               bool
+		expectNoTrackRules   bool
+		expectUDPPortInRules int
 	}{
-		{mode: config.TrafficEncapModeNoEncap},
-		{mode: config.TrafficEncapModeNoEncap, noSNAT: true},
-		{mode: config.TrafficEncapModeHybrid},
-		{mode: config.TrafficEncapModeEncap},
-	}
-
-	expectedIPTables := map[string]string{
-		"filter": `:ANTREA-FORWARD - [0:0]
--A FORWARD -m comment --comment "Antrea: jump to Antrea forwarding rules" -j ANTREA-FORWARD
--A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local pods" -j ACCEPT
--A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local pods" -j ACCEPT
-`,
-		"mangle": `:ANTREA-MANGLE - [0:0]
--A PREROUTING -m comment --comment "Antrea: jump to Antrea mangle rules" -j ANTREA-MANGLE
-`,
+		{
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+			},
+			expectNoTrackRules: false,
+		},
+		{
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeHybrid,
+				TunnelType:       ovsconfig.GeneveTunnel,
+			},
+			noSNAT:               true,
+			expectNoTrackRules:   true,
+			expectUDPPortInRules: 6081,
+		},
+		{
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+				TunnelType:       ovsconfig.VXLANTunnel,
+			},
+			expectNoTrackRules:   true,
+			expectUDPPortInRules: 4789,
+		},
 	}
 
 	for _, tc := range tcs {
-		t.Logf("Running Initialize test with mode %s node config %s", tc.mode, nodeConfig)
-		routeClient, err := route.NewClient(serviceCIDR, tc.mode, tc.noSNAT)
+		t.Logf("Running Initialize test with mode %s node config %s", tc.networkConfig.TrafficEncapMode, nodeConfig)
+		routeClient, err := route.NewClient(serviceCIDR, tc.networkConfig, tc.noSNAT)
 		if err != nil {
 			t.Error(err)
 		}
@@ -133,17 +144,43 @@ func TestInitialize(t *testing.T) {
 		entries, err := ipset.ListEntries("ANTREA-POD-IP")
 		assert.NoError(t, err, "list ipset entries failed")
 		assert.Contains(t, entries, podCIDR.String(), "entry should be in ipset")
+		err = exec.Command("ipset", "list", "ANTREA-NODE-IP").Run()
+		assert.NoError(t, err, "ipset not exist")
 
 		// verify iptables
-		if !tc.noSNAT {
-			expectedIPTables["nat"] = `:ANTREA-POSTROUTING - [0:0]
+		expectedIPTables := map[string]string{
+			"raw": `:ANTREA-OUTPUT - [0:0]
+:ANTREA-PREROUTING - [0:0]
+-A PREROUTING -m comment --comment "Antrea: jump to Antrea prerouting rules" -j ANTREA-PREROUTING
+-A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
+`,
+			"filter": `:ANTREA-FORWARD - [0:0]
+-A FORWARD -m comment --comment "Antrea: jump to Antrea forwarding rules" -j ANTREA-FORWARD
+-A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local pods" -j ACCEPT
+-A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local pods" -j ACCEPT
+`,
+			"mangle": `:ANTREA-MANGLE - [0:0]
+-A PREROUTING -m comment --comment "Antrea: jump to Antrea mangle rules" -j ANTREA-MANGLE
+`,
+			"nat": `:ANTREA-POSTROUTING - [0:0]
 -A POSTROUTING -m comment --comment "Antrea: jump to Antrea postrouting rules" -j ANTREA-POSTROUTING
 -A ANTREA-POSTROUTING -s 10.10.10.0/24 -m comment --comment "Antrea: masquerade pod to external packets" -m set ! --match-set ANTREA-POD-IP dst -j MASQUERADE
-`
-		} else {
+`}
+
+		if tc.noSNAT {
 			expectedIPTables["nat"] = `:ANTREA-POSTROUTING - [0:0]
 -A POSTROUTING -m comment --comment "Antrea: jump to Antrea postrouting rules" -j ANTREA-POSTROUTING
 `
+		}
+
+		if tc.expectNoTrackRules {
+			expectedIPTables["raw"] = fmt.Sprintf(`:ANTREA-OUTPUT - [0:0]
+:ANTREA-PREROUTING - [0:0]
+-A PREROUTING -m comment --comment "Antrea: jump to Antrea prerouting rules" -j ANTREA-PREROUTING
+-A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
+-A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: do not track encapsulation packets to remote nodes" -m udp --dport %d -m set --match-set ANTREA-NODE-IP dst -m addrtype --src-type LOCAL -j NOTRACK
+-A ANTREA-PREROUTING -p udp -m comment --comment "Antrea: do not track encapsulation packets from remote nodes" -m udp --dport %d -m set --match-set ANTREA-NODE-IP src -m addrtype --dst-type LOCAL -j NOTRACK
+`, tc.expectUDPPortInRules, tc.expectUDPPortInRules)
 		}
 
 		for table, expectedData := range expectedIPTables {
@@ -183,7 +220,7 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Logf("Running test with mode %s peer cidr %s peer ip %s node config %s", tc.mode, tc.peerCIDR, tc.peerIP, nodeConfig)
-		routeClient, err := route.NewClient(serviceCIDR, tc.mode, false)
+		routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: tc.mode}, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -219,8 +256,11 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 		entries, err := ipset.ListEntries("ANTREA-POD-IP")
 		assert.NoError(t, err, "list ipset entries failed")
 		assert.Contains(t, entries, tc.peerCIDR, "entry should be in ipset")
+		entries, err = ipset.ListEntries("ANTREA-NODE-IP")
+		assert.NoError(t, err, "list ipset entries failed")
+		assert.Contains(t, entries, tc.peerIP.String(), "entry should be in ipset")
 
-		if err := routeClient.DeleteRoutes(peerCIDR); err != nil {
+		if err := routeClient.DeleteRoutes(peerCIDR, tc.peerIP); err != nil {
 			t.Errorf("route delete failed with err %v", err)
 		}
 		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", peerCIDR))
@@ -230,6 +270,9 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 		entries, err = ipset.ListEntries("ANTREA-POD-IP")
 		assert.NoError(t, err, "list ipset entries failed")
 		assert.NotContains(t, entries, tc.peerCIDR, "entry should not be in ipset")
+		entries, err = ipset.ListEntries("ANTREA-NODE-IP")
+		assert.NoError(t, err, "list ipset entries failed")
+		assert.NotContains(t, entries, tc.peerIP.String(), "entry should not be in ipset")
 	}
 }
 
@@ -251,6 +294,7 @@ func TestReconcile(t *testing.T) {
 		mode             config.TrafficEncapModeType
 		addedRoutes      []peer
 		desiredPeerCIDRs []string
+		desiredNodeIPs   []string
 		// expectations
 		expRoutes map[string]netlink.Link
 	}{
@@ -261,6 +305,7 @@ func TestReconcile(t *testing.T) {
 				{peerCIDR: "10.10.30.0/24", peerIP: ip.NextIP((remotePeerIP))},
 			},
 			desiredPeerCIDRs: []string{"10.10.20.0/24"},
+			desiredNodeIPs:   []string{remotePeerIP.String()},
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": gwLink, "10.10.30.0/24": nil},
 		},
 		{
@@ -270,6 +315,7 @@ func TestReconcile(t *testing.T) {
 				{peerCIDR: "10.10.30.0/24", peerIP: ip.NextIP((localPeerIP))},
 			},
 			desiredPeerCIDRs: []string{"10.10.20.0/24"},
+			desiredNodeIPs:   []string{localPeerIP.String()},
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": nodeLink, "10.10.30.0/24": nil},
 		},
 		{
@@ -281,13 +327,14 @@ func TestReconcile(t *testing.T) {
 				{peerCIDR: "10.10.50.0/24", peerIP: ip.NextIP((remotePeerIP))},
 			},
 			desiredPeerCIDRs: []string{"10.10.20.0/24", "10.10.40.0/24"},
+			desiredNodeIPs:   []string{localPeerIP.String(), remotePeerIP.String()},
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": nodeLink, "10.10.30.0/24": nil, "10.10.40.0/24": gwLink, "10.10.50.0/24": nil},
 		},
 	}
 
 	for _, tc := range tcs {
 		t.Logf("Running test with mode %s added routes %v desired routes %v", tc.mode, tc.addedRoutes, tc.desiredPeerCIDRs)
-		routeClient, err := route.NewClient(serviceCIDR, tc.mode, false)
+		routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: tc.mode}, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -303,7 +350,7 @@ func TestReconcile(t *testing.T) {
 			}
 		}
 
-		if err := routeClient.Reconcile(tc.desiredPeerCIDRs); err != nil {
+		if err := routeClient.Reconcile(tc.desiredPeerCIDRs, tc.desiredNodeIPs); err != nil {
 			t.Errorf("Reconcile failed with err %v", err)
 		}
 
@@ -323,6 +370,9 @@ func TestReconcile(t *testing.T) {
 		entries, err := ipset.ListEntries("ANTREA-POD-IP")
 		assert.NoError(t, err, "list ipset entries failed")
 		assert.ElementsMatch(t, entries, tc.desiredPeerCIDRs, "mismatch ipset entries")
+		entries, err = ipset.ListEntries("ANTREA-NODE-IP")
+		assert.NoError(t, err, "list ipset entries failed")
+		assert.ElementsMatch(t, entries, tc.desiredNodeIPs, "mismatch ipset entries")
 	}
 }
 
@@ -335,7 +385,7 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
 
-	routeClient, err := route.NewClient(serviceCIDR, config.TrafficEncapModeNetworkPolicyOnly, false)
+	routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly}, false)
 	if err != nil {
 		t.Error(err)
 	}

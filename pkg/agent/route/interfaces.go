@@ -26,8 +26,8 @@ type Interface interface {
 	// It should be idempotent and can be safely called on every startup.
 	Initialize(nodeConfig *config.NodeConfig) error
 
-	// Reconcile should remove orphaned routes and related configuration based on the desired podCIDRs.
-	Reconcile(podCIDRs []string) error
+	// Reconcile should remove orphaned routes and related configuration based on the desired podCIDRs and remoteNodeIPs.
+	Reconcile(podCIDRs []string, remoteNodeIPs []string) error
 
 	// AddRoutes should add routes to the provided podCIDR.
 	// It should override the routes if they already exist, without error.
@@ -35,7 +35,7 @@ type Interface interface {
 
 	// DeleteRoutes should delete routes to the provided podCIDR.
 	// It should do nothing if the routes don't exist, without error.
-	DeleteRoutes(podCIDR *net.IPNet) error
+	DeleteRoutes(podCIDR *net.IPNet, peerNodeIP net.IP) error
 
 	// MigrateRoutesToGw should move routes from device linkname to local gateway.
 	MigrateRoutesToGw(linkName string) error
