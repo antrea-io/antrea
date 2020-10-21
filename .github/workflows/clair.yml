@@ -11,6 +11,12 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
+      with:
+        # Check out pull request's HEAD commit instead of the merge commit to
+        # work-around an issue where wrong a commit is being checked out.
+        # For more details, see:
+        # https://github.com/actions/checkout/issues/299.
+        ref: ${{ github.event.pull_request.head.sha }}
     - uses: actions/setup-go@v1
       with:
         go-version: 1.13

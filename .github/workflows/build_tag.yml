@@ -10,6 +10,12 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
+      with:
+        # Check out pull request's HEAD commit instead of the merge commit to
+        # work-around an issue where wrong a commit is being checked out.
+        # For more details, see:
+        # https://github.com/actions/checkout/issues/299.
+        ref: ${{ github.event.pull_request.head.sha }}
     - name: Build Antrea Docker image and push to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -24,6 +30,12 @@ jobs:
     runs-on: [windows-2019]
     steps:
     - uses: actions/checkout@v2
+      with:
+        # Check out pull request's HEAD commit instead of the merge commit to
+        # work-around an issue where wrong a commit is being checked out.
+        # For more details, see:
+        # https://github.com/actions/checkout/issues/299.
+        ref: ${{ github.event.pull_request.head.sha }}
     - name: Build Antrea Windows Docker image and push to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -40,6 +52,12 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
       - uses: actions/checkout@v2
+        with:
+          # Check out pull request's HEAD commit instead of the merge commit to
+          # work-around an issue where wrong a commit is being checked out.
+          # For more details, see:
+          # https://github.com/actions/checkout/issues/299.
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Build octant-antrea-ubuntu Docker image and push to registry
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}

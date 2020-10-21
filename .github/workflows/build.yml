@@ -18,6 +18,11 @@ jobs:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
+        # Check out pull request's HEAD commit instead of the merge commit to
+        # work-around an issue where wrong a commit is being checked out.
+        # For more details, see:
+        # https://github.com/actions/checkout/issues/299.
+        ref: ${{ github.event.pull_request.head.sha }}
     - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@master
       id: check_diff
       with:
@@ -31,6 +36,12 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
+      with:
+        # Check out pull request's HEAD commit instead of the merge commit to
+        # work-around an issue where wrong a commit is being checked out.
+        # For more details, see:
+        # https://github.com/actions/checkout/issues/299.
+        ref: ${{ github.event.pull_request.head.sha }}
     - name: Build Antrea Docker image
       run: make
     - name: Push Antrea Docker image to registry
@@ -48,6 +59,12 @@ jobs:
     runs-on: [windows-2019]
     steps:
     - uses: actions/checkout@v2
+      with:
+        # Check out pull request's HEAD commit instead of the merge commit to
+        # work-around an issue where wrong a commit is being checked out.
+        # For more details, see:
+        # https://github.com/actions/checkout/issues/299.
+        ref: ${{ github.event.pull_request.head.sha }}
     - name: Build Antrea Windows Docker image
       run: make build-windows
     - name: Push Antrea Windows Docker image to registry
@@ -66,6 +83,12 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
+      with:
+        # Check out pull request's HEAD commit instead of the merge commit to
+        # work-around an issue where wrong a commit is being checked out.
+        # For more details, see:
+        # https://github.com/actions/checkout/issues/299.
+        ref: ${{ github.event.pull_request.head.sha }}
     - name: Build octant-antrea-ubuntu Docker image
       run: make octant-antrea-ubuntu
     - name: Push octant-antrea-ubuntu Docker image to registry
@@ -83,6 +106,12 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
+      with:
+        # Check out pull request's HEAD commit instead of the merge commit to
+        # work-around an issue where wrong a commit is being checked out.
+        # For more details, see:
+        # https://github.com/actions/checkout/issues/299.
+        ref: ${{ github.event.pull_request.head.sha }}
     - name: Build netpol Docker image
       working-directory: hack/netpol
       run: make build
