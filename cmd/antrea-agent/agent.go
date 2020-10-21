@@ -163,13 +163,16 @@ func run(o *Options) error {
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated Pods.
 	podUpdates := make(chan v1beta1.PodReference, 100)
-	networkPolicyController := networkpolicy.NewNetworkPolicyController(
+	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
 		ifaceStore,
 		nodeConfig.Name,
 		podUpdates,
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
+	if err != nil {
+		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
+	}
 	isChaining := false
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true

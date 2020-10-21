@@ -88,11 +88,12 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
 	podUpdates <-chan v1beta1.PodReference,
-	antreaPolicyEnabled bool) *Controller {
+	antreaPolicyEnabled bool) (*Controller, error) {
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
 		reconciler:           newReconciler(ofClient, ifaceStore),
+		ofClient:             ofClient,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
@@ -108,7 +109,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		// Initiate logger for Antrea Policy audit logging
 		err := initLogger()
 		if err != nil {
-			return nil
+			return nil, err
 		}
 	}
 
@@ -286,7 +287,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		fullSyncWaitGroup: &c.fullSyncGroup,
 		fullSynced:        false,
 	}
-	return c
+	return c, nil
 }
 
 func (c *Controller) GetNetworkPolicyNum() int {

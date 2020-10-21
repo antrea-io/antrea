@@ -111,14 +111,18 @@ func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchFie
 
 // getMatch receives ofctrl matchers and table id, match field.
 // Modifies match field to Ingress/Egress register based on tableID.
-func getMatch(matchers *ofctrl.Matchers, tableID binding.TableIDType) *ofctrl.MatchField {
-	// Get match from ingress/egress reg
-	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable, openflow.EgressDefaultTable) {
+func getMatch(matchers *ofctrl.Matchers, tableID binding.TableIDType, disposition uint32) *ofctrl.MatchField {
+	// Get match from CNPDropConjunctionIDReg if disposition is drop
+	if disposition == openflow.DispositionDrop {
+		return getMatchRegField(matchers, uint32(openflow.CNPDropConjunctionIDReg))
+	}
+	// Get match from ingress/egress reg if disposition is allow
+	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable) {
 		if tableID == table {
 			return getMatchRegField(matchers, uint32(openflow.EgressReg))
 		}
 	}
-	for _, table := range append(openflow.GetAntreaPolicyIngressTables(), openflow.IngressRuleTable, openflow.IngressDefaultTable) {
+	for _, table := range append(openflow.GetAntreaPolicyIngressTables(), openflow.IngressRuleTable) {
 		if tableID == table {
 			return getMatchRegField(matchers, uint32(openflow.IngressReg))
 		}
@@ -146,23 +150,24 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	tableID := binding.TableIDType(pktIn.TableId)
 	ob.tableName = openflow.GetFlowTableName(tableID)
 
-	// Set match to corresponding ingress/egress reg
-	match = getMatch(matchers, tableID)
+	// Get disposition Allow or Drop
+	match = getMatchRegField(matchers, uint32(openflow.DispositionMarkReg))
+	info, err := getInfoInReg(match, openflow.APDispositionMarkRange.ToNXRange())
+	if err != nil {
+		return errors.New(fmt.Sprintf("received error while unloading disposition from reg: %v", err))
+	}
+	ob.disposition = openflow.DispositionToString[info]
+
+	// Set match to corresponding ingress/egress reg according to disposition
+	match = getMatch(matchers, tableID, info)
 
 	// Get Network Policy full name and OF priority of the conjunction
-	info, err := getInfoInReg(match, nil)
+	info, err = getInfoInReg(match, nil)
 	if err != nil {
 		return errors.New(fmt.Sprintf("received error while unloading conjunction id from reg: %v", err))
 	}
 	ob.npRef, ob.ofPriority = c.ofClient.GetPolicyInfoFromConjunction(info)
 
-	// Get disposition Allow or Drop
-	match = getMatchRegField(matchers, uint32(openflow.DispositionMarkReg))
-	info, err = getInfoInReg(match, openflow.APDispositionMarkRange.ToNXRange())
-	if err != nil {
-		return errors.New(fmt.Sprintf("received error while unloading disposition from reg: %v", err))
-	}
-	ob.disposition = openflow.DispositionToString[info]
 	return nil
 }
 

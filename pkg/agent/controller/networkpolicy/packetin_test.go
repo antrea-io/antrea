@@ -24,51 +24,42 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func getMockPacketIn() *ofctrl.PacketIn {
-	ipPacket := protocol.IPv4{
-		NWSrc:    net.IPv4(1, 1, 1, 1),
-		NWDst:    net.IPv4(2, 2, 2, 2),
-		Length:   1,
-		Protocol: 6,
-	}
-	etherPacket := protocol.Ethernet{
-		Ethertype: 0x0800,
-		Data:      util.Message(&ipPacket),
-	}
-	result := ofctrl.PacketIn{
-		Reason: 1,
-		Data:   etherPacket,
-	}
-	return &result
-}
-
 func TestGetPacketInfo(t *testing.T) {
 	type args struct {
 		pktIn *ofctrl.PacketIn
 		ob    *logInfo
 	}
-	mockOb := new(logInfo)
-	expectedOb := logInfo{srcIP: "1.1.1.1", destIP: "2.2.2.2", pktLength: 1, protocolStr: "TCP"}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name       string
+		pktIn      *ofctrl.PacketIn
+		expectedOb logInfo
+		wantErr    bool
 	}{
 		{
 			"ipv4",
-			args{
-				getMockPacketIn(),
-				mockOb,
+			&ofctrl.PacketIn{
+				Reason: 1,
+				Data: protocol.Ethernet{
+					Ethertype: 0x0800,
+					Data: util.Message(&protocol.IPv4{
+						NWSrc:    net.IPv4(1, 1, 1, 1),
+						NWDst:    net.IPv4(2, 2, 2, 2),
+						Length:   1,
+						Protocol: 6,
+					}),
+				},
 			},
+			logInfo{srcIP: "1.1.1.1", destIP: "2.2.2.2", pktLength: 1, protocolStr: "TCP"},
 			false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := getPacketInfo(tt.args.pktIn, tt.args.ob); (err != nil) != tt.wantErr {
+			actualOb := logInfo{}
+			if err := getPacketInfo(tt.pktIn, &actualOb); (err != nil) != tt.wantErr {
 				t.Errorf("getPacketInfo() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			assert.Equal(t, expectedOb, *mockOb, "Expect to retrieve exact packet info while differed")
+			assert.Equal(t, tt.expectedOb, actualOb, "Expect to retrieve exact packet info while differed")
 		})
 	}
 }

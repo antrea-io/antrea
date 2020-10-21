@@ -201,9 +201,9 @@ const (
 	EgressReg       regType = 5
 	IngressReg      regType = 6
 	TraceflowReg    regType = 9 // Use reg9[28..31] to store traceflow dataplaneTag.
-	// cnpDropConjunctionIDReg reuses reg3 which will also be used for storing endpoint IP to store the rule ID. Since
+	// CNPDropConjunctionIDReg reuses reg3 which will also be used for storing endpoint IP to store the rule ID. Since
 	// the service selection will finish when a packet hitting NetworkPolicy related rules, there is no conflict.
-	cnpDropConjunctionIDReg regType = 3
+	CNPDropConjunctionIDReg regType = 3
 	// marksRegServiceNeedLB indicates a packet need to do service selection.
 	marksRegServiceNeedLB uint32 = 0b001
 	// marksRegServiceSelected indicates a packet has done service selection.
@@ -239,7 +239,7 @@ var DispositionToString = map[uint32]string{
 }
 
 var (
-	// APDispositionMarkRange takes the 21 to 28 bits of register marksReg to indicate disposition of Antrea Policy.
+	// APDispositionMarkRange takes the 21 to 21 bits of register marksReg to indicate disposition of Antrea Policy.
 	APDispositionMarkRange = binding.Range{21, 21}
 	// ofPortMarkRange takes the 16th bit of register marksReg to indicate if the ofPort number of an interface
 	// is found or not. Its value is 0x1 if yes.
@@ -968,7 +968,7 @@ func (c *client) dropRuleMetricFlow(conjunctionID uint32, ingress bool) binding.
 	return c.pipeline[metricTableID].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchPriority(priorityNormal).
 		MatchRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
-		MatchReg(int(cnpDropConjunctionIDReg), conjunctionID).
+		MatchReg(int(CNPDropConjunctionIDReg), conjunctionID).
 		Action().Drop().
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 		Done()
@@ -1018,10 +1018,8 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 // Any matched flow will be dropped in corresponding metric tables.
 func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding.TableIDType, priority *uint16, enableLogging bool) binding.Flow {
 	ofPriority := *priority
-	conjReg := IngressReg
 	metricTableID := IngressMetricTable
 	if _, ok := egressTables[tableID]; ok {
-		conjReg = EgressReg
 		metricTableID = EgressMetricTable
 	}
 	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
@@ -1029,8 +1027,7 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
 			MatchConjID(conjunctionID).
 			MatchPriority(ofPriority).
-			Action().LoadRegRange(int(cnpDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Logging
+			Action().LoadRegRange(int(CNPDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
 			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
 			Action().LoadRegRange(int(marksReg), DispositionDrop, APDispositionMarkRange). //Logging
 			Action().SendToController(uint8(PacketInReasonNP)).
@@ -1041,7 +1038,7 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
 			MatchConjID(conjunctionID).
 			MatchPriority(ofPriority).
-			Action().LoadRegRange(int(cnpDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
+			Action().LoadRegRange(int(CNPDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
 			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
 			Action().GotoTable(metricTableID).
 			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).

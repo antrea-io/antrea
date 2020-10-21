@@ -37,6 +37,7 @@ const (
 	PacketInReasonNP ofpPacketInReason = 0
 )
 
+// RegisterPacketInHandler stores controller handler in a map of map with reason and name as keys.
 func (c *client) RegisterPacketInHandler(packetHandlerReason uint8, packetHandlerName string, packetInHandler interface{}) {
 	handler, ok := packetInHandler.(PacketInHandler)
 	if !ok {
@@ -49,11 +50,7 @@ func (c *client) RegisterPacketInHandler(packetHandlerReason uint8, packetHandle
 	c.packetInHandlers[packetHandlerReason][packetHandlerName] = handler
 }
 
-type FeatureStartPacketIn interface {
-	ConfigPacketIn()
-	ListenPacketIn()
-}
-
+// featureStartPacketIn contains packetin resources specifically for each feature that uses packetin.
 type featureStartPacketIn struct {
 	reason        uint8
 	subscribeCh   chan *ofctrl.PacketIn
@@ -61,9 +58,11 @@ type featureStartPacketIn struct {
 	packetInQueue *workqueue.Type
 }
 
-func (f *featureStartPacketIn) ConfigPacketIn() {
-	f.subscribeCh = make(chan *ofctrl.PacketIn)
-	f.packetInQueue = workqueue.NewNamed(string(f.reason))
+func newfeatureStartPacketIn(reason uint8, stopCh <-chan struct{}) *featureStartPacketIn {
+	featurePacketIn := featureStartPacketIn{reason: reason, stopCh: stopCh}
+	featurePacketIn.subscribeCh = make(chan *ofctrl.PacketIn)
+	featurePacketIn.packetInQueue = workqueue.NewNamed(string(reason))
+	return &featurePacketIn
 }
 
 func (f *featureStartPacketIn) ListenPacketIn() {
@@ -83,6 +82,7 @@ func (f *featureStartPacketIn) ListenPacketIn() {
 	}
 }
 
+// StartPacketInHandler is the starting point for processing feature packetin requests.
 func (c *client) StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{}) {
 	if len(c.packetInHandlers) == 0 || len(packetInStartedReason) == 0 {
 		return
@@ -90,7 +90,7 @@ func (c *client) StartPacketInHandler(packetInStartedReason []uint8, stopCh <-ch
 
 	// Iterate through each feature that starts packetin. Subscribe with their specified reason.
 	for _, reason := range packetInStartedReason {
-		featurePacketIn := &featureStartPacketIn{reason: reason, stopCh: stopCh}
+		featurePacketIn := newfeatureStartPacketIn(reason, stopCh)
 		err := c.subscribeFeaturePacketIn(featurePacketIn)
 		if err != nil {
 			klog.Errorf("received error %+v while subscribing packetin for each feature", err)
@@ -99,13 +99,12 @@ func (c *client) StartPacketInHandler(packetInStartedReason []uint8, stopCh <-ch
 }
 
 func (c *client) subscribeFeaturePacketIn(featurePacketIn *featureStartPacketIn) error {
-	featurePacketIn.ConfigPacketIn()
 	err := c.SubscribePacketIn(featurePacketIn.reason, featurePacketIn.subscribeCh)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Subscribe %d PacketIn failed %+v", featurePacketIn.reason, err))
 	}
 	go c.parsePacketIn(featurePacketIn.packetInQueue, featurePacketIn.reason)
-	featurePacketIn.ListenPacketIn()
+	go featurePacketIn.ListenPacketIn()
 	return nil
 }
 
