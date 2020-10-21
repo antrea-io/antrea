@@ -76,6 +76,7 @@ https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 | kind/failing-test                  | Categorizes issue or PR as related to a consistently or frequently failing test | Any |
 | kind/feature                       | Categorizes issue or PR as related to a new feature.      | Any                |
 | kind/support                       | Categorizes issue or PR as related to a support question. | Any |
+| kind/task                          | Categorizes issue or PR as related to a routine task that needs to be performed. | Any |
 | lifecycle/active                   | Indicates that an issue or PR is actively being worked on by a contributor. | Any |
 | lifecycle/frozen                   | Indicates that an issue or PR should not be auto-closed due to staleness. | Any |
 | lifecycle/stale                    | Denotes an issue or PR has remained open with no activity and has become stale. | Any |
