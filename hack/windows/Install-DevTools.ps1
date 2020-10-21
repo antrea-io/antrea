@@ -70,7 +70,7 @@ function InstallMingw() {
 }
 
 function InstallGolang() {
-    $GOLANG_VERSION = "1.13.10"
+    $GOLANG_VERSION = "1.15.3"
     Write-Host "Installing Golang $GOLANG_VERSION"
     Write-Host "=============="
     if (CommandExists("go")) {

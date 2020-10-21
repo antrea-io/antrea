@@ -13,5 +13,5 @@ spec:
       containers:
         - name: netpol
           imagePullPolicy: Always
-          image: antrea/netpol:alpha6
+          image: antrea/netpol:alpha7
       serviceAccount: netpol

@@ -10,10 +10,10 @@ RUN PROTOBUF_VERSION=3.0.2; ZIPNAME="protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
   chmod -R +rX /tmp/protoc
 
 
-FROM golang:1.13
+FROM golang:1.15
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image based on golang 1.13 which includes codegen tools."
+LABEL description="A Docker image based on golang 1.15 which includes codegen tools."
 
 ENV GO111MODULE=on
 

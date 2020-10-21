@@ -1,6 +1,6 @@
 module github.com/vmware-tanzu/antrea/plugins/octant
 
-go 1.13
+go 1.15
 
 require (
 	github.com/vmware-tanzu/antrea v0.0.0
