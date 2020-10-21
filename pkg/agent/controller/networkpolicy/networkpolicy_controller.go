@@ -31,7 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
@@ -85,7 +85,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
-	podUpdates <-chan v1beta1.PodReference,
+	podUpdates <-chan v1beta2.PodReference,
 	antreaPolicyEnabled bool) *Controller {
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
@@ -112,14 +112,14 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if err != nil {
 				return nil, err
 			}
-			return antreaClient.ControlplaneV1beta1().NetworkPolicies("").Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta2().NetworkPolicies("").Watch(context.TODO(), options)
 		},
 		AddFunc: func(obj runtime.Object) error {
-			policy, ok := obj.(*v1beta1.NetworkPolicy)
+			policy, ok := obj.(*v1beta2.NetworkPolicy)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
 			}
-			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta1.K8sNetworkPolicy {
+			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
 				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
 					policy.SourceRef.ToString())
 				return nil
@@ -129,11 +129,11 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		UpdateFunc: func(obj runtime.Object) error {
-			policy, ok := obj.(*v1beta1.NetworkPolicy)
+			policy, ok := obj.(*v1beta2.NetworkPolicy)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
 			}
-			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta1.K8sNetworkPolicy {
+			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
 				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
 					policy.SourceRef.ToString())
 				return nil
@@ -142,11 +142,11 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		DeleteFunc: func(obj runtime.Object) error {
-			policy, ok := obj.(*v1beta1.NetworkPolicy)
+			policy, ok := obj.(*v1beta2.NetworkPolicy)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
 			}
-			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta1.K8sNetworkPolicy {
+			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
 				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
 					policy.SourceRef.ToString())
 				return nil
@@ -156,14 +156,14 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		ReplaceFunc: func(objs []runtime.Object) error {
-			policies := make([]*v1beta1.NetworkPolicy, len(objs))
+			policies := make([]*v1beta2.NetworkPolicy, len(objs))
 			var ok bool
 			for i := range objs {
-				policies[i], ok = objs[i].(*v1beta1.NetworkPolicy)
+				policies[i], ok = objs[i].(*v1beta2.NetworkPolicy)
 				if !ok {
 					return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", objs[i])
 				}
-				if !c.antreaPolicyEnabled && policies[i].SourceRef.Type != v1beta1.K8sNetworkPolicy {
+				if !c.antreaPolicyEnabled && policies[i].SourceRef.Type != v1beta2.K8sNetworkPolicy {
 					klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
 						policies[i].SourceRef.ToString())
 					return nil
@@ -184,10 +184,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if err != nil {
 				return nil, err
 			}
-			return antreaClient.ControlplaneV1beta1().AppliedToGroups().Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta2().AppliedToGroups().Watch(context.TODO(), options)
 		},
 		AddFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AppliedToGroup)
+			group, ok := obj.(*v1beta2.AppliedToGroup)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
 			}
@@ -195,7 +195,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		UpdateFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AppliedToGroupPatch)
+			group, ok := obj.(*v1beta2.AppliedToGroupPatch)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
 			}
@@ -203,7 +203,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		DeleteFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AppliedToGroup)
+			group, ok := obj.(*v1beta2.AppliedToGroup)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
 			}
@@ -211,10 +211,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		ReplaceFunc: func(objs []runtime.Object) error {
-			groups := make([]*v1beta1.AppliedToGroup, len(objs))
+			groups := make([]*v1beta2.AppliedToGroup, len(objs))
 			var ok bool
 			for i := range objs {
-				groups[i], ok = objs[i].(*v1beta1.AppliedToGroup)
+				groups[i], ok = objs[i].(*v1beta2.AppliedToGroup)
 				if !ok {
 					return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", objs[i])
 				}
@@ -233,10 +233,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if err != nil {
 				return nil, err
 			}
-			return antreaClient.ControlplaneV1beta1().AddressGroups().Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta2().AddressGroups().Watch(context.TODO(), options)
 		},
 		AddFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AddressGroup)
+			group, ok := obj.(*v1beta2.AddressGroup)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
 			}
@@ -244,7 +244,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		UpdateFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AddressGroupPatch)
+			group, ok := obj.(*v1beta2.AddressGroupPatch)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
 			}
@@ -252,7 +252,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		DeleteFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AddressGroup)
+			group, ok := obj.(*v1beta2.AddressGroup)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
 			}
@@ -260,10 +260,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		ReplaceFunc: func(objs []runtime.Object) error {
-			groups := make([]*v1beta1.AddressGroup, len(objs))
+			groups := make([]*v1beta2.AddressGroup, len(objs))
 			var ok bool
 			for i := range objs {
-				groups[i], ok = objs[i].(*v1beta1.AddressGroup)
+				groups[i], ok = objs[i].(*v1beta2.AddressGroup)
 				if !ok {
 					return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", objs[i])
 				}
@@ -292,26 +292,26 @@ func (c *Controller) GetAppliedToGroupNum() int {
 // GetNetworkPolicies returns the requested NetworkPolicies.
 // This func will return all NetworkPolicies that can match all provided attributes in NetworkPolicyQueryFilter.
 // These not provided attributes in NetworkPolicyQueryFilter means match all.
-func (c *Controller) GetNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+func (c *Controller) GetNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
 	return c.ruleCache.getNetworkPolicies(npFilter)
 }
 
 // GetAppliedToNetworkPolicies returns the NetworkPolicies applied to the Pod and match the filter.
-func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
 	return c.ruleCache.getAppliedNetworkPolicies(pod, namespace, npFilter)
 }
 
 // GetNetworkPolicy looks up and returns the cached NetworkPolicy which first matches the filter.
 // nil is returned if the specified NetworkPolicy is not found.
-func (c *Controller) GetNetworkPolicy(npFilter *querier.NetworkPolicyQueryFilter) *v1beta1.NetworkPolicy {
+func (c *Controller) GetNetworkPolicy(npFilter *querier.NetworkPolicyQueryFilter) *v1beta2.NetworkPolicy {
 	return c.ruleCache.getNetworkPolicy(npFilter)
 }
 
-func (c *Controller) GetAddressGroups() []v1beta1.AddressGroup {
+func (c *Controller) GetAddressGroups() []v1beta2.AddressGroup {
 	return c.ruleCache.GetAddressGroups()
 }
 
-func (c *Controller) GetAppliedToGroups() []v1beta1.AppliedToGroup {
+func (c *Controller) GetAppliedToGroups() []v1beta2.AppliedToGroup {
 	return c.ruleCache.GetAppliedToGroups()
 }
 
