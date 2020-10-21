@@ -7,7 +7,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends iproute2 iptables ipset make wget gcc libc6-dev ca-certificates git && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/*
 
-ENV GO_VERSION=1.13.12
+ENV GO_VERSION=1.15.3
 ENV GOPATH /go
 
 RUN wget -q -O - https://golang.org/dl/go$GO_VERSION.linux-amd64.tar.gz | tar xz -C /usr/local/ && \

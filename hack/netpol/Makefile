@@ -1,5 +1,5 @@
 # TODO: use kustomize if the code stays in the Antrea repo for a long time.
-VERSION ?= alpha6
+VERSION ?= alpha7
 
 .PHONY: all
 all: build
