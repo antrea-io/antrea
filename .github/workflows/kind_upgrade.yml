@@ -4,10 +4,12 @@ on:
     branches:
     - master
     - release-*
+    - api-change-controlplane-v1beta2
   push:
     branches:
     - master
     - release-*
+    - api-change-controlplane-v1beta2
 
 env:
   KIND_VERSION: v0.9.0
