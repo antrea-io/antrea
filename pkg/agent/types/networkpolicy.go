@@ -15,7 +15,7 @@
 package types
 
 import (
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
@@ -43,7 +43,7 @@ type Address interface {
 
 // PolicyRule groups configurations to set up conjunctive match for egress/ingress policy rules.
 type PolicyRule struct {
-	Direction     v1beta1.Direction
+	Direction     v1beta2.Direction
 	From          []Address
 	To            []Address
 	Service       []v1beta1.Service
@@ -57,7 +57,7 @@ type PolicyRule struct {
 
 // IsAntreaNetworkPolicyRule returns if a PolicyRule is created for Antrea NetworkPolicy types.
 func (r *PolicyRule) IsAntreaNetworkPolicyRule() bool {
-	return r.PolicyRef.Type != v1beta1.K8sNetworkPolicy
+	return r.PolicyRef.Type != v1beta2.K8sNetworkPolicy
 }
 
 // Priority is a struct that is composed of Antrea NetworkPolicy priority, rule priority and Tier priority.

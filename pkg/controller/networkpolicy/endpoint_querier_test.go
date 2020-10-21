@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 // pods represent kubernetes pods for testing proper query results
@@ -218,8 +218,8 @@ func TestEndpointQuery(t *testing.T) {
 						Name:      "podA",
 						Policies:  []Policy{{policyRef0}},
 						Rules: []Rule{
-							{policyRef0, v1beta1.DirectionOut, 0},
-							{policyRef0, v1beta1.DirectionIn, 0},
+							{policyRef0, v1beta2.DirectionOut, 0},
+							{policyRef0, v1beta2.DirectionIn, 0},
 						},
 					},
 				},
@@ -240,8 +240,8 @@ func TestEndpointQuery(t *testing.T) {
 							{policyRef1},
 						},
 						Rules: []Rule{
-							{policyRef0, v1beta1.DirectionOut, 0},
-							{policyRef0, v1beta1.DirectionIn, 0},
+							{policyRef0, v1beta2.DirectionOut, 0},
+							{policyRef0, v1beta2.DirectionIn, 0},
 						},
 					},
 				},

@@ -70,24 +70,16 @@ type ExternalEntityReference struct {
 	Namespace string
 }
 
-// Endpoint represents an external endpoint.
-type Endpoint struct {
-	// IP is the IP address of the Endpoint.
-	IP IPAddress
-	// Ports is the list NamedPort of the Endpoint.
-	Ports []NamedPort
-}
-
 // GroupMember represents an resource member to be populated in Groups.
 type GroupMember struct {
 	// Pod maintains the reference to the Pod.
 	Pod *PodReference
-
 	// ExternalEntity maintains the reference to the ExternalEntity.
 	ExternalEntity *ExternalEntityReference
-
-	// Endpoints maintains a list of EndPoints associated with this GroupMember.
-	Endpoints []Endpoint
+	// IP is the IP address of the Endpoints associated with the GroupMember.
+	IPs []IPAddress
+	// Ports is the list NamedPort of the GroupMember.
+	Ports []NamedPort
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

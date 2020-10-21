@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
@@ -38,7 +38,7 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 
 		var obj interface{}
 		npq := aq.GetNetworkPolicyInfoQuerier()
-		var nps []cpv1beta1.NetworkPolicy
+		var nps []cpv1beta.NetworkPolicy
 
 		if npFilter.Pod != "" {
 			interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(npFilter.Pod, npFilter.Namespace)
@@ -49,7 +49,7 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			nps = npq.GetNetworkPolicies(npFilter)
 		}
 
-		obj = cpv1beta1.NetworkPolicyList{Items: nps}
+		obj = cpv1beta.NetworkPolicyList{Items: nps}
 
 		if err := json.NewEncoder(w).Encode(obj); err != nil {
 			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
@@ -58,11 +58,11 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 }
 
 // From user shorthand input to cpv1beta1.NetworkPolicyType
-var mapToNetworkPolicyType = map[string]cpv1beta1.NetworkPolicyType{
-	"NP":    cpv1beta1.K8sNetworkPolicy,
-	"K8SNP": cpv1beta1.K8sNetworkPolicy,
-	"ACNP":  cpv1beta1.AntreaClusterNetworkPolicy,
-	"ANP":   cpv1beta1.AntreaNetworkPolicy,
+var mapToNetworkPolicyType = map[string]cpv1beta.NetworkPolicyType{
+	"NP":    cpv1beta.K8sNetworkPolicy,
+	"K8SNP": cpv1beta.K8sNetworkPolicy,
+	"ACNP":  cpv1beta.AntreaClusterNetworkPolicy,
+	"ANP":   cpv1beta.AntreaNetworkPolicy,
 }
 
 // Create a Network Policy Filter from URL Query

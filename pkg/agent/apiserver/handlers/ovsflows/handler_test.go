@@ -28,7 +28,7 @@ import (
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	aqtest "github.com/vmware-tanzu/antrea/pkg/agent/querier/testing"
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
@@ -121,7 +121,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	testNetworkPolicy := &cpv1beta1.NetworkPolicy{}
+	testNetworkPolicy := &cpv1beta.NetworkPolicy{}
 
 	testcases := []testCase{
 		{

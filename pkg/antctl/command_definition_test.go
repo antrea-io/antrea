@@ -39,7 +39,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/rule"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 type Foobar struct {
@@ -158,7 +158,7 @@ foo2
 							Services:  nil,
 						},
 					},
-					SourceType: cpv1beta1.K8sNetworkPolicy,
+					SourceType: cpv1beta.K8sNetworkPolicy,
 				},
 				{
 					Rules: []rule.Response{
@@ -174,7 +174,7 @@ foo2
 					AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c"},
 					Name:            "GroupName1",
 					NameSpace:       "Namespace2",
-					SourceType:      cpv1beta1.AntreaNetworkPolicy,
+					SourceType:      cpv1beta.AntreaNetworkPolicy,
 				},
 			},
 			expected: `NAMESPACE  NAME       APPLIED-TO                                       RULES SOURCE-TYPE        
@@ -207,11 +207,11 @@ GroupName2 <NONE>
 			rawResponseData: appliedtogroup.Response{
 				Name: "GroupName",
 				Pods: []common.GroupMemberPod{
-					{Pod: &cpv1beta1.PodReference{
+					{Pod: &cpv1beta.PodReference{
 						Name:      "nginx-6db489d4b7-324rc",
 						Namespace: "PodNamespace",
 					}},
-					{Pod: &cpv1beta1.PodReference{
+					{Pod: &cpv1beta.PodReference{
 						Name:      "nginx-6db489d4b7-vgv7v",
 						Namespace: "PodNamespace",
 					}},

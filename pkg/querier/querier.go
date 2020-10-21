@@ -17,7 +17,7 @@ package querier
 import (
 	v1 "k8s.io/api/core/v1"
 
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
@@ -31,11 +31,11 @@ type NetworkPolicyInfoQuerier interface {
 type AgentNetworkPolicyInfoQuerier interface {
 	NetworkPolicyInfoQuerier
 	GetControllerConnectionStatus() bool
-	GetNetworkPolicies(npFilter *NetworkPolicyQueryFilter) []cpv1beta1.NetworkPolicy
-	GetAddressGroups() []cpv1beta1.AddressGroup
-	GetAppliedToGroups() []cpv1beta1.AppliedToGroup
-	GetNetworkPolicy(npFilter *NetworkPolicyQueryFilter) *cpv1beta1.NetworkPolicy
-	GetAppliedNetworkPolicies(pod, namespace string, npFilter *NetworkPolicyQueryFilter) []cpv1beta1.NetworkPolicy
+	GetNetworkPolicies(npFilter *NetworkPolicyQueryFilter) []cpv1beta.NetworkPolicy
+	GetAddressGroups() []cpv1beta.AddressGroup
+	GetAppliedToGroups() []cpv1beta.AppliedToGroup
+	GetNetworkPolicy(npFilter *NetworkPolicyQueryFilter) *cpv1beta.NetworkPolicy
+	GetAppliedNetworkPolicies(pod, namespace string, npFilter *NetworkPolicyQueryFilter) []cpv1beta.NetworkPolicy
 }
 
 type ControllerNetworkPolicyInfoQuerier interface {
@@ -85,5 +85,5 @@ type NetworkPolicyQueryFilter struct {
 	// Name of the pod that the network policy is applied on.
 	Pod string
 	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, CNP, ANP)
-	SourceType cpv1beta1.NetworkPolicyType
+	SourceType cpv1beta.NetworkPolicyType
 }

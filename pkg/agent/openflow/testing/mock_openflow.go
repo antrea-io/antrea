@@ -24,7 +24,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	v1beta2 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	openflow "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	proxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 	net "net"
@@ -167,10 +167,10 @@ func (mr *MockClientMockRecorder) GetPodFlowKeys(arg0 interface{}) *gomock.Call 
 }
 
 // GetPolicyFromConjunction mocks base method
-func (m *MockClient) GetPolicyFromConjunction(arg0 uint32) *v1beta1.NetworkPolicyReference {
+func (m *MockClient) GetPolicyFromConjunction(arg0 uint32) *v1beta2.NetworkPolicyReference {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPolicyFromConjunction", arg0)
-	ret0, _ := ret[0].(*v1beta1.NetworkPolicyReference)
+	ret0, _ := ret[0].(*v1beta2.NetworkPolicyReference)
 	return ret0
 }
 
