@@ -16,52 +16,73 @@ package networkpolicy
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
+	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query network policy rules in current agent.
-func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
+func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		name := r.URL.Query().Get("name")
-		ns := r.URL.Query().Get("namespace")
-		pod := r.URL.Query().Get("pod")
-
-		if (name != "" || pod != "") && ns == "" {
-			http.Error(w, "namespace must be provided", http.StatusBadRequest)
+		npFilter, err := newFilterFromURLQuery(r.URL.Query())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		var obj interface{}
 		npq := aq.GetNetworkPolicyInfoQuerier()
+		var nps []cpv1beta1.NetworkPolicy
 
-		if name != "" {
-			// Query the specified NetworkPolicy.
-			np := npq.GetNetworkPolicy(name, ns)
-			if np != nil {
-				obj = *np
-			}
-		} else if pod != "" {
-			// Query NetworkPolicies applied to the Pod
-			interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(pod, ns)
+		if npFilter.Pod != "" {
+			interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(npFilter.Pod, npFilter.Namespace)
 			if len(interfaces) > 0 {
-				nps := npq.GetAppliedNetworkPolicies(pod, ns)
-				obj = cpv1beta1.NetworkPolicyList{Items: nps}
+				nps = npq.GetAppliedNetworkPolicies(npFilter.Pod, npFilter.Namespace, npFilter)
 			}
 		} else {
-			nps := npq.GetNetworkPolicies(ns)
-			obj = cpv1beta1.NetworkPolicyList{Items: nps}
+			nps = npq.GetNetworkPolicies(npFilter)
 		}
 
-		if obj == nil {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+		obj = cpv1beta1.NetworkPolicyList{Items: nps}
+
 		if err := json.NewEncoder(w).Encode(obj); err != nil {
 			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
 		}
 	}
+}
+
+// From user shorthand input to cpv1beta1.NetworkPolicyType
+var mapToNetworkPolicyType = map[string]cpv1beta1.NetworkPolicyType{
+	"NP":    cpv1beta1.K8sNetworkPolicy,
+	"K8SNP": cpv1beta1.K8sNetworkPolicy,
+	"ACNP":  cpv1beta1.AntreaClusterNetworkPolicy,
+	"ANP":   cpv1beta1.AntreaNetworkPolicy,
+}
+
+// Create a Network Policy Filter from URL Query
+func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter, error) {
+	namespace := query.Get("namespace")
+	pod := query.Get("pod")
+	if pod != "" && namespace == "" {
+		return nil, fmt.Errorf("with a pod name, namespace must be provided")
+	}
+
+	strSourceType := strings.ToUpper(query.Get("type"))
+	npSourceType, ok := mapToNetworkPolicyType[strSourceType]
+	if strSourceType != "" && !ok {
+		return nil, fmt.Errorf("invalid reference type. It should be K8sNP, ACNP or ANP")
+	}
+
+	return &querier.NetworkPolicyQueryFilter{
+		Name:       query.Get("name"),
+		Namespace:  namespace,
+		Pod:        pod,
+		SourceType: npSourceType,
+	}, nil
 }

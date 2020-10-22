@@ -31,6 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 const (
@@ -142,7 +143,7 @@ type ruleCache struct {
 
 	policyMapLock sync.RWMutex
 	// policyMap is a map using NetworkPolicy UID as the key.
-	policyMap map[string]*types.NamespacedName
+	policyMap map[string]*v1beta1.NetworkPolicyReference
 
 	// rules is a storage that supports listing rules using multiple indexing functions.
 	// rules is thread-safe.
@@ -154,26 +155,33 @@ type ruleCache struct {
 	podUpdates <-chan v1beta1.PodReference
 }
 
-func (c *ruleCache) getNetworkPolicies(namespace string) []v1beta1.NetworkPolicy {
-	ret := []v1beta1.NetworkPolicy{}
+func (c *ruleCache) getNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+	var ret []v1beta1.NetworkPolicy
 	c.policyMapLock.RLock()
 	defer c.policyMapLock.RUnlock()
-	for uid, np := range c.policyMap {
-		if namespace == "" || np.Namespace == namespace {
+	for uid, npr := range c.policyMap {
+		if c.networkPolicyMatchFilter(npFilter, npr) {
 			ret = append(ret, *c.buildNetworkPolicyFromRules(uid))
 		}
 	}
 	return ret
 }
 
+// If this npr(Network Policy Reference) can match the npFilter(Network Policy Filter)
+func (c *ruleCache) networkPolicyMatchFilter(npFilter *querier.NetworkPolicyQueryFilter, npr *v1beta1.NetworkPolicyReference) bool {
+	return (npFilter.Name == "" || npFilter.Name == npr.Name) &&
+		(npFilter.Namespace == "" || npFilter.Namespace == npr.Namespace) &&
+		(npFilter.SourceType == "" || npFilter.SourceType == npr.Type)
+}
+
 // getNetworkPolicy looks up and returns the cached NetworkPolicy.
 // nil is returned if the specified NetworkPolicy is not found.
-func (c *ruleCache) getNetworkPolicy(npName, npNamespace string) *v1beta1.NetworkPolicy {
+func (c *ruleCache) getNetworkPolicy(npFilter *querier.NetworkPolicyQueryFilter) *v1beta1.NetworkPolicy {
 	var npUID string
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
-	for uid, np := range c.policyMap {
-		if np.Name == npName && np.Namespace == npNamespace {
+	for uid, npr := range c.policyMap {
+		if c.networkPolicyMatchFilter(npFilter, npr) {
 			npUID = uid
 			break
 		}
@@ -226,7 +234,7 @@ func addRuleToNetworkPolicy(np *v1beta1.NetworkPolicy, rule *rule) *v1beta1.Netw
 
 }
 
-func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string) []v1beta1.NetworkPolicy {
+func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
 	var groups []string
 	memberPod := &v1beta1.GroupMemberPod{Pod: &v1beta1.PodReference{Name: pod, Namespace: namespace}}
 	c.podSetLock.RLock()
@@ -243,10 +251,12 @@ func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string) []v1beta1.N
 		for _, ruleObj := range rules {
 			rule := ruleObj.(*rule)
 			np, ok := npMap[string(rule.PolicyUID)]
-			np = addRuleToNetworkPolicy(np, rule)
-			if !ok {
-				// First rule for this NetworkPolicy
-				npMap[string(rule.PolicyUID)] = np
+			if c.networkPolicyMatchFilter(npFilter, rule.SourceRef) {
+				np = addRuleToNetworkPolicy(np, rule)
+				if !ok {
+					// First rule for this NetworkPolicy
+					npMap[string(rule.PolicyUID)] = np
+				}
 			}
 		}
 	}
@@ -338,7 +348,7 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta1.PodRef
 	cache := &ruleCache{
 		podSetByGroup:     make(map[string]v1beta1.GroupMemberPodSet),
 		addressSetByGroup: make(map[string]v1beta1.GroupMemberSet),
-		policyMap:         make(map[string]*types.NamespacedName),
+		policyMap:         make(map[string]*v1beta1.NetworkPolicyReference),
 		rules:             rules,
 		dirtyRuleHandler:  dirtyRuleHandler,
 		podUpdates:        podUpdate,
@@ -641,7 +651,7 @@ func (c *ruleCache) AddNetworkPolicy(policy *v1beta1.NetworkPolicy) error {
 }
 
 func (c *ruleCache) addNetworkPolicyLocked(policy *v1beta1.NetworkPolicy) error {
-	c.policyMap[string(policy.UID)] = &types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name}
+	c.policyMap[string(policy.UID)] = policy.SourceRef
 	metrics.NetworkPolicyCount.Inc()
 	return c.UpdateNetworkPolicy(policy)
 }

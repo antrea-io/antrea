@@ -32,6 +32,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 const (
@@ -289,22 +290,21 @@ func (c *Controller) GetAppliedToGroupNum() int {
 }
 
 // GetNetworkPolicies returns the requested NetworkPolicies.
-// If namespace is provided, only NetworkPolicies in the Namespace are returned.
-// If namespace is not provided, NetworkPolicies in all the Namespace are
-// returned.
-func (c *Controller) GetNetworkPolicies(namespace string) []v1beta1.NetworkPolicy {
-	return c.ruleCache.getNetworkPolicies(namespace)
+// This func will return all NetworkPolicies that can match all provided attributes in NetworkPolicyQueryFilter.
+// These not provided attributes in NetworkPolicyQueryFilter means match all.
+func (c *Controller) GetNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+	return c.ruleCache.getNetworkPolicies(npFilter)
 }
 
-// GetAppliedToNetworkPolicies returns the NetworkPolicies applied to the Pod.
-func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string) []v1beta1.NetworkPolicy {
-	return c.ruleCache.getAppliedNetworkPolicies(pod, namespace)
+// GetAppliedToNetworkPolicies returns the NetworkPolicies applied to the Pod and match the filter.
+func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta1.NetworkPolicy {
+	return c.ruleCache.getAppliedNetworkPolicies(pod, namespace, npFilter)
 }
 
-// GetNetworkPolicy looks up and returns the cached NetworkPolicy.
+// GetNetworkPolicy looks up and returns the cached NetworkPolicy which first matches the filter.
 // nil is returned if the specified NetworkPolicy is not found.
-func (c *Controller) GetNetworkPolicy(npName, npNamespace string) *v1beta1.NetworkPolicy {
-	return c.ruleCache.getNetworkPolicy(npName, npNamespace)
+func (c *Controller) GetNetworkPolicy(npFilter *querier.NetworkPolicyQueryFilter) *v1beta1.NetworkPolicy {
+	return c.ruleCache.getNetworkPolicy(npFilter)
 }
 
 func (c *Controller) GetAddressGroups() []v1beta1.AddressGroup {

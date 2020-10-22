@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
@@ -506,7 +505,7 @@ func TestRuleCacheReplaceNetworkPolicies(t *testing.T) {
 			c, recorder, _ := newFakeRuleCache()
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
-				c.policyMap[string(rule.PolicyUID)] = &types.NamespacedName{Namespace: rule.PolicyNamespace, Name: rule.PolicyName}
+				c.policyMap[string(rule.PolicyUID)] = rule.SourceRef
 			}
 			c.ReplaceNetworkPolicies(tt.args)
 
