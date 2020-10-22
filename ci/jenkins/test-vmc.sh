@@ -37,16 +37,16 @@ TEST_FAILURE=false
 CLUSTER_READY=false
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
-                  [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|whole-conformance|networkpolicy>]
+                  [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
                   [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only]
 
-Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, whole Conformance & Network Policy).
+Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all features Conformance, whole Conformance & Network Policy).
 
         --cluster-name           The cluster name to be used for the generated VMC cluster.
         --kubeconfig             Path to save kubeconfig of generated VMC cluster.
         --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
         --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
-        --testcase               The testcase to run: e2e, conformance, whole-conformance or networkpolicy.
+        --testcase               The testcase to run: e2e, conformance, all-features-conformance, whole-conformance or networkpolicy.
         --garbage-collection     Do garbage collection to clean up some unused testbeds.
         --setup-only             Only perform setting up the cluster and run test.
         --cleanup-only           Only perform cleaning up the cluster.
@@ -382,7 +382,12 @@ function run_conformance {
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$GIT_CHECKOUT_DIR/jenkins/out/kubeconfig
 
-    kubectl apply -f $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
+    if [[ "$TESTCASE" == "all-features-conformance" ]]; then
+      $GIT_CHECKOUT_DIR/hack/generate-manifest.sh --mode dev --all-features > $GIT_CHECKOUT_DIR/build/yamls/antrea-all.yml
+      kubectl apply -f $GIT_CHECKOUT_DIR/build/yamls/antrea-all.yml
+    else
+      kubectl apply -f $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
+    fi
     kubectl rollout restart deployment/coredns -n kube-system
     kubectl rollout status --timeout=5m deployment/coredns -n kube-system
     kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system
@@ -394,6 +399,8 @@ function run_conformance {
     scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${master_ip}:~/.kube/config
 
     if [[ "$TESTCASE" == "conformance" ]]; then
+        ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
+    elif [[ "$TESTCASE" == "all-features-conformance" ]]; then
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
     elif [[ "$TESTCASE" == "whole-conformance" ]]; then
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-whole-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
@@ -467,7 +474,7 @@ if [[ "$RUN_CLEANUP_ONLY" == true ]]; then
     exit 0
 fi
 
-if [[ "$TESTCASE" != "e2e" && "$TESTCASE" != "conformance" && "$TESTCASE" != "whole-conformance" && "$TESTCASE" != "networkpolicy" && "$TESTCASE" != "integration" ]]; then
+if [[ "$TESTCASE" != "e2e" && "$TESTCASE" != "conformance" && "$TESTCASE" != "all-features-conformance" && "$TESTCASE" != "whole-conformance" && "$TESTCASE" != "networkpolicy" && "$TESTCASE" != "integration" ]]; then
     echoerr "testcase should be e2e, integration, conformance, whole-conformance or networkpolicy"
     exit 1
 fi
