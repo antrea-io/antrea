@@ -212,7 +212,7 @@ spec:
                 items:
                   properties:
                     ip:
-                      format: ipv4
+                      pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                       type: string
                     name:
                       type: string
@@ -485,7 +485,7 @@ spec:
                   - ip
                 properties:
                   ip:
-                    format: ipv4
+                    pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                     type: string
                   namespace:
                     type: string
@@ -503,7 +503,7 @@ spec:
                       protocol:
                         type: integer
                       srcIP:
-                        format: ipv4
+                        pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                         type: string
                       ttl:
                         type: integer

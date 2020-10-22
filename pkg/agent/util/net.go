@@ -132,17 +132,6 @@ func GetIPv4Addr(ips []net.IP) net.IP {
 	return nil
 }
 
-func CheckAddressFamilies(ips []net.IP) (hasV4, hasV6 bool) {
-	for _, ip := range ips {
-		if ip.To4() != nil {
-			hasV4 = true
-		} else {
-			hasV6 = true
-		}
-	}
-	return
-}
-
 func GetIPWithFamily(ips []net.IP, addrFamily uint8) (net.IP, error) {
 	if addrFamily == FamilyIPv6 {
 		for _, ip := range ips {
