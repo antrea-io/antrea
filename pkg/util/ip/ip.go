@@ -32,16 +32,10 @@ const (
 // in allowCIDR eliminating except CIDRs. It currently supports only IPv4. except CIDR input
 // can be changed.
 func DiffFromCIDRs(allowCIDR *net.IPNet, exceptCIDRs []*net.IPNet) ([]*net.IPNet, error) {
-	if allowCIDR.IP.To4() == nil {
-		return nil, fmt.Errorf("allowCIDR IP type is not v4")
-	}
 	// Remove the redundant CIDRs
 	exceptCIDRs = mergeCIDRs(exceptCIDRs)
 	newCIDRs := []*net.IPNet{allowCIDR}
 	for _, exceptCIDR := range exceptCIDRs {
-		if exceptCIDR.IP.To4() == nil {
-			return nil, fmt.Errorf("exceptCIDR IP type is not v4")
-		}
 	beginLoop:
 		for i, indCIDR := range newCIDRs {
 			// Consider masked IP from IPNet struct
@@ -76,6 +70,12 @@ func diffFromCIDR(allowCIDR, exceptCIDR *net.IPNet) []*net.IPNet {
 	// Mask the IP to get the start IP of range
 	allowStartIP := allowCIDR.IP.Mask(allowCIDR.Mask)
 	exceptStartIP := exceptCIDR.IP.Mask(exceptCIDR.Mask)
+	var bits int
+	if allowStartIP.To4() != nil {
+		bits = v4BitLen
+	} else {
+		bits = v6BitLen
+	}
 
 	// New CIDRs should not contain the IPs in exceptCIDR. Manipulating the bits in start IP of
 	// exceptCIDR will give remainder IPs in allowCIDR, specifically the masked IPs for remaining
@@ -83,8 +83,8 @@ func diffFromCIDR(allowCIDR, exceptCIDR *net.IPNet) []*net.IPNet {
 	remainingCIDRs := make([]*net.IPNet, 0, exceptPrefix-allowPrefix)
 	for i := allowPrefix + 1; i <= exceptPrefix; i++ {
 		// Flip the (ipBitLen - i)th bit from LSB in exceptCIDR to get the IP which is not in exceptCIDR
-		ipOfNewCIDR := flipSingleBit(&exceptStartIP, uint8(v4BitLen-i))
-		newCIDRMask := net.CIDRMask(i, v4BitLen)
+		ipOfNewCIDR := flipSingleBit(&exceptStartIP, uint8(bits-i))
+		newCIDRMask := net.CIDRMask(i, bits)
 		for j := range allowStartIP {
 			ipOfNewCIDR[j] = allowStartIP[j] | ipOfNewCIDR[j]
 		}
@@ -135,10 +135,13 @@ func IPNetToNetIPNet(ipNet *v1beta2.IPNet) *net.IPNet {
 	var bits int
 	if ip.To4() != nil {
 		bits = v4BitLen
+		return &net.IPNet{IP: ip, Mask: net.CIDRMask(int(ipNet.PrefixLength), bits)}
 	} else {
-		bits = v6BitLen
+		// Since OVS will report error when using an IPv6 CIDR in the OpenFlow messages if the bit is not zero in the
+		// address but it is zero in the mask. Here using the function in "net" library to ensure the result is valid.
+		_, ipNet, _ := net.ParseCIDR(fmt.Sprintf("%s/%d", ip.String(), ipNet.PrefixLength))
+		return ipNet
 	}
-	return &net.IPNet{IP: ip, Mask: net.CIDRMask(int(ipNet.PrefixLength), bits)}
 }
 
 // NetIPNetToIPNet transforms net.IPNet to Antrea IPNet

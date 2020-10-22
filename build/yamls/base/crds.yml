@@ -109,7 +109,7 @@ spec:
                       type: string
                     ip:
                       type: string
-                      format: ipv4
+                      pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                   oneOf:
                     - required: ["pod", "namespace"]
                     - required: ["service", "namespace"]
@@ -122,7 +122,7 @@ spec:
                       properties:
                         srcIP:
                           type: string
-                          format: ipv4
+                          pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                         protocol:
                           type: integer
                         ttl:
@@ -558,7 +558,7 @@ spec:
                     properties:
                       ip:
                         type: string
-                        format: ipv4
+                        pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                       name:
                         type: string
                 ports:

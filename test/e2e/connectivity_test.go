@@ -110,8 +110,8 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	hpPodHostIP := hpPod.Status.HostIP
 	// Create client Pod to test connectivity.
 	clientName := randName("test-client-")
-	if err := data.createBusyboxPod(clientName); err != nil {
-		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	if err := data.createBusyboxPodOnNode(clientName, ""); err != nil {
+		t.Fatalf("Error when creating test client Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, clientName)
 	if _, err := data.podWaitForIPs(defaultTimeout, clientName, testNamespace); err != nil {

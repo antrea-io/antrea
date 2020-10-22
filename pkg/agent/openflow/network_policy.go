@@ -29,28 +29,44 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
-const (
-	MatchDstIP int = iota
-	MatchSrcIP
-	MatchDstIPNet
-	MatchSrcIPNet
-	MatchDstOFPort
-	MatchSrcOFPort
-	MatchTCPDstPort
-	MatchUDPDstPort
-	MatchSCTPDstPort
-	Unsupported
+var (
+	MatchDstIP         = types.NewMatchKey(binding.ProtocolIP, types.IPAddr, "nw_dst")
+	MatchSrcIP         = types.NewMatchKey(binding.ProtocolIP, types.IPAddr, "nw_src")
+	MatchDstIPNet      = types.NewMatchKey(binding.ProtocolIP, types.IPNetAddr, "nw_dst")
+	MatchSrcIPNet      = types.NewMatchKey(binding.ProtocolIP, types.IPNetAddr, "nw_src")
+	MatchDstIPv6       = types.NewMatchKey(binding.ProtocolIPv6, types.IPAddr, "ipv6_dst")
+	MatchSrcIPv6       = types.NewMatchKey(binding.ProtocolIPv6, types.IPAddr, "ipv6_src")
+	MatchDstIPNetv6    = types.NewMatchKey(binding.ProtocolIPv6, types.IPNetAddr, "ipv6_dst")
+	MatchSrcIPNetv6    = types.NewMatchKey(binding.ProtocolIPv6, types.IPNetAddr, "ipv6_src")
+	MatchDstOFPort     = types.NewMatchKey(binding.ProtocolIP, types.OFPortAddr, "reg1[0..31]")
+	MatchSrcOFPort     = types.NewMatchKey(binding.ProtocolIP, types.OFPortAddr, "in_port")
+	MatchTCPDstPort    = types.NewMatchKey(binding.ProtocolTCP, types.L4PortAddr, "tp_dst")
+	MatchTCPv6DstPort  = types.NewMatchKey(binding.ProtocolTCPv6, types.L4PortAddr, "tp_dst")
+	MatchUDPDstPort    = types.NewMatchKey(binding.ProtocolUDP, types.L4PortAddr, "tp_dst")
+	MatchUDPv6DstPort  = types.NewMatchKey(binding.ProtocolUDPv6, types.L4PortAddr, "tp_dst")
+	MatchSCTPDstPort   = types.NewMatchKey(binding.ProtocolSCTP, types.L4PortAddr, "tp_dst")
+	MatchSCTPv6DstPort = types.NewMatchKey(binding.ProtocolSCTPv6, types.L4PortAddr, "tp_dst")
+	Unsupported        = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
 )
 
 // IP address calculated from Pod's address.
 type IPAddress net.IP
 
-func (a *IPAddress) GetMatchKey(addrType types.AddressType) int {
+func (a *IPAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
+	ipArr := net.IP(*a)
 	switch addrType {
 	case types.SrcAddress:
-		return MatchSrcIP
+		if ipArr.To4() != nil {
+			return MatchSrcIP
+		} else {
+			return MatchSrcIPv6
+		}
 	case types.DstAddress:
-		return MatchDstIP
+		if ipArr.To4() != nil {
+			return MatchDstIP
+		} else {
+			return MatchDstIPv6
+		}
 	default:
 		klog.Errorf("Unknown AddressType %d in IPAddress", addrType)
 		return Unsupported
@@ -74,12 +90,21 @@ func NewIPAddress(addr net.IP) *IPAddress {
 // IP block calculated from Pod's address.
 type IPNetAddress net.IPNet
 
-func (a *IPNetAddress) GetMatchKey(addrType types.AddressType) int {
+func (a *IPNetAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
+	ipAddr := net.IPNet(*a)
 	switch addrType {
 	case types.SrcAddress:
-		return MatchSrcIPNet
+		if ipAddr.IP.To4() != nil {
+			return MatchSrcIPNet
+		} else {
+			return MatchSrcIPNetv6
+		}
 	case types.DstAddress:
-		return MatchDstIPNet
+		if ipAddr.IP.To4() != nil {
+			return MatchDstIPNet
+		} else {
+			return MatchDstIPNetv6
+		}
 	default:
 		klog.Errorf("Unknown AddressType %d in IPNetAddress", addrType)
 		return Unsupported
@@ -103,7 +128,7 @@ func NewIPNetAddress(addr net.IPNet) *IPNetAddress {
 // OFPortAddress is the Openflow port of an interface.
 type OFPortAddress int32
 
-func (a *OFPortAddress) GetMatchKey(addrType types.AddressType) int {
+func (a *OFPortAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
 	switch addrType {
 	case types.SrcAddress:
 		// in_port is used in egress rule to match packets sent from local Pod. Service traffic is not covered by this
@@ -149,7 +174,7 @@ func newConjunctionNotFound(conjunctionID uint32) *ConjunctionNotFound {
 type conjunctiveMatch struct {
 	tableID    binding.TableIDType
 	priority   *uint16
-	matchKey   int
+	matchKey   *types.MatchKey
 	matchValue interface{}
 }
 
@@ -159,16 +184,27 @@ func (m *conjunctiveMatch) generateGlobalMapKey() string {
 	switch v := m.matchValue.(type) {
 	case net.IP:
 		// Use the unique format "x.x.x.x/xx" for IP address and IP net, to avoid generating two different global map
-		// keys for IP and IP/32. Use MatchDstIPNet/MatchSrcIPNet as match type to generate global cache key for both IP
-		// and IPNet. This is because OVS treats IP and IP/32 as the same condition, if Antrea has two different
-		// conjunctive match flow contexts, only one flow entry is installed on OVS, and the conjunctive actions in the
-		// first context wil be overwritten by those in the second one.
-		valueStr = fmt.Sprintf("%s/32", v.String())
+		// keys for IP and IP/mask. Use MatchDstIPNet/MatchSrcIPNet as match type to generate global cache key for both IP
+		// and IPNet. This is because OVS treats IP and IP/$maskLen as the same condition (maskLen=32 for an IPv4 address,
+		// and maskLen=128 for an IPv6 address). If Antrea has two different conjunctive match flow contexts, only one
+		// flow entry is installed on OVS, and the conjunctive actions in the first context wil be overwritten by those
+		// in the second one.
+		var maskLen int
+		if v.To4() != nil {
+			maskLen = net.IPv4len * 8
+		} else {
+			maskLen = net.IPv6len * 8
+		}
+		valueStr = fmt.Sprintf("%s/%d", v.String(), maskLen)
 		switch m.matchKey {
 		case MatchDstIP:
 			matchType = MatchDstIPNet
+		case MatchDstIPv6:
+			matchType = MatchDstIPNetv6
 		case MatchSrcIP:
 			matchType = MatchSrcIPNet
+		case MatchSrcIPv6:
+			matchType = MatchSrcIPNetv6
 		}
 	case net.IPNet:
 		valueStr = v.String()
@@ -181,7 +217,7 @@ func (m *conjunctiveMatch) generateGlobalMapKey() string {
 	} else {
 		priorityStr = strconv.Itoa(int(*m.priority))
 	}
-	return fmt.Sprintf("table:%d,priority:%s,type:%d,value:%s", m.tableID, priorityStr, matchType, valueStr)
+	return fmt.Sprintf("table:%d,priority:%s,type:%v,value:%s", m.tableID, priorityStr, matchType, valueStr)
 }
 
 // changeType is generally used to describe the change type of a conjMatchFlowContext. It is also used in "flowChange"
@@ -546,33 +582,54 @@ func (c *clause) generateAddressConjMatch(addr types.Address, addrType types.Add
 	return match
 }
 
-func getServiceMatchType(protocol *v1beta2.Protocol) int {
+func getServiceMatchType(protocol *v1beta2.Protocol, ipv4Enabled, ipv6Enabled bool) []*types.MatchKey {
+	var matchKeys []*types.MatchKey
 	switch *protocol {
 	case v1beta2.ProtocolTCP:
-		return MatchTCPDstPort
+		if ipv4Enabled {
+			matchKeys = append(matchKeys, MatchTCPDstPort)
+		}
+		if ipv6Enabled {
+			matchKeys = append(matchKeys, MatchTCPv6DstPort)
+		}
 	case v1beta2.ProtocolUDP:
-		return MatchUDPDstPort
+		if ipv4Enabled {
+			matchKeys = append(matchKeys, MatchUDPDstPort)
+		}
+		if ipv6Enabled {
+			matchKeys = append(matchKeys, MatchUDPv6DstPort)
+		}
 	case v1beta2.ProtocolSCTP:
-		return MatchSCTPDstPort
+		if ipv4Enabled {
+			matchKeys = append(matchKeys, MatchSCTPDstPort)
+		}
+		if ipv6Enabled {
+			matchKeys = append(matchKeys, MatchSCTPv6DstPort)
+		}
 	default:
-		return MatchTCPDstPort
+		matchKeys = []*types.MatchKey{MatchTCPDstPort}
 	}
+	return matchKeys
 }
 
-func (c *clause) generateServicePortConjMatch(port v1beta2.Service, priority *uint16) *conjunctiveMatch {
-	matchKey := getServiceMatchType(port.Protocol)
+func (c *clause) generateServicePortConjMatches(port v1beta2.Service, priority *uint16, ipv4Enabled, ipv6Enabled bool) []*conjunctiveMatch {
+	matchKeys := getServiceMatchType(port.Protocol, ipv4Enabled, ipv6Enabled)
 	// Match all ports with the given protocol type if the matchValue is not specified (value is 0).
 	matchValue := uint16(0)
 	if port.Port != nil {
 		matchValue = uint16(port.Port.IntVal)
 	}
-	match := &conjunctiveMatch{
-		tableID:    c.ruleTable.GetID(),
-		matchKey:   matchKey,
-		matchValue: matchValue,
-		priority:   priority,
+	var matches []*conjunctiveMatch
+	for _, matchKey := range matchKeys {
+		matches = append(matches,
+			&conjunctiveMatch{
+				tableID:    c.ruleTable.GetID(),
+				matchKey:   matchKey,
+				matchValue: matchValue,
+				priority:   priority,
+			})
 	}
-	return match
+	return matches
 }
 
 // addAddrFlows translates the specified addresses to conjunctiveMatchFlows, and returns the corresponding changes on the
@@ -595,9 +652,11 @@ func (c *clause) addAddrFlows(client *client, addrType types.AddressType, addres
 func (c *clause) addServiceFlows(client *client, ports []v1beta2.Service, priority *uint16) []*conjMatchFlowContextChange {
 	var conjMatchFlowContextChanges []*conjMatchFlowContextChange
 	for _, port := range ports {
-		match := c.generateServicePortConjMatch(port, priority)
-		ctxChange := c.addConjunctiveMatchFlow(client, match)
-		conjMatchFlowContextChanges = append(conjMatchFlowContextChanges, ctxChange)
+		matches := c.generateServicePortConjMatches(port, priority, client.IsIPv4Enabled(), client.IsIPv6Enabled())
+		for _, match := range matches {
+			ctxChange := c.addConjunctiveMatchFlow(client, match)
+			conjMatchFlowContextChanges = append(conjMatchFlowContextChanges, ctxChange)
+		}
 	}
 	return conjMatchFlowContextChanges
 }
@@ -768,7 +827,7 @@ func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *poli
 			actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleID, ruleTable.GetID(), rule.Priority, rule.EnableLogging))
 		} else {
 			metricFlows = append(metricFlows, c.allowRulesMetricFlows(ruleID, isIngress)...)
-			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority, rule.EnableLogging))
+			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority, rule.EnableLogging)...)
 		}
 		conj.actionFlows = actionFlows
 		conj.metricFlows = metricFlows
