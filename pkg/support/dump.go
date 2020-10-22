@@ -209,7 +209,7 @@ func (d *agentDumper) DumpNetworkPolicyResources(basedir string) error {
 	if err := dump(d.npq.GetAddressGroups(), "addressgroups"); err != nil {
 		return err
 	}
-	if err := dump(d.npq.GetNetworkPolicies(""), "networkpolicies"); err != nil {
+	if err := dump(d.npq.GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{}), "networkpolicies"); err != nil {
 		return err
 	}
 	return dump(d.npq.GetAppliedToGroups(), "appliedtogroups")

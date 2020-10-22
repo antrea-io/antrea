@@ -103,12 +103,14 @@ var CommandList = &commandList{
 			use:     "networkpolicy",
 			aliases: []string{"networkpolicies", "netpol"},
 			short:   "Print NetworkPolicies",
-			long:    "Print NetworkPolicies in ${component}. 'namespace' is required if 'name' is provided.",
+			long:    "Print NetworkPolicies in ${component}. 'namespace' is required if 'pod' is provided.",
 			example: `  Get a specific NetworkPolicy
-  $ antctl get networkpolicy np1 -n ns1
+  $ antctl get networkpolicy np1 -n ns1 -T acnp
   Get the list of NetworkPolicies in a Namespace
   $ antctl get networkpolicy -n ns1
-  Get the list of NetworkPolicies in all Namespaces
+  Get the list of NetworkPolicies with a specific source Type
+  $ antctl get networkpolicy -T acnp
+  Get the list of all NetworkPolicies
   $ antctl get networkpolicy
   Get the list of NetworkPolicies applied to a Pod (supported by agent only)
   $ antctl get networkpolicy -p pod1 -n ns1`,
@@ -140,7 +142,13 @@ var CommandList = &commandList{
 							usage:     "Get NetworkPolicies applied to the Pod. If present, Namespace must be provided.",
 							shorthand: "p",
 						},
+						{
+							name:      "type",
+							usage:     "Get NetworkPolicies with specific type. Type means the type of its source network policy: K8sNP, ACNP, ANP",
+							shorthand: "T",
+						},
 					},
+					outputType: multiple,
 				},
 				addonTransform: networkpolicy.Transform,
 			},
