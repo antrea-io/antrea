@@ -129,17 +129,20 @@ The following kubectl commands can be used to retrieve Tier resources:
 
     # Use short name with API Group
     kubectl get tr.security.antrea.tanzu.vmware.com
+
+    # Sort output by Tier priority
+    kubectl get tiers --sort-by=.spec.priority
 ```
 
 All of the above commands produce output similar to what is shown below:
 
 ```
     NAME          PRIORITY   AGE
-    application   250        27h
     emergency     5          27h
+    securityops   50         27h
     networkops    100        27h
     platform      150        27h
-    securityops   50         27h
+    application   250        27h
 ```
 
 ## Antrea ClusterNetworkPolicy
