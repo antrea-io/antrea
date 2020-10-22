@@ -188,18 +188,20 @@ spec:
             periodSeconds: 10
             failureThreshold: 5
           volumeMounts:
-            - name: antrea-config
-              mountPath: /etc/antrea/antrea-controller.conf
-              subPath: antrea-controller.conf
+            - name: antrea-config-controller
+              mountPath: /etc/antrea
               readOnly: true
             - name: antrea-controller-tls
               mountPath: /var/run/antrea/antrea-controller-tls
             - name: host-var-log-antrea
               mountPath: /var/log/antrea
       volumes:
-        - name: antrea-config
+        - name: antrea-config-controller
           configMap:
             name: antrea-config
+            items:
+              - key: antrea-controller.conf
+                path: antrea-controller.conf
         # Make it optional as we only read it when selfSignedCert=false.
         - name: antrea-controller-tls
           secret:

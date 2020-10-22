@@ -1265,10 +1265,9 @@ spec:
           requests:
             cpu: 200m
         volumeMounts:
-        - mountPath: /etc/antrea/antrea-controller.conf
-          name: antrea-config
+        - mountPath: /etc/antrea
+          name: antrea-config-controller
           readOnly: true
-          subPath: antrea-controller.conf
         - mountPath: /var/run/antrea/antrea-controller-tls
           name: antrea-controller-tls
         - mountPath: /var/log/antrea
@@ -1285,8 +1284,11 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
+          items:
+          - key: antrea-controller.conf
+            path: antrea-controller.conf
           name: antrea-config-799khkd457
-        name: antrea-config
+        name: antrea-config-controller
       - name: antrea-controller-tls
         secret:
           defaultMode: 256
@@ -1439,10 +1441,9 @@ spec:
         securityContext:
           privileged: true
         volumeMounts:
-        - mountPath: /etc/antrea/antrea-agent.conf
-          name: antrea-config
+        - mountPath: /etc/antrea
+          name: antrea-config-agent
           readOnly: true
-          subPath: antrea-agent.conf
         - mountPath: /var/run/antrea
           name: host-var-run-antrea
         - mountPath: /var/run/openvswitch
@@ -1542,10 +1543,9 @@ spec:
             add:
             - SYS_MODULE
         volumeMounts:
-        - mountPath: /etc/antrea/antrea-cni.conflist
-          name: antrea-config
+        - mountPath: /etc/antrea
+          name: antrea-config-cni
           readOnly: true
-          subPath: antrea-cni.conflist
         - mountPath: /host/etc/cni/net.d
           name: host-cni-conf
         - mountPath: /host/opt/cni/bin
@@ -1569,8 +1569,17 @@ spec:
         operator: Exists
       volumes:
       - configMap:
+          items:
+          - key: antrea-cni.conflist
+            path: antrea-cni.conflist
           name: antrea-config-799khkd457
-        name: antrea-config
+        name: antrea-config-cni
+      - configMap:
+          items:
+          - key: antrea-agent.conf
+            path: antrea-agent.conf
+          name: antrea-config-799khkd457
+        name: antrea-config-agent
       - hostPath:
           path: /etc/cni/net.d
         name: host-cni-conf

@@ -55,21 +55,21 @@ const (
 	defaultTimeout = 90 * time.Second
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
-	antreaNamespace      string = "kube-system"
-	antreaConfigVolume   string = "antrea-config"
-	antreaDaemonSet      string = "antrea-agent"
-	antreaDeployment     string = "antrea-controller"
-	antreaDefaultGW      string = "antrea-gw0"
-	testNamespace        string = "antrea-test"
-	busyboxContainerName string = "busybox"
-	ovsContainerName     string = "antrea-ovs"
-	agentContainerName   string = "antrea-agent"
-	antreaYML            string = "antrea.yml"
-	antreaIPSecYML       string = "antrea-ipsec.yml"
-	antreaCovYML         string = "antrea-coverage.yml"
-	antreaIPSecCovYML    string = "antrea-ipsec-coverage.yml"
-	defaultBridgeName    string = "br-int"
-	monitoringNamespace  string = "monitoring"
+	antreaNamespace              string = "kube-system"
+	antreaConfigControllerVolume string = "antrea-config-controller"
+	antreaDaemonSet              string = "antrea-agent"
+	antreaDeployment             string = "antrea-controller"
+	antreaDefaultGW              string = "antrea-gw0"
+	testNamespace                string = "antrea-test"
+	busyboxContainerName         string = "busybox"
+	ovsContainerName             string = "antrea-ovs"
+	agentContainerName           string = "antrea-agent"
+	antreaYML                    string = "antrea.yml"
+	antreaIPSecYML               string = "antrea-ipsec.yml"
+	antreaCovYML                 string = "antrea-coverage.yml"
+	antreaIPSecCovYML            string = "antrea-ipsec-coverage.yml"
+	defaultBridgeName            string = "br-int"
+	monitoringNamespace          string = "monitoring"
 
 	antreaControllerCovBinary string = "antrea-controller-coverage"
 	antreaAgentCovBinary      string = "antrea-agent-coverage"
@@ -1187,13 +1187,13 @@ func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*corev1.Config
 	}
 	var configMapName string
 	for _, volume := range deployment.Spec.Template.Spec.Volumes {
-		if volume.ConfigMap != nil && volume.Name == antreaConfigVolume {
+		if volume.ConfigMap != nil && volume.Name == antreaConfigControllerVolume {
 			configMapName = volume.ConfigMap.Name
 			break
 		}
 	}
 	if len(configMapName) == 0 {
-		return nil, fmt.Errorf("failed to locate %s ConfigMap volume", antreaConfigVolume)
+		return nil, fmt.Errorf("failed to locate %s ConfigMap volume", antreaConfigControllerVolume)
 	}
 	configMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
 	if err != nil {

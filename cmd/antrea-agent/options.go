@@ -15,14 +15,18 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis"
@@ -50,6 +54,8 @@ type Options struct {
 	flowCollector net.Addr
 	// Flow exporter poll interval
 	pollInterval time.Duration
+	// Watcher for updates to config file
+	configWatcher *fsnotify.Watcher
 }
 
 func newOptions() *Options {
@@ -114,11 +120,48 @@ func (o *Options) validate(args []string) error {
 	return nil
 }
 
+func (o *Options) exitIfConfigChanges(configData []byte) {
+	klog.Infof("Watching for Agent configuration changes")
+	defer klog.Infof("Stopping watch on Agent configuration file")
+	for {
+		select {
+		case _, ok := <-o.configWatcher.Events:
+			if !ok {
+				return
+			}
+			klog.Infof("Event for configuration file")
+			data, err := ioutil.ReadFile(o.configFile)
+			if err != nil {
+				continue
+			}
+			if !bytes.Equal(data, configData) {
+				klog.Infof("Agent configuration has changed, exiting")
+				os.Exit(0)
+			}
+		case _, ok := <-o.configWatcher.Errors:
+			if !ok {
+				return
+			}
+		}
+	}
+}
+
 func (o *Options) loadConfigFromFile(file string) (*AgentConfig, error) {
+	var err error
+	if o.configWatcher, err = fsnotify.NewWatcher(); err != nil {
+		return nil, fmt.Errorf("error when creating file watcher for configuration file: %v", err)
+	}
+
+	if err = o.configWatcher.Add(file); err != nil {
+		return nil, fmt.Errorf("error when starting file watch on configuration file: %v", err)
+	}
+
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
+
+	go o.exitIfConfigChanges(data)
 
 	var c AgentConfig
 	err = yaml.UnmarshalStrict(data, &c)

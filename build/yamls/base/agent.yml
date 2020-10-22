@@ -44,9 +44,8 @@ spec:
                 # SYS_MODULE is required to load the OVS kernel module.
                 - SYS_MODULE
           volumeMounts:
-          - name: antrea-config
-            mountPath: /etc/antrea/antrea-cni.conflist
-            subPath: antrea-cni.conflist
+          - name: antrea-config-cni
+            mountPath: /etc/antrea
             readOnly: true
           - name: host-cni-conf
             mountPath: /host/etc/cni/net.d
@@ -112,9 +111,8 @@ spec:
             # antrea-agent needs to perform sysctl configuration.
             privileged: true
           volumeMounts:
-          - name: antrea-config
-            mountPath: /etc/antrea/antrea-agent.conf
-            subPath: antrea-agent.conf
+          - name: antrea-config-agent
+            mountPath: /etc/antrea
             readOnly: true
           - name: host-var-run-antrea
             mountPath: /var/run/antrea
@@ -178,9 +176,18 @@ spec:
             mountPath: /var/log/openvswitch
             subPath: openvswitch
       volumes:
-        - name: antrea-config
+        - name: antrea-config-cni
           configMap:
             name: antrea-config
+            items:
+              - key: antrea-cni.conflist
+                path: antrea-cni.conflist
+        - name: antrea-config-agent
+          configMap:
+            name: antrea-config
+            items:
+              - key: antrea-agent.conf
+                path: antrea-agent.conf
         - name: host-cni-conf
           hostPath:
             path: /etc/cni/net.d
