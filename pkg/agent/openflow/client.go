@@ -231,6 +231,10 @@ type Client interface {
 	StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{})
 	// Get traffic metrics of each NetworkPolicy rule.
 	NetworkPolicyMetrics() map[uint32]*types.RuleMetric
+	// Returns if IPv4 is supported on this Node or not.
+	IsIPv4Enabled() bool
+	// Returns if IPv6 is supported on this Node or not.
+	IsIPv6Enabled() bool
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -490,8 +494,7 @@ func (c *client) InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.Hardw
 		c.gatewayClassifierFlow(gatewayOFPort, cookie.Default),
 		c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default),
 	}
-	hasV4, hasV6 := util.CheckAddressFamilies(gatewayAddrs)
-	flows = append(flows, c.gatewayIPSpoofGuardFlows(gatewayOFPort, hasV4, hasV6, cookie.Default)...)
+	flows = append(flows, c.gatewayIPSpoofGuardFlows(gatewayOFPort, cookie.Default)...)
 
 	// Add ARP SpoofGuard flow for local gateway interface.
 	gwIPv4 := util.GetIPv4Addr(gatewayAddrs)
@@ -500,7 +503,7 @@ func (c *client) InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.Hardw
 	}
 	// Add flow to ensure the liveness check packet could be forwarded correctly.
 	flows = append(flows, c.localProbeFlow(gatewayAddrs, cookie.Default)...)
-	flows = append(flows, c.ctRewriteDstMACFlow(gatewayMAC, hasV4, hasV6, cookie.Default)...)
+	flows = append(flows, c.ctRewriteDstMACFlows(gatewayMAC, cookie.Default)...)
 	// In NoEncap , no traffic from tunnel port
 	if c.encapMode.SupportsEncap() {
 		flows = append(flows, c.l3ToGatewayFlow(gatewayAddrs, gatewayMAC, cookie.Default)...)
@@ -563,6 +566,13 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 	c.nodeConfig = nodeConfig
 	c.encapMode = encapMode
 	c.gatewayPort = gatewayOFPort
+
+	if c.nodeConfig.PodIPv4CIDR != nil {
+		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIP)
+	}
+	if c.nodeConfig.PodIPv6CIDR != nil {
+		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIPv6)
+	}
 
 	// Initiate connections to target OFswitch, and create tables on the switch.
 	connCh := make(chan struct{})
@@ -665,11 +675,13 @@ func (c *client) DeleteStaleFlows() error {
 }
 
 func (c *client) setupPolicyOnlyFlows() error {
-	flows := []binding.Flow{
-		// Rewrites MAC to gw port if the packet received is unmatched by local Pod flows.
-		c.l3ToGWFlow(c.nodeConfig.GatewayConfig.MAC, cookie.Default),
-		// Replies any ARP request with the same global virtual MAC.
-		c.arpResponderStaticFlow(cookie.Default),
+	// Rewrites MAC to gw port if the packet received is unmatched by local Pod flows.
+	flows := c.l3ToGWFlow(c.nodeConfig.GatewayConfig.MAC, cookie.Default)
+	if c.IsIPv4Enabled() {
+		flows = append(flows,
+			// Replies any ARP request with the same global virtual MAC.
+			c.arpResponderStaticFlow(cookie.Default),
+		)
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to setup policy-only flows: %w", err)
@@ -785,4 +797,12 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 // into geneve, and will be stored back to NXM_NX_REG9[28..31] when packet get decapsulated.
 func (c *client) InitialTLVMap() error {
 	return c.bridge.AddTLVMap(0x0104, 0x80, 4, 0)
+}
+
+func (c *client) IsIPv4Enabled() bool {
+	return c.nodeConfig.PodIPv4CIDR != nil
+}
+
+func (c *client) IsIPv6Enabled() bool {
+	return c.nodeConfig.PodIPv6CIDR != nil
 }

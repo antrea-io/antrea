@@ -338,7 +338,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
-	_, err = c.Initialize(roundInfo, &config1.NodeConfig{}, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort)
+	_, err = c.Initialize(roundInfo, &config1.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR}, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -349,8 +349,8 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	}()
 
 	ruleID := uint32(100)
-	fromList := []string{"192.168.1.3", "192.168.1.25", "192.168.2.4"}
-	toList := []string{"192.168.3.4", "192.168.3.5"}
+	fromList := []string{"192.168.1.3", "192.168.1.25", "192.168.2.4", "fd12:ab:34:a001::3"}
+	toList := []string{"192.168.3.4", "192.168.3.5", "fd12:ab:34:a002::4"}
 
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta2.ProtocolTCP
@@ -377,7 +377,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	checkConjunctionFlows(t, ingressRuleTable, ingressDefaultTable, contrackCommitTable, priorityNormal, ruleID, rule, assert.True)
 	checkDefaultDropFlows(t, ingressDefaultTable, priorityNormal, types.DstAddress, toIPList, true)
 
-	addedFrom := prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"})
+	addedFrom := prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24", "fd12:ab:34:a003::/64"})
 	checkAddAddress(t, ingressRuleTable, priorityNormal, ruleID, addedFrom, types.SrcAddress)
 	checkDeleteAddress(t, ingressRuleTable, priorityNormal, ruleID, addedFrom, types.SrcAddress)
 
@@ -388,16 +388,13 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	// Dump flows.
 	flowList, err := ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ingressRuleTable)
 	require.Nil(t, err, "Failed to dump flows")
-	conjMatch := fmt.Sprintf("priority=%d,ip,reg1=0x%x", priorityNormal, ofport)
+	conjMatch := fmt.Sprintf("priority=%d,reg1=0x%x", priorityNormal, ofport)
 	flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
 	assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow), "Failed to install conjunctive match flow")
-	serviceConjMatch := fmt.Sprintf("priority=%d,tcp,tp_dst=8080", priorityNormal)
-	flow = &ofTestUtils.ExpectFlow{MatchStr: serviceConjMatch, ActStr: fmt.Sprintf("conjunction(%d,3/3)", ruleID)}
-	assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow), "Failed to install service flow")
 
 	// Verify multiple conjunctions share the same match conditions.
 	ruleID2 := uint32(101)
-	toList2 := []string{"192.168.3.4"}
+	toList2 := []string{"192.168.3.4", "fd12:ab:34:a002::4"}
 	toIPList2 := prepareIPAddresses(toList2)
 	udpProtocol := v1beta2.ProtocolUDP
 	npPort2 := v1beta2.Service{Protocol: &udpProtocol}
@@ -421,15 +418,15 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	// Dump flows
 	flowList, err = ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, ingressRuleTable)
 	require.Nil(t, err, "Failed to dump flows")
-	conjMatch = fmt.Sprintf("priority=%d,ip,nw_dst=192.168.3.4", priorityNormal)
-	flow1 := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3),conjunction(%d,1/2)", ruleID, ruleID2)}
-	flow2 := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,1/2),conjunction(%d,2/3)", ruleID2, ruleID)}
-	serviceConjMatch = fmt.Sprintf("priority=%d,udp", priorityNormal)
-	flow3 := &ofTestUtils.ExpectFlow{MatchStr: serviceConjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/2)", ruleID2)}
-	if !ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow1) && !ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow2) {
-		t.Errorf("Failed to install conjunctive match flow")
+	for _, addr := range toIPList2 {
+		_, ipProto := getIPProtoStr(addr)
+		conjMatch = fmt.Sprintf("priority=%d,%s,%s=%s", priorityNormal, ipProto, addr.GetMatchKey(types.DstAddress).GetKeyString(), addr.GetMatchValue())
+		flow1 := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3),conjunction(%d,1/2)", ruleID, ruleID2)}
+		flow2 := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,1/2),conjunction(%d,2/3)", ruleID2, ruleID)}
+		if !ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow1) && !ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow2) {
+			t.Errorf("Failed to install conjunctive match flow")
+		}
 	}
-	require.True(t, ofTestUtils.OfctlFlowMatch(flowList, ingressRuleTable, flow3), "Failed to install service flow")
 	checkOVSFlowMetrics(t, c)
 
 	_, err = c.UninstallPolicyRuleFlows(ruleID2)
@@ -647,32 +644,14 @@ func checkDefaultDropFlows(t *testing.T, table uint8, priority int, addrType typ
 	flowList, err := ofTestUtils.OfctlDumpTableFlows(ovsCtlClient, table)
 	assert.Nil(t, err, fmt.Sprintf("Failed to dump flows: %v", err))
 	for _, addr := range addresses {
-		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(addrType)), addr.GetMatchValue())
+		_, ipProto := getIPProtoStr(addr)
+		conjMatch := fmt.Sprintf("priority=%d,%s,%s=%s", priority, ipProto, addr.GetMatchKey(addrType).GetKeyString(), addr.GetMatchValue())
 		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: "drop"}
 		if add {
 			assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, table, flow), "Failed to install conjunctive match flow")
 		} else {
 			assert.False(t, ofTestUtils.OfctlFlowMatch(flowList, table, flow), "Failed to uninstall conjunctive match flow")
 		}
-	}
-}
-
-func getCmdMatchKey(matchType int) string {
-	switch matchType {
-	case ofClient.MatchSrcIP:
-		fallthrough
-	case ofClient.MatchSrcIPNet:
-		return "nw_src"
-	case ofClient.MatchDstIP:
-		fallthrough
-	case ofClient.MatchDstIPNet:
-		return "nw_dst"
-	case ofClient.MatchSrcOFPort:
-		return "in_port"
-	case ofClient.MatchDstOFPort:
-		return "reg1[0..31]"
-	default:
-		return ""
 	}
 }
 
@@ -690,7 +669,8 @@ func checkAddAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint32,
 	}
 
 	for _, addr := range addedAddress {
-		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(addrType)), addr.GetMatchValue())
+		_, ipProto := getIPProtoStr(addr)
+		conjMatch := fmt.Sprintf("priority=%d,%s,%s=%s", priority, ipProto, addr.GetMatchKey(addrType).GetKeyString(), addr.GetMatchValue())
 		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: action}
 		assert.True(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow")
 	}
@@ -716,7 +696,8 @@ func checkDeleteAddress(t *testing.T, ruleTable uint8, priority int, ruleID uint
 	}
 
 	for _, addr := range addedAddress {
-		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(addrType)), addr.GetMatchValue())
+		_, ipProto := getIPProtoStr(addr)
+		conjMatch := fmt.Sprintf("priority=%d,%s,%s=%s", priority, ipProto, addr.GetMatchKey(addrType).GetKeyString(), addr.GetMatchValue())
 		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: action}
 		assert.False(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow")
 	}
@@ -744,22 +725,44 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("load:0x%x->NXM_NX_REG%d[],ct(commit,table=%d,zone=65520,exec(load:0x%x->NXM_NX_CT_LABEL[0..31])", ruleID, conjReg, nextTable, ruleID)}
 	testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to update conjunction action flow")
 
+	useIPv4 := false
+	useIPv6 := false
+
 	for _, addr := range rule.From {
-		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(types.SrcAddress)), addr.GetMatchValue())
+		isIPv6, ipProto := getIPProtoStr(addr)
+		if isIPv6 && !useIPv6 {
+			useIPv6 = true
+		} else if !isIPv6 && !useIPv4 {
+			useIPv4 = true
+		}
+		conjMatch := fmt.Sprintf("priority=%d,%s,%s=%s", priority, ipProto, addr.GetMatchKey(types.SrcAddress).GetKeyString(), addr.GetMatchValue())
 		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,1/3)", ruleID)}
 		testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause1")
 	}
 
 	for _, addr := range rule.To {
-		conjMatch := fmt.Sprintf("priority=%d,ip,%s=%s", priority, getCmdMatchKey(addr.GetMatchKey(types.DstAddress)), addr.GetMatchValue())
+		isIPv6, ipProto := getIPProtoStr(addr)
+		if isIPv6 && !useIPv6 {
+			useIPv6 = true
+		} else if !isIPv6 && !useIPv4 {
+			useIPv4 = true
+		}
+		conjMatch := fmt.Sprintf("priority=%d,%s,%s=%s", priority, ipProto, addr.GetMatchKey(types.DstAddress).GetKeyString(), addr.GetMatchValue())
 		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch, ActStr: fmt.Sprintf("conjunction(%d,2/3)", ruleID)}
 		testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause2")
 	}
 
 	for _, service := range rule.Service {
-		conjMatch1 := fmt.Sprintf("priority=%d,%s,tp_dst=%d", priority, strings.ToLower(string(*service.Protocol)), service.Port.IntVal)
-		flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch1, ActStr: fmt.Sprintf("conjunction(%d,3/3)", ruleID)}
-		testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause3")
+		if useIPv4 {
+			conjMatch1 := fmt.Sprintf("priority=%d,%s,tp_dst=%d", priority, strings.ToLower(string(*service.Protocol)), service.Port.IntVal)
+			flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch1, ActStr: fmt.Sprintf("conjunction(%d,3/3)", ruleID)}
+			testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause3")
+		}
+		if useIPv6 {
+			conjMatch1 := fmt.Sprintf("priority=%d,%s6,tp_dst=%d", priority, strings.ToLower(string(*service.Protocol)), service.Port.IntVal)
+			flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch1, ActStr: fmt.Sprintf("conjunction(%d,3/3)", ruleID)}
+			testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause3")
+		}
 	}
 
 	tablesStatus := c.GetFlowTableStatus()
@@ -768,6 +771,21 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 			assert.Equal(t, tableStatus.FlowCount, uint(len(flowList)),
 				fmt.Sprintf("Cached table status in %d is incorrect, expect: %d, actual %d", tableStatus.ID, tableStatus.FlowCount, len(flowList)))
 		}
+	}
+}
+
+func getIPProtoStr(addr types.Address) (bool, string) {
+	var addrIP net.IP
+	switch v := addr.GetValue().(type) {
+	case net.IP:
+		addrIP = v
+	case net.IPNet:
+		addrIP = v.IP
+	}
+	if addrIP.To4() != nil {
+		return false, "ip"
+	} else {
+		return true, "ipv6"
 	}
 }
 

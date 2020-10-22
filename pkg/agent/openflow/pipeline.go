@@ -332,6 +332,8 @@ type client struct {
 	// packetInHandlers stores handler to process PacketIn event. Each packetin reason can have multiple handlers registered.
 	// When a packetin arrives, openflow send packet to registered handlers in this map.
 	packetInHandlers map[uint8]map[string]PacketInHandler
+	// Supported IP Protocols (IP or IPv6) on the current Node.
+	ipProtocols []binding.Protocol
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -557,36 +559,29 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 
 	// TODO: following flows should move to function "kubeProxyFlows". Since another PR(#1198) is trying
 	//  to polish the relevant logic, code refactoring is needed after that PR is merged.
-	if c.nodeConfig.PodIPv4CIDR != nil {
+	for _, proto := range c.ipProtocols {
+		ctZone := CtZone
+		if proto == binding.ProtocolIPv6 {
+			ctZone = CtZoneV6
+		}
 		flows = append(flows,
-			connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+			// If a connection was initiated through the gateway (i.e. has gatewayCTMark) and
+			// the packet is received on the gateway port, go to the next table directly. This
+			// is to bypass the flow which is installed by ctRewriteDstMACFlow in the same
+			// table, and which will rewrite the destination MAC address for traffic with the
+			// gatewayCTMark, but which is flowing in the opposite direction.
+			connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(proto).
 				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 				MatchCTMark(gatewayCTMark, nil).
 				MatchCTStateNew(false).MatchCTStateTrk(true).
 				Action().GotoTable(connectionTrackStateTable.GetNext()).
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
-			connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			// Connections initiated through the gateway are marked with gatewayCTMark.
+			connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(proto).
 				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 				MatchCTStateNew(true).MatchCTStateTrk(true).
-				Action().CT(true, connectionTrackCommitTable.GetNext(), CtZone).LoadToMark(gatewayCTMark).CTDone().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-		)
-	}
-	if c.nodeConfig.PodIPv6CIDR != nil {
-		flows = append(flows,
-			connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIPv6).
-				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-				MatchCTMark(gatewayCTMark, nil).
-				MatchCTStateNew(false).MatchCTStateTrk(true).
-				Action().GotoTable(connectionTrackStateTable.GetNext()).
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-			connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
-				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-				MatchCTStateNew(true).MatchCTStateTrk(true).
-				Action().CT(true, connectionTrackCommitTable.GetNext(), CtZoneV6).LoadToMark(gatewayCTMark).CTDone().
+				Action().CT(true, connectionTrackCommitTable.GetNext(), ctZone).LoadToMark(gatewayCTMark).CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
 		)
@@ -598,30 +593,20 @@ func (c *client) conntrackBasicFlows(category cookie.Category) []binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	connectionTrackCommitTable := c.pipeline[conntrackCommitTable]
 	var flows []binding.Flow
-	if c.nodeConfig.PodIPv4CIDR != nil {
+	for _, proto := range c.ipProtocols {
+		ctZone := CtZone
+		if proto == binding.ProtocolIPv6 {
+			ctZone = CtZoneV6
+		}
 		flows = append(flows,
-			connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
+			connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(proto).
 				MatchCTStateInv(true).MatchCTStateTrk(true).
 				Action().Drop().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
-			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
+			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(proto).
 				MatchCTStateNew(true).MatchCTStateTrk(true).
-				Action().CT(true, connectionTrackCommitTable.GetNext(), CtZone).CTDone().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-		)
-	}
-	if c.nodeConfig.PodIPv6CIDR != nil {
-		flows = append(flows,
-			connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIPv6).
-				MatchCTStateInv(true).MatchCTStateTrk(true).
-				Action().Drop().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIPv6).
-				MatchCTStateNew(true).MatchCTStateTrk(true).
-				Action().CT(true, connectionTrackCommitTable.GetNext(), CtZoneV6).CTDone().
+				Action().CT(true, connectionTrackCommitTable.GetNext(), ctZone).CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
 		)
@@ -632,18 +617,14 @@ func (c *client) conntrackBasicFlows(category cookie.Category) []binding.Flow {
 func (c *client) kubeProxyFlows(category cookie.Category) []binding.Flow {
 	connectionTrackTable := c.pipeline[conntrackTable]
 	var flows []binding.Flow
-	if c.nodeConfig.PodIPv4CIDR != nil {
+	for _, proto := range c.ipProtocols {
+		ctZone := CtZone
+		if proto == binding.ProtocolIPv6 {
+			ctZone = CtZoneV6
+		}
 		flows = append(flows,
-			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-				Action().CT(false, connectionTrackTable.GetNext(), CtZone).CTDone().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-		)
-	}
-	if c.nodeConfig.PodIPv6CIDR != nil {
-		flows = append(flows,
-			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
-				Action().CT(false, connectionTrackTable.GetNext(), CtZoneV6).CTDone().
+			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(proto).
+				Action().CT(false, connectionTrackTable.GetNext(), ctZone).CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
 		)
@@ -671,22 +652,27 @@ func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cook
 	return flowBuilder.Done()
 }
 
-// ctRewriteDstMACFlow rewrites the destination MAC with local host gateway MAC if the packets has set ct_mark but not sent from the host gateway.
-func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr, hasV4Addr, hasV6Addr bool, category cookie.Category) []binding.Flow {
+// ctRewriteDstMACFlow rewrites the destination MAC address with the local host gateway MAC if the
+// packet is marked with gatewayCTMark but was not received on the host gateway. In other words, it
+// rewrites the destination MAC address for reply traffic for connections which were initiated
+// through the gateway, to ensure that this reply traffic gets forwarded correctly (back to the host
+// network namespace, through the gateway). In particular, it is necessary in the following 2 cases:
+//  1) reply traffic for connections from a local Pod to a ClusterIP Service (when AntreaProxy is
+//  disabled and kube-proxy is used). In this case the destination IP address of the reply traffic
+//  is the Pod which initiated the connection to the Service (no SNAT). We need to make sure that
+//  these packets are sent back through the gateway so that the source IP can be rewritten (Service
+//  backend IP -> Service ClusterIP).
+//  2) when hair-pinning is involved, i.e. for connections between 2 local Pods belonging to this
+//  Node and for which NAT is performed. This applies regardless of whether AntreaProxy is enabled
+//  or not, and thus also applies to Windows Nodes (for which AntreaProxy is enabled by default).
+//  One example is a Pod accessing a NodePort Service for which externalTrafficPolicy is set to
+//  Local, using the local Node's IP address.
+func (c *client) ctRewriteDstMACFlows(gatewayMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	macData, _ := strconv.ParseUint(strings.Replace(gatewayMAC.String(), ":", "", -1), 16, 64)
 	var flows []binding.Flow
-	if hasV4Addr {
-		flows = append(flows, connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			MatchCTMark(gatewayCTMark, nil).
-			MatchCTStateNew(false).MatchCTStateTrk(true).
-			Action().LoadRange(binding.NxmFieldDstMAC, macData, binding.Range{0, 47}).
-			Action().GotoTable(connectionTrackStateTable.GetNext()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
-	}
-	if hasV6Addr {
-		flows = append(flows, connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+	for _, proto := range c.ipProtocols {
+		flows = append(flows, connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(proto).
 			MatchCTMark(gatewayCTMark, nil).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
 			Action().LoadRange(binding.NxmFieldDstMAC, macData, binding.Range{0, 47}).
@@ -811,14 +797,19 @@ func (c *client) l3ToPodFlow(podInterfaceIPs []net.IP, podInterfaceMAC net.Hardw
 
 // l3ToGWFlow generates the flow to rewrite MAC to gw port if the packet received is unmatched by local Pod flows.
 // This flow is used in policy only traffic mode.
-func (c *client) l3ToGWFlow(gwMAC net.HardwareAddr, category cookie.Category) binding.Flow {
+func (c *client) l3ToGWFlow(gwMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
-	return l3FwdTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
-		Action().SetDstMAC(gwMAC).
-		Action().DecTTL().
-		Action().GotoTable(l3FwdTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
+	var flows []binding.Flow
+	for _, ipProto := range c.ipProtocols {
+		flows = append(flows, l3FwdTable.BuildFlow(priorityLow).MatchProtocol(ipProto).
+			Action().SetDstMAC(gwMAC).
+			Action().DecTTL().
+			Action().GotoTable(l3FwdTable.GetNext()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		)
+	}
+	return flows
 }
 
 // l3ToGatewayFlow generates flow that rewrites MAC of the packet received from tunnel port and destined to local gateway.
@@ -1005,23 +996,22 @@ func (c *client) sessionAffinityReselectFlow() binding.Flow {
 }
 
 // gatewayIPSpoofGuardFlow generates the flow to skip spoof guard checking for traffic sent from gateway interface.
-func (c *client) gatewayIPSpoofGuardFlows(gatewayOFPort uint32, hasIPv4Addr, hasIPv6Addr bool, category cookie.Category) []binding.Flow {
+func (c *client) gatewayIPSpoofGuardFlows(gatewayOFPort uint32, category cookie.Category) []binding.Flow {
 	ipPipeline := c.pipeline
 	ipSpoofGuardTable := ipPipeline[spoofGuardTable]
 	var flows []binding.Flow
-	if hasIPv4Addr {
-		flows = append(flows, ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			MatchInPort(gatewayOFPort).
-			Action().GotoTable(ipSpoofGuardTable.GetNext()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
-	}
-	if hasIPv6Addr {
-		flows = append(flows, ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
-			MatchInPort(gatewayOFPort).
-			Action().GotoTable(ipv6Table).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
+	for _, proto := range c.ipProtocols {
+		nextTable := ipSpoofGuardTable.GetNext()
+		if proto == binding.ProtocolIPv6 {
+			nextTable = ipv6Table
+		}
+		flows = append(flows,
+			ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(proto).
+				MatchInPort(gatewayOFPort).
+				Action().GotoTable(nextTable).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
+		)
 	}
 	return flows
 }
@@ -1072,26 +1062,25 @@ func (c *client) allowRulesMetricFlows(conjunctionID uint32, ingress bool) []bin
 		offset = 32
 		labelRange = metricEgressRuleIDRange
 	}
+	metricFlow := func(isCTNew bool, protocol binding.Protocol) binding.Flow {
+		return c.pipeline[metricTableID].BuildFlow(priorityNormal).
+			MatchProtocol(protocol).
+			MatchPriority(priorityNormal).
+			MatchCTStateNew(isCTNew).
+			MatchCTLabelRange(0, uint64(conjunctionID)<<offset, labelRange).
+			Action().GotoTable(c.pipeline[metricTableID].GetNext()).
+			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+			Done()
+	}
+	var flows []binding.Flow
 	// These two flows track the number of sessions in addition to the packet and byte counts.
 	// The flow matching 'ct_state=+new' tracks the number of sessions and byte count of the first packet for each
 	// session.
 	// The flow matching 'ct_state=-new' tracks the byte/packet count of an established connection (both directions).
-	return []binding.Flow{
-		c.pipeline[metricTableID].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			MatchPriority(priorityNormal).
-			MatchCTStateNew(true).
-			MatchCTLabelRange(0, uint64(conjunctionID)<<offset, labelRange).
-			Action().GotoTable(c.pipeline[metricTableID].GetNext()).
-			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-			Done(),
-		c.pipeline[metricTableID].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			MatchPriority(priorityNormal).
-			MatchCTStateNew(false).
-			MatchCTLabelRange(0, uint64(conjunctionID)<<offset, labelRange).
-			Action().GotoTable(c.pipeline[metricTableID].GetNext()).
-			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-			Done(),
+	for _, proto := range c.ipProtocols {
+		flows = append(flows, metricFlow(true, proto), metricFlow(false, proto))
 	}
+	return flows
 }
 
 func (c *client) dropRuleMetricFlow(conjunctionID uint32, ingress bool) binding.Flow {
@@ -1099,7 +1088,7 @@ func (c *client) dropRuleMetricFlow(conjunctionID uint32, ingress bool) binding.
 	if !ingress {
 		metricTableID = EgressMetricTable
 	}
-	return c.pipeline[metricTableID].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+	return c.pipeline[metricTableID].BuildFlow(priorityNormal).
 		MatchPriority(priorityNormal).
 		MatchRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
 		MatchReg(int(CNPDropConjunctionIDReg), conjunctionID).
@@ -1151,7 +1140,7 @@ func (c *client) ipv6Flows(category cookie.Category) []binding.Flow {
 
 // conjunctionActionFlow generates the flow to jump to a specific table if policyRuleConjunction ID is matched. Priority of
 // conjunctionActionFlow is created at priorityLow for k8s network policies, and *priority assigned by PriorityAssigner for AntreaPolicy.
-func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, priority *uint16, enableLogging bool) binding.Flow {
+func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, priority *uint16, enableLogging bool) []binding.Flow {
 	var ofPriority uint16
 	if priority == nil {
 		ofPriority = priorityLow
@@ -1164,29 +1153,40 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 		conjReg = EgressReg
 		labelRange = metricEgressRuleIDRange
 	}
-	if enableLogging {
-		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
-			MatchConjID(conjunctionID).
-			MatchPriority(ofPriority).
-			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).       // Traceflow.
-			Action().LoadRegRange(int(marksReg), DispositionAllow, APDispositionMarkRange). //AntreaPolicy
-			Action().SendToController(uint8(PacketInReasonNP)).
-			Action().CT(true, nextTable, CtZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
-			LoadToLabelRange(uint64(conjunctionID), &labelRange).
-			CTDone().
-			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-			Done()
-	} else {
-		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
-			MatchConjID(conjunctionID).
-			MatchPriority(ofPriority).
-			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
-			Action().CT(true, nextTable, CtZone).                                     // CT action requires commit flag if actions other than NAT without arguments are specified.
-			LoadToLabelRange(uint64(conjunctionID), &labelRange).
-			CTDone().
-			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-			Done()
+	conjActionFlow := func(proto binding.Protocol) binding.Flow {
+		ctZone := CtZone
+		if proto == binding.ProtocolIPv6 {
+			ctZone = CtZoneV6
+		}
+		if enableLogging {
+			return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
+				MatchConjID(conjunctionID).
+				MatchPriority(ofPriority).
+				Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).       // Traceflow.
+				Action().LoadRegRange(int(marksReg), DispositionAllow, APDispositionMarkRange). // AntreaPolicy
+				Action().SendToController(uint8(PacketInReasonNP)).
+				Action().CT(true, nextTable, ctZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
+				LoadToLabelRange(uint64(conjunctionID), &labelRange).
+				CTDone().
+				Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+				Done()
+		} else {
+			return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
+				MatchConjID(conjunctionID).
+				MatchPriority(ofPriority).
+				Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
+				Action().CT(true, nextTable, ctZone).                                     // CT action requires commit flag if actions other than NAT without arguments are specified.
+				LoadToLabelRange(uint64(conjunctionID), &labelRange).
+				CTDone().
+				Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+				Done()
+		}
 	}
+	var flows []binding.Flow
+	for _, proto := range c.ipProtocols {
+		flows = append(flows, conjActionFlow(proto))
+	}
+	return flows
 }
 
 // conjunctionActionDropFlow generates the flow to mark the packet to be dropped if policyRuleConjunction ID is matched.
@@ -1199,7 +1199,7 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 	}
 	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
 	if enableLogging {
-		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
+		return c.pipeline[tableID].BuildFlow(ofPriority).
 			MatchConjID(conjunctionID).
 			MatchPriority(ofPriority).
 			Action().LoadRegRange(int(CNPDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
@@ -1210,7 +1210,7 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 			Done()
 	} else {
-		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(binding.ProtocolIP).
+		return c.pipeline[tableID].BuildFlow(ofPriority).
 			MatchConjID(conjunctionID).
 			MatchPriority(ofPriority).
 			Action().LoadRegRange(int(CNPDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
@@ -1219,7 +1219,6 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 			Done()
 	}
-
 }
 
 func (c *client) Disconnect() error {
@@ -1236,74 +1235,89 @@ func (c *client) establishedConnectionFlows(category cookie.Category) (flows []b
 	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
 	// egressRuleTable or the egressDropTable.
 	egressDropTable := c.pipeline[EgressDefaultTable]
-	egressEstFlow := c.pipeline[EgressRuleTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
-		MatchCTStateNew(false).MatchCTStateEst(true).
-		Action().GotoTable(egressDropTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
 	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
 	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
 	// ingressRuleTable or ingressDropTable.
 	ingressDropTable := c.pipeline[IngressDefaultTable]
-	ingressEstFlow := c.pipeline[IngressRuleTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
-		MatchCTStateNew(false).MatchCTStateEst(true).
-		Action().GotoTable(ingressDropTable.GetNext()).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
-	allEstFlows := []binding.Flow{egressEstFlow, ingressEstFlow}
-	if !c.enableAntreaPolicy {
-		return allEstFlows
-	}
-	apFlows := make([]binding.Flow, len(GetAntreaPolicyEgressTables())+len(GetAntreaPolicyIngressTables()))
-	for i, tableID := range GetAntreaPolicyEgressTables() {
-		apEgressEstFlow := c.pipeline[tableID].BuildFlow(priorityTopAntreaPolicy).MatchProtocol(binding.ProtocolIP).
+	var allEstFlows []binding.Flow
+	for _, ipProto := range c.ipProtocols {
+		egressEstFlow := c.pipeline[EgressRuleTable].BuildFlow(priorityHigh).MatchProtocol(ipProto).
 			MatchCTStateNew(false).MatchCTStateEst(true).
 			Action().GotoTable(egressDropTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done()
-		apFlows[i] = apEgressEstFlow
-	}
-	for i, tableID := range GetAntreaPolicyIngressTables() {
-		apIngressEstFlow := c.pipeline[tableID].BuildFlow(priorityTopAntreaPolicy).MatchProtocol(binding.ProtocolIP).
+		ingressEstFlow := c.pipeline[IngressRuleTable].BuildFlow(priorityHigh).MatchProtocol(ipProto).
 			MatchCTStateNew(false).MatchCTStateEst(true).
 			Action().GotoTable(ingressDropTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done()
-		apFlows[i+len(GetAntreaPolicyEgressTables())] = apIngressEstFlow
+		allEstFlows = append(allEstFlows, egressEstFlow, ingressEstFlow)
+	}
+	if !c.enableAntreaPolicy {
+		return allEstFlows
+	}
+	apFlows := make([]binding.Flow, 0)
+	for _, tableID := range GetAntreaPolicyEgressTables() {
+		for _, ipProto := range c.ipProtocols {
+			apEgressEstFlow := c.pipeline[tableID].BuildFlow(priorityTopAntreaPolicy).MatchProtocol(ipProto).
+				MatchCTStateNew(false).MatchCTStateEst(true).
+				Action().GotoTable(egressDropTable.GetNext()).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done()
+			apFlows = append(apFlows, apEgressEstFlow)
+		}
+
+	}
+	for _, tableID := range GetAntreaPolicyIngressTables() {
+		for _, ipProto := range c.ipProtocols {
+			apIngressEstFlow := c.pipeline[tableID].BuildFlow(priorityTopAntreaPolicy).MatchProtocol(ipProto).
+				MatchCTStateNew(false).MatchCTStateEst(true).
+				Action().GotoTable(ingressDropTable.GetNext()).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done()
+			apFlows = append(apFlows, apIngressEstFlow)
+		}
+
 	}
 	allEstFlows = append(allEstFlows, apFlows...)
 	return allEstFlows
 }
 
-func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue interface{}) binding.FlowBuilder {
-	switch matchType {
-	case MatchDstIP:
-		fb = fb.MatchProtocol(binding.ProtocolIP).MatchDstIP(matchValue.(net.IP))
-	case MatchDstIPNet:
-		fb = fb.MatchProtocol(binding.ProtocolIP).MatchDstIPNet(matchValue.(net.IPNet))
-	case MatchSrcIP:
-		fb = fb.MatchProtocol(binding.ProtocolIP).MatchSrcIP(matchValue.(net.IP))
-	case MatchSrcIPNet:
-		fb = fb.MatchProtocol(binding.ProtocolIP).MatchSrcIPNet(matchValue.(net.IPNet))
+func (c *client) addFlowMatch(fb binding.FlowBuilder, matchKey *types.MatchKey, matchValue interface{}) binding.FlowBuilder {
+	switch matchKey {
 	case MatchDstOFPort:
 		// ofport number in NXM_NX_REG1 is used in ingress rule to match packets sent to local Pod.
-		fb = fb.MatchProtocol(binding.ProtocolIP).MatchReg(int(portCacheReg), uint32(matchValue.(int32)))
+		fb = fb.MatchReg(int(portCacheReg), uint32(matchValue.(int32)))
 	case MatchSrcOFPort:
-		fb = fb.MatchProtocol(binding.ProtocolIP).MatchInPort(uint32(matchValue.(int32)))
+		fb = fb.MatchInPort(uint32(matchValue.(int32)))
+	case MatchDstIP:
+		fallthrough
+	case MatchDstIPv6:
+		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchDstIP(matchValue.(net.IP))
+	case MatchDstIPNet:
+		fallthrough
+	case MatchDstIPNetv6:
+		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchDstIPNet(matchValue.(net.IPNet))
+	case MatchSrcIP:
+		fallthrough
+	case MatchSrcIPv6:
+		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchSrcIP(matchValue.(net.IP))
+	case MatchSrcIPNet:
+		fallthrough
+	case MatchSrcIPNetv6:
+		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchSrcIPNet(matchValue.(net.IPNet))
 	case MatchTCPDstPort:
-		fb = fb.MatchProtocol(binding.ProtocolTCP)
-		portValue := matchValue.(uint16)
-		if portValue > 0 {
-			fb = fb.MatchDstPort(portValue, nil)
-		}
+		fallthrough
+	case MatchTCPv6DstPort:
+		fallthrough
 	case MatchUDPDstPort:
-		fb = fb.MatchProtocol(binding.ProtocolUDP)
-		portValue := matchValue.(uint16)
-		if portValue > 0 {
-			fb = fb.MatchDstPort(portValue, nil)
-		}
+		fallthrough
+	case MatchUDPv6DstPort:
+		fallthrough
 	case MatchSCTPDstPort:
-		fb = fb.MatchProtocol(binding.ProtocolSCTP)
+		fallthrough
+	case MatchSCTPv6DstPort:
+		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
 		portValue := matchValue.(uint16)
 		if portValue > 0 {
 			fb = fb.MatchDstPort(portValue, nil)
@@ -1314,7 +1328,7 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue 
 
 // conjunctionExceptionFlow generates the flow to jump to a specific table if both policyRuleConjunction ID and except address are matched.
 // Keeping this for reference to generic exception flow.
-func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, matchKey int, matchValue interface{}) binding.Flow {
+func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.TableIDType, nextTable binding.TableIDType, matchKey *types.MatchKey, matchValue interface{}) binding.Flow {
 	conjReg := IngressReg
 	if tableID == EgressRuleTable {
 		conjReg = EgressReg
@@ -1328,7 +1342,7 @@ func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.
 }
 
 // conjunctiveMatchFlow generates the flow to set conjunctive actions if the match condition is matched.
-func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey int, matchValue interface{}, priority *uint16, actions ...*conjunctiveAction) binding.Flow {
+func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey *types.MatchKey, matchValue interface{}, priority *uint16, actions ...*conjunctiveAction) binding.Flow {
 	var ofPriority uint16
 	if priority != nil {
 		ofPriority = *priority
@@ -1344,7 +1358,7 @@ func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey int,
 }
 
 // defaultDropFlow generates the flow to drop packets if the match condition is matched.
-func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey int, matchValue interface{}) binding.Flow {
+func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey *types.MatchKey, matchValue interface{}) binding.Flow {
 	fb := c.pipeline[tableID].BuildFlow(priorityNormal)
 	return c.addFlowMatch(fb, matchKey, matchValue).
 		Action().Drop().
