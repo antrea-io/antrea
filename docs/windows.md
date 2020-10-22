@@ -44,21 +44,21 @@ Note, OVS driver and daemons are pre-installed on the Windows Nodes in the demo 
 ## Instructions for deploying Antrea on Windows Worker Nodes
 
 ### Prerequisites
+
 * Obtain a Windows Server 2019 license (or higher) in order to configure the Windows Node that hosts Windows containers,  installed with the latest Windows
   updates.
-* A "starter" Linux-based Kubernetes cluster with no CNI (you can set this up with a single Kubeadm node). 
-* Install [Hyper-V](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-the-hyper-v-role-on-windows-server)
+* A "starter" Linux-based Kubernetes cluster with no CNI (you can set this up with a single Kubeadm node).
+* A windows node with the following installed components:
+  * Install [Hyper-V](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-the-hyper-v-role-on-windows-server)
   with management tools.
-* Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
-* [Install OVS](http://docs.openvswitch.org/en/latest/intro/install/windows/)
-  and configure the daemons as Windows service.
-    * The kernel driver of OVS should be [signed by Windows Hardware Dev Center](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing).
-    * If OVS driver is not signed, please refer to the Windows doc about how to
-      [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
-    * If you don't have a self-signed OVS package and just want to try the
-      Antrea on windows, Antrea provides a test-signed OVS package for you.
-      See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes)
-      section.
+  * Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
+
+Note: We provide an easy way to install OVS on windows tutorial, so you can proceed with the directions below even in case its not installed yet.
+
+* Installation of [OVS](http://docs.openvswitch.org/en/latest/intro/install/windows/), configured as a Windows service.
+  * The kernel driver of OVS should be [signed by Windows Hardware Dev Center](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing).
+  * If OVS driver is not signed, please refer to the Windows doc about how to [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
+  * If you don't have a self-signed OVS package and just want to try the Antrea on windows, Antrea provides a test-signed OVS package for you.  See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes) section.
 
 ### Installation
 #### Download & Configure Antrea for Linux
@@ -73,12 +73,15 @@ Add Windows-compatible versions of kube-proxy by applying file `kube-proxy.yaml`
 
 Download `kube-proxy.yaml` from kubernetes official repository and set
 kube-proxy version.
+
 ```
 # Example:
 curl -L https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/kube-proxy.yml | sed 's/VERSION/v1.18.0/g'  > kube-proxy.yml
 ```
-Replace the content of `run-script.ps1` in configmap named `kube-proxy-windows`
+
+Replace the ENTIRE CONTENT of the `run-script.ps1` in configmap named `kube-proxy-windows`
 as following:
+
 ```
 apiVersion: v1
 data:
@@ -100,7 +103,9 @@ metadata:
   name: kube-proxy-windows
   namespace: kube-system
 ``` 
+
 Set the `hostNetwork` option as true in spec of kube-proxy-windows daemonset.
+
 ```
 apiVersion: apps/v1
 kind: DaemonSet
@@ -134,7 +139,8 @@ Download and apply `antrea-windows.yml`.
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-windows.yml
 ```
 
-#### Join Windows worker Nodes
+#### Install OVS
+
 1. (Optional, Test-Only) Install OVS provided by Antrea
 
 Antrea provides a pre-built OVS package which contains test-signed OVS kernel
@@ -191,7 +197,9 @@ curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/w
 > Note: The interface will be deleted automatically by Windows after Windows
 > Node reboots. So the script needs to be executed after rebooting the Node.
 
-5. Run kubeadm to join the Node
+#### Kubeadm setup and joining to the Linux cluster
+
+Finally, you can now run kubeadm to join the Node
 
 On Windows Node, run the `kubeadm join` command to join the cluster. The token 
 is provided by the master Node.
@@ -220,6 +228,7 @@ restart-service kubelet
 ```
 
 #### Verify your installation
+
 There will be temporary network interruption on Windows worker Node on the
 first startup of antrea-agent. It's because antrea-agent will set the OVS to
 take over the host network. After that you should be able to view the Windows
