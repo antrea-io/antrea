@@ -194,15 +194,24 @@ fmt:
 
 .PHONY: golangci
 golangci: .golangci-bin
+	@echo "===> Running golangci for linux <==="
 	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml
+	@echo "===> Running golangci for windows <==="
+	@GOOS=windows .golangci-bin/golangci-lint run -c .golangci.yml
 
 .PHONY: golangci-fix
 golangci-fix: .golangci-bin
+	@echo "===> Running golangci-fix for linux <==="
 	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml --fix
+	@echo "===> Running golangci-fix for windows <==="
+	@GOOS=windows .golangci-bin/golangci-lint run -c .golangci.yml --fix
 
 .PHONY: lint
 lint: .golangci-bin
+	@echo "===> Running lint for linux <==="
 	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci-golint.yml
+	@echo "===> Running lint for windows <==="
+	@GOOS=windows .golangci-bin/golangci-lint run -c .golangci-golint.yml
 
 .PHONY: clean
 clean:
