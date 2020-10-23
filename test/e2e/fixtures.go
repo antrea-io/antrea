@@ -21,6 +21,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
 
 const (
@@ -49,6 +51,18 @@ func skipIfNumNodesLessThan(tb testing.TB, required int) {
 func skipIfRunCoverage(tb testing.TB, reason string) {
 	if testOptions.enableCoverage {
 		tb.Skipf("Skipping test for the '%s' when run coverage: %s", tb.Name(), reason)
+	}
+}
+
+func skipIfEncapModeIs(tb testing.TB, data *TestData, encapModes []config.TrafficEncapModeType) {
+	currentEncapMode, err := data.GetEncapMode()
+	if err != nil {
+		tb.Fatalf("Failed to get encap mode: %v", err)
+	}
+	for _, encapMode := range encapModes {
+		if currentEncapMode == encapMode {
+			tb.Skipf("Skipping test for encap mode '%s'", encapMode.String())
+		}
 	}
 }
 
