@@ -200,9 +200,10 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	if err := i.readIPSecPSK(); err != nil {
+	if err := i.initializeIPSec(); err != nil {
 		return err
 	}
+
 	if err := i.prepareHostNetwork(); err != nil {
 		return err
 	}
@@ -610,20 +611,50 @@ func (i *Initializer) initNodeLocalConfig() error {
 	return nil
 }
 
-// readIPSecPSK reads the IPSec PSK value from environment variable
-// ANTREA_IPSEC_PSK, when enableIPSecTunnel is set to true.
-func (i *Initializer) readIPSecPSK() error {
+// initializeIPSec checks if preconditions are met for using IPsec and reads the IPsec PSK value.
+func (i *Initializer) initializeIPSec() error {
 	if !i.networkConfig.EnableIPSecTunnel {
 		return nil
 	}
 
-	i.networkConfig.IPSecPSK = os.Getenv(ipsecPSKEnvKey)
-	if i.networkConfig.IPSecPSK == "" {
-		return fmt.Errorf("IPSec PSK environment variable is not set or is empty")
+	// At the time the agent is initialized and this code is executed, the
+	// OVS daemons are already running given that we have successfully
+	// connected to OVSDB. Given that the start_ovs script deletes existing
+	// PID files before starting the OVS daemons, it is safe to assume that
+	// if this file exists, the IPsec monitor is indeed running.
+	const ovsMonitorIPSecPID = "/var/run/openvswitch/ovs-monitor-ipsec.pid"
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		if _, err := os.Stat(ovsMonitorIPSecPID); err == nil {
+			klog.V(2).Infof("OVS IPsec monitor seems to be present")
+			break
+		}
+		select {
+		case <-ticker.C:
+			continue
+		case <-timer.C:
+			return fmt.Errorf("IPsec was requested, but the OVS IPsec monitor does not seem to be running")
+		}
 	}
 
-	// Normally we want not to log the secret data.
-	klog.V(4).Infof("IPSec PSK value: %s", i.networkConfig.IPSecPSK)
+	if err := i.readIPSecPSK(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// readIPSecPSK reads the IPsec PSK value from environment variable ANTREA_IPSEC_PSK
+func (i *Initializer) readIPSecPSK() error {
+	i.networkConfig.IPSecPSK = os.Getenv(ipsecPSKEnvKey)
+	if i.networkConfig.IPSecPSK == "" {
+		return fmt.Errorf("IPsec PSK environment variable '%s' is not set or is empty", ipsecPSKEnvKey)
+	}
+
+	// Usually one does not want to log the secret data.
+	klog.V(4).Infof("IPsec PSK value: %s", i.networkConfig.IPSecPSK)
 	return nil
 }
 
