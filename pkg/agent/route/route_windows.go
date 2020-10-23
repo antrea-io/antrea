@@ -44,7 +44,7 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType, noSNAT bool) (*Client, error) {
 	nr := netroute.New()
 	return &Client{
 		nr:          nr,

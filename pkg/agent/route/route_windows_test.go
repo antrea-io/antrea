@@ -52,7 +52,7 @@ func TestRouteOperation(t *testing.T) {
 	nr := netroute.New()
 	defer nr.Exit()
 
-	client, err := NewClient(serviceCIDR, 0)
+	client, err := NewClient(serviceCIDR, 0, false)
 	require.Nil(t, err)
 	nodeConfig := &config.NodeConfig{
 		GatewayConfig: &config.GatewayConfig{

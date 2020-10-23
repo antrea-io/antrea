@@ -107,7 +107,7 @@ func run(o *Options) error {
 		TrafficEncapMode:  encapMode,
 		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
 
-	routeClient, err := route.NewClient(serviceCIDRNet, encapMode)
+	routeClient, err := route.NewClient(serviceCIDRNet, encapMode, o.config.NoSNAT)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
