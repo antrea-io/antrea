@@ -3,7 +3,8 @@ function Get-WebFileIfNotExist($Path, $URL) {
         return
     }
     Write-Host "Downloading $URL to $PATH"
-    curl.exe -sLo $Path $URL
+    curl.exe -Lo $Path $URL
+    ls $PATH
 }
 
 function New-DirectoryIfNotExist($Path)
@@ -93,6 +94,8 @@ function Install-AntreaAgent {
     New-DirectoryIfNotExist $KubernetesHome
     # Download kubectl
     Get-WebFileIfNotExist $kubectl  "https://dl.k8s.io/$KubernetesVersion/bin/windows/amd64/kubectl.exe"
+    ls $kubectl
+    Get-Command kubectl
     # Download kube-proxy
     Get-WebFileIfNotExist $KubeProxy "https://dl.k8s.io/$KubernetesVersion/bin/windows/amd64/kube-proxy.exe"
     # Download yq

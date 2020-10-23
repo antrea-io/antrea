@@ -28,9 +28,32 @@ function Get-GithubLatestReleaseTag($Owner, $Repo) {
     return $null
 }
 
+function SyncSystemTime() {
+    $MaxRetryCount = 20
+    $RetryCountRange = 1..$MaxRetryCount
+    $RetryInterval = 5
+    foreach ($RetryCount in $RetryCountRange) {
+        Write-Host "Syncing system time..."
+        $res = $(W32tm /resync /force)
+        Write-Host $res
+        if ($res) {
+            Write-Host "Failed to syn system time, retry in $RetryInterval seconds..."
+            Start-Sleep -Seconds $RetryInterval
+        } else {
+            return $true
+        }
+    }
+    return $false
+}
+
 $Owner = "vmware-tanzu"
 $Repo = "antrea"
 $helper = "$AntreaHome\Helper.psm1"
+
+#if (!(SyncSystemTime)) {
+#    Write-Host "Failed to sync system time"
+#    exit 1
+#}
 
 if (Test-Path $helper) {
     Import-Module $helper
