@@ -38,7 +38,7 @@ type connTrackSystem struct {
 }
 
 func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackSystem {
-	if err := setupConntrackParameters(); err != nil {
+	if err := SetupConntrackParameters(); err != nil {
 		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
 		klog.Errorf("Error when setting up conntrack parameters, some information may be missing from exported flows: %v", err)
 	}
@@ -60,7 +60,7 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 	// ZoneID filter is not supported currently in tl-mo/conntrack library.
 	// Link to issue: https://github.com/ti-mo/conntrack/issues/23
 	// Dump all flows in the conntrack table for now.
-	conns, err := ct.connTrack.DumpFilter(conntrack.Filter{})
+	conns, err := ct.connTrack.DumpFlowsInCtZone(zoneFilter)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
@@ -74,7 +74,7 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 // NetFilterConnTrack interface helps for testing the code that contains the third party library functions ("github.com/ti-mo/conntrack")
 type NetFilterConnTrack interface {
 	Dial() error
-	DumpFilter(filter conntrack.Filter) ([]*flowexporter.Connection, error)
+	DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error)
 }
 
 type netFilterConnTrack struct {
@@ -91,8 +91,8 @@ func (nfct *netFilterConnTrack) Dial() error {
 	return nil
 }
 
-func (nfct *netFilterConnTrack) DumpFilter(filter conntrack.Filter) ([]*flowexporter.Connection, error) {
-	conns, err := nfct.netlinkConn.DumpFilter(filter)
+func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error) {
+	conns, err := nfct.netlinkConn.DumpFilter(conntrack.Filter{})
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func netlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 	return &newConn
 }
 
-func setupConntrackParameters() error {
+func SetupConntrackParameters() error {
 	parametersWithErrors := []string{}
 	if sysctl.EnsureSysctlNetValue("netfilter/nf_conntrack_acct", 1) != nil {
 		parametersWithErrors = append(parametersWithErrors, "net.netfilter.nf_conntrack_acct")
@@ -163,6 +163,6 @@ func setupConntrackParameters() error {
 }
 
 func (ct *connTrackSystem) GetMaxConnections() (int, error) {
-	maxConns, err := sysctl.GetSysctlNet("nf_conntrack_max")
+	maxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
 	return maxConns, err
 }

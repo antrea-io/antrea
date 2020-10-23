@@ -21,7 +21,6 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	conntrack "github.com/ti-mo/conntrack"
 	flowexporter "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	reflect "reflect"
 )
@@ -117,17 +116,17 @@ func (mr *MockNetFilterConnTrackMockRecorder) Dial() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dial", reflect.TypeOf((*MockNetFilterConnTrack)(nil).Dial))
 }
 
-// DumpFilter mocks base method
-func (m *MockNetFilterConnTrack) DumpFilter(arg0 conntrack.Filter) ([]*flowexporter.Connection, error) {
+// DumpFlowsInCtZone mocks base method
+func (m *MockNetFilterConnTrack) DumpFlowsInCtZone(arg0 uint16) ([]*flowexporter.Connection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DumpFilter", arg0)
+	ret := m.ctrl.Call(m, "DumpFlowsInCtZone", arg0)
 	ret0, _ := ret[0].([]*flowexporter.Connection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// DumpFilter indicates an expected call of DumpFilter
-func (mr *MockNetFilterConnTrackMockRecorder) DumpFilter(arg0 interface{}) *gomock.Call {
+// DumpFlowsInCtZone indicates an expected call of DumpFlowsInCtZone
+func (mr *MockNetFilterConnTrackMockRecorder) DumpFlowsInCtZone(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFilter", reflect.TypeOf((*MockNetFilterConnTrack)(nil).DumpFilter), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlowsInCtZone", reflect.TypeOf((*MockNetFilterConnTrack)(nil).DumpFlowsInCtZone), arg0)
 }

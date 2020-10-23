@@ -19,6 +19,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"k8s.io/klog"
 
@@ -45,10 +46,8 @@ type connTrackOvsCtl struct {
 	ovsctlClient ovsctl.OVSCtlClient
 }
 
-func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsctlClient ovsctl.OVSCtlClient) *connTrackOvsCtl {
-	if ovsctlClient == nil {
-		return nil
-	}
+func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackOvsCtl {
+	ovsctlClient := ovsctl.NewClient(nodeConfig.OVSBridge)
 
 	return &connTrackOvsCtl{
 		nodeConfig,
@@ -97,40 +96,41 @@ func (ct *connTrackOvsCtl) ovsAppctlDumpConnections(zoneFilter uint16) ([]*flowe
 
 // flowStringToAntreaConnection parses the flow string and converts to Antrea connection.
 // Example of flow string:
-// tcp,orig=(src=10.10.1.2,dst=10.96.0.1,sport=42540,dport=443),reply=(src=10.96.0.1,dst=10.10.1.2,sport=443,dport=42540),zone=65520,protoinfo=(state=TIME_WAIT)
+// "tcp,orig=(src=10.10.1.2,dst=10.10.1.3,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=10.10.1.3,dst=10.10.1.2,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397"
 func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter.Connection, error) {
 	conn := flowexporter.Connection{}
 	flowSlice := strings.Split(flow, ",")
 	isReply := false
 	inZone := false
-	var err error
 	for _, fs := range flowSlice {
 		// Indicator to populate reply or reverse fields
 		if strings.Contains(fs, "reply") {
 			isReply = true
 		}
-		if !strings.Contains(fs, "=") {
+		switch {
+		case hasAnyProto(fs):
 			// Proto identifier
-			conn.TupleOrig.Protocol, err = lookupProtocolMap(fs)
+			proto, err := lookupProtocolMap(fs)
 			if err != nil {
 				return nil, err
 			}
-			conn.TupleReply.Protocol = conn.TupleOrig.Protocol
-		} else if strings.Contains(fs, "src") {
+			conn.TupleReply.Protocol = proto
+			conn.TupleOrig.Protocol = proto
+		case strings.Contains(fs, "src"):
 			fields := strings.Split(fs, "=")
 			if !isReply {
 				conn.TupleOrig.SourceAddress = net.ParseIP(fields[len(fields)-1])
 			} else {
 				conn.TupleReply.SourceAddress = net.ParseIP(fields[len(fields)-1])
 			}
-		} else if strings.Contains(fs, "dst") {
+		case strings.Contains(fs, "dst"):
 			fields := strings.Split(fs, "=")
 			if !isReply {
 				conn.TupleOrig.DestinationAddress = net.ParseIP(fields[len(fields)-1])
 			} else {
 				conn.TupleReply.DestinationAddress = net.ParseIP(fields[len(fields)-1])
 			}
-		} else if strings.Contains(fs, "sport") {
+		case strings.Contains(fs, "sport"):
 			fields := strings.Split(fs, "=")
 			val, err := strconv.Atoi(fields[len(fields)-1])
 			if err != nil {
@@ -141,7 +141,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 			} else {
 				conn.TupleReply.SourcePort = uint16(val)
 			}
-		} else if strings.Contains(fs, "dport") {
+		case strings.Contains(fs, "dport"):
 			// dport field could be the last tuple field in ovs-dpctl output format.
 			fs = strings.TrimSuffix(fs, ")")
 
@@ -155,7 +155,44 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 			} else {
 				conn.TupleReply.DestinationPort = uint16(val)
 			}
-		} else if strings.Contains(fs, "zone") {
+		case strings.Contains(fs, "packets"):
+			fields := strings.Split(fs, "=")
+			val, err := strconv.Atoi(fields[len(fields)-1])
+			if err != nil {
+				return nil, fmt.Errorf("conversion of packets %s to int failed", fields[len(fields)-1])
+			}
+			if !isReply {
+				conn.OriginalPackets = uint64(val)
+			} else {
+				conn.ReversePackets = uint64(val)
+			}
+		case strings.Contains(fs, "bytes"):
+			fs = strings.TrimSuffix(fs, ")")
+			fields := strings.Split(fs, "=")
+			val, err := strconv.Atoi(fields[len(fields)-1])
+			if err != nil {
+				return nil, fmt.Errorf("conversion of bytes %s to int failed", fields[len(fields)-1])
+			}
+			if !isReply {
+				conn.OriginalBytes = uint64(val)
+			} else {
+				conn.ReverseBytes = uint64(val)
+			}
+		case strings.Contains(fs, "start"):
+			fs = strings.TrimSuffix(fs, ")")
+			fields := strings.Split(fs, "=")
+			// Append "Z" to meet RFC3339 standard because flow string doesn't have timezone information
+			timeString := fields[len(fields)-1] + "Z"
+			val, err := time.Parse(time.RFC3339, timeString)
+			if err != nil {
+				return nil, fmt.Errorf("parsing start time %s failed", timeString)
+			}
+			conn.StartTime = val
+		// TODO: We didn't find stoptime related field in flow string right now, need to investigate how stoptime is recorded and dumped.
+		case strings.Contains(fs, "status"):
+			fields := strings.Split(fs, "=")
+			conn.StatusFlag = statusStringToStateflag(fields[len(fields)-1])
+		case strings.Contains(fs, "zone"):
 			fields := strings.Split(fs, "=")
 			val, err := strconv.Atoi(fields[len(fields)-1])
 			if err != nil {
@@ -167,14 +204,14 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 				inZone = true
 				conn.Zone = uint16(val)
 			}
-		} else if strings.Contains(fs, "timeout") {
+		case strings.Contains(fs, "timeout"):
 			fields := strings.Split(fs, "=")
 			val, err := strconv.Atoi(fields[len(fields)-1])
 			if err != nil {
 				return nil, fmt.Errorf("conversion of timeout %s to int failed", fields[len(fields)-1])
 			}
 			conn.Timeout = uint32(val)
-		} else if strings.Contains(fs, "id") {
+		case strings.Contains(fs, "id"):
 			fields := strings.Split(fs, "=")
 			val, err := strconv.Atoi(fields[len(fields)-1])
 			if err != nil {
@@ -189,7 +226,18 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 	conn.IsActive = true
 	conn.DoExport = true
 
+	klog.V(5).Infof("Converted flow string: %v into connection: %+v", flow, conn)
+
 	return &conn, nil
+}
+
+func hasAnyProto(text string) bool {
+	for proto := range protocols {
+		if strings.Contains(strings.ToLower(text), proto) {
+			return true
+		}
+	}
+	return false
 }
 
 // lookupProtocolMap returns protocol identifier given protocol name
@@ -213,4 +261,33 @@ func (ct *connTrackOvsCtl) GetMaxConnections() (int, error) {
 		return 0, fmt.Errorf("error when converting dpctl/ct-get-maxconns output '%s' to int", cmdOutput)
 	}
 	return maxConns, nil
+}
+
+func statusStringToStateflag(status string) uint32 {
+	// Mapping is defined at https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/netfilter/nf_conntrack_common.h#L42
+	stateMap := map[string]uint32{
+		"EXPECTED":      uint32(1),
+		"SEEN_REPLY":    uint32(1 << 1),
+		"ASSURED":       uint32(1 << 2),
+		"CONFIRMED":     uint32(1 << 3),
+		"SRC_NAT":       uint32(1 << 4),
+		"DST_NAT":       uint32(1 << 5),
+		"NAT_MASK":      uint32(1<<5 | 1<<4),
+		"SEQ_ADJUST":    uint32(1 << 6),
+		"SRC_NAT_DONE":  uint32(1 << 7),
+		"DST_NAT_DONE":  uint32(1 << 8),
+		"NAT_DONE_MASK": uint32(1<<8 | 1<<7),
+		"DYING":         uint32(1 << 9),
+		"FIXED_TIMEOUT": uint32(1 << 10),
+		"TEMPLATE":      uint32(1 << 11),
+		"UNTRACKED":     uint32(1 << 12),
+		"HELPER":        uint32(1 << 13),
+		"OFFLOAD":       uint32(1 << 14),
+	}
+	var stateflag uint32
+	statusSlice := strings.Split(status, "|")
+	for _, subStatus := range statusSlice {
+		stateflag = stateflag | stateMap[subStatus]
+	}
+	return stateflag
 }
