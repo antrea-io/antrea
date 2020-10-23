@@ -24,7 +24,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/ti-mo/conntrack"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
@@ -85,7 +84,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	connDumperDPSystem.connTrack = mockNetlinkCT
 	// Set expects for mocks
 	mockNetlinkCT.EXPECT().Dial().Return(nil)
-	mockNetlinkCT.EXPECT().DumpFilter(conntrack.Filter{}).Return(testFlows, nil)
+	mockNetlinkCT.EXPECT().DumpFlowsInCtZone(uint16(openflow.CtZone)).Return(testFlows, nil)
 
 	conns, totalConns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
 	assert.NoErrorf(t, err, "Dump flows function returned error: %v", err)
@@ -115,7 +114,11 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		Mask: net.IPMask{255, 255, 255, 0},
 	}
 
-	connDumper := NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, mockOVSCtlClient)
+	connDumper := &connTrackOvsCtl{
+		nodeConfig,
+		serviceCIDR,
+		mockOVSCtlClient,
+	}
 	// Set expect call for mock ovsCtlClient
 	ovsctlCmdOutput := []byte("tcp,orig=(src=127.0.0.1,dst=127.0.0.1,sport=45218,dport=2379,packets=320108,bytes=24615344),reply=(src=127.0.0.1,dst=127.0.0.1,sport=2379,dport=45218,packets=239595,bytes=24347883),start=2020-07-24T05:07:03.998,id=3750535678,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86399,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
 		"tcp,orig=(src=127.0.0.1,dst=8.7.6.5,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=8.7.6.5,dst=127.0.0.1,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)\n" +
@@ -124,12 +127,12 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	expConn := &flowexporter.Connection{
 		ID:         982464968,
 		Timeout:    86399,
-		StartTime:  time.Time{},
+		StartTime:  time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC),
 		StopTime:   time.Time{},
 		IsActive:   true,
 		DoExport:   true,
 		Zone:       65520,
-		StatusFlag: 0,
+		StatusFlag: 302,
 		TupleOrig: flowexporter.Tuple{
 			SourceAddress:      net.ParseIP("100.10.0.105"),
 			DestinationAddress: net.ParseIP("10.96.0.1"),
@@ -144,10 +147,10 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 			SourcePort:         6443,
 			DestinationPort:    41284,
 		},
-		OriginalPackets:         0,
-		OriginalBytes:           0,
-		ReversePackets:          0,
-		ReverseBytes:            0,
+		OriginalPackets:         343260,
+		OriginalBytes:           19340621,
+		ReversePackets:          381035,
+		ReverseBytes:            181176472,
 		SourcePodNamespace:      "",
 		SourcePodName:           "",
 		DestinationPodNamespace: "",
@@ -164,27 +167,13 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	assert.Equal(t, len(outputFlow), totalConns, "Number of connections in conntrack table should be equal to outputFlow")
 }
 
-func TestSetupConnTrackParameters(t *testing.T) {
-	err := setupConntrackParameters()
-	if err != nil {
-		t.Skipf("Skipping test as trying to set up conntrack parameters returned an error: %v", err)
-	} else {
-		conntrackAcct, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_acct")
-		require.NoError(t, err, "Cannot read nf_conntrack_acct")
-		assert.Equal(t, 1, conntrackAcct, "net.netfilter.nf_conntrack_acct value should be 1")
-		conntrackTimestamping, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_timestamp")
-		require.NoError(t, err, "Cannot read nf_conntrack_timestamp")
-		assert.Equal(t, 1, conntrackTimestamping, "net.netfilter.nf_conntrack_timestamp value should be 1")
-	}
-}
-
 func TestConnTrackSystem_GetMaxConnections(t *testing.T) {
 	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, &net.IPNet{})
 	maxConns, err := connDumperDPSystem.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
-	expMaxConns, err := sysctl.GetSysctlNet("nf_conntrack_max")
-	require.NoError(t, err, "Cannot read nf_conntrack_max")
-	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to nf_conntrack_max")
+	expMaxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
+	require.NoError(t, err, "Cannot read netfilter/nf_conntrack_max")
+	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to netfilter/nf_conntrack_max")
 }
 
 func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
@@ -194,7 +183,11 @@ func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 	// Set expect call of dpctl/ct-get-maxconns for mock ovsCtlClient
 	expMaxConns := 300000
 	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/ct-get-maxconns", false).Return([]byte(strconv.Itoa(expMaxConns)), nil)
-	connDumper := NewConnTrackOvsAppCtl(&config.NodeConfig{}, &net.IPNet{}, mockOVSCtlClient)
+	connDumper := &connTrackOvsCtl{
+		&config.NodeConfig{},
+		&net.IPNet{},
+		mockOVSCtlClient,
+	}
 	maxConns, err := connDumper.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
 	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to the previous hard-coded value")
