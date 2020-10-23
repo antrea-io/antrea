@@ -113,12 +113,14 @@ var provider providers.ProviderInterface
 
 // TestData stores the state required for each test case.
 type TestData struct {
-	kubeConfig         *restclient.Config
-	clientset          kubernetes.Interface
-	aggregatorClient   aggregatorclientset.Interface
-	securityClient     secv1alpha1.SecurityV1alpha1Interface
-	crdClient          crdclientset.Interface
-	logsDirForTestCase string
+	kubeConfig              *restclient.Config
+	clientset               kubernetes.Interface
+	aggregatorClient        aggregatorclientset.Interface
+	securityClient          secv1alpha1.SecurityV1alpha1Interface
+	crdClient               crdclientset.Interface
+	logsDirForTestCase      string
+	agentConfigMutated      bool
+	controllerConfigMutated bool
 }
 
 var testData *TestData
@@ -1216,7 +1218,7 @@ func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, e
 	return antreaDefaultGW, nil
 }
 
-func (data *TestData) mutateAntreaConfigMap(mutatingFunc func(data map[string]string), restartController, restartAgent bool) error {
+func (data *TestData) mutateAntreaConfigMap(mutatingFunc func(data map[string]string), restartController, restartAgents bool) error {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
 		return err
@@ -1225,7 +1227,9 @@ func (data *TestData) mutateAntreaConfigMap(mutatingFunc func(data map[string]st
 	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
 	}
-	if restartAgent {
+	data.controllerConfigMutated = restartController || data.controllerConfigMutated
+	data.agentConfigMutated = restartAgents || data.agentConfigMutated
+	if restartAgents {
 		err = data.restartAntreaAgentPods(defaultTimeout)
 		if err != nil {
 			return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)

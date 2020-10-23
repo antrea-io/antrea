@@ -261,6 +261,25 @@ func teardownTest(tb testing.TB, data *TestData) {
 	if err := data.deleteTestNamespace(defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down test: %v", err)
 	}
+
+	restoreConfigMap := func() error {
+		tb.Logf("Restoring Antrea ConfigMap")
+		if err := data.deployAntrea(); err != nil {
+			return err
+		}
+		return data.mutateAntreaConfigMap(
+			func(data map[string]string) {},
+			testData.controllerConfigMutated,
+			testData.agentConfigMutated,
+		)
+	}
+	if data.agentConfigMutated || data.controllerConfigMutated {
+		if err := restoreConfigMap(); err != nil {
+			tb.Logf("Error when restoring ConfigMap: %v", err)
+		}
+		testData.agentConfigMutated = false
+		testData.controllerConfigMutated = false
+	}
 }
 
 func deletePodWrapper(tb testing.TB, data *TestData, name string) {
