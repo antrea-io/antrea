@@ -769,6 +769,7 @@ func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
 	return nil
 }
 
+// GetOVSVersion either returns the version of OVS, or an error.
 func (br *OVSBridge) GetOVSVersion() (string, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 
@@ -783,12 +784,29 @@ func (br *OVSBridge) GetOVSVersion() (string, Error) {
 		klog.Error("Transaction failed: ", err)
 		return "", NewTransactionError(err, temporary)
 	}
-	if len(res[0].Rows) == 0 {
-		klog.Warning("Could not find ovs_version")
-		return "", nil
-	}
 
-	return res[0].Rows[0].(map[string]interface{})["ovs_version"].(string), nil
+	if len(res[0].Rows) == 0 {
+		klog.Warning("Could not find ovs_version in the OVS query result")
+		return "", NewTransactionError(err, false)
+	} else {
+		return ParseOvsVersion(res[0].Rows)
+	}
+}
+
+func ParseOvsVersion(ovsReturnRow interface{}) (string, Error) {
+	errorMessage := fmt.Errorf("unexpected transaction result when querying OVSDB %v", defaultOvsVersionMessage)
+	switch ovsReturnRow.(type) {
+	default:
+	case map[string]string:
+		if _, ok := ovsReturnRow.(map[string]string)["ovs_version"]; ok {
+			return ovsReturnRow.(map[string]string)["ovs_version"], nil
+		}
+	case map[string]interface{}:
+		if _, ok := ovsReturnRow.(map[string]interface{})["ovs_version"]; ok {
+			return ovsReturnRow.(map[string]interface{})["ovs_version"].(string), nil
+		}
+	}
+	return "", NewTransactionError(errorMessage, false)
 }
 
 // AddOVSOtherConfig adds the given configs to the "other_config" column of

@@ -12,24 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !windows
-
 package ovsconfig
 
 import (
-	"path"
-	"time"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-const (
-	DefaultOVSRunDir = "/var/run/openvswitch"
+func TestOVSClient(t *testing.T) {
+	_, err := ParseOvsVersion(nil)
+	assert.Error(t, err)
 
-	defaultConnNetwork = "unix"
-	// Wait up to 5 seconds when getting port.
-	defaultGetPortTimeout    = 5 * time.Second
-	defaultOvsVersionMessage = "OVS version not found in ovsdb. Please configure your OVS (ovsdb) to provide version information."
-)
+	// raw strings are not accepted, we want to make sure the function doesn't panic and returns an error
+	_, err = ParseOvsVersion("ovs_version")
+	assert.Error(t, err)
 
-func GetConnAddress(ovsRunDir string) string {
-	return path.Join(ovsRunDir, defaultOVSDBFile)
+	m1 := map[string]string{"ovs_version": "1"}
+	_, err = ParseOvsVersion(m1)
+	assert.NoError(t, err)
+
+	m2 := map[string]interface{}{"ovs_version": "1.2.3.4.5"}
+	_, err = ParseOvsVersion(m2)
+	assert.NoError(t, err)
+
 }
