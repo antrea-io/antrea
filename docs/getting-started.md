@@ -54,12 +54,14 @@ encountered when running Antrea on specific OSes are documented
 To deploy a released version of Antrea, pick a deployment manifest from the
 [list of releases](https://github.com/vmware-tanzu/antrea/releases). For any
 given release `<TAG>` (e.g. `v0.1.0`), you can deploy Antrea as follows:
+
 ```bash
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml
 ```
 
 To deploy the latest version of Antrea (built from the master branch), use the
 checked-in [deployment yaml](/build/yamls/antrea.yml):
+
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea.yml
 ```
@@ -76,6 +78,7 @@ information.
 The instructions above only apply when deploying Antrea in a new cluster. If you
 need to migrate your existing cluster from another CNI plugin to Antrea, you
 will need to do the following:
+
  * Delete previous CNI, including all resources (K8s objects, iptables rules,
  interfaces, ...) created by that CNI.
  * Deploy Antrea.
@@ -89,6 +92,7 @@ deleting the previous CNI, existing Pods may not be reachable anymore.
 
 For example, when migrating from Flannel to Antrea, you will need to do the
 following:
+
 1. Delete Flannel with `kubectl delete -f <path to your Flannel YAML manifest>`.
 2. Delete Flannel bridge and tunnel interface with `ip link delete flannel.1 &&
 ip link delete flannel cni0` **on each Node**.

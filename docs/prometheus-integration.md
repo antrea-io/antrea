@@ -29,6 +29,7 @@ Prometheus integration with Antrea is validated as part of CI using Prometheus v
 Prometheus requires access to Kubernetes API resources for the service discovery
 capability. Reading metrics also requires access to the "/metrics" API
 endpoints.
+
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -55,6 +56,7 @@ rules:
 ### Antrea Metrics Listener Access
 To scrape the metrics from Antrea Controller and Agent, Prometheus needs the
 following permissions
+
 ```yaml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -75,6 +77,7 @@ value is 10350). Antrea Controller metrics endpoint is exposed through Antrea ap
 on `apiport` config parameter given in `antrea-controller.conf` (default value is 10349). 
 
 #### Controller Scraping
+
 ```yaml
 - job_name: 'antrea-controllers'
 kubernetes_sd_configs:
@@ -93,6 +96,7 @@ relabel_configs:
 ```
 
 #### Agent Scraping
+
 ```yaml
 - job_name: 'antrea-agents'
 kubernetes_sd_configs:

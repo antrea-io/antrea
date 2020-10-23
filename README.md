@@ -13,7 +13,7 @@ security services for a Kubernetes cluster, leveraging
 [Open vSwitch](https://www.openvswitch.org/) as the networking data plane.
 
 <p align="center">
-<img src="/docs/assets/antrea_overview.svg.png" width="500" alt="Antrea Overview">
+<img src="docs/assets/antrea_overview.svg.png" width="500" alt="Antrea Overview">
 </p>
 
 Open vSwitch is a widely adopted high-performance programmable virtual
@@ -33,7 +33,7 @@ Antrea has been tested with Kubernetes clusters running version 1.16 or later.
 ## Getting Started
 
 Getting started with Antrea is very simple, and takes only a few minutes.
-See how it's done in the [Getting started](docs/getting-started.md) document.
+See how it's done in the [Getting started](/docs/getting-started.md) document.
 
 ## Contributing
 
@@ -41,7 +41,7 @@ The Antrea community welcomes new contributors. We are waiting for your PRs!
 
 * Before contributing, please get familiar with our
 [Code of Conduct](CODE_OF_CONDUCT.md).
-* Check out the Antrea [Contributor Guide](/CONTRIBUTING.md) for information
+* Check out the Antrea [Contributor Guide](CONTRIBUTING.md) for information
 about setting up your development environment and our contribution workflow.
 * Learn about Antrea's [Architecture and Design](/docs/design/architecture.md).
 Your feedback is more than welcome!

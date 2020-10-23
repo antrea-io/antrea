@@ -50,6 +50,7 @@ your environment and preference.
 Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):NodePort.
 
 Note:
+
 1. Docker image antrea/octant-antrea-ubuntu should be automatically downloaded
 when you apply antrea-octant.yml in step 3. If the image is not successfully
 downloaded which may be due to network issues, you can run command `make
@@ -67,7 +68,7 @@ environment. It may be due to the network policies or other security rules
 configured on your hosts.
 4. To deploy a released version of the plugin, you can download
 `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-octant.yml`,
-where `<TAG>` (e.g. `v0.3.0`) is the desired version (should match the version
+where `<TAG>` (e.g. `v0.8.2`) is the desired version (should match the version
 of Antrea you are using). After making the necessary edits, you can apply the
 yaml with `kubectl`.
 
@@ -88,7 +89,6 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
     ```
 
     or
-
     ```bash
     wget https://github.com/vmware-tanzu/octant/releases/download/v0.13.1/octant_0.13.1_Linux-64bit.rpm
     rpm -i octant_0.13.1_Linux-64bit.rpm
@@ -123,6 +123,7 @@ based on your environment and move the binary to OCTANT_PLUGIN_PATH.
 Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):80.
 
 Note:
+
 1.  If you deploy Octant and the Antrea UI as a process, you cannot access the Traceflow UI for now when following the
 steps listed above (at least until the v0.9.0 release). However, you can still build the binary yourself with
 the command below, with the remaining steps being almost the same as the ones above.

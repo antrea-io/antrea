@@ -41,7 +41,7 @@ The Antrea community welcomes new contributors. We are waiting for your PRs!
 
 * Before contributing, please get familiar with our
 [Code of Conduct](CODE_OF_CONDUCT.md).
-* Check out the Antrea [Contributor Guide](/CONTRIBUTING.md) for information
+* Check out the Antrea [Contributor Guide](CONTRIBUTING.md) for information
 about setting up your development environment and our contribution workflow.
 * Learn about Antrea's [Architecture and Design](architecture.md).
 Your feedback is more than welcome!
@@ -95,7 +95,7 @@ introduced for each version release.
 ## Roadmap
 
 We are adding features very quickly to Antrea. Check out the list of features we are considering 
-on our [Roadmap](ROADMAP.md) page. Feel free to throw your ideas in!
+on our [Roadmap](ROADMAP) page. Feel free to throw your ideas in!
 
 ## License
 

@@ -402,4 +402,3 @@ determine the number of features included in a milestone.
 * `priority/critical-urgent` -- highest priority. Must be actively worked on as someone's top priority right now.
 * `priority/important-longterm` -- important over the long term, but may not be staffed and/or may need multiple releases to complete.
 * `priority/import-soon` -- must be staffed and worked on either currently, or very soon, ideally in time for the next release.
-
