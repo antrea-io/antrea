@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 )
 
@@ -36,34 +37,24 @@ type testcase struct {
 	expectedResults []v1alpha1.NodeResult
 }
 
-// TestTraceflow verifies if traceflow can trace intra/inter nodes traffic with some NetworkPolicies set.
-func TestTraceflow(t *testing.T) {
-	skipIfProviderIs(t, "kind", "Inter nodes test needs Geneve tunnel")
-	skipIfNumNodesLessThan(t, 2)
-
+// TestTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
+func TestTraceflowIntraNode(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 
+	skipIfEncapModeIs(t, data, []config.TrafficEncapModeType{config.TrafficEncapModeNoEncap, config.TrafficEncapModeNetworkPolicyOnly})
+
 	if err = data.enableTraceflow(t); err != nil {
 		t.Fatal("Error when enabling Traceflow")
 	}
 
 	node1 := nodeName(0)
-	node2 := nodeName(1)
 
-	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 2, node1)
-	node2Pods, node2IPs, node2CleanupFn := createTestBusyboxPods(t, data, 1, node2)
+	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 3, node1)
 	defer node1CleanupFn()
-	defer node2CleanupFn()
-
-	require.NoError(t, data.createNginxPod("nginx", node2))
-	nginxIP, err := data.podWaitForIP(defaultTimeout, "nginx", testNamespace)
-	require.NoError(t, err)
-	svc, err := data.createNginxClusterIPService(false)
-	require.NoError(t, err)
 
 	// Setup 2 NetworkPolicies:
 	// 1. Allow all egress traffic.
@@ -158,6 +149,251 @@ func TestTraceflow(t *testing.T) {
 			},
 		},
 		{
+			name: "intraNodeUDPDstPodTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1Pods[2])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node1Pods[2],
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 17,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							UDP: &v1alpha1.UDPHeader{
+								DstPort: 321,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "intraNodeUDPDstIPTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: node1IPs[2],
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 17,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							UDP: &v1alpha1.UDPHeader{
+								DstPort: 321,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "intraNodeICMPDstIPTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: node1IPs[2],
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 1,
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "nonExistingDstPod",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, "non-existing-pod")),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       "non-existing-pod",
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Failed,
+		},
+	}
+
+	t.Run("traceflowGroupTest", func(t *testing.T) {
+		for _, tc := range testcases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				// t.Parallel()
+				runTestTraceflow(t, data, tc)
+			})
+		}
+	})
+}
+
+// TestTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
+func TestTraceflowInterNode(t *testing.T) {
+	skipIfProviderIs(t, "kind", "Inter nodes test needs Geneve tunnel")
+	skipIfNumNodesLessThan(t, 2)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	if err = data.enableTraceflow(t); err != nil {
+		t.Fatal("Error when enabling Traceflow")
+	}
+
+	node1 := nodeName(0)
+	node2 := nodeName(1)
+
+	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 1, node1)
+	node2Pods, node2IPs, node2CleanupFn := createTestBusyboxPods(t, data, 2, node2)
+	defer node1CleanupFn()
+	defer node2CleanupFn()
+
+	require.NoError(t, data.createNginxPod("nginx", node2))
+	nginxIP, err := data.podWaitForIP(defaultTimeout, "nginx", testNamespace)
+	require.NoError(t, err)
+	svc, err := data.createNginxClusterIPService(false)
+	require.NoError(t, err)
+
+	// Setup 2 NetworkPolicies:
+	// 1. Allow all egress traffic.
+	// 2. Deny ingress traffic on pod with label antrea-e2e = node1Pods[1]. So flow node1Pods[0] -> node1Pods[1] will be dropped.
+	var allowAllEgress *networkingv1.NetworkPolicy
+	allowAllEgressName := "test-networkpolicy-allow-all-egress"
+	if allowAllEgress, err = data.createNPAllowAllEgress(allowAllEgressName); err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(allowAllEgress); err != nil {
+			t.Errorf("Error when deleting network policy: %v", err)
+		}
+	}()
+
+	var denyAllIngress *networkingv1.NetworkPolicy
+	denyAllIngressName := "test-networkpolicy-deny-ingress"
+	if denyAllIngress, err = data.createNPDenyAllIngress("antrea-e2e", node2Pods[1], denyAllIngressName); err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(denyAllIngress); err != nil {
+			t.Errorf("Error when deleting network policy: %v", err)
+		}
+	}()
+
+	antreaPod, err := data.getAntreaPodOnNode(node2)
+	if err = data.waitForNetworkpolicyRealized(antreaPod, allowAllEgressName); err != nil {
+		t.Fatal(err)
+	}
+	if err = data.waitForNetworkpolicyRealized(antreaPod, denyAllIngressName); err != nil {
+		t.Fatal(err)
+	}
+
+	// Creates 6 traceflows:
+	// 1. node1Pods[0] -> node1Pods[1], intra node1.
+	// 2. node1Pods[0] -> node2Pods[0], inter node1 and node2.
+	// 3. node1Pods[0] -> node1IPs[1], intra node1.
+	// 4. node1Pods[0] -> node2IPs[0], inter node1 and node2.
+	// 5. node1Pods[0] -> service, inter node1 and node2.
+	// 6. node1Pods[0] -> non-existing Pod
+	testcases := []testcase{
+		{
 			name: "interNodeTraceflow",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -224,10 +460,10 @@ func TestTraceflow(t *testing.T) {
 			},
 		},
 		{
-			name: "intraNodeUDPDstIPTraceflow",
+			name: "interNodeUDPDstIPTraceflow",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[1])),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -235,7 +471,7 @@ func TestTraceflow(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node1IPs[1],
+						IP: node2IPs[0],
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
@@ -264,9 +500,24 @@ func TestTraceflow(t *testing.T) {
 							Action:        v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
-							ComponentInfo: "IngressDefaultRule",
-							Action:        v1alpha1.Dropped,
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Forwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.Received,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
 						},
 					},
 				},
@@ -403,75 +654,13 @@ func TestTraceflow(t *testing.T) {
 				},
 			},
 		},
-		{
-			name: "nonExistingDstPod",
-			tf: &v1alpha1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, "non-existing-pod")),
-				},
-				Spec: v1alpha1.TraceflowSpec{
-					Source: v1alpha1.Source{
-						Namespace: testNamespace,
-						Pod:       node1Pods[0],
-					},
-					Destination: v1alpha1.Destination{
-						Namespace: testNamespace,
-						Pod:       "non-existing-pod",
-					},
-				},
-			},
-			expectedPhase: v1alpha1.Failed,
-		},
 	}
 
 	t.Run("traceflowGroupTest", func(t *testing.T) {
 		for _, tc := range testcases {
 			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
-				if _, err := data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
-					t.Fatalf("Error when creating traceflow: %v", err)
-				}
-				defer func() {
-					if err := data.crdClient.OpsV1alpha1().Traceflows().Delete(context.TODO(), tc.tf.Name, metav1.DeleteOptions{}); err != nil {
-						t.Errorf("Error when deleting traceflow: %v", err)
-					}
-				}()
-
-				tf, err := data.waitForTraceflow(t, tc.tf.Name, tc.expectedPhase)
-				if err != nil {
-					t.Fatalf("Error: Get Traceflow failed: %v", err)
-					return
-				}
-				if len(tf.Status.Results) != len(tc.expectedResults) {
-					t.Fatalf("Error: Traceflow Results should be %v, but got %v", tc.expectedResults, tf.Status.Results)
-					return
-				}
-				if len(tc.expectedResults) == 1 {
-					if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0]); err != nil {
-						t.Fatal(err)
-						return
-					}
-				} else if len(tc.expectedResults) > 0 {
-					if tf.Status.Results[0].Observations[0].Component == v1alpha1.SpoofGuard {
-						if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0]); err != nil {
-							t.Fatal(err)
-							return
-						}
-						if err = compareObservations(tc.expectedResults[1], tf.Status.Results[1]); err != nil {
-							t.Fatal(err)
-							return
-						}
-					} else {
-						if err = compareObservations(tc.expectedResults[0], tf.Status.Results[1]); err != nil {
-							t.Fatal(err)
-							return
-						}
-						if err = compareObservations(tc.expectedResults[1], tf.Status.Results[0]); err != nil {
-							t.Fatal(err)
-							return
-						}
-					}
-				}
+				runTestTraceflow(t, data, tc)
 			})
 		}
 	})
@@ -575,4 +764,51 @@ func (data *TestData) waitForNetworkpolicyRealized(pod string, networkpolicy str
 		return fmt.Errorf("Error when executing antctl get NetworkPolicy: %v", err)
 	}
 	return nil
+}
+
+func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
+	if _, err := data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Error when creating traceflow: %v", err)
+	}
+	defer func() {
+		if err := data.crdClient.OpsV1alpha1().Traceflows().Delete(context.TODO(), tc.tf.Name, metav1.DeleteOptions{}); err != nil {
+			t.Errorf("Error when deleting traceflow: %v", err)
+		}
+	}()
+
+	tf, err := data.waitForTraceflow(t, tc.tf.Name, tc.expectedPhase)
+	if err != nil {
+		t.Fatalf("Error: Get Traceflow failed: %v", err)
+		return
+	}
+	if len(tf.Status.Results) != len(tc.expectedResults) {
+		t.Fatalf("Error: Traceflow Results should be %v, but got %v", tc.expectedResults, tf.Status.Results)
+		return
+	}
+	if len(tc.expectedResults) == 1 {
+		if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0]); err != nil {
+			t.Fatal(err)
+			return
+		}
+	} else if len(tc.expectedResults) > 0 {
+		if tf.Status.Results[0].Observations[0].Component == v1alpha1.SpoofGuard {
+			if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0]); err != nil {
+				t.Fatal(err)
+				return
+			}
+			if err = compareObservations(tc.expectedResults[1], tf.Status.Results[1]); err != nil {
+				t.Fatal(err)
+				return
+			}
+		} else {
+			if err = compareObservations(tc.expectedResults[0], tf.Status.Results[1]); err != nil {
+				t.Fatal(err)
+				return
+			}
+			if err = compareObservations(tc.expectedResults[1], tf.Status.Results[0]); err != nil {
+				t.Fatal(err)
+				return
+			}
+		}
+	}
 }
