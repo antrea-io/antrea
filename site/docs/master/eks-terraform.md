@@ -1,1 +1,0 @@
-../../../docs/eks-terraform.md

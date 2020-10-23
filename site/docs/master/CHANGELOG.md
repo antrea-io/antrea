@@ -457,7 +457,7 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [EKS]: https://aws.amazon.com/eks/
 [GKE]: https://cloud.google.com/kubernetes-engine
 [Antrea Windows documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/windows.md
-[OVS pipeline documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/ovs-pipeline.md
+[OVS pipeline documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/design/ovs-pipeline.md
 [OVS hardware offload]: https://github.com/vmware-tanzu/antrea/blob/master/docs/ovs-offload.md
 [AKS]: https://azure.microsoft.com/en-us/services/kubernetes-service/
 [Flow Exporter]: https://github.com/vmware-tanzu/antrea/blob/master/docs/network-flow-visibility.md

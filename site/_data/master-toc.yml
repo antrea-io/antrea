@@ -8,7 +8,7 @@ toc:
       - page: Deploying on kind
         url: /kind
       - page: Manual Installation
-        url: /manual-installation
+        url: /contributors/manual-installation
       - page: Configuration
         url: /configuration
   - title: Cloud Deployment
@@ -22,7 +22,7 @@ toc:
       - page: GKE Installation (Alpha)
         url: /gke-installation
       - page: Running Antrea In Policy Only Mode
-        url: /policy-only
+        url: /design/policy-only
   - title: Reference
     subfolderitems:
       - page: Network Policy
@@ -30,7 +30,7 @@ toc:
       - page: antctl
         url: /antctl
       - page: Architecture
-        url: /architecture
+        url: /design/architecture
       - page: IPsec Configuration
         url: /ipsec-tunnel
       - page: Securing Control Plane
@@ -40,19 +40,21 @@ toc:
       - page: OS-specific Known Issues
         url: /os-issues
       - page: OVS Pipeline
-        url: /ovs-pipeline
+        url: /design/ovs-pipeline
       - page: Feature Gates
         url: /feature-gates
       - page: Network Flow Visibility
         url: /network-flow-visibility
       - page: Traceflow Guide
         url: /traceflow-guide
+      - page: Versioning
+        url: /versioning
   - title: Windows
     subfolderitems:
       - page: Windows Deployment
         url: /windows
       - page: Windows Design
-        url: /windows-design
+        url: /design/windows-design
   - title: Integrations
     subfolderitems:
       - page: Octant Plugin Installation
@@ -62,13 +64,15 @@ toc:
   - title: Developer Guide
     subfolderitems:
       - page: Code Generation
-        url: /code-generation
+        url: /contributors/code-generation
       - page: Release Instructions
         url: /maintainers/release
       - page: Issue Management
-        url: /issue-management
+        url: /contributors/issue-management
       - page: GitHub Labels
-        url: /github-labels
+        url: /contributors/github-labels
+      - page: EKS Terraform
+        url: /contributors/eks-terraform
   - title: Project Information
     subfolderitems: 
     - page: Contributing to Antrea

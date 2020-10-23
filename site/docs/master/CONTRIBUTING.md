@@ -27,11 +27,12 @@ contributing to project Antrea:
 
 1. Read and observe the [code of conduct](CODE_OF_CONDUCT.md).
 2. Sign the [CLA](#cla).
-3. Check out the [Architecture document](architecture.md) for the Antrea architecture and design.
+3. Check out the [Architecture document](design/architecture.md) for the Antrea
+   architecture and design.
 4. Set up necessary [accounts](#accounts-setup).
-5. Set up your [development environment](manual-installation.md)
+5. Set up your [development environment](contributors/manual-installation.md)
 
-Now that you're setup, skip ahead to learn how to [contribute](#contribute). 
+Now that you're setup, skip ahead to learn how to [contribute](#contribute).
 
 ### CLA
 
@@ -162,7 +163,7 @@ the `$GOPATH`.
 
 To develop locally, you can follow these steps:
 
- 1. [Install Go 1.13](https://golang.org/doc/install)
+ 1. [Install Go 1.15](https://golang.org/doc/install)
  2. Checkout your feature branch and `cd` into it.
  3. To build all Go files and install them under `bin`, run `make bin`
  4. To run all Go unit tests, run `make test-unit`
@@ -207,7 +208,7 @@ For more information about the tests we run as part of CI, please refer to
 
 We use labels and workflows (some manual, some automated with GitHub Actions) to
 help us manage triage, prioritize, and track issue progress. For a detailed
-discussion, see [docs/issue-management.md](issue-management.md).
+discussion, see [docs/issue-management.md](contributors/issue-management.md).
 
 ### Filing An Issue
 
@@ -234,7 +235,7 @@ labels are included on your issue:
   area label will identify the area of interest an issue or PR belongs in and
   will ensure the appropriate reviewers shepherd the issue or PR through to its
   closure. For an overview of areas, see the 
-  [`docs/github-labels.md`](github-labels.md).
+  [`docs/github-labels.md`](contributors/github-labels.md).
 * **size** (optional) -- if you have an idea of the size (lines of code, complexity,
   effort) of the issue, you can label it using a [size label](#size). The size
   can be updated during backlog grooming by contributors. This estimate is used
@@ -262,18 +263,18 @@ triage labels.
 Use a `kind` label to describe the kind of issue or PR you are submitting. Valid
 kinds include:
 
-* [`kind/api-change`](issue-management.md#api-change) -- for api changes
-* [`kind/bug`](issue-management.md#bug) -- for filing a bug
-* [`kind/cleanup`](issue-management.md#cleanup) -- for code cleanup and organization
-* [`kind/deprecation`](issue-management.md#deprecation) -- for deprecating a feature
-* [`kind/design`](issue-management.md#design) -- for proposing a design or architectural change
-* [`kind/documentation`](issue-management.md#documentation) -- for updating documentation
-* [`kind/failing-test`](issue-management.md#failing-test) -- for reporting a failed test (may
+* [`kind/api-change`](contributors/issue-management.md#api-change) -- for api changes
+* [`kind/bug`](contributors/issue-management.md#bug) -- for filing a bug
+* [`kind/cleanup`](contributors/issue-management.md#cleanup) -- for code cleanup and organization
+* [`kind/deprecation`](contributors/issue-management.md#deprecation) -- for deprecating a feature
+* [`kind/design`](contributors/issue-management.md#design) -- for proposing a design or architectural change
+* [`kind/documentation`](contributors/issue-management.md#documentation) -- for updating documentation
+* [`kind/failing-test`](contributors/issue-management.md#failing-test) -- for reporting a failed test (may
   create with automation in future)
-* [`kind/feature`](issue-management.md#feature) -- for proposing a feature
-* [`kind/support`](issue-management.md#support) -- to request support. You may also get support by
+* [`kind/feature`](contributors/issue-management.md#feature) -- for proposing a feature
+* [`kind/support`](contributors/issue-management.md#support) -- to request support. You may also get support by
   using our [Slack](https://kubernetes.slack.com/archives/CR2J23M0X) channel for
   interactive help. If you have not set up the appropriate accounts, please
   follow the instructions in [accounts setup](#accounts-setup).
 
-For more details on how we manage issues, please read our [Issue Management doc](issue-management.md).
+For more details on how we manage issues, please read our [Issue Management doc](contributors/issue-management.md).

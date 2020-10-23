@@ -1,1 +1,0 @@
-../../../docs/github-labels.md

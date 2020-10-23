@@ -1,1 +1,0 @@
-../../../docs/ovs-pipeline.md
