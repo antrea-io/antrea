@@ -51,6 +51,7 @@ var _ Interface = &Client{}
 type Client struct {
 	nodeConfig  *config.NodeConfig
 	encapMode   config.TrafficEncapModeType
+	noSNAT      bool
 	serviceCIDR *net.IPNet
 	ipt         *iptables.Client
 	// nodeRoutes caches ip routes to remote Pods. It's a map of podCIDR to routes.
@@ -58,7 +59,7 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType, noSNAT bool) (*Client, error) {
 	ipt, err := iptables.New()
 	if err != nil {
 		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
@@ -67,6 +68,7 @@ func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType) (*
 	return &Client{
 		serviceCIDR: serviceCIDR,
 		encapMode:   encapMode,
+		noSNAT:      noSNAT,
 		ipt:         ipt,
 	}, nil
 }
@@ -185,11 +187,9 @@ func (c *Client) initIPTables() error {
 	}...)
 	writeLine(iptablesData, "COMMIT")
 
-	// In policy-only mode, masquerade is managed by primary CNI.
-	// Antrea should not get involved.
 	writeLine(iptablesData, "*nat")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
-	if !c.encapMode.IsNetworkPolicyOnly() {
+	if !c.noSNAT {
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: masquerade pod to external packets"`,
