@@ -7,6 +7,24 @@ CONTAINER_NAME="antrea-ovs-ipsec"
 
 set -euo pipefail
 
+# TODO: we assume that StrongSwan is used to provide IPsec for OVS, but in
+# theory LibreSwan is also supported.
+
+log_info $CONTAINER_NAME "Checking for StrongSwan prerequisites"
+
+command -v ipsec >/dev/null 2>&1 || { log_error $CONTAINER_NAME "'ipsec' command not available - are the StrongSwan packages installed?"; exit 1; }
+
+# OVS IPsec requires that the GCM module be loaded (/etc/strongswan.d/ovs.conf),
+# and we use the presence of /etc/strongswan.d/charon/gcm.conf to determine
+# whether this is the case (this should be independent of the Linux distribution
+# used). Just in case, we only perform the check if the /etc/strongswan.d/charon
+# directory exists. We do not use "ipsec listplugins" as it requires the IKE
+# daemon to be running already.
+if [[ -d "/etc/strongswan.d/charon" && ! -f "/etc/strongswan.d/charon/gcm.conf" ]]; then
+    log_error $CONTAINER_NAME "Cannot detect 'gcm' plugin for StrongSwan, make sure it is installed (libstrongswan-standard-plugins package on Debian systems)"
+    exit 1
+fi
+
 function start_agents {
     log_info $CONTAINER_NAME "Starting ovs-monitor-ipsec and strongSwan agents"
     /usr/share/openvswitch/scripts/ovs-ctl --ike-daemon=strongswan start-ovs-ipsec
