@@ -1137,6 +1137,10 @@ data:
             {
                 "type": "portmap",
                 "capabilities": {"portMappings": true}
+            },
+            {
+                "type": "bandwidth",
+                "capabilities": {"bandwidth": true}
             }
         ]
     }
@@ -1175,7 +1179,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-8c5mfk22m2
+  name: antrea-config-c7k774f9f7
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1282,7 +1286,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-8c5mfk22m2
+          name: antrea-config-c7k774f9f7
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1531,7 +1535,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-8c5mfk22m2
+          name: antrea-config-c7k774f9f7
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
