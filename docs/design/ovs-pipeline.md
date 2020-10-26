@@ -541,11 +541,14 @@ table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_
 table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=dec_ttl,mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:105
 ```
 
-If none of the flows described above are hit, traffic
-goes directly to [L2ForwardingCalcTable]. This is the case for external traffic,
-whose destination is outside the cluster (such traffic has already been
-forwarded to the local gateway by the local source Pod, and only L2 switching is
-required), as well as for local Pod-to-Pod traffic.
+If none of the flows described above are hit, traffic goes directly to
+[L2ForwardingCalcTable]. This is the case for external traffic, whose
+destination is outside the cluster (such traffic has already been
+forwarded to the local gateway by the local source Pod, and only L2 switching
+is required), as well as for local Pod-to-Pod traffic.
+```
+table=70, priority=0 actions=goto_table:80
+```
 
 ### L2ForwardingCalcTable (80)
 
@@ -554,10 +557,9 @@ port (gateway port, Pod ports and tunnel port), as you can see if you dump the
 flows:
 ```
 1. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-2. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-3. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-4. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=load:0x4->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-5. table=80, priority=0 actions=goto_table:90
+2. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+3. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=load:0x4->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+4. table=80, priority=0 actions=goto_table:90
 ```
 
 For each port flow (1 through 4 in the example above), we set bit 16 of the
