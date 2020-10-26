@@ -5,7 +5,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends wget ca-certificates
 
 # Leading dot is required for the tar command below
-ENV CNI_PLUGINS="./host-local ./loopback ./portmap"
+ENV CNI_PLUGINS="./host-local ./loopback ./portmap ./bandwidth"
 
 RUN mkdir -p /opt/cni/bin && \
     wget -q -O - https://github.com/containernetworking/plugins/releases/download/v0.8.6/cni-plugins-linux-amd64-v0.8.6.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS

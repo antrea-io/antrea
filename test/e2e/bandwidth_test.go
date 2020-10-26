@@ -16,9 +16,11 @@ package e2e
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -33,13 +35,13 @@ func TestBenchmarkBandwidthIntraNode(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil, false); err != nil {
+	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest client Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, "perftest-a", testNamespace); err != nil {
 		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false); err != nil {
+	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
 	podBIPs, err := data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
@@ -66,13 +68,13 @@ func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string) {
 	if err != nil {
 		t.Fatalf("Error when creating perftest service: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-a", clientNode, perftoolImage, nil, nil, nil, nil, false); err != nil {
+	if err := data.createPodOnNode("perftest-a", clientNode, perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest client Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, "perftest-a", testNamespace); err != nil {
 		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-b", endpointNode, perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false); err != nil {
+	if err := data.createPodOnNode("perftest-b", endpointNode, perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, "perftest-b", testNamespace); err != nil {
@@ -99,4 +101,72 @@ func TestBenchmarkBandwidthServiceRemoteAccess(t *testing.T) {
 	skipIfNotBenchmarkTest(t)
 	skipIfNumNodesLessThan(t, 2)
 	benchmarkBandwidthService(t, masterNodeName(), workerNodeName(1))
+}
+
+func TestPodTrafficShaping(t *testing.T) {
+	// TODO: tc configuration succeeded, however it didn't take effect, need to understand the reason.
+	skipIfProviderIs(t, "kind", "tc does not work with Kind")
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	tests := []struct {
+		name string
+		// The bandwidths' unit is Mbits/sec.
+		clientEgressBandwidth  int
+		serverIngressBandwidth int
+		expectedBandwidth    int
+	}{
+		{
+			name:                   "limited by egress bandwidth",
+			clientEgressBandwidth:  100,
+			serverIngressBandwidth: 200,
+			expectedBandwidth:      100,
+		},
+		{
+			name:                   "limited by ingress bandwidth",
+			clientEgressBandwidth:  300,
+			serverIngressBandwidth: 200,
+			expectedBandwidth:      200,
+		},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clientPodName := fmt.Sprintf("client-a-%d", i)
+			serverPodName := fmt.Sprintf("server-a-%d", i)
+			if err := data.createPodOnNode(clientPodName, masterNodeName(), perftoolImage, nil, nil, nil, nil, false, func(pod *v1.Pod) {
+				pod.Annotations = map[string]string{
+					"kubernetes.io/egress-bandwidth": fmt.Sprintf("%dM", tt.clientEgressBandwidth),
+				}
+			}); err != nil {
+				t.Fatalf("Error when creating the perftest client Pod: %v", err)
+			}
+			defer deletePodWrapper(t, data, clientPodName)
+			if err := data.podWaitForRunning(defaultTimeout, clientPodName, testNamespace); err != nil {
+				t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
+			}
+			if err := data.createPodOnNode(serverPodName, masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, func(pod *v1.Pod) {
+				pod.Annotations = map[string]string{
+					"kubernetes.io/ingress-bandwidth": fmt.Sprintf("%dM", tt.serverIngressBandwidth),
+				}
+			}); err != nil {
+				t.Fatalf("Error when creating the perftest server Pod: %v", err)
+			}
+			defer deletePodWrapper(t, data, serverPodName)
+			podBIP, err := data.podWaitForIP(defaultTimeout, serverPodName, testNamespace)
+			if err != nil {
+				t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
+			}
+			stdout, _, err := data.runCommandFromPod(testNamespace, clientPodName, "perftool", []string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -f m -O 1|grep sender|awk '{print $7}'", podBIP)})
+			if err != nil {
+				t.Fatalf("Error when running iperf3 client: %v", err)
+			}
+			stdout = strings.TrimSpace(stdout)
+			actualBandwidth, _ := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
+			t.Logf("Actual bandwidth: %v Mbits/sec", actualBandwidth)
+			// Allow a certain deviation.
+			assert.InEpsilon(t, actualBandwidth, tt.expectedBandwidth, 0.1)
+		})
+	}
 }
