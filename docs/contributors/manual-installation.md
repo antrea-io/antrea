@@ -141,6 +141,10 @@ cat >/etc/cni/net.d/10-antrea.conflist <<EOF
     {
       "type": "portmap",
       "capabilities": {"portMappings": true}
+    },
+    {
+      "type": "bandwidth",
+      "capabilities": {"bandwidth": true}
     }
   ]
 }

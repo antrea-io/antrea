@@ -49,6 +49,12 @@ A typical CNI configuration looks like this:
         "capabilities": {
           "portMappings": true
         }
+      },
+      {
+        "type": "bandwidth",
+        "capabilities": {
+          "bandwidth": true
+        }
       }
     ]
   }
@@ -62,9 +68,10 @@ strongly discouraged to set the `"mtu"` field in the CNI configuration to a
 value that does not match the `defaultMTU` parameter, as it may lead to
 performance degradation or packet drops.
 
-Antrea enables portmap CNI plugin by default to support `hostPort`
-functionality for Pods. In order to disable the portmap plugin, remove the
-following from Antrea CNI config:
+Antrea enables portmap and bandwidth CNI plugins by default to support `hostPort`
+and traffic shaping functionalities for Pods respectively. In order to disable
+them, remove the corresponding section from `antrea-cni.conflist` in the Antrea
+manifest. For example, removing the following section disables portmap plugin:
 ```
 {
   "type": "portmap",
