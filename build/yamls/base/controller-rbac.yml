@@ -97,8 +97,10 @@ rules:
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
+      - mutatingwebhookconfigurations
       - validatingwebhookconfigurations
     resourceNames:
+      - crdmutator.antrea.tanzu.vmware.com
       - crdvalidator.antrea.tanzu.vmware.com
     verbs:
       - get
