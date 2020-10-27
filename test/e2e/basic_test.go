@@ -38,6 +38,7 @@ func TestDeploy(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	fmt.Println("test")
 }
 
 // TestPodAssignIP verifies that Antrea allocates IP addresses properly to new Pods. It does this by
