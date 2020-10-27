@@ -39,7 +39,7 @@ Antrea in a Kubernetes cluster with both Linux and Windows nodes. In this demo, 
 - How NetworkPolicy enforcement works for Windows Pods
 - How to leverage Antrea's Traceflow with Octant
 
-Note, OVS driver and daemons are pre-installed on the Windows Nodes in the demo - so you'll need to get some components up and running before you can replicate it locally.  We'll describe that further in the next section.
+Note, OVS driver and daemons are pre-installed on the Windows Nodes in the demo - so you'll need to get some components up and running before you can replicate it locally. We'll describe that further in the next section.
 
 ## Instructions for deploying Antrea on Windows Worker Nodes
 
@@ -58,7 +58,7 @@ Note: We provide an easy way to install OVS on windows tutorial, so you can proc
 * Installation of [OVS](http://docs.openvswitch.org/en/latest/intro/install/windows/), configured as a Windows service.
   * The kernel driver of OVS should be [signed by Windows Hardware Dev Center](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing).
   * If OVS driver is not signed, please refer to the Windows doc about how to [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
-  * If you don't have a self-signed OVS package and just want to try the Antrea on windows, Antrea provides a test-signed OVS package for you.  See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes) section.
+  * If you don't have a self-signed OVS package and just want to try the Antrea on windows, Antrea provides a test-signed OVS package for you. See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes) section.
 
 ### Installation
 #### Download & Configure Antrea for Linux
@@ -79,7 +79,7 @@ kube-proxy version.
 curl -L https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/kube-proxy.yml | sed 's/VERSION/v1.18.0/g'  > kube-proxy.yml
 ```
 
-Replace the ENTIRE CONTENT of the `run-script.ps1` in configmap named `kube-proxy-windows` as following, to use "userspace" proxying.  This is a deviation from the standard kube-proxy curated in the sig-windows-tools repository.  Also, you'll be removing some of the `yq` commands which setup the network name and so on, which won't be needed, since antrea will install its own cni configurations as needed.
+Replace the ENTIRE CONTENT of the `run-script.ps1` in configmap named `kube-proxy-windows` as following, to use "userspace" proxying. This is a deviation from the standard kube-proxy curated in the sig-windows-tools repository. Also, you'll be removing some of the `yq` commands which setup the network name and so on, which won't be needed, since antrea will install its own cni configurations as needed.
 
 ```
 apiVersion: v1
