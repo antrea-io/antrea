@@ -1,0 +1,257 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: antrea-agent-simulator
+  namespace: kube-system
+spec:
+  clusterIP: None
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    name: antrea-agent-simulator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: antrea
+  name: antrea-agent-simulator
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
+  name: antrea-agent-simulator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - endpoints
+  - services
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - clusterinformation.antrea.tanzu.vmware.com
+  resources:
+  - antreaagentinfos
+  verbs:
+  - get
+  - create
+  - update
+  - delete
+- apiGroups:
+  - controlplane.antrea.tanzu.vmware.com
+  - networking.antrea.tanzu.vmware.com
+  resources:
+  - networkpolicies
+  - appliedtogroups
+  - addressgroups
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - controlplane.antrea.tanzu.vmware.com
+  resources:
+  - nodestatssummaries
+  verbs:
+  - create
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resourceNames:
+  - extension-apiserver-authentication
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resourceNames:
+  - antrea-ca
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - ops.antrea.tanzu.vmware.com
+  resources:
+  - traceflows
+  - traceflows/status
+  verbs:
+  - get
+  - watch
+  - list
+  - update
+  - patch
+  - create
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: antrea-agent-simulator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-agent-simulator
+subjects:
+- kind: ServiceAccount
+  name: antrea-agent-simulator
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: antrea-agent-simulator
+  namespace: kube-system
+spec:
+  podManagementPolicy: Parallel
+  replicas: 1
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-agent-simulator
+  serviceName: antrea-agent-simulator
+  template:
+    metadata:
+      labels:
+        app: antrea
+        component: antrea-agent-simulator
+    spec:
+      serviceAccountName: antrea-agent
+      initContainers:
+      - name: init-inotify-limit
+        image: busybox:latest
+        command: ['sysctl', '-w', 'fs.inotify.max_user_instances=200']
+        securityContext:
+          privileged: true
+      volumes:
+      - name: kubeconfig-volume
+        secret:
+          secretName: kubeconfig
+      - name: logs-volume
+        hostPath:
+          path: /var/log
+      containers:
+      - name: simulator
+        image: bliu9284/simulator-ubuntu:v0.11.0
+        #imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
+        command: ['/antrea-agent-simulator', '-v', '5']
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+        volumeMounts:
+        - name: kubeconfig-volume
+          mountPath: /kubeconfig
+          readOnly: true
+        - name: logs-volume
+          mountPath: /var/log
+      - name: hollow-kubelet
+        image: bliu9284/kubemark:v1.18.4
+        ports:
+        - containerPort: 4194
+        - containerPort: 10250
+        - containerPort: 10255
+        env:
+        - name: CONTENT_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: node-configmap
+              key: content.type
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        command:
+        - /bin/sh
+        - -c
+        - /kubemark --morph=kubelet --name=$(NODE_NAME) --kubeconfig=/kubeconfig/kubelet.kubeconfig $(CONTENT_TYPE) --v=2 --log-file=/var/log/kubelet-$(NODE_NAME).log
+        volumeMounts:
+        - name: kubeconfig-volume
+          mountPath: /kubeconfig
+          readOnly: true
+        - name: logs-volume
+          mountPath: /var/log
+        resources:
+          requests:
+            cpu: 20m
+            memory: 50M
+        securityContext:
+          privileged: true
+      - name: hollow-proxy
+        image: bliu9284/kubemark:v1.18.4
+        env:
+        - name: CONTENT_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: node-configmap
+              key: content.type
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        command:
+        - /bin/sh
+        - -c
+        - /kubemark --morph=proxy --name=$(NODE_NAME) --use-real-proxier=false --kubeconfig=/kubeconfig/kubeproxy.kubeconfig $(CONTENT_TYPE) --alsologtostderr --v=2 --log-file=/var/log/kubelet-$(NODE_NAME).log
+        volumeMounts:
+        - name: kubeconfig-volume
+          mountPath: /kubeconfig
+          readOnly: true
+        - name: logs-volume
+          mountPath: /var/log
+        resources:
+          requests:
+            cpu: 20m
+            memory: 50M
+      tolerations:
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
