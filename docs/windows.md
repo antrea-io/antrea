@@ -256,3 +256,11 @@ the HNS Network created by antrea-agent is removed, and the Open vSwitch
 Extension is disabled by default. In this case, the stale OVS bridge and ports
 should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1)
 can be used to clean the OVS bridge.
+
+2. Fail to create antrea-agent pod with error  `The parameter is incorrect`.
+Describe pod and get following warning:
+```
+  Normal   Created    31s (x5 over 2m2s)  kubelet            Created container install-cni
+  Warning  Failed     31s (x5 over 2m)    kubelet            Error: failed to start container "install-cni": Error response from daemon: hcsshim::CreateComputeSystem install-cni: The parameter is incorrect.
+```
+Solution: Install latest windows updates.
