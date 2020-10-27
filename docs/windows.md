@@ -33,7 +33,7 @@ section for details.
 ### Antrea Windows demo
 
 To see more, you can check out this [demo video](https://www.youtube.com/watch?v=NjeVPGgaNFU) of running
-Antrea in a Kubernetes cluster with both Linux and Windows nodes.   In this demo, we also go over:
+Antrea in a Kubernetes cluster with both Linux and Windows nodes. In this demo, we also go over:
 
 - the Antrea OVS bridge configuration on a Windows Node
 - How NetworkPolicy enforcement works for Windows Pods
