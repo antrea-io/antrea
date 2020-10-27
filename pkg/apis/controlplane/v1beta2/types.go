@@ -31,10 +31,8 @@ import (
 type AppliedToGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	// Pods is a list of Pods selected by this group.
-	Pods []GroupMemberPod `json:"pods,omitempty" protobuf:"bytes,2,rep,name=pods"`
-	// GroupMembers is list of resources selected by this group. This eventually will replace Pods
-	GroupMembers []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,3,rep,name=groupMembers"`
+	// GroupMembers is list of resources selected by this group.
+	GroupMembers []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,2,rep,name=groupMembers"`
 }
 
 // PodReference represents a Pod Reference.
@@ -53,16 +51,6 @@ type NamedPort struct {
 	Name string `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
 	// Protocol for port. Must be UDP, TCP, or SCTP.
 	Protocol Protocol `json:"protocol,omitempty" protobuf:"bytes,3,opt,name=protocol"`
-}
-
-// GroupMemberPod represents a GroupMember related to Pods.
-type GroupMemberPod struct {
-	// Pod maintains the reference to the Pod.
-	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
-	// IP maintains the IPAddress associated with the Pod.
-	IP IPAddress `json:"ip,omitempty" protobuf:"bytes,2,opt,name=ip"`
-	// Ports maintain the named port mapping of this Pod.
-	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,3,rep,name=ports"`
 }
 
 // ExternalEntityReference represents a ExternalEntity Reference.
@@ -91,10 +79,8 @@ type GroupMember struct {
 type AppliedToGroupPatch struct {
 	metav1.TypeMeta     `json:",inline"`
 	metav1.ObjectMeta   `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	AddedPods           []GroupMemberPod `json:"addedPods,omitempty" protobuf:"bytes,2,rep,name=addedPods"`
-	RemovedPods         []GroupMemberPod `json:"removedPods,omitempty" protobuf:"bytes,3,rep,name=removedPods"`
-	AddedGroupMembers   []GroupMember    `json:"addedGroupMembers,omitempty" protobuf:"bytes,4,rep,name=addedGroupMembers"`
-	RemovedGroupMembers []GroupMember    `json:"removedGroupMembers,omitempty" protobuf:"bytes,5,rep,name=removedGroupMembers"`
+	AddedGroupMembers   []GroupMember `json:"addedGroupMembers,omitempty" protobuf:"bytes,2,rep,name=addedGroupMembers"`
+	RemovedGroupMembers []GroupMember `json:"removedGroupMembers,omitempty" protobuf:"bytes,3,rep,name=removedGroupMembers"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -113,8 +99,7 @@ type AppliedToGroupList struct {
 type AddressGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	Pods              []GroupMemberPod `json:"pods,omitempty" protobuf:"bytes,2,rep,name=pods"`
-	GroupMembers      []GroupMember    `json:"groupMembers,omitempty" protobuf:"bytes,3,rep,name=groupMembers"`
+	GroupMembers      []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,2,rep,name=groupMembers"`
 }
 
 // IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.
@@ -131,10 +116,8 @@ type IPNet struct {
 type AddressGroupPatch struct {
 	metav1.TypeMeta     `json:",inline"`
 	metav1.ObjectMeta   `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	AddedPods           []GroupMemberPod `json:"addedPods,omitempty" protobuf:"bytes,2,rep,name=addedPods"`
-	RemovedPods         []GroupMemberPod `json:"removedPods,omitempty" protobuf:"bytes,3,rep,name=removedPods"`
-	AddedGroupMembers   []GroupMember    `json:"addedGroupMembers,omitempty" protobuf:"bytes,4,rep,name=addedGroupMembers"`
-	RemovedGroupMembers []GroupMember    `json:"removedGroupMembers,omitempty" protobuf:"bytes,5,rep,name=removedGroupMembers"`
+	AddedGroupMembers   []GroupMember `json:"addedGroupMembers,omitempty" protobuf:"bytes,2,rep,name=addedGroupMembers"`
+	RemovedGroupMembers []GroupMember `json:"removedGroupMembers,omitempty" protobuf:"bytes,3,rep,name=removedGroupMembers"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -171,7 +154,7 @@ type NetworkPolicyReference struct {
 type NetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	// Rules is a list of rules to be applied to the selected Pods.
+	// Rules is a list of rules to be applied to the selected GroupMembers.
 	Rules []NetworkPolicyRule `json:"rules,omitempty" protobuf:"bytes,2,rep,name=rules"`
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
 	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,3,rep,name=appliedToGroups"`
@@ -199,9 +182,9 @@ type NetworkPolicyRule struct {
 	// If it's set to In, From must be set and To must not be set.
 	// If it's set to Out, To must be set and From must not be set.
 	Direction Direction `json:"direction,omitempty" protobuf:"bytes,1,opt,name=direction"`
-	// From represents sources which should be able to access the pods selected by the policy.
+	// From represents sources which should be able to access the GroupMembers selected by the policy.
 	From NetworkPolicyPeer `json:"from,omitempty" protobuf:"bytes,2,opt,name=from"`
-	// To represents destinations which should be able to be accessed by the pods selected by the policy.
+	// To represents destinations which should be able to be accessed by the GroupMembers selected by the policy.
 	To NetworkPolicyPeer `json:"to,omitempty" protobuf:"bytes,3,opt,name=to"`
 	// Services is a list of services which should be matched.
 	Services []Service `json:"services,omitempty" protobuf:"bytes,4,rep,name=services"`

@@ -37,17 +37,17 @@ func (meta *SpanMeta) Has(nodeName string) bool {
 	return meta.NodeNames.Has(nodeName)
 }
 
-// GroupSelector describes how to select Pods.
+// GroupSelector describes how to select GroupMembers.
 type GroupSelector struct {
 	// The normalized name is calculated from Namespace, PodSelector, ExternalEntitySelector and NamespaceSelector.
 	// If multiple policies have same selectors, they should share this group by comparing NormalizedName.
 	// It's also used to generate Name and UUID of group.
 	NormalizedName string
-	// If Namespace is set, NamespaceSelector can not be set. It means only Pods in this Namespace will be matched.
+	// If Namespace is set, NamespaceSelector can not be set. It means only GroupMembers in this Namespace will be matched.
 	Namespace string
-	// This is a label selector which selects Pods. If Namespace is also set, it selects the Pods in the Namespace.
-	// If NamespaceSelector is set instead, it selects the Pods in the Namespaces selected by NamespaceSelector.
-	// If Namespace and NamespaceSelector both are unset, it selects the Pods in all the Namespaces.
+	// This is a label selector which selects GroupMembers. If Namespace is also set, it selects the GroupMembers in the Namespace.
+	// If NamespaceSelector is set instead, it selects the GroupMembers in the Namespaces selected by NamespaceSelector.
+	// If Namespace and NamespaceSelector both are unset, it selects the GroupMembers in all the Namespaces.
 	PodSelector labels.Selector
 	// This is a label selector which selects Namespaces. It this field is set, Namespace can not be set.
 	NamespaceSelector labels.Selector
@@ -59,7 +59,7 @@ type GroupSelector struct {
 	ExternalEntitySelector labels.Selector
 }
 
-// AppliedToGroup describes a set of Pods to apply Network Policies to.
+// AppliedToGroup describes a set of GroupMembers to apply Network Policies to.
 type AppliedToGroup struct {
 	SpanMeta
 	// UID is generated from the hash value of GroupSelector.NormalizedName.
@@ -68,11 +68,10 @@ type AppliedToGroup struct {
 	Name string
 	// Selector describes how the group selects pods.
 	Selector GroupSelector
-	// PodsByNode is a mapping from nodeName to a set of Pods on the Node.
-	// It will be converted to a slice of GroupMemberPod for transferring according
+	// GroupMemberByNode is a mapping from nodeName to a set of GroupMembers on the Node,
+	// either GroupMembers or ExternalEntity on the external node.
+	// It will be converted to a slice of GroupMember for transferring according
 	// to client's selection.
-	PodsByNode map[string]controlplane.GroupMemberPodSet
-	// ExternalEntityByNode is a mapping from externalNodeName to a set of GroupMembers on that externalNode
 	GroupMemberByNode map[string]controlplane.GroupMemberSet
 }
 
@@ -85,16 +84,13 @@ type AddressGroup struct {
 	Name string
 	// Selector describes how the group selects pods to get their addresses.
 	Selector GroupSelector
-	// Pods is a set of Pods selected by this group.
-	// It will be converted to a slice of GroupMemberPod for transferring according
+	// GroupMembers is a set of GroupMembers selected by this group.
+	// It will be converted to a slice of GroupMember for transferring according
 	// to client's selection.
-	Pods controlplane.GroupMemberPodSet
-	// GroupMembers is a set of GroupMembers selected by this group
-	// TODO: Eventually Pods should be unified into the GroupMembers field
 	GroupMembers controlplane.GroupMemberSet
 }
 
-// NetworkPolicy describes what network traffic is allowed for a set of Pods.
+// NetworkPolicy describes what network traffic is allowed for a set of GroupMembers.
 type NetworkPolicy struct {
 	SpanMeta
 	// UID of the internal Network Policy.
@@ -109,7 +105,7 @@ type NetworkPolicy struct {
 	// Priority represents the relative priority of this Network Policy as compared to
 	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
 	Priority *float64
-	// Rules is a list of rules to be applied to the selected Pods.
+	// Rules is a list of rules to be applied to the selected GroupMembers.
 	Rules []controlplane.NetworkPolicyRule
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
 	AppliedToGroups []string

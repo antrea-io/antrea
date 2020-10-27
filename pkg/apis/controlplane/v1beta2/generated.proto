@@ -35,9 +35,7 @@ option go_package = "v1beta2";
 message AddressGroup {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
-  repeated GroupMemberPod pods = 2;
-
-  repeated GroupMember groupMembers = 3;
+  repeated GroupMember groupMembers = 2;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -53,13 +51,9 @@ message AddressGroupList {
 message AddressGroupPatch {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
-  repeated GroupMemberPod addedPods = 2;
+  repeated GroupMember addedGroupMembers = 2;
 
-  repeated GroupMemberPod removedPods = 3;
-
-  repeated GroupMember addedGroupMembers = 4;
-
-  repeated GroupMember removedGroupMembers = 5;
+  repeated GroupMember removedGroupMembers = 3;
 }
 
 // +genclient
@@ -70,11 +64,8 @@ message AddressGroupPatch {
 message AppliedToGroup {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
-  // Pods is a list of Pods selected by this group.
-  repeated GroupMemberPod pods = 2;
-
-  // GroupMembers is list of resources selected by this group. This eventually will replace Pods
-  repeated GroupMember groupMembers = 3;
+  // GroupMembers is list of resources selected by this group.
+  repeated GroupMember groupMembers = 2;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -90,13 +81,9 @@ message AppliedToGroupList {
 message AppliedToGroupPatch {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
-  repeated GroupMemberPod addedPods = 2;
+  repeated GroupMember addedGroupMembers = 2;
 
-  repeated GroupMemberPod removedPods = 3;
-
-  repeated GroupMember addedGroupMembers = 4;
-
-  repeated GroupMember removedGroupMembers = 5;
+  repeated GroupMember removedGroupMembers = 3;
 }
 
 // ExternalEntityReference represents a ExternalEntity Reference.
@@ -122,18 +109,6 @@ message GroupMember {
 
   // Ports is the list NamedPort of the GroupMember.
   repeated NamedPort ports = 4;
-}
-
-// GroupMemberPod represents a GroupMember related to Pods.
-message GroupMemberPod {
-  // Pod maintains the reference to the Pod.
-  optional PodReference pod = 1;
-
-  // IP maintains the IPAddress associated with the Pod.
-  optional bytes ip = 2;
-
-  // Ports maintain the named port mapping of this Pod.
-  repeated NamedPort ports = 3;
 }
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should
@@ -174,7 +149,7 @@ message NamedPort {
 message NetworkPolicy {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
-  // Rules is a list of rules to be applied to the selected Pods.
+  // Rules is a list of rules to be applied to the selected GroupMembers.
   repeated NetworkPolicyRule rules = 2;
 
   // AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
@@ -231,10 +206,10 @@ message NetworkPolicyRule {
   // If it's set to Out, To must be set and From must not be set.
   optional string direction = 1;
 
-  // From represents sources which should be able to access the pods selected by the policy.
+  // From represents sources which should be able to access the GroupMembers selected by the policy.
   optional NetworkPolicyPeer from = 2;
 
-  // To represents destinations which should be able to be accessed by the pods selected by the policy.
+  // To represents destinations which should be able to be accessed by the GroupMembers selected by the policy.
   optional NetworkPolicyPeer to = 3;
 
   // Services is a list of services which should be matched.

@@ -29,7 +29,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	v1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
@@ -54,13 +54,13 @@ type rule struct {
 	// ID is calculated from the hash value of all other fields.
 	ID string
 	// Direction of this rule.
-	Direction v1beta2.Direction
+	Direction v1beta.Direction
 	// Source Address of this rule, can't coexist with To.
-	From v1beta2.NetworkPolicyPeer
+	From v1beta.NetworkPolicyPeer
 	// Destination Address of this rule, can't coexist with From.
-	To v1beta2.NetworkPolicyPeer
+	To v1beta.NetworkPolicyPeer
 	// Protocols and Ports of this rule.
-	Services []v1beta2.Service
+	Services []v1beta.Service
 	// Action of this rule. nil for k8s NetworkPolicy.
 	Action *secv1alpha1.RuleAction
 	// Priority of this rule within the NetworkPolicy. Defaults to -1 for K8s NetworkPolicy.
@@ -87,7 +87,7 @@ type rule struct {
 	// controlplane NetworkPolicy. Although they are same for now, it might
 	// change in the future, features that need the information of the original
 	// NetworkPolicy should use SourceRef.
-	SourceRef *v1beta2.NetworkPolicyReference
+	SourceRef *v1beta.NetworkPolicyReference
 }
 
 // hashRule calculates a string based on the rule's content.
@@ -104,46 +104,46 @@ func hashRule(r *rule) string {
 type CompletedRule struct {
 	*rule
 	// Source GroupMembers of this rule, can't coexist with ToAddresses.
-	FromAddresses v1beta2.GroupMemberSet
+	FromAddresses v1beta.GroupMemberSet
 	// Destination GroupMembers of this rule, can't coexist with FromAddresses.
-	ToAddresses v1beta2.GroupMemberSet
-	// Target Pods of this rule.
-	Pods v1beta2.GroupMemberPodSet
+	ToAddresses v1beta.GroupMemberSet
+	// Target GroupMembers of this rule.
+	TargetMembers v1beta.GroupMemberSet
 }
 
 // String returns the string representation of the CompletedRule.
 func (r *CompletedRule) String() string {
 	var addressString string
-	if r.Direction == v1beta2.DirectionIn {
+	if r.Direction == v1beta.DirectionIn {
 		addressString = fmt.Sprintf("FromAddressGroups: %d, FromIPBlocks: %d, FromAddresses: %d", len(r.From.AddressGroups), len(r.From.IPBlocks), len(r.FromAddresses))
 	} else {
 		addressString = fmt.Sprintf("ToAddressGroups: %d, ToIPBlocks: %d, ToAddresses: %d", len(r.To.AddressGroups), len(r.To.IPBlocks), len(r.ToAddresses))
 	}
-	return fmt.Sprintf("%s (Direction: %v, Pods: %d, %s, Services: %d, PolicyPriority: %v, RulePriority: %v)",
-		r.ID, r.Direction, len(r.Pods), addressString, len(r.Services), r.PolicyPriority, r.Priority)
+	return fmt.Sprintf("%s (Direction: %v, Targets: %d, %s, Services: %d, PolicyPriority: %v, RulePriority: %v)",
+		r.ID, r.Direction, len(r.TargetMembers), addressString, len(r.Services), r.PolicyPriority, r.Priority)
 }
 
 // isAntreaNetworkPolicyRule returns true if the rule is part of a Antrea policy.
 func (r *CompletedRule) isAntreaNetworkPolicyRule() bool {
-	return r.SourceRef.Type != v1beta2.K8sNetworkPolicy
+	return r.SourceRef.Type != v1beta.K8sNetworkPolicy
 }
 
 // ruleCache caches Antrea AddressGroups, AppliedToGroups and NetworkPolicies,
 // can construct complete rules that can be used by reconciler to enforce.
 type ruleCache struct {
 	podSetLock sync.RWMutex
-	// podSetByGroup stores the AppliedToGroup members.
-	// It is a mapping from group name to a set of Pods.
-	podSetByGroup map[string]v1beta2.GroupMemberPodSet
+	// memberSetByGroup stores the AppliedToGroup members.
+	// It is a mapping from group name to a set of Pod members.
+	memberSetByGroup map[string]v1beta.GroupMemberSet
 
 	addressSetLock sync.RWMutex
 	// addressSetByGroup stores the AddressGroup members.
 	// It is a mapping from group name to a set of GroupMembers.
-	addressSetByGroup map[string]v1beta2.GroupMemberSet
+	addressSetByGroup map[string]v1beta.GroupMemberSet
 
 	policyMapLock sync.RWMutex
 	// policyMap is a map using NetworkPolicy UID as the key.
-	policyMap map[string]*v1beta2.NetworkPolicyReference
+	policyMap map[string]*v1beta.NetworkPolicyReference
 
 	// rules is a storage that supports listing rules using multiple indexing functions.
 	// rules is thread-safe.
@@ -152,11 +152,11 @@ type ruleCache struct {
 	dirtyRuleHandler func(string)
 
 	// podUpdates is a channel for receiving Pod updates from CNIServer.
-	podUpdates <-chan v1beta2.PodReference
+	podUpdates <-chan v1beta.PodReference
 }
 
-func (c *ruleCache) getNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
-	var ret []v1beta2.NetworkPolicy
+func (c *ruleCache) getNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta.NetworkPolicy {
+	var ret []v1beta.NetworkPolicy
 	c.policyMapLock.RLock()
 	defer c.policyMapLock.RUnlock()
 	for uid, npr := range c.policyMap {
@@ -168,7 +168,7 @@ func (c *ruleCache) getNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilte
 }
 
 // If this npr(Network Policy Reference) can match the npFilter(Network Policy Filter)
-func (c *ruleCache) networkPolicyMatchFilter(npFilter *querier.NetworkPolicyQueryFilter, npr *v1beta2.NetworkPolicyReference) bool {
+func (c *ruleCache) networkPolicyMatchFilter(npFilter *querier.NetworkPolicyQueryFilter, npr *v1beta.NetworkPolicyReference) bool {
 	return (npFilter.Name == "" || npFilter.Name == npr.Name) &&
 		(npFilter.Namespace == "" || npFilter.Namespace == npr.Namespace) &&
 		(npFilter.SourceType == "" || npFilter.SourceType == npr.Type)
@@ -176,7 +176,7 @@ func (c *ruleCache) networkPolicyMatchFilter(npFilter *querier.NetworkPolicyQuer
 
 // getNetworkPolicy looks up and returns the cached NetworkPolicy.
 // nil is returned if the specified NetworkPolicy is not found.
-func (c *ruleCache) getNetworkPolicy(npFilter *querier.NetworkPolicyQueryFilter) *v1beta2.NetworkPolicy {
+func (c *ruleCache) getNetworkPolicy(npFilter *querier.NetworkPolicyQueryFilter) *v1beta.NetworkPolicy {
 	var npUID string
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
@@ -194,8 +194,8 @@ func (c *ruleCache) getNetworkPolicy(npFilter *querier.NetworkPolicyQueryFilter)
 	return c.buildNetworkPolicyFromRules(npUID)
 }
 
-func (c *ruleCache) buildNetworkPolicyFromRules(uid string) *v1beta2.NetworkPolicy {
-	var np *v1beta2.NetworkPolicy
+func (c *ruleCache) buildNetworkPolicyFromRules(uid string) *v1beta.NetworkPolicy {
+	var np *v1beta.NetworkPolicy
 	rules, _ := c.rules.ByIndex(policyIndex, uid)
 	// Sort the rules by priority
 	sort.Slice(rules, func(i, j int) bool {
@@ -211,9 +211,9 @@ func (c *ruleCache) buildNetworkPolicyFromRules(uid string) *v1beta2.NetworkPoli
 
 // addRuleToNetworkPolicy adds a cached rule to the passed NetworkPolicy struct
 // and returns it. If np is nil, a new NetworkPolicy struct will be created.
-func addRuleToNetworkPolicy(np *v1beta2.NetworkPolicy, rule *rule) *v1beta2.NetworkPolicy {
+func addRuleToNetworkPolicy(np *v1beta.NetworkPolicy, rule *rule) *v1beta.NetworkPolicy {
 	if np == nil {
-		np = &v1beta2.NetworkPolicy{
+		np = &v1beta.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{UID: rule.PolicyUID,
 				Name:      rule.PolicyName,
 				Namespace: rule.PolicyNamespace},
@@ -223,7 +223,7 @@ func addRuleToNetworkPolicy(np *v1beta2.NetworkPolicy, rule *rule) *v1beta2.Netw
 			TierPriority:    rule.TierPriority,
 		}
 	}
-	np.Rules = append(np.Rules, v1beta2.NetworkPolicyRule{
+	np.Rules = append(np.Rules, v1beta.NetworkPolicyRule{
 		Direction: rule.Direction,
 		From:      rule.From,
 		To:        rule.To,
@@ -234,18 +234,18 @@ func addRuleToNetworkPolicy(np *v1beta2.NetworkPolicy, rule *rule) *v1beta2.Netw
 
 }
 
-func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
+func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta.NetworkPolicy {
 	var groups []string
-	memberPod := &v1beta2.GroupMemberPod{Pod: &v1beta2.PodReference{Name: pod, Namespace: namespace}}
+	memberPod := &v1beta.GroupMember{Pod: &v1beta.PodReference{Name: pod, Namespace: namespace}}
 	c.podSetLock.RLock()
-	for group, podSet := range c.podSetByGroup {
+	for group, podSet := range c.memberSetByGroup {
 		if podSet.Has(memberPod) {
 			groups = append(groups, group)
 		}
 	}
 	c.podSetLock.RUnlock()
 
-	npMap := make(map[string]*v1beta2.NetworkPolicy)
+	npMap := make(map[string]*v1beta.NetworkPolicy)
 	for _, group := range groups {
 		rules, _ := c.rules.ByIndex(appliedToGroupIndex, group)
 		for _, ruleObj := range rules {
@@ -261,49 +261,43 @@ func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *q
 		}
 	}
 
-	ret := make([]v1beta2.NetworkPolicy, 0, len(npMap))
+	ret := make([]v1beta.NetworkPolicy, 0, len(npMap))
 	for _, np := range npMap {
 		ret = append(ret, *np)
 	}
 	return ret
 }
 
-func (c *ruleCache) GetAddressGroups() []v1beta2.AddressGroup {
-	var ret []v1beta2.AddressGroup
+func (c *ruleCache) GetAddressGroups() []v1beta.AddressGroup {
+	var ret []v1beta.AddressGroup
 	c.addressSetLock.RLock()
 	defer c.addressSetLock.RUnlock()
 
 	for k, v := range c.addressSetByGroup {
-		var pods []v1beta2.GroupMemberPod
-		var groupMembers []v1beta2.GroupMember
+		var groupMembers []v1beta.GroupMember
 		for _, member := range v {
-			if member.Pod != nil {
-				pods = append(pods, *member.ToGroupMemberPod())
-			} else if member.ExternalEntity != nil {
-				groupMembers = append(groupMembers, *member)
-			}
+			groupMembers = append(groupMembers, *member)
 		}
-		ret = append(ret, v1beta2.AddressGroup{
+		ret = append(ret, v1beta.AddressGroup{
 			ObjectMeta:   metav1.ObjectMeta{Name: k},
-			Pods:         pods,
 			GroupMembers: groupMembers,
 		})
 	}
 	return ret
 }
 
-func (c *ruleCache) GetAppliedToGroups() []v1beta2.AppliedToGroup {
-	var ret []v1beta2.AppliedToGroup
+func (c *ruleCache) GetAppliedToGroups() []v1beta.AppliedToGroup {
+	var ret []v1beta.AppliedToGroup
 	c.podSetLock.RLock()
 	defer c.podSetLock.RUnlock()
-	for k, v := range c.podSetByGroup {
-		var pods []v1beta2.GroupMemberPod
+	for k, v := range c.memberSetByGroup {
+		var pods []v1beta.GroupMember
 		for _, pod := range v.Items() {
 			pods = append(pods, *pod)
 		}
-		ret = append(ret, v1beta2.AppliedToGroup{
-			ObjectMeta: metav1.ObjectMeta{Name: k},
-			Pods:       pods,
+		ret = append(ret, v1beta.AppliedToGroup{
+			ObjectMeta:   metav1.ObjectMeta{Name: k},
+			GroupMembers: pods,
 		})
 	}
 	return ret
@@ -340,15 +334,15 @@ func policyIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta2.PodReference) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta.PodReference) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc},
 	)
 	cache := &ruleCache{
-		podSetByGroup:     make(map[string]v1beta2.GroupMemberPodSet),
-		addressSetByGroup: make(map[string]v1beta2.GroupMemberSet),
-		policyMap:         make(map[string]*v1beta2.NetworkPolicyReference),
+		memberSetByGroup:  make(map[string]v1beta.GroupMemberSet),
+		addressSetByGroup: make(map[string]v1beta.GroupMemberSet),
+		policyMap:         make(map[string]*v1beta.NetworkPolicyReference),
 		rules:             rules,
 		dirtyRuleHandler:  dirtyRuleHandler,
 		podUpdates:        podUpdate,
@@ -369,11 +363,11 @@ func (c *ruleCache) processPodUpdates() {
 		select {
 		case pod := <-c.podUpdates:
 			func() {
-				memberPod := &v1beta2.GroupMemberPod{Pod: &pod}
+				memberPod := &v1beta.GroupMember{Pod: &pod}
 				c.podSetLock.RLock()
 				defer c.podSetLock.RUnlock()
-				for group, podSet := range c.podSetByGroup {
-					if podSet.Has(memberPod) {
+				for group, memberSet := range c.memberSetByGroup {
+					if memberSet.Has(memberPod) {
 						c.onAppliedToGroupUpdate(group)
 					}
 				}
@@ -393,7 +387,7 @@ func (c *ruleCache) GetAddressGroupNum() int {
 // ReplaceAddressGroups atomically adds the given groups to the cache and deletes
 // the pre-existing groups that are not in the given groups from the cache.
 // It makes the cache in sync with the apiserver when restarting a watch.
-func (c *ruleCache) ReplaceAddressGroups(groups []*v1beta2.AddressGroup) {
+func (c *ruleCache) ReplaceAddressGroups(groups []*v1beta.AddressGroup) {
 	c.addressSetLock.Lock()
 	defer c.addressSetLock.Unlock()
 
@@ -413,27 +407,24 @@ func (c *ruleCache) ReplaceAddressGroups(groups []*v1beta2.AddressGroup) {
 	return
 }
 
-// AddAddressGroup adds a new *v1beta2.AddressGroup to the cache. The rules
+// AddAddressGroup adds a new *v1beta.AddressGroup to the cache. The rules
 // referencing it will be regarded as dirty.
 // It's safe to add an AddressGroup multiple times as it only overrides the
 // map, this could happen when the watcher reconnects to the Apiserver.
-func (c *ruleCache) AddAddressGroup(group *v1beta2.AddressGroup) error {
+func (c *ruleCache) AddAddressGroup(group *v1beta.AddressGroup) error {
 	c.addressSetLock.Lock()
 	defer c.addressSetLock.Unlock()
 
 	return c.addAddressGroupLocked(group)
 }
 
-func (c *ruleCache) addAddressGroupLocked(group *v1beta2.AddressGroup) error {
-	groupMemberSet := v1beta2.GroupMemberSet{}
-	for i := range group.Pods {
+func (c *ruleCache) addAddressGroupLocked(group *v1beta.AddressGroup) error {
+	groupMemberSet := v1beta.GroupMemberSet{}
+	for i := range group.GroupMembers {
 		// Must not store address of loop iterator variable as it's the same
 		// address taking different values in each loop iteration, otherwise
 		// groupMemberSet would eventually contain only the last value.
 		// https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
-		groupMemberSet.Insert(group.Pods[i].ToGroupMember())
-	}
-	for i := range group.GroupMembers {
 		groupMemberSet.Insert(&group.GroupMembers[i])
 	}
 
@@ -446,21 +437,15 @@ func (c *ruleCache) addAddressGroupLocked(group *v1beta2.AddressGroup) error {
 	return nil
 }
 
-// PatchAddressGroup updates a cached *v1beta2.AddressGroup.
+// PatchAddressGroup updates a cached *v1beta.AddressGroup.
 // The rules referencing it will be regarded as dirty.
-func (c *ruleCache) PatchAddressGroup(patch *v1beta2.AddressGroupPatch) error {
+func (c *ruleCache) PatchAddressGroup(patch *v1beta.AddressGroupPatch) error {
 	c.addressSetLock.Lock()
 	defer c.addressSetLock.Unlock()
 
 	groupMemberSet, exists := c.addressSetByGroup[patch.Name]
 	if !exists {
 		return fmt.Errorf("AddressGroup %v doesn't exist in cache, can't be patched", patch.Name)
-	}
-	for i := range patch.AddedPods {
-		groupMemberSet.Insert(patch.AddedPods[i].ToGroupMember())
-	}
-	for i := range patch.RemovedPods {
-		groupMemberSet.Delete(patch.RemovedPods[i].ToGroupMember())
 	}
 	for i := range patch.AddedGroupMembers {
 		groupMemberSet.Insert(&patch.AddedGroupMembers[i])
@@ -473,10 +458,10 @@ func (c *ruleCache) PatchAddressGroup(patch *v1beta2.AddressGroupPatch) error {
 	return nil
 }
 
-// DeleteAddressGroup deletes a cached *v1beta2.AddressGroup.
+// DeleteAddressGroup deletes a cached *v1beta.AddressGroup.
 // It should only happen when a group is no longer referenced by any rule, so
 // no need to mark dirty rules.
-func (c *ruleCache) DeleteAddressGroup(group *v1beta2.AddressGroup) error {
+func (c *ruleCache) DeleteAddressGroup(group *v1beta.AddressGroup) error {
 	c.addressSetLock.Lock()
 	defer c.addressSetLock.Unlock()
 
@@ -489,18 +474,18 @@ func (c *ruleCache) GetAppliedToGroupNum() int {
 	c.podSetLock.RLock()
 	defer c.podSetLock.RUnlock()
 
-	return len(c.podSetByGroup)
+	return len(c.memberSetByGroup)
 }
 
 // ReplaceAppliedToGroups atomically adds the given groups to the cache and deletes
 // the pre-existing groups that are not in the given groups from the cache.
 // It makes the cache in sync with the apiserver when restarting a watch.
-func (c *ruleCache) ReplaceAppliedToGroups(groups []*v1beta2.AppliedToGroup) {
+func (c *ruleCache) ReplaceAppliedToGroups(groups []*v1beta.AppliedToGroup) {
 	c.podSetLock.Lock()
 	defer c.podSetLock.Unlock()
 
-	oldGroupKeys := make(sets.String, len(c.podSetByGroup))
-	for key := range c.podSetByGroup {
+	oldGroupKeys := make(sets.String, len(c.memberSetByGroup))
+	for key := range c.memberSetByGroup {
 		oldGroupKeys.Insert(key)
 	}
 
@@ -510,69 +495,69 @@ func (c *ruleCache) ReplaceAppliedToGroups(groups []*v1beta2.AppliedToGroup) {
 	}
 
 	for key := range oldGroupKeys {
-		delete(c.podSetByGroup, key)
+		delete(c.memberSetByGroup, key)
 	}
 	return
 }
 
-// AddAppliedToGroup adds a new *v1beta2.AppliedToGroup to the cache. The rules
+// AddAppliedToGroup adds a new *v1beta.AppliedToGroup to the cache. The rules
 // referencing it will be regarded as dirty.
 // It's safe to add an AppliedToGroup multiple times as it only overrides the
 // map, this could happen when the watcher reconnects to the Apiserver.
-func (c *ruleCache) AddAppliedToGroup(group *v1beta2.AppliedToGroup) error {
+func (c *ruleCache) AddAppliedToGroup(group *v1beta.AppliedToGroup) error {
 	c.podSetLock.Lock()
 	defer c.podSetLock.Unlock()
 
 	return c.addAppliedToGroupLocked(group)
 }
 
-func (c *ruleCache) addAppliedToGroupLocked(group *v1beta2.AppliedToGroup) error {
-	podSet := v1beta2.GroupMemberPodSet{}
-	for i := range group.Pods {
-		podSet.Insert(&group.Pods[i])
+func (c *ruleCache) addAppliedToGroupLocked(group *v1beta.AppliedToGroup) error {
+	memberSet := v1beta.GroupMemberSet{}
+	for i := range group.GroupMembers {
+		memberSet.Insert(&group.GroupMembers[i])
 	}
-	oldPodSet, exists := c.podSetByGroup[group.Name]
-	if exists && oldPodSet.Equal(podSet) {
+	oldPodSet, exists := c.memberSetByGroup[group.Name]
+	if exists && oldPodSet.Equal(memberSet) {
 		return nil
 	}
-	c.podSetByGroup[group.Name] = podSet
+	c.memberSetByGroup[group.Name] = memberSet
 	c.onAppliedToGroupUpdate(group.Name)
 	return nil
 }
 
-// PatchAppliedToGroup updates a cached *v1beta2.AppliedToGroupPatch.
+// PatchAppliedToGroup updates a cached *v1beta.AppliedToGroupPatch.
 // The rules referencing it will be regarded as dirty.
-func (c *ruleCache) PatchAppliedToGroup(patch *v1beta2.AppliedToGroupPatch) error {
+func (c *ruleCache) PatchAppliedToGroup(patch *v1beta.AppliedToGroupPatch) error {
 	c.podSetLock.Lock()
 	defer c.podSetLock.Unlock()
 
-	podSet, exists := c.podSetByGroup[patch.Name]
+	podSet, exists := c.memberSetByGroup[patch.Name]
 	if !exists {
 		return fmt.Errorf("AppliedToGroup %v doesn't exist in cache, can't be patched", patch.Name)
 	}
-	for i := range patch.AddedPods {
-		podSet.Insert(&patch.AddedPods[i])
+	for i := range patch.AddedGroupMembers {
+		podSet.Insert(&patch.AddedGroupMembers[i])
 	}
-	for i := range patch.RemovedPods {
-		podSet.Delete(&patch.RemovedPods[i])
+	for i := range patch.RemovedGroupMembers {
+		podSet.Delete(&patch.RemovedGroupMembers[i])
 	}
 	c.onAppliedToGroupUpdate(patch.Name)
 	return nil
 }
 
-// DeleteAppliedToGroup deletes a cached *v1beta2.AppliedToGroup.
+// DeleteAppliedToGroup deletes a cached *v1beta.AppliedToGroup.
 // It should only happen when a group is no longer referenced by any rule, so
 // no need to mark dirty rules.
-func (c *ruleCache) DeleteAppliedToGroup(group *v1beta2.AppliedToGroup) error {
+func (c *ruleCache) DeleteAppliedToGroup(group *v1beta.AppliedToGroup) error {
 	c.podSetLock.Lock()
 	defer c.podSetLock.Unlock()
 
-	delete(c.podSetByGroup, group.Name)
+	delete(c.memberSetByGroup, group.Name)
 	return nil
 }
 
-// toRule converts v1beta2.NetworkPolicyRule to *rule.
-func toRule(r *v1beta2.NetworkPolicyRule, policy *v1beta2.NetworkPolicy, maxPriority int32) *rule {
+// toRule converts v1beta.NetworkPolicyRule to *rule.
+func toRule(r *v1beta.NetworkPolicyRule, policy *v1beta.NetworkPolicy, maxPriority int32) *rule {
 	rule := &rule{
 		Direction:       r.Direction,
 		From:            r.From,
@@ -593,10 +578,10 @@ func toRule(r *v1beta2.NetworkPolicyRule, policy *v1beta2.NetworkPolicy, maxPrio
 	return rule
 }
 
-// getMaxPriority returns the highest rule priority for v1beta2.NetworkPolicy that is created
+// getMaxPriority returns the highest rule priority for v1beta.NetworkPolicy that is created
 // by Antrea-native policies. For K8s NetworkPolicies, it always returns -1.
-func getMaxPriority(policy *v1beta2.NetworkPolicy) int32 {
-	if policy.SourceRef.Type == v1beta2.K8sNetworkPolicy {
+func getMaxPriority(policy *v1beta.NetworkPolicy) int32 {
+	if policy.SourceRef.Type == v1beta.K8sNetworkPolicy {
 		return -1
 	}
 	maxPriority := int32(-1)
@@ -619,7 +604,7 @@ func (c *ruleCache) GetNetworkPolicyNum() int {
 // ReplaceNetworkPolicies atomically adds the given policies to the cache and deletes
 // the pre-existing policies that are not in the given policies from the cache.
 // It makes the cache in sync with the apiserver when restarting a watch.
-func (c *ruleCache) ReplaceNetworkPolicies(policies []*v1beta2.NetworkPolicy) {
+func (c *ruleCache) ReplaceNetworkPolicies(policies []*v1beta.NetworkPolicy) {
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
 
@@ -639,26 +624,26 @@ func (c *ruleCache) ReplaceNetworkPolicies(policies []*v1beta2.NetworkPolicy) {
 	return
 }
 
-// AddNetworkPolicy adds a new *v1beta2.NetworkPolicy to the cache.
+// AddNetworkPolicy adds a new *v1beta.NetworkPolicy to the cache.
 // It could happen that an existing NetworkPolicy is "added" again when the
 // watcher reconnects to the Apiserver, we use the same processing as
 // UpdateNetworkPolicy to ensure orphan rules are removed.
-func (c *ruleCache) AddNetworkPolicy(policy *v1beta2.NetworkPolicy) error {
+func (c *ruleCache) AddNetworkPolicy(policy *v1beta.NetworkPolicy) error {
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
 
 	return c.addNetworkPolicyLocked(policy)
 }
 
-func (c *ruleCache) addNetworkPolicyLocked(policy *v1beta2.NetworkPolicy) error {
+func (c *ruleCache) addNetworkPolicyLocked(policy *v1beta.NetworkPolicy) error {
 	c.policyMap[string(policy.UID)] = policy.SourceRef
 	metrics.NetworkPolicyCount.Inc()
 	return c.UpdateNetworkPolicy(policy)
 }
 
-// UpdateNetworkPolicy updates a cached *v1beta2.NetworkPolicy.
+// UpdateNetworkPolicy updates a cached *v1beta.NetworkPolicy.
 // The added rules and removed rules will be regarded as dirty.
-func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta2.NetworkPolicy) error {
+func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta.NetworkPolicy) error {
 	existingRules, _ := c.rules.ByIndex(policyIndex, string(policy.UID))
 	ruleByID := map[string]interface{}{}
 	for _, r := range existingRules {
@@ -676,7 +661,7 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta2.NetworkPolicy) error {
 			// If rule doesn't exist, add it to cache, mark it as dirty.
 			c.rules.Add(r)
 			// Count up antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
-			if r.Direction == v1beta2.DirectionIn {
+			if r.Direction == v1beta.DirectionIn {
 				metrics.IngressNetworkPolicyRuleCount.Inc()
 			} else {
 				metrics.EgressNetworkPolicyRuleCount.Inc()
@@ -689,7 +674,7 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta2.NetworkPolicy) error {
 	for ruleID, r := range ruleByID {
 		c.rules.Delete(r)
 		// Count down antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
-		if r.(*rule).Direction == v1beta2.DirectionIn {
+		if r.(*rule).Direction == v1beta.DirectionIn {
 			metrics.IngressNetworkPolicyRuleCount.Dec()
 		} else {
 			metrics.EgressNetworkPolicyRuleCount.Dec()
@@ -699,9 +684,9 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta2.NetworkPolicy) error {
 	return nil
 }
 
-// DeleteNetworkPolicy deletes a cached *v1beta2.NetworkPolicy.
+// DeleteNetworkPolicy deletes a cached *v1beta.NetworkPolicy.
 // All its rules will be regarded as dirty.
-func (c *ruleCache) DeleteNetworkPolicy(policy *v1beta2.NetworkPolicy) error {
+func (c *ruleCache) DeleteNetworkPolicy(policy *v1beta.NetworkPolicy) error {
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
 
@@ -714,7 +699,7 @@ func (c *ruleCache) deleteNetworkPolicyLocked(uid string) error {
 	for _, r := range existingRules {
 		ruleID := r.(*rule).ID
 		// Count down antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
-		if r.(*rule).Direction == v1beta2.DirectionIn {
+		if r.(*rule).Direction == v1beta.DirectionIn {
 			metrics.IngressNetworkPolicyRuleCount.Dec()
 		} else {
 			metrics.EgressNetworkPolicyRuleCount.Dec()
@@ -736,8 +721,8 @@ func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRul
 	}
 
 	r := obj.(*rule)
-	var fromAddresses, toAddresses v1beta2.GroupMemberSet
-	if r.Direction == v1beta2.DirectionIn {
+	var fromAddresses, toAddresses v1beta.GroupMemberSet
+	if r.Direction == v1beta.DirectionIn {
 		fromAddresses, completed = c.unionAddressGroups(r.From.AddressGroups)
 	} else {
 		toAddresses, completed = c.unionAddressGroups(r.To.AddressGroups)
@@ -746,7 +731,7 @@ func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRul
 		return nil, true, false
 	}
 
-	pods, completed := c.unionAppliedToGroups(r.AppliedToGroups)
+	groupMembers, completed := c.unionAppliedToGroups(r.AppliedToGroups)
 	if !completed {
 		return nil, true, false
 	}
@@ -755,7 +740,7 @@ func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRul
 		rule:          r,
 		FromAddresses: fromAddresses,
 		ToAddresses:   toAddresses,
-		Pods:          pods,
+		TargetMembers: groupMembers,
 	}
 	return completedRule, true, true
 }
@@ -781,11 +766,11 @@ func (c *ruleCache) onAddressGroupUpdate(groupName string) {
 // unionAddressGroups gets the union of addresses of the provided address groups.
 // If any group is not found, nil and false will be returned to indicate the
 // set is not complete yet.
-func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta2.GroupMemberSet, bool) {
+func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta.GroupMemberSet, bool) {
 	c.addressSetLock.RLock()
 	defer c.addressSetLock.RUnlock()
 
-	set := v1beta2.NewGroupMemberSet()
+	set := v1beta.NewGroupMemberSet()
 	for _, groupName := range groupNames {
 		curSet, exists := c.addressSetByGroup[groupName]
 		if !exists {
@@ -800,13 +785,13 @@ func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta2.GroupMember
 // unionAppliedToGroups gets the union of pods of the provided appliedTo groups.
 // If any group is not found, nil and false will be returned to indicate the
 // set is not complete yet.
-func (c *ruleCache) unionAppliedToGroups(groupNames []string) (v1beta2.GroupMemberPodSet, bool) {
+func (c *ruleCache) unionAppliedToGroups(groupNames []string) (v1beta.GroupMemberSet, bool) {
 	c.podSetLock.RLock()
 	defer c.podSetLock.RUnlock()
 
-	set := v1beta2.NewGroupMemberPodSet()
+	set := v1beta.NewGroupMemberSet()
 	for _, groupName := range groupNames {
-		curSet, exists := c.podSetByGroup[groupName]
+		curSet, exists := c.memberSetByGroup[groupName]
 		if !exists {
 			klog.V(2).Infof("AppliedToGroup %v was not found", groupName)
 			return nil, false
