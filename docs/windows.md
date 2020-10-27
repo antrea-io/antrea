@@ -15,7 +15,7 @@ the [design doc](design/windows-design.md).
 
 ### Components that run on Windows
 
-The following components need to be configured to run antrea as the networking provider for a Windows Node:
+The following components need to be configured to run Antrea as the networking provider for a Windows Node:
 
 * standard [kubernetes components](https://kubernetes.io/docs/setup/production-environment/windows/user-guide-windows-nodes/)
 * OVS daemons
