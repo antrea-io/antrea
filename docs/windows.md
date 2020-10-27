@@ -79,8 +79,7 @@ kube-proxy version.
 curl -L https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/kube-proxy.yml | sed 's/VERSION/v1.18.0/g'  > kube-proxy.yml
 ```
 
-Replace the ENTIRE CONTENT of the `run-script.ps1` in configmap named `kube-proxy-windows`
-as following:
+Replace the ENTIRE CONTENT of the `run-script.ps1` in configmap named `kube-proxy-windows` as following, to use "userspace" proxying.  This is a deviation from the standard kube-proxy curated in the sig-windows-tools repository.  Also, you'll be removing some of the `yq` commands which setup the network name and so on, which won't be needed, since antrea will install its own cni configurations as needed.
 
 ```
 apiVersion: v1
@@ -97,11 +96,7 @@ data:
     wins cli process run --path /k/kube-proxy/kube-proxy.exe --args "--v=4 --config=/var/lib/kube-proxy/config.conf --proxy-mode=userspace --hostname-override=$env:NODE_NAME"
 
 kind: ConfigMap
-metadata:
-  labels:
-    app: kube-proxy
-  name: kube-proxy-windows
-  namespace: kube-system
+...
 ``` 
 
 Set the `hostNetwork` option as true in spec of kube-proxy-windows daemonset.
@@ -110,24 +105,19 @@ Set the `hostNetwork` option as true in spec of kube-proxy-windows daemonset.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  labels:
-    k8s-app: kube-proxy
-  name: kube-proxy-windows
-  namespace: kube-system
+...
 spec:
   selector:
-    matchLabels:
-      k8s-app: kube-proxy-windows
+    ...
   template:
-    metadata:
-      labels:
-        k8s-app: kube-proxy-windows
+    ...
     spec:
-      hostNetwork: true
+      hostNetwork: true <--- ADD THIS LINE !!!!
 ```
-Then apply the `kube-proxy.yml`.
+Then apply the new `kube-proxy.yml` file... 
+
 ```
-kubectl apply -f kube-proxy.yml
+   kubectl apply -f kube-proxy.yml
 ```
 
 #### Add Windows antrea-agent DaemonSet
