@@ -17,7 +17,7 @@ the [design doc](design/windows-design.md).
 
 The following components need to be configured to run Antrea as the networking provider for a Windows Node:
 
-* standard [kubernetes components](https://kubernetes.io/docs/setup/production-environment/windows/user-guide-windows-nodes/)
+* [standard kubernetes components](https://kubernetes.io/docs/setup/production-environment/windows/user-guide-windows-nodes/)
 * OVS daemons
 * antrea-agent
 * kube-proxy
@@ -53,7 +53,7 @@ Note, OVS driver and daemons are pre-installed on the Windows Nodes in the demo 
   with management tools.
   * Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
 
-Note: We provide an easy way to install OVS on windows tutorial, so you can proceed with the directions below even in case its not installed yet.
+Note: We provide an easy way to install OVS on windows tutorial, so you can proceed with the directions below (if it's not already installed).
 
 * Installation of [OVS](http://docs.openvswitch.org/en/latest/intro/install/windows/), configured as a Windows service.
   * The kernel driver of OVS should be [signed by Windows Hardware Dev Center](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing).
