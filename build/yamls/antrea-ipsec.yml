@@ -1069,7 +1069,7 @@ data:
     # Determines how traffic is encapsulated. It has the following options:
     # encap(default):    Inter-node Pod traffic is always encapsulated and Pod to external network
     #                    traffic is SNAT'd.
-    # noEncap:           Inter-node Pod traffic is not encapsulated; Pod to exteranl network traffic is
+    # noEncap:           Inter-node Pod traffic is not encapsulated; Pod to external network traffic is
     #                    SNAT'd if noSNAT is not set to true. Underlying network must be capable of
     #                    supporting Pod traffic across IP subnets.
     # hybrid:            noEncap if source and destination Nodes are on the same subnet, otherwise encap.
@@ -1184,7 +1184,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-5t288gtgdd
+  name: antrea-config-2gdh849dhk
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1300,7 +1300,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-5t288gtgdd
+          name: antrea-config-2gdh849dhk
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1584,7 +1584,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-5t288gtgdd
+          name: antrea-config-2gdh849dhk
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
