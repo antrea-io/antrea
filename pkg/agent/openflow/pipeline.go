@@ -220,6 +220,8 @@ const (
 	macRewriteMark   = 0b1
 	cnpDropMark      = 0b1
 
+	// gatewayCTMark is used to to mark connections initiated through the host gateway interface
+	// (i.e. for which the first packet of the connection was received through the gateway).
 	gatewayCTMark = 0x20
 	snatCTMark    = 0x40
 	serviceCTMark = 0x21
@@ -536,6 +538,11 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 		)
 	}
 	return append(flows,
+		// If a connection was initiated through the gateway (i.e. has gatewayCTMark) and
+		// the packet is received on the gateway port, go to the next table directly. This
+		// is to bypass the flow which is installed by ctRewriteDstMACFlow in the same
+		// table, and which will rewrite the destination MAC address for traffic with the
+		// gatewayCTMark, but which is flowing in the opposite direction.
 		connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 			MatchCTMark(gatewayCTMark, nil).
@@ -548,6 +555,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 			Action().Drop().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
+		// Connections initiated through the gateway are marked with gatewayCTMark.
 		connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
@@ -582,10 +590,25 @@ func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cook
 	return flowBuilder.Done()
 }
 
-// ctRewriteDstMACFlow rewrites the destination MAC with local host gateway MAC if the packets has set ct_mark but not sent from the host gateway.
+// ctRewriteDstMACFlow rewrites the destination MAC address with the local host gateway MAC if the
+// packet is marked with gatewayCTMark but was not received on the host gateway. In other words, it
+// rewrites the destination MAC address for reply traffic for connections which were initiated
+// through the gateway, to ensure that this reply traffic gets forwarded correctly (back to the host
+// network namespace, through the gateway). In particular, it is necessary in the following 2 cases:
+//  1) reply traffic for Pod-to-ClusterIP traffic (when AntreaProxy is disabled and kube-proxy is
+//  used). In this case the destination IP address of the reply traffic is the Pod which initiated
+//  the connection to the Service (no SNAT). We need to make sure that these packets are sent back
+//  through the gateway so that the source IP can be rewritten (Service backend IP -> Service
+//  ClusterIP).
+//  2) when hair-pinning is involved, i.e. for connections between 2 Pods belonging to the same
+//  Node and for which NAT is performed. This applies regardless of whether AntreaProxy is enabled
+//  or not, and thus also applies to Windows Nodes (for which AntreaProxy is enabled by default).
+//  One example is a Pod accessing a NodePort Service for which externalTrafficPolicy is set to
+//  Local, using the local Node's IP address.
 func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	macData, _ := strconv.ParseUint(strings.Replace(gatewayMAC.String(), ":", "", -1), 16, 64)
+	// Complements the flows installed by connectionTrackFlows.
 	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchCTMark(gatewayCTMark, nil).
 		MatchCTStateNew(false).MatchCTStateTrk(true).
