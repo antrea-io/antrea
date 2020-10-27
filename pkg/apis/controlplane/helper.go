@@ -16,23 +16,6 @@ package controlplane
 
 import "fmt"
 
-// Conversion functions between GroupMember and GroupMemberPod
-func (g *GroupMember) ToGroupMemberPod() *GroupMemberPod {
-	return &GroupMemberPod{
-		Pod:   g.Pod,
-		IP:    g.IPs[0],
-		Ports: g.Ports,
-	}
-}
-
-func (p *GroupMemberPod) ToGroupMember() *GroupMember {
-	return &GroupMember{
-		Pod:   p.Pod,
-		IPs:   []IPAddress{p.IP},
-		Ports: p.Ports,
-	}
-}
-
 func (r *NetworkPolicyReference) ToString() string {
 	if r.Type == AntreaClusterNetworkPolicy {
 		return fmt.Sprintf("%s:%s", r.Type, r.Name)

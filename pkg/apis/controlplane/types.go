@@ -28,8 +28,6 @@ import (
 type AppliedToGroup struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	// Pods is a list of Pods selected by this group.
-	Pods []GroupMemberPod
 	// GroupMembers is a list of resources selected by this group.
 	GroupMembers []GroupMember
 }
@@ -50,16 +48,6 @@ type NamedPort struct {
 	Name string
 	// Protocol for port. Must be UDP, TCP, or SCTP.
 	Protocol Protocol
-}
-
-// GroupMemberPod represents a Pod related member to be populated in Groups.
-type GroupMemberPod struct {
-	// Pod maintains the reference to the Pod.
-	Pod *PodReference
-	// IP maintains the IPAddress of the Pod.
-	IP IPAddress
-	// Ports maintain the list of named port associated with this Pod member.
-	Ports []NamedPort
 }
 
 // ExternalEntityReference represents a ExternalEntity Reference.
@@ -87,8 +75,6 @@ type GroupMember struct {
 type AppliedToGroupPatch struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	AddedPods           []GroupMemberPod
-	RemovedPods         []GroupMemberPod
 	AddedGroupMembers   []GroupMember
 	RemovedGroupMembers []GroupMember
 }
@@ -106,8 +92,6 @@ type AppliedToGroupList struct {
 type AddressGroup struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	// Pods is a list of Pods selected by this group.
-	Pods []GroupMemberPod
 	// GroupMembers is a list of GroupMember selected by this group.
 	GroupMembers []GroupMember
 }
@@ -126,8 +110,6 @@ type IPNet struct {
 type AddressGroupPatch struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	AddedPods           []GroupMemberPod
-	RemovedPods         []GroupMemberPod
 	AddedGroupMembers   []GroupMember
 	RemovedGroupMembers []GroupMember
 }
@@ -164,7 +146,7 @@ type NetworkPolicyReference struct {
 type NetworkPolicy struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	// Rules is a list of rules to be applied to the selected Pods.
+	// Rules is a list of rules to be applied to the selected GroupMembers.
 	Rules []NetworkPolicyRule
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
 	AppliedToGroups []string
@@ -192,9 +174,9 @@ type NetworkPolicyRule struct {
 	// If it's set to In, From must be set and To must not be set.
 	// If it's set to Out, To must be set and From must not be set.
 	Direction Direction
-	// From represents sources which should be able to access the pods selected by the policy.
+	// From represents sources which should be able to access the GroupMembers selected by the policy.
 	From NetworkPolicyPeer
-	// To represents destinations which should be able to be accessed by the pods selected by the policy.
+	// To represents destinations which should be able to be accessed by the GroupMembers selected by the policy.
 	To NetworkPolicyPeer
 	// Services is a list of services which should be matched.
 	Services []Service

@@ -67,7 +67,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupPatch":               schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference":           schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember":                       schema_pkg_apis_controlplane_v1beta2_GroupMember(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod":                    schema_pkg_apis_controlplane_v1beta2_GroupMemberPod(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.IPBlock":                           schema_pkg_apis_controlplane_v1beta2_IPBlock(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.IPNet":                             schema_pkg_apis_controlplane_v1beta2_IPNet(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NamedPort":                         schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
@@ -1868,18 +1867,6 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref common.ReferenceCallb
 							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
 						},
 					},
-					"pods": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod"),
-									},
-								},
-							},
-						},
-					},
 					"groupMembers": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},
@@ -1896,7 +1883,7 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -1973,30 +1960,6 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref common.Reference
 							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
 						},
 					},
-					"addedPods": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod"),
-									},
-								},
-							},
-						},
-					},
-					"removedPods": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod"),
-									},
-								},
-							},
-						},
-					},
 					"addedGroupMembers": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},
@@ -2025,7 +1988,7 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref common.Reference
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -2055,22 +2018,9 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref common.ReferenceCal
 							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
 						},
 					},
-					"pods": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Pods is a list of Pods selected by this group.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod"),
-									},
-								},
-							},
-						},
-					},
 					"groupMembers": {
 						SchemaProps: spec.SchemaProps{
-							Description: "GroupMembers is list of resources selected by this group. This eventually will replace Pods",
+							Description: "GroupMembers is list of resources selected by this group.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -2085,7 +2035,7 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -2162,30 +2112,6 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref common.Referen
 							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
 						},
 					},
-					"addedPods": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod"),
-									},
-								},
-							},
-						},
-					},
-					"removedPods": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod"),
-									},
-								},
-							},
-						},
-					},
 					"addedGroupMembers": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},
@@ -2214,7 +2140,7 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref common.Referen
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMemberPod", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -2296,47 +2222,6 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 		},
 		Dependencies: []string{
 			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NamedPort", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
-	}
-}
-
-func schema_pkg_apis_controlplane_v1beta2_GroupMemberPod(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "GroupMemberPod represents a GroupMember related to Pods.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"pod": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Pod maintains the reference to the Pod.",
-							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PodReference"),
-						},
-					},
-					"ip": {
-						SchemaProps: spec.SchemaProps{
-							Description: "IP maintains the IPAddress associated with the Pod.",
-							Type:        []string{"string"},
-							Format:      "byte",
-						},
-					},
-					"ports": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Ports maintain the named port mapping of this Pod.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NamedPort"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NamedPort", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
 	}
 }
 
@@ -2462,7 +2347,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref common.ReferenceCall
 					},
 					"rules": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Rules is a list of rules to be applied to the selected Pods.",
+							Description: "Rules is a list of rules to be applied to the selected GroupMembers.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -2660,13 +2545,13 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 					},
 					"from": {
 						SchemaProps: spec.SchemaProps{
-							Description: "From represents sources which should be able to access the pods selected by the policy.",
+							Description: "From represents sources which should be able to access the GroupMembers selected by the policy.",
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer"),
 						},
 					},
 					"to": {
 						SchemaProps: spec.SchemaProps{
-							Description: "To represents destinations which should be able to be accessed by the pods selected by the policy.",
+							Description: "To represents destinations which should be able to be accessed by the GroupMembers selected by the policy.",
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer"),
 						},
 					},

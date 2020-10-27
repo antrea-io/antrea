@@ -85,9 +85,6 @@ func ToAddressGroupMsg(in *types.AddressGroup, out *controlplane.AddressGroup, i
 	if !includeBody {
 		return
 	}
-	for _, p := range in.Pods {
-		out.Pods = append(out.Pods, *p)
-	}
 	for _, member := range in.GroupMembers {
 		out.GroupMembers = append(out.GroupMembers, *member)
 	}
@@ -120,20 +117,7 @@ func genAddressGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (
 	// Calculate PatchObject in advance so that we don't need to do it for
 	// each watcher when generating *event.Event.
 	if event.PrevGroup != nil && event.CurrGroup != nil {
-		var addedPods, removedPods []controlplane.GroupMemberPod
-		// TODO: Eventually pods should be unified as GroupMember
 		var addedMembers, removedMembers []controlplane.GroupMember
-		// TODO: Deprecate addedPods and removedPods
-		for podHash, pod := range event.CurrGroup.Pods {
-			if _, exists := event.PrevGroup.Pods[podHash]; !exists {
-				addedPods = append(addedPods, *pod)
-			}
-		}
-		for podHash, pod := range event.PrevGroup.Pods {
-			if _, exists := event.CurrGroup.Pods[podHash]; !exists {
-				removedPods = append(removedPods, *pod)
-			}
-		}
 		for memberHash, member := range event.CurrGroup.GroupMembers {
 			if _, exists := event.PrevGroup.GroupMembers[memberHash]; !exists {
 				addedMembers = append(addedMembers, *member)
@@ -145,12 +129,10 @@ func genAddressGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (
 			}
 		}
 		// PatchObject will not be generated when only span changes.
-		if len(addedPods)+len(removedPods)+len(addedMembers)+len(removedMembers) > 0 {
+		if len(addedMembers)+len(removedMembers) > 0 {
 			event.PatchObject = new(controlplane.AddressGroupPatch)
 			event.PatchObject.UID = event.CurrGroup.UID
 			event.PatchObject.Name = event.CurrGroup.Name
-			event.PatchObject.AddedPods = addedPods
-			event.PatchObject.RemovedPods = removedPods
 			event.PatchObject.AddedGroupMembers = addedMembers
 			event.PatchObject.RemovedGroupMembers = removedMembers
 		}

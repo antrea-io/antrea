@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package networkpolicy provides NetworkPolicyController implementation to manage
-// and synchronize the Pods and Namespaces affected by Network Policies and enforce
+// and synchronize the GroupMembers and Namespaces affected by Network Policies and enforce
 // their rules.
 
 package networkpolicy
@@ -545,7 +545,7 @@ func (n *NetworkPolicyController) filterAppliedToGroupsForPodOrExternalEntity(ob
 // createAddressGroup creates an AddressGroup object corresponding to a
 // NetworkPolicyPeer object in NetworkPolicyRule. This function simply
 // creates the object without actually populating the PodAddresses as the
-// affected Pods are calculated during sync process.
+// affected GroupMembers are calculated during sync process.
 func (n *NetworkPolicyController) createAddressGroup(peer networkingv1.NetworkPolicyPeer, np *networkingv1.NetworkPolicy) string {
 	groupSelector := toGroupSelector(np.ObjectMeta.Namespace, peer.PodSelector, peer.NamespaceSelector, nil)
 	normalizedUID := getNormalizedUID(groupSelector.NormalizedName)
@@ -1208,7 +1208,7 @@ func (n *NetworkPolicyController) processNextAppliedToGroupWorkItem() bool {
 
 // syncAddressGroup retrieves all the internal NetworkPolicies which have a
 // reference to this AddressGroup and updates it's Pod IPAddresses set to
-// reflect the current state of affected Pods based on the GroupSelector.
+// reflect the current state of affected GroupMembers based on the GroupSelector.
 func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	startTime := time.Now()
 	defer func() {
@@ -1239,14 +1239,13 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	// Find all Pods and ExternalEntities matching its selectors and update store.
 	groupSelector := addressGroup.Selector
 	pods, externalEntities := n.processSelector(groupSelector)
-	podSet := controlplane.GroupMemberPodSet{}
 	memberSet := controlplane.GroupMemberSet{}
 	for _, pod := range pods {
 		if pod.Status.PodIP == "" {
 			// No need to insert Pod IPAddress when it is unset.
 			continue
 		}
-		podSet.Insert(podToMemberPod(pod, true, false))
+		memberSet.Insert(podToGroupMember(pod, true))
 	}
 	for _, entity := range externalEntities {
 		memberSet.Insert(externalEntityToGroupMember(entity))
@@ -1255,21 +1254,21 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 		Name:         addressGroup.Name,
 		UID:          addressGroup.UID,
 		Selector:     addressGroup.Selector,
-		Pods:         podSet,
 		GroupMembers: memberSet,
 		SpanMeta:     antreatypes.SpanMeta{NodeNames: addrGroupNodeNames},
 	}
-	klog.V(2).Infof("Updating existing AddressGroup %s with %d pods, %d external entities and %d Nodes", key, len(podSet), len(memberSet), addrGroupNodeNames.Len())
+	klog.V(2).Infof("Updating existing AddressGroup %s with %d Pods/ExternalEntities and %d Nodes", key, len(memberSet), addrGroupNodeNames.Len())
 	n.addressGroupStore.Update(updatedAddressGroup)
 	return nil
 }
 
-// podToMemberPod is util function to convert a Pod to a GroupMemberPod type.
-// A controlplane.NamedPort item will be set in the GroupMemberPod, only if the
-// Pod contains a Port with the name field set. Depending on the input, the
-// Pod IP and/or PodReference will also be set.
-func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *controlplane.GroupMemberPod {
-	memberPod := &controlplane.GroupMemberPod{}
+// podToGroupMember is util function to convert a Pod to a GroupMember type.
+// A controlplane.NamedPort item will be set in the GroupMember, only if the
+// Pod contains a Port with the name field set. PodReference will also be set
+// for converting GroupMember to GroupMemberPod for clients using older version
+// of the controlplane API.
+func podToGroupMember(pod *v1.Pod, includeIP bool) *controlplane.GroupMember {
+	memberPod := &controlplane.GroupMember{}
 	for _, container := range pod.Spec.Containers {
 		for _, port := range container.Ports {
 			// Only include container ports with name set.
@@ -1283,15 +1282,13 @@ func podToMemberPod(pod *v1.Pod, includeIP, includePodRef bool) *controlplane.Gr
 		}
 	}
 	if includeIP {
-		memberPod.IP = ipStrToIPAddress(pod.Status.PodIP)
+		memberPod.IPs = []controlplane.IPAddress{ipStrToIPAddress(pod.Status.PodIP)}
 	}
-	if includePodRef {
-		podRef := controlplane.PodReference{
-			Name:      pod.Name,
-			Namespace: pod.Namespace,
-		}
-		memberPod.Pod = &podRef
+	podRef := controlplane.PodReference{
+		Name:      pod.Name,
+		Namespace: pod.Namespace,
 	}
+	memberPod.Pod = &podRef
 	return memberPod
 }
 
@@ -1360,7 +1357,7 @@ func (n *NetworkPolicyController) processSelector(groupSelector antreatypes.Grou
 
 // syncAppliedToGroup enqueues all the internal NetworkPolicy keys that
 // refer this AppliedToGroup and update the AppliedToGroup Pod
-// references by Node to reflect the latest set of affected Pods based
+// references by Node to reflect the latest set of affected GroupMembers based
 // on it's GroupSelector.
 func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	startTime := time.Now()
@@ -1376,7 +1373,6 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		klog.V(2).Infof("AppliedToGroup %s not found.", key)
 		return nil
 	}
-	podSetByNode := make(map[string]controlplane.GroupMemberPodSet)
 	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
 	scheduledPodNum, scheduledExtEntityNum := 0, 0
 
@@ -1389,13 +1385,13 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 			continue
 		}
 		scheduledPodNum++
-		podSet := podSetByNode[pod.Spec.NodeName]
+		podSet := memberSetByNode[pod.Spec.NodeName]
 		if podSet == nil {
-			podSet = controlplane.GroupMemberPodSet{}
+			podSet = controlplane.GroupMemberSet{}
 		}
-		podSet.Insert(podToMemberPod(pod, false, true))
+		podSet.Insert(podToGroupMember(pod, false))
 		// Update the Pod references by Node.
-		podSetByNode[pod.Spec.NodeName] = podSet
+		memberSetByNode[pod.Spec.NodeName] = podSet
 		// Update the NodeNames in order to set the SpanMeta for AppliedToGroup.
 		appGroupNodeNames.Insert(pod.Spec.NodeName)
 	}
@@ -1416,7 +1412,6 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		UID:               appliedToGroup.UID,
 		Name:              appliedToGroup.Name,
 		Selector:          appliedToGroup.Selector,
-		PodsByNode:        podSetByNode,
 		GroupMemberByNode: memberSetByNode,
 		SpanMeta:          antreatypes.SpanMeta{NodeNames: appGroupNodeNames},
 	}
