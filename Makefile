@@ -312,6 +312,10 @@ manifest:
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
 	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev > build/yamls/flow-aggregator.yml
 
+manifest-scale:
+	@echo "===> Generating simulator manifest for Antrea <==="
+	$(CURDIR)/hack/generate-manifest.sh --mode dev --simulator > build/yamls/antrea-scale.yml
+
 .PHONY: manifest-coverage
 manifest-coverage:
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --coverage > build/yamls/antrea-coverage.yml
