@@ -77,6 +77,10 @@ type Rule struct {
 	// destinations.
 	// +optional
 	To []NetworkPolicyPeer `json:"to"`
+	// Name describes the intention of this rule.
+	// Name should be unique within the policy.
+	// +optional
+	Name string `json:"name"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.
