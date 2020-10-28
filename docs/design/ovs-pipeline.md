@@ -356,7 +356,7 @@ If you dump the flows for this table, you should see the following:
 ```text
 1. table=31, priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff actions=goto_table:40
 2. table=31, priority=200,ct_state=+inv+trk,ip actions=drop
-3. table=31, priority=200,ct_state=-new+trk,ct_mark=0x20,ip actions=load:0xe2e5a49b1cb1->NXM_OF_ETH_DST[],goto_table:40
+3. table=31, priority=200,ct_state=-new+trk,ct_mark=0x20,ip actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:40
 4. table=31, priority=0 actions=goto_table:40
 ```
 

@@ -217,21 +217,20 @@ func (i *Initializer) Initialize() error {
 	if err := i.prepareHostNetwork(); err != nil {
 		return err
 	}
+
 	if err := i.setupOVSBridge(); err != nil {
+		return err
+	}
+
+	wg.Add(1)
+	// routeClient.Initialize() should be after i.setupOVSBridge() which
+	// creates the host gateway interface.
+	if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
 		return err
 	}
 
 	// Install OpenFlow entries on OVS bridge.
 	if err := i.initOpenFlowPipeline(); err != nil {
-		return err
-	}
-
-	wg.Add(1)
-	if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
-		return err
-	}
-
-	if err := i.setupExternalConnectivity(); err != nil {
 		return err
 	}
 
@@ -294,9 +293,16 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		return err
 	}
 
-	// On windows platform, host network flows are needed for host traffic.
+	// On Windows platform, host network flows are needed for host traffic.
 	if err := i.initHostNetworkFlows(); err != nil {
-		klog.Errorf("Failed to setup openflow entires for host network: %v", err)
+		klog.Errorf("Failed to install openflow entries for host network: %v", err)
+		return err
+	}
+
+	// On Windows platform, extra flows are needed to perform SNAT for the
+	// traffic to external network.
+	if err := i.initExternalConnectivityFlows(); err != nil {
+		klog.Errorf("Failed to install openflow entries for external connectivity: %v", err)
 		return err
 	}
 
@@ -766,7 +772,7 @@ func (i *Initializer) getNodeMTU(localIntf *net.Interface) (int, error) {
 		}
 	}
 	if i.networkConfig.EnableIPSecTunnel {
-		mtu -= config.IpsecESPOverhead
+		mtu -= config.IPSecESPOverhead
 	}
 	return mtu, nil
 }

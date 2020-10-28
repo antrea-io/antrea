@@ -39,7 +39,7 @@ const (
 	GREOverhead    = 38
 	// IPsec ESP can add a maximum of 38 bytes to the packet including the ESP
 	// header and trailer.
-	IpsecESPOverhead  = 38
+	IPSecESPOverhead  = 38
 	IPv6ExtraOverhead = 20
 )
 
