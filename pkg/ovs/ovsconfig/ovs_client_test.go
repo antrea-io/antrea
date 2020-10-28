@@ -21,19 +21,19 @@ import (
 )
 
 func TestOVSClient(t *testing.T) {
-	_, err := ParseOvsVersion(nil)
+	_, err := parseOvsVersion(nil)
 	assert.Error(t, err)
 
 	// raw strings are not accepted, we want to make sure the function doesn't panic and returns an error
-	_, err = ParseOvsVersion("ovs_version")
+	_, err = parseOvsVersion("ovs_version")
 	assert.Error(t, err)
 
 	m1 := map[string]string{"ovs_version": "1"}
-	_, err = ParseOvsVersion(m1)
+	_, err = parseOvsVersion(m1)
 	assert.NoError(t, err)
 
 	m2 := map[string]interface{}{"ovs_version": "1.2.3.4.5"}
-	_, err = ParseOvsVersion(m2)
+	_, err = parseOvsVersion(m2)
 	assert.NoError(t, err)
 
 }

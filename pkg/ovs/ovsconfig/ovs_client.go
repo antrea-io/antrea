@@ -789,20 +789,21 @@ func (br *OVSBridge) GetOVSVersion() (string, Error) {
 		klog.Warning("Could not find ovs_version in the OVS query result")
 		return "", NewTransactionError(fmt.Errorf("no results from OVS query"), false)
 	} else {
-		return ParseOvsVersion(res[0].Rows)
+		return parseOvsVersion(res[0].Rows[0])
 	}
 }
 
-func ParseOvsVersion(ovsReturnRow interface{}) (string, Error) {
+// parseOvsVersion parses the version from an interface type, which can be a map of string[interface] or string[string], and returns it as a string, we have special logic here so that a panic doesn't happen.
+func parseOvsVersion(ovsReturnRow interface{}) (string, Error) {
 	errorMessage := fmt.Errorf("unexpected transaction result when querying OVSDB %v", defaultOvsVersionMessage)
 	switch obj := ovsReturnRow.(type) {
 	case map[string]string:
-		if _, ok := ovsReturnRow.(map[string]string)["ovs_version"]; ok {
-			return ovsReturnRow.(map[string]string)["ovs_version"], nil
+		if _, ok := obj["ovs_version"]; ok {
+			return obj["ovs_version"], nil
 		}
 	case map[string]interface{}:
-		if _, ok := ovsReturnRow.(map[string]interface{})["ovs_version"]; ok {
-			return ovsReturnRow.(map[string]interface{})["ovs_version"].(string), nil
+		if _, ok := obj["ovs_version"]; ok {
+			return obj["ovs_version"].(string), nil
 		}
 	}
 	return "", NewTransactionError(errorMessage, false)
