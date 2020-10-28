@@ -595,12 +595,12 @@ func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cook
 // rewrites the destination MAC address for reply traffic for connections which were initiated
 // through the gateway, to ensure that this reply traffic gets forwarded correctly (back to the host
 // network namespace, through the gateway). In particular, it is necessary in the following 2 cases:
-//  1) reply traffic for Pod-to-ClusterIP traffic (when AntreaProxy is disabled and kube-proxy is
-//  used). In this case the destination IP address of the reply traffic is the Pod which initiated
-//  the connection to the Service (no SNAT). We need to make sure that these packets are sent back
-//  through the gateway so that the source IP can be rewritten (Service backend IP -> Service
-//  ClusterIP).
-//  2) when hair-pinning is involved, i.e. for connections between 2 Pods belonging to the same
+//  1) reply traffic for connections from a local Pod to a ClusterIP Service (when AntreaProxy is
+//  disabled and kube-proxy is used). In this case the destination IP address of the reply traffic
+//  is the Pod which initiated the connection to the Service (no SNAT). We need to make sure that
+//  these packets are sent back through the gateway so that the source IP can be rewritten (Service
+//  backend IP -> Service ClusterIP).
+//  2) when hair-pinning is involved, i.e. for connections between 2 local Pods belonging to this
 //  Node and for which NAT is performed. This applies regardless of whether AntreaProxy is enabled
 //  or not, and thus also applies to Windows Nodes (for which AntreaProxy is enabled by default).
 //  One example is a Pod accessing a NodePort Service for which externalTrafficPolicy is set to

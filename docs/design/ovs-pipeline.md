@@ -332,23 +332,23 @@ purposes:
  the gateway. For all reply packets belonging to such connections we overwrite
  the destination MAC to the local gateway MAC to ensure that they get forwarded
  though the gateway port. This is required to handle the following cases:
-   - reply traffic for Pod-to-ClusterIP traffic, which is handled by kube-proxy
-     and goes through DNAT. In this case the destination IP address of the reply
-     traffic is the Pod which initiated the connection to the Service (no SNAT
-     by kube-proxy). We need to make sure that these packets are sent back
-     through the gateway so that the source IP can be rewritten to the ClusterIP
-     ("undo" DNAT). If we do not use connection tracking and do not rewrite the
-     destination MAC, reply traffic from the backend will go directly to the
-     originating Pod without going first through the gateway and kube-proxy.
-     This means that the reply traffic will arrive at the originating Pod with
-     the incorrect source IP (it will be set to the backend's IP instead of the
-     service IP).
-   - when hair-pinning is involved, i.e. for connections between 2 Pods
-     belonging to the same Node and for which NAT is performed. One example is a
-     Pod accessing a NodePort Service for which `externalTrafficPolicy` is set
-     to `Local` using the local Node's IP address, as there will be no SNAT for
-     such traffic. Another example could be `hostPort` support, depending on how
-     the feature is implemented.
+   - reply traffic for connections from a local Pod to a ClusterIP Service,
+     which are handled by kube-proxy and go through DNAT. In this case the
+     destination IP address of the reply traffic is the Pod which initiated the
+     connection to the Service (no SNAT by kube-proxy). We need to make sure
+     that these packets are sent back through the gateway so that the source IP
+     can be rewritten to the ClusterIP ("undo" DNAT). If we do not use
+     connection tracking and do not rewrite the destination MAC, reply traffic
+     from the backend will go directly to the originating Pod without going
+     first through the gateway and kube-proxy.  This means that the reply
+     traffic will arrive at the originating Pod with the incorrect source IP (it
+     will be set to the backend's IP instead of the service IP).
+   - when hair-pinning is involved, i.e. for connections between 2 local Pods
+     and for which NAT is performed. One example is a Pod accessing a NodePort
+     Service for which `externalTrafficPolicy` is set to `Local` using the local
+     Node's IP address, as there will be no SNAT for such traffic. Another
+     example could be `hostPort` support, depending on how the feature is
+     implemented.
  * drop packets reported as invalid by conntrack
 
 If you dump the flows for this table, you should see the following:
