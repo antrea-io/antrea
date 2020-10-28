@@ -787,7 +787,7 @@ func (br *OVSBridge) GetOVSVersion() (string, Error) {
 
 	if len(res[0].Rows) == 0 {
 		klog.Warning("Could not find ovs_version in the OVS query result")
-		return "", NewTransactionError(err, false)
+		return "", NewTransactionError(fmt.Errorf("no results from OVS query"), false)
 	} else {
 		return ParseOvsVersion(res[0].Rows)
 	}
