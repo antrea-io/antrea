@@ -795,7 +795,7 @@ func (br *OVSBridge) GetOVSVersion() (string, Error) {
 
 func ParseOvsVersion(ovsReturnRow interface{}) (string, Error) {
 	errorMessage := fmt.Errorf("unexpected transaction result when querying OVSDB %v", defaultOvsVersionMessage)
-	switch ovsReturnRow.(type) {
+	switch obj := ovsReturnRow.(type) {
 	default:
 	case map[string]string:
 		if _, ok := ovsReturnRow.(map[string]string)["ovs_version"]; ok {
