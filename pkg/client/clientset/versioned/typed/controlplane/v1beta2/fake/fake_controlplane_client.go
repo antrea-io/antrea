@@ -34,8 +34,8 @@ func (c *FakeControlplaneV1beta2) AppliedToGroups() v1beta2.AppliedToGroupInterf
 	return &FakeAppliedToGroups{c}
 }
 
-func (c *FakeControlplaneV1beta2) NetworkPolicies(namespace string) v1beta2.NetworkPolicyInterface {
-	return &FakeNetworkPolicies{c, namespace}
+func (c *FakeControlplaneV1beta2) NetworkPolicies() v1beta2.NetworkPolicyInterface {
+	return &FakeNetworkPolicies{c}
 }
 
 func (c *FakeControlplaneV1beta2) NodeStatsSummaries() v1beta2.NodeStatsSummaryInterface {

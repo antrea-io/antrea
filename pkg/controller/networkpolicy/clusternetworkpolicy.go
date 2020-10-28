@@ -32,9 +32,9 @@ func (n *NetworkPolicyController) addCNP(obj interface{}) {
 	// Create an internal NetworkPolicy object corresponding to this
 	// ClusterNetworkPolicy and enqueue task to internal NetworkPolicy Workqueue.
 	internalNP := n.processClusterNetworkPolicy(cnp)
-	klog.Infof("Creating new internal NetworkPolicy %#v", internalNP)
+	klog.V(2).Infof("Creating new internal NetworkPolicy %s for %s", internalNP.Name, internalNP.SourceRef.ToString())
 	n.internalNetworkPolicyStore.Create(internalNP)
-	key, _ := keyFunc(cnp)
+	key := internalNetworkPolicyKeyFunc(cnp)
 	n.enqueueInternalNetworkPolicy(key)
 }
 
@@ -47,11 +47,11 @@ func (n *NetworkPolicyController) updateCNP(old, cur interface{}) {
 	// Update an internal NetworkPolicy, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processClusterNetworkPolicy(curCNP)
-	klog.V(2).Infof("Updating existing internal NetworkPolicy %s", curInternalNP.Name)
+	klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
 	// Retrieve old secv1alpha1.NetworkPolicy object.
 	oldCNP := old.(*secv1alpha1.ClusterNetworkPolicy)
 	// Old and current NetworkPolicy share the same key.
-	key, _ := keyFunc(oldCNP)
+	key := internalNetworkPolicyKeyFunc(oldCNP)
 	// Lock access to internal NetworkPolicy store such that concurrent access
 	// to an internal NetworkPolicy is not allowed. This will avoid the
 	// case in which an Update to an internal NetworkPolicy object may
@@ -101,10 +101,10 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 	}
 	defer n.heartbeat("deleteCNP")
 	klog.Infof("Processing ClusterNetworkPolicy %s DELETE event", cnp.Name)
-	key, _ := keyFunc(cnp)
+	key := internalNetworkPolicyKeyFunc(cnp)
 	oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
 	oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
-	klog.Infof("Old internal NetworkPolicy %#v", oldInternalNP)
+	klog.V(2).Infof("Deleting internal NetworkPolicy %s for %s", oldInternalNP.Name, oldInternalNP.SourceRef.ToString())
 	err := n.internalNetworkPolicyStore.Delete(key)
 	if err != nil {
 		klog.Errorf("Error deleting internal NetworkPolicy during NetworkPolicy %s delete: %v", cnp.Name, err)
@@ -156,8 +156,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	}
 	tierPriority := n.getTierPriority(cnp.Spec.Tier)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
-		Name:      cnp.Name,
-		Namespace: "",
+		Name: internalNetworkPolicyKeyFunc(cnp),
 		SourceRef: &controlplane.NetworkPolicyReference{
 			Type: controlplane.AntreaClusterNetworkPolicy,
 			Name: cnp.Name,

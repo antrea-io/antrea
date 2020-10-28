@@ -79,8 +79,16 @@ func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter,
 		return nil, fmt.Errorf("invalid reference type. It should be K8sNP, ACNP or ANP")
 	}
 
+	source := query.Get("source")
+
+	name := query.Get("name")
+	if name != "" && (source != "" || namespace != "" || pod != "" || strSourceType != "") {
+		return nil, fmt.Errorf("with a name, none of the other fields can be set")
+	}
+
 	return &querier.NetworkPolicyQueryFilter{
-		Name:       query.Get("name"),
+		Name:       name,
+		SourceName: source,
 		Namespace:  namespace,
 		Pod:        pod,
 		SourceType: npSourceType,

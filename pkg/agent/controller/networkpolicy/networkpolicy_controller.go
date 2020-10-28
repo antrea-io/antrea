@@ -112,7 +112,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if err != nil {
 				return nil, err
 			}
-			return antreaClient.ControlplaneV1beta2().NetworkPolicies("").Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta2().NetworkPolicies().Watch(context.TODO(), options)
 		},
 		AddFunc: func(obj runtime.Object) error {
 			policy, ok := obj.(*v1beta2.NetworkPolicy)
@@ -299,12 +299,6 @@ func (c *Controller) GetNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilt
 // GetAppliedToNetworkPolicies returns the NetworkPolicies applied to the Pod and match the filter.
 func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
 	return c.ruleCache.getAppliedNetworkPolicies(pod, namespace, npFilter)
-}
-
-// GetNetworkPolicy looks up and returns the cached NetworkPolicy which first matches the filter.
-// nil is returned if the specified NetworkPolicy is not found.
-func (c *Controller) GetNetworkPolicy(npFilter *querier.NetworkPolicyQueryFilter) *v1beta2.NetworkPolicy {
-	return c.ruleCache.getNetworkPolicy(npFilter)
 }
 
 func (c *Controller) GetAddressGroups() []v1beta2.AddressGroup {

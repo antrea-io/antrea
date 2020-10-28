@@ -114,7 +114,7 @@ func TestPodTrafficShaping(t *testing.T) {
 		// The bandwidths' unit is Mbits/sec.
 		clientEgressBandwidth  int
 		serverIngressBandwidth int
-		expectedBandwidth    int
+		expectedBandwidth      int
 	}{
 		{
 			name:                   "limited by egress bandwidth",

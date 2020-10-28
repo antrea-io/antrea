@@ -148,6 +148,7 @@ type NetworkPolicyReference struct {
 }
 
 // +genclient
+// +genclient:nonNamespaced
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.

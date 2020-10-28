@@ -98,7 +98,7 @@ func getPodFlows(aq agentquerier.AgentQuerier, podName, namespace string) ([]Res
 }
 
 func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace string) ([]Response, error) {
-	if aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: npName, Namespace: namespace}) == nil {
+	if len(aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: npName, Namespace: namespace})) == 0 {
 		// NetworkPolicy not found.
 		return nil, nil
 	}

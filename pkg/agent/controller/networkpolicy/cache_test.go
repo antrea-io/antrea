@@ -501,7 +501,7 @@ func TestRuleCacheReplaceNetworkPolicies(t *testing.T) {
 			c, recorder, _ := newFakeRuleCache()
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
-				c.policyMap[string(rule.PolicyUID)] = rule.SourceRef
+				c.policyMap[string(rule.PolicyUID)] = &v1beta2.NetworkPolicy{}
 			}
 			c.ReplaceNetworkPolicies(tt.args)
 

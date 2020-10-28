@@ -19,7 +19,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -79,8 +78,6 @@ type rule struct {
 	// The metadata of parent Policy. Used to associate the rule with Policy
 	// for troubleshooting purpose (logging and CLI).
 	PolicyName string
-	// PolicyNamespace is empty for ClusterNetworkPolicy.
-	PolicyNamespace string
 	// Reference to the original NetworkPolicy that the rule belongs to.
 	// Note it has a different meaning from PolicyUID, PolicyName, and
 	// PolicyNamespace which are the metadata fields of the corresponding
@@ -143,7 +140,8 @@ type ruleCache struct {
 
 	policyMapLock sync.RWMutex
 	// policyMap is a map using NetworkPolicy UID as the key.
-	policyMap map[string]*v1beta.NetworkPolicyReference
+	// TODO: reduce its storage redundancy with rules.
+	policyMap map[string]*v1beta.NetworkPolicy
 
 	// rules is a storage that supports listing rules using multiple indexing functions.
 	// rules is thread-safe.
@@ -159,79 +157,32 @@ func (c *ruleCache) getNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilte
 	var ret []v1beta.NetworkPolicy
 	c.policyMapLock.RLock()
 	defer c.policyMapLock.RUnlock()
-	for uid, npr := range c.policyMap {
-		if c.networkPolicyMatchFilter(npFilter, npr) {
-			ret = append(ret, *c.buildNetworkPolicyFromRules(uid))
+	for _, np := range c.policyMap {
+		if c.networkPolicyMatchFilter(npFilter, np) {
+			ret = append(ret, *np)
 		}
 	}
 	return ret
 }
 
-// If this npr(Network Policy Reference) can match the npFilter(Network Policy Filter)
-func (c *ruleCache) networkPolicyMatchFilter(npFilter *querier.NetworkPolicyQueryFilter, npr *v1beta.NetworkPolicyReference) bool {
-	return (npFilter.Name == "" || npFilter.Name == npr.Name) &&
-		(npFilter.Namespace == "" || npFilter.Namespace == npr.Namespace) &&
-		(npFilter.SourceType == "" || npFilter.SourceType == npr.Type)
+// networkPolicyMatchFilter returns true if the provided NetworkPolicy matches the provided NetworkPolicyQueryFilter.
+func (c *ruleCache) networkPolicyMatchFilter(npFilter *querier.NetworkPolicyQueryFilter, np *v1beta.NetworkPolicy) bool {
+	if npFilter.Name != "" {
+		return npFilter.Name == np.Name
+	}
+	return (npFilter.SourceName == "" || npFilter.SourceName == np.SourceRef.Name) &&
+		(npFilter.Namespace == "" || npFilter.Namespace == np.SourceRef.Namespace) &&
+		(npFilter.SourceType == "" || npFilter.SourceType == np.SourceRef.Type)
 }
 
-// getNetworkPolicy looks up and returns the cached NetworkPolicy.
-// nil is returned if the specified NetworkPolicy is not found.
-func (c *ruleCache) getNetworkPolicy(npFilter *querier.NetworkPolicyQueryFilter) *v1beta.NetworkPolicy {
-	var npUID string
-	c.policyMapLock.Lock()
-	defer c.policyMapLock.Unlock()
-	for uid, npr := range c.policyMap {
-		if c.networkPolicyMatchFilter(npFilter, npr) {
-			npUID = uid
-			break
-		}
-	}
-
-	if npUID == "" {
-		// NetworkPolicy not found.
+func (c *ruleCache) getNetworkPolicy(uid string) *v1beta.NetworkPolicy {
+	c.policyMapLock.RLock()
+	defer c.policyMapLock.RUnlock()
+	policy, exists := c.policyMap[uid]
+	if !exists {
 		return nil
 	}
-	return c.buildNetworkPolicyFromRules(npUID)
-}
-
-func (c *ruleCache) buildNetworkPolicyFromRules(uid string) *v1beta.NetworkPolicy {
-	var np *v1beta.NetworkPolicy
-	rules, _ := c.rules.ByIndex(policyIndex, uid)
-	// Sort the rules by priority
-	sort.Slice(rules, func(i, j int) bool {
-		r1 := rules[i].(*rule)
-		r2 := rules[j].(*rule)
-		return r1.Priority < r2.Priority
-	})
-	for _, ruleObj := range rules {
-		np = addRuleToNetworkPolicy(np, ruleObj.(*rule))
-	}
-	return np
-}
-
-// addRuleToNetworkPolicy adds a cached rule to the passed NetworkPolicy struct
-// and returns it. If np is nil, a new NetworkPolicy struct will be created.
-func addRuleToNetworkPolicy(np *v1beta.NetworkPolicy, rule *rule) *v1beta.NetworkPolicy {
-	if np == nil {
-		np = &v1beta.NetworkPolicy{
-			ObjectMeta: metav1.ObjectMeta{UID: rule.PolicyUID,
-				Name:      rule.PolicyName,
-				Namespace: rule.PolicyNamespace},
-			SourceRef:       rule.SourceRef,
-			AppliedToGroups: rule.AppliedToGroups,
-			Priority:        rule.PolicyPriority,
-			TierPriority:    rule.TierPriority,
-		}
-	}
-	np.Rules = append(np.Rules, v1beta.NetworkPolicyRule{
-		Direction: rule.Direction,
-		From:      rule.From,
-		To:        rule.To,
-		Services:  rule.Services,
-		Action:    rule.Action,
-		Priority:  rule.Priority})
-	return np
-
+	return policy
 }
 
 func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta.NetworkPolicy {
@@ -245,27 +196,26 @@ func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *q
 	}
 	c.podSetLock.RUnlock()
 
-	npMap := make(map[string]*v1beta.NetworkPolicy)
+	var policies []v1beta.NetworkPolicy
+	policyKeys := sets.NewString()
 	for _, group := range groups {
 		rules, _ := c.rules.ByIndex(appliedToGroupIndex, group)
 		for _, ruleObj := range rules {
 			rule := ruleObj.(*rule)
-			np, ok := npMap[string(rule.PolicyUID)]
-			if c.networkPolicyMatchFilter(npFilter, rule.SourceRef) {
-				np = addRuleToNetworkPolicy(np, rule)
-				if !ok {
-					// First rule for this NetworkPolicy
-					npMap[string(rule.PolicyUID)] = np
-				}
+			if policyKeys.Has(string(rule.PolicyUID)) {
+				continue
+			}
+			np := c.getNetworkPolicy(string(rule.PolicyUID))
+			// The Policy might be removed during the query.
+			if np == nil {
+				continue
+			}
+			if c.networkPolicyMatchFilter(npFilter, np) {
+				policies = append(policies, *np)
 			}
 		}
 	}
-
-	ret := make([]v1beta.NetworkPolicy, 0, len(npMap))
-	for _, np := range npMap {
-		ret = append(ret, *np)
-	}
-	return ret
+	return policies
 }
 
 func (c *ruleCache) GetAddressGroups() []v1beta.AddressGroup {
@@ -342,7 +292,7 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta.PodRefe
 	cache := &ruleCache{
 		memberSetByGroup:  make(map[string]v1beta.GroupMemberSet),
 		addressSetByGroup: make(map[string]v1beta.GroupMemberSet),
-		policyMap:         make(map[string]*v1beta.NetworkPolicyReference),
+		policyMap:         make(map[string]*v1beta.NetworkPolicy),
 		rules:             rules,
 		dirtyRuleHandler:  dirtyRuleHandler,
 		podUpdates:        podUpdate,
@@ -572,7 +522,6 @@ func toRule(r *v1beta.NetworkPolicyRule, policy *v1beta.NetworkPolicy, maxPriori
 		SourceRef:       policy.SourceRef,
 	}
 	rule.ID = hashRule(rule)
-	rule.PolicyNamespace = policy.Namespace
 	rule.PolicyName = policy.Name
 	rule.MaxPriority = maxPriority
 	return rule
@@ -636,7 +585,7 @@ func (c *ruleCache) AddNetworkPolicy(policy *v1beta.NetworkPolicy) error {
 }
 
 func (c *ruleCache) addNetworkPolicyLocked(policy *v1beta.NetworkPolicy) error {
-	c.policyMap[string(policy.UID)] = policy.SourceRef
+	c.policyMap[string(policy.UID)] = policy
 	metrics.NetworkPolicyCount.Inc()
 	return c.UpdateNetworkPolicy(policy)
 }
