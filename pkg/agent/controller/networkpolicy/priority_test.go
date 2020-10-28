@@ -67,7 +67,7 @@ func TestUpdatePriorityAssignment(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(InitialOFPriority, true)
+			pa := newPriorityAssigner(false)
 			for i := 0; i < len(tt.argsPriorities); i++ {
 				pa.updatePriorityAssignment(tt.argsOFPriorities[i], tt.argsPriorities[i])
 			}
@@ -156,7 +156,7 @@ func TestReassignBoundaryPriorities(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(InitialOFPriority, true)
+			pa := newPriorityAssigner(false)
 			for i, p := range tt.originalOfPriorities {
 				pa.updatePriorityAssignment(p, tt.originalPriorities[i])
 			}
@@ -171,8 +171,9 @@ func TestReassignBoundaryPriorities(t *testing.T) {
 
 func TestInsertConsecutivePriorities(t *testing.T) {
 	prioritiesToRegister := []types.Priority{p1133, p1132, p1131, p1130}
-	insertionLow := InitialOFPriority(prioritiesToRegister[0], true)
-	insertionHigh := InitialOFPriority(prioritiesToRegister[3], true)
+	pa := newPriorityAssigner(false)
+	insertionLow := pa.initialOFPriority(prioritiesToRegister[0], false)
+	insertionHigh := pa.initialOFPriority(prioritiesToRegister[3], false)
 	tests := []struct {
 		name                  string
 		originalPriorities    []types.Priority
@@ -248,7 +249,7 @@ func TestInsertConsecutivePriorities(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pa := newPriorityAssigner(InitialOFPriority, true)
+			pa := newPriorityAssigner(false)
 			for i, p := range tt.originalOfPriorities {
 				pa.updatePriorityAssignment(p, tt.originalPriorities[i])
 			}
@@ -261,10 +262,10 @@ func TestInsertConsecutivePriorities(t *testing.T) {
 }
 
 func TestRegisterPrioritiesAndRevert(t *testing.T) {
-	pa := newPriorityAssigner(InitialOFPriority, false)
+	pa := newPriorityAssigner(false)
 	prioritiesToRegister := []types.Priority{p1132, p1131, p1130, p190, p191}
-	insertionPoint1132 := InitialOFPriority(p1132, false)
-	insertionPoint191 := InitialOFPriority(p191, false)
+	insertionPoint1132 := pa.initialOFPriority(p1132, false)
+	insertionPoint191 := pa.initialOFPriority(p191, false)
 	pa.updatePriorityAssignment(insertionPoint1132-1, p1140)
 	pa.updatePriorityAssignment(insertionPoint1132+2, p1121)
 	pa.updatePriorityAssignment(insertionPoint1132+3, p1120)
@@ -295,20 +296,20 @@ func generatePriorities(tierPriority, start, end int32, policyPriority float64) 
 }
 
 func TestRegisterAllOFPriorities(t *testing.T) {
-	pa := newPriorityAssigner(InitialOFPriority, true)
-	maxPriorities := generatePriorities(250, int32(PolicyBottomPriority), int32(PolicyTopPriority), 5)
+	pa := newPriorityAssigner(true)
+	maxPriorities := generatePriorities(253, int32(BaselinePolicyBottomPriority), int32(BaselinePolicyTopPriority), 5)
 	_, _, err := pa.RegisterPriorities(maxPriorities)
-	assert.Equalf(t, nil, err, "Error occurred in registering max number of allowed priorities")
+	assert.Equalf(t, nil, err, "Error occurred in registering max number of allowed priorities in baseline tier")
 
 	extraPriority := types.Priority{
-		TierPriority:   1,
+		TierPriority:   253,
 		PolicyPriority: 5,
-		RulePriority:   int32(PolicyTopPriority) - int32(PolicyBottomPriority) + 1,
+		RulePriority:   int32(BaselinePolicyTopPriority) - int32(BaselinePolicyBottomPriority) + 1,
 	}
 	_, _, err = pa.RegisterPriorities([]types.Priority{extraPriority})
-	assert.Errorf(t, err, "Error should be raised after max number of priorities are registered")
+	assert.Errorf(t, err, "Error should be raised after max number of priorities are registered in baseline tier")
 
-	pa = newPriorityAssigner(InitialOFPriority, false)
+	pa = newPriorityAssigner(false)
 	consecPriorities1 := generatePriorities(5, int32(PolicyBottomPriority), 10000, 5)
 	_, _, err = pa.RegisterPriorities(consecPriorities1)
 

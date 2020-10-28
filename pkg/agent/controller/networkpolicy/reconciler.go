@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	defaultTierPriority int32 = 250
+	baselineTierPriority int32 = 253
 )
 
 // Reconciler is an interface that knows how to reconcile the desired state of
@@ -182,14 +182,14 @@ type reconciler struct {
 // newReconciler returns a new *reconciler.
 func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore) *reconciler {
 	priorityAssigners := map[binding.TableIDType]*tablePriorityAssigner{}
-	for _, table := range openflow.GetAntreaPolicySingleTierTables() {
+	for _, table := range openflow.GetAntreaPolicyBaselineTierTables() {
 		priorityAssigners[table] = &tablePriorityAssigner{
-			assigner: newPriorityAssigner(InitialOFPriority, true),
+			assigner: newPriorityAssigner(true),
 		}
 	}
 	for _, table := range openflow.GetAntreaPolicyMultiTierTables() {
 		priorityAssigners[table] = &tablePriorityAssigner{
-			assigner: newPriorityAssigner(InitialOFPriority, false),
+			assigner: newPriorityAssigner(false),
 		}
 	}
 	reconciler := &reconciler{
@@ -252,7 +252,7 @@ func (r *reconciler) getOFRuleTable(rule *CompletedRule) binding.TableIDType {
 	} else {
 		ruleTables = openflow.GetAntreaPolicyEgressTables()
 	}
-	if *rule.TierPriority != defaultTierPriority {
+	if *rule.TierPriority != baselineTierPriority {
 		return ruleTables[0]
 	}
 	return ruleTables[1]
