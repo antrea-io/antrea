@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strconv"
 	"sync"
 
 	"github.com/vishvananda/netlink"
@@ -30,17 +31,25 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 const (
+	vxlanPort  = 4789
+	genevePort = 6081
+
 	// Antrea managed ipset.
 	// antreaPodIPSet contains all Pod CIDRs of this cluster.
 	antreaPodIPSet = "ANTREA-POD-IP"
+	// antreaNodeIPSet contains all Node IPs of this cluster, except the Node itself.
+	antreaNodeIPSet = "ANTREA-NODE-IP"
 
 	// Antrea managed iptables chains.
 	antreaForwardChain     = "ANTREA-FORWARD"
+	antreaPreRoutingChain  = "ANTREA-PREROUTING"
 	antreaPostRoutingChain = "ANTREA-POSTROUTING"
+	antreaOutputChain      = "ANTREA-OUTPUT"
 	antreaMangleChain      = "ANTREA-MANGLE"
 )
 
@@ -49,27 +58,27 @@ var _ Interface = &Client{}
 
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
 type Client struct {
-	nodeConfig  *config.NodeConfig
-	encapMode   config.TrafficEncapModeType
-	noSNAT      bool
-	serviceCIDR *net.IPNet
-	ipt         *iptables.Client
+	nodeConfig    *config.NodeConfig
+	networkConfig *config.NetworkConfig
+	noSNAT        bool
+	serviceCIDR   *net.IPNet
+	ipt           *iptables.Client
 	// nodeRoutes caches ip routes to remote Pods. It's a map of podCIDR to routes.
 	nodeRoutes sync.Map
 }
 
 // NewClient returns a route client.
-func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType, noSNAT bool) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
 	ipt, err := iptables.New()
 	if err != nil {
 		return nil, fmt.Errorf("error creating IPTables instance: %v", err)
 	}
 
 	return &Client{
-		serviceCIDR: serviceCIDR,
-		encapMode:   encapMode,
-		noSNAT:      noSNAT,
-		ipt:         ipt,
+		serviceCIDR:   serviceCIDR,
+		networkConfig: networkConfig,
+		noSNAT:        noSNAT,
+		ipt:           ipt,
 	}, nil
 }
 
@@ -99,7 +108,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 // initIPSet ensures that the required ipset exists and it has the initial members.
 func (c *Client) initIPSet() error {
 	// In policy-only mode, Node Pod CIDR is undefined.
-	if c.encapMode.IsNetworkPolicyOnly() {
+	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		return nil
 	}
 	if err := ipset.CreateIPSet(antreaPodIPSet, ipset.HashNet); err != nil {
@@ -107,6 +116,10 @@ func (c *Client) initIPSet() error {
 	}
 	// Ensure its own PodCIDR is in it.
 	if err := ipset.AddEntry(antreaPodIPSet, c.nodeConfig.PodCIDR.String()); err != nil {
+		return err
+	}
+
+	if err := ipset.CreateIPSet(antreaNodeIPSet, ipset.HashIP); err != nil {
 		return err
 	}
 	return nil
@@ -142,6 +155,8 @@ func (c *Client) initIPTables() error {
 	// We cannot use iptables-restore for these jump rules because there
 	// are non antrea managed rules in built-in chains.
 	jumpRules := []struct{ table, srcChain, dstChain, comment string }{
+		{iptables.RawTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules"},
+		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules"},
 		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules"},
 		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"},
@@ -160,6 +175,42 @@ func (c *Client) initIPTables() error {
 	// Use iptables-restore as it flushes the involved chains and creates the desired rules
 	// with a single call, instead of string matching to clean up stale rules.
 	iptablesData := bytes.NewBuffer(nil)
+	// Write head lines anyway so the undesired rules can be deleted when changing encap mode.
+	writeLine(iptablesData, "*raw")
+	writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
+	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
+	if c.networkConfig.TrafficEncapMode.SupportsEncap() {
+		// For Geneve and VXLAN encapsulation packets, the request and response packets don't belong to a UDP connection
+		// so tracking them doesn't give the normal benefits of conntrack. Besides, kube-proxy may install great number
+		// of iptables rules in nat table. The first encapsulation packets of connections would have to go through all
+		// of the rules which wastes CPU and increases packet latency.
+		udpPort := 0
+		if c.networkConfig.TunnelType == ovsconfig.GeneveTunnel {
+			udpPort = genevePort
+		} else if c.networkConfig.TunnelType == ovsconfig.VXLANTunnel {
+			udpPort = vxlanPort
+		}
+		if udpPort > 0 {
+			writeLine(iptablesData, []string{
+				"-A", antreaPreRoutingChain,
+				"-m", "comment", "--comment", `"Antrea: do not track encapsulation packets from remote nodes"`,
+				"-m", "udp", "-p", "udp", "--dport", strconv.Itoa(udpPort),
+				"-m", "set", "--match-set", antreaNodeIPSet, "src",
+				"-m", "addrtype", "--dst-type", "LOCAL",
+				"-j", iptables.NoTrackTarget,
+			}...)
+			writeLine(iptablesData, []string{
+				"-A", antreaOutputChain,
+				"-m", "comment", "--comment", `"Antrea: do not track encapsulation packets to remote nodes"`,
+				"-m", "udp", "-p", "udp", "--dport", strconv.Itoa(udpPort),
+				"-m", "set", "--match-set", antreaNodeIPSet, "dst",
+				"-m", "addrtype", "--src-type", "LOCAL",
+				"-j", iptables.NoTrackTarget,
+			}...)
+		}
+	}
+	writeLine(iptablesData, "COMMIT")
+
 	// Write head lines anyway so the undesired rules can be deleted when noEncap -> encap.
 	writeLine(iptablesData, "*mangle")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaMangleChain))
@@ -207,7 +258,7 @@ func (c *Client) initIPTables() error {
 }
 
 func (c *Client) initIPRoutes() error {
-	if c.encapMode.IsNetworkPolicyOnly() {
+	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
 		_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/32", c.nodeConfig.NodeIPAddr.IP.String()))
 		if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
@@ -219,7 +270,7 @@ func (c *Client) initIPRoutes() error {
 
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
 // based on the desired podCIDRs.
-func (c *Client) Reconcile(podCIDRs []string) error {
+func (c *Client) Reconcile(podCIDRs []string, remoteNodeIPs []string) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 
 	// Remove orphaned podCIDRs from antreaPodIPSet.
@@ -241,6 +292,22 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 		}
 		route := &netlink.Route{Dst: cidr}
 		if err := netlink.RouteDel(route); err != nil && err != unix.ESRCH {
+			return err
+		}
+	}
+
+	desiredNodeIPs := sets.NewString(remoteNodeIPs...)
+	// Remove orphaned nodeIPs from antreaNodeIPSet.
+	entries, err = ipset.ListEntries(antreaNodeIPSet)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if desiredNodeIPs.Has(entry) {
+			continue
+		}
+		klog.Infof("Deleting orphaned Node IP %s from ipset", entry)
+		if err := ipset.DelEntry(antreaNodeIPSet, entry); err != nil {
 			return err
 		}
 	}
@@ -279,15 +346,19 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeIP, nodeGwIP net.IP) error {
 	if err := ipset.AddEntry(antreaPodIPSet, podCIDRStr); err != nil {
 		return err
 	}
+	// Add this nodeIP to antreaNodeIPSet so that encapsulation packets from/to them won't be tracked.
+	if err := ipset.AddEntry(antreaNodeIPSet, nodeIP.String()); err != nil {
+		return err
+	}
 	// Install routes to this Node.
 	route := &netlink.Route{
 		Dst: podCIDR,
 	}
-	if c.encapMode.NeedsEncapToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
+	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
 		route.Flags = int(netlink.FLAG_ONLINK)
 		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
 		route.Gw = nodeGwIP
-	} else if !c.encapMode.NeedsRoutingToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
+	} else if !c.networkConfig.TrafficEncapMode.NeedsRoutingToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
 		// NoEncap traffic need routing help.
 		route.Gw = nodeIP
 	} else {
@@ -302,10 +373,14 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeIP, nodeGwIP net.IP) error {
 }
 
 // DeleteRoutes deletes routes to a PodCIDR. It does nothing if the routes doesn't exist.
-func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
+func (c *Client) DeleteRoutes(podCIDR *net.IPNet, nodeIP net.IP) error {
 	podCIDRStr := podCIDR.String()
 	// Delete this podCIDR from antreaPodIPSet as the CIDR is no longer for Pods.
 	if err := ipset.DelEntry(antreaPodIPSet, podCIDRStr); err != nil {
+		return err
+	}
+	// Delete this IP from antreaNodeIPSet as it's no longer a Node IP.
+	if err := ipset.DelEntry(antreaNodeIPSet, nodeIP.String()); err != nil {
 		return err
 	}
 
