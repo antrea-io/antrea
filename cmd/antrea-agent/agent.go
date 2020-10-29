@@ -36,6 +36,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
+	npl "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/bootstrap"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
@@ -240,6 +241,11 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
+
+	// Start the NPL agent.
+	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
+		npl.InitializeNPLAgent(k8sClient, informerFactory)
+	}
 
 	log.StartLogFileNumberMonitor(stopCh)
 
