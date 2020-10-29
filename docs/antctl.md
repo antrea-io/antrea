@@ -24,6 +24,7 @@ running in two different modes:
   - [Dumping OVS flows](#dumping-ovs-flows)
   - [OVS packet tracing](#ovs-packet-tracing)
   - [Traceflow](#traceflow)
+  - [Antctl Proxy](#antctl-proxy)
 <!-- /toc -->
 
 ## Installation
@@ -367,7 +368,8 @@ be added to start the traceflow without waiting for result. Then, the deletion o
 will not be conducted. Besides, users can specify header protocol (ICMP, TCP and UDP),
 source/destination ports and TCP flags.
 
-e.g.
+For example:
+
 ```bash
 $ antctl traceflow -S busybox0 -D busybox1
 name: default-busybox0-to-default-busybox1-fpllngzi
@@ -384,3 +386,32 @@ results:
     componentInfo: Output
     action: Delivered
 ```
+
+### Antctl Proxy
+
+Antctl can run as a reverse proxy for the Antrea API (Controller or arbitrary
+Agent). Usage is very similar to `kubectl proxy` and the implementation is
+essentially the same. One thing to keep in mind is that the TLS connection
+between the proxy and the Antrea Agent or Controller will not be secure (no
+certificate verification), and the proxy should be used for debugging only.
+
+To run a reverse proxy for the Antrea Controller API, use:
+
+```bash
+$ antctl proxy --controller
+````
+
+To run a reverse proxy for the Antrea Agent API for the antrea-agent Pod running
+on Node <TARGET_NODE>, use:
+
+```bash
+$ antctl proxy --agent-node
+```
+
+You can then access the API at `127.0.0.1:8001`. To see the full list of
+supported options, run `antctl proxy --help`.
+
+This feature is useful if one wants to use the Go
+[pprof](https://golang.org/pkg/net/http/pprof/) tool to collect runtime
+profiling data about the Antrea components. Please refer to this
+[document](troubleshooting.md#profiling-antrea-components) for more information.

@@ -7,12 +7,15 @@
 - [Accessing the antrea-controller API](#accessing-the-antrea-controller-api)
   - [Using antctl](#using-antctl)
   - [Using kubectl proxy](#using-kubectl-proxy)
+  - [Using antctl proxy](#using-antctl-proxy)
   - [Directly accessing the antrea-controller API](#directly-accessing-the-antrea-controller-api)
 - [Accessing the antrea-agent API](#accessing-the-antrea-agent-api)
   - [Using antctl](#using-antctl-1)
+  - [Using antctl proxy](#using-antctl-proxy-1)
   - [Directly accessing the antrea-agent API](#directly-accessing-the-antrea-agent-api)
 - [Troubleshooting Open vSwitch](#troubleshooting-open-vswitch)
 - [Troubleshooting with antctl](#troubleshooting-with-antctl)
+- [Profiling Antrea components](#profiling-antrea-components)
 <!-- /toc -->
 
 ## Looking at the Antrea logs
@@ -101,6 +104,14 @@ kubectl proxy &
 curl 127.0.0.1:8001/apis/controlplane.antrea.tanzu.vmware.com
 ```
 
+### Using antctl proxy
+
+Antctl supports running a reverse proxy (similar to the kubectl one) which
+enables access to the entire Antrea Controller API (not just aggregated API
+Services), but does not secure the TLS connection between the proxy and the
+Controller. Refer to the [antctl documentation](antctl.md#antctl-proxy) for more
+information.
+
 ### Directly accessing the antrea-controller API
 
 If you want to directly access the antrea-controller API, you need to get its
@@ -135,6 +146,13 @@ kubectl exec -it <antrea-agent Pod name> -n kube-system -c antrea-agent bash
 # View the agent's NetworkPolicy
 antctl get networkpolicy
 ```
+
+### Using antctl proxy
+
+Antctl supports running a reverse proxy (similar to the kubectl one) which
+enables access to the entire Antrea Agent API, but does not secure the TLS
+connection between the proxy and the Controller. Refer to the [antctl
+documentation](antctl.md#antctl-proxy) for more information.
 
 ### Directly accessing the antrea-agent API
 
@@ -221,3 +239,22 @@ Agent, which can print the runtime information of `antrea-controller` and
 information on a Node, dump Antrea OVS flows, and perform OVS packet tracing.
 Refer to the [`antctl` guide](/docs/antctl.md#usage) to learn how to use these
 commands.
+
+## Profiling Antrea components
+
+The easiest way to profile the Antrea components is to use the Go
+[pprof](https://golang.org/pkg/net/http/pprof/) tool. Both the Antrea Agent and
+the Antrea Controller use the k8s apiserver library to server their API, and
+this library enables the pprof HTTP server by default. In order to access it
+without having to worry about authentication, you can use the antctl proxy
+function.
+
+For example, this is what you would do to look at a 30-second CPU profile for
+the Antrea Controller:
+
+```bash
+# Start the proxy in the background
+antctl proxy --controller&
+# Look at a 30-second CPU profile
+go tool pprof http://127.0.0.1:8001/debug/pprof/profile?seconds=30
+```
