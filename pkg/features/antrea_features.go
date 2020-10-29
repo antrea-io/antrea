@@ -50,6 +50,10 @@ const (
 	// alpha: v0.10
 	// Enable collecting and exposing NetworkPolicy statistics.
 	NetworkPolicyStats featuregate.Feature = "NetworkPolicyStats"
+
+	// alpha: v0.1
+	// Expose Pod IPs through nodeport
+	NodePortLocal featuregate.Feature = "NodePortLocal"
 )
 
 var (
@@ -69,6 +73,7 @@ var (
 		Traceflow:          {Default: false, PreRelease: featuregate.Alpha},
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats: {Default: false, PreRelease: featuregate.Alpha},
+		NodePortLocal:      {Default: false, PreRelease: featuregate.Alpha},
 	}
 )
 
