@@ -75,11 +75,11 @@ type priorityAssigner struct {
 	sortedPriorities types.ByPriority
 	// isBaselineTier keeps track of if the priorityAssigner is responsible for handling the baseline Tier
 	// table (which is shared with K8s NetworkPolicy default tables) or the Antrea Policy tables.
-	isBaselineTier       bool
+	isBaselineTier bool
 	// policyBottomPriority keeps track of the lowest ofPriority allowed for flow creation in the table it manages.
 	policyBottomPriority uint16
 	// policyTopPriority keeps track of the highest ofPriority allowed for flow creation in the table it manages.
-	policyTopPriority    uint16
+	policyTopPriority uint16
 }
 
 func newPriorityAssigner(isBaselineTier bool) *priorityAssigner {
@@ -267,6 +267,7 @@ func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) (map
 		}
 	}
 	numPriorityToRegister := len(prioritiesToRegister)
+	klog.V(2).Infof("%v new Priorities need to be registered", numPriorityToRegister)
 	if numPriorityToRegister == 0 {
 		return nil, nil, nil
 	} else if uint16(numPriorityToRegister+len(pa.sortedPriorities)) > pa.policyTopPriority-pa.policyBottomPriority+1 {
@@ -337,7 +338,7 @@ func (pa *priorityAssigner) insertConsecutivePriorities(priorities types.ByPrior
 		upperBound = pa.priorityMap[pa.sortedPriorities[insertionIdx]]
 	}
 	// not enough space to insert Priorities.
-	if upperBound-lowerBound-1 <= uint16(numPriorities) {
+	if upperBound-lowerBound-1 < uint16(numPriorities) {
 		return pa.reassignBoundaryPriorities(lowerBound, upperBound, priorities, updates)
 	}
 	switch {
@@ -373,6 +374,7 @@ func (pa *priorityAssigner) Release(ofPriority uint16) {
 		klog.V(2).Infof("OF priority %v not known, skip releasing priority", ofPriority)
 		return
 	}
+	klog.V(4).Infof("Releasing ofPriority %v", ofPriority)
 	pa.deletePriorityMapping(ofPriority, priority)
 	pa.unregisterPriority(priority)
 }

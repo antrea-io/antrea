@@ -316,12 +316,72 @@ func testCNPDropEgress(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+// testBaselineNamespaceIsolation tests that a CNP in the baseline Tier is able to enforce default namespace isolation,
+// which can be later overridden by developer K8s NetworkPolicies.
+func testCNPBaselineNamespaceIsolation(t *testing.T) {
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	nsExpOtherThanX := metav1.LabelSelectorRequirement{
+		Key:      "ns",
+		Operator: metav1.LabelSelectorOpNotIn,
+		Values:   []string{"x"},
+	}
+	builder = builder.SetName("cnp-baseline-isolate-ns-x").
+		SetTier("baseline").
+		SetPriority(1.0).
+		SetAppliedToGroup(nil, map[string]string{"ns": "x"}, nil, nil)
+	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil,
+		nil, &[]metav1.LabelSelectorRequirement{nsExpOtherThanX}, secv1alpha1.RuleActionDrop)
+
+	// create a K8s NetworkPolicy to allow ingress from pods in it's own ns and y/a to connect to pods in namespace x.
+	k8sNPBuilder := &NetworkPolicySpecBuilder{}
+	k8sNPBuilder = k8sNPBuilder.SetName("x", "default-deny-namespace").
+		SetTypeIngress().
+		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
+			nil, map[string]string{"ns": "x"}, nil, nil).
+		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
+			map[string]string{"pod": "a"}, map[string]string{"ns": "y"}, nil, nil)
+
+	reachability := NewReachability(allPods, true)
+	reachability.Expect(Pod("y/b"), Pod("x/a"), false)
+	reachability.Expect(Pod("y/c"), Pod("x/a"), false)
+	reachability.Expect(Pod("z/a"), Pod("x/a"), false)
+	reachability.Expect(Pod("z/b"), Pod("x/a"), false)
+	reachability.Expect(Pod("z/c"), Pod("x/a"), false)
+	reachability.Expect(Pod("y/b"), Pod("x/b"), false)
+	reachability.Expect(Pod("y/c"), Pod("x/b"), false)
+	reachability.Expect(Pod("z/a"), Pod("x/b"), false)
+	reachability.Expect(Pod("z/b"), Pod("x/b"), false)
+	reachability.Expect(Pod("z/c"), Pod("x/b"), false)
+	reachability.Expect(Pod("y/b"), Pod("x/c"), false)
+	reachability.Expect(Pod("y/c"), Pod("x/c"), false)
+	reachability.Expect(Pod("z/a"), Pod("x/c"), false)
+	reachability.Expect(Pod("z/b"), Pod("x/c"), false)
+	reachability.Expect(Pod("z/c"), Pod("x/c"), false)
+
+	testStep := []*TestStep{
+		{
+			"Port 80",
+			reachability,
+			[]metav1.Object{builder.Get(), k8sNPBuilder.Get()},
+			80,
+			0,
+		},
+	}
+	testCase := []*TestCase{
+		{"CNP baseline tier namespace isolation", testStep},
+	}
+	executeTests(t, testCase)
+	// Cleanup the K8s NetworkPolicy created for this test.
+	failOnError(k8sUtils.CleanNetworkPolicies([]string{"x"}), t)
+	time.Sleep(networkPolicyDelay)
+}
+
 // testCNPPriorityOverride tests priority overriding in three Policies. Those three Policies are applied in a specific order to
 // test priority reassignment, and each controls a smaller set of traffic patterns as priority increases.
 func testCNPPriorityOverride(t *testing.T) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("cnp-priority1").
-		SetPriority(1.01).
+		SetPriority(1.001).
 		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
 	podZBIP, _ := podIPs["z/b"]
 	cidr := podZBIP + "/32"
@@ -331,7 +391,7 @@ func testCNPPriorityOverride(t *testing.T) {
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
 	builder2 = builder2.SetName("cnp-priority2").
-		SetPriority(1.02).
+		SetPriority(1.002).
 		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
 	// Medium priority. Allows traffic from z to x/a.
 	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
@@ -339,7 +399,7 @@ func testCNPPriorityOverride(t *testing.T) {
 
 	builder3 := &ClusterNetworkPolicySpecBuilder{}
 	builder3 = builder3.SetName("cnp-priority3").
-		SetPriority(1.03).
+		SetPriority(1.003).
 		SetAppliedToGroup(nil, map[string]string{"ns": "x"}, nil, nil)
 	// Lowest priority. Drops traffic from z to x.
 	builder3.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
@@ -805,6 +865,7 @@ func TestAntreaPolicy(t *testing.T) {
 		// testcases below do not depend on underlying k8s NetworkPolicies
 		t.Run("Case=CNPAllowNoDefaultIsolation", func(t *testing.T) { testCNPAllowNoDefaultIsolation(t) })
 		t.Run("Case=CNPDropEgress", func(t *testing.T) { testCNPDropEgress(t) })
+		t.Run("Case=CNPBaselinePolicy", func(t *testing.T) { testCNPBaselineNamespaceIsolation(t) })
 		t.Run("Case=CNPPrioirtyOverride", func(t *testing.T) { testCNPPriorityOverride(t) })
 		t.Run("Case=CNPTierOverride", func(t *testing.T) { testCNPTierOverride(t) })
 		t.Run("Case=CNPCustomTiers", func(t *testing.T) { testCNPCustomTiers(t) })
