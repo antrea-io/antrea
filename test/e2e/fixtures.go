@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	ipfixCollectorImage = "antrea/ipfix-collector:06252020.1"
+	ipfixCollectorImage = "antrea/ipfix-collector:10282020.1"
 	ipfixCollectorPort  = "4739"
 )
 
