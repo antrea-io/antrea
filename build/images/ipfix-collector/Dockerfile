@@ -10,7 +10,7 @@ ADD https://svwh.dl.sourceforge.net/project/libipfix/libipfix/libipfix-impd4e_11
 RUN apt-get update && \
     apt-get install -y --no-install-recommends libc6-dev build-essential libpcap0.8-dev && \
     tar -xvf libipfix-* && rm libipfix-* && \
-    cd libipfix_* && ./configure && make && make install && ldconfig && \
+    cd libipfix_* && ./configure --enable-ipv6 && make && make install && ldconfig && \
     cp collector/ipfix_collector /usr/local/bin && \
     cd .. && \
     rm -rf libipfix_* && \
