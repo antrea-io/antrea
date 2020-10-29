@@ -27,6 +27,7 @@ const (
 	// The hash:net set type uses a hash to store different sized IP network addresses.
 	// The lookup time grows linearly with the number of the different prefix values added to the set.
 	HashNet SetType = "hash:net"
+	HashIP  SetType = "hash:ip"
 )
 
 // memberPattern is used to match the members part of ipset list result.
