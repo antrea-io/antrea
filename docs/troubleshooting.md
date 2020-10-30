@@ -244,10 +244,9 @@ commands.
 
 The easiest way to profile the Antrea components is to use the Go
 [pprof](https://golang.org/pkg/net/http/pprof/) tool. Both the Antrea Agent and
-the Antrea Controller use the k8s apiserver library to server their API, and
-this library enables the pprof HTTP server by default. In order to access it
-without having to worry about authentication, you can use the antctl proxy
-function.
+the Antrea Controller use the K8s apiserver library to serve their API, and this
+library enables the pprof HTTP server by default. In order to access it without
+having to worry about authentication, you can use the antctl proxy function.
 
 For example, this is what you would do to look at a 30-second CPU profile for
 the Antrea Controller:

@@ -391,9 +391,7 @@ results:
 
 Antctl can run as a reverse proxy for the Antrea API (Controller or arbitrary
 Agent). Usage is very similar to `kubectl proxy` and the implementation is
-essentially the same. One thing to keep in mind is that the TLS connection
-between the proxy and the Antrea Agent or Controller will not be secure (no
-certificate verification), and the proxy should be used for debugging only.
+essentially the same.
 
 To run a reverse proxy for the Antrea Controller API, use:
 
@@ -408,8 +406,15 @@ on Node <TARGET_NODE>, use:
 $ antctl proxy --agent-node
 ```
 
-You can then access the API at `127.0.0.1:8001`. To see the full list of
-supported options, run `antctl proxy --help`.
+You can then access the API at `127.0.0.1:8001`. To implement this
+functionality, antctl retrieves the Node IP address and API server port for the
+Antrea Controller or for the specified Agent from the K8s API, and it proxies
+all the requests received on `127.0.0.1:8001` directly to that IP / port. One
+thing to keep in mind is that the TLS connection between the proxy and the
+Antrea Agent or Controller will not be secure (no certificate verification), and
+the proxy should be used for debugging only.
+
+To see the full list of supported options, run `antctl proxy --help`.
 
 This feature is useful if one wants to use the Go
 [pprof](https://golang.org/pkg/net/http/pprof/) tool to collect runtime
