@@ -172,8 +172,8 @@ func TestReassignBoundaryPriorities(t *testing.T) {
 func TestInsertConsecutivePriorities(t *testing.T) {
 	prioritiesToRegister := []types.Priority{p1133, p1132, p1131, p1130}
 	pa := newPriorityAssigner(false)
-	insertionLow := pa.initialOFPriority(prioritiesToRegister[0], false)
-	insertionHigh := pa.initialOFPriority(prioritiesToRegister[3], false)
+	insertionLow := pa.initialOFPriority(prioritiesToRegister[0])
+	insertionHigh := pa.initialOFPriority(prioritiesToRegister[3])
 	tests := []struct {
 		name                  string
 		originalPriorities    []types.Priority
@@ -246,6 +246,16 @@ func TestInsertConsecutivePriorities(t *testing.T) {
 				insertionLow + 9: p1121, insertionLow + 10: p1120,
 			},
 		},
+		{
+			"gap-just-enough-for-insertion",
+			[]types.Priority{p1141, p1140, p1121, p1120},
+			[]uint16{insertionLow - 1, insertionLow, insertionLow + 5, insertionLow + 6},
+			map[uint16]types.Priority{
+				insertionLow - 1: p1141, insertionLow: p1140,
+				insertionLow + 1: p1133, insertionLow + 2: p1132, insertionLow + 3: p1131, insertionLow + 4: p1130,
+				insertionLow + 5: p1121, insertionLow + 6: p1120,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -264,8 +274,8 @@ func TestInsertConsecutivePriorities(t *testing.T) {
 func TestRegisterPrioritiesAndRevert(t *testing.T) {
 	pa := newPriorityAssigner(false)
 	prioritiesToRegister := []types.Priority{p1132, p1131, p1130, p190, p191}
-	insertionPoint1132 := pa.initialOFPriority(p1132, false)
-	insertionPoint191 := pa.initialOFPriority(p191, false)
+	insertionPoint1132 := pa.initialOFPriority(p1132)
+	insertionPoint191 := pa.initialOFPriority(p191)
 	pa.updatePriorityAssignment(insertionPoint1132-1, p1140)
 	pa.updatePriorityAssignment(insertionPoint1132+2, p1121)
 	pa.updatePriorityAssignment(insertionPoint1132+3, p1120)

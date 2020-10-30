@@ -318,7 +318,7 @@ func testCNPDropEgress(t *testing.T) {
 
 // testBaselineNamespaceIsolation tests that a CNP in the baseline Tier is able to enforce default namespace isolation,
 // which can be later overridden by developer K8s NetworkPolicies.
-func testCNPBaselineNamespaceIsolation(t *testing.T) {
+func testBaselineNamespaceIsolation(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	nsExpOtherThanX := metav1.LabelSelectorRequirement{
 		Key:      "ns",
@@ -332,9 +332,10 @@ func testCNPBaselineNamespaceIsolation(t *testing.T) {
 	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil,
 		nil, &[]metav1.LabelSelectorRequirement{nsExpOtherThanX}, secv1alpha1.RuleActionDrop)
 
-	// create a K8s NetworkPolicy to allow ingress from pods in it's own ns and y/a to connect to pods in namespace x.
+	// create a K8s NetworkPolicy for Pods in namespace x to allow ingress traffic from Pods in the same namespace,
+	// as well as from the y/a Pod. It should open up ingress from y/a since it's evaluated before the baseline tier.
 	k8sNPBuilder := &NetworkPolicySpecBuilder{}
-	k8sNPBuilder = k8sNPBuilder.SetName("x", "default-deny-namespace").
+	k8sNPBuilder = k8sNPBuilder.SetName("x", "allow-ns-x-and-y-a").
 		SetTypeIngress().
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
 			nil, map[string]string{"ns": "x"}, nil, nil).
@@ -865,7 +866,7 @@ func TestAntreaPolicy(t *testing.T) {
 		// testcases below do not depend on underlying k8s NetworkPolicies
 		t.Run("Case=CNPAllowNoDefaultIsolation", func(t *testing.T) { testCNPAllowNoDefaultIsolation(t) })
 		t.Run("Case=CNPDropEgress", func(t *testing.T) { testCNPDropEgress(t) })
-		t.Run("Case=CNPBaselinePolicy", func(t *testing.T) { testCNPBaselineNamespaceIsolation(t) })
+		t.Run("Case=CNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
 		t.Run("Case=CNPPrioirtyOverride", func(t *testing.T) { testCNPPriorityOverride(t) })
 		t.Run("Case=CNPTierOverride", func(t *testing.T) { testCNPTierOverride(t) })
 		t.Run("Case=CNPCustomTiers", func(t *testing.T) { testCNPCustomTiers(t) })

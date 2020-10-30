@@ -107,13 +107,13 @@ func newPriorityAssigner(isBaselineTier bool) *priorityAssigner {
 // will then search for the appropriate OpenFlow priority to insert the input Priority.
 // It computes the initial OpenFlow priority by offsetting the tier priority, policy priority and rule priority
 // with pre-determined coefficients.
-func (pa *priorityAssigner) initialOFPriority(p types.Priority, isBaselineTier bool) uint16 {
+func (pa *priorityAssigner) initialOFPriority(p types.Priority) uint16 {
 	tierOffsetBase := TierOffsetMultiTier
 	priorityOffsetBase := PriorityOffsetMultiTier
 	if p.TierPriority == DefaultTierPriority {
 		priorityOffsetBase = PriorityOffsetDefaultTier
 	}
-	if isBaselineTier {
+	if pa.isBaselineTier {
 		tierOffsetBase = TierOffsetBaselineTier
 		priorityOffsetBase = PriorityOffsetBaselineTier
 	}
@@ -324,8 +324,8 @@ func (pa *priorityAssigner) registerConsecutivePriorities(consecutivePriorities 
 func (pa *priorityAssigner) insertConsecutivePriorities(priorities types.ByPriority, updates map[types.Priority]*PriorityUpdate) error {
 	numPriorities := len(priorities)
 	pLow, pHigh := priorities[0], priorities[numPriorities-1]
-	insertionPointLow := pa.initialOFPriority(pLow, pa.isBaselineTier)
-	insertionPointHigh := pa.initialOFPriority(pHigh, pa.isBaselineTier)
+	insertionPointLow := pa.initialOFPriority(pLow)
+	insertionPointHigh := pa.initialOFPriority(pHigh)
 	// get the index for inserting the lowest Priority into the registered Priorities.
 	insertionIdx := sort.Search(len(pa.sortedPriorities), func(i int) bool { return pLow.Less(pa.sortedPriorities[i]) })
 	upperBound, lowerBound := pa.policyTopPriority, pa.policyBottomPriority
