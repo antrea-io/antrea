@@ -277,6 +277,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 // https://github.com/kubernetes/kubernetes/blob/v1.20.0-alpha.0/test/e2e/network/network_policy.go#L1365
 // https://github.com/kubernetes/kubernetes/pull/93583
 func TestEgressToServerInCIDRBlock(t *testing.T) {
+	t.Skipf("Skipping test before Network Policy IPv6 is supported")
 	skipIfNotIPv6Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
@@ -351,6 +352,7 @@ func TestEgressToServerInCIDRBlock(t *testing.T) {
 // https://github.com/kubernetes/kubernetes/blob/v1.20.0-alpha.0/test/e2e/network/network_policy.go#L1444
 // https://github.com/kubernetes/kubernetes/pull/93583
 func TestEgressToServerInCIDRBlockWithException(t *testing.T) {
+	t.Skipf("Skipping test before Network Policy IPv6 is supported")
 	skipIfNotIPv6Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
