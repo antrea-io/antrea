@@ -45,6 +45,7 @@ type Connection struct {
 	// DoExport flag helps in tagging connections that can be exported by Flow Exporter
 	DoExport   bool
 	Zone       uint16
+	Mark       uint32
 	StatusFlag uint32
 	// TODO: Have a separate field for protocol. No need to keep it in Tuple.
 	TupleOrig, TupleReply          Tuple
