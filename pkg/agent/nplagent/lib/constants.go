@@ -17,6 +17,10 @@
 package lib
 
 const (
-	NPLEPAnnotation = "npl.k8s.io/endpoints"
-	IPTableRule     = "IPTABLE"
+	NPLEPAnnotation    = "npl.antrea.io"
+	NodePortLocalChain = "NODE-PORT-LOCAL"
 )
+
+type NPLRuleImplementation string
+
+const NPLRuleImplementationIptable NPLRuleImplementation = "Iptable"

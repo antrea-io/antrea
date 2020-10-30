@@ -1165,6 +1165,9 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
 
+    # Enable NodePortLocal feature to make the pod reachable externally through nodeport
+    #  NodePortLocal: false
+
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
     # feature that supports priorities, rule actions and externalEntities in the future.

@@ -29,7 +29,6 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/juju/testing v0.0.0-20201030020617-7189b3728523 // indirect
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
-	github.com/onsi/gomega v1.7.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.4.1
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0

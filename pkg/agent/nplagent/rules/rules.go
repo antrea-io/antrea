@@ -17,41 +17,29 @@
 package rules
 
 import (
-	"github.com/coreos/go-iptables/iptables"
 	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
 )
 
 type PodPortRules interface {
-	Init() (bool, error)
-	AddRule(port int, podip string) (bool, error)
-	DeleteRule(port int, podip string) (bool, error)
+	Init() bool
+	AddRule(port int, podip string) bool
+	DeleteRule(port int, podip string) bool
 	SyncState(podPort map[int]string) bool
-	GetAllRules(podPort map[int]string) (bool, error)
-	DeleteAllRules() (bool, error)
+	GetAllRules(podPort map[int]string) bool
+	DeleteAllRules() bool
 }
 
-func Initrules(args ...string) PodPortRules {
-	var ruletype string
+func Initrules(args ...nplutils.NPLRuleImplementation) PodPortRules {
+	var ruletype nplutils.NPLRuleImplementation
 	if len(args) == 0 {
 		// By default use iptable
-		ruletype = nplutils.IPTableRule
+		ruletype = nplutils.NPLRuleImplementationIptable
 	} else {
 		ruletype = args[0]
 	}
 	switch ruletype {
-	case "IPTABLE":
-		ipt, err := iptables.New()
-		if err != nil {
-			return nil
-		}
-		iptRule := IPTableRule{
-			name:  "NPL",
-			table: ipt,
-		}
-
-		iptRule.DeleteAllRules()
-		iptRule.CreateChains()
-		return &iptRule
+	case nplutils.NPLRuleImplementationIptable:
+		return NewIPTableRules()
 	}
 	return nil
 }

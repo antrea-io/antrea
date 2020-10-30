@@ -36,7 +36,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
-	npl "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/bootstrap"
+	npl "github.com/vmware-tanzu/antrea/pkg/agent/nplagent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
@@ -244,7 +244,10 @@ func run(o *Options) error {
 
 	// Start the NPL agent.
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
-		npl.InitializeNPLAgent(k8sClient, informerFactory)
+		err := npl.InitializeNPLAgent(k8sClient, informerFactory)
+		if err != nil {
+			klog.Warningf("Failed to start NPL agent: %v", err)
+		}
 	}
 
 	log.StartLogFileNumberMonitor(stopCh)

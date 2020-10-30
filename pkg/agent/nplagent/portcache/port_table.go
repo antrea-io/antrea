@@ -50,13 +50,17 @@ type PortTable struct {
 var once sync.Once
 var ptable PortTable
 
-func NewPortTable(start, end int) *PortTable {
+func NewPortTable(start, end int) (*PortTable, bool) {
+	var ok bool
 	once.Do(func() {
 		ptable = PortTable{StartPort: start, EndPort: end}
 		ptable.Table = make(map[int]NodePortData)
 		ptable.PodPortRules = rules.Initrules()
 	})
-	return &ptable
+	if ptable.PodPortRules != nil {
+		ok = true
+	}
+	return &ptable, ok
 }
 
 func GetPortTable() *PortTable {
@@ -65,9 +69,9 @@ func GetPortTable() *PortTable {
 
 func (pt *PortTable) PopulatePortTable(r rules.PodPortRules) {
 	portMap := make(map[int]string)
-	ok, err := r.GetAllRules(portMap)
+	ok := r.GetAllRules(portMap)
 	if !ok {
-		klog.Warningf("Could not populate port table cache due to error: %v", err)
+		klog.Warningf("Could not populate port table cache")
 		return
 	}
 	table := make(map[int]NodePortData)
@@ -153,7 +157,7 @@ func (pt *PortTable) AddRule(podip string, podport int) (int, bool) {
 	if pt == nil {
 		return 0, false
 	}
-	ok, _ := pt.PodPortRules.AddRule(nodeport, fmt.Sprintf("%s:%d", podip, podport))
+	ok := pt.PodPortRules.AddRule(nodeport, fmt.Sprintf("%s:%d", podip, podport))
 	if !ok {
 		return 0, false
 	}
@@ -161,14 +165,14 @@ func (pt *PortTable) AddRule(podip string, podport int) (int, bool) {
 	return nodeport, true
 }
 
-func (pt *PortTable) DeleteRule(podip string, podport int) (bool, error) {
+func (pt *PortTable) DeleteRule(podip string, podport int) bool {
 	data := pt.GetEntryByPodIPPort(podip, podport)
-	ok, err := pt.PodPortRules.DeleteRule(data.Nodeport, fmt.Sprintf("%s:%d", podip, podport))
+	ok := pt.PodPortRules.DeleteRule(data.Nodeport, fmt.Sprintf("%s:%d", podip, podport))
 	if !ok {
-		return false, err
+		return false
 	}
 	pt.DeleteEntry(data.Nodeport)
-	return true, nil
+	return true
 }
 
 func (pt *PortTable) RuleExists(podip string, podport int) bool {

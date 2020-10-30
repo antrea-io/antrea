@@ -21,10 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
-	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
@@ -39,28 +40,28 @@ import (
 type PPRTest struct {
 }
 
-func (PPRTest) Init() (bool, error) {
-	return true, nil
+func (PPRTest) Init() bool {
+	return true
 }
 
-func (PPRTest) AddRule(port int, podip string) (bool, error) {
-	return true, nil
+func (PPRTest) AddRule(port int, podip string) bool {
+	return true
 }
 
-func (PPRTest) DeleteRule(port int, podip string) (bool, error) {
-	return true, nil
+func (PPRTest) DeleteRule(port int, podip string) bool {
+	return true
 }
 
 func (PPRTest) SyncState(podPort map[int]string) bool {
 	return true
 }
 
-func (PPRTest) GetAllRules(podPort map[int]string) (bool, error) {
-	return true, nil
+func (PPRTest) GetAllRules(podPort map[int]string) bool {
+	return true
 }
 
-func (PPRTest) DeleteAllRules() (bool, error) {
-	return true, nil
+func (PPRTest) DeleteAllRules() bool {
+	return true
 }
 
 type nplAnnotation struct {
@@ -87,7 +88,6 @@ var kubeClient *k8sfake.Clientset
 var c *k8s.Controller
 
 func getTestPod() corev1.Pod {
-
 	testPod := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      defaultPodName,
@@ -113,6 +113,34 @@ func getTestPod() corev1.Pod {
 	return testPod
 }
 
+// compareWithRetry : call fn() every second and compare returned value with expected value until timeout
+// Implements a minimal functionality similar to Eventually() of github.com/onsi/gomega
+func compareWithRetry(t *testing.T, fn interface{}, expected interface{}, timeout time.Duration) {
+	var actualValue []reflect.Value
+	var receivedData reflect.Value
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	timeCh := make(chan bool)
+	go func() {
+		time.Sleep(timeout)
+		timeCh <- true
+	}()
+	for {
+		select {
+		case <-timeCh:
+			if len(actualValue) > 0 {
+				receivedData = actualValue[0]
+			}
+			t.Fatalf("Timed out, actual value: %v did not match expected value: %v", receivedData, expected)
+		case _ = <-ticker.C:
+			actualValue = reflect.ValueOf(fn).Call([]reflect.Value{})
+			if len(actualValue) > 0 && reflect.DeepEqual(actualValue[0].Interface(), expected) {
+				return
+			}
+		}
+	}
+}
+
 func TestMain(t *testing.T) {
 	os.Setenv("HOSTNAME", defaultNodeName)
 	kubeClient = k8sfake.NewSimpleClientset()
@@ -133,7 +161,7 @@ func TestPodAdd(t *testing.T) {
 	var data string
 	var found bool
 
-	g := gomega.NewGomegaWithT(t)
+	a := assert.New(t)
 
 	testPod := getTestPod()
 	p, err := c.KubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod, metav1.CreateOptions{})
@@ -142,7 +170,7 @@ func TestPodAdd(t *testing.T) {
 	}
 	t.Logf("successfully created Pod: %v", p)
 
-	g.Eventually(func() bool {
+	compareWithRetry(t, func() bool {
 		updatedPod, err := c.KubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("Failed to update pod: %v", err)
@@ -150,7 +178,7 @@ func TestPodAdd(t *testing.T) {
 		ann = updatedPod.GetAnnotations()
 		data, found = ann[lib.NPLEPAnnotation]
 		return found
-	}, 20*time.Second).Should(gomega.Equal(true))
+	}, true, 20*time.Second)
 
 	var nplData []nplAnnotation
 	json.Unmarshal([]byte(data), &nplData)
@@ -159,9 +187,9 @@ func TestPodAdd(t *testing.T) {
 		t.Fatalf("Expected npl annotation of length: 1, got: %d", len(nplData))
 	}
 
-	g.Expect(nplData[0].Nodeip).To(gomega.Equal(defaultHostIP))
-	g.Expect(nplData[0].Podport).To(gomega.Equal(fmt.Sprint(defaultPort)))
-	g.Expect(c.PortTable.RuleExists(defaultPodIP, defaultPort)).To(gomega.Equal(true))
+	a.Equal(nplData[0].Nodeip, defaultHostIP)
+	a.Equal(nplData[0].Podport, fmt.Sprint(defaultPort))
+	a.Equal(c.PortTable.RuleExists(defaultPodIP, defaultPort), true)
 }
 
 // Test that any update in the Pod container port is reflected in pod annotation and local port cache
@@ -170,7 +198,7 @@ func TestPodUpdate(t *testing.T) {
 	var nplData []nplAnnotation
 	var data string
 
-	g := gomega.NewGomegaWithT(t)
+	a := assert.New(t)
 
 	testPod := getTestPod()
 	testPod.Spec.Containers[0].Ports[0].ContainerPort = 8080
@@ -181,7 +209,7 @@ func TestPodUpdate(t *testing.T) {
 	}
 	t.Logf("successfully created Pod: %v", p)
 
-	g.Eventually(func() string {
+	compareWithRetry(t, func() string {
 		updatedPod, err := c.KubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("Failed to update pod: %v", err)
@@ -193,23 +221,22 @@ func TestPodUpdate(t *testing.T) {
 			return ""
 		}
 		return nplData[0].Podport
-	}, 20*time.Second).Should(gomega.Equal("8080"))
-	g.Expect(c.PortTable.RuleExists(defaultPodIP, defaultPort)).To(gomega.Equal(false))
-	g.Expect(c.PortTable.RuleExists(defaultPodIP, 8080)).To(gomega.Equal(true))
+	}, "8080", 20*time.Second)
+	a.Equal(c.PortTable.RuleExists(defaultPodIP, defaultPort), false)
+	a.Equal(c.PortTable.RuleExists(defaultPodIP, 8080), true)
 }
 
 // Make sure that when a pod gets deleted, corresponding entry gets deleted from local port cache also
 func TestPodDel(t *testing.T) {
-	g := gomega.NewGomegaWithT(t)
 	err := c.KubeClient.CoreV1().Pods(defaultNS).Delete(context.TODO(), defaultPodName, metav1.DeleteOptions{})
 	if err != nil {
 		t.Fatalf("Pod deletion failed with err: %v", err)
 	}
 	t.Logf("successfully deleted Pod: %s", defaultPodName)
 
-	g.Eventually(func() bool {
+	compareWithRetry(t, func() bool {
 		return c.PortTable.RuleExists(defaultPodIP, 8080)
-	}, 20*time.Second).Should(gomega.Equal(false))
+	}, false, 20*time.Second)
 }
 
 // Create a pod with multiple ports and verify that pod annotation and local port cache are updated correctly
@@ -218,7 +245,7 @@ func TestPodAddMultiPort(t *testing.T) {
 	var data string
 	var found bool
 
-	g := gomega.NewGomegaWithT(t)
+	a := assert.New(t)
 
 	testPod := getTestPod()
 	newPort := corev1.ContainerPort{ContainerPort: 90}
@@ -229,7 +256,7 @@ func TestPodAddMultiPort(t *testing.T) {
 	}
 	t.Logf("successfully created Pod: %v", p)
 
-	g.Eventually(func() bool {
+	compareWithRetry(t, func() bool {
 		updatedPod, err := c.KubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("Failed to update pod: %v", err)
@@ -237,21 +264,21 @@ func TestPodAddMultiPort(t *testing.T) {
 		ann = updatedPod.GetAnnotations()
 		data, found = ann[lib.NPLEPAnnotation]
 		return found
-	}, 20*time.Second).Should(gomega.Equal(true))
+	}, true, 20*time.Second)
 
 	var nplData []nplAnnotation
-	g.Eventually(func() int {
+	compareWithRetry(t, func() int {
 		json.Unmarshal([]byte(data), &nplData)
 		return len(nplData)
-	}, 20*time.Second).Should(gomega.Equal(2))
+	}, 2, 20*time.Second)
 
-	g.Expect(nplData[0].Nodeip).To(gomega.Equal(defaultHostIP))
-	g.Expect(nplData[0].Podport).To(gomega.Equal(fmt.Sprint(defaultPort)))
-	g.Expect(c.PortTable.RuleExists(defaultPodIP, defaultPort)).To(gomega.Equal(true))
+	a.Equal(nplData[0].Nodeip, defaultHostIP)
+	a.Equal(nplData[0].Podport, fmt.Sprint(defaultPort))
+	a.Equal(c.PortTable.RuleExists(defaultPodIP, defaultPort), true)
 
-	g.Expect(nplData[1].Nodeip).To(gomega.Equal(defaultHostIP))
-	g.Expect(nplData[1].Podport).To(gomega.Equal("90"))
-	g.Expect(c.PortTable.RuleExists(defaultPodIP, 90)).To(gomega.Equal(true))
+	a.Equal(nplData[1].Nodeip, defaultHostIP)
+	a.Equal(nplData[1].Podport, "90")
+	a.Equal(c.PortTable.RuleExists(defaultPodIP, 90), true)
 }
 
 // Create Multiple Pods and test that annotations for both te pods are updated correctly
@@ -261,7 +288,7 @@ func TestAddMultiplePods(t *testing.T) {
 	var data string
 	var found bool
 
-	g := gomega.NewGomegaWithT(t)
+	a := assert.New(t)
 
 	testPod1 := getTestPod()
 	testPod1.Name = "pod1"
@@ -281,7 +308,7 @@ func TestAddMultiplePods(t *testing.T) {
 	}
 	t.Logf("successfully created Pod: %v", p)
 
-	g.Eventually(func() bool {
+	compareWithRetry(t, func() bool {
 		updatedPod, err := c.KubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod1.Name, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("Failed to update pod: %v", err)
@@ -289,7 +316,7 @@ func TestAddMultiplePods(t *testing.T) {
 		ann = updatedPod.GetAnnotations()
 		data, found = ann[lib.NPLEPAnnotation]
 		return found
-	}, 20*time.Second).Should(gomega.Equal(true))
+	}, true, 20*time.Second)
 
 	var nplData []nplAnnotation
 	json.Unmarshal([]byte(data), &nplData)
@@ -298,11 +325,11 @@ func TestAddMultiplePods(t *testing.T) {
 		t.Fatalf("Expected npl annotation of length: 1, got: %d", len(nplData))
 	}
 
-	g.Expect(nplData[0].Nodeip).To(gomega.Equal(defaultHostIP))
-	g.Expect(nplData[0].Podport).To(gomega.Equal(fmt.Sprint(defaultPort)))
-	g.Expect(c.PortTable.RuleExists(testPod1.Status.PodIP, defaultPort)).To(gomega.Equal(true))
+	a.Equal(nplData[0].Nodeip, defaultHostIP)
+	a.Equal(nplData[0].Podport, fmt.Sprint(defaultPort))
+	a.Equal(c.PortTable.RuleExists(testPod1.Status.PodIP, defaultPort), true)
 
-	g.Eventually(func() bool {
+	compareWithRetry(t, func() bool {
 		updatedPod, err := c.KubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod2.Name, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("Failed to update pod: %v", err)
@@ -310,14 +337,14 @@ func TestAddMultiplePods(t *testing.T) {
 		ann = updatedPod.GetAnnotations()
 		data, found = ann[lib.NPLEPAnnotation]
 		return found
-	}, 20*time.Second).Should(gomega.Equal(true))
+	}, true, 20*time.Second)
 	json.Unmarshal([]byte(data), &nplData)
 
 	if len(nplData) != 1 {
 		t.Fatalf("Expected npl annotation of length: 1, got: %d", len(nplData))
 	}
 
-	g.Expect(nplData[0].Nodeip).To(gomega.Equal(defaultHostIP))
-	g.Expect(nplData[0].Podport).To(gomega.Equal(fmt.Sprint(defaultPort)))
-	g.Expect(c.PortTable.RuleExists(testPod2.Status.PodIP, defaultPort)).To(gomega.Equal(true))
+	a.Equal(nplData[0].Nodeip, defaultHostIP)
+	a.Equal(nplData[0].Podport, fmt.Sprint(defaultPort))
+	a.Equal(c.PortTable.RuleExists(testPod2.Status.PodIP, defaultPort), true)
 }

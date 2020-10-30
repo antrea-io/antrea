@@ -14,15 +14,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bootstrap
+package nplagent
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/klog"
 )
 
 // InitializeNPLAgent : start NodePortLocal (NPL) agent
@@ -33,10 +35,17 @@ func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informer
 	c := k8s.NewNPLController(kubeClient)
 	start, end, err := lib.GetPortsRange()
 	if err != nil {
-		klog.Errorf("Something went wrong while fetching port range: %s", err.Error())
-		return err
+		return fmt.Errorf("something went wrong while fetching port range: %v", err)
 	}
-	c.PortTable = portcache.NewPortTable(start, end)
+	var ok bool
+	c.PortTable, ok = portcache.NewPortTable(start, end)
+	if !ok {
+		return errors.New("NPL port table could not be initialized")
+	}
+	ok = c.PortTable.PodPortRules.Init()
+	if !ok {
+		return errors.New("NPL rules for pod ports could not be initialized")
+	}
 	c.RemoveNPLAnnotationFromPods()
 	c.SetupEventHandlers(informerFactory)
 	return nil

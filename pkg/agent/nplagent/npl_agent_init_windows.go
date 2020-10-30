@@ -14,18 +14,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bootstrap
+package nplagent
 
 import (
 	"errors"
+
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/klog"
 )
 
 // InitializeNPLAgent : start NodePortLocal (NPL) agent
-// Currently NPL is disabled for windows 
+// Currently NPL is disabled for windows
 func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory) error {
-	klog.Errorf("NodePortLocal is currently not supported in Windows Platform ")
 	return errors.New("Windows Platform not supported fot NPL")
 }

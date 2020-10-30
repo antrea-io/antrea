@@ -18,7 +18,7 @@ package lib
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"strconv"
@@ -51,11 +51,10 @@ func HasElem(s interface{}, elem interface{}) bool {
 
 func GetPortsRange() (start, end int, err error) {
 	// required field
-	envConst := os.Getenv("NPL_PORT_RANGE")
-	portsRange := strings.Split(envConst, "-")
+	nplPortsEnvCost := os.Getenv("NPL_PORT_RANGE")
+	portsRange := strings.Split(nplPortsEnvCost, "-")
 	if len(portsRange) != 2 {
-		klog.Warningf("Wrong port range format: %s", envConst)
-		return 0, 0, errors.New("Wrong port range format")
+		return 0, 0, fmt.Errorf("wrong port range format: %s", nplPortsEnvCost)
 	}
 
 	if start, err = strconv.Atoi(portsRange[0]); err != nil {
@@ -64,6 +63,10 @@ func GetPortsRange() (start, end int, err error) {
 
 	if end, err = strconv.Atoi(portsRange[1]); err != nil {
 		return 0, 0, err
+	}
+
+	if end <= start {
+		return 0, 0, fmt.Errorf("invalid port range: %s", nplPortsEnvCost)
 	}
 
 	return start, end, nil

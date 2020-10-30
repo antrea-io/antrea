@@ -102,7 +102,7 @@ func (c *Controller) HandleUpdatePod(old, newp *corev1.Pod) {
 				if nodePort == "" && c.PortTable.GetEntryByPodIPPort(oldPodIP, int(cport.ContainerPort)) == nil {
 					break
 				}
-				ok, _ := c.PortTable.DeleteRule(podIP, int(cport.ContainerPort))
+				ok := c.PortTable.DeleteRule(podIP, int(cport.ContainerPort))
 				if ok {
 					removeFromPodAnnotation(newp, port)
 				}
