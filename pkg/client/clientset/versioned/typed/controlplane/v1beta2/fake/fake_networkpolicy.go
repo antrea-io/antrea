@@ -30,7 +30,6 @@ import (
 // FakeNetworkPolicies implements NetworkPolicyInterface
 type FakeNetworkPolicies struct {
 	Fake *FakeControlplaneV1beta2
-	ns   string
 }
 
 var networkpoliciesResource = schema.GroupVersionResource{Group: "controlplane.antrea.tanzu.vmware.com", Version: "v1beta2", Resource: "networkpolicies"}
@@ -40,8 +39,7 @@ var networkpoliciesKind = schema.GroupVersionKind{Group: "controlplane.antrea.ta
 // Get takes name of the networkPolicy, and returns the corresponding networkPolicy object, and an error if there is any.
 func (c *FakeNetworkPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.NetworkPolicy, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(networkpoliciesResource, c.ns, name), &v1beta2.NetworkPolicy{})
-
+		Invokes(testing.NewRootGetAction(networkpoliciesResource, name), &v1beta2.NetworkPolicy{})
 	if obj == nil {
 		return nil, err
 	}
@@ -51,8 +49,7 @@ func (c *FakeNetworkPolicies) Get(ctx context.Context, name string, options v1.G
 // List takes label and field selectors, and returns the list of NetworkPolicies that match those selectors.
 func (c *FakeNetworkPolicies) List(ctx context.Context, opts v1.ListOptions) (result *v1beta2.NetworkPolicyList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(networkpoliciesResource, networkpoliciesKind, c.ns, opts), &v1beta2.NetworkPolicyList{})
-
+		Invokes(testing.NewRootListAction(networkpoliciesResource, networkpoliciesKind, opts), &v1beta2.NetworkPolicyList{})
 	if obj == nil {
 		return nil, err
 	}
@@ -73,6 +70,5 @@ func (c *FakeNetworkPolicies) List(ctx context.Context, opts v1.ListOptions) (re
 // Watch returns a watch.Interface that watches the requested networkPolicies.
 func (c *FakeNetworkPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(networkpoliciesResource, c.ns, opts))
-
+		InvokesWatch(testing.NewRootWatchAction(networkpoliciesResource, opts))
 }

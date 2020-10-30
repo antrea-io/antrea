@@ -79,8 +79,6 @@ const (
 )
 
 var (
-	keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
-
 	// uuidNamespace is a uuid.UUID type generated from a string to be
 	// used to generate uuid.UUID for internal Antrea objects like
 	// AppliedToGroup, AddressGroup etc.
@@ -676,9 +674,8 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	}
 
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
-		Name:      np.Name,
-		Namespace: np.Namespace,
-		UID:       np.UID,
+		Name: internalNetworkPolicyKeyFunc(np),
+		UID:  np.UID,
 		SourceRef: &controlplane.NetworkPolicyReference{
 			Type:      controlplane.K8sNetworkPolicy,
 			Namespace: np.Namespace,
@@ -735,13 +732,13 @@ func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolic
 func (n *NetworkPolicyController) addNetworkPolicy(obj interface{}) {
 	defer n.heartbeat("addNetworkPolicy")
 	np := obj.(*networkingv1.NetworkPolicy)
-	klog.V(2).Infof("Processing NetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
+	klog.Infof("Processing K8s NetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
 	// Create an internal NetworkPolicy object corresponding to this NetworkPolicy
 	// and enqueue task to internal NetworkPolicy Workqueue.
 	internalNP := n.processNetworkPolicy(np)
-	klog.Infof("Creating new internal NetworkPolicy %s/%s", internalNP.Namespace, internalNP.Name)
+	klog.V(2).Infof("Creating new internal NetworkPolicy %s for %s", internalNP.Name, internalNP.SourceRef.ToString())
 	n.internalNetworkPolicyStore.Create(internalNP)
-	key, _ := keyFunc(np)
+	key := internalNetworkPolicyKeyFunc(np)
 	n.enqueueInternalNetworkPolicy(key)
 }
 
@@ -750,15 +747,15 @@ func (n *NetworkPolicyController) addNetworkPolicy(obj interface{}) {
 func (n *NetworkPolicyController) updateNetworkPolicy(old, cur interface{}) {
 	defer n.heartbeat("updateNetworkPolicy")
 	np := cur.(*networkingv1.NetworkPolicy)
-	klog.V(2).Infof("Processing NetworkPolicy %s/%s UPDATE event", np.Namespace, np.Name)
+	klog.Infof("Processing K8s NetworkPolicy %s/%s UPDATE event", np.Namespace, np.Name)
 	// Update an internal NetworkPolicy ID, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processNetworkPolicy(np)
-	klog.V(2).Infof("Updating existing internal NetworkPolicy %s/%s", curInternalNP.Namespace, curInternalNP.Name)
+	klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
 	// Retrieve old networkingv1.NetworkPolicy object.
 	oldNP := old.(*networkingv1.NetworkPolicy)
 	// Old and current NetworkPolicy share the same key.
-	key, _ := keyFunc(oldNP)
+	key := internalNetworkPolicyKeyFunc(oldNP)
 	// Lock access to internal NetworkPolicy store such that concurrent access
 	// to an internal NetworkPolicy is not allowed. This will avoid the
 	// case in which an Update to an internal NetworkPolicy object may
@@ -812,13 +809,13 @@ func (n *NetworkPolicyController) deleteNetworkPolicy(old interface{}) {
 	}
 	defer n.heartbeat("deleteNetworkPolicy")
 
-	klog.V(2).Infof("Processing NetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
-	key, _ := keyFunc(np)
+	klog.Infof("Processing K8s NetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
+	key := internalNetworkPolicyKeyFunc(np)
 	oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
 	oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
 	// AppliedToGroups currently only supports a single member.
 	oldAppliedToGroupUID := oldInternalNP.AppliedToGroups[0]
-	klog.Infof("Deleting internal NetworkPolicy %s/%s", np.Namespace, np.Name)
+	klog.Infof("Deleting internal NetworkPolicy %s for %s", oldInternalNP.Name, oldInternalNP.SourceRef.ToString())
 	// Delete corresponding internal NetworkPolicy from store.
 	err := n.internalNetworkPolicyStore.Delete(key)
 	if err != nil {
@@ -1475,7 +1472,6 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 	updatedNetworkPolicy := &antreatypes.NetworkPolicy{
 		UID:             internalNP.UID,
 		Name:            internalNP.Name,
-		Namespace:       internalNP.Namespace,
 		SourceRef:       internalNP.SourceRef,
 		Rules:           internalNP.Rules,
 		AppliedToGroups: internalNP.AppliedToGroups,
@@ -1529,4 +1525,12 @@ func cidrStrToIPNet(cidr string) (*controlplane.IPNet, error) {
 		PrefixLength: int32(prefixLen64),
 	}
 	return ipNet, nil
+}
+
+// internalNetworkPolicyKeyFunc knows how to generate the key for an internal NetworkPolicy based on the object metadata
+// of the corresponding original NetworkPolicy resource (also referred to as the "source").
+// The key must be unique across K8s NetworkPolicies, Antrea NetworkPolicies, and Antrea ClusterNetworkPolicies.
+// Currently the UID of the original NetworkPolicy is used to ensure uniqueness.
+func internalNetworkPolicyKeyFunc(obj metav1.Object) string {
+	return string(obj.GetUID())
 }

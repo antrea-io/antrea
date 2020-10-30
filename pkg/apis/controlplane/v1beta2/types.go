@@ -148,6 +148,7 @@ type NetworkPolicyReference struct {
 }
 
 // +genclient
+// +genclient:nonNamespaced
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.
@@ -195,6 +196,8 @@ type NetworkPolicyRule struct {
 	// action “nil” defaults to Allow action, which would be the case for rules created for
 	// K8s Network Policy.
 	Action *secv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1.RuleAction"`
+	// EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.
+	EnableLogging bool `json:"enableLogging" protobuf:"varint,7,opt,name=enableLogging"`
 }
 
 // Protocol defines network protocols supported for things like container ports.

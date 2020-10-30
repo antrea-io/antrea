@@ -30,7 +30,7 @@ import (
 // NetworkPoliciesGetter has a method to return a NetworkPolicyInterface.
 // A group's client should implement this interface.
 type NetworkPoliciesGetter interface {
-	NetworkPolicies(namespace string) NetworkPolicyInterface
+	NetworkPolicies() NetworkPolicyInterface
 }
 
 // NetworkPolicyInterface has methods to work with NetworkPolicy resources.
@@ -44,14 +44,12 @@ type NetworkPolicyInterface interface {
 // networkPolicies implements NetworkPolicyInterface
 type networkPolicies struct {
 	client rest.Interface
-	ns     string
 }
 
 // newNetworkPolicies returns a NetworkPolicies
-func newNetworkPolicies(c *ControlplaneV1beta2Client, namespace string) *networkPolicies {
+func newNetworkPolicies(c *ControlplaneV1beta2Client) *networkPolicies {
 	return &networkPolicies{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -59,7 +57,6 @@ func newNetworkPolicies(c *ControlplaneV1beta2Client, namespace string) *network
 func (c *networkPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.NetworkPolicy, err error) {
 	result = &v1beta2.NetworkPolicy{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("networkpolicies").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -76,7 +73,6 @@ func (c *networkPolicies) List(ctx context.Context, opts v1.ListOptions) (result
 	}
 	result = &v1beta2.NetworkPolicyList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("networkpolicies").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -93,7 +89,6 @@ func (c *networkPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch
 	}
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("networkpolicies").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).

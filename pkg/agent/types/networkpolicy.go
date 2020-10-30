@@ -46,12 +46,12 @@ type PolicyRule struct {
 	Direction     v1beta2.Direction
 	From          []Address
 	To            []Address
-	Service       []v1beta1.Service
+	Service       []v1beta2.Service
 	Action        *secv1alpha1.RuleAction
 	Priority      *uint16
 	FlowID        uint32
 	TableID       binding.TableIDType
-	PolicyRef     *v1beta1.NetworkPolicyReference
+	PolicyRef     *v1beta2.NetworkPolicyReference
 	EnableLogging bool
 }
 

@@ -750,7 +750,7 @@ func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.Network
 // waitForNetworkpolicyRealized waits for the NetworkPolicy to be realized by the antrea-agent Pod.
 func (data *TestData) waitForNetworkpolicyRealized(pod string, networkpolicy string) error {
 	if err := wait.Poll(200*time.Millisecond, 5*time.Second, func() (bool, error) {
-		cmds := []string{"antctl", "get", "networkpolicy", networkpolicy, "-n", testNamespace}
+		cmds := []string{"antctl", "get", "networkpolicy", "-S", networkpolicy, "-n", testNamespace}
 		if _, stderr, err := runAntctl(pod, cmds, data); err != nil {
 			if strings.Contains(stderr, "server could not find the requested resource") {
 				return false, nil

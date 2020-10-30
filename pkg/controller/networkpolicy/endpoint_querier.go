@@ -162,9 +162,9 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 	for _, internalPolicy := range applied {
 		responsePolicy := Policy{
 			PolicyRef: PolicyRef{
-				Namespace: internalPolicy.Namespace,
-				Name:      internalPolicy.Name,
-				UID:       internalPolicy.UID,
+				Namespace: internalPolicy.SourceRef.Namespace,
+				Name:      internalPolicy.SourceRef.Name,
+				UID:       internalPolicy.SourceRef.UID,
 			},
 		}
 		responsePolicies = append(responsePolicies, responsePolicy)
@@ -174,9 +174,9 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 	for _, internalPolicy := range egress {
 		newRule := Rule{
 			PolicyRef: PolicyRef{
-				Namespace: internalPolicy.policy.Namespace,
-				Name:      internalPolicy.policy.Name,
-				UID:       internalPolicy.policy.UID,
+				Namespace: internalPolicy.policy.SourceRef.Namespace,
+				Name:      internalPolicy.policy.SourceRef.Name,
+				UID:       internalPolicy.policy.SourceRef.UID,
 			},
 			Direction: cpv1beta.DirectionOut,
 			RuleIndex: internalPolicy.index,
@@ -186,9 +186,9 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 	for _, internalPolicy := range ingress {
 		newRule := Rule{
 			PolicyRef: PolicyRef{
-				Namespace: internalPolicy.policy.Namespace,
-				Name:      internalPolicy.policy.Name,
-				UID:       internalPolicy.policy.UID,
+				Namespace: internalPolicy.policy.SourceRef.Namespace,
+				Name:      internalPolicy.policy.SourceRef.Name,
+				UID:       internalPolicy.policy.SourceRef.UID,
 			},
 			Direction: cpv1beta.DirectionIn,
 			RuleIndex: internalPolicy.index,

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -123,17 +124,17 @@ func newAppliedToGroup(name string, pods []v1beta2.GroupMember) *v1beta2.Applied
 	}
 }
 
-func newNetworkPolicy(uid string, from, to, appliedTo []string, services []v1beta2.Service) *v1beta2.NetworkPolicy {
+func newNetworkPolicy(name string, uid types.UID, from, to, appliedTo []string, services []v1beta2.Service) *v1beta2.NetworkPolicy {
 	networkPolicyRule1 := newPolicyRule(v1beta2.DirectionIn, from, to, services)
 	return &v1beta2.NetworkPolicy{
-		ObjectMeta:      v1.ObjectMeta{UID: types.UID(uid), Name: uid, Namespace: testNamespace},
+		ObjectMeta:      v1.ObjectMeta{UID: uid, Name: string(uid)},
 		Rules:           []v1beta2.NetworkPolicyRule{networkPolicyRule1},
 		AppliedToGroups: appliedTo,
 		SourceRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: testNamespace,
-			Name:      uid,
-			UID:       types.UID(uid),
+			Name:      name,
+			UID:       uid,
 		},
 	}
 }
@@ -147,7 +148,7 @@ func newPolicyRule(direction v1beta2.Direction, from []string, to []string, serv
 	}
 }
 
-func newNetworkPolicyWithMultipleRules(uid string, from, to, appliedTo []string, services []v1beta2.Service) *v1beta2.NetworkPolicy {
+func newNetworkPolicyWithMultipleRules(name string, uid types.UID, from, to, appliedTo []string, services []v1beta2.Service) *v1beta2.NetworkPolicy {
 	networkPolicyRule1 := v1beta2.NetworkPolicyRule{
 		Direction: v1beta2.DirectionIn,
 		From:      v1beta2.NetworkPolicyPeer{AddressGroups: from},
@@ -161,14 +162,14 @@ func newNetworkPolicyWithMultipleRules(uid string, from, to, appliedTo []string,
 		Services:  services,
 	}
 	return &v1beta2.NetworkPolicy{
-		ObjectMeta:      v1.ObjectMeta{UID: types.UID(uid), Name: uid, Namespace: testNamespace},
+		ObjectMeta:      v1.ObjectMeta{UID: uid, Name: string(uid)},
 		Rules:           []v1beta2.NetworkPolicyRule{networkPolicyRule1, networkPolicyRule2},
 		AppliedToGroups: appliedTo,
 		SourceRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: testNamespace,
-			Name:      uid,
-			UID:       types.UID(uid),
+			Name:      name,
+			UID:       uid,
 		},
 	}
 }
@@ -196,7 +197,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 	go controller.Run(stopCh)
 
 	// policy1 comes first, no rule will be synced due to missing addressGroup1 and appliedToGroup1.
-	policy1 := newNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services)
+	policy1 := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services)
 	networkPolicyWatcher.Add(policy1)
 	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	select {
@@ -204,7 +205,9 @@ func TestAddSingleGroupRule(t *testing.T) {
 		t.Fatalf("Expected no update, got %v", ruleID)
 	case <-time.After(time.Millisecond * 100):
 	}
-	assert.Equal(t, policy1, controller.GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}))
+	networkPolicies := controller.GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: policy1.SourceRef.Name, Namespace: policy1.SourceRef.Namespace})
+	require.Equal(t, 1, len(networkPolicies))
+	assert.Equal(t, policy1, &networkPolicies[0])
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 0, controller.GetAddressGroupNum())
 	assert.Equal(t, 0, controller.GetAppliedToGroupNum())
@@ -279,7 +282,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	// policy1 comes first, no rule will be synced due to missing addressGroup2 and appliedToGroup2.
-	policy1 := newNetworkPolicy("policy1", []string{"addressGroup1", "addressGroup2"}, []string{}, []string{"appliedToGroup1", "appliedToGroup2"}, services)
+	policy1 := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1", "addressGroup2"}, []string{}, []string{"appliedToGroup1", "appliedToGroup2"}, services)
 	networkPolicyWatcher.Add(policy1)
 	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	select {
@@ -287,7 +290,9 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 		t.Fatalf("Expected no update, got %v", ruleID)
 	case <-time.After(time.Millisecond * 100):
 	}
-	assert.Equal(t, policy1, controller.GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}))
+	networkPolicies := controller.GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: policy1.SourceRef.Name, Namespace: policy1.SourceRef.Namespace})
+	require.Equal(t, 1, len(networkPolicies))
+	assert.Equal(t, policy1, &networkPolicies[0])
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
@@ -351,7 +356,7 @@ func TestDeleteRule(t *testing.T) {
 	addressGroupWatcher.Action(watch.Bookmark, nil)
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
-	networkPolicyWatcher.Add(newNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services))
+	networkPolicyWatcher.Add(newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services))
 	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	select {
 	case ruleID := <-reconciler.updated:
@@ -366,7 +371,7 @@ func TestDeleteRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 
-	networkPolicyWatcher.Delete(newNetworkPolicy("policy1", []string{}, []string{}, []string{}, nil))
+	networkPolicyWatcher.Delete(newNetworkPolicy("policy1", "uid1", []string{}, []string{}, []string{}, nil))
 	select {
 	case ruleID := <-reconciler.deleted:
 		actualRule, exists := reconciler.getLastRealized(ruleID)
@@ -407,7 +412,7 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	go controller.Run(stopCh)
 
 	// Test NetworkPolicyInfoQuerier functions when the NetworkPolicy has multiple rules.
-	policy1 := newNetworkPolicyWithMultipleRules("policy1", []string{"addressGroup1"}, []string{"addressGroup2"}, []string{"appliedToGroup1"}, services)
+	policy1 := newNetworkPolicyWithMultipleRules("policy1", "uid1", []string{"addressGroup1"}, []string{"addressGroup2"}, []string{"appliedToGroup1"}, services)
 	networkPolicyWatcher.Add(policy1)
 	networkPolicyWatcher.Action(watch.Bookmark, nil)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
@@ -452,8 +457,10 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 			t.Fatal("Expected two rule updates, got timeout")
 		}
 	}
-	assert.ElementsMatch(t, policy1.Rules, controller.GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}).Rules)
-	assert.ElementsMatch(t, policy1.AppliedToGroups, controller.GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: policy1.Name, Namespace: policy1.Namespace}).AppliedToGroups)
+	networkPolicies := controller.GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: policy1.SourceRef.Name, Namespace: policy1.SourceRef.Namespace})
+	require.Equal(t, 1, len(networkPolicies))
+	assert.ElementsMatch(t, policy1.Rules, networkPolicies[0].Rules)
+	assert.ElementsMatch(t, policy1.AppliedToGroups, networkPolicies[0].AppliedToGroups)
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 2, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
@@ -544,7 +551,7 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	go controller.Run(stopCh)
 
 	// Test adding policy1 with a single rule
-	policy1 := newNetworkPolicy("policy1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services)
+	policy1 := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
@@ -555,7 +562,7 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	checkNetworkPolicyMetrics()
 
 	// Test adding policy2 with multiple rules
-	policy2 := newNetworkPolicyWithMultipleRules("policy2", []string{"addressGroup2"}, []string{"addressGroup2"}, []string{"appliedToGroup2"}, services)
+	policy2 := newNetworkPolicyWithMultipleRules("policy2", "uid2", []string{"addressGroup2"}, []string{"addressGroup2"}, []string{"appliedToGroup2"}, services)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta2.GroupMember{*newAddressGroupMember("3.3.3.3"), *newAddressGroupMember("4.4.4.4")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta2.GroupMember{*newAppliedToGroupMember("pod2", "ns2")}))
@@ -565,12 +572,12 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	checkNetworkPolicyMetrics()
 
 	// Test deleting policy1
-	networkPolicyWatcher.Delete(newNetworkPolicy("policy1", []string{}, []string{}, []string{}, nil))
+	networkPolicyWatcher.Delete(newNetworkPolicy("policy1", "uid1", []string{}, []string{}, []string{}, nil))
 	waitForReconcilerDeleted()
 	checkNetworkPolicyMetrics()
 
 	// Test deleting policy2
-	networkPolicyWatcher.Delete(newNetworkPolicy("policy2", []string{}, []string{}, []string{}, nil))
+	networkPolicyWatcher.Delete(newNetworkPolicy("policy2", "uid2", []string{}, []string{}, []string{}, nil))
 	waitForReconcilerDeleted()
 	checkNetworkPolicyMetrics()
 }

@@ -34,7 +34,6 @@ type AgentNetworkPolicyInfoQuerier interface {
 	GetNetworkPolicies(npFilter *NetworkPolicyQueryFilter) []cpv1beta.NetworkPolicy
 	GetAddressGroups() []cpv1beta.AddressGroup
 	GetAppliedToGroups() []cpv1beta.AppliedToGroup
-	GetNetworkPolicy(npFilter *NetworkPolicyQueryFilter) *cpv1beta.NetworkPolicy
 	GetAppliedNetworkPolicies(pod, namespace string, npFilter *NetworkPolicyQueryFilter) []cpv1beta.NetworkPolicy
 }
 
@@ -78,9 +77,12 @@ func GetVersion() string {
 // e.g SourceType = "" means all type network policy will be retrieved
 // Can have more attributes in future if more args are required
 type NetworkPolicyQueryFilter struct {
-	// Name of the network policy.
+	// The Name of the controlplane network policy. If this field is set then
+	// none of the other fields can be.
 	Name string
-	// Namespace of the NetworkPolicy.
+	// The Name of the original network policy.
+	SourceName string
+	// The namespace of the original Namespace that the internal NetworkPolicy is created for.
 	Namespace string
 	// Name of the pod that the network policy is applied on.
 	Pod string

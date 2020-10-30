@@ -95,11 +95,8 @@ type NetworkPolicy struct {
 	SpanMeta
 	// UID of the internal Network Policy.
 	UID types.UID
-	// Name of the internal Network Policy.
+	// Name of the internal Network Policy, must be unique across all Network Policy types.
 	Name string
-	// Namespace of the original K8s Network Policy.
-	// An empty value indicates that the Network Policy is Cluster scoped.
-	Namespace string
 	// Reference to the original Network Policy.
 	SourceRef *controlplane.NetworkPolicyReference
 	// Priority represents the relative priority of this Network Policy as compared to

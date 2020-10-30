@@ -791,12 +791,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-cnp-ingress-rule-uninstall",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta2.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
 				FromAddresses: addressGroup1,
 				TargetMembers: appliedToGroupWithDiffContainerPort,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta2.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
 				FromAddresses: addressGroup1,
 				TargetMembers: appliedToGroupWithSingleContainerPort,
 			},

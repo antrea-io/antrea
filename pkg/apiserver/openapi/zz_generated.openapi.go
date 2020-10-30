@@ -2582,7 +2582,15 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 							Format:      "",
 						},
 					},
+					"enableLogging": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
+				Required: []string{"enableLogging"},
 			},
 		},
 		Dependencies: []string{
