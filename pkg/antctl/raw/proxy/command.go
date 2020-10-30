@@ -93,6 +93,28 @@ func (o *proxyOptions) validateAndComplete() error {
 
 	o.port = defaultPort
 
+	if !strings.HasSuffix(o.staticPrefix, "/") {
+		o.staticPrefix += "/"
+	}
+
+	if !strings.HasSuffix(o.apiPrefix, "/") {
+		o.apiPrefix += "/"
+	}
+
+	if o.disableFilter {
+		if o.unixSocket == "" {
+			klog.Warning("Request filter disabled, your proxy is vulnerable to XSRF attacks, please be cautious")
+		}
+		o.filter = nil
+	} else {
+		o.filter = &proxy.FilterServer{
+			AcceptPaths:   proxy.MakeRegexpArrayOrDie(o.acceptPaths),
+			RejectPaths:   proxy.MakeRegexpArrayOrDie(o.rejectPaths),
+			AcceptHosts:   proxy.MakeRegexpArrayOrDie(o.acceptHosts),
+			RejectMethods: proxy.MakeRegexpArrayOrDie(o.rejectMethods),
+		}
+	}
+
 	return nil
 }
 
