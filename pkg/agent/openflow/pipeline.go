@@ -224,7 +224,7 @@ const (
 	// (i.e. for which the first packet of the connection was received through the gateway).
 	gatewayCTMark = 0x20
 	snatCTMark    = 0x40
-	serviceCTMark = 0x21
+	ServiceCTMark = 0x21
 )
 
 var (
@@ -523,7 +523,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Done(),
 			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
 				MatchCTStateTrk(true).
-				MatchCTMark(serviceCTMark, nil).
+				MatchCTMark(ServiceCTMark, nil).
 				MatchRegRange(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Action().GotoTable(connectionTrackCommitTable.GetNext()).
@@ -623,7 +623,7 @@ func (c *client) ctRewriteDstMACFlow(gatewayMAC net.HardwareAddr, category cooki
 func (c *client) serviceLBBypassFlow() binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchCTMark(serviceCTMark, nil).
+		MatchCTMark(ServiceCTMark, nil).
 		MatchCTStateNew(false).MatchCTStateTrk(true).
 		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 		Action().GotoTable(EgressRuleTable).
@@ -979,7 +979,7 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 		MatchConjID(conjunctionID).
 		MatchPriority(ofPriority).
 		Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
-		Action().CT(true, nextTable, CtZone).                                     // CT action requires commit flag if actions other than NAT without arguments are specified.
+		Action().CT(true, nextTable, CtZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
 		LoadToLabelRange(uint64(conjunctionID), &labelRange).
 		CTDone().
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
@@ -1345,7 +1345,7 @@ func (c *client) endpointDNATFlow(endpointIP net.IP, endpointPort uint16, protoc
 			&binding.IPRange{StartIP: endpointIP, EndIP: endpointIP},
 			&binding.PortRange{StartPort: endpointPort, EndPort: endpointPort},
 		).
-		LoadToMark(serviceCTMark).
+		LoadToMark(ServiceCTMark).
 		CTDone().
 		Done()
 }

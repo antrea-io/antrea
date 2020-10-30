@@ -25,17 +25,17 @@ import (
 )
 
 // InitializeConnTrackDumper initializes the ConnTrackDumper interface for different OS and datapath types.
-func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsDatapathType string) ConnTrackDumper {
+func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsDatapathType string, isAntreaProxyEnabled bool) ConnTrackDumper {
 	var connTrackDumper ConnTrackDumper
 	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
-		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDR)
+		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDR, isAntreaProxyEnabled)
 	} else if ovsDatapathType == ovsconfig.OVSDatapathNetdev {
-		connTrackDumper = NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR)
+		connTrackDumper = NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, isAntreaProxyEnabled)
 	}
 	return connTrackDumper
 }
 
-func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, zoneFilter uint16) []*flowexporter.Connection {
+func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, zoneFilter uint16, isAntreaProxyEnabled bool) []*flowexporter.Connection {
 	filteredConns := conns[:0]
 	for _, conn := range conns {
 		if conn.Zone != zoneFilter {
@@ -44,23 +44,25 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 		srcIP := conn.TupleOrig.SourceAddress
 		dstIP := conn.TupleReply.SourceAddress
 
-		// Only get Pod-to-Pod flows.
+		// Consider Pod-to-Pod, Pod-To-Service and Pod-To-External flows.
 		if srcIP.Equal(nodeConfig.GatewayConfig.IP) || dstIP.Equal(nodeConfig.GatewayConfig.IP) {
-			klog.V(4).Infof("Detected flow through gateway :%+v", conn)
+			klog.V(4).Infof("Detected flow for which one of the endpoint is host gateway %s :%+v", nodeConfig.GatewayConfig.IP.String(), conn)
 			continue
 		}
 
-		// Pod-to-Service flows w/ kube-proxy: There are two conntrack flows for every Pod-to-Service flow.
-		// One is with ClusterIP as source or destination, where other IP is podIP. Second conntrack flow is
-		// with resolved Endpoint Pod IP corresponding to ClusterIP. Both conntrack flows have same stats, which makes them duplicates.
-		// Ideally, we have to correlate these two connections and maintain one connection with both Endpoint Pod IP and ClusterIP.
-		// To do the correlation, we need ClusterIP-to-EndpointIP mapping info, which is not available at Agent.
-		// Therefore, we ignore the connection with ClusterIP and keep the connection with Endpoint Pod IP.
-		// Conntrack flows will be different for Pod-to-Service flows w/ Antrea-proxy. This implementation will be simpler, when the
-		// Antrea proxy is supported.
-		if serviceCIDR.Contains(srcIP) || serviceCIDR.Contains(dstIP) {
-			klog.V(4).Infof("Detected a flow with Cluster IP :%+v", conn)
-			continue
+		if !isAntreaProxyEnabled {
+			// Pod-to-Service flows with kube-proxy: There are two conntrack flows
+			// for every Pod-to-Service flow. One is with ClusterIP as destination
+			// and the other one is with resolved endpoint PodIP as destination.
+			// Both conntrack flows have same stats, which makes them duplicates.
+			// We ignore the connection with ClusterIP and keep the connection with
+			// the endpoint PodIP, which is essentially Pod-to-Pod flow.
+			// TODO: Consider the conntrack flows from default zoneID to get iptables
+			// related flow that has both ClusterIP and resolved endpoint PodIP.
+			if serviceCIDR.Contains(dstIP) {
+				klog.V(4).Infof("Detected a flow with Cluster IP with kube-proxy enabled :%+v", conn)
+				continue
+			}
 		}
 		filteredConns = append(filteredConns, conn)
 	}
