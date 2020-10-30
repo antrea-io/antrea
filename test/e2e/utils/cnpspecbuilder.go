@@ -115,7 +115,7 @@ func (b *ClusterNetworkPolicySpecBuilder) SetAppliedToGroup(podSelector map[stri
 }
 
 func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
-	port *int, portName *string, cidr *string,
+	port *int, portName *string, portRange *secv1alpha1.PortRange, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
 	ruleAppliedToSpecs []ACNPRuleAppliedToSpec, action secv1alpha1.RuleAction, name string) *ClusterNetworkPolicySpecBuilder {
@@ -191,6 +191,18 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			},
 		}
 	}
+	if portRange != nil {
+		if len(ports) == 0 {
+			ports = []secv1alpha1.NetworkPolicyPort{
+				{
+					PortRange: portRange,
+					Protocol:  &protoc,
+				},
+			}
+		} else {
+			ports[0].PortRange = portRange
+		}
+	}
 	newRule := secv1alpha1.Rule{
 		From:      policyPeer,
 		Ports:     ports,
@@ -203,7 +215,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 }
 
 func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
-	port *int, portName *string, cidr *string,
+	port *int, portName *string, portRange *secv1alpha1.PortRange, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
 	ruleAppliedToSpecs []ACNPRuleAppliedToSpec, action secv1alpha1.RuleAction, name string) *ClusterNetworkPolicySpecBuilder {
@@ -211,7 +223,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &ClusterNetworkPolicySpecBuilder{}
-	c.AddIngress(protoc, port, portName, cidr, podSelector, nsSelector,
+	c.AddIngress(protoc, port, portName, portRange, cidr, podSelector, nsSelector,
 		podSelectorMatchExp, nsSelectorMatchExp, ruleAppliedToSpecs, action, name)
 	theRule := c.Get().Spec.Ingress[0]
 

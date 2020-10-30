@@ -213,6 +213,35 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 	return reason, allowed
 }
 
+// validatePortRange validates if portRange is valid
+func (a *antreaPolicyValidator) validatePortRange(ingress, egress []secv1alpha1.Rule) error {
+	isValid := func(rules []secv1alpha1.Rule) error {
+		for _, rule := range rules {
+			for _, port := range rule.Ports {
+				if port.PortRange != nil {
+					if port.PortRange.Port != nil && (port.PortRange.From != nil || port.PortRange.To != nil) {
+						return fmt.Errorf("inside portRange, `port` and `from`/`to` cannot be set at the same time")
+					}
+					if (port.PortRange.From != nil) != (port.PortRange.To != nil) {
+						return fmt.Errorf("inside portRange, `from` and `to` have be set at the same time")
+					}
+					if port.PortRange.From != nil && port.PortRange.To != nil && *port.PortRange.From > *port.PortRange.To {
+						return fmt.Errorf("inside portRange, `from` cannot be bigger than `to`")
+					}
+				}
+			}
+		}
+		return nil
+	}
+	if err := isValid(ingress); err != nil {
+		return err
+	}
+	if err := isValid(egress); err != nil {
+		return err
+	}
+	return nil
+}
+
 // validateTier validates the admission of a Tier resource
 func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
 	allowed := true
@@ -297,6 +326,9 @@ func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	reason, allowed = a.validateAppliedTo(ingress, egress, specAppliedTo)
 	if !allowed {
 		return reason, allowed
+	}
+	if err := a.validatePortRange(ingress, egress); err != nil {
+		return err.Error(), false
 	}
 	return "", true
 }

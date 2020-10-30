@@ -223,9 +223,9 @@ type Service struct {
 	// field defaults to TCP.
 	// +optional
 	Protocol *Protocol `json:"protocol,omitempty" protobuf:"bytes,1,opt,name=protocol"`
-	// The port name or number on the given protocol. If not specified, this matches all port numbers.
+	// A PortMask is a representation of a single port name/number or a range of ports from base port with a bitmask applied.
 	// +optional
-	Port *intstr.IntOrString `json:"port,omitempty" protobuf:"bytes,2,opt,name=port"`
+	PortMask *PortMask `json:"portMask,omitempty" protobuf:"bytes,3,opt,name=portMask"`
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
@@ -297,4 +297,14 @@ type NetworkPolicyNodeStatus struct {
 	NodeName string `json:"nodeName,omitempty" protobuf:"bytes,1,opt,name=nodeName"`
 	// The generation realized by the Node.
 	Generation int64 `json:"generation,omitempty" protobuf:"varint,2,opt,name=generation"`
+}
+
+// A PortMask is a representation of a single port name or number or a range of ports from base port with a bitmask applied.
+type PortMask struct {
+	// The port name or number on the given protocol. If not specified, this matches all port numbers.
+	// +optional
+	Port *intstr.IntOrString `json:"port,omitempty" protobuf:"bytes,1,opt,name=port"`
+	// The mask applied on given port. If not specified, means no mask applied.
+	// +optional
+	Mask *int32 `json:"mask,omitempty" protobuf:"bytes,2,opt,name=mask"`
 }

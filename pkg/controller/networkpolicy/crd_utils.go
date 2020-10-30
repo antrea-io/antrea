@@ -15,8 +15,11 @@
 package networkpolicy
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -25,6 +28,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"github.com/vmware-tanzu/antrea/third_party/network_policy"
 )
 
 var (
@@ -42,16 +46,94 @@ func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) ([]controlp
 	var antreaServices []controlplane.Service
 	var namedPortExists bool
 	for _, npPort := range npPorts {
-		if npPort.Port != nil && npPort.Port.Type == intstr.String {
-			namedPortExists = true
+		if npPort.Port != nil {
+			namedPortExists = addSingleAntreaServiceForCRD(npPort.Protocol, npPort.Port, &antreaServices)
 		}
-		antreaService := controlplane.Service{
-			Protocol: toAntreaProtocol(npPort.Protocol),
-			Port:     npPort.Port,
+		if npPort.PortRange != nil {
+			if npPort.PortRange.Port != nil {
+				namedPortExists = addSingleAntreaServiceForCRD(npPort.Protocol, npPort.PortRange.Port, &antreaServices) || namedPortExists
+			} else if npPort.PortRange.From != nil && npPort.PortRange.To != nil {
+				if npPort.PortRange.Except != nil {
+					portRanges := rangeSplit(*npPort.PortRange.From, *npPort.PortRange.To, npPort.PortRange.Except)
+					for _, portRange := range portRanges {
+						err := addRangeAntreaServiceForCRD(npPort.Protocol, portRange, &antreaServices)
+						if err != nil {
+							klog.Error(err.Error())
+						}
+					}
+				} else {
+					err := addRangeAntreaServiceForCRD(npPort.Protocol, network_policy.PortRange{Start: *npPort.PortRange.From, End: *npPort.PortRange.To}, &antreaServices)
+					if err != nil {
+						klog.Error(err.Error())
+					}
+				}
+			}
 		}
-		antreaServices = append(antreaServices, antreaService)
+		if npPort.Port == nil && npPort.PortRange == nil {
+			antreaServices = append(antreaServices, controlplane.Service{Protocol: toAntreaProtocol(npPort.Protocol)})
+		}
 	}
 	return antreaServices, namedPortExists
+}
+
+// Add single antrea service with single port
+func addSingleAntreaServiceForCRD(protocol *v1.Protocol, port *intstr.IntOrString, antreaServices *[]controlplane.Service) bool {
+	var namedPortExists bool
+	if port.Type == intstr.String {
+		namedPortExists = true
+	}
+	antreaService := controlplane.Service{
+		Protocol: toAntreaProtocol(protocol),
+		PortMask: &controlplane.PortMask{Port: port},
+	}
+	*antreaServices = append(*antreaServices, antreaService)
+	return namedPortExists
+}
+
+// Add several antrea range service with a port range
+func addRangeAntreaServiceForCRD(protocol *v1.Protocol, portRange network_policy.PortRange, antreaServices *[]controlplane.Service) error {
+	bitRanges, err := portRange.BitwiseMatch()
+	if err != nil {
+		return fmt.Errorf("error when get bitMatch: %s", err.Error())
+	}
+	for _, bitRange := range bitRanges {
+		port := intstr.FromInt(int(bitRange.Value))
+		mask := int32(bitRange.Mask)
+		antreaService := controlplane.Service{
+			Protocol: toAntreaProtocol(protocol),
+			PortMask: &controlplane.PortMask{
+				Port: &port,
+				Mask: &mask,
+			},
+		}
+		*antreaServices = append(*antreaServices, antreaService)
+	}
+	return nil
+}
+
+// Transform a range with exception to several range
+func rangeSplit(from uint16, to uint16, excepts []uint16) []network_policy.PortRange {
+	var portRanges []network_policy.PortRange
+	sort.Slice(excepts, func(i, j int) bool { return excepts[i] < excepts[j] })
+	for _, except := range excepts {
+		if except < from {
+			continue
+		} else if except == from {
+			from++
+		} else if except < to {
+			portRanges = append(portRanges, network_policy.PortRange{Start: from, End: except - 1})
+			from = except + 1
+		} else if except == to {
+			to--
+			break
+		} else if except > to {
+			break
+		}
+	}
+	if from <= to {
+		portRanges = append(portRanges, network_policy.PortRange{Start: from, End: to})
+	}
+	return portRanges
 }
 
 // toAntreaIPBlockForCRD converts a secv1alpha1.IPBlock to an Antrea IPBlock.

@@ -37,7 +37,6 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
-	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
 	tests := []struct {
 		name                    string
 		inputPolicy             *secv1alpha1.NetworkPolicy
@@ -58,7 +57,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -74,7 +73,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							To: []secv1alpha1.NetworkPolicyPeer{
@@ -108,7 +107,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr80,
+								PortMask: &controlplane.PortMask{Port: &int80},
 							},
 						},
 						Priority: 0,
@@ -122,7 +121,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr81,
+								PortMask: &controlplane.PortMask{Port: &int81},
 							},
 						},
 						Priority: 0,
@@ -147,7 +146,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -160,7 +159,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -193,7 +192,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr80,
+								PortMask: &controlplane.PortMask{Port: &int80},
 							},
 						},
 						Priority: 0,
@@ -207,7 +206,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr81,
+								PortMask: &controlplane.PortMask{Port: &int81},
 							},
 						},
 						Priority: 1,
@@ -235,7 +234,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 							},
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -253,7 +252,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 							},
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -287,7 +286,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr80,
+								PortMask: &controlplane.PortMask{Port: &int80},
 							},
 						},
 						Priority: 0,
@@ -302,7 +301,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr81,
+								PortMask: &controlplane.PortMask{Port: &int81},
 							},
 						},
 						Priority: 1,
@@ -317,6 +316,125 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 			},
 			expectedAppliedToGroups: 2,
 			expectedAddressGroups:   2,
+		},
+		{
+			name: "with-port-range",
+			inputPolicy: &secv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns3", Name: "npC", UID: "uidC"},
+				Spec: secv1alpha1.NetworkPolicySpec{
+					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Protocol:  &k8sProtocolTCP,
+									PortRange: &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+					Egress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Protocol:  &k8sProtocolTCP,
+									PortRange: &secv1alpha1.PortRange{Port: &int81},
+								},
+							},
+							To: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidD",
+				Name: "uidD",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "ns4",
+					Name:      "npD",
+					UID:       "uidD",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int998, Mask: &int32For65535},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1000, Mask: &int32For65528},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1008, Mask: &int32For65520},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1024, Mask: &int32For65024},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1536, Mask: &int32For65280},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1792, Mask: &int32For65408},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1920, Mask: &int32For65472},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1984, Mask: &int32For65520},
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int81},
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("ns3", &selectorA, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
 		},
 	}
 	for _, tt := range tests {
@@ -394,7 +512,7 @@ func TestAddANP(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &int80,
+								PortMask: &controlplane.PortMask{Port: &int80},
 							},
 						},
 						Priority: 0,
@@ -402,6 +520,125 @@ func TestAddANP(t *testing.T) {
 					},
 				},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
+		{
+			name: "with-port-range",
+			inputPolicy: &secv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "npB", UID: "uidB"},
+				Spec: secv1alpha1.NetworkPolicySpec{
+					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Protocol:  &k8sProtocolTCP,
+									PortRange: &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+					Egress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Protocol:  &k8sProtocolTCP,
+									PortRange: &secv1alpha1.PortRange{Port: &int81},
+								},
+							},
+							To: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidB",
+				Name: "uidB",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "nsB",
+					Name:      "npB",
+					UID:       "uidB",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int998, Mask: &int32For65535},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1000, Mask: &int32For65528},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1008, Mask: &int32For65520},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1024, Mask: &int32For65024},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1536, Mask: &int32For65280},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1792, Mask: &int32For65408},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1920, Mask: &int32For65472},
+							},
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int1984, Mask: &int32For65520},
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								PortMask: &controlplane.PortMask{Port: &int81},
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsB", &selectorA, nil, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
 			expAddressGroups:   1,

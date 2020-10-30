@@ -185,7 +185,14 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 				Spec: v1.PodSpec{
 					TerminationGracePeriodSeconds: &zero,
 					Containers: []v1.Container{
-						makeContainerSpec(80), makeContainerSpec(81),
+						makeContainerSpec(80),
+						makeContainerSpec(81),
+						makeContainerSpec(8080),
+						makeContainerSpec(8081),
+						makeContainerSpec(8082),
+						makeContainerSpec(8083),
+						makeContainerSpec(8084),
+						makeContainerSpec(8085),
 					},
 				},
 			},
@@ -379,12 +386,15 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string,
 func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	const maxTries = 10
 	const sleepInterval = 1 * time.Second
-	log.Infof("waiting for HTTP servers (ports 80 and 81) to become ready")
+	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
 	var wrong int
 	for i := 0; i < maxTries; i++ {
 		reachability := NewReachability(allPods, true)
 		k.Validate(allPods, reachability, 80)
 		k.Validate(allPods, reachability, 81)
+		for j := 8080; j < 8086; j++ {
+			k.Validate(allPods, reachability, j)
+		}
 		_, wrong, _ = reachability.Summary()
 		if wrong == 0 {
 			log.Infof("all HTTP servers are ready")

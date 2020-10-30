@@ -212,8 +212,15 @@ func (m *conjunctiveMatch) generateGlobalMapKey() string {
 		}
 	case net.IPNet:
 		valueStr = v.String()
+	case types.BitRange:
+		bitRange := m.matchValue.(types.BitRange)
+		if bitRange.Mask != nil {
+			valueStr = fmt.Sprintf("%d/%d", bitRange.Value, *bitRange.Mask)
+		} else {
+			valueStr = fmt.Sprintf("%d/nil", bitRange.Value)
+		}
 	default:
-		// The default cases include the matchValue is a Service port or an ofport Number.
+		// The default cases include the matchValue is an ofport Number.
 		valueStr = fmt.Sprintf("%s", m.matchValue)
 	}
 	if m.priority == nil {
@@ -616,12 +623,18 @@ func getServiceMatchType(protocol *v1beta2.Protocol, ipv4Enabled, ipv6Enabled bo
 	return matchKeys
 }
 
-func (c *clause) generateServicePortConjMatches(port v1beta2.Service, priority *uint16, ipv4Enabled, ipv6Enabled bool) []*conjunctiveMatch {
-	matchKeys := getServiceMatchType(port.Protocol, ipv4Enabled, ipv6Enabled)
+func (c *clause) generateServicePortConjMatches(service v1beta2.Service, priority *uint16, ipv4Enabled, ipv6Enabled bool) []*conjunctiveMatch {
+	matchKeys := getServiceMatchType(service.Protocol, ipv4Enabled, ipv6Enabled)
 	// Match all ports with the given protocol type if the matchValue is not specified (value is 0).
-	matchValue := uint16(0)
-	if port.Port != nil {
-		matchValue = uint16(port.Port.IntVal)
+	var bitRange types.BitRange
+	// Match all ports with the given protocol type if Port and MaskPortRange are not specified (value is 0).
+	bitRange.Value = uint16(0)
+	if service.PortMask != nil && service.PortMask.Port != nil {
+		bitRange.Value = uint16(service.PortMask.Port.IntVal)
+		if service.PortMask.Mask != nil {
+			mask := uint16(*service.PortMask.Mask)
+			bitRange.Mask = &mask
+		}
 	}
 	var matches []*conjunctiveMatch
 	for _, matchKey := range matchKeys {
@@ -629,7 +642,7 @@ func (c *clause) generateServicePortConjMatches(port v1beta2.Service, priority *
 			&conjunctiveMatch{
 				tableID:    c.ruleTable.GetID(),
 				matchKey:   matchKey,
-				matchValue: matchValue,
+				matchValue: bitRange,
 				priority:   priority,
 			})
 	}

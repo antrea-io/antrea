@@ -164,9 +164,35 @@ type NetworkPolicyPort struct {
 	// The port on the given protocol. This can either be a numerical
 	// or named port on a Pod. If this field is not provided, this
 	// matches all port names and numbers.
-	// TODO: extend it to include Port Range.
 	// +optional
-	Port *intstr.IntOrString `json:"port"`
+	Port *intstr.IntOrString `json:"port,omitempty"`
+	// The portRange on the given protocol. This can either be a
+	// a range of ports with some optional exception
+	// or a numerical or named port on a Pod
+	// +optional
+	PortRange *PortRange `json:"portRange,omitempty"`
+}
+
+// PortRange describes a range of ports.
+// It could be a range of ports with some optional exception
+// or a numerical or named port on a Pod
+type PortRange struct {
+	// From represent the start port number of a range of ports, inclusive.
+	// Must be set if To is set, cannot be set with Port
+	// +optional
+	From *uint16 `json:"from,omitempty"`
+	// To represent the end port number of a range of ports, inclusive.
+	// Must be set if From is set, cannot be set with Port
+	// +optional
+	To *uint16 `json:"to,omitempty"`
+	// Port is a single entry represent the port name or number.
+	// Cannot be set with From and To
+	// +optional
+	Port *intstr.IntOrString `json:"port,omitempty"`
+	// Except is a list of except ports
+	// These ports won't be included in this range
+	// +optional
+	Except []uint16 `json:"except,omitempty"`
 }
 
 // RuleAction describes the action to be applied on traffic matching a rule.

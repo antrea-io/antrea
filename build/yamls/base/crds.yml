@@ -342,6 +342,19 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
+                            portRange:
+                              type: object
+                              properties:
+                                from:
+                                  type: integer
+                                to:
+                                  type: integer
+                                port:
+                                  x-kubernetes-int-or-string: true
+                                except:
+                                  type: array
+                                  items:
+                                    type: integer
                       from:
                         type: array
                         items:
@@ -391,6 +404,19 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
+                            portRange:
+                              type: object
+                              properties:
+                                from:
+                                  type: integer
+                                to:
+                                  type: integer
+                                port:
+                                  x-kubernetes-int-or-string: true
+                                except:
+                                  type: array
+                                  items:
+                                    type: integer
                       to:
                         type: array
                         items:
@@ -522,6 +548,19 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
+                            portRange:
+                              type: object
+                              properties:
+                                from:
+                                  type: integer
+                                to:
+                                  type: integer
+                                port:
+                                  x-kubernetes-int-or-string: true
+                                except:
+                                  type: array
+                                  items:
+                                    type: integer
                       from:
                         type: array
                         items:
@@ -572,6 +611,19 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
+                            portRange:
+                              type: object
+                              properties:
+                                from:
+                                  type: integer
+                                to:
+                                  type: integer
+                                port:
+                                  x-kubernetes-int-or-string: true
+                                except:
+                                  type: array
+                                  items:
+                                    type: integer
                       to:
                         type: array
                         items:

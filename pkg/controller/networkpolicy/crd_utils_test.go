@@ -43,7 +43,7 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expServices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					Port:     &int80,
+					PortMask: &controlplane.PortMask{Port: &int80},
 				},
 			},
 			expNamedPortExists: false,
@@ -58,10 +58,83 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expServices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					Port:     &strHTTP,
+					PortMask: &controlplane.PortMask{Port: &strHTTP},
 				},
 			},
 			expNamedPortExists: true,
+		},
+		{
+			ports: []secv1alpha1.NetworkPolicyPort{
+				{
+					Protocol:  &k8sProtocolTCP,
+					PortRange: &secv1alpha1.PortRange{Port: &int80},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					PortMask: &controlplane.PortMask{Port: &int80},
+				},
+			},
+			expNamedPortExists: false,
+		},
+		{
+			ports: []secv1alpha1.NetworkPolicyPort{
+				{
+					Protocol:  &k8sProtocolTCP,
+					PortRange: &secv1alpha1.PortRange{Port: &strHTTP},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					PortMask: &controlplane.PortMask{Port: &strHTTP},
+				},
+			},
+			expNamedPortExists: true,
+		},
+		{
+			ports: []secv1alpha1.NetworkPolicyPort{
+				{
+					Protocol:  &k8sProtocolTCP,
+					PortRange: &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					PortMask: &controlplane.PortMask{Port: &int998, Mask: &int32For65535},
+				},
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					PortMask: &controlplane.PortMask{Port: &int1000, Mask: &int32For65528},
+				},
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					PortMask: &controlplane.PortMask{Port: &int1008, Mask: &int32For65520},
+				},
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					PortMask: &controlplane.PortMask{Port: &int1024, Mask: &int32For65024},
+				},
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					PortMask: &controlplane.PortMask{Port: &int1536, Mask: &int32For65280},
+				},
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					PortMask: &controlplane.PortMask{Port: &int1792, Mask: &int32For65408},
+				},
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					PortMask: &controlplane.PortMask{Port: &int1920, Mask: &int32For65472},
+				},
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					PortMask: &controlplane.PortMask{Port: &int1984, Mask: &int32For65520},
+				},
+			},
+			expNamedPortExists: false,
 		},
 	}
 	for _, table := range tables {

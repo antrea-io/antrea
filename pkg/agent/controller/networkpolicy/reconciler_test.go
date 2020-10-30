@@ -60,12 +60,12 @@ var (
 	portHTTP  = intstr.FromString("http")
 	portHTTPS = intstr.FromString("https")
 
-	serviceTCP80   = v1beta2.Service{Protocol: &protocolTCP, Port: &port80}
-	serviceTCP443  = v1beta2.Service{Protocol: &protocolTCP, Port: &port443}
-	serviceTCP8080 = v1beta2.Service{Protocol: &protocolTCP, Port: &port8080}
+	serviceTCP80   = v1beta2.Service{Protocol: &protocolTCP, PortMask: &v1beta2.PortMask{Port: &port80}}
+	serviceTCP443  = v1beta2.Service{Protocol: &protocolTCP, PortMask: &v1beta2.PortMask{Port: &port443}}
+	serviceTCP8080 = v1beta2.Service{Protocol: &protocolTCP, PortMask: &v1beta2.PortMask{Port: &port8080}}
 	serviceTCP     = v1beta2.Service{Protocol: &protocolTCP}
-	serviceHTTP    = v1beta2.Service{Protocol: &protocolTCP, Port: &portHTTP}
-	serviceHTTPS   = v1beta2.Service{Protocol: &protocolTCP, Port: &portHTTPS}
+	serviceHTTP    = v1beta2.Service{Protocol: &protocolTCP, PortMask: &v1beta2.PortMask{Port: &portHTTP}}
+	serviceHTTPS   = v1beta2.Service{Protocol: &protocolTCP, PortMask: &v1beta2.PortMask{Port: &portHTTPS}}
 
 	services1    = []v1beta2.Service{serviceTCP80}
 	servicesKey1 = normalizeServices(services1)
@@ -1773,9 +1773,9 @@ func BenchmarkNormalizeServices(b *testing.B) {
 func benchmarkGroupMembersByServices(b *testing.B, withNamedPort bool) {
 	serviceHTTP := v1beta2.Service{Protocol: &protocolTCP}
 	if withNamedPort {
-		serviceHTTP.Port = &portHTTP
+		serviceHTTP.PortMask = &v1beta2.PortMask{Port: &portHTTP}
 	} else {
-		serviceHTTP.Port = &port80
+		serviceHTTP.PortMask = &v1beta2.PortMask{Port: &port80}
 	}
 
 	services := []v1beta2.Service{serviceHTTP}
