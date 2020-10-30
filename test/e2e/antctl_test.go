@@ -205,7 +205,7 @@ func runAntctProxy(nodeName string, nodeAntctlPath string, proxyPort int, agentN
 	}
 	pid := strings.TrimSpace(stdout)
 	return func() error {
-		cmd := fmt.Sprintf("kill -SIGINT %s", pid)
+		cmd := fmt.Sprintf("kill -INT %s", pid)
 		rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
 		if err != nil {
 			return fmt.Errorf("error when running command '%s' on Node: %v", cmd, err)
