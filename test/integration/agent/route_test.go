@@ -511,7 +511,7 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 				t.Errorf("mismatch IPv6 Neighbor")
 			}
 		}
-		if err := routeClient.DeleteRoutes(peerCIDR, localPeerIP); err != nil {
+		if err := routeClient.DeleteRoutes(peerCIDR); err != nil {
 			t.Errorf("route delete failed with err %v", err)
 		}
 		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", peerCIDR))

@@ -161,7 +161,9 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 		if len(podCIDRs) == 0 {
 			continue
 		}
-		desiredPodCIDRs = append(desiredPodCIDRs, node.Spec.PodCIDR)
+		for _, podCIDR := range podCIDRs {
+			desiredPodCIDRs = append(desiredPodCIDRs, podCIDR)
+		}
 	}
 
 	// routeClient will remove orphaned routes whose destinations are not in desiredPodCIDRs.
@@ -430,9 +432,22 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 			klog.Errorf("Failed to parse PodCIDR %s for Node %s", podCIDR, nodeName)
 			return nil
 		}
+		isIPv6 := false
+		if peerPodCIDRAddr.To4() != nil {
+			isIPv6 = true
+		}
+		nameWithAddrFamily := func(isIPv6 bool) string {
+			if len(podCIDRStrs) == 1 {
+				return nodeName
+			}
+			if isIPv6 {
+				return fmt.Sprintf("%s-IPv6", nodeName)
+			}
+			return fmt.Sprintf("%s-IPv4", nodeName)
+		}
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 		err = c.ofClient.InstallNodeFlows(
-			nodeName,
+			nameWithAddrFamily(isIPv6),
 			c.nodeConfig.GatewayConfig.MAC,
 			*peerPodCIDR,
 			peerGatewayIP,
