@@ -99,6 +99,8 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    enableLogging:
+                      type: boolean
                     name:
                       type: string
                     ports:
@@ -137,6 +139,8 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    enableLogging:
+                      type: boolean
                     from:
                       items:
                         properties:
@@ -284,6 +288,8 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    enableLogging:
+                      type: boolean
                     name:
                       type: string
                     ports:
@@ -324,6 +330,8 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    enableLogging:
+                      type: boolean
                     from:
                       items:
                         properties:

@@ -88,6 +88,8 @@ type rule struct {
 	// change in the future, features that need the information of the original
 	// NetworkPolicy should use SourceRef.
 	SourceRef *v1beta1.NetworkPolicyReference
+	// EnableLogging is a boolean indicating whether logging is required for Antrea Policies. Always false for K8s NetworkPolicy.
+	EnableLogging bool
 }
 
 // hashRule calculates a string based on the rule's content.
@@ -585,6 +587,7 @@ func toRule(r *v1beta1.NetworkPolicyRule, policy *v1beta1.NetworkPolicy, maxPrio
 		AppliedToGroups: policy.AppliedToGroups,
 		PolicyUID:       policy.UID,
 		SourceRef:       policy.SourceRef,
+		EnableLogging:   r.EnableLogging,
 	}
 	rule.ID = hashRule(rule)
 	rule.PolicyNamespace = policy.Namespace

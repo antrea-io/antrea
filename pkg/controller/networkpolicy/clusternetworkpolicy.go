@@ -135,11 +135,12 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports)
 		rules = append(rules, controlplane.NetworkPolicyRule{
-			Direction: controlplane.DirectionIn,
-			From:      *n.toAntreaPeerForCRD(ingressRule.From, cnp, controlplane.DirectionIn, namedPortExists),
-			Services:  services,
-			Action:    ingressRule.Action,
-			Priority:  int32(idx),
+			Direction:     controlplane.DirectionIn,
+			From:          *n.toAntreaPeerForCRD(ingressRule.From, cnp, controlplane.DirectionIn, namedPortExists),
+			Services:      services,
+			Action:        ingressRule.Action,
+			Priority:      int32(idx),
+			EnableLogging: ingressRule.EnableLogging,
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
@@ -147,11 +148,12 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports)
 		rules = append(rules, controlplane.NetworkPolicyRule{
-			Direction: controlplane.DirectionOut,
-			To:        *n.toAntreaPeerForCRD(egressRule.To, cnp, controlplane.DirectionOut, namedPortExists),
-			Services:  services,
-			Action:    egressRule.Action,
-			Priority:  int32(idx),
+			Direction:     controlplane.DirectionOut,
+			To:            *n.toAntreaPeerForCRD(egressRule.To, cnp, controlplane.DirectionOut, namedPortExists),
+			Services:      services,
+			Action:        egressRule.Action,
+			Priority:      int32(idx),
+			EnableLogging: egressRule.EnableLogging,
 		})
 	}
 	tierPriority := n.getTierPriority(cnp.Spec.Tier)

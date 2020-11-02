@@ -216,3 +216,10 @@ func (b *ClusterNetworkPolicySpecBuilder) WithEgressDNS() *ClusterNetworkPolicyS
 	}
 	return b
 }
+
+func (b *ClusterNetworkPolicySpecBuilder) AddEgressLogging() *ClusterNetworkPolicySpecBuilder {
+	for _, e := range b.Spec.Egress {
+		e.EnableLogging = true
+	}
+	return b
+}

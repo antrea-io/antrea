@@ -79,6 +79,12 @@ var SupportedDestinationTypes = []string{
 	DstTypeIPv4,
 }
 
+// List the ethernet types.
+const (
+	EtherTypeIPv4 uint16 = 0x0800
+	EtherTypeIPv6 uint16 = 0x86DD
+)
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

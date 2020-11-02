@@ -220,11 +220,14 @@ type Client interface {
 	// Find network policy and namespace by conjunction ID.
 	GetPolicyFromConjunction(ruleID uint32) *v1beta1.NetworkPolicyReference
 
-	// RegisterPacketInHandler registers PacketIn handler to process PacketIn event.
-	RegisterPacketInHandler(packetHandlerName string, packetInHandler interface{})
+	// Find Network Policy reference and OFpriority by conjunction ID.
+	GetPolicyInfoFromConjunction(ruleID uint32) (string, string)
+
 	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received
 	// packets through registered handlers.
-	StartPacketInHandler(stopCh <-chan struct{})
+	RegisterPacketInHandler(packetHandlerReason uint8, packetHandlerName string, packetInHandler interface{})
+
+	StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{})
 	// Get traffic metrics of each NetworkPolicy rule.
 	NetworkPolicyMetrics() map[uint32]*types.RuleMetric
 }
@@ -745,7 +748,7 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 				ctx.dropFlow.CopyToBuilder(priorityNormal+2, false).
 					MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
 					SetHardTimeout(300).
-					Action().SendToController(1).
+					Action().SendToController(uint8(PacketInReasonTF)).
 					Done())
 		}
 	}

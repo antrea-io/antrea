@@ -213,6 +213,9 @@ type NetworkPolicyRule struct {
 	// action “nil” defaults to Allow action, which would be the case for rules created for
 	// K8s NetworkPolicy.
 	Action *secv1alpha1.RuleAction
+	// EnableLogging is used to indicate if agent should generate logs
+	// when rules are matched. Should be default to false.
+	EnableLogging bool
 }
 
 // Protocol defines network protocols supported for things like container ports.
