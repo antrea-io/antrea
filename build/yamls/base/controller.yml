@@ -19,6 +19,19 @@ metadata:
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
+  name: v1beta2.controlplane.antrea.tanzu.vmware.com
+spec:
+  group: controlplane.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  version: v1beta2
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
   name: v1beta1.controlplane.antrea.tanzu.vmware.com
 spec:
   group: controlplane.antrea.tanzu.vmware.com

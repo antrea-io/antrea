@@ -28,7 +28,7 @@ import (
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	aqtest "github.com/vmware-tanzu/antrea/pkg/agent/querier/testing"
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
@@ -121,7 +121,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	testNetworkPolicy := &cpv1beta1.NetworkPolicy{}
+	testNetworkPolicy := &cpv1beta.NetworkPolicy{}
 
 	testcases := []testCase{
 		{
@@ -147,7 +147,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		if tc.expectedStatus != http.StatusNotFound {
 			ofc := oftest.NewMockClient(ctrl)
 			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
-			npq.EXPECT().GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: tc.name, Namespace: tc.namespace}).Return(testNetworkPolicy).Times(1)
+			npq.EXPECT().GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: tc.name, Namespace: tc.namespace}).Return([]cpv1beta.NetworkPolicy{*testNetworkPolicy}).Times(1)
 			ofc.EXPECT().GetNetworkPolicyFlowKeys(tc.name, tc.namespace).Return(testFlowKeys).Times(1)
 			q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
 			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
@@ -155,7 +155,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpResults[i], nil).Times(1)
 			}
 		} else {
-			npq.EXPECT().GetNetworkPolicy(&querier.NetworkPolicyQueryFilter{Name: tc.name, Namespace: tc.namespace}).Return(nil).Times(1)
+			npq.EXPECT().GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: tc.name, Namespace: tc.namespace}).Return(nil).Times(1)
 		}
 
 		runHTTPTest(t, &tc, q)

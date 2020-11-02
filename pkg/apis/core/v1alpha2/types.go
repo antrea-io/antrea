@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1alpha1
+package v1alpha2
 
 import (
 	v1 "k8s.io/api/core/v1"
@@ -35,6 +35,8 @@ type ExternalEntity struct {
 type ExternalEntitySpec struct {
 	// Endpoints is a list of external endpoints associated with this entity.
 	Endpoints []Endpoint `json:"endpoints,omitempty"`
+	// Ports maintain the list of named ports.
+	Ports []NamedPort `json:"ports,omitempty"`
 	// ExternalNode is the opaque identifier of the agent/controller responsible
 	// for additional processing or handling of this external entity.
 	ExternalNode string `json:"externalNode,omitempty"`
@@ -44,11 +46,9 @@ type ExternalEntitySpec struct {
 type Endpoint struct {
 	// IP associated with this endpoint.
 	IP string `json:"ip,omitempty"`
-	// Name identifies this endpoint. Could be the interface name in case of VMs.
+	// Name identifies this endpoint. Could be the network interface name in case of VMs.
 	// +optional
 	Name string `json:"name,omitempty"`
-	// Ports maintain the list of named ports.
-	Ports []NamedPort `json:"ports,omitempty"`
 }
 
 // NamedPort describes the port and protocol to match in a rule.

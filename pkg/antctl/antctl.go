@@ -31,7 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/version"
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	controllerinforest "github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
@@ -103,24 +103,24 @@ var CommandList = &commandList{
 		{
 			use:     "networkpolicy",
 			aliases: []string{"networkpolicies", "netpol"},
-			short:   "Print NetworkPolicies",
-			long:    "Print NetworkPolicies in ${component}. 'namespace' is required if 'pod' is provided.",
-			example: `  Get a specific NetworkPolicy
-  $ antctl get networkpolicy np1 -n ns1 -T acnp
-  Get the list of NetworkPolicies in a Namespace
-  $ antctl get networkpolicy -n ns1
-  Get the list of NetworkPolicies with a specific source Type
-  $ antctl get networkpolicy -T acnp
-  Get the list of all NetworkPolicies
+			short:   "Print control plane NetworkPolicies",
+			long:    "Print control plane NetworkPolicies in ${component}. 'namespace' is required if 'pod' is provided.",
+			example: `  Get a specific control plane NetworkPolicy
+  $ antctl get networkpolicy 6001549b-ba63-4752-8267-30f52b4332db
+  Get the list of all control plane NetworkPolicies
   $ antctl get networkpolicy
-  Get the list of NetworkPolicies applied to a Pod (supported by agent only)
+  Get the control plane NetworkPolicy with a specific source (supported by agent only)
+  $ antctl get networkpolicy -S allow-http -n ns1
+  Get the list of control plane NetworkPolicies whose source NetworkPolicies are in a Namespace (supported by agent only)
+  $ antctl get networkpolicy -n ns1
+  Get the list of control plane NetworkPolicies with a specific source Type (supported by agent only)
+  $ antctl get networkpolicy -T acnp
+  Get the list of control plane NetworkPolicies applied to a Pod (supported by agent only)
   $ antctl get networkpolicy -p pod1 -n ns1`,
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &cpv1beta1.NetworkPolicyVersionResource,
-					resourceName:         "",
-					namespaced:           true,
+					groupVersionResource: &cpv1beta.NetworkPolicyVersionResource,
 				},
 				addonTransform: networkpolicy.Transform,
 			},
@@ -130,12 +130,17 @@ var CommandList = &commandList{
 					params: []flagInfo{
 						{
 							name:  "name",
-							usage: "Get NetworkPolicy by name. If present, Namespace must be provided.",
+							usage: "Get NetworkPolicy by name.",
 							arg:   true,
 						},
 						{
+							name:      "source",
+							usage:     "Get NetworkPolicies for which the source has the provided name. The source of a control plane NetworkPolicy is the original policy resource (K8s NetworkPolicy or Antrea-native Policy) from which the control plane NetworkPolicy was derived.",
+							shorthand: "S",
+						},
+						{
 							name:      "namespace",
-							usage:     "Get Networkpolicies from specific Namespace",
+							usage:     "Get Networkpolicies from specific Namespace.",
 							shorthand: "n",
 						},
 						{
@@ -163,7 +168,7 @@ var CommandList = &commandList{
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &cpv1beta1.AppliedToGroupVersionResource,
+					groupVersionResource: &cpv1beta.AppliedToGroupVersionResource,
 				},
 				addonTransform: appliedtogroup.Transform,
 			},
@@ -190,7 +195,7 @@ var CommandList = &commandList{
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &cpv1beta1.AddressGroupVersionResource,
+					groupVersionResource: &cpv1beta.AddressGroupVersionResource,
 				},
 				addonTransform: addressgroup.Transform,
 			},

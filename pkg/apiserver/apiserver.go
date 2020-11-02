@@ -152,6 +152,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpStorage["networkpolicies"] = networkPolicyStorage
 	cpStorage["nodestatssummaries"] = nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	cpGroup.VersionedResourcesStorageMap["v1beta1"] = cpStorage
+	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpStorage
 
 	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to
 	// two minor versions, the APIs must be kept for two minor releases before it can be deleted.

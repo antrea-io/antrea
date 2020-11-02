@@ -23,7 +23,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
@@ -454,7 +454,7 @@ type policyRuleConjunction struct {
 	actionFlows   []binding.Flow
 	metricFlows   []binding.Flow
 	// NetworkPolicy reference information for debugging usage.
-	npRef       *v1beta1.NetworkPolicyReference
+	npRef       *v1beta2.NetworkPolicyReference
 	ruleTableID binding.TableIDType
 }
 
@@ -546,20 +546,20 @@ func (c *clause) generateAddressConjMatch(addr types.Address, addrType types.Add
 	return match
 }
 
-func getServiceMatchType(protocol *v1beta1.Protocol) int {
+func getServiceMatchType(protocol *v1beta2.Protocol) int {
 	switch *protocol {
-	case v1beta1.ProtocolTCP:
+	case v1beta2.ProtocolTCP:
 		return MatchTCPDstPort
-	case v1beta1.ProtocolUDP:
+	case v1beta2.ProtocolUDP:
 		return MatchUDPDstPort
-	case v1beta1.ProtocolSCTP:
+	case v1beta2.ProtocolSCTP:
 		return MatchSCTPDstPort
 	default:
 		return MatchTCPDstPort
 	}
 }
 
-func (c *clause) generateServicePortConjMatch(port v1beta1.Service, priority *uint16) *conjunctiveMatch {
+func (c *clause) generateServicePortConjMatch(port v1beta2.Service, priority *uint16) *conjunctiveMatch {
 	matchKey := getServiceMatchType(port.Protocol)
 	// Match all ports with the given protocol type if the matchValue is not specified (value is 0).
 	matchValue := uint16(0)
@@ -592,7 +592,7 @@ func (c *clause) addAddrFlows(client *client, addrType types.AddressType, addres
 
 // addServiceFlows translates the specified NetworkPolicyPorts to conjunctiveMatchFlow, and returns corresponding
 // conjMatchFlowContextChange.
-func (c *clause) addServiceFlows(client *client, ports []v1beta1.Service, priority *uint16) []*conjMatchFlowContextChange {
+func (c *clause) addServiceFlows(client *client, ports []v1beta2.Service, priority *uint16) []*conjMatchFlowContextChange {
 	var conjMatchFlowContextChanges []*conjMatchFlowContextChange
 	for _, port := range ports {
 		match := c.generateServicePortConjMatch(port, priority)
@@ -890,7 +890,7 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule, clnt *c
 	var dropTable binding.Table
 	var isEgressRule = false
 	switch rule.Direction {
-	case v1beta1.DirectionOut:
+	case v1beta2.DirectionOut:
 		dropTable = clnt.pipeline[EgressDefaultTable]
 		isEgressRule = true
 	default:
@@ -1007,7 +1007,7 @@ func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction 
 	return conj.(*policyRuleConjunction)
 }
 
-func (c *client) GetPolicyFromConjunction(ruleID uint32) *v1beta1.NetworkPolicyReference {
+func (c *client) GetPolicyFromConjunction(ruleID uint32) *v1beta2.NetworkPolicyReference {
 	conjunction := c.getPolicyRuleConjunction(ruleID)
 	if conjunction == nil {
 		return nil

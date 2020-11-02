@@ -37,9 +37,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/rule"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 type Foobar struct {
@@ -149,37 +148,53 @@ foo2
 			name: "StructureData-NetworkPolicy-List-HasSummary-RandomFieldOrder",
 			rawResponseData: []networkpolicy.Response{
 				{
-					NameSpace:       "Namespace1",
-					Name:            "GroupName2",
-					AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c", "c4c59cfe-9160-5de5-a85b-01a58d11963e"},
-					Rules: []rule.Response{
-						{
-							Direction: "In",
-							Services:  nil,
+					NetworkPolicy: &cpv1beta.NetworkPolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "6001549b-ba63-4752-8267-30f52b4332db",
+						},
+						AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c", "c4c59cfe-9160-5de5-a85b-01a58d11963e"},
+						Rules: []cpv1beta.NetworkPolicyRule{
+							{
+								Direction: "In",
+								Services:  nil,
+							},
+						},
+						SourceRef: &cpv1beta.NetworkPolicyReference{
+							Type:      cpv1beta.K8sNetworkPolicy,
+							Namespace: "default",
+							Name:      "allow-all",
+							UID:       "6001549b-ba63-4752-8267-30f52b4332db",
 						},
 					},
-					SourceType: cpv1beta1.K8sNetworkPolicy,
 				},
 				{
-					Rules: []rule.Response{
-						{
-							Direction: "In",
-							Services:  nil,
+					NetworkPolicy: &cpv1beta.NetworkPolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "880db7e8-fc2a-4030-aefe-09afc5f341ad",
 						},
-						{
-							Direction: "In",
-							Services:  nil,
+						AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c"},
+						Rules: []cpv1beta.NetworkPolicyRule{
+							{
+								Direction: "In",
+								Services:  nil,
+							},
+							{
+								Direction: "In",
+								Services:  nil,
+							},
+						},
+						SourceRef: &cpv1beta.NetworkPolicyReference{
+							Type:      cpv1beta.AntreaNetworkPolicy,
+							Namespace: "default",
+							Name:      "allow-all",
+							UID:       "880db7e8-fc2a-4030-aefe-09afc5f341ad",
 						},
 					},
-					AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c"},
-					Name:            "GroupName1",
-					NameSpace:       "Namespace2",
-					SourceType:      cpv1beta1.AntreaNetworkPolicy,
 				},
 			},
-			expected: `NAMESPACE  NAME       APPLIED-TO                                       RULES SOURCE-TYPE        
-Namespace1 GroupName2 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1     K8sNetworkPolicy   
-Namespace2 GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2     AntreaNetworkPolicy
+			expected: `NAME                                 APPLIED-TO                                       RULES SOURCE                               
+6001549b-ba63-4752-8267-30f52b4332db 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1     K8sNetworkPolicy:default/allow-all   
+880db7e8-fc2a-4030-aefe-09afc5f341ad 32ef631b-6817-5a18-86eb-93f4abf0467c             2     AntreaNetworkPolicy:default/allow-all
 `,
 		},
 		{
@@ -187,14 +202,14 @@ Namespace2 GroupName1 32ef631b-6817-5a18-86eb-93f4abf0467c             2     Ant
 			rawResponseData: []addressgroup.Response{
 				{
 					Name: "GroupName1",
-					Pods: []common.GroupMemberPod{
+					Pods: []common.GroupMember{
 						{IP: "127.0.0.1"}, {IP: "192.168.0.1"}, {IP: "127.0.0.2"},
 						{IP: "127.0.0.3"}, {IP: "10.0.0.3"}, {IP: "127.0.0.5"}, {IP: "127.0.0.6"},
 					},
 				},
 				{
 					Name: "GroupName2",
-					Pods: []common.GroupMemberPod{},
+					Pods: []common.GroupMember{},
 				},
 			},
 			expected: `NAME       POD-IPS                                           
@@ -206,12 +221,12 @@ GroupName2 <NONE>
 			name: "StructureData-AppliedToGroup-Single-NoSummary",
 			rawResponseData: appliedtogroup.Response{
 				Name: "GroupName",
-				Pods: []common.GroupMemberPod{
-					{Pod: &cpv1beta1.PodReference{
+				Pods: []common.GroupMember{
+					{Pod: &cpv1beta.PodReference{
 						Name:      "nginx-6db489d4b7-324rc",
 						Namespace: "PodNamespace",
 					}},
-					{Pod: &cpv1beta1.PodReference{
+					{Pod: &cpv1beta.PodReference{
 						Name:      "nginx-6db489d4b7-vgv7v",
 						Namespace: "PodNamespace",
 					}},
@@ -230,7 +245,7 @@ GroupName PodNamespace/nginx-6db489d4b7-324rc + 1 more...
 			name: "StructureData-AppliedToGroup-Single-EmptyRespCase",
 			rawResponseData: appliedtogroup.Response{
 				Name: "GroupName",
-				Pods: []common.GroupMemberPod{},
+				Pods: []common.GroupMember{},
 			},
 			expected: `NAME      PODS  
 GroupName <NONE>
