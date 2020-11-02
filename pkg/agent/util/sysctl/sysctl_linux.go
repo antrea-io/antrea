@@ -44,6 +44,7 @@ func GetSysctlNet(sysctl string) (int, error) {
 
 // SetSysctlNet sets the specified sysctl net.* parameter to the new value.
 func SetSysctlNet(sysctl string, newVal int) error {
+	// #nosec G306: provided permissions match /proc/sys file permissions
 	return ioutil.WriteFile(path.Join(sysctlNet, sysctl), []byte(strconv.Itoa(newVal)), 0640)
 }
 

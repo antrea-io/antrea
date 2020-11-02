@@ -138,7 +138,8 @@ func getWrappedStr(str string) string {
 }
 
 func getNodeResult(tf *opsv1alpha1.Traceflow, fn func(result *opsv1alpha1.NodeResult) bool) *opsv1alpha1.NodeResult {
-	for _, result := range tf.Status.Results {
+	for i := range tf.Status.Results {
+		result := tf.Status.Results[i]
 		if fn(&result) {
 			return &result
 		}
@@ -271,7 +272,8 @@ func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *
 	}
 
 	// Draw the actual observations of traceflow.
-	for _, o := range obs {
+	for i := range obs {
+		o := obs[i]
 		// Construct node and edge.
 		nodeName := fmt.Sprintf("%s_%d", cluster.Name, len(nodes))
 		node, err := createNodeWithDefaultStyle(graph, cluster.Name, nodeName)

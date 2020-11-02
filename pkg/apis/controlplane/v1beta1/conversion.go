@@ -148,12 +148,14 @@ func Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(in *controlplane
 func Convert_v1beta1_AddressGroup_To_controlplane_AddressGroup(in *AddressGroup, out *controlplane.AddressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	var groupMembers []controlplane.GroupMember
-	for _, p := range in.Pods {
+	for i := range in.Pods {
+		p := in.Pods[i]
 		var podMember controlplane.GroupMember
 		Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(&p, &podMember, nil)
 		groupMembers = append(groupMembers, podMember)
 	}
-	for _, m := range in.GroupMembers {
+	for i := range in.GroupMembers {
+		m := in.GroupMembers[i]
 		var member controlplane.GroupMember
 		Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&m, &member, nil)
 		groupMembers = append(groupMembers, member)
@@ -166,7 +168,8 @@ func Convert_controlplane_AddressGroup_To_v1beta1_AddressGroup(in *controlplane.
 	out.ObjectMeta = in.ObjectMeta
 	var groupMembers []GroupMember
 	var pods []GroupMemberPod
-	for _, m := range in.GroupMembers {
+	for i := range in.GroupMembers {
+		m := in.GroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
 			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
@@ -187,22 +190,26 @@ func Convert_controlplane_AddressGroup_To_v1beta1_AddressGroup(in *controlplane.
 func Convert_v1beta1_AddressGroupPatch_To_controlplane_AddressGroupPatch(in *AddressGroupPatch, out *controlplane.AddressGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	var addedMembers, removedMembers []controlplane.GroupMember
-	for _, p := range in.AddedPods {
+	for i := range in.AddedPods {
+		p := in.AddedPods[i]
 		var podMember controlplane.GroupMember
 		Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(&p, &podMember, nil)
 		addedMembers = append(addedMembers, podMember)
 	}
-	for _, p := range in.RemovedPods {
+	for i := range in.RemovedPods {
+		p := in.RemovedPods[i]
 		var podMember controlplane.GroupMember
 		Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(&p, &podMember, nil)
 		removedMembers = append(removedMembers, podMember)
 	}
-	for _, m := range in.AddedGroupMembers {
+	for i := range in.AddedGroupMembers {
+		m := in.AddedGroupMembers[i]
 		var member controlplane.GroupMember
 		Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&m, &member, nil)
 		addedMembers = append(addedMembers, member)
 	}
-	for _, m := range in.RemovedGroupMembers {
+	for i := range in.RemovedGroupMembers {
+		m := in.RemovedGroupMembers[i]
 		var member controlplane.GroupMember
 		Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&m, &member, nil)
 		removedMembers = append(removedMembers, member)
@@ -216,7 +223,8 @@ func Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *con
 	out.ObjectMeta = in.ObjectMeta
 	var addedPods, removedPods []GroupMemberPod
 	var addedMembers, removedMembers []GroupMember
-	for _, m := range in.AddedGroupMembers {
+	for i := range in.AddedGroupMembers {
+		m := in.AddedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
 			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
@@ -229,7 +237,8 @@ func Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *con
 			addedMembers = append(addedMembers, ee)
 		}
 	}
-	for _, m := range in.RemovedGroupMembers {
+	for i := range in.RemovedGroupMembers {
+		m := in.RemovedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
 			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
@@ -252,12 +261,14 @@ func Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *con
 func Convert_v1beta1_AppliedToGroup_To_controlplane_AppliedToGroup(in *AppliedToGroup, out *controlplane.AppliedToGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	var groupMembers []controlplane.GroupMember
-	for _, p := range in.Pods {
+	for i := range in.Pods {
+		p := in.Pods[i]
 		var podMember controlplane.GroupMember
 		Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(&p, &podMember, nil)
 		groupMembers = append(groupMembers, podMember)
 	}
-	for _, m := range in.GroupMembers {
+	for i := range in.GroupMembers {
+		m := in.GroupMembers[i]
 		var member controlplane.GroupMember
 		Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&m, &member, nil)
 		groupMembers = append(groupMembers, member)
@@ -270,7 +281,8 @@ func Convert_controlplane_AppliedToGroup_To_v1beta1_AppliedToGroup(in *controlpl
 	out.ObjectMeta = in.ObjectMeta
 	var groupMembers []GroupMember
 	var pods []GroupMemberPod
-	for _, m := range in.GroupMembers {
+	for i := range in.GroupMembers {
+		m := in.GroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
 			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
@@ -292,22 +304,26 @@ func Convert_v1beta1_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch(in 
 	out.ObjectMeta = in.ObjectMeta
 	var addedMembers []controlplane.GroupMember
 	var removedMembers []controlplane.GroupMember
-	for _, p := range in.AddedPods {
+	for i := range in.AddedPods {
+		p := in.AddedPods[i]
 		var podMember controlplane.GroupMember
 		Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(&p, &podMember, nil)
 		addedMembers = append(addedMembers, podMember)
 	}
-	for _, p := range in.RemovedPods {
+	for i := range in.RemovedPods {
+		p := in.RemovedPods[i]
 		var podMember controlplane.GroupMember
 		Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(&p, &podMember, nil)
 		removedMembers = append(removedMembers, podMember)
 	}
-	for _, m := range in.AddedGroupMembers {
+	for i := range in.AddedGroupMembers {
+		m := in.AddedGroupMembers[i]
 		var member controlplane.GroupMember
 		Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&m, &member, nil)
 		addedMembers = append(addedMembers, member)
 	}
-	for _, m := range in.RemovedGroupMembers {
+	for i := range in.RemovedGroupMembers {
+		m := in.RemovedGroupMembers[i]
 		var member controlplane.GroupMember
 		Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&m, &member, nil)
 		removedMembers = append(removedMembers, member)
@@ -321,7 +337,8 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in 
 	out.ObjectMeta = in.ObjectMeta
 	var addedPods, removedPods []GroupMemberPod
 	var addedMembers, removedMembers []GroupMember
-	for _, m := range in.AddedGroupMembers {
+	for i := range in.AddedGroupMembers {
+		m := in.AddedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
 			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
@@ -334,7 +351,8 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in 
 			addedMembers = append(addedMembers, ee)
 		}
 	}
-	for _, m := range in.RemovedGroupMembers {
+	for i := range in.RemovedGroupMembers {
+		m := in.RemovedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
 			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {

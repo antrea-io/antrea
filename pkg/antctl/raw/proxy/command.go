@@ -174,7 +174,8 @@ func createAgentClientCfg(k8sClientset kubernetes.Interface, antreaClientset ant
 		return nil, err
 	}
 	var agentInfo *clusterinformationv1beta1.AntreaAgentInfo
-	for _, ai := range agentInfoList.Items {
+	for i := range agentInfoList.Items {
+		ai := agentInfoList.Items[i]
 		if ai.NodeRef.Name == nodeName {
 			agentInfo = &ai
 			break

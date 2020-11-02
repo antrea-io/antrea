@@ -46,7 +46,9 @@ func TestCreateHNSNetwork(t *testing.T) {
 	_, subnet, _ := net.ParseCIDR("172.16.1.0/24")
 	nodeIP, err := getAdapterIPv4Addr("Ethernet0")
 	require.Nil(t, err)
-	hnsNet, err = CreateHNSNetwork(testNet, subnet, nodeIP)
+	adapter, err := net.InterfaceByName("Ethernet0")
+	require.Nil(t, err)
+	hnsNet, err = CreateHNSNetwork(testNet, subnet, nodeIP, adapter)
 	require.Nil(t, err, "No error expected when creating HNSNetwork")
 	defer hnsNet.Delete()
 

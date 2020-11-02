@@ -244,7 +244,7 @@ func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
 
 	klog.V(2).Infof("Adding address %v to gateway interface %s", gwIP, name)
 	if err := ConfigureInterfaceAddress(iface.Name, gwIPNet); err != nil {
-		klog.Errorf("Failed to set gateway interface %s with address %v: %v", iface, gwIP, err)
+		klog.Errorf("Failed to set gateway interface %v with address %v: %v", iface, gwIP, err)
 		return err
 	}
 	return nil

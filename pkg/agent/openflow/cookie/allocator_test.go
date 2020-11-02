@@ -38,6 +38,7 @@ func TestConcurrentAllocate(t *testing.T) {
 	concurrentNum := 8
 
 	rand.Seed(time.Now().UnixNano())
+	// #nosec G404: random number generator not used for security purposes
 	round := rand.Uint64() >> (64 - BitwidthRound)
 	a := NewAllocator(round)
 

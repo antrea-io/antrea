@@ -293,7 +293,8 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 	if err != nil {
 		return fmt.Errorf("error listing ip routes: %v", err)
 	}
-	for _, route := range routes {
+	for i := range routes {
+		route := routes[i]
 		if reflect.DeepEqual(route.Dst, c.nodeConfig.PodCIDR) {
 			continue
 		}
@@ -392,7 +393,8 @@ func (c *Client) MigrateRoutesToGw(linkName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get routes for link %s: %w", linkName, err)
 	}
-	for _, route := range routes {
+	for i := range routes {
+		route := routes[i]
 		route.LinkIndex = gwLink.Attrs().Index
 		if err = netlink.RouteReplace(&route); err != nil {
 			return fmt.Errorf("failed to add route %v to link %s: %w", &route, gwLink.Attrs().Name, err)
@@ -404,7 +406,8 @@ func (c *Client) MigrateRoutesToGw(linkName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get addresses for %s: %w", linkName, err)
 	}
-	for _, addr := range addrs {
+	for i := range addrs {
+		addr := addrs[i]
 		if err = netlink.AddrDel(link, &addr); err != nil {
 			klog.Errorf("failed to delete addr %v from %s: %v", addr, link, err)
 		}
@@ -431,7 +434,8 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 	if err != nil {
 		return fmt.Errorf("failed to get routes for link %s: %w", gwLink.Attrs().Name, err)
 	}
-	for _, rt := range routes {
+	for i := range routes {
+		rt := routes[i]
 		if route.String() == rt.Dst.String() {
 			if link != nil {
 				rt.LinkIndex = link.Attrs().Index

@@ -99,7 +99,8 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 		return nil, err
 	}
 	antreaConns := make([]*flowexporter.Connection, len(conns))
-	for i, conn := range conns {
+	for i := range conns {
+		conn := conns[i]
 		antreaConns[i] = netlinkFlowToAntreaConnection(&conn)
 	}
 
