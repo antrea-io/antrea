@@ -23,6 +23,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovstracing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/traceflow"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
@@ -404,6 +405,11 @@ var CommandList = &commandList{
 		{
 			cobraCommand:      traceflow.Command,
 			supportAgent:      true,
+			supportController: true,
+		},
+		{
+			cobraCommand:      proxy.Command,
+			supportAgent:      false,
 			supportController: true,
 		},
 	},
