@@ -75,7 +75,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 
 // Reconcile removes the orphaned routes and related configuration based on the desired podCIDRs. Only the route
 // entries on the host gateway interface are stored in the cache.
-func (c *Client) Reconcile(podCIDRs []string, remoteNodeIPs []string) error {
+func (c *Client) Reconcile(podCIDRs []string) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 	routes, err := c.listRoutes()
 	if err != nil {
@@ -124,7 +124,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, peerNodeIP, peerGwIP net.IP) erro
 
 // DeleteRoutes deletes routes to the provided podCIDR.
 // It does nothing if the routes don't exist, without error.
-func (c *Client) DeleteRoutes(podCIDR *net.IPNet, peerNodeIP net.IP) error {
+func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	obj, found := c.hostRoutes.Load(podCIDR.String())
 	if !found {
 		klog.V(2).Infof("Route with destination %s not exists", podCIDR.String())
