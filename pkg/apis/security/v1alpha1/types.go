@@ -81,6 +81,9 @@ type Rule struct {
 	// Name should be unique within the policy.
 	// +optional
 	Name string `json:"name"`
+	// EnableLogging is used to indicate if agent should generate logs
+	// when rules are matched. Should be default to false.
+	EnableLogging bool `json:"enableLogging"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.

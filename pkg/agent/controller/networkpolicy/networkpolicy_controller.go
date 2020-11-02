@@ -73,6 +73,8 @@ type Controller struct {
 	// reconciler provides interfaces to reconcile the desired state of
 	// NetworkPolicy rules with the actual state of Openflow entries.
 	reconciler Reconciler
+	// ofClient registers packetin for Antrea Policy logging.
+	ofClient openflow.Client
 
 	networkPolicyWatcher  *watcher
 	appliedToGroupWatcher *watcher
@@ -86,11 +88,12 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
 	podUpdates <-chan v1beta1.PodReference,
-	antreaPolicyEnabled bool) *Controller {
+	antreaPolicyEnabled bool) (*Controller, error) {
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
 		reconciler:           newReconciler(ofClient, ifaceStore),
+		ofClient:             ofClient,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
@@ -99,6 +102,16 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	// solution to a deterministic mechanism for when to cleanup flows from previous round.
 	// Wait until appliedToGroupWatcher, addressGroupWatcher and networkPolicyWatcher to receive bookmark event.
 	c.fullSyncGroup.Add(3)
+
+	if c.ofClient != nil && antreaPolicyEnabled {
+		// Register packetInHandler
+		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "networkpolicy", c)
+		// Initiate logger for Antrea Policy audit logging
+		err := initLogger()
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// Use nodeName to filter resources when watching resources.
 	options := metav1.ListOptions{
@@ -274,7 +287,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		fullSyncWaitGroup: &c.fullSyncGroup,
 		fullSynced:        false,
 	}
-	return c
+	return c, nil
 }
 
 func (c *Controller) GetNetworkPolicyNum() int {
