@@ -274,12 +274,11 @@ single port, to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
 **Note**: The order in which the egress rules are set matter, i.e. rules will
 be enforced in the order in which they are written.
 
-**enableLogging**: ClusterNetworkPolicy ingress or egress rule can be
-audited by enabling it's logging field. When `enableLogging` field is set to
-true, any packet (first packet in the connection) that is matched by this rule
-will be logged to a separate file (/var/log/antrea/networkpolicy/np.log). These
-log files can then be retrieved for further analysis. By default, rules are not
-logged.
+**enableLogging**: A ClusterNetworkPolicy ingress or egress rule can be
+audited by enabling its logging field. When `enableLogging` field is set to
+true, the first packet of any connection that matches this rule will be logged
+to a separate file (`/var/log/antrea/networkpolicy/np.log`). These log files
+can then be retrieved for further analysis. By default, rules are not logged.
 The example policy logs all traffic that matches the "DropToThirdParty" egress
 rule, while the rule "AllowFromFrontend" is not logged.
 
