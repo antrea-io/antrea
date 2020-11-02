@@ -281,6 +281,14 @@ to a separate file (`/var/log/antrea/networkpolicy/np.log`). These log files
 can then be retrieved for further analysis. By default, rules are not logged.
 The example policy logs all traffic that matches the "DropToThirdParty" egress
 rule, while the rule "AllowFromFrontend" is not logged.
+The rules are logged in the following format:
+
+```
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <action> <openflow-priority> SRC: <source-ip> DEST: <destination-ip> <packet-length> <protocol>
+
+    Example:
+    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp Allow 61800 SRC: 10.0.0.4 DEST: 10.0.0.5 60 TCP
+```
 
 ### Behavior of *to* and *from* selectors
 
