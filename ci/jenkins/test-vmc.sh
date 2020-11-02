@@ -356,12 +356,12 @@ function run_e2e {
     test_rc=$?
     set -e
 
-    if [ "$test_rc" == "1" ]
-    then
+    if [[ "$test_rc" != "0" ]]; then
         echo "=== TEST FAILURE !!! ==="
         TEST_FAILURE=true
+    else
+        echo "=== TEST SUCCESS !!! ==="
     fi
-    echo "=== TEST SUCCESS !!! ==="
 
     tar -zcf ${GIT_CHECKOUT_DIR}/antrea-test-logs.tar.gz ${GIT_CHECKOUT_DIR}/antrea-test-logs
 
