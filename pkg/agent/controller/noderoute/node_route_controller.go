@@ -161,7 +161,9 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 		if len(podCIDRs) == 0 {
 			continue
 		}
-		desiredPodCIDRs = append(desiredPodCIDRs, node.Spec.PodCIDR)
+		for _, podCIDR := range podCIDRs {
+			desiredPodCIDRs = append(desiredPodCIDRs, podCIDR)
+		}
 	}
 
 	// routeClient will remove orphaned routes whose destinations are not in desiredPodCIDRs.
@@ -351,12 +353,12 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 
 	node, err := c.nodeLister.Get(nodeName)
 	if err != nil {
-		return c.deleteNodeRoute(nodeName)
+		return c.deleteNodeRoute(nodeName, node)
 	}
 	return c.addNodeRoute(nodeName, node)
 }
 
-func (c *Controller) deleteNodeRoute(nodeName string) error {
+func (c *Controller) deleteNodeRoute(nodeName string, node *corev1.Node) error {
 	klog.Infof("Deleting routes and flows to Node %s", nodeName)
 
 	objs, installed := c.installedNodes.Load(nodeName)
@@ -371,8 +373,21 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 			return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 		}
 	}
-	if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
-		return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
+
+	podCIDRStrs := getPodCIDRsOnNode(node)
+	for _, podCIDR := range podCIDRStrs {
+		peerPodCIDRAddr, _, err := net.ParseCIDR(podCIDR)
+		if err != nil {
+			klog.Errorf("Failed to parse PodCIDR %s for Node %s", podCIDR, nodeName)
+			return nil
+		}
+		isIPv6 := false
+		if peerPodCIDRAddr.To4() != nil {
+			isIPv6 = true
+		}
+		if err := c.ofClient.UninstallNodeFlows(nameWithAddrFamily(podCIDRStrs, nodeName, isIPv6)); err != nil {
+			return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
+		}
 	}
 	c.installedNodes.Delete(nodeName)
 
@@ -430,9 +445,13 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 			klog.Errorf("Failed to parse PodCIDR %s for Node %s", podCIDR, nodeName)
 			return nil
 		}
+		isIPv6 := false
+		if peerPodCIDRAddr.To4() != nil {
+			isIPv6 = true
+		}
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 		err = c.ofClient.InstallNodeFlows(
-			nodeName,
+			nameWithAddrFamily(podCIDRStrs, nodeName, isIPv6),
 			c.nodeConfig.GatewayConfig.MAC,
 			*peerPodCIDR,
 			peerGatewayIP,
@@ -454,6 +473,16 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	}
 	c.installedNodes.Store(nodeName, nodeRouteInfos)
 	return err
+}
+
+func nameWithAddrFamily(podCIDRStrs []string, nodeName string, isIPv6 bool) string {
+	if len(podCIDRStrs) == 1 {
+		return nodeName
+	}
+	if isIPv6 {
+		return fmt.Sprintf("%s-IPv6", nodeName)
+	}
+	return fmt.Sprintf("%s-IPv4", nodeName)
 }
 
 func getPodCIDRsOnNode(node *corev1.Node) []string {
