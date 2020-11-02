@@ -29,28 +29,28 @@ import (
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 var (
-	addressGroup1 = v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))
-	addressGroup2 = v1beta1.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"))
+	addressGroup1 = v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))
+	addressGroup2 = v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"))
 
-	appliedToGroup1                     = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod1", "ns1"))
-	appliedToGroup2                     = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod2", "ns1"))
-	appliedToGroup3                     = v1beta1.NewGroupMemberPodSet(newAppliedToGroupMember("pod4", "ns1"))
-	appliedToGroupWithSameContainerPort = v1beta1.NewGroupMemberPodSet(
-		newAppliedToGroupMember("pod1", "ns1", v1beta1.NamedPort{Name: "http", Protocol: v1beta1.ProtocolTCP, Port: 80}),
-		newAppliedToGroupMember("pod3", "ns1", v1beta1.NamedPort{Name: "http", Protocol: v1beta1.ProtocolTCP, Port: 80}),
+	appliedToGroup1                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1"))
+	appliedToGroup2                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod2", "ns1"))
+	appliedToGroup3                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod4", "ns1"))
+	appliedToGroupWithSameContainerPort = v1beta2.NewGroupMemberSet(
+		newAppliedToGroupMember("pod1", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}),
+		newAppliedToGroupMember("pod3", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}),
 	)
-	appliedToGroupWithDiffContainerPort = v1beta1.NewGroupMemberPodSet(
-		newAppliedToGroupMember("pod1", "ns1", v1beta1.NamedPort{Name: "http", Protocol: v1beta1.ProtocolTCP, Port: 80}),
-		newAppliedToGroupMember("pod3", "ns1", v1beta1.NamedPort{Name: "http", Protocol: v1beta1.ProtocolTCP, Port: 443}),
+	appliedToGroupWithDiffContainerPort = v1beta2.NewGroupMemberSet(
+		newAppliedToGroupMember("pod1", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}),
+		newAppliedToGroupMember("pod3", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 443}),
 	)
-	appliedToGroupWithSingleContainerPort = v1beta1.NewGroupMemberPodSet(
-		newAppliedToGroupMember("pod1", "ns1", v1beta1.NamedPort{Name: "http", Protocol: v1beta1.ProtocolTCP, Port: 80}))
+	appliedToGroupWithSingleContainerPort = v1beta2.NewGroupMemberSet(
+		newAppliedToGroupMember("pod1", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}))
 
-	protocolTCP = v1beta1.ProtocolTCP
+	protocolTCP = v1beta2.ProtocolTCP
 
 	port80    = intstr.FromInt(80)
 	port443   = intstr.FromInt(443)
@@ -58,29 +58,29 @@ var (
 	portHTTP  = intstr.FromString("http")
 	portHTTPS = intstr.FromString("https")
 
-	serviceTCP80   = v1beta1.Service{Protocol: &protocolTCP, Port: &port80}
-	serviceTCP443  = v1beta1.Service{Protocol: &protocolTCP, Port: &port443}
-	serviceTCP8080 = v1beta1.Service{Protocol: &protocolTCP, Port: &port8080}
-	serviceTCP     = v1beta1.Service{Protocol: &protocolTCP}
-	serviceHTTP    = v1beta1.Service{Protocol: &protocolTCP, Port: &portHTTP}
-	serviceHTTPS   = v1beta1.Service{Protocol: &protocolTCP, Port: &portHTTPS}
+	serviceTCP80   = v1beta2.Service{Protocol: &protocolTCP, Port: &port80}
+	serviceTCP443  = v1beta2.Service{Protocol: &protocolTCP, Port: &port443}
+	serviceTCP8080 = v1beta2.Service{Protocol: &protocolTCP, Port: &port8080}
+	serviceTCP     = v1beta2.Service{Protocol: &protocolTCP}
+	serviceHTTP    = v1beta2.Service{Protocol: &protocolTCP, Port: &portHTTP}
+	serviceHTTPS   = v1beta2.Service{Protocol: &protocolTCP, Port: &portHTTPS}
 
-	services1    = []v1beta1.Service{serviceTCP80}
+	services1    = []v1beta2.Service{serviceTCP80}
 	servicesKey1 = normalizeServices(services1)
-	services2    = []v1beta1.Service{serviceTCP}
+	services2    = []v1beta2.Service{serviceTCP}
 	servicesKey2 = normalizeServices(services2)
 
 	policyPriority = float64(1)
 	tierPriority   = int32(1)
 
-	np1 = v1beta1.NetworkPolicyReference{
-		Type:      v1beta1.K8sNetworkPolicy,
+	np1 = v1beta2.NetworkPolicyReference{
+		Type:      v1beta2.K8sNetworkPolicy,
 		Namespace: "ns1",
 		Name:      "name1",
 		UID:       "uid1",
 	}
-	cnp1 = v1beta1.NetworkPolicyReference{
-		Type: v1beta1.AntreaClusterNetworkPolicy,
+	cnp1 = v1beta2.NetworkPolicyReference{
+		Type: v1beta2.AntreaClusterNetworkPolicy,
 		Name: "name1",
 		UID:  "uid1",
 	}
@@ -105,7 +105,7 @@ func TestReconcilerForget(t *testing.T) {
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8},
 					CompletedRule: &CompletedRule{
-						rule: &rule{Direction: v1beta1.DirectionIn, SourceRef: &np1},
+						rule: &rule{Direction: v1beta2.DirectionIn, SourceRef: &np1},
 					},
 				},
 			},
@@ -119,7 +119,7 @@ func TestReconcilerForget(t *testing.T) {
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8},
 					CompletedRule: &CompletedRule{
-						rule: &rule{Direction: v1beta1.DirectionIn, SourceRef: &np1},
+						rule: &rule{Direction: v1beta2.DirectionIn, SourceRef: &np1},
 					},
 				},
 			},
@@ -133,7 +133,7 @@ func TestReconcilerForget(t *testing.T) {
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8, servicesKey2: 9},
 					CompletedRule: &CompletedRule{
-						rule: &rule{Direction: v1beta1.DirectionIn, SourceRef: &np1},
+						rule: &rule{Direction: v1beta2.DirectionIn, SourceRef: &np1},
 					},
 				},
 			},
@@ -147,7 +147,7 @@ func TestReconcilerForget(t *testing.T) {
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8, servicesKey2: 9},
 					CompletedRule: &CompletedRule{
-						rule: &rule{Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
+						rule: &rule{Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
 					},
 				},
 			},
@@ -211,14 +211,14 @@ func TestReconcilerReconcile(t *testing.T) {
 	diffNet11 := newCIDR("10.20.2.32/27")
 	diffNet12 := newCIDR("10.20.2.16/28")
 
-	ipBlock1 := v1beta1.IPBlock{
-		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet1.IP), PrefixLength: 16},
+	ipBlock1 := v1beta2.IPBlock{
+		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet1.IP), PrefixLength: 16},
 	}
-	ipBlock2 := v1beta1.IPBlock{
-		CIDR: v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet2.IP), PrefixLength: 16},
-		Except: []v1beta1.IPNet{
-			{IP: v1beta1.IPAddress(ipNet3.IP), PrefixLength: 24},
-			{IP: v1beta1.IPAddress(ipNet4.IP), PrefixLength: 28},
+	ipBlock2 := v1beta2.IPBlock{
+		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet2.IP), PrefixLength: 16},
+		Except: []v1beta2.IPNet{
+			{IP: v1beta2.IPAddress(ipNet3.IP), PrefixLength: 24},
+			{IP: v1beta2.IPAddress(ipNet4.IP), PrefixLength: 28},
 		},
 	}
 
@@ -231,17 +231,17 @@ func TestReconcilerReconcile(t *testing.T) {
 		{
 			"ingress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceTCP80, serviceTCP}, SourceRef: &np1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, Services: []v1beta2.Service{serviceTCP80, serviceTCP}, SourceRef: &np1},
 				FromAddresses: addressGroup1,
 				ToAddresses:   nil,
-				Pods:          appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionIn,
+					Direction: v1beta2.DirectionIn,
 					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
-					Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+					Service:   []v1beta2.Service{serviceTCP80, serviceTCP},
 					PolicyRef: &np1,
 				},
 			},
@@ -250,14 +250,14 @@ func TestReconcilerReconcile(t *testing.T) {
 		{
 			"ingress-rule-with-missing-ofport",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, SourceRef: &np1},
 				FromAddresses: addressGroup1,
 				ToAddresses:   nil,
-				Pods:          appliedToGroup2,
+				TargetMembers: appliedToGroup2,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionIn,
+					Direction: v1beta2.DirectionIn,
 					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
 					To:        []types.Address{},
 					Service:   nil,
@@ -271,18 +271,18 @@ func TestReconcilerReconcile(t *testing.T) {
 			&CompletedRule{
 				rule: &rule{
 					ID:        "ingress-rule",
-					Direction: v1beta1.DirectionIn,
-					From:      v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2}},
-					Services:  []v1beta1.Service{serviceTCP80, serviceTCP},
+					Direction: v1beta2.DirectionIn,
+					From:      v1beta2.NetworkPolicyPeer{IPBlocks: []v1beta2.IPBlock{ipBlock1, ipBlock2}},
+					Services:  []v1beta2.Service{serviceTCP80, serviceTCP},
 					SourceRef: &np1,
 				},
 				FromAddresses: addressGroup1,
 				ToAddresses:   nil,
-				Pods:          appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionIn,
+					Direction: v1beta2.DirectionIn,
 					From: []types.Address{
 						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
 						openflow.NewIPNetAddress(*ipNet1),
@@ -300,7 +300,7 @@ func TestReconcilerReconcile(t *testing.T) {
 						openflow.NewIPNetAddress(*diffNet12),
 					},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
-					Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+					Service:   []v1beta2.Service{serviceTCP80, serviceTCP},
 					PolicyRef: &np1,
 				},
 			},
@@ -311,15 +311,15 @@ func TestReconcilerReconcile(t *testing.T) {
 			&CompletedRule{
 				rule: &rule{
 					ID:        "ingress-rule",
-					Direction: v1beta1.DirectionIn,
-					Services:  []v1beta1.Service{},
+					Direction: v1beta2.DirectionIn,
+					Services:  []v1beta2.Service{},
 					SourceRef: &np1,
 				},
-				Pods: appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionIn,
+					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 					Service:   nil,
@@ -333,18 +333,18 @@ func TestReconcilerReconcile(t *testing.T) {
 			&CompletedRule{
 				rule: &rule{
 					ID:        "ingress-rule",
-					Direction: v1beta1.DirectionIn,
-					Services:  []v1beta1.Service{serviceHTTP},
+					Direction: v1beta2.DirectionIn,
+					Services:  []v1beta2.Service{serviceHTTP},
 					SourceRef: &np1,
 				},
-				Pods: appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionIn,
+					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
-					Service:   []v1beta1.Service{},
+					Service:   []v1beta2.Service{},
 					PolicyRef: &np1,
 				},
 			},
@@ -355,18 +355,18 @@ func TestReconcilerReconcile(t *testing.T) {
 			&CompletedRule{
 				rule: &rule{
 					ID:        "ingress-rule",
-					Direction: v1beta1.DirectionIn,
-					Services:  []v1beta1.Service{serviceHTTP},
+					Direction: v1beta2.DirectionIn,
+					Services:  []v1beta2.Service{serviceHTTP},
 					SourceRef: &np1,
 				},
-				Pods: appliedToGroupWithSameContainerPort,
+				TargetMembers: appliedToGroupWithSameContainerPort,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionIn,
+					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1, 3)),
-					Service:   []v1beta1.Service{serviceTCP80},
+					Service:   []v1beta2.Service{serviceTCP80},
 					PolicyRef: &np1,
 				},
 			},
@@ -377,25 +377,25 @@ func TestReconcilerReconcile(t *testing.T) {
 			&CompletedRule{
 				rule: &rule{
 					ID:        "ingress-rule",
-					Direction: v1beta1.DirectionIn,
-					Services:  []v1beta1.Service{serviceHTTP},
+					Direction: v1beta2.DirectionIn,
+					Services:  []v1beta2.Service{serviceHTTP},
 					SourceRef: &np1,
 				},
-				Pods: appliedToGroupWithDiffContainerPort,
+				TargetMembers: appliedToGroupWithDiffContainerPort,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionIn,
+					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
-					Service:   []v1beta1.Service{serviceTCP80},
+					Service:   []v1beta2.Service{serviceTCP80},
 					PolicyRef: &np1,
 				},
 				{
-					Direction: v1beta1.DirectionIn,
+					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(3)),
-					Service:   []v1beta1.Service{serviceTCP443},
+					Service:   []v1beta2.Service{serviceTCP443},
 					PolicyRef: &np1,
 				},
 			},
@@ -404,14 +404,14 @@ func TestReconcilerReconcile(t *testing.T) {
 		{
 			"ingress-rule-deny-all",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, SourceRef: &np1},
 				FromAddresses: nil,
 				ToAddresses:   nil,
-				Pods:          appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionIn,
+					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
 					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 					Service:   nil,
@@ -423,14 +423,14 @@ func TestReconcilerReconcile(t *testing.T) {
 		{
 			"egress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
+				rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
 				FromAddresses: nil,
 				ToAddresses:   addressGroup1,
-				Pods:          appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionOut,
+					Direction: v1beta2.DirectionOut,
 					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
 					To:        ipsToOFAddresses(sets.NewString("1.1.1.1")),
 					Service:   nil,
@@ -444,17 +444,17 @@ func TestReconcilerReconcile(t *testing.T) {
 			&CompletedRule{
 				rule: &rule{
 					ID:        "egress-rule",
-					Direction: v1beta1.DirectionOut,
-					To:        v1beta1.NetworkPolicyPeer{IPBlocks: []v1beta1.IPBlock{ipBlock1, ipBlock2}},
+					Direction: v1beta2.DirectionOut,
+					To:        v1beta2.NetworkPolicyPeer{IPBlocks: []v1beta2.IPBlock{ipBlock1, ipBlock2}},
 					SourceRef: &np1,
 				},
 				FromAddresses: nil,
 				ToAddresses:   addressGroup1,
-				Pods:          appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionOut,
+					Direction: v1beta2.DirectionOut,
 					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
 					To: []types.Address{
 						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
@@ -483,16 +483,16 @@ func TestReconcilerReconcile(t *testing.T) {
 			&CompletedRule{
 				rule: &rule{
 					ID:        "egress-rule",
-					Direction: v1beta1.DirectionOut,
+					Direction: v1beta2.DirectionOut,
 					SourceRef: &np1,
 				},
 				FromAddresses: nil,
 				ToAddresses:   nil,
-				Pods:          appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			[]*types.PolicyRule{
 				{
-					Direction: v1beta1.DirectionOut,
+					Direction: v1beta2.DirectionOut,
 					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
 					To:        []types.Address{},
 					Service:   nil,
@@ -535,57 +535,57 @@ func TestReconcilerBatchReconcile(t *testing.T) {
 	})
 	completedRules := []*CompletedRule{
 		{
-			rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceTCP80, serviceTCP}, SourceRef: &np1},
+			rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, Services: []v1beta2.Service{serviceTCP80, serviceTCP}, SourceRef: &np1},
 			FromAddresses: addressGroup1,
 			ToAddresses:   nil,
-			Pods:          appliedToGroup1,
+			TargetMembers: appliedToGroup1,
 		},
 		{
-			rule: &rule{ID: "ingress-rule-no-ports", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{}, SourceRef: &np1},
-			Pods: appliedToGroup1,
+			rule:          &rule{ID: "ingress-rule-no-ports", Direction: v1beta2.DirectionIn, Services: []v1beta2.Service{}, SourceRef: &np1},
+			TargetMembers: appliedToGroup1,
 		},
 		{
-			rule: &rule{ID: "ingress-rule-diff-named-port", Direction: v1beta1.DirectionIn, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &np1},
-			Pods: appliedToGroupWithDiffContainerPort,
+			rule:          &rule{ID: "ingress-rule-diff-named-port", Direction: v1beta2.DirectionIn, Services: []v1beta2.Service{serviceHTTP}, SourceRef: &np1},
+			TargetMembers: appliedToGroupWithDiffContainerPort,
 		},
 		{
-			rule:          &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
+			rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
 			FromAddresses: nil,
 			ToAddresses:   addressGroup1,
-			Pods:          appliedToGroup1,
+			TargetMembers: appliedToGroup1,
 		},
 	}
 	expectedOFRules := []*types.PolicyRule{
 		{
-			Direction: v1beta1.DirectionIn,
+			Direction: v1beta2.DirectionIn,
 			From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
 			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
-			Service:   []v1beta1.Service{serviceTCP80, serviceTCP},
+			Service:   []v1beta2.Service{serviceTCP80, serviceTCP},
 			PolicyRef: &np1,
 		},
 		{
-			Direction: v1beta1.DirectionIn,
+			Direction: v1beta2.DirectionIn,
 			From:      []types.Address{},
 			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
 			Service:   nil,
 			PolicyRef: &np1,
 		},
 		{
-			Direction: v1beta1.DirectionIn,
+			Direction: v1beta2.DirectionIn,
 			From:      []types.Address{},
 			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
-			Service:   []v1beta1.Service{serviceTCP80},
+			Service:   []v1beta2.Service{serviceTCP80},
 			PolicyRef: &np1,
 		},
 		{
-			Direction: v1beta1.DirectionIn,
+			Direction: v1beta2.DirectionIn,
 			From:      []types.Address{},
 			To:        ofPortsToOFAddresses(sets.NewInt32(3)),
-			Service:   []v1beta1.Service{serviceTCP443},
+			Service:   []v1beta2.Service{serviceTCP443},
 			PolicyRef: &np1,
 		},
 		{
-			Direction: v1beta1.DirectionOut,
+			Direction: v1beta2.DirectionOut,
 			From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
 			To:        ipsToOFAddresses(sets.NewString("1.1.1.1")),
 			Service:   nil,
@@ -677,14 +677,14 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-ingress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, SourceRef: &np1},
 				FromAddresses: addressGroup1,
-				Pods:          appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, SourceRef: &np1},
 				FromAddresses: addressGroup2,
-				Pods:          appliedToGroup2,
+				TargetMembers: appliedToGroup2,
 			},
 			ipsToOFAddresses(sets.NewString("1.1.1.2")),
 			ofPortsToOFAddresses(sets.NewInt32(2)),
@@ -696,14 +696,14 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-egress-rule",
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
-				ToAddresses: addressGroup1,
-				Pods:        appliedToGroup1,
+				rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
+				ToAddresses:   addressGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
-				ToAddresses: addressGroup2,
-				Pods:        appliedToGroup2,
+				rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
+				ToAddresses:   addressGroup2,
+				TargetMembers: appliedToGroup2,
 			},
 			ipsToOFAddresses(sets.NewString("3.3.3.3")),
 			ipsToOFAddresses(sets.NewString("1.1.1.2")),
@@ -715,14 +715,14 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-ingress-rule-with-missing-ofport",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, SourceRef: &np1},
 				FromAddresses: addressGroup1,
-				Pods:          appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, SourceRef: &np1},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, SourceRef: &np1},
 				FromAddresses: addressGroup2,
-				Pods:          appliedToGroup3,
+				TargetMembers: appliedToGroup3,
 			},
 			ipsToOFAddresses(sets.NewString("1.1.1.2")),
 			[]types.Address{},
@@ -734,14 +734,14 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-egress-rule-with-missing-ip",
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
-				ToAddresses: addressGroup1,
-				Pods:        appliedToGroup1,
+				rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
+				ToAddresses:   addressGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
-				ToAddresses: addressGroup2,
-				Pods:        appliedToGroup3,
+				rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
+				ToAddresses:   addressGroup2,
+				TargetMembers: appliedToGroup3,
 			},
 			[]types.Address{},
 			ipsToOFAddresses(sets.NewString("1.1.1.2")),
@@ -753,14 +753,14 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-egress-rule-deny-all",
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
-				ToAddresses: nil,
-				Pods:        appliedToGroup1,
+				rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
+				ToAddresses:   nil,
+				TargetMembers: appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:        &rule{ID: "egress-rule", Direction: v1beta1.DirectionOut, SourceRef: &np1},
-				ToAddresses: nil,
-				Pods:        appliedToGroup2,
+				rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
+				ToAddresses:   nil,
+				TargetMembers: appliedToGroup2,
 			},
 			ipsToOFAddresses(sets.NewString("3.3.3.3")),
 			[]types.Address{},
@@ -772,14 +772,14 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-cnp-ingress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
 				FromAddresses: addressGroup1,
-				Pods:          appliedToGroup1,
+				TargetMembers: appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
 				FromAddresses: addressGroup2,
-				Pods:          appliedToGroup2,
+				TargetMembers: appliedToGroup2,
 			},
 			ipsToOFAddresses(sets.NewString("1.1.1.2")),
 			ofPortsToOFAddresses(sets.NewInt32(2)),
@@ -791,14 +791,14 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-cnp-ingress-rule-uninstall",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta2.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
 				FromAddresses: addressGroup1,
-				Pods:          appliedToGroupWithDiffContainerPort,
+				TargetMembers: appliedToGroupWithDiffContainerPort,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta1.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta1.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta2.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
 				FromAddresses: addressGroup1,
-				Pods:          appliedToGroupWithSingleContainerPort,
+				TargetMembers: appliedToGroupWithSingleContainerPort,
 			},
 			[]types.Address{},
 			[]types.Address{},
@@ -844,123 +844,123 @@ func TestReconcilerUpdate(t *testing.T) {
 	}
 }
 
-func TestGroupPodsByServices(t *testing.T) {
-	numberedServices := []v1beta1.Service{serviceTCP80, serviceTCP443}
+func TestGroupMembersByServices(t *testing.T) {
+	numberedServices := []v1beta2.Service{serviceTCP80, serviceTCP443}
 	numberedServicesKey := normalizeServices(numberedServices)
-	namedServices := []v1beta1.Service{serviceHTTP, serviceHTTPS}
+	namedServices := []v1beta2.Service{serviceHTTP, serviceHTTPS}
 
 	tests := []struct {
-		name                  string
-		services              []v1beta1.Service
-		pods                  v1beta1.GroupMemberPodSet
-		wantPodsByServicesMap map[servicesKey]v1beta1.GroupMemberPodSet
-		wantServicesMap       map[servicesKey][]v1beta1.Service
+		name                     string
+		services                 []v1beta2.Service
+		members                  v1beta2.GroupMemberSet
+		wantMembersByServicesMap map[servicesKey]v1beta2.GroupMemberSet
+		wantServicesMap          map[servicesKey][]v1beta2.Service
 	}{
 		{
 			name:     "numbered ports",
 			services: numberedServices,
-			pods: v1beta1.NewGroupMemberPodSet(
-				&v1beta1.GroupMemberPod{
-					IP: v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
+			members: v1beta2.NewGroupMemberSet(
+				&v1beta2.GroupMember{
+					IPs: []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.1"))},
 				},
-				&v1beta1.GroupMemberPod{
-					IP: v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
+				&v1beta2.GroupMember{
+					IPs: []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.2"))},
 				},
 			),
-			wantPodsByServicesMap: map[servicesKey]v1beta1.GroupMemberPodSet{
-				numberedServicesKey: v1beta1.NewGroupMemberPodSet(
-					&v1beta1.GroupMemberPod{
-						IP: v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
+			wantMembersByServicesMap: map[servicesKey]v1beta2.GroupMemberSet{
+				numberedServicesKey: v1beta2.NewGroupMemberSet(
+					&v1beta2.GroupMember{
+						IPs: []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.1"))},
 					},
-					&v1beta1.GroupMemberPod{
-						IP: v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
+					&v1beta2.GroupMember{
+						IPs: []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.2"))},
 					},
 				),
 			},
-			wantServicesMap: map[servicesKey][]v1beta1.Service{
+			wantServicesMap: map[servicesKey][]v1beta2.Service{
 				numberedServicesKey: numberedServices,
 			},
 		},
 		{
 			name:     "named ports",
 			services: namedServices,
-			pods: v1beta1.NewGroupMemberPodSet(
-				&v1beta1.GroupMemberPod{
-					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
-					Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+			members: v1beta2.NewGroupMemberSet(
+				&v1beta2.GroupMember{
+					IPs:   []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.1"))},
+					Ports: []v1beta2.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
 				},
-				&v1beta1.GroupMemberPod{
-					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
-					Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+				&v1beta2.GroupMember{
+					IPs:   []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.2"))},
+					Ports: []v1beta2.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
 				},
-				&v1beta1.GroupMemberPod{
-					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.3")),
-					Ports: []v1beta1.NamedPort{{Port: 8080, Name: "http", Protocol: protocolTCP}},
+				&v1beta2.GroupMember{
+					IPs:   []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.3"))},
+					Ports: []v1beta2.NamedPort{{Port: 8080, Name: "http", Protocol: protocolTCP}},
 				},
-				&v1beta1.GroupMemberPod{
-					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.4")),
-					Ports: []v1beta1.NamedPort{{Port: 443, Name: "https", Protocol: protocolTCP}},
+				&v1beta2.GroupMember{
+					IPs:   []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.4"))},
+					Ports: []v1beta2.NamedPort{{Port: 443, Name: "https", Protocol: protocolTCP}},
 				},
-				&v1beta1.GroupMemberPod{
-					IP: v1beta1.IPAddress(net.ParseIP("1.1.1.5")),
+				&v1beta2.GroupMember{
+					IPs: []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.5"))},
 				},
-				&v1beta1.GroupMemberPod{
-					IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.6")),
-					Ports: []v1beta1.NamedPort{{Port: 443, Name: "foo", Protocol: protocolTCP}},
+				&v1beta2.GroupMember{
+					IPs:   []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.6"))},
+					Ports: []v1beta2.NamedPort{{Port: 443, Name: "foo", Protocol: protocolTCP}},
 				},
 			),
-			wantPodsByServicesMap: map[servicesKey]v1beta1.GroupMemberPodSet{
-				normalizeServices([]v1beta1.Service{serviceTCP80, serviceHTTPS}): v1beta1.NewGroupMemberPodSet(
-					&v1beta1.GroupMemberPod{
-						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.1")),
-						Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
+			wantMembersByServicesMap: map[servicesKey]v1beta2.GroupMemberSet{
+				normalizeServices([]v1beta2.Service{serviceTCP80, serviceHTTPS}): v1beta2.NewGroupMemberSet(
+					&v1beta2.GroupMember{
+						IPs:   []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.1"))},
+						Ports: []v1beta2.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
 					},
-					&v1beta1.GroupMemberPod{
-						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.2")),
-						Ports: []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
-					},
-				),
-				normalizeServices([]v1beta1.Service{serviceTCP8080, serviceHTTPS}): v1beta1.NewGroupMemberPodSet(
-					&v1beta1.GroupMemberPod{
-						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.3")),
-						Ports: []v1beta1.NamedPort{{Port: 8080, Name: "http", Protocol: protocolTCP}},
+					&v1beta2.GroupMember{
+						IPs:   []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.2"))},
+						Ports: []v1beta2.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}},
 					},
 				),
-				normalizeServices([]v1beta1.Service{serviceHTTP, serviceTCP443}): v1beta1.NewGroupMemberPodSet(
-					&v1beta1.GroupMemberPod{
-						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.4")),
-						Ports: []v1beta1.NamedPort{{Port: 443, Name: "https", Protocol: protocolTCP}},
+				normalizeServices([]v1beta2.Service{serviceTCP8080, serviceHTTPS}): v1beta2.NewGroupMemberSet(
+					&v1beta2.GroupMember{
+						IPs:   []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.3"))},
+						Ports: []v1beta2.NamedPort{{Port: 8080, Name: "http", Protocol: protocolTCP}},
 					},
 				),
-				normalizeServices([]v1beta1.Service{serviceHTTP, serviceHTTPS}): v1beta1.NewGroupMemberPodSet(
-					&v1beta1.GroupMemberPod{
-						IP: v1beta1.IPAddress(net.ParseIP("1.1.1.5")),
+				normalizeServices([]v1beta2.Service{serviceHTTP, serviceTCP443}): v1beta2.NewGroupMemberSet(
+					&v1beta2.GroupMember{
+						IPs:   []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.4"))},
+						Ports: []v1beta2.NamedPort{{Port: 443, Name: "https", Protocol: protocolTCP}},
 					},
-					&v1beta1.GroupMemberPod{
-						IP:    v1beta1.IPAddress(net.ParseIP("1.1.1.6")),
-						Ports: []v1beta1.NamedPort{{Port: 443, Name: "foo", Protocol: protocolTCP}},
+				),
+				normalizeServices([]v1beta2.Service{serviceHTTP, serviceHTTPS}): v1beta2.NewGroupMemberSet(
+					&v1beta2.GroupMember{
+						IPs: []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.5"))},
+					},
+					&v1beta2.GroupMember{
+						IPs:   []v1beta2.IPAddress{v1beta2.IPAddress(net.ParseIP("1.1.1.6"))},
+						Ports: []v1beta2.NamedPort{{Port: 443, Name: "foo", Protocol: protocolTCP}},
 					},
 				),
 			},
-			wantServicesMap: map[servicesKey][]v1beta1.Service{
-				normalizeServices([]v1beta1.Service{serviceTCP80, serviceHTTPS}):   {serviceTCP80, serviceHTTPS},
-				normalizeServices([]v1beta1.Service{serviceTCP8080, serviceHTTPS}): {serviceTCP8080, serviceHTTPS},
-				normalizeServices([]v1beta1.Service{serviceHTTP, serviceTCP443}):   {serviceHTTP, serviceTCP443},
-				normalizeServices([]v1beta1.Service{serviceHTTP, serviceHTTPS}):    {serviceHTTP, serviceHTTPS},
+			wantServicesMap: map[servicesKey][]v1beta2.Service{
+				normalizeServices([]v1beta2.Service{serviceTCP80, serviceHTTPS}):   {serviceTCP80, serviceHTTPS},
+				normalizeServices([]v1beta2.Service{serviceTCP8080, serviceHTTPS}): {serviceTCP8080, serviceHTTPS},
+				normalizeServices([]v1beta2.Service{serviceHTTP, serviceTCP443}):   {serviceHTTP, serviceTCP443},
+				normalizeServices([]v1beta2.Service{serviceHTTP, serviceHTTPS}):    {serviceHTTP, serviceHTTPS},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotPodsByServicesMap, gotServicesMap := groupPodsByServices(tt.services, tt.pods)
-			assert.Equal(t, tt.wantPodsByServicesMap, gotPodsByServicesMap)
+			gotMembersByServicesMap, gotServicesMap := groupMembersByServices(tt.services, tt.members)
+			assert.Equal(t, tt.wantMembersByServicesMap, gotMembersByServicesMap)
 			assert.Equal(t, tt.wantServicesMap, gotServicesMap)
 		})
 	}
 }
 
 func BenchmarkNormalizeServices(b *testing.B) {
-	services := []v1beta1.Service{serviceTCP80, serviceTCP8080}
+	services := []v1beta2.Service{serviceTCP80, serviceTCP8080}
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -969,25 +969,27 @@ func BenchmarkNormalizeServices(b *testing.B) {
 	}
 }
 
-func benchmarkGroupPodsByServices(b *testing.B, withNamedPort bool) {
-	serviceHTTP := v1beta1.Service{Protocol: &protocolTCP}
+func benchmarkGroupMembersByServices(b *testing.B, withNamedPort bool) {
+	serviceHTTP := v1beta2.Service{Protocol: &protocolTCP}
 	if withNamedPort {
 		serviceHTTP.Port = &portHTTP
 	} else {
 		serviceHTTP.Port = &port80
 	}
 
-	services := []v1beta1.Service{serviceHTTP}
-	pods := v1beta1.NewGroupMemberPodSet()
+	services := []v1beta2.Service{serviceHTTP}
+	pods := v1beta2.NewGroupMemberSet()
 	// 50,000 Pods in this group.
 	for i1 := 1; i1 <= 100; i1++ {
 		for i2 := 1; i2 <= 50; i2++ {
 			for i3 := 1; i3 <= 10; i3++ {
-				pod := &v1beta1.GroupMemberPod{
-					IP: v1beta1.IPAddress(net.ParseIP(fmt.Sprintf("1.%d.%d.%d", i1, i2, i3))),
+				pod := &v1beta2.GroupMember{
+					IPs: []v1beta2.IPAddress{
+						v1beta2.IPAddress(net.ParseIP(fmt.Sprintf("1.%d.%d.%d", i1, i2, i3))),
+					},
 				}
 				if withNamedPort {
-					pod.Ports = []v1beta1.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}}
+					pod.Ports = []v1beta2.NamedPort{{Port: 80, Name: "http", Protocol: protocolTCP}}
 				}
 				pods.Insert(pod)
 			}
@@ -996,14 +998,14 @@ func benchmarkGroupPodsByServices(b *testing.B, withNamedPort bool) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		groupPodsByServices(services, pods)
+		groupMembersByServices(services, pods)
 	}
 }
 
 func BenchmarkGroupPodsByServicesWithNamedPort(b *testing.B) {
-	benchmarkGroupPodsByServices(b, true)
+	benchmarkGroupMembersByServices(b, true)
 }
 
 func BenchmarkGroupPodsByServicesWithoutNamedPort(b *testing.B) {
-	benchmarkGroupPodsByServices(b, false)
+	benchmarkGroupMembersByServices(b, false)
 }

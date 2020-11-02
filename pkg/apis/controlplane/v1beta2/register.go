@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1alpha1
+package v1beta2
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,15 +21,25 @@ import (
 )
 
 // GroupName is the group name used in this package.
-const GroupName = "core.antrea.tanzu.vmware.com"
+const GroupName = "controlplane.antrea.tanzu.vmware.com"
 
-// SchemeGroupVersion is group version used to register these objects.
-var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v1alpha1"}
+var (
+	// SchemeGroupVersion is group version used to register these objects.
+	SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v1beta2"}
 
-// Kind takes an unqualified kind and returns back a Group qualified GroupKind
-func Kind(kind string) schema.GroupKind {
-	return SchemeGroupVersion.WithKind(kind).GroupKind()
-}
+	AppliedToGroupVersionResource = schema.GroupVersionResource{
+		Group:    SchemeGroupVersion.Group,
+		Version:  SchemeGroupVersion.Version,
+		Resource: "appliedtogroups"}
+	AddressGroupVersionResource = schema.GroupVersionResource{
+		Group:    SchemeGroupVersion.Group,
+		Version:  SchemeGroupVersion.Version,
+		Resource: "addressgroups"}
+	NetworkPolicyVersionResource = schema.GroupVersionResource{
+		Group:    SchemeGroupVersion.Group,
+		Version:  SchemeGroupVersion.Version,
+		Resource: "networkpolicies"}
+)
 
 // Resource takes an unqualified resource and returns a Group qualified GroupResource.
 func Resource(resource string) schema.GroupResource {
@@ -37,15 +47,23 @@ func Resource(resource string) schema.GroupResource {
 }
 
 var (
-	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
-	AddToScheme   = SchemeBuilder.AddToScheme
+	SchemeBuilder      = runtime.NewSchemeBuilder(addKnownTypes)
+	localSchemeBuilder = &SchemeBuilder
+	AddToScheme        = localSchemeBuilder.AddToScheme
 )
 
 // Adds the list of known types to the given scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&ExternalEntity{},
-		&ExternalEntityList{},
+		&AppliedToGroup{},
+		&AppliedToGroupPatch{},
+		&AppliedToGroupList{},
+		&AddressGroup{},
+		&AddressGroupPatch{},
+		&AddressGroupList{},
+		&NetworkPolicy{},
+		&NetworkPolicyList{},
+		&NodeStatsSummary{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

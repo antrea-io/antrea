@@ -32,9 +32,9 @@ func (n *NetworkPolicyController) addANP(obj interface{}) {
 	// Create an internal NetworkPolicy object corresponding to this
 	// NetworkPolicy and enqueue task to internal NetworkPolicy Workqueue.
 	internalNP := n.processAntreaNetworkPolicy(np)
-	klog.Infof("Creating new internal NetworkPolicy %#v", internalNP)
+	klog.V(2).Infof("Creating new internal NetworkPolicy %s for %s", internalNP.Name, internalNP.SourceRef.ToString())
 	n.internalNetworkPolicyStore.Create(internalNP)
-	key, _ := keyFunc(np)
+	key := internalNetworkPolicyKeyFunc(np)
 	n.enqueueInternalNetworkPolicy(key)
 }
 
@@ -47,11 +47,11 @@ func (n *NetworkPolicyController) updateANP(old, cur interface{}) {
 	// Update an internal NetworkPolicy, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processAntreaNetworkPolicy(curNP)
-	klog.V(2).Infof("Updating existing internal NetworkPolicy %s", curInternalNP.Name)
+	klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
 	// Retrieve old secv1alpha1.NetworkPolicy object.
 	oldNP := old.(*secv1alpha1.NetworkPolicy)
 	// Old and current NetworkPolicy share the same key.
-	key, _ := keyFunc(oldNP)
+	key := internalNetworkPolicyKeyFunc(oldNP)
 	// Lock access to internal NetworkPolicy store such that concurrent access
 	// to an internal NetworkPolicy is not allowed. This will avoid the
 	// case in which an Update to an internal NetworkPolicy object may
@@ -101,10 +101,10 @@ func (n *NetworkPolicyController) deleteANP(old interface{}) {
 	}
 	defer n.heartbeat("deleteANP")
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
-	key, _ := keyFunc(np)
+	key := internalNetworkPolicyKeyFunc(np)
 	oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
 	oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
-	klog.V(4).Infof("Old internal NetworkPolicy %#v", oldInternalNP)
+	klog.V(2).Infof("Deleting internal NetworkPolicy %s for %s", oldInternalNP.Name, oldInternalNP.SourceRef.ToString())
 	err := n.internalNetworkPolicyStore.Delete(key)
 	if err != nil {
 		klog.Errorf("Error deleting internal NetworkPolicy during Antrea NetworkPolicy %s delete: %v", np.Name, err)
@@ -165,8 +165,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 			Name:      np.Name,
 			UID:       np.UID,
 		},
-		Name:            np.Name,
-		Namespace:       np.Namespace,
+		Name:            internalNetworkPolicyKeyFunc(np),
 		UID:             np.UID,
 		AppliedToGroups: appliedToGroupNames,
 		Rules:           rules,

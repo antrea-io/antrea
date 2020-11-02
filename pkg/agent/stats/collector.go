@@ -24,7 +24,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
@@ -117,11 +117,11 @@ func (m *Collector) collect() *statsCollection {
 
 		var statsMap map[types.UID]*statsv1alpha1.TrafficStats
 		switch policyRef.Type {
-		case cpv1beta1.K8sNetworkPolicy:
+		case cpv1beta.K8sNetworkPolicy:
 			statsMap = npStatsMap
-		case cpv1beta1.AntreaClusterNetworkPolicy:
+		case cpv1beta.AntreaClusterNetworkPolicy:
 			statsMap = acnpStatsMap
-		case cpv1beta1.AntreaNetworkPolicy:
+		case cpv1beta.AntreaNetworkPolicy:
 			statsMap = anpStatsMap
 		}
 
@@ -151,7 +151,7 @@ func (m *Collector) report(curStatsCollection *statsCollection) error {
 		return nil
 	}
 
-	summary := &cpv1beta1.NodeStatsSummary{
+	summary := &cpv1beta.NodeStatsSummary{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: m.nodeName,
 		},
@@ -165,18 +165,18 @@ func (m *Collector) report(curStatsCollection *statsCollection) error {
 	if err != nil {
 		return err
 	}
-	_, err = antreaClient.ControlplaneV1beta1().NodeStatsSummaries().Create(context.TODO(), summary, metav1.CreateOptions{})
+	_, err = antreaClient.ControlplaneV1beta2().NodeStatsSummaries().Create(context.TODO(), summary, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func calculateDiff(curStatsMap, lastStatsMap map[types.UID]*statsv1alpha1.TrafficStats) []cpv1beta1.NetworkPolicyStats {
+func calculateDiff(curStatsMap, lastStatsMap map[types.UID]*statsv1alpha1.TrafficStats) []cpv1beta.NetworkPolicyStats {
 	if len(curStatsMap) == 0 {
 		return nil
 	}
-	statsList := make([]cpv1beta1.NetworkPolicyStats, 0, len(curStatsMap))
+	statsList := make([]cpv1beta.NetworkPolicyStats, 0, len(curStatsMap))
 	for uid, curStats := range curStatsMap {
 		var stats *statsv1alpha1.TrafficStats
 		lastStats, exists := lastStatsMap[uid]
@@ -197,8 +197,8 @@ func calculateDiff(curStatsMap, lastStatsMap map[types.UID]*statsv1alpha1.Traffi
 		if stats.Bytes == 0 {
 			continue
 		}
-		policyStats := cpv1beta1.NetworkPolicyStats{
-			NetworkPolicy: cpv1beta1.NetworkPolicyReference{UID: uid},
+		policyStats := cpv1beta.NetworkPolicyStats{
+			NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: uid},
 			TrafficStats:  *stats,
 		}
 		statsList = append(statsList, policyStats)

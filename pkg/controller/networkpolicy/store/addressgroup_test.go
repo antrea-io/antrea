@@ -31,15 +31,14 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
-func newAddressGroupMemberPod(ip string) *controlplane.GroupMemberPod {
-	return &controlplane.GroupMemberPod{IP: controlplane.IPAddress(net.ParseIP(ip))}
+func newAddressGroupMemberPod(ip string) *controlplane.GroupMember {
+	return &controlplane.GroupMember{IPs: []controlplane.IPAddress{controlplane.IPAddress(net.ParseIP(ip))}}
 }
 
 func newAddressGroupMemberExternalEntity(ip string) *controlplane.GroupMember {
 	return &controlplane.GroupMember{
-		Endpoints: []controlplane.Endpoint{
-			{IP: controlplane.IPAddress(net.ParseIP(ip))},
-		},
+		IPs: []controlplane.IPAddress{
+			controlplane.IPAddress(net.ParseIP(ip))},
 	}
 }
 
@@ -56,31 +55,34 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 			fieldSelector: fields.Everything(),
 			operations: func(store storage.Interface) {
 				store.Create(&types.AddressGroup{
-					Name:         "foo",
-					SpanMeta:     types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-					Pods:         controlplane.NewGroupMemberPodSet(newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("2.2.2.2")),
-					GroupMembers: controlplane.NewGroupMemberSet(newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("6.6.6.6")),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					GroupMembers: controlplane.NewGroupMemberSet(
+						newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("2.2.2.2"),
+						newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("6.6.6.6")),
 				})
 				store.Update(&types.AddressGroup{
-					Name:         "foo",
-					SpanMeta:     types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-					Pods:         controlplane.NewGroupMemberPodSet(newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("3.3.3.3")),
-					GroupMembers: controlplane.NewGroupMemberSet(newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("7.7.7.7")),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					GroupMembers: controlplane.NewGroupMemberSet(
+						newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("3.3.3.3"),
+						newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("7.7.7.7")),
 				})
 			},
 			expected: []watch.Event{
 				{Type: watch.Bookmark, Object: nil},
 				{Type: watch.Added, Object: &controlplane.AddressGroup{
-					ObjectMeta:   metav1.ObjectMeta{Name: "foo"},
-					Pods:         []controlplane.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2")},
-					GroupMembers: []controlplane.GroupMember{*newAddressGroupMemberExternalEntity("5.5.5.5"), *newAddressGroupMemberExternalEntity("6.6.6.6")},
+					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+					GroupMembers: []controlplane.GroupMember{
+						*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2"),
+						*newAddressGroupMemberExternalEntity("5.5.5.5"), *newAddressGroupMemberExternalEntity("6.6.6.6")},
 				}},
 				{Type: watch.Modified, Object: &controlplane.AddressGroupPatch{
-					ObjectMeta:          metav1.ObjectMeta{Name: "foo"},
-					AddedPods:           []controlplane.GroupMemberPod{*newAddressGroupMemberPod("3.3.3.3")},
-					RemovedPods:         []controlplane.GroupMemberPod{*newAddressGroupMemberPod("2.2.2.2")},
-					AddedGroupMembers:   []controlplane.GroupMember{*newAddressGroupMemberExternalEntity("7.7.7.7")},
-					RemovedGroupMembers: []controlplane.GroupMember{*newAddressGroupMemberExternalEntity("6.6.6.6")},
+					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+					AddedGroupMembers: []controlplane.GroupMember{
+						*newAddressGroupMemberPod("3.3.3.3"), *newAddressGroupMemberExternalEntity("7.7.7.7")},
+					RemovedGroupMembers: []controlplane.GroupMember{
+						*newAddressGroupMemberPod("2.2.2.2"), *newAddressGroupMemberExternalEntity("6.6.6.6")},
 				}},
 			},
 		},
@@ -90,46 +92,51 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 			operations: func(store storage.Interface) {
 				// This should not be seen as it doesn't span node3.
 				store.Create(&types.AddressGroup{
-					Name:         "foo",
-					SpanMeta:     types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-					Pods:         controlplane.NewGroupMemberPodSet(newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("2.2.2.2")),
-					GroupMembers: controlplane.NewGroupMemberSet(newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("6.6.6.6")),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					GroupMembers: controlplane.NewGroupMemberSet(
+						newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("2.2.2.2"),
+						newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("6.6.6.6")),
 				})
 				// This should be seen as an added event as it makes foo span node3 for the first time.
 				store.Update(&types.AddressGroup{
-					Name:         "foo",
-					SpanMeta:     types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
-					Pods:         controlplane.NewGroupMemberPodSet(newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("2.2.2.2")),
-					GroupMembers: controlplane.NewGroupMemberSet(newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("6.6.6.6")),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+					GroupMembers: controlplane.NewGroupMemberSet(
+						newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("2.2.2.2"),
+						newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("6.6.6.6")),
 				})
 				// This should be seen as a modified event as it updates addressGroups of node3.
 				store.Update(&types.AddressGroup{
-					Name:         "foo",
-					SpanMeta:     types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
-					Pods:         controlplane.NewGroupMemberPodSet(newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("3.3.3.3")),
-					GroupMembers: controlplane.NewGroupMemberSet(newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("7.7.7.7")),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+					GroupMembers: controlplane.NewGroupMemberSet(
+						newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("3.3.3.3"),
+						newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("7.7.7.7")),
 				})
 				// This should be seen as a deleted event as it makes foo not span node3 any more.
 				store.Update(&types.AddressGroup{
-					Name:         "foo",
-					SpanMeta:     types.SpanMeta{NodeNames: sets.NewString("node1")},
-					Pods:         controlplane.NewGroupMemberPodSet(newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("3.3.3.3")),
-					GroupMembers: controlplane.NewGroupMemberSet(newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("6.6.6.6")),
+					Name:     "foo",
+					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1")},
+					GroupMembers: controlplane.NewGroupMemberSet(
+						newAddressGroupMemberPod("1.1.1.1"), newAddressGroupMemberPod("3.3.3.3"),
+						newAddressGroupMemberExternalEntity("5.5.5.5"), newAddressGroupMemberExternalEntity("6.6.6.6")),
 				})
 			},
 			expected: []watch.Event{
 				{Type: watch.Bookmark, Object: nil},
 				{Type: watch.Added, Object: &controlplane.AddressGroup{
-					ObjectMeta:   metav1.ObjectMeta{Name: "foo"},
-					Pods:         []controlplane.GroupMemberPod{*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2")},
-					GroupMembers: []controlplane.GroupMember{*newAddressGroupMemberExternalEntity("5.5.5.5"), *newAddressGroupMemberExternalEntity("6.6.6.6")},
+					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+					GroupMembers: []controlplane.GroupMember{
+						*newAddressGroupMemberPod("1.1.1.1"), *newAddressGroupMemberPod("2.2.2.2"),
+						*newAddressGroupMemberExternalEntity("5.5.5.5"), *newAddressGroupMemberExternalEntity("6.6.6.6")},
 				}},
 				{Type: watch.Modified, Object: &controlplane.AddressGroupPatch{
-					ObjectMeta:          metav1.ObjectMeta{Name: "foo"},
-					AddedPods:           []controlplane.GroupMemberPod{*newAddressGroupMemberPod("3.3.3.3")},
-					RemovedPods:         []controlplane.GroupMemberPod{*newAddressGroupMemberPod("2.2.2.2")},
-					AddedGroupMembers:   []controlplane.GroupMember{*newAddressGroupMemberExternalEntity("7.7.7.7")},
-					RemovedGroupMembers: []controlplane.GroupMember{*newAddressGroupMemberExternalEntity("6.6.6.6")},
+					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+					AddedGroupMembers: []controlplane.GroupMember{
+						*newAddressGroupMemberPod("3.3.3.3"), *newAddressGroupMemberExternalEntity("7.7.7.7")},
+					RemovedGroupMembers: []controlplane.GroupMember{
+						*newAddressGroupMemberPod("2.2.2.2"), *newAddressGroupMemberExternalEntity("6.6.6.6")},
 				}},
 				{Type: watch.Deleted, Object: &controlplane.AddressGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
@@ -158,8 +165,8 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}
-					if !assert.ElementsMatch(t, expectedObj.Pods, actualObj.Pods) {
-						t.Errorf("Expected IPAddresses %v, got %v", expectedObj.Pods, actualObj.Pods)
+					if !assert.ElementsMatch(t, expectedObj.GroupMembers, actualObj.GroupMembers) {
+						t.Errorf("Expected IPAddresses %v, got %v", expectedObj.GroupMembers, actualObj.GroupMembers)
 					}
 				case watch.Modified:
 					actualObj := actualEvent.Object.(*controlplane.AddressGroupPatch)
@@ -167,11 +174,11 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}
-					if !assert.ElementsMatch(t, expectedObj.AddedPods, actualObj.AddedPods) {
-						t.Errorf("Expected AddedIPAddresses %v, got %v", expectedObj.AddedPods, actualObj.AddedPods)
+					if !assert.ElementsMatch(t, expectedObj.AddedGroupMembers, actualObj.AddedGroupMembers) {
+						t.Errorf("Expected AddedIPAddresses %v, got %v", expectedObj.AddedGroupMembers, actualObj.AddedGroupMembers)
 					}
-					if !assert.ElementsMatch(t, expectedObj.RemovedPods, actualObj.RemovedPods) {
-						t.Errorf("Expected RemovedIPAddresses %v, got %v", expectedObj.RemovedPods, actualObj.RemovedPods)
+					if !assert.ElementsMatch(t, expectedObj.RemovedGroupMembers, actualObj.RemovedGroupMembers) {
+						t.Errorf("Expected RemovedIPAddresses %v, got %v", expectedObj.RemovedGroupMembers, actualObj.RemovedGroupMembers)
 					}
 				}
 			}

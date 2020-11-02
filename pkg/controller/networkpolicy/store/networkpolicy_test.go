@@ -39,7 +39,6 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 		UID:       "id1",
 	}
 	policyV1 := &types.NetworkPolicy{
-		Namespace: "foo",
 		Name:      "bar",
 		SourceRef: &npRef,
 		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
@@ -52,7 +51,6 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
 	policyV2 := &types.NetworkPolicy{
-		Namespace: "foo",
 		Name:      "bar",
 		SourceRef: &npRef,
 		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
@@ -65,7 +63,6 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
 	policyV3 := &types.NetworkPolicy{
-		Namespace: "foo",
 		Name:      "bar",
 		SourceRef: &npRef,
 		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
@@ -95,13 +92,13 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 			expected: []watch.Event{
 				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
 				{Type: watch.Added, Object: &controlplane.NetworkPolicy{
-					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+					ObjectMeta:      metav1.ObjectMeta{Name: "bar"},
 					SourceRef:       &npRef,
 					Rules:           policyV1.Rules,
 					AppliedToGroups: policyV1.AppliedToGroups,
 				}},
 				{Type: watch.Modified, Object: &controlplane.NetworkPolicy{
-					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+					ObjectMeta:      metav1.ObjectMeta{Name: "bar"},
 					SourceRef:       &npRef,
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
@@ -124,19 +121,19 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 			expected: []watch.Event{
 				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
 				{Type: watch.Added, Object: &controlplane.NetworkPolicy{
-					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+					ObjectMeta:      metav1.ObjectMeta{Name: "bar"},
 					SourceRef:       &npRef,
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
 				}},
 				{Type: watch.Modified, Object: &controlplane.NetworkPolicy{
-					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+					ObjectMeta:      metav1.ObjectMeta{Name: "bar"},
 					SourceRef:       &npRef,
 					Rules:           policyV3.Rules,
 					AppliedToGroups: policyV3.AppliedToGroups,
 				}},
 				{Type: watch.Deleted, Object: &controlplane.NetworkPolicy{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+					ObjectMeta: metav1.ObjectMeta{Name: "bar"},
 					SourceRef:  &npRef,
 				}},
 			},
@@ -168,9 +165,8 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 
 func TestGetNetworkPolicyByIndex(t *testing.T) {
 	policy1 := &types.NetworkPolicy{
-		Namespace: "foo",
-		Name:      "bar",
-		UID:       "uid-1",
+		Name: "bar",
+		UID:  "uid-1",
 		SourceRef: &controlplane.NetworkPolicyReference{
 			Type:      controlplane.K8sNetworkPolicy,
 			Namespace: "foo",
@@ -185,9 +181,8 @@ func TestGetNetworkPolicyByIndex(t *testing.T) {
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
 	policy2 := &types.NetworkPolicy{
-		Namespace: "foo2",
-		Name:      "bar2",
-		UID:       "uid-2",
+		Name: "bar2",
+		UID:  "uid-2",
 		SourceRef: &controlplane.NetworkPolicyReference{
 			Type:      controlplane.K8sNetworkPolicy,
 			Namespace: "foo2",

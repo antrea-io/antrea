@@ -289,7 +289,7 @@ jobs:
     - name: Run e2e tests
       run: |
         mkdir log
-        mkdir test-e2e-encap-np-coverage 
+        mkdir test-e2e-encap-np-coverage
         ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-np-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --np --coverage
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-np-coverage.tar.gz test-e2e-encap-np-coverage

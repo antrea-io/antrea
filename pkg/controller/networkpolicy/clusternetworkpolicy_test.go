@@ -93,9 +93,8 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "cnpA",
-				Namespace: "",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpA",
@@ -178,9 +177,8 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidB",
-				Name:      "cnpB",
-				Namespace: "",
+				UID:  "uidB",
+				Name: "uidB",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpB",
@@ -264,9 +262,8 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidC",
-				Name:      "cnpC",
-				Namespace: "",
+				UID:  "uidC",
+				Name: "uidC",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpC",
@@ -385,9 +382,8 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "cnpA",
-				Namespace: "",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpA",
@@ -445,7 +441,7 @@ func TestAddCNP(t *testing.T) {
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
 				UID:  "uidB",
-				Name: "cnpB",
+				Name: "uidB",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpB",
@@ -503,9 +499,8 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidD",
-				Name:      "cnpD",
-				Namespace: "",
+				UID:  "uidD",
+				Name: "uidD",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpD",
@@ -563,9 +558,8 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidE",
-				Name:      "cnpE",
-				Namespace: "",
+				UID:  "uidE",
+				Name: "uidE",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpE",
@@ -638,9 +632,8 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidF",
-				Name:      "cnpF",
-				Namespace: "",
+				UID:  "uidF",
+				Name: "uidF",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpF",
@@ -723,9 +716,8 @@ func TestAddCNP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidG",
-				Name:      "cnpG",
-				Namespace: "",
+				UID:  "uidG",
+				Name: "uidG",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type: controlplane.AntreaClusterNetworkPolicy,
 					Name: "cnpG",
@@ -775,7 +767,7 @@ func TestAddCNP(t *testing.T) {
 			npc.tierStore.Add(&appTier)
 			npc.tierStore.Add(&emergencyTier)
 			npc.addCNP(tt.inputPolicy)
-			key, _ := keyFunc(tt.inputPolicy)
+			key := internalNetworkPolicyKeyFunc(tt.inputPolicy)
 			actualPolicyObj, _, _ := npc.internalNetworkPolicyStore.Get(key)
 			actualPolicy := actualPolicyObj.(*antreatypes.NetworkPolicy)
 			assert.Equal(t, tt.expPolicy, actualPolicy)
@@ -803,7 +795,7 @@ func TestDeleteCNP(t *testing.T) {
 	assert.False(t, found, "expected AppliedToGroup to be deleted")
 	adgs := npc.addressGroupStore.List()
 	assert.Len(t, adgs, 0, "expected empty AddressGroup list")
-	key, _ := keyFunc(cnpObj)
+	key := internalNetworkPolicyKeyFunc(cnpObj)
 	_, found, _ = npc.internalNetworkPolicyStore.Get(key)
 	assert.False(t, found, "expected internal NetworkPolicy to be deleted")
 }
