@@ -27,6 +27,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --kind                        Generate a manifest appropriate for running Antrea in a Kind cluster
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
+        --all-features                Generate a manifest with all alpha features enabled
         --proxy                       Generate a manifest with Antrea proxy enabled
         --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
         --prometheus                  Generate a manifest with Antrea Controller and Agent Prometheus metrics listener enabled
@@ -58,6 +59,7 @@ function print_help {
 MODE="dev"
 KIND=false
 IPSEC=false
+ALLFEATURES=false
 PROXY=false
 NP=false
 KEEP=false
@@ -92,6 +94,10 @@ case $key in
     ;;
     --ipsec)
     IPSEC=true
+    shift
+    ;;
+    --all-features)
+    ALLFEATURES=true
     shift
     ;;
     --proxy)
@@ -212,6 +218,14 @@ if $IPSEC; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableIPSecTunnel[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableIPSecTunnel: true/" antrea-agent.conf
     # change the tunnel type to GRE which works better with IPSec encryption than other types.
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
+fi
+
+if $ALLFEATURES; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*Traceflow[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  Traceflow: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*FlowExporter[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  FlowExporter: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*NetworkPolicyStats[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  NetworkPolicyStats: true/" antrea-agent.conf
 fi
 
 if $PROXY; then
