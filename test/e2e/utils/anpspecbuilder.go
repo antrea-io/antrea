@@ -186,3 +186,11 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	})
 	return b
 }
+
+func (b *AntreaNetworkPolicySpecBuilder) AddEgressLogging() *AntreaNetworkPolicySpecBuilder {
+	for i, e := range b.Spec.Egress {
+		e.EnableLogging = true
+		b.Spec.Egress[i] = e
+	}
+	return b
+}
