@@ -277,11 +277,12 @@ be enforced in the order in which they are written.
 **enableLogging**: A ClusterNetworkPolicy ingress or egress rule can be
 audited by enabling its logging field. When `enableLogging` field is set to
 true, the first packet of any connection that matches this rule will be logged
-to a separate file (`/var/log/antrea/networkpolicy/np.log`). These log files
-can then be retrieved for further analysis. By default, rules are not logged.
-The example policy logs all traffic that matches the "DropToThirdParty" egress
-rule, while the rule "AllowFromFrontend" is not logged.
-The rules are logged in the following format:
+to a separate file (`/var/log/antrea/networkpolicy/np.log`) on the Node on
+which the rule is applied. These log files can then be retrieved for further
+analysis. By default, rules are not logged. The example policy logs all
+traffic that matches the "DropToThirdParty" egress rule, while the rule
+"AllowFromFrontend" is not logged. The rules are logged in the following
+format:
 
 ```
     <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <action> <openflow-priority> SRC: <source-ip> DEST: <destination-ip> <packet-length> <protocol>
