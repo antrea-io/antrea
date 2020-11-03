@@ -155,7 +155,7 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 
 	// We iterate over all current Nodes, including the Node on which this agent is
 	// running, so the route to local Pods will be desired as well.
-	var desiredPodCIDRs, desiredRemoteNodeIPs []string
+	var desiredPodCIDRs []string
 	for _, node := range nodes {
 		// PodCIDR is allocated by K8s NodeIpamController asynchronously so it's possible we see a Node
 		// with no PodCIDR set when it just joins the cluster.
@@ -163,20 +163,10 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 			continue
 		}
 		desiredPodCIDRs = append(desiredPodCIDRs, node.Spec.PodCIDR)
-
-		if node.Name == c.nodeConfig.Name {
-			continue
-		}
-		nodeIP, err := GetNodeAddr(node)
-		if err != nil {
-			klog.Errorf("Failed to retrieve IP address of Node %s: %v", node.Name, err)
-			continue
-		}
-		desiredRemoteNodeIPs = append(desiredRemoteNodeIPs, nodeIP.String())
 	}
 
 	// routeClient will remove orphaned routes whose destinations are not in desiredPodCIDRs.
-	if err := c.routeClient.Reconcile(desiredPodCIDRs, desiredRemoteNodeIPs); err != nil {
+	if err := c.routeClient.Reconcile(desiredPodCIDRs); err != nil {
 		return err
 	}
 	return nil
@@ -376,7 +366,7 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 		return nil
 	}
 	nodeRouteInfo := obj.(*nodeRouteInfo)
-	if err := c.routeClient.DeleteRoutes(nodeRouteInfo.podCIDR, nodeRouteInfo.nodeIP); err != nil {
+	if err := c.routeClient.DeleteRoutes(nodeRouteInfo.podCIDR); err != nil {
 		return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 	}
 
