@@ -17,7 +17,7 @@
   - [The Antrea NetworkPolicy resource](#the-antrea-networkpolicy-resource)
   - [Key differences from Antrea ClusterNetworkPolicy](#key-differences-from-antrea-clusternetworkpolicy)
   - [kubectl commands for Antrea NetworkPolicy](#kubectl-commands-for-antrea-networkpolicy)
-- [Antrea Policy ordering based on priorities](#antrea-policy-ordering-based-on-priorities)
+- [Antrea-native Policy ordering based on priorities](#antrea-native-policy-ordering-based-on-priorities)
   - [Ordering based on Tier priority](#ordering-based-on-tier-priority)
   - [Ordering based on policy priority](#ordering-based-on-policy-priority)
   - [Rule enforcement based on priorities](#rule-enforcement-based-on-priorities)
@@ -38,11 +38,11 @@ complement the K8s NetworkPolicy.
 
 ## Tier
 
-Antrea supports grouping Antrea Policy CRDs together in a tiered fashion
+Antrea supports grouping Antrea-native Policy CRDs together in a tiered fashion
 to provide a hierarchy of security policies. This is achieved by setting the
-`tier` field when defining an Antrea Policy CRD (e.g. a ClusterNetworkPolicy
-object) to the appropriate tier name. Each tier has a priority associated with
-it, which determines its relative order among all tiers.
+`tier` field when defining an Antrea-native Policy CRD (e.g. an Antrea
+ClusterNetworkPolicy object) to the appropriate tier name. Each tier has a
+priority associated with it, which determines its relative order among all tiers.
 
 **Note**: K8s NetworkPolicies will be enforced once all tiers have been
 enforced.
@@ -69,7 +69,7 @@ Tiers have the following characteristics:
 
 - Policies can associate themselves with an existing Tier by setting the `tier`
   field in a Antrea NetworkPolicy CRD spec to the Tier's name.
-- A Tier must exist before an Antrea policy can reference it.
+- A Tier must exist before an Antrea-native policy can reference it.
 - Policies associated with higher ordered (low `priority` value) Tiers are
   enforced first.
 - No two Tiers can be created with the same priority.
@@ -81,37 +81,48 @@ Tiers have the following characteristics:
 Antrea release 0.9.x introduced support for 5 static tiers. These static tiers
 have been removed in favor of Tier CRDs as mentioned in the previous section.
 On startup, antrea-controller will create 5 Read-Only Tier resources
-corresponding to the static tiers for default consumption as shown below.
+corresponding to the static tiers for default consumption, as well as a "baseline"
+Tier CRD object, that will be enforced after developer-created K8s NetworkPolicies.
+The details for these tiers are shown below:
 
 ```
-    Emergency -> Tier name "emergency" with priority "5"
+    Emergency   -> Tier name "emergency" with priority "5"
     SecurityOps -> Tier name "securityops" with priority "50"
-    NetworkOps -> Tier name "networkops" with priority "100"
-    Platform -> Tier name "platform" with priority "150"
+    NetworkOps  -> Tier name "networkops" with priority "100"
+    Platform    -> Tier name "platform" with priority "150"
     Application -> Tier name "application" with priority "250"
+    Baseline    -> Tier name "baseline" with priority "253"
 ```
 
-Any Antrea policy CRD referencing a static tier in its spec will now internally
-reference the corresponding Tier resource, thus maintaining the order of
-enforcement.
+Any Antrea-native policy CRD referencing a static tier in its spec will now internally
+reference the corresponding Tier resource, thus maintaining the order of enforcement.
 
-Previously, the static tiers created were as follows in the relative order of
-precedence:
+The static tier resources are created as follows in the relative order of
+precedence compared to K8s NetworkPolicies:
 
 ```
-    Emergency > SecurityOps > NetworkOps > Platform > Application  
+    Emergency > SecurityOps > NetworkOps > Platform > Application > K8s NetworkPolicy > Baseline
 ```
 
-Thus, all Antrea Policy resources associated with "Emergency" tier will be
-enforced before any other Antrea Policy resource associated with any other
-tier, until a match occurs, in which case the policy rule's `action` will be
-applied. The "Application" tier carries the lowest precedence, and any Antrea
-Policy resource without a `tier` name set in its spec will be associated with
-the "Application" tier. Even though the policies associated with the
-"Application" tier carry the lowest precedence amongst all the tiers, they are
-still enforced before K8s NetworkPolicies. Thus, admin-created tiered Antrea
-Policy CRDs have a higher precedence than developer-created K8s
-NetworkPolicies.
+Thus, all Antrea-native Policy resources associated with the "emergency" tier will be
+enforced before any Antrea-native Policy resource associated with any other
+tiers, until a match occurs, in which case the policy rule's `action` will be
+applied. **Any Antrea-native Policy resource without a `tier` name set in its spec
+will be associated with the "application" tier.** Policies associated with the first
+5 static, read-only tiers, as well as with all the custom tiers created with a priority
+value lower than 250 (priority values greater than or equal to 250 are not allowed
+for custom tiers), will be enforced before K8s NetworkPolicies.
+Policies created in the "baseline" tier, on the other hand, will have lower precedence
+than developer-created K8s NetworkPolicies, which comes in handy when administrators
+want to enforce baseline policies like "default-deny inter-namespace traffic" for some
+specific Namespace, while still allowing individual developers to lift the restriction
+if needed using K8s NetworkPolicies.
+Note that baseline policies cannot counteract the isolated Pod behavior provided by
+K8s NetworkPolicies. If a Pod becomes isolated because a K8s NetworkPolicy is applied
+to it, and the policy does not explicitly allow communications with another Pod,
+this behavior cannot be changed by creating an Antrea-native policy with an "allow"
+action in the "baseline" tier. For this reason, it generally does not make sense to
+create policies in the "baseline" tier with the "allow" action。
 
 ### kubectl commands for Tier
 
@@ -147,7 +158,7 @@ All of the above commands produce output similar to what is shown below:
 
 ## Antrea ClusterNetworkPolicy
 
-Antrea ClusterNetworkPolicy (ACNP), one of the two Antrea Policy CRDs
+Antrea ClusterNetworkPolicy (ACNP), one of the two Antrea-native Policy CRDs
 introduced, is a specification of how workloads within a cluster communicate
 with each other and other external endpoints. The ClusterNetworkPolicy is
 supposed to aid cluster admins to configure the security policy for the
@@ -443,9 +454,9 @@ All of the above commands produce output similar to what is shown below:
     test-anp   securityops   5          5s
 ```
 
-## Antrea Policy ordering based on priorities
+## Antrea-native Policy ordering based on priorities
 
-Antrea Policy CRDs are ordered based on priorities set at various levels.
+Antrea-native Policy CRDs are ordered based on priorities set at various levels.
 
 ### Ordering based on Tier priority
 
@@ -453,11 +464,12 @@ With the introduction of tiers, Antrea Policies, like ClusterNetworkPolicies,
 are first enforced based on the Tier to which they are associated. i.e. all
 policies belonging to a high Tier are enforced first, followed by policies
 belonging to the next Tier and so on, until the "application" Tier policies
-are enforced.
+are enforced. K8s NetworkPolicies are enforced next, and "baseline" Tier
+policies will be enforced last.
 
 ### Ordering based on policy priority
 
-Within a tier, Antrea Policy CRDs are ordered by the `priority` at the policy
+Within a tier, Antrea-native Policy CRDs are ordered by the `priority` at the policy
 level. Thus, the policy with the highest precedence (lowest priority number
 value) is enforced first. This ordering is performed solely based on the
 `priority` assigned as opposed to the "Kind" of the resource, i.e. the relative
@@ -480,11 +492,12 @@ This translates to the following order:
 
 Once a rule is matched, it is executed based on the action set. If none of the
 policy rules match, the packet is then enforced for rules created for K8s NP.
-Hence, Antrea Policy CRDs take precedence over K8s NP.
+If the packet still does not match any rule for K8s NP, it will then be evaluated
+against policies created in the "baseline" Tier.
 
 ## RBAC
 
-Antrea Policy CRDs are meant for admins to manage the security of their
+Antrea-native Policy CRDs are meant for admins to manage the security of their
 cluster. Thus, access to manage these CRDs must be granted to subjects which
 have the authority to outline the security policies for the cluster and/or
 Namespaces. On cluster initialization, Antrea grants the permissions to edit
@@ -500,9 +513,14 @@ the policies that may affect their workloads.
 - There is a soft limit of 20 on the maximum number of Tier resources that are
   supported. But for optimal performance, it is recommended that the number of
   Tiers in a cluster be less than or equal to 10.
-- The v1alpha1 Policy CRDs support up to 10000 unique priority at policy level.
-  In order to reduce the churn in the agent, it is recommended to set the
+- In order to reduce the churn in the agent, it is recommended to set the policy
   priority within the range 1.0 to 100.0.
+- The v1alpha1 Policy CRDs support up to 10,000 unique priorities at policy level,
+  and up to 50,000 unique priorities at rule level, across all tiers except for
+  the "baseline" tier. For any two policy rules, their rule level priorities are only
+  considered equal if they share the same tier, and have the same policy priority
+  as well as rule priority.
+- For the "baseline" tier, the max supported unique priorities (at rule level）is 150.
 
 ## Known Issues
 
