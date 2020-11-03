@@ -16,12 +16,12 @@ package e2e
 
 import (
 	"fmt"
-	"io/ioutil"
 	"strings"
 	"testing"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -655,50 +655,36 @@ func testANPBasic(t *testing.T) {
 }
 
 // testAuditLoggingBasic tests that a audit log is generated when egress drop applied
-func testAuditLoggingBasic(t *testing.T) {
+func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-log-cnp-deny").
 		SetPriority(1.0).
-		SetAppliedToGroup(map[string]string{"pod": "a"}, nil, nil, nil)
+		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
 	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
-		nil, nil, secv1alpha1.RuleActionDrop).
-		AddEgressLogging()
+		nil, nil, secv1alpha1.RuleActionDrop)
+	builder.AddEgressLogging()
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/c"), false)
+	_, err := k8sUtils.CreateOrUpdateCNP(builder.Get())
+	failOnError(err, t)
 
-	testStep := []*TestStep{
-		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			80,
-			0,
-		},
-	}
-	testCase := []*TestCase{
-		{"Audit Log CNP Drop Egress From All Pod:a to NS:z", testStep},
-	}
-	executeTests(t, testCase)
-}
+	// generate some traffic that will be dropped by test-log-cnp-deny
+	k8sUtils.Probe("x", "a", "z", "a", p80)
+	k8sUtils.Probe("x", "a", "z", "b", p80)
+	k8sUtils.Probe("x", "a", "z", "c", p80)
 
-// validateAuditLog validates whether testAuditLoggingBasic succeeded or failed
-func validateAuditLog() bool {
-	data, err := ioutil.ReadFile("/var/log/antrea/networkpolicy/np.log")
+	podXA, _ := k8sUtils.GetPod("x", "a")
+	nodeName := podXA.Spec.NodeName
+	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
-		return false
+		t.Errorf("error occurred when trying to get the Antrea agent pod running on node %s: %v", nodeName, err)
 	}
-	s := string(data)
-	// check whether s contains test CNP
-	fmt.Println(strings.Contains(s, "test-log-cnp-deny"))
-	return true
+	cmd := []string{"cat", "/var/log/antrea/networkpolicy/np.log"}
+	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
+	if err != nil {
+		t.Errorf("error occurred when inspecting the audit log file: %v", err)
+	}
+	assert.Equalf(t, true, strings.Contains(stdout, "test-log-cnp-deny"), "audit log does not contain entries for test-log-cnp-deny")
+	failOnError(k8sUtils.CleanCNPs(), t)
 }
 
 // executeTests runs all the tests in testList and prints results
@@ -766,10 +752,6 @@ func printResults() {
 				result = fmt.Sprintf("failure -- %d wrong results", wrong)
 				testFailed = true
 			}
-			if testCase.Name == "Audit Log CNP Drop Egress From All Pod:a to NS:z" {
-				result = fmt.Sprintf("failure -- %d wrong results", 1)
-				testFailed = !validateAuditLog()
-			}
 			fmt.Printf("\tStep %s on port %d, duration %d seconds, result: %s\n",
 				step.Name, step.Port, int(step.Duration.Seconds()), result)
 			fmt.Printf("\n%s\n", comparison.PrettyPrint("\t\t"))
@@ -814,9 +796,12 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=CNPPriorityConflictingRule", func(t *testing.T) { testCNPPriorityConflictingRule(t) })
 		t.Run("Case=CNPRulePriority", func(t *testing.T) { testCNPRulePrioirty(t) })
 		t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })
-		t.Run("Case=AuditLoggingBasic", func(t *testing.T) { testAuditLoggingBasic(t) })
 	})
-
+	// print results for reachability tests
 	printResults()
+
+	t.Run("TestGroupAuditLogging", func(t *testing.T) {
+		t.Run("Case=AuditLoggingBasic", func(t *testing.T) { testAuditLoggingBasic(t, data) })
+	})
 	k8sUtils.Cleanup(namespaces)
 }
