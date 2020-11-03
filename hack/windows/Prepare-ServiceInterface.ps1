@@ -13,7 +13,8 @@ PS> .\PrepareServiceInterface.ps1 -InterfaceAlias "HNS Internal NIC"
 
 #>
 Param(
-    [parameter(Mandatory = $false, HelpMessage="Interface to be added service IPs by kube-proxy")] [string] $InterfaceAlias="HNS Internal NIC"
+    [parameter(Mandatory = $false, HelpMessage="Interface to be added service IPs by kube-proxy")] [string] $InterfaceAlias="HNS Internal NIC",
+    [parameter(Mandatory = $false, HelpMessage="Stop existing kube-proxy process after creating interface")] [bool] $StopKubeProxyOnCreation=$true
 )
 $ErrorActionPreference = 'Stop'
 
@@ -27,3 +28,10 @@ if (Get-NetAdapter -InterfaceAlias $INTERFACE_TO_ADD_SERVICE_IP -ErrorAction Sil
 $hnsSwitchName = $(Get-VMSwitch -SwitchType Internal).Name
 Add-VMNetworkAdapter -ManagementOS -Name $InterfaceAlias -SwitchName $hnsSwitchName
 Set-NetIPInterface -ifAlias $INTERFACE_TO_ADD_SERVICE_IP -Forwarding Enabled
+
+if ($StopKubeProxyOnCreation) {
+  # Restart kube-proxy to make new created inteface can be used.
+  # Kill kube-proxy and the process will be recreated by kube-proxy pod.
+  Write-Host "killing running kube-proxy process if exists..."
+  taskkill /im rancher-wins-kube-proxy.exe /f
+}
