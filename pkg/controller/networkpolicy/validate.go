@@ -20,12 +20,45 @@ import (
 	"strconv"
 
 	admv1 "k8s.io/api/admission/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
+
+// validator interface introduces the set of functions that must be implemented
+// by any resource validator.
+type validator interface {
+	// createValidate is the interface which must be satisfied for resource
+	// CREATE events.
+	createValidate(curObj interface{}, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool)
+	// updateValidate is the interface which must be satisfied for resource
+	// UPDATE events.
+	updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool)
+	// deleteValidate is the interface which must be satisfied for resource
+	// DELETE events.
+	deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool)
+}
+
+// antreaPolicyValidator implements the validator interface for Antrea-native
+// policies.
+type antreaPolicyValidator struct{}
+
+// tierValidator implements the validator interface for Tier resources.
+type tierValidator struct{}
+
+// validatorRegistry maintains a list of validator objects which implement
+// the validator interface.
+type validatorRegistry struct {
+	// antreaPolicyValidators maintains a list of validator objects which
+	// implement the validator interface for Antrea-native policies.
+	antreaPolicyValidators []validator
+	// tierValidators maintains a list of validator objects which
+	// implement the validator interface for Tier resources.
+	tierValidators []validator
+}
 
 var (
 	// reservedTierPriorities stores the reserved priority range from 251, 252, 254 and 255.
@@ -36,15 +69,40 @@ var (
 	// reservedTierNames stores the set of Tier names which cannot be deleted
 	// since they are created by Antrea.
 	reservedTierNames = sets.NewString("baseline", "application", "platform", "networkops", "securityops", "emergency")
+	// apv is an instance of antreaPolicyValidator to validate Antrea-native
+	// policy events.
+	apv = antreaPolicyValidator{}
+	// tv is an instance of tierValidator to validate Tier resource events.
+	tv = tierValidator{}
 )
 
+// registerAntreaPolicyValidator registers an Antrea-native policy validator to
+// the resource registry.
+func registerAntreaPolicyValidator(v *validatorRegistry, a validator) {
+	v.antreaPolicyValidators = append(v.antreaPolicyValidators, a)
+}
+
+// registerTierValidator registers a Tier validator to the resource registry.
+func registerTierValidator(v *validatorRegistry, t validator) {
+	v.tierValidators = append(v.tierValidators, t)
+}
+
 type NetworkPolicyValidator struct {
+	// reg maintains list of validators to be called during validation of
+	// Antrea-native policies and Tier resources.
+	reg                     *validatorRegistry
 	networkPolicyController *NetworkPolicyController
 }
 
 // NewNetworkPolicyValidator returns a new *NetworkPolicyValidator.
 func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController) *NetworkPolicyValidator {
+	// initialize the validator registry with the validators that need to be
+	// called.
+	vr := validatorRegistry{}
+	registerAntreaPolicyValidator(&vr, &apv)
+	registerTierValidator(&vr, &tv)
 	return &NetworkPolicyValidator{
+		reg:                     &vr,
 		networkPolicyController: networkPolicyController,
 	}
 }
@@ -55,6 +113,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 	var msg string
 	allowed := false
 	op := ar.Request.Operation
+	ui := ar.Request.UserInfo
 	curRaw := ar.Request.Object.Raw
 	oldRaw := ar.Request.OldObject.Raw
 	switch ar.Request.Kind.Kind {
@@ -73,7 +132,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateTier(&curTier, &oldTier, op)
+		msg, allowed = validateTier(&curTier, &oldTier, op, ui, v)
 	case "ClusterNetworkPolicy":
 		klog.V(2).Info("Validating Antrea ClusterNetworkPolicy CRD")
 		var curCNP, oldCNP secv1alpha1.ClusterNetworkPolicy
@@ -89,7 +148,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaPolicy(op, curCNP.Spec.Tier, curCNP.Spec.Ingress, curCNP.Spec.Egress)
+		msg, allowed = validateAntreaPolicy(&curCNP, &oldCNP, op, ui, v)
 	case "NetworkPolicy":
 		klog.V(2).Info("Validating Antrea NetworkPolicy CRD")
 		var curANP, oldANP secv1alpha1.NetworkPolicy
@@ -105,7 +164,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaPolicy(op, curANP.Spec.Tier, curANP.Spec.Ingress, curANP.Spec.Egress)
+		msg, allowed = validateAntreaPolicy(&curANP, &oldANP, op, ui, v)
 	}
 	if msg != "" {
 		result = &metav1.Status{
@@ -119,65 +178,48 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 }
 
 // validateAntreaPolicy validates the admission of a Antrea NetworkPolicy CRDs
-func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier string, ingress, egress []secv1alpha1.Rule) (string, bool) {
+func validateAntreaPolicy(curObj, oldObj interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool) {
 	allowed := true
 	reason := ""
 	switch op {
 	case admv1.Create, admv1.Update:
-		if isUnique := v.validateRuleName(ingress, egress); !isUnique {
-			allowed = false
-			reason = "rules names are not unique, or policy has duplicate rules, or collision occurred in generated rule names"
-			break
+		for _, val := range v.reg.antreaPolicyValidators {
+			reason, allowed = val.createValidate(curObj, userInfo, v)
+			if !allowed {
+				return reason, allowed
+			}
 		}
-		// "tier" must exist before referencing.
-		if tier == "" || staticTierSet.Has(tier) {
-			// Empty Tier name corresponds to default Tier
-			break
-		}
-		if ok := v.tierExists(tier); !ok {
-			allowed = false
-			reason = fmt.Sprintf("tier %s does not exist", tier)
+		for _, val := range v.reg.antreaPolicyValidators {
+			reason, allowed = val.updateValidate(curObj, oldObj, userInfo, v)
+			if !allowed {
+				return reason, allowed
+			}
 		}
 	case admv1.Delete:
-		// Delete of Antrea Policies have no validation
-		allowed = true
+		// Delete of Antrea Policies have no validation. This will be an
+		// empty for loop.
+		for _, val := range v.reg.antreaPolicyValidators {
+			reason, allowed = val.deleteValidate(curObj, userInfo, v)
+			if !allowed {
+				return reason, allowed
+			}
+		}
 	}
 	return reason, allowed
 }
 
-// validateRuleName validates if the name of each rule is unique within a policy
-func (v *NetworkPolicyValidator) validateRuleName(ingress, egress []secv1alpha1.Rule) bool {
-	uniqueRuleName := sets.NewString()
-	isUnique := func(rules []secv1alpha1.Rule) bool {
-		for _, rule := range rules {
-			if uniqueRuleName.Has(rule.Name) {
-				return false
-			}
-			uniqueRuleName.Insert(rule.Name)
-		}
-		return true
-	}
-	return isUnique(ingress) && isUnique(egress)
-}
-
 // validateTier validates the admission of a Tier resource
-func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier, op admv1.Operation) (string, bool) {
+func validateTier(curTier, oldTier *secv1alpha1.Tier, op admv1.Operation, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool) {
 	allowed := true
 	reason := ""
 	switch op {
 	case admv1.Create:
 		klog.V(2).Info("Validating CREATE request for Tier")
-		if len(v.networkPolicyController.tierInformer.Informer().GetIndexer().ListIndexFuncValues(PriorityIndex)) >= maxSupportedTiers {
-			return fmt.Sprintf("maximum number of Tiers supported: %d", maxSupportedTiers), false
-		}
-		// Tier priority must not overlap reserved tier's priority
-		if reservedTierPriorities.Has(curTier.Spec.Priority) {
-			return fmt.Sprintf("tier %s priority %d is reserved", curTier.Name, curTier.Spec.Priority), false
-		}
-		// Tier priority must not overlap existing tier's priority
-		trs, err := v.networkPolicyController.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, strconv.FormatInt(int64(curTier.Spec.Priority), 10))
-		if err != nil || len(trs) > 0 {
-			return fmt.Sprintf("tier %s priority %d overlaps with existing Tier", curTier.Name, curTier.Spec.Priority), false
+		for _, val := range v.reg.tierValidators {
+			reason, allowed = val.createValidate(curTier, userInfo, v)
+			if !allowed {
+				return reason, allowed
+			}
 		}
 	case admv1.Update:
 		// Tier priority updates are not allowed
@@ -188,20 +230,11 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier
 		}
 	case admv1.Delete:
 		klog.V(2).Info("Validating DELETE request for Tier")
-		if reservedTierNames.Has(oldTier.Name) {
-			reason = fmt.Sprintf("cannot delete reserved tier %s", oldTier.Name)
-			return reason, false
-		}
-		// Tier with existing ACNPs/ANPs cannot be deleted
-		cnps, err := v.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
-		if err != nil || len(cnps) > 0 {
-			reason = fmt.Sprintf("tier %s is referenced by %d Antrea ClusterNetworkPolicies", oldTier.Name, len(cnps))
-			return reason, false
-		}
-		anps, err := v.networkPolicyController.anpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
-		if err != nil || len(anps) > 0 {
-			reason = fmt.Sprintf("tier %s is referenced by %d Antrea NetworkPolicies", oldTier.Name, len(anps))
-			return reason, false
+		for _, val := range v.reg.tierValidators {
+			reason, allowed = val.deleteValidate(curTier, userInfo, v)
+			if !allowed {
+				return reason, allowed
+			}
 		}
 	}
 	return reason, allowed
@@ -226,4 +259,119 @@ func GetAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 			Message: err.Error(),
 		},
 	}
+}
+
+// createValidate validates the CREATE events of Antrea-native policies,
+func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool) {
+	var tier string
+	var ingress, egress []secv1alpha1.Rule
+	switch curObj.(type) {
+	case *secv1alpha1.ClusterNetworkPolicy:
+		curCNP := curObj.(*secv1alpha1.ClusterNetworkPolicy)
+		tier = curCNP.Spec.Tier
+		ingress = curCNP.Spec.Ingress
+		egress = curCNP.Spec.Egress
+	case *secv1alpha1.NetworkPolicy:
+		curANP := curObj.(*secv1alpha1.NetworkPolicy)
+		tier = curANP.Spec.Tier
+		ingress = curANP.Spec.Ingress
+		egress = curANP.Spec.Egress
+	}
+	reason, allowed := validateTierForPolicy(tier, v)
+	if !allowed {
+		return reason, allowed
+	}
+	if ruleNameUnique := v.validateRuleName(ingress, egress); !ruleNameUnique {
+		return fmt.Sprint("rules names must be unique within the policy"), false
+	}
+	return "", true
+}
+
+// validateRuleName validates if the name of each rule is unique within a policy
+func (v *NetworkPolicyValidator) validateRuleName(ingress, egress []secv1alpha1.Rule) bool {
+	uniqueRuleName := sets.NewString()
+	isUnique := func(rules []secv1alpha1.Rule) bool {
+		for _, rule := range rules {
+			if uniqueRuleName.Has(rule.Name) {
+				return false
+			}
+			uniqueRuleName.Insert(rule.Name)
+		}
+		return true
+	}
+	return isUnique(ingress) && isUnique(egress)
+}
+
+// validateTierForPolicy validates whether a referenced Tier exists.
+func validateTierForPolicy(tier string, v *NetworkPolicyValidator) (string, bool) {
+	// "tier" must exist before referencing
+	if tier == "" || staticTierSet.Has(tier) {
+		// Empty Tier name corresponds to default Tier.
+		return "", true
+	}
+	if ok := v.tierExists(tier); !ok {
+		reason := fmt.Sprintf("tier %s does not exist", tier)
+		return reason, false
+	}
+	return "", true
+}
+
+// updateValidate validates the UPDATE events of Antrea-native policies.
+func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool) {
+	var tier string
+	switch curObj.(type) {
+	case *secv1alpha1.ClusterNetworkPolicy:
+		curCNP := curObj.(*secv1alpha1.ClusterNetworkPolicy)
+		tier = curCNP.Spec.Tier
+	case *secv1alpha1.NetworkPolicy:
+		curANP := curObj.(*secv1alpha1.NetworkPolicy)
+		tier = curANP.Spec.Tier
+	}
+	return validateTierForPolicy(tier, v)
+}
+
+// deleteValidate validates the DELETE events of Antrea-native policies.
+func (a *antreaPolicyValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool) {
+	return "", true
+}
+
+// createValidate validates the CREATE events of Tier resources.
+func (t *tierValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool) {
+	if len(v.networkPolicyController.tierInformer.Informer().GetIndexer().ListIndexFuncValues(PriorityIndex)) >= maxSupportedTiers {
+		return fmt.Sprintf("maximum number of Tiers supported: %d", maxSupportedTiers), false
+	}
+	curTier := curObj.(*secv1alpha1.Tier)
+	// Tier priority must not overlap reserved tier's priority.
+	if reservedTierPriorities.Has(curTier.Spec.Priority) {
+		return fmt.Sprintf("tier %s priority %d is reserved", curTier.Name, curTier.Spec.Priority), false
+	}
+	// Tier priority must not overlap existing tier's priority.
+	trs, err := v.networkPolicyController.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, strconv.FormatInt(int64(curTier.Spec.Priority), 10))
+	if err != nil || len(trs) > 0 {
+		return fmt.Sprintf("tier %s priority %d overlaps with existing Tier", curTier.Name, curTier.Spec.Priority), false
+	}
+	return "", true
+}
+
+// updateValidate validates the UPDATE events of Tier resources.
+func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool) {
+	return "", true
+}
+
+// deleteValidate validates the DELETE events of Tier resources.
+func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo, v *NetworkPolicyValidator) (string, bool) {
+	oldTier := oldObj.(*secv1alpha1.Tier)
+	if reservedTierNames.Has(oldTier.Name) {
+		return fmt.Sprintf("cannot delete reserved tier %s", oldTier.Name), false
+	}
+	// Tier with existing ACNPs/ANPs cannot be deleted.
+	cnps, err := v.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
+	if err != nil || len(cnps) > 0 {
+		return fmt.Sprintf("tier %s is referenced by %d Antrea ClusterNetworkPolicies", oldTier.Name, len(cnps)), false
+	}
+	anps, err := v.networkPolicyController.anpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
+	if err != nil || len(anps) > 0 {
+		return fmt.Sprintf("tier %s is referenced by %d Antrea NetworkPolicies", oldTier.Name, len(anps)), false
+	}
+	return "", true
 }
