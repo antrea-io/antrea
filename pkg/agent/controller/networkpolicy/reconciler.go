@@ -17,10 +17,12 @@ package networkpolicy
 import (
 	"encoding/binary"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -53,11 +55,12 @@ type Reconciler interface {
 	// Forget cleanups the actual state of Openflow entries of the specified ruleID.
 	Forget(ruleID string) error
 
-	// GetIDAllocatorWorker returns the idAllocator worker
-	GetIDAllocatorWorker() func()
-
-	// GetRuleByFlowID return the rule from async rule cache in idAllocator
+	// GetRuleByFlowID return the rule from async rule cache in idAllocator cache.
 	GetRuleByFlowID(ruleID uint32) (*types.PolicyRule, error)
+
+	// RunIDAllocatorWorker runs worker that deletes rules from cache in idAllocator
+	// asynchronously.
+	RunIDAllocatorWorker(stopCh <-chan struct{})
 }
 
 // servicesKey is used to identify Services based on their numbered ports.
@@ -202,10 +205,18 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 		ofClient:          ofClient,
 		ifaceStore:        ifaceStore,
 		lastRealizeds:     sync.Map{},
-		idAllocator:       newIDAllocator(),
+		idAllocator: newIDAllocator(),
 		priorityAssigners: priorityAssigners,
 	}
 	return reconciler
+}
+
+// RunIDAllocatorWorker runs worker that deletes rules from cache in idAllocator
+// asynchronously.
+func (r *reconciler) RunIDAllocatorWorker(stopCh <-chan struct{}) {
+	wait.Until(r.idAllocator.worker, time.Second, stopCh)
+
+	<- stopCh
 }
 
 // Reconcile checks whether the provided rule have been enforced or not, and
@@ -712,10 +723,6 @@ func (r *reconciler) Forget(ruleID string) error {
 
 	r.lastRealizeds.Delete(ruleID)
 	return nil
-}
-
-func (r *reconciler) GetIDAllocatorWorker() func() {
-	return r.idAllocator.worker
 }
 
 func (r *reconciler) GetRuleByFlowID(ruleFlowID uint32) (*types.PolicyRule, error) {

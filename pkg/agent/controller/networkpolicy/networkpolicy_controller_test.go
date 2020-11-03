@@ -102,10 +102,8 @@ func (r *mockReconciler) Forget(ruleID string) error {
 	return nil
 }
 
-func (r *mockReconciler) GetIDAllocatorWorker() func() {
-	return func() {
-		return
-	}
+func (r *mockReconciler) RunIDAllocatorWorker(_ <-chan struct{}) {
+	return
 }
 
 func (r *mockReconciler) GetRuleByFlowID(_ uint32) (*agenttypes.PolicyRule, error) {

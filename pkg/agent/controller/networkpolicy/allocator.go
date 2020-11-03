@@ -47,6 +47,8 @@ type idAllocator struct {
 	availableSet map[uint32]struct{}
 	// availableSlice maintains the order of release.
 	availableSlice []uint32
+	// asyncRuleCache maintains rules in a cache and deletes the rules asynchronously
+	// after a given delete interval.
 	asyncRuleCache *asyncRuleCache
 }
 
@@ -88,7 +90,7 @@ func (a *idAllocator) allocateForRule(rule *types.PolicyRule) error {
 		id, a.availableSlice = a.availableSlice[0], a.availableSlice[1:]
 		delete(a.availableSet, id)
 
-		// Add ID to the rule and the rule to asyncRuleCache
+		// Add ID to the rule and the rule to asyncRuleCache.
 		rule.FlowID = id
 		a.asyncRuleCache.rules.Add(rule)
 
@@ -99,7 +101,7 @@ func (a *idAllocator) allocateForRule(rule *types.PolicyRule) error {
 	}
 	a.lastAllocatedID++
 
-	// Add ID to rule and rule to asyncRuleCache
+	// Add ID to the rule and the rule to asyncRuleCache.
 	rule.FlowID = a.lastAllocatedID
 	a.asyncRuleCache.rules.Add(rule)
 
@@ -167,10 +169,10 @@ func (a *idAllocator) release(id uint32) error {
 	return nil
 }
 
-// asyncRuleCache maintains asynchronous network policy rule cache with ID as the key.
+// asyncRuleCache maintains asynchronous NetworkPolicy rule cache with ID as the key.
 type asyncRuleCache struct {
 	rules       cache.Store
-	deleteQueue workqueue.RateLimitingInterface
+	deleteQueue workqueue.DelayingInterface
 }
 
 // asyncRuleCacheKeyFunc knows how to get key of a *rule.
@@ -182,6 +184,6 @@ func asyncRuleCacheKeyFunc(obj interface{}) (string, error) {
 func NewAsyncRuleCache() *asyncRuleCache {
 	return &asyncRuleCache{
 		rules:       cache.NewStore(asyncRuleCacheKeyFunc),
-		deleteQueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "async_delete_networkpolicyrule"),
+		deleteQueue: workqueue.NewNamedDelayingQueue("async_delete_networkpolicyrule"),
 	}
 }

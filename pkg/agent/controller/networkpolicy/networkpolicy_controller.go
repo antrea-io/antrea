@@ -376,8 +376,8 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
 
-	klog.Infof("Starting IDAllocator worker now to maintain async rule cache.")
-	go wait.Until(c.reconciler.GetIDAllocatorWorker(), time.Second, stopCh)
+	klog.Infof("Start IDAllocator worker to maintain the async rule cache.")
+	go c.reconciler.RunIDAllocatorWorker(stopCh)
 
 	<-stopCh
 }
