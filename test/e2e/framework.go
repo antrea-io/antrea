@@ -86,7 +86,7 @@ const (
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:10282020.1"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:latest"
 	ipfixCollectorPort  = "4739"
 )
 
