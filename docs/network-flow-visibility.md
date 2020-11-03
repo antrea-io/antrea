@@ -112,23 +112,23 @@ the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 
 | IPFIX Information Element| Enterprise ID | Field ID | Type           |
 |--------------------------|---------------|----------|----------------|
-| packetTotalCount         | 29305         | 86       | unsigned64     |
-| octetTotalCount          | 29305         | 85       | unsigned64     |
-| packetDeltaCount         | 29305         | 2        | unsigned64     |
-| octetDeltaCount          | 29305         | 1        | unsigned64     |
+| reversePacketTotalCount  | 29305         | 86       | unsigned64     |
+| reverseOctetTotalCount   | 29305         | 85       | unsigned64     |
+| reversePacketDeltaCount  | 29305         | 2        | unsigned64     |
+| reverseOctetDeltaCount   | 29305         | 1        | unsigned64     |
 
 #### IEs from Antrea IE Registry
 
 | IPFIX Information Element | Enterprise ID | Field ID | Type        |
 |---------------------------|---------------|----------|-------------|
-| sourcePodNamespace        | 55829         | 100      | string      |
-| sourcePodName             | 55829         | 101      | string      |
-| destinationPodNamespace   | 55829         | 102      | string      |
-| destinationPodName        | 55829         | 103      | string      |
-| sourceNodeName            | 55829         | 104      | string      |
-| destinationNodeName       | 55829         | 105      | string      |
-| destinationClusterIP      | 55829         | 106      | ipv4Address |
-| destinationServicePortName| 55829         | 108      | string      |
+| sourcePodNamespace        | 56506         | 100      | string      |
+| sourcePodName             | 56506         | 101      | string      |
+| destinationPodNamespace   | 56506         | 102      | string      |
+| destinationPodName        | 56506         | 103      | string      |
+| sourceNodeName            | 56506         | 104      | string      |
+| destinationNodeName       | 56506         | 105      | string      |
+| destinationClusterIPv4    | 56506         | 106      | ipv4Address |
+| destinationServicePortName| 56506         | 109      | string      |
 
 ### Supported capabilities
 
