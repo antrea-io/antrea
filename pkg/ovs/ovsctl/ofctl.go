@@ -16,6 +16,7 @@ package ovsctl
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"strings"
 )
@@ -120,7 +121,15 @@ func (c *ovsCtlClient) DumpPortsDesc() ([][]string, error) {
 
 func (c *ovsCtlClient) SetPortNoFlood(ofport int) error {
 	cmdStr := fmt.Sprintf("ovs-ofctl mod-port %s %d no-flood", c.bridge, ofport)
-	return getOVSCommand(cmdStr).Run()
+	cmd := getOVSCommand(cmdStr)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("fail to set no-food config for port %d on bridge %s: %v, stderr: %s", ofport, c.bridge, err, string(stderr.Bytes()))
+	}
+	return nil
 }
 
 func (c *ovsCtlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
