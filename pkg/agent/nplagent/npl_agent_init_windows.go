@@ -25,6 +25,6 @@ import (
 
 // InitializeNPLAgent : start NodePortLocal (NPL) agent
 // Currently NPL is disabled for windows
-func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory) error {
+func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange string) error {
 	return errors.New("Windows Platform not supported fot NPL")
 }

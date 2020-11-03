@@ -21,10 +21,13 @@ import (
 	"encoding/json"
 
 	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
 )
+
+const NPLAnnotationStr = "npl.antrea.io"
 
 type NPLEPAnnotation struct {
 	PodPort  string `json:"Podport"`
@@ -52,8 +55,8 @@ func assignPodAnnotation(pod *corev1.Pod, containerPort, nodeIP, nodePort string
 
 	var annotations []NPLEPAnnotation
 	// nplEP annotation exists
-	if current[nplutils.NPLEPAnnotation] != "" {
-		if err = json.Unmarshal([]byte(current[nplutils.NPLEPAnnotation]), &annotations); err != nil {
+	if current[NPLAnnotationStr] != "" {
+		if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
 			klog.Warningf("Unable to unmarshal NPLEP annotation")
 		}
 
@@ -75,7 +78,7 @@ func assignPodAnnotation(pod *corev1.Pod, containerPort, nodeIP, nodePort string
 		}}
 	}
 
-	current[nplutils.NPLEPAnnotation] = nplutils.Stringify(annotations)
+	current[NPLAnnotationStr] = nplutils.Stringify(annotations)
 	pod.Annotations = current
 }
 
@@ -85,7 +88,7 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort string) {
 
 	klog.Infof("Removing annotation from pod: %s\tport: %s", pod.Name, containerPort)
 	var annotations []NPLEPAnnotation
-	if err = json.Unmarshal([]byte(current[nplutils.NPLEPAnnotation]), &annotations); err != nil {
+	if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
 		klog.Warningf("Unable to unmarshal NPLEP annotation")
 		return
 	}
@@ -97,7 +100,7 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort string) {
 		}
 	}
 
-	current[nplutils.NPLEPAnnotation] = nplutils.Stringify(annotations)
+	current[NPLAnnotationStr] = nplutils.Stringify(annotations)
 	pod.Annotations = current
 }
 
@@ -108,8 +111,13 @@ func (c *Controller) RemoveNPLAnnotationFromPods() {
 		klog.Warningf("Unable to list Pods")
 		return
 	}
+	nodeName, err := env.GetNodeName()
+	if err != nil {
+		klog.Warningf("Failed to get nodename, NPL annotation can not be removed for pods")
+		return
+	}
 	for _, pod := range podList.Items {
-		if nplutils.GetHostname() != pod.Spec.NodeName {
+		if nodeName != pod.Spec.NodeName {
 			continue
 		}
 		podAnnotation := pod.GetAnnotations()
@@ -117,7 +125,7 @@ func (c *Controller) RemoveNPLAnnotationFromPods() {
 			continue
 		}
 		klog.Infof("Removing all NPL annotation from pod: %s, ns: %s", pod.Name, pod.Namespace)
-		delete(podAnnotation, nplutils.NPLEPAnnotation)
+		delete(podAnnotation, NPLAnnotationStr)
 		pod.Annotations = podAnnotation
 		c.KubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), &pod, metav1.UpdateOptions{})
 	}
@@ -136,7 +144,7 @@ func (c *Controller) updatePodAnnotation(pod *corev1.Pod) error {
 func getNodeportFromPodAnnotation(pod *corev1.Pod, port string) string {
 	current := pod.Annotations
 	var annotations []NPLEPAnnotation
-	if err := json.Unmarshal([]byte(current[nplutils.NPLEPAnnotation]), &annotations); err != nil {
+	if err := json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
 		klog.Warningf("Unable to unmarshal NPLEP annotation")
 		return ""
 	}

@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
@@ -43,10 +43,16 @@ func NewNPLController(kubeClient clientset.Interface) *Controller {
 }
 
 func (c *Controller) SetupEventHandlers(k8sinfo informers.SharedInformerFactory) {
+	nodeName, err := env.GetNodeName()
+	if err != nil {
+		klog.Warningf("Failed to get nodename, event handlers won't be started for NPL")
+		return
+	}
 	podEventHandler := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			addPod := obj.(*corev1.Pod).DeepCopy()
-			if nplutils.GetHostname() == addPod.Spec.NodeName {
+			//if nplutils.GetHostname() == addPod.Spec.NodeName {
+			if nodeName == addPod.Spec.NodeName {
 				c.HandleAddPod(addPod)
 			}
 		},
@@ -66,7 +72,7 @@ func (c *Controller) SetupEventHandlers(k8sinfo informers.SharedInformerFactory)
 					return
 				}
 			}
-			if nplutils.GetHostname() == deletePod.Spec.NodeName {
+			if nodeName == deletePod.Spec.NodeName {
 				c.HandleDeletePod(deletePod)
 			}
 		},
@@ -74,7 +80,7 @@ func (c *Controller) SetupEventHandlers(k8sinfo informers.SharedInformerFactory)
 		UpdateFunc: func(old, cur interface{}) {
 			oldPod, newPod := old.(*corev1.Pod).DeepCopy(), cur.(*corev1.Pod).DeepCopy()
 			if oldPod.ResourceVersion != newPod.ResourceVersion &&
-				nplutils.GetHostname() == newPod.Spec.NodeName {
+				nodeName == newPod.Spec.NodeName {
 				c.HandleUpdatePod(oldPod, newPod)
 			}
 		},

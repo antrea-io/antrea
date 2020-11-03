@@ -27,7 +27,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/k8s"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -142,7 +141,7 @@ func compareWithRetry(t *testing.T, fn interface{}, expected interface{}, timeou
 }
 
 func TestMain(t *testing.T) {
-	os.Setenv("HOSTNAME", defaultNodeName)
+	os.Setenv("NODE_NAME", defaultNodeName)
 	kubeClient = k8sfake.NewSimpleClientset()
 
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
@@ -176,7 +175,7 @@ func TestPodAdd(t *testing.T) {
 			t.Fatalf("Failed to update pod: %v", err)
 		}
 		ann = updatedPod.GetAnnotations()
-		data, found = ann[lib.NPLEPAnnotation]
+		data, found = ann[k8s.NPLAnnotationStr]
 		return found
 	}, true, 20*time.Second)
 
@@ -215,7 +214,7 @@ func TestPodUpdate(t *testing.T) {
 			t.Fatalf("Failed to update pod: %v", err)
 		}
 		ann = updatedPod.GetAnnotations()
-		data, _ = ann[lib.NPLEPAnnotation]
+		data, _ = ann[k8s.NPLAnnotationStr]
 		json.Unmarshal([]byte(data), &nplData)
 		if len(nplData) != 1 {
 			return ""
@@ -262,7 +261,7 @@ func TestPodAddMultiPort(t *testing.T) {
 			t.Fatalf("Failed to update pod: %v", err)
 		}
 		ann = updatedPod.GetAnnotations()
-		data, found = ann[lib.NPLEPAnnotation]
+		data, found = ann[k8s.NPLAnnotationStr]
 		return found
 	}, true, 20*time.Second)
 
@@ -314,7 +313,7 @@ func TestAddMultiplePods(t *testing.T) {
 			t.Fatalf("Failed to update pod: %v", err)
 		}
 		ann = updatedPod.GetAnnotations()
-		data, found = ann[lib.NPLEPAnnotation]
+		data, found = ann[k8s.NPLAnnotationStr]
 		return found
 	}, true, 20*time.Second)
 
@@ -335,7 +334,7 @@ func TestAddMultiplePods(t *testing.T) {
 			t.Fatalf("Failed to update pod: %v", err)
 		}
 		ann = updatedPod.GetAnnotations()
-		data, found = ann[lib.NPLEPAnnotation]
+		data, found = ann[k8s.NPLAnnotationStr]
 		return found
 	}, true, 20*time.Second)
 	json.Unmarshal([]byte(data), &nplData)

@@ -54,7 +54,7 @@ const (
 	NetworkPolicyStats featuregate.Feature = "NetworkPolicyStats"
 
 	// alpha: v0.1
-	// Expose Pod IPs through nodeport
+	// Expose Pod IPs through NodPort
 	NodePortLocal featuregate.Feature = "NodePortLocal"
 )
 

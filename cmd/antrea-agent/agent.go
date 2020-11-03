@@ -244,7 +244,7 @@ func run(o *Options) error {
 
 	// Start the NPL agent.
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
-		err := npl.InitializeNPLAgent(k8sClient, informerFactory)
+		err := npl.InitializeNPLAgent(k8sClient, informerFactory, o.config.NPLPortRange)
 		if err != nil {
 			klog.Warningf("Failed to start NPL agent: %v", err)
 		}

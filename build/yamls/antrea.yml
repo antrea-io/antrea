@@ -1165,7 +1165,7 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
 
-    # Enable NodePortLocal feature to make the pod reachable externally through nodeport
+    # Enable NodePortLocal feature to make the pods reachable externally through NodePort
     #  NodePortLocal: false
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
@@ -1268,6 +1268,9 @@ data:
     # the flow collector.
     # Flow export frequency should be greater than or equal to 1.
     #flowExportFrequency: 12
+
+    # Provide the port range used by NodePortLocal for programming IPTABLES rules. This is only used if NodePortLocal is enabled.
+    #nplPortRange: 40000=41000
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",

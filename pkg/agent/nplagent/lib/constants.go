@@ -16,11 +16,6 @@
 
 package lib
 
-const (
-	NPLEPAnnotation    = "npl.antrea.io"
-	NodePortLocalChain = "NODE-PORT-LOCAL"
-)
-
 type NPLRuleImplementation string
 
 const NPLRuleImplementationIptable NPLRuleImplementation = "Iptable"

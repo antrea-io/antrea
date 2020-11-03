@@ -31,9 +31,9 @@ import (
 // Initialize port table cache to keep a track of node ports available for use of NPL
 // SetupEventHandlers to handle pod add, update and delete events
 // When a Pod gets created, a free node port is obtained from the port table cache and a DNAT rule is added to send traffic to the pod ip:port
-func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory) error {
+func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange string) error {
 	c := k8s.NewNPLController(kubeClient)
-	start, end, err := lib.GetPortsRange()
+	start, end, err := lib.ParsePortsRange(portRange)
 	if err != nil {
 		return fmt.Errorf("something went wrong while fetching port range: %v", err)
 	}

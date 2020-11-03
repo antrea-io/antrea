@@ -19,7 +19,6 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -49,12 +48,10 @@ func HasElem(s interface{}, elem interface{}) bool {
 	return false
 }
 
-func GetPortsRange() (start, end int, err error) {
-	// required field
-	nplPortsEnvCost := os.Getenv("NPL_PORT_RANGE")
-	portsRange := strings.Split(nplPortsEnvCost, "-")
+func ParsePortsRange(portRangeConfig string) (start, end int, err error) {
+	portsRange := strings.Split(portRangeConfig, "-")
 	if len(portsRange) != 2 {
-		return 0, 0, fmt.Errorf("wrong port range format: %s", nplPortsEnvCost)
+		return 0, 0, fmt.Errorf("wrong port range format: %s", portRangeConfig)
 	}
 
 	if start, err = strconv.Atoi(portsRange[0]); err != nil {
@@ -66,15 +63,10 @@ func GetPortsRange() (start, end int, err error) {
 	}
 
 	if end <= start {
-		return 0, 0, fmt.Errorf("invalid port range: %s", nplPortsEnvCost)
+		return 0, 0, fmt.Errorf("invalid port range: %s", portRangeConfig)
 	}
 
 	return start, end, nil
-}
-
-func GetHostname() string {
-	envConst := os.Getenv("HOSTNAME")
-	return envConst
 }
 
 func IsPortAvailable(mPort int) bool {

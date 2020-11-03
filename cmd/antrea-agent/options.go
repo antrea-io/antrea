@@ -43,6 +43,7 @@ const (
 	defaultFlowCollectorPort      = "4739"
 	defaultFlowPollInterval       = 5 * time.Second
 	defaultFlowExportFrequency    = 12
+	defaultNPLPortRange           = "40000-41000"
 )
 
 type Options struct {
@@ -193,6 +194,12 @@ func (o *Options) setDefaults() {
 		if o.config.FlowExportFrequency == 0 {
 			// This frequency value makes flow export interval as 60s by default.
 			o.config.FlowExportFrequency = defaultFlowExportFrequency
+		}
+	}
+
+	if o.config.FeatureGates[string(features.NodePortLocal)] {
+		if o.config.NPLPortRange == "" {
+			o.config.NPLPortRange = defaultNPLPortRange
 		}
 	}
 }

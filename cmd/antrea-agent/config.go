@@ -120,4 +120,6 @@ type AgentConfig struct {
 	// Flow export frequency should be greater than or equal to 1.
 	// Defaults to "12".
 	FlowExportFrequency uint `yaml:"flowExportFrequency,omitempty"`
+	// Provide the port range used by NodePortLocal for programming IPTABLES rules. This is only used if NodePortLocal is enabled.
+	NPLPortRange string `yaml:"nplPortRange,omitempty"`
 }
