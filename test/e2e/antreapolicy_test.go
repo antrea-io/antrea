@@ -44,6 +44,9 @@ var (
 const (
 	// provide enough time for policies to be enforced & deleted by the CNI plugin.
 	networkPolicyDelay = 2 * time.Second
+	// audit log directory on Antrea Agent
+	logDir             = "/var/log/antrea/networkpolicy/"
+	logfileName        = "np.log"
 )
 
 func failOnError(err error, t *testing.T) {
@@ -666,24 +669,36 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 
 	_, err := k8sUtils.CreateOrUpdateCNP(builder.Get())
 	failOnError(err, t)
+	time.Sleep(networkPolicyDelay)
 
 	// generate some traffic that will be dropped by test-log-cnp-deny
 	k8sUtils.Probe("x", "a", "z", "a", p80)
 	k8sUtils.Probe("x", "a", "z", "b", p80)
 	k8sUtils.Probe("x", "a", "z", "c", p80)
+	time.Sleep(networkPolicyDelay)
 
 	podXA, _ := k8sUtils.GetPod("x", "a")
+	// nodeName is guaranteed to be set at this stage, since the framework waits for all Pods to be in Running phase
 	nodeName := podXA.Spec.NodeName
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
-		t.Errorf("error occurred when trying to get the Antrea agent pod running on node %s: %v", nodeName, err)
+		t.Errorf("error occurred when trying to get the Antrea Agent pod running on node %s: %v", nodeName, err)
 	}
-	cmd := []string{"cat", "/var/log/antrea/networkpolicy/np.log"}
-	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
-	if err != nil {
-		t.Errorf("error occurred when inspecting the audit log file: %v", err)
+	cmd := []string{"cat", logDir + logfileName}
+	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
+	if err != nil || stderr != "" {
+		t.Errorf("error occurred when inspecting the audit log file. err: %v, stderr: %v", err, stderr)
 	}
 	assert.Equalf(t, true, strings.Contains(stdout, "test-log-cnp-deny"), "audit log does not contain entries for test-log-cnp-deny")
+
+	destinations := []string{"z/a", "z/b", "z/c"}
+	srcIP, _ := podIPs["x/a"]
+	for _, d := range destinations {
+		dstIP, _ := podIPs[d]
+		// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
+		pattern := `Drop [0-9]+ SRC: ` + srcIP + ` DEST: ` + dstIP
+		assert.Regexp(t, pattern, stdout, "audit log does not contain expected entry for x/a to %s", d)
+	}
 	failOnError(k8sUtils.CleanCNPs(), t)
 }
 

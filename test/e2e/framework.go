@@ -726,22 +726,6 @@ func (data *TestData) podWaitForIP(timeout time.Duration, name, namespace string
 	return pod.Status.PodIP, nil
 }
 
-// podWaitForNode polls the K8s apiserver until the specified Pod is in the "running" state (or until
-// the provided timeout expires). The function then returns the node which the Pod is scheduled on.
-func (data *TestData) podWaitForNode(timeout time.Duration, name, namespace string) (string, error) {
-	pod, err := data.podWaitFor(timeout, name, namespace, func(pod *corev1.Pod) (bool, error) {
-		return pod.Status.Phase == corev1.PodRunning, nil
-	})
-	if err != nil {
-		return "", err
-	}
-	// If not specified at creation, nodeName in spec will be filled by the K8s scheduler.
-	if pod.Spec.NodeName == "" {
-		return "", fmt.Errorf("pod is running but not scheduled on any node, which should never happen")
-	}
-	return pod.Spec.NodeName, nil
-}
-
 // deleteAntreaAgentOnNode deletes the antrea-agent Pod on a specific Node and measure how long it
 // takes for the Pod not to be visible to the client any more. It also waits for a new antrea-agent
 // Pod to be running on the Node.
