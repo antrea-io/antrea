@@ -1006,7 +1006,7 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 			MatchConjID(conjunctionID).
 			MatchPriority(ofPriority).
 			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
-			Action().CT(true, nextTable, CtZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
+			Action().CT(true, nextTable, CtZone).                                     // CT action requires commit flag if actions other than NAT without arguments are specified.
 			LoadToLabelRange(uint64(conjunctionID), &labelRange).
 			CTDone().
 			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).

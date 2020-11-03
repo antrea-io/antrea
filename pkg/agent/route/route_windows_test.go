@@ -83,7 +83,7 @@ func TestRouteOperation(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes3))
 
-	err = client.DeleteRoutes(destCIDR2, peerNodeIP2)
+	err = client.DeleteRoutes(destCIDR2)
 	routes4, err := nr.GetNetRoutes(gwLink, destCIDR2)
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes4))

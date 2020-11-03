@@ -49,7 +49,7 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
 	for _, groupCommand := range groupCommands {
 		root.AddCommand(groupCommand)
 	}
-	for i, _ := range cl.definitions {
+	for i := range cl.definitions {
 		def := &cl.definitions[i]
 		if (runtime.Mode == runtime.ModeAgent && def.agentEndpoint == nil) ||
 			(runtime.Mode == runtime.ModeController && def.controllerEndpoint == nil) {

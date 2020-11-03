@@ -42,8 +42,6 @@ const (
 	// Antrea managed ipset.
 	// antreaPodIPSet contains all Pod CIDRs of this cluster.
 	antreaPodIPSet = "ANTREA-POD-IP"
-	// antreaNodeIPSet contains all Node IPs of this cluster, except the Node itself.
-	antreaNodeIPSet = "ANTREA-NODE-IP"
 
 	// Antrea managed iptables chains.
 	antreaForwardChain     = "ANTREA-FORWARD"
@@ -118,10 +116,6 @@ func (c *Client) initIPSet() error {
 	if err := ipset.AddEntry(antreaPodIPSet, c.nodeConfig.PodCIDR.String()); err != nil {
 		return err
 	}
-
-	if err := ipset.CreateIPSet(antreaNodeIPSet, ipset.HashIP); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -193,17 +187,15 @@ func (c *Client) initIPTables() error {
 		if udpPort > 0 {
 			writeLine(iptablesData, []string{
 				"-A", antreaPreRoutingChain,
-				"-m", "comment", "--comment", `"Antrea: do not track encapsulation packets from remote nodes"`,
+				"-m", "comment", "--comment", `"Antrea: do not track incoming encapsulation packets"`,
 				"-m", "udp", "-p", "udp", "--dport", strconv.Itoa(udpPort),
-				"-m", "set", "--match-set", antreaNodeIPSet, "src",
 				"-m", "addrtype", "--dst-type", "LOCAL",
 				"-j", iptables.NoTrackTarget,
 			}...)
 			writeLine(iptablesData, []string{
 				"-A", antreaOutputChain,
-				"-m", "comment", "--comment", `"Antrea: do not track encapsulation packets to remote nodes"`,
+				"-m", "comment", "--comment", `"Antrea: do not track outgoing encapsulation packets"`,
 				"-m", "udp", "-p", "udp", "--dport", strconv.Itoa(udpPort),
-				"-m", "set", "--match-set", antreaNodeIPSet, "dst",
 				"-m", "addrtype", "--src-type", "LOCAL",
 				"-j", iptables.NoTrackTarget,
 			}...)
@@ -270,7 +262,7 @@ func (c *Client) initIPRoutes() error {
 
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
 // based on the desired podCIDRs.
-func (c *Client) Reconcile(podCIDRs []string, remoteNodeIPs []string) error {
+func (c *Client) Reconcile(podCIDRs []string) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 
 	// Remove orphaned podCIDRs from antreaPodIPSet.
@@ -292,22 +284,6 @@ func (c *Client) Reconcile(podCIDRs []string, remoteNodeIPs []string) error {
 		}
 		route := &netlink.Route{Dst: cidr}
 		if err := netlink.RouteDel(route); err != nil && err != unix.ESRCH {
-			return err
-		}
-	}
-
-	desiredNodeIPs := sets.NewString(remoteNodeIPs...)
-	// Remove orphaned nodeIPs from antreaNodeIPSet.
-	entries, err = ipset.ListEntries(antreaNodeIPSet)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if desiredNodeIPs.Has(entry) {
-			continue
-		}
-		klog.Infof("Deleting orphaned Node IP %s from ipset", entry)
-		if err := ipset.DelEntry(antreaNodeIPSet, entry); err != nil {
 			return err
 		}
 	}
@@ -346,10 +322,6 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeIP, nodeGwIP net.IP) error {
 	if err := ipset.AddEntry(antreaPodIPSet, podCIDRStr); err != nil {
 		return err
 	}
-	// Add this nodeIP to antreaNodeIPSet so that encapsulation packets from/to them won't be tracked.
-	if err := ipset.AddEntry(antreaNodeIPSet, nodeIP.String()); err != nil {
-		return err
-	}
 	// Install routes to this Node.
 	route := &netlink.Route{
 		Dst: podCIDR,
@@ -373,14 +345,10 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeIP, nodeGwIP net.IP) error {
 }
 
 // DeleteRoutes deletes routes to a PodCIDR. It does nothing if the routes doesn't exist.
-func (c *Client) DeleteRoutes(podCIDR *net.IPNet, nodeIP net.IP) error {
+func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	podCIDRStr := podCIDR.String()
 	// Delete this podCIDR from antreaPodIPSet as the CIDR is no longer for Pods.
 	if err := ipset.DelEntry(antreaPodIPSet, podCIDRStr); err != nil {
-		return err
-	}
-	// Delete this IP from antreaNodeIPSet as it's no longer a Node IP.
-	if err := ipset.DelEntry(antreaNodeIPSet, nodeIP.String()); err != nil {
 		return err
 	}
 
