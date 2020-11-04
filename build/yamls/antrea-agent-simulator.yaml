@@ -209,7 +209,7 @@ spec:
         command:
         - /bin/sh
         - -c
-        - /kubemark --morph=kubelet --name=$(NODE_NAME) --kubeconfig=/kubeconfig/admin.conf $(CONTENT_TYPE) --v=2 --log-file=/var/log/kubelet-$(NODE_NAME).log
+        - /kubemark --morph=kubelet --name=$(NODE_NAME) --kubeconfig=/kubeconfig/admin.conf $(CONTENT_TYPE) --v=2 --log-file=/var/log/kubelet-$(NODE_NAME).log --node-labels 'antrea/instance=simulator'
         volumeMounts:
         - name: kubeconfig-volume
           mountPath: /kubeconfig

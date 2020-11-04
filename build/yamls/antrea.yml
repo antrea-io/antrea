@@ -1367,6 +1367,15 @@ spec:
         app: antrea
         component: antrea-agent
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: antrea/instance
+                operator: NotIn
+                values:
+                - simulator
       containers:
       - args:
         - --config
