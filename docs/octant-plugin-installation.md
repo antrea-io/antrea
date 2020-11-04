@@ -28,18 +28,17 @@ your environment and preference.
 1. Create a secret that contains your kubeconfig.
 
     ```bash
-    # Change --from-file according to kubeconfig location in your set up.
-    kubectl create secret generic octant-kubeconfig --from-file=/etc/kubernetes/admin.conf -n kube-system
+    # Change path to kubeconfig file according to your set up.
+    kubectl create secret generic octant-kubeconfig --from-file=admin.conf=<path to kubeconfig file> -n kube-system
     ```
 
-2. You may need to update [build/yamls/antrea-octant.yml](/build/yamls/antrea-octant.yml) according to your kubeconfig file name.
-
-3. You can change the sample yaml according to your requirements and environment, then apply the yaml to create both deployment and NodePort service.
+2. You can change the sample yaml[build/yamls/antrea-octant.yml](/build/yamls/antrea-octant.yml) according to your requirements and environment, then apply the yaml to create both deployment and NodePort service.
 
     ```bash
     kubectl apply -f build/yamls/antrea-octant.yml
     ```
-4. You can get the NodePort of antrea-octant service via kubectl.
+
+3. You can get the NodePort of antrea-octant service via kubectl.
 
     ```bash
     # See field NodePort
@@ -50,21 +49,16 @@ Now, you are supposed to see Octant is running together with antrea-octant-plugi
 
 Note:
 1. Docker image antrea/octant-antrea-ubuntu should be automatically downloaded
-when you apply antrea-octant.yml in step 3. If the image is not successfully
+when you apply antrea-octant.yml in step 2. If the image is not successfully
 downloaded which may be due to network issues, you can run command `make
 octant-antrea-ubuntu` to build the image locally. If it is the case, you need
 to make sure that the image exists on all the K8s Nodes since the antrea-octant
 Pod may run on any of them.
-2. In Antrea v0.8.2, the Traceflow UI is a separate Octant plugin called antrea-traceflow-plugin,
-but it has been merged into antrea-octant-plugin on the master branch since then.
-To get the latest version of Traceflow UI, please build image
-antrea/octant-antrea-ubuntu via command `make octant-antrea-ubuntu` and use the image antrea/octant-antrea-ubuntu:latest
-for deploying UI as a Pod.
-3. If the Pod is running without any explicit issue but you can not access the
+2. If the Pod is running without any explicit issue but you can not access the
 URL, please take a further look at the network configurations in your
 environment. It may be due to the network policies or other security rules
 configured on your hosts.
-4. To deploy a released version of the plugin, you can download
+3. To deploy a released version of the plugin, you can download
 `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-octant.yml`,
 where `<TAG>` (e.g. `v0.3.0`) is the desired version (should match the version
 of Antrea you are using). After making the necessary edits, you can apply the
@@ -119,9 +113,8 @@ based on your environment and move the binary to OCTANT_PLUGIN_PATH.
 Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):80.
 
 Note:
-1.  If you deploy Octant and the Antrea UI as a process, you cannot access the Traceflow UI for now when following the
-steps listed above (at least until the v0.9.0 release). However, you can still build the binary yourself with
-the command below, with the remaining steps being almost the same as the ones above.
+1.  You can also build the plugin binary yourself with the command below,
+with the remaining steps being almost the same as the ones above.
 
     ```bash
     # You will find the compliled binary under folder antrea/plugins/octant/bin.
