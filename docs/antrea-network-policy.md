@@ -212,6 +212,7 @@ spec:
           - protocol: TCP
             port: 8080
         name: AllowFromFrontend
+        enableLogging: false
     egress:
       - action: Drop
         to:
@@ -221,6 +222,7 @@ spec:
           - protocol: TCP
             port: 5978
         name: DropToThirdParty
+        enableLogging: true
 ```
 
 **spec**: The ClusterNetworkPolicy `spec` has all the information needed to
@@ -271,6 +273,23 @@ The example policy contains a single rule, which drops matched traffic on a
 single port, to the 10.0.10.0/24 subnet specified by the `ipBlock` field. 
 **Note**: The order in which the egress rules are set matter, i.e. rules will
 be enforced in the order in which they are written.
+
+**enableLogging**: A ClusterNetworkPolicy ingress or egress rule can be
+audited by enabling its logging field. When `enableLogging` field is set to
+true, the first packet of any connection that matches this rule will be logged
+to a separate file (`/var/log/antrea/networkpolicy/np.log`) on the Node on
+which the rule is applied. These log files can then be retrieved for further
+analysis. By default, rules are not logged. The example policy logs all
+traffic that matches the "DropToThirdParty" egress rule, while the rule
+"AllowFromFrontend" is not logged. The rules are logged in the following
+format:
+
+```
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <action> <openflow-priority> SRC: <source-ip> DEST: <destination-ip> <packet-length> <protocol>
+
+    Example:
+    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp Allow 61800 SRC: 10.0.0.4 DEST: 10.0.0.5 60 TCP
+```
 
 ### Behavior of *to* and *from* selectors
 
@@ -375,6 +394,7 @@ spec:
           - protocol: TCP
             port: 8080
         name: AllowFromFrontend
+        enableLogging: false
     egress:
       - action: Drop
         to:
@@ -384,6 +404,7 @@ spec:
           - protocol: TCP
             port: 5978
         name: DropToThirdParty
+        enableLogging: true
 ```
 
 ### Key differences from Antrea ClusterNetworkPolicy
