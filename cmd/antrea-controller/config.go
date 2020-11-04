@@ -18,6 +18,25 @@ import (
 	componentbaseconfig "k8s.io/component-base/config"
 )
 
+type NodeIPAMConfig struct {
+	// Enable the integrated node IPAM controller within the Antrea controller.
+	// Defaults to false.
+	EnableNodeIPAM bool `yaml:"enableNodeIPAM,omitempty"`
+	// CIDR Ranges for Pods in cluster. Value can contain a single CIDR range, or multiple ranges, separated by commas.
+	// The CIDRs could be either IPv4 or IPv6. Value ignored when EnableNodeIPAM is false.
+	ClusterCIDRs string `yaml:"clusterCIDRs,omitempty"`
+	// CIDR Ranges for Services in cluster. It is not necessary to specify it when there is no overlap with clusterCIDRs.
+	// Value ignored when EnableNodeIPAM is false.
+	ServiceCIDR          string `yaml:"serviceCIDR,omitempty"`
+	SecondaryServiceCIDR string `yaml:"secondaryServiceCIDR,omitempty"`
+	// Mask size for IPv4 Node CIDR in IPv4 or dual-stack cluster. Value ignored when EnableNodeIPAM is false
+	// or when IPv4 Pod CIDR is not configured.
+	NodeCIDRMaskSizeIPv4 int `yaml:"nodeCIDRMaskSizeIPv4,omitempty"`
+	// Mask size for IPv6 Node CIDR in IPv6 or dual-stack cluster. Value ignored when EnableNodeIPAM is false
+	// or when IPv6 Pod CIDR is not configured.
+	NodeCIDRMaskSizeIPv6 int `yaml:"nodeCIDRMaskSizeIPv6,omitempty"`
+}
+
 type ControllerConfig struct {
 	// FeatureGates is a map of feature names to bools that enable or disable experimental features.
 	FeatureGates map[string]bool `yaml:"featureGates,omitempty"`
@@ -45,4 +64,6 @@ type ControllerConfig struct {
 	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
 	// Legacy CRD mirroring.
 	LegacyCRDMirroring bool `yaml:"legacyCRDMirroring,omitempty"`
+	// NodeIPAM Configuration
+	NodeIPAM NodeIPAMConfig `yaml:"nodeIPAM"`
 }

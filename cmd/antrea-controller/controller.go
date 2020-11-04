@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -30,6 +31,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+	netutils "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/apiserver"
 	"antrea.io/antrea/pkg/apiserver/certificate"
@@ -57,6 +59,8 @@ import (
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/version"
+	"antrea.io/antrea/third_party/ipam/nodeipam"
+	"antrea.io/antrea/third_party/ipam/nodeipam/ipam"
 )
 
 const (
@@ -334,6 +338,24 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		go networkPolicyStatusController.Run(stopCh)
 	}
+	if features.DefaultFeatureGate.Enabled(features.NodeIPAM) && o.config.NodeIPAM.EnableNodeIPAM {
+		cidrSplit := strings.Split(strings.TrimSpace(o.config.NodeIPAM.ClusterCIDRs), ",")
+		clusterCIDRs, _ := netutils.ParseCIDRs(cidrSplit)
+		_, serviceCIDR, _ := net.ParseCIDR(o.config.NodeIPAM.ServiceCIDR)
+		_, secondaryServiceCIDR, _ := net.ParseCIDR(o.config.NodeIPAM.SecondaryServiceCIDR)
+		err = startNodeIPAM(
+			client,
+			informerFactory,
+			clusterCIDRs,
+			serviceCIDR,
+			secondaryServiceCIDR,
+			o.config.NodeIPAM.NodeCIDRMaskSizeIPv4,
+			o.config.NodeIPAM.NodeCIDRMaskSizeIPv6,
+			stopCh)
+		if err != nil {
+			return fmt.Errorf("failed to initialize node IPAM controller: %v", err)
+		}
+	}
 
 	if o.config.LegacyCRDMirroring {
 		if features.DefaultFeatureGate.Enabled(features.Traceflow) {
@@ -353,6 +375,45 @@ func run(o *Options) error {
 
 	<-stopCh
 	klog.Info("Stopping Antrea controller")
+	return nil
+}
+
+func getNodeCIDRMaskSizes(clusterCIDRs []*net.IPNet, maskSizeIPv4, maskSizeIPv6 int) []int {
+	nodeMaskCIDRs := make([]int, len(clusterCIDRs))
+
+	for idx, clusterCIDR := range clusterCIDRs {
+		if netutils.IsIPv6CIDR(clusterCIDR) {
+			nodeMaskCIDRs[idx] = maskSizeIPv6
+		} else {
+			nodeMaskCIDRs[idx] = maskSizeIPv4
+		}
+	}
+	return nodeMaskCIDRs
+}
+
+func startNodeIPAM(client clientset.Interface,
+	informerFactory informers.SharedInformerFactory,
+	clusterCIDRs []*net.IPNet,
+	serviceCIDR *net.IPNet,
+	secondaryServiceCIDR *net.IPNet,
+	nodeCIDRMaskSizeIPv4 int,
+	nodeCIDRMaskSizeIPv6 int,
+	stopCh <-chan struct{}) error {
+
+	nodeCIDRMaskSizes := getNodeCIDRMaskSizes(clusterCIDRs, nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6)
+	nodeIPAM, err := nodeipam.NewNodeIpamController(
+		informerFactory.Core().V1().Nodes(),
+		client,
+		clusterCIDRs,
+		serviceCIDR,
+		secondaryServiceCIDR,
+		nodeCIDRMaskSizes,
+		ipam.RangeAllocatorType,
+	)
+	if err != nil {
+		return err
+	}
+	go nodeIPAM.Run(stopCh)
 	return nil
 }
 
