@@ -28,7 +28,7 @@ and bandwidth CNI plugins. All Antrea Controller, Agent, OVS daemons, and
 command-line tool called `antctl`, and an [Octant](https://github.com/vmware-tanzu/octant)
 UI plugin.
 
-<img src="../assets/arch.svg.png" width="600" alt="Antrea Architecture Overview">
+![Antrea Architecture Overview](../assets/arch.svg.png)
 
 ### Antrea Controller
 
@@ -154,7 +154,7 @@ Agent also creates an internal port - `antrea-gw0` by default - to be the gatewa
 the Node's subnet, and a tunnel port `antrea-tun0` which is for creating overlay
 tunnels to other Nodes.
 
-<img src="../assets/node.svg.png" width="300" alt="Antrea Node Network">
+![Antrea Node Network](../assets/node.svg.png)
 
 Each Node is assigned a single subnet, and all Pods on the Node get an IP from
 the subnet. Antrea leverages Kubernetes' `NodeIPAMController` for the Node
@@ -172,7 +172,7 @@ IP against each Node's subnet.
 
 ### Traffic walk
 
-<img src="../assets/traffic_walk.svg.png" width="600" alt="Antrea Traffic Walk">
+![Antrea Traffic Walk](../assets/traffic_walk.svg.png)
 
 * ***Intra-node traffic*** Packets between two local Pods will be forwarded by
 the OVS bridge directly.
@@ -204,7 +204,7 @@ the destination endpoint is a local Pod, the packets will be forwarded to the
 Pod directly; if it is on another Node the packets will be sent to that Node via
 the tunnel.
 
-<img src="../assets/service_walk.svg.png" width="600" alt="Antrea Service Traffic Walk">
+![Antrea Service Traffic Walk](../assets/service_walk.svg.png)
 
 `kube-proxy` can be used in any supported mode: user-space iptables, or IPVS.
 See the [Kubernetes Service documentation](https://kubernetes.io/docs/concepts/services-networking/service)

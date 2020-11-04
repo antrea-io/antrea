@@ -6,7 +6,7 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 function reset_docs_master {
   printf "Resetting master docs directory\n"
-  rm -f *
+  rm -rf *
 }
 
 function copy_root_markdowns_to_docs_master {
@@ -22,13 +22,37 @@ function copy_root_markdowns_to_docs_master {
   done
 }
 
-function create_symbolic_links_to_root_docs {
-  # Create symbolic links to docs files and subdirectories.
-  printf "Creating symbolic links for files and subdirectories in /docs...\n"
+function copy_other_markdowns_to_docs_master {
+  printf "Copying non-root markdown docs\n"
 
-  for f in ../../../docs/*; do
-    printf "symbolically linking $f... \n"
-    ln -s ${f}
+  cp -rf ../../../docs/* .
+
+  printf "Using symbolic links for assets\n"
+
+  rm -rf assets
+  ln -s ../../../docs/assets assets
+  rm -rf cookbooks/multus/assets
+  ln -s ../../../../../docs/cookbooks/multus/assets cookbooks/multus/assets
+
+  printf "Fixing up HTML img tags\n"
+
+  # The Antrea markdown files sometimes use HTML tags for images in order to
+  # set a fixed size for them. We still need jekyll / redcarpet to fix the links
+  # for us, so we convert the HTML tag to standard markdown (and lose the size
+  # information). This is quite brittle but it works for now.
+  for doc in $(find "$PWD" -type f -name "*.md"); do
+      sed -i.bak 's/<img src="\(.*\)" \(.*\) alt="\(.*\)">/![\3](\1)/' ${doc}
+      rm -f ${doc}.bak
+  done
+
+  # For some reason (list formatting I think), jekyll / redcarpet does not like
+  # the "toc" comments
+  printf "Fixing up HTML comments\n"
+  for doc in $(find "$PWD" -type f -name "*.md"); do
+      sed -i.bak '/<!-- toc -->/d' ${doc}
+      rm -f ${doc}.bak
+      sed -i.bak '/<!-- \/toc -->/d' ${doc}
+      rm -f ${doc}.bak
   done
 }
 
@@ -36,7 +60,7 @@ pushd $THIS_DIR/docs/master
 
 reset_docs_master
 copy_root_markdowns_to_docs_master
-create_symbolic_links_to_root_docs
+copy_other_markdowns_to_docs_master
 
 popd
 

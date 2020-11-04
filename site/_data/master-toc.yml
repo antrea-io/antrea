@@ -25,8 +25,8 @@ toc:
         url: /design/policy-only
   - title: Reference
     subfolderitems:
-      - page: Network Policy
-        url: /network-policy
+      - page: Antrea Network Policy
+        url: /antrea-network-policy
       - page: antctl
         url: /antctl
       - page: Architecture
@@ -71,8 +71,6 @@ toc:
         url: /contributors/issue-management
       - page: GitHub Labels
         url: /contributors/github-labels
-      - page: EKS Terraform
-        url: /contributors/eks-terraform
   - title: Project Information
     subfolderitems: 
     - page: Contributing to Antrea
