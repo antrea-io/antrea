@@ -71,7 +71,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	}
 	nodeConfig := &config.NodeConfig{
 		GatewayConfig: gwConfig,
-		PodCIDR: &net.IPNet{
+		PodIPv4CIDR: &net.IPNet{
 			IP:   net.IP{1, 2, 3, 0},
 			Mask: net.IPMask{255, 255, 255, 0},
 		},
