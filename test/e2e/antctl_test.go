@@ -221,6 +221,7 @@ func runAntctProxy(nodeName string, nodeAntctlPath string, proxyPort int, agentN
 // TestAntctlProxy validates "antctl proxy" for both the Antrea Controller and
 // Agent API.
 func TestAntctlProxy(t *testing.T) {
+	skipIfIPv6Cluster(t)
 	const proxyPort = 8001
 
 	data, err := setupTest(t)
