@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/endpoints/request"
@@ -78,16 +79,23 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
+	labelSelector := labels.Everything()
+	if options != nil && options.LabelSelector != nil {
+		labelSelector = options.LabelSelector
+	}
 	ns, namespaceScoped := request.NamespaceFrom(ctx)
 	networkPolicies := r.networkPolicyStore.List()
-	list := new(controlplane.NetworkPolicyList)
+	items := make([]controlplane.NetworkPolicy, 0, len(networkPolicies))
 	for i := range networkPolicies {
 		if !namespaceScoped || len(ns) == 0 || networkPolicies[i].(*types.NetworkPolicy).Namespace == ns {
-			policy := controlplane.NetworkPolicy{}
-			store.ToNetworkPolicyMsg(networkPolicies[i].(*types.NetworkPolicy), &policy, true)
-			list.Items = append(list.Items, policy)
+			var item controlplane.NetworkPolicy
+			store.ToNetworkPolicyMsg(networkPolicies[i].(*types.NetworkPolicy), &item, true)
+			if labelSelector.Matches(labels.Set(item.Labels)) {
+				items = append(items, item)
+			}
 		}
 	}
+	list := &controlplane.NetworkPolicyList{Items: items}
 	return list, nil
 }
 
