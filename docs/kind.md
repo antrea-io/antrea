@@ -106,6 +106,7 @@ containers to run Kubernetes Nodes), it is not possible to use the kernel
 datapath type for Kind clusters. Instead, we use OVS in [userspace
 mode](http://docs.openvswitch.org/en/latest/intro/install/userspace/), which
 requires some changes to the way Antrea is deployed. Most notably:
+
  * the tun device driver needs to be mounted in the antrea-ovs container
  * the Antrea agent's ConfigMap needs to be updated so that the userspace
    (`netdev`) OVS datapath type is used
@@ -122,7 +123,7 @@ The script is required for Antrea to work properly in a Kind cluster. It takes
 care of disabling TX hardware checksum offload for the veth interface (in the
 host's network namespace) of each Kind Node. This is required when using OVS in
 userspace mode. Refer to this [Antrea Github issue
-#14](https://github.com/vmware-tanzu/antrea/issues/14) for more information. For
+14](https://github.com/vmware-tanzu/antrea/issues/14) for more information. For
 Linux hosts, the script is equivalent to running `ethtool` directly on the Linux
 host to disable TX checksum offload on each Node's veth interface. On macOS, the
 script is equivalent to running `ethtool` in the Linux
