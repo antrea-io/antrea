@@ -15,7 +15,3 @@
 // limitations under the License.
 
 package lib
-
-type NPLRuleImplementation string
-
-const NPLRuleImplementationIptable NPLRuleImplementation = "Iptable"

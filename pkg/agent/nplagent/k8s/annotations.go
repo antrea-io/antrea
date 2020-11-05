@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 
-	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +32,11 @@ type NPLEPAnnotation struct {
 	PodPort  string `json:"Podport"`
 	NodeIP   string `json:"Nodeip"`
 	NodePort string `json:"Nodeport"`
+}
+
+func Stringify(serialize interface{}) string {
+	json_marshalled, _ := json.Marshal(serialize)
+	return string(json_marshalled)
 }
 
 func IsNodePortInAnnotation(s []NPLEPAnnotation, nodeport string) bool {
@@ -78,7 +82,7 @@ func assignPodAnnotation(pod *corev1.Pod, containerPort, nodeIP, nodePort string
 		}}
 	}
 
-	current[NPLAnnotationStr] = nplutils.Stringify(annotations)
+	current[NPLAnnotationStr] = Stringify(annotations)
 	pod.Annotations = current
 }
 
@@ -100,7 +104,7 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort string) {
 		}
 	}
 
-	current[NPLAnnotationStr] = nplutils.Stringify(annotations)
+	current[NPLAnnotationStr] = Stringify(annotations)
 	pod.Annotations = current
 }
 

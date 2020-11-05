@@ -22,27 +22,22 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/coreos/go-iptables/iptables"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
 	"k8s.io/klog"
 )
 
-const NodePortLocalChain = "NODE-PORT-LOCAL"
+const NodePortLocalChain = "ANTREA-NODE-PORT-LOCAL"
 
 type IPTableRules struct {
 	name  string
-	table *iptables.IPTables
+	table *iptables.Client
 }
 
 func NewIPTableRules() *IPTableRules {
-	iptables.New()
-	ipt, err := iptables.New()
-	if err != nil {
-		klog.Infof("init iptable for NPL failed: %v\n", err)
-		return nil
-	}
+	iptInstance, _ := iptables.New(true, false)
 	iptRule := IPTableRules{
 		name:  "NPL",
-		table: ipt,
+		table: iptInstance,
 	}
 	return &iptRule
 }
@@ -56,93 +51,53 @@ func (ipt *IPTableRules) Init() bool {
 	return ipt.CreateChains()
 }
 
-// CreateChains : Create the chain NODE-PORT-LOCAL in NAT table
+// CreateChains : Create the chain NodePortLocalChain in NAT table
 // All DNAT rules for NPL would be added in this chain
 func (ipt *IPTableRules) CreateChains() bool {
-	exists, err := ipt.table.Exists("nat", NodePortLocalChain)
-	if err != nil {
-		klog.Warningf("check for NODE-PORT-LOCAL chain in iptable failed with error: %v", err)
-		return false
+	ipt.table.EnsureChain(iptables.NATTable, NodePortLocalChain)
+	ruleSpec := []string{
+		"-p", "tcp", "-j", NodePortLocalChain,
 	}
-	if !exists {
-		err = ipt.table.NewChain("nat", NodePortLocalChain)
-		if err != nil {
-			klog.Warningf("IPtable chain creation failed for NPL with error: %v", err)
-			return false
-		}
-	}
-
-	exists, err = ipt.table.Exists("nat", "PREROUTING", "-p", "tcp", "-j", NodePortLocalChain)
-	if err != nil {
-		klog.Warningf("check for NODE-PORT-LOCAL chain in iptable failed with error: %v", err)
-		return false
-	}
-	if !exists {
-		err = ipt.table.Append("nat", "PREROUTING", "-p", "tcp", "-j", NodePortLocalChain)
-		if err != nil {
-			klog.Warningf("IPtable rule creation in PREROUTING chain failed for NPL with error: %v", err)
-			return false
-		}
-	}
+	ipt.table.EnsureRule(iptables.NATTable, iptables.PreRoutingChain, ruleSpec)
 	return true
 }
 
-// AddRule : Appends a DNAT rule in NODE-PORT-LOCAL chain of NAT table
+// AddRule : Appends a DNAT rule in NodePortLocalChain chain of NAT table
 func (ipt *IPTableRules) AddRule(port int, podip string) bool {
-	exists, err := ipt.table.Exists("nat", NodePortLocalChain, "-p", "tcp", "-m", "tcp", "--dport",
-		fmt.Sprint(port), "-j", "DNAT", "--to-destination", podip)
+	ruleSpec := []string{
+		"-p", "tcp", "-m", "tcp", "--dport",
+		fmt.Sprint(port), "-j", "DNAT", "--to-destination", podip,
+	}
+	err := ipt.table.EnsureRule(iptables.NATTable, NodePortLocalChain, ruleSpec)
 	if err != nil {
-		klog.Warningf("check for NODE-PORT-LOCAL chain in iptable failed with error: %v", err)
+		klog.Warningf("IPTABLES rule creation in failed for NPL with error: %v", err)
 		return false
 	}
-	if !exists {
-		err := ipt.table.Append("nat", NodePortLocalChain, "-p", "tcp", "-m", "tcp", "--dport",
-			fmt.Sprint(port), "-j", "DNAT", "--to-destination", podip)
-
-		if err != nil {
-			klog.Warningf("IPtable rule creation in failed for NPL with error: %v", err)
-			return false
-		}
-	}
-
+	klog.Infof("successfully added rule for pod %s: %d", podip, port)
 	return true
 }
 
-// DeleteRule : Delete a specific NPL rule from NODE-PORT-LOCAL chain
+// DeleteRule : Delete a specific NPL rule from NodePortLocalChain chain
 func (ipt *IPTableRules) DeleteRule(port int, podip string) bool {
 	klog.Infof("Deleting rule with port %v and podip %v", port, podip)
-	err := ipt.table.Delete("nat", NodePortLocalChain, "-p", "tcp", "-m", "tcp", "--dport",
-		fmt.Sprint(port), "-j", "DNAT", "--to-destination", podip)
+	ruleSpec := []string{
+		"-p", "tcp", "-m", "tcp", "--dport",
+		fmt.Sprint(port), "-j", "DNAT", "--to-destination", podip,
+	}
+	err := ipt.table.DeleteRule(iptables.NATTable, NodePortLocalChain, ruleSpec)
 
 	if err != nil {
-		klog.Infof("Failed to delete iptable rule for NPL: %v", err)
+		klog.Infof("Failed to delete IPTABLES rule for NPL: %v", err)
 		return false
 	}
-	return true
-}
-
-// SyncState : To Do - Compare existing rules with expected rules for all pods
-// and make sure that correct rules are programmed correctly
-func (ipt *IPTableRules) SyncState(podPort map[int]string) bool {
-	m := make(map[int]string)
-	var success = false
-	for port, node := range podPort {
-		success = ipt.AddRule(port, node)
-		if success == false {
-			m[port] = node
-			klog.Warningf("Adding iptables failed for port %d and node %s", port, node)
-			return false
-		}
-	}
-	podPort = m
 	return true
 }
 
 // GetAllRules : Get list of all NPL rules progammed in the node
 func (ipt *IPTableRules) GetAllRules(podPort map[int]string) bool {
-	rules, err := ipt.table.List("nat", NodePortLocalChain)
+	rules, err := ipt.table.ListRules(iptables.NATTable, NodePortLocalChain)
 	if err != nil {
-		klog.Warningf("Failed to list IPtable rules for NPL: %v", err)
+		klog.Warningf("Failed to list IPTABLES rules for NPL: %v", err)
 		return false
 	}
 	m := make(map[int]string)
@@ -171,19 +126,18 @@ func (ipt *IPTableRules) GetAllRules(podPort map[int]string) bool {
 
 // DeleteAllRules : Delete all NPL rules progammed in the node
 func (ipt *IPTableRules) DeleteAllRules() bool {
-	err := ipt.table.Delete("nat", "PREROUTING", "-p", "tcp", "-j", NodePortLocalChain)
+	ruleSpec := []string{
+		"-p", "tcp", "-j", NodePortLocalChain,
+	}
+	err := ipt.table.DeleteRule(iptables.NATTable, iptables.PreRoutingChain, ruleSpec)
 	if err != nil {
-		klog.Warningf("Failed to delete rule from PREROUTING chain for NPL: %v\n", err)
+		klog.Warningf("Failed to delete rule from prerouting chain for NPL: %v", err)
 		return false
 	}
-	err = ipt.table.ClearChain("nat", NodePortLocalChain)
+
+	err = ipt.table.DeleteChain(iptables.NATTable, NodePortLocalChain)
 	if err != nil {
-		klog.Warningf("Failed to clear chain for NPL: %v\n", err)
-		return false
-	}
-	err = ipt.table.DeleteChain("nat", NodePortLocalChain)
-	if err != nil {
-		klog.Warningf("Failed to delete chain for NPL: %v\n", err)
+		klog.Warningf("Failed to delete NodePortLocal Chain from NAT table: %v", err)
 		return false
 	}
 	return true

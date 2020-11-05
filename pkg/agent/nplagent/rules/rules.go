@@ -16,30 +16,16 @@
 
 package rules
 
-import (
-	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
-)
-
 type PodPortRules interface {
 	Init() bool
 	AddRule(port int, podip string) bool
 	DeleteRule(port int, podip string) bool
-	SyncState(podPort map[int]string) bool
 	GetAllRules(podPort map[int]string) bool
 	DeleteAllRules() bool
 }
 
-func Initrules(args ...nplutils.NPLRuleImplementation) PodPortRules {
-	var ruletype nplutils.NPLRuleImplementation
-	if len(args) == 0 {
-		// By default use iptable
-		ruletype = nplutils.NPLRuleImplementationIptable
-	} else {
-		ruletype = args[0]
-	}
-	switch ruletype {
-	case nplutils.NPLRuleImplementationIptable:
-		return NewIPTableRules()
-	}
-	return nil
+func Initrules() PodPortRules {
+	// Currently we only support IPTABLES. Later this can be extended based on the system capability.
+	return NewIPTableRules()
+
 }

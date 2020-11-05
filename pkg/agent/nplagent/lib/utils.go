@@ -17,7 +17,6 @@
 package lib
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -26,11 +25,6 @@ import (
 	"golang.org/x/sys/unix"
 	"k8s.io/klog"
 )
-
-func Stringify(serialize interface{}) string {
-	json_marshalled, _ := json.Marshal(serialize)
-	return string(json_marshalled)
-}
 
 func HasElem(s interface{}, elem interface{}) bool {
 	arrV := reflect.ValueOf(s)
