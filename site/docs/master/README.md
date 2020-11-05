@@ -13,7 +13,7 @@ security services for a Kubernetes cluster, leveraging
 [Open vSwitch](https://www.openvswitch.org/) as the networking data plane.
 
 <p align="center">
-![Antrea Overview](assets/antrea_overview.svg.png)
+<img src="assets/antrea_overview.svg.png" width="500" alt="Antrea Overview">
 </p>
 
 Open vSwitch is a widely adopted high-performance programmable virtual
