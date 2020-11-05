@@ -65,6 +65,7 @@ that Node and `<BRIDGE_NAME>` is the name of the bridge created by Antrea
 ## Registers
 
 We use 2 32-bit OVS registers to carry information throughout the pipeline:
+
  * reg0 (NXM_NX_REG0):
    - bits [0..15] are used to store the traffic source (from tunnel: 0, from
    local gateway: 1, from local Pod: 2). It is set in the [ClassifierTable].
@@ -184,7 +185,7 @@ on the same Node and they have the following IP addresses:
 
 ## Tables
 
-![OVS pipeline](/docs/assets/ovs-pipeline.svg)
+![OVS pipeline](../assets/ovs-pipeline.svg)
 
 ### ClassifierTable (0)
 
@@ -209,10 +210,9 @@ coming in through an overlay tunnel (i.e. from another Node). The next two
 flows (3 and 4) are for local Pods (in this case Pods from the coredns
 deployment).
 
-Local traffic then goes to [SpoofGuardTable], while tunnel traffic
-from other Nodes goes to [ConntrackTable]. The table-miss flow entry
-will drop all unmatched packets (in practice this flow entry should almost never
-be used).
+Local traffic then goes to [SpoofGuardTable], while tunnel traffic from other
+Nodes goes to [ConntrackTable]. The table-miss flow entry will drop all
+unmatched packets (in practice this flow entry should almost never be used).
 
 ### SpoofGuardTable (10)
 
@@ -249,7 +249,7 @@ If you dump the flows for this table, you may see the following:
 ```
 
 After this table, ARP traffic goes to [ARPResponderTable], while IP
-traffic goes to [ConnectionTrackTable]. Traffic which does not match
+traffic goes to [ConntrackTable]. Traffic which does not match
 any of the rules described above will be dropped by the table-miss flow entry.
 
 ### ARPResponderTable (20)
@@ -658,10 +658,10 @@ packet. Otherwise, go to the next AntreaPolicyRuleTable belonging to the next
 tier in precedence, or in the case of the Application tier (lowest precedence),
 go to the [IngressRuleTable]. One notable difference is how we use OF ports to
 identify the destination of the traffic, while we use IP addresses in
-[AntreaPolicyEgressRuleTable] to identify the source of the traffic. More details
+[AntreaPolicyEgressRuleTables] to identify the source of the traffic. More details
 regarding this can be found in the following [IngressRuleTable] section.
 
-As seen in [AntreaPolicyEgressRuleTable], the default action is to evaluate K8s
+As seen in [AntreaPolicyEgressRuleTables], the default action is to evaluate K8s
 Network Policy [IngressRuleTable] and a AntreaPolicyIngressDefaultTable does not exist.
 
 ### IngressRuleTable (90)
