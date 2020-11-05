@@ -154,19 +154,28 @@ func TestPodTrafficShaping(t *testing.T) {
 				t.Fatalf("Error when creating the perftest server Pod: %v", err)
 			}
 			defer deletePodWrapper(t, data, serverPodName)
-			podBIP, err := data.podWaitForIP(defaultTimeout, serverPodName, testNamespace)
+			podIPs, err := data.podWaitForIPs(defaultTimeout, serverPodName, testNamespace)
 			if err != nil {
 				t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
 			}
-			stdout, _, err := data.runCommandFromPod(testNamespace, clientPodName, "perftool", []string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -f m -O 1|grep sender|awk '{print $7}'", podBIP)})
-			if err != nil {
-				t.Fatalf("Error when running iperf3 client: %v", err)
+
+			runIperf := func(cmd []string) {
+				stdout, _, err := data.runCommandFromPod(testNamespace, clientPodName, "perftool", cmd)
+				if err != nil {
+					t.Fatalf("Error when running iperf3 client: %v", err)
+				}
+				stdout = strings.TrimSpace(stdout)
+				actualBandwidth, _ := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
+				t.Logf("Actual bandwidth: %v Mbits/sec", actualBandwidth)
+				// Allow a certain deviation.
+				assert.InEpsilon(t, actualBandwidth, tt.expectedBandwidth, 0.1)
 			}
-			stdout = strings.TrimSpace(stdout)
-			actualBandwidth, _ := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
-			t.Logf("Actual bandwidth: %v Mbits/sec", actualBandwidth)
-			// Allow a certain deviation.
-			assert.InEpsilon(t, actualBandwidth, tt.expectedBandwidth, 0.1)
+			if podIPs.ipv4 != nil {
+				runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -f m -O 1|grep sender|awk '{print $7}'", podIPs.ipv4.String())})
+			}
+			if podIPs.ipv6 != nil {
+				runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -6 -c %s -f m -O 1|grep sender|awk '{print $7}'", podIPs.ipv6.String())})
+			}
 		})
 	}
 }
