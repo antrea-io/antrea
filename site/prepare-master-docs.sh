@@ -22,8 +22,8 @@ function copy_root_markdowns_to_docs_master {
   done
 }
 
-function copy_other_markdowns_to_docs_master {
-  printf "Copying non-root markdown docs\n"
+function copy_markdowns_to_docs_master {
+  printf "Copying markdown docs\n"
 
   cp -rf ../../../docs/* .
 
@@ -59,8 +59,10 @@ function copy_other_markdowns_to_docs_master {
 pushd $THIS_DIR/docs/master
 
 reset_docs_master
+copy_markdowns_to_docs_master
+# This is done after copy_markdowns_to_docs_master, to overwrite changes made by
+# that function
 copy_root_markdowns_to_docs_master
-copy_other_markdowns_to_docs_master
 
 popd
 
