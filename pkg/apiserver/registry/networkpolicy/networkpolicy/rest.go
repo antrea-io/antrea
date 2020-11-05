@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -71,10 +72,18 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
+	labelSelector := labels.Everything()
+	if options != nil && options.LabelSelector != nil {
+		labelSelector = options.LabelSelector
+	}
 	networkPolicies := r.networkPolicyStore.List()
-	items := make([]controlplane.NetworkPolicy, len(networkPolicies))
+	items := make([]controlplane.NetworkPolicy, 0, len(networkPolicies))
 	for i := range networkPolicies {
-		store.ToNetworkPolicyMsg(networkPolicies[i].(*types.NetworkPolicy), &items[i], true)
+		var item controlplane.NetworkPolicy
+		store.ToNetworkPolicyMsg(networkPolicies[i].(*types.NetworkPolicy), &item, true)
+		if labelSelector.Matches(labels.Set(item.Labels)) {
+			items = append(items, item)
+		}
 	}
 	list := &controlplane.NetworkPolicyList{Items: items}
 	return list, nil
