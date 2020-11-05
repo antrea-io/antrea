@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -71,12 +72,20 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
-	appliedToGroups := r.appliedToGroupStore.List()
-	list := new(controlplane.AppliedToGroupList)
-	list.Items = make([]controlplane.AppliedToGroup, len(appliedToGroups))
-	for i := range appliedToGroups {
-		store.ToAppliedToGroupMsg(appliedToGroups[i].(*types.AppliedToGroup), &list.Items[i], true, nil)
+	labelSelector := labels.Everything()
+	if options != nil && options.LabelSelector != nil {
+		labelSelector = options.LabelSelector
 	}
+	appliedToGroups := r.appliedToGroupStore.List()
+	items := make([]controlplane.AppliedToGroup, 0, len(appliedToGroups))
+	for i := range appliedToGroups {
+		var item controlplane.AppliedToGroup
+		store.ToAppliedToGroupMsg(appliedToGroups[i].(*types.AppliedToGroup), &item, true, nil)
+		if labelSelector.Matches(labels.Set(item.Labels)) {
+			items = append(items, item)
+		}
+	}
+	list := &controlplane.AppliedToGroupList{Items: items}
 	return list, nil
 }
 
