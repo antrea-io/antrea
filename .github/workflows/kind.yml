@@ -40,10 +40,11 @@ jobs:
     - name: Save Antrea image to tarball
       run:  docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu-coverage:latest
     - name: Upload Antrea image for subsequent jobs
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v2
       with:
-        name: antrea-ubuntu
+        name: antrea-ubuntu-cov
         path: antrea-ubuntu.tar
+        retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
 
   test-e2e-encap:
     name: E2e tests on a Kind cluster on Linux
@@ -62,9 +63,9 @@ jobs:
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: antrea-ubuntu
+        name: antrea-ubuntu-cov
     - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+      run:  docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -82,6 +83,7 @@ jobs:
       with:
         name: test-e2e-encap-coverage
         path: test-e2e-encap-coverage.tar.gz
+        retention-days: 30
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
@@ -98,6 +100,7 @@ jobs:
       with:
         name: e2e-kind-encap.tar.gz
         path: log.tar.gz
+        retention-days: 30
 
   test-e2e-encap-proxy:
     name: E2e tests on a Kind cluster on Linux with proxy enabled
@@ -116,9 +119,9 @@ jobs:
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: antrea-ubuntu
+        name: antrea-ubuntu-cov
     - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+      run:  docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -136,6 +139,7 @@ jobs:
       with:
         name: test-e2e-encap-proxy-coverage
         path: test-e2e-encap-proxy-coverage.tar.gz
+        retention-days: 30
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
@@ -152,6 +156,7 @@ jobs:
       with:
         name: e2e-kind-encap-proxy.tar.gz
         path: log.tar.gz
+        retention-days: 30
 
   test-e2e-noencap:
     name: E2e tests on a Kind cluster on Linux (noEncap)
@@ -170,9 +175,9 @@ jobs:
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: antrea-ubuntu
+        name: antrea-ubuntu-cov
     - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+      run:  docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -190,6 +195,7 @@ jobs:
       with:
         name: test-e2e-noencap-coverage
         path: test-e2e-noencap-coverage.tar.gz
+        retention-days: 30
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
@@ -206,6 +212,7 @@ jobs:
       with:
         name: e2e-kind-noencap.tar.gz
         path: log.tar.gz
+        retention-days: 30
 
   test-e2e-hybrid:
     name: E2e tests on a Kind cluster on Linux (hybrid)
@@ -224,9 +231,9 @@ jobs:
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: antrea-ubuntu
+        name: antrea-ubuntu-cov
     - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+      run:  docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -244,6 +251,7 @@ jobs:
       with:
         name: test-e2e-hybrid-coverage
         path: test-e2e-hybrid-coverage.tar.gz
+        retention-days: 30
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
@@ -260,6 +268,7 @@ jobs:
       with:
         name: e2e-kind-hybrid.tar.gz
         path: log.tar.gz
+        retention-days: 30
 
   test-e2e-encap-np:
     name: E2e tests on a Kind cluster on Linux with Antrea NetworkPolicies enabled
@@ -278,9 +287,9 @@ jobs:
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: antrea-ubuntu
+        name: antrea-ubuntu-cov
     - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+      run:  docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -298,6 +307,7 @@ jobs:
       with:
         name: test-e2e-encap-np-coverage
         path: test-e2e-encap-np-coverage.tar.gz
+        retention-days: 30
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
@@ -314,6 +324,7 @@ jobs:
       with:
         name: e2e-kind-hybrid.tar.gz
         path: log.tar.gz
+        retention-days: 30
 
   build-antrea-image:
     name: Build Antrea image to be used for Kind netpol tests
@@ -324,12 +335,13 @@ jobs:
     - uses: actions/checkout@v2
     - run: make
     - name: Save Antrea image to tarball
-      run:  docker save -o antrea-ubuntu-netpol.tar antrea/antrea-ubuntu:latest
+      run:  docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
     - name: Upload Antrea image for subsequent jobs
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v2
       with:
-        name: antrea-ubuntu-netpol
-        path: antrea-ubuntu-netpol.tar
+        name: antrea-ubuntu
+        path: antrea-ubuntu.tar
+        retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
 
   test-netpol-tmp:
     name: Run experimental network policy tests (netpol) on Kind cluster
@@ -348,9 +360,9 @@ jobs:
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: antrea-ubuntu-netpol
+        name: antrea-ubuntu
     - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu-netpol/antrea-ubuntu-netpol.tar
+      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -380,9 +392,9 @@ jobs:
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v1
         with:
-          name: antrea-ubuntu-netpol
+          name: antrea-ubuntu
       - name: Load Antrea image
-        run:  docker load -i antrea-ubuntu-netpol/antrea-ubuntu-netpol.tar
+        run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
       - name: Install Kind
         run: |
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -391,3 +403,25 @@ jobs:
       - name: Validate document
         run: |
           ./ci/kind/validate-metrics-doc.sh
+
+  # Runs after all other jobs in the workflow and deletes Antrea Docker images uploaded as temporary
+  # artifacts. It uses a third-party, MIT-licensed action (geekyeggo/delete-artifact). While Github
+  # exposes an API for deleting artifacts, they do not support an official delete-artifact action
+  # yet.
+  artifact-cleanup:
+    name: Delete uploaded images
+    needs: [build-antrea-coverage-image, build-antrea-image, test-e2e-encap, test-e2e-encap-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-np, test-netpol-tmp, validate-prometheus-metrics-doc]
+    if: ${{ always() }}
+    runs-on: [ubuntu-18.04]
+    steps:
+    - name: Delete antrea-ubuntu-cov
+      if: ${{ needs.build-antrea-coverage-image.result == 'success' }}
+      uses: geekyeggo/delete-artifact@v1
+      with:
+        name: antrea-ubuntu-cov
+    - name: Delete antrea-ubuntu
+      if: ${{ needs.build-antrea-image.result == 'success' }}
+      uses: geekyeggo/delete-artifact@v1
+      with:
+        name: antrea-ubuntu
+        failOnError: false

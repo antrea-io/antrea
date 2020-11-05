@@ -38,10 +38,11 @@ jobs:
     - name: Save Antrea image to tarball
       run:  docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
     - name: Upload Antrea image for subsequent jobs
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v2
       with:
         name: antrea-ubuntu
         path: antrea-ubuntu.tar
+        retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
 
 # TODO: define an action to avoid repetition?
 
@@ -160,3 +161,20 @@ jobs:
       - name: Run test
         run: |
           ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 2 --controller-only
+
+  # Runs after all other jobs in the workflow and deletes Antrea Docker images uploaded as temporary
+  # artifacts. It uses a third-party, MIT-licensed action (geekyeggo/delete-artifact). While Github
+  # exposes an API for deleting artifacts, they do not support an official delete-artifact action
+  # yet.
+  artifact-cleanup:
+    name: Delete uploaded images
+    needs: [build-antrea-image, from-N-1, from-N-2, compatible-N-1, compatible-N-2]
+    if: ${{ always() }}
+    runs-on: [ubuntu-18.04]
+    steps:
+    - name: Delete antrea-ubuntu
+      if: ${{ needs.build-antrea-image.result == 'success' }}
+      uses: geekyeggo/delete-artifact@v1
+      with:
+        name: antrea-ubuntu
+        failOnError: false
