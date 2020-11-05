@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
@@ -138,6 +139,7 @@ func TestRESTList(t *testing.T) {
 	tests := []struct {
 		name                      string
 		networkPolicyStatsEnabled bool
+		labelSelector             labels.Selector
 		stats                     map[string]map[string]statsv1alpha1.NetworkPolicyStats
 		npNamespace               string
 		expectedObj               runtime.Object
@@ -232,6 +234,53 @@ func TestRESTList(t *testing.T) {
 			},
 			expectedErr: false,
 		},
+		{
+			name:                      "label selector selecting nothing",
+			networkPolicyStatsEnabled: true,
+			labelSelector:             labels.Nothing(),
+			stats: map[string]map[string]statsv1alpha1.NetworkPolicyStats{
+				"foo": {
+					"bar": {
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "foo",
+							Name:      "bar",
+						},
+					},
+				},
+			},
+			npNamespace: "foo",
+			expectedObj: &statsv1alpha1.NetworkPolicyStatsList{
+				Items: []statsv1alpha1.NetworkPolicyStats{},
+			},
+			expectedErr: false,
+		},
+		{
+			name:                      "label selector selecting everything",
+			networkPolicyStatsEnabled: true,
+			labelSelector:             labels.Everything(),
+			stats: map[string]map[string]statsv1alpha1.NetworkPolicyStats{
+				"foo": {
+					"bar": {
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "foo",
+							Name:      "bar",
+						},
+					},
+				},
+			},
+			npNamespace: "foo",
+			expectedObj: &statsv1alpha1.NetworkPolicyStatsList{
+				Items: []statsv1alpha1.NetworkPolicyStats{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "foo",
+							Name:      "bar",
+						},
+					},
+				},
+			},
+			expectedErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -241,7 +290,7 @@ func TestRESTList(t *testing.T) {
 				statsProvider: &fakeStatsProvider{stats: tt.stats},
 			}
 			ctx := request.WithNamespace(context.TODO(), tt.npNamespace)
-			actualObj, err := r.List(ctx, &internalversion.ListOptions{})
+			actualObj, err := r.List(ctx, &internalversion.ListOptions{LabelSelector: tt.labelSelector})
 			if tt.expectedErr {
 				require.Error(t, err)
 			} else {

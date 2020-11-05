@@ -23,6 +23,7 @@ import (
 	metatable "k8s.io/apimachinery/pkg/api/meta/table"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
@@ -67,7 +68,17 @@ func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (
 	if !features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		return nil, errors.NewBadRequest("feature AntreaPolicy disabled")
 	}
-	items := r.statsProvider.ListAntreaClusterNetworkPolicyStats()
+	labelSelector := labels.Everything()
+	if options != nil && options.LabelSelector != nil {
+		labelSelector = options.LabelSelector
+	}
+	stats := r.statsProvider.ListAntreaClusterNetworkPolicyStats()
+	items := make([]statsv1alpha1.AntreaClusterNetworkPolicyStats, 0, len(stats))
+	for i := range stats {
+		if labelSelector.Matches(labels.Set(stats[i].Labels)) {
+			items = append(items, stats[i])
+		}
+	}
 	metricList := &statsv1alpha1.AntreaClusterNetworkPolicyStatsList{
 		Items: items,
 	}
