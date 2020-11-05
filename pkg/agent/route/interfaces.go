@@ -24,7 +24,7 @@ import (
 type Interface interface {
 	// Initialize should initialize all infrastructures required to route container packets in host network.
 	// It should be idempotent and can be safely called on every startup.
-	Initialize(nodeConfig *config.NodeConfig) error
+	Initialize(nodeConfig *config.NodeConfig, done func()) error
 
 	// Reconcile should remove orphaned routes and related configuration based on the desired podCIDRs.
 	Reconcile(podCIDRs []string) error

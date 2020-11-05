@@ -56,7 +56,7 @@ func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSN
 
 // Initialize sets nodeConfig on Window.
 // Service LoadBalancing is provided by OpenFlow.
-func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
+func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.nodeConfig = nodeConfig
 	if err := c.initFwRules(); err != nil {
 		return err
@@ -70,6 +70,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 	if err := util.EnableIPForwarding(nodeConfig.GatewayConfig.Name); err != nil {
 		return err
 	}
+	done()
 	return nil
 }
 

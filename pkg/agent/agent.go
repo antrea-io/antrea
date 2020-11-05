@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -66,6 +67,9 @@ type Initializer struct {
 	networkConfig   *config.NetworkConfig
 	nodeConfig      *config.NodeConfig
 	enableProxy     bool
+	// networkReadyCh should be closed once the Node's network is ready.
+	// The CNI server will wait for it before handling any CNI Add requests.
+	networkReadyCh chan<- struct{}
 }
 
 func NewInitializer(
@@ -79,6 +83,7 @@ func NewInitializer(
 	mtu int,
 	serviceCIDR *net.IPNet,
 	networkConfig *config.NetworkConfig,
+	networkReadyCh chan<- struct{},
 	enableProxy bool) *Initializer {
 	return &Initializer{
 		ovsBridgeClient: ovsBridgeClient,
@@ -91,6 +96,7 @@ func NewInitializer(
 		mtu:             mtu,
 		serviceCIDR:     serviceCIDR,
 		networkConfig:   networkConfig,
+		networkReadyCh:  networkReadyCh,
 		enableProxy:     enableProxy,
 	}
 }
@@ -194,6 +200,8 @@ func (i *Initializer) initInterfaceStore() error {
 // Initialize sets up agent initial configurations.
 func (i *Initializer) Initialize() error {
 	klog.Info("Setting up node network")
+	// wg is used to wait for the asynchronous initialization.
+	var wg sync.WaitGroup
 
 	if err := i.initNodeLocalConfig(); err != nil {
 		return err
@@ -215,7 +223,8 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	if err := i.routeClient.Initialize(i.nodeConfig); err != nil {
+	wg.Add(1)
+	if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
 		return err
 	}
 
@@ -223,6 +232,11 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
+	// The Node's network is ready only when both synchronous and asynchronous initialization are done.
+	go func() {
+		wg.Wait()
+		close(i.networkReadyCh)
+	}()
 	klog.Infof("Agent initialized NodeConfig=%v, NetworkConfig=%v", i.nodeConfig, i.networkConfig)
 	return nil
 }
