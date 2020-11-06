@@ -29,7 +29,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/features"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -193,7 +192,7 @@ const (
 	// marksReg stores traffic-source mark and pod-found mark.
 	// traffic-source resides in [0..15], pod-found resides in [16].
 	marksReg        regType = 0
-	portCacheReg    regType = 1
+	PortCacheReg    regType = 1
 	swapReg         regType = 2
 	endpointIPReg   regType = 3               // Use reg3 to store endpoint IP
 	endpointPortReg regType = 4               // Use reg4[0..15] to store endpoint port
@@ -229,9 +228,7 @@ var (
 	// ofPortMarkRange takes the 16th bit of register marksReg to indicate if the ofPort number of an interface
 	// is found or not. Its value is 0x1 if yes.
 	ofPortMarkRange = binding.Range{16, 16}
-	// OfTraceflowMarkRange stores dataplaneTag at range 28-31 in marksReg.
-	OfTraceflowMarkRange = binding.Range{28, 31}
-	// ofPortRegRange takes a 32-bit range of register portCacheReg to cache the ofPort number of the interface.
+	// ofPortRegRange takes a 32-bit range of register PortCacheReg to cache the ofPort number of the interface.
 	ofPortRegRange = binding.Range{0, 31}
 	// snatMarkRange takes the 17th bit of register marksReg to indicate if the packet needs to be SNATed with Node's IP
 	// or not. Its value is 0x1 if yes.
@@ -258,6 +255,10 @@ var (
 	metricIngressRuleIDRange = binding.Range{0, 31}
 	// metricEgressRuleIDRange takes 32..63 range of ct_label to store the egress rule ID.
 	metricEgressRuleIDRange = binding.Range{32, 63}
+
+	// traceflowTagToSRange stores dataplaneTag at range 2-7 in ToS field of IP header.
+	// IPv4/v6 DSCP (bits 2-7) field supports exact match only.
+	traceflowTagToSRange = binding.Range{2, 7}
 
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	hairpinIP           = net.ParseIP("169.254.169.252").To4()
@@ -435,14 +436,9 @@ func (c *client) defaultFlows() (flows []binding.Flow) {
 
 // tunnelClassifierFlow generates the flow to mark traffic comes from the tunnelOFPort.
 func (c *client) tunnelClassifierFlow(tunnelOFPort uint32, category cookie.Category) binding.Flow {
-	flowBuilder := c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
-		MatchInPort(tunnelOFPort)
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
-		tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
-		flowBuilder = flowBuilder.Action().MoveRange(tunMetadataName, regName, OfTraceflowMarkRange, OfTraceflowMarkRange)
-	}
-	return flowBuilder.Action().LoadRegRange(int(marksReg), markTrafficFromTunnel, binding.Range{0, 15}).
+	return c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
+		MatchInPort(tunnelOFPort).
+		Action().LoadRegRange(int(marksReg), markTrafficFromTunnel, binding.Range{0, 15}).
 		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 		Action().GotoTable(conntrackTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -567,8 +563,9 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 // avoid unexpected packet drop in Traceflow.
 func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cookie.Category) binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow+2).
-		MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
+	flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow + 2).
+		MatchProtocol(binding.ProtocolIP).
+		MatchIPDscp(dataplaneTag).
 		SetHardTimeout(300).
 		Cookie(c.cookieAllocator.Request(category).Raw())
 	if c.enableProxy {
@@ -613,7 +610,7 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, categ
 	l2FwdCalcTable := c.pipeline[l2ForwardingCalcTable]
 	return l2FwdCalcTable.BuildFlow(priorityNormal).
 		MatchDstMAC(dstMAC).
-		Action().LoadRegRange(int(portCacheReg), ofPort, ofPortRegRange).
+		Action().LoadRegRange(int(PortCacheReg), ofPort, ofPortRegRange).
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		Action().GotoTable(l2FwdCalcTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -624,26 +621,49 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, categ
 func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
 	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
+		Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
 
-// traceflowL2ForwardOutputFlow generates Traceflow specific flow that outputs traceflow packets to OVS port and Antrea
+// traceflowL2ForwardOutputFlows generates Traceflow specific flows that outputs traceflow packets to OVS port and Antrea
 // Agent after L2forwarding calculation.
-func (c *client) traceflowL2ForwardOutputFlow(dataplaneTag uint8, category cookie.Category) binding.Flow {
-	regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
-	tunMetadataName := fmt.Sprintf("%s%d", binding.NxmFieldTunMetadata, 0)
-	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
-		MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
+func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cookie.Category) []binding.Flow {
+	flows := []binding.Flow{}
+	// Output and SendToController if output port is tunnel or gateway port.
+	// The gw0 IP as Traceflow destination is not supported.
+	if c.encapMode.SupportsEncap() {
+		flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
+			MatchReg(int(PortCacheReg), config.DefaultTunOFPort).
+			MatchIPDscp(dataplaneTag).
+			SetHardTimeout(300).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+			Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
+			Action().SendToController(uint8(PacketInReasonTF)).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
+	}
+	flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
+		MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
+		MatchIPDscp(dataplaneTag).
 		SetHardTimeout(300).
 		MatchProtocol(binding.ProtocolIP).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().MoveRange(regName, tunMetadataName, OfTraceflowMarkRange, OfTraceflowMarkRange).
-		Action().OutputRegRange(int(portCacheReg), ofPortRegRange).
-		Action().SendToController(1).
+		Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
+		Action().SendToController(uint8(PacketInReasonTF)).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
+		Done())
+	// Only SendToController if output port is Pod port.
+	flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
+		MatchIPDscp(dataplaneTag).
+		SetHardTimeout(300).
+		MatchProtocol(binding.ProtocolIP).
+		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+		Action().SendToController(uint8(PacketInReasonTF)).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done())
+	return flows
 }
 
 // l2ForwardOutputServiceHairpinFlow uses in_port action for Service
@@ -727,7 +747,7 @@ func (c *client) l3FwdFlowToRemote(
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(globalVirtualMAC).
 		// Load ofport of the tunnel interface.
-		Action().LoadRegRange(int(portCacheReg), tunOFPort, ofPortRegRange).
+		Action().LoadRegRange(int(PortCacheReg), tunOFPort, ofPortRegRange).
 		// Set MAC-known.
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		// Flow based tunnel. Set tunnel destination.
@@ -867,7 +887,7 @@ func (c *client) sessionAffinityReselectFlow() binding.Flow {
 func (c *client) serviceCIDRDNATFlow(serviceCIDR *net.IPNet, gatewayOFPort uint32) binding.Flow {
 	return c.pipeline[dnatTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 		MatchDstIPNet(*serviceCIDR).
-		Action().LoadRegRange(int(portCacheReg), gatewayOFPort, ofPortRegRange).
+		Action().LoadRegRange(int(PortCacheReg), gatewayOFPort, ofPortRegRange).
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		Action().GotoTable(conntrackCommitTable).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
@@ -1047,7 +1067,7 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchType int, matchValue 
 		fb = fb.MatchProtocol(binding.ProtocolIP).MatchSrcIPNet(matchValue.(net.IPNet))
 	case MatchDstOFPort:
 		// ofport number in NXM_NX_REG1 is used in ingress rule to match packets sent to local Pod.
-		fb = fb.MatchProtocol(binding.ProtocolIP).MatchReg(int(portCacheReg), uint32(matchValue.(int32)))
+		fb = fb.MatchProtocol(binding.ProtocolIP).MatchReg(int(PortCacheReg), uint32(matchValue.(int32)))
 	case MatchSrcOFPort:
 		fb = fb.MatchProtocol(binding.ProtocolIP).MatchInPort(uint32(matchValue.(int32)))
 	case MatchTCPDstPort:

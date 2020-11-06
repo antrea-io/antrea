@@ -48,10 +48,12 @@ const (
 	// Default number of workers processing traceflow request.
 	defaultWorkers = 4
 
-	// Min and max data plane tag for traceflow. dataplaneTag=0 means it's not a Traceflow packet.
-	// dataplaneTag=15 is reserved.
-	minTagNum uint8 = 1
-	maxTagNum uint8 = 14
+	// Min and max data plane tag for traceflow. minTagNum is 7 (0b000111), maxTagNum is 59 (0b111011).
+	// As per RFC2474, 16 different DSCP values are we reserved for Experimental or Local Use, which we use as the 16 possible data plane tag values.
+	// tagStep is 4 (0b100) to keep last 2 bits at 0b11.
+	tagStep   uint8 = 0b100
+	minTagNum uint8 = 0b1*tagStep + 0b11
+	maxTagNum uint8 = 0b1110*tagStep + 0b11
 
 	// PodIP index name for Pod cache.
 	podIPIndex = "podIP"
@@ -358,7 +360,7 @@ func (c *Controller) allocateTag(name string) (uint8, error) {
 			return 0, nil
 		}
 	}
-	for i := minTagNum; i <= maxTagNum; i++ {
+	for i := minTagNum; i <= maxTagNum; i += tagStep {
 		if _, ok := c.runningTraceflows[i]; !ok {
 			c.runningTraceflows[i] = name
 			return i, nil
