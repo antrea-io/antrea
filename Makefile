@@ -69,9 +69,13 @@ windows-bin:
 ifeq ($(UNAME_S),Linux)
 test-unit: .linux-test-unit
 test-integration: .linux-test-integration
+else ifneq (,$(findstring MSYS_NT-,$(UNAME_S)))
+test-unit: .windows-test-unit
+test-integration:
+	$(error Cannot use target 'test-integration' on Windows, but you can run integration tests with 'docker-test-integration')
 else
 test-unit:
-	$(error Cannot use target 'test-unit' on a non-Linux OS, but you can run unit tests with 'docker-test-unit')
+	$(error Cannot use target 'test-unit' on OS $(UNAME_S), but you can run unit tests with 'docker-test-unit')
 test-integration:
 	$(error Cannot use target 'test-integration' on a non-Linux OS, but you can run integration tests with 'docker-test-integration')
 endif
@@ -160,6 +164,12 @@ antctl-release:
 	@echo
 	@echo "==> Running unit tests <=="
 	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover github.com/vmware-tanzu/antrea/cmd/... github.com/vmware-tanzu/antrea/pkg/...
+
+.PHONY: .windows-test-unit
+.windows-test-unit:
+	@echo
+	@echo "==> Running unit tests <=="
+	$(GO) test github.com/vmware-tanzu/antrea/cmd/... github.com/vmware-tanzu/antrea/pkg/...
 
 .PHONY: tidy
 tidy:
