@@ -45,8 +45,8 @@ const (
 	// provide enough time for policies to be enforced & deleted by the CNI plugin.
 	networkPolicyDelay = 2 * time.Second
 	// audit log directory on Antrea Agent
-	logDir             = "/var/log/antrea/networkpolicy/"
-	logfileName        = "np.log"
+	logDir      = "/var/log/antrea/networkpolicy/"
+	logfileName = "np.log"
 )
 
 func failOnError(err error, t *testing.T) {

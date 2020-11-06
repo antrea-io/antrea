@@ -818,7 +818,8 @@ func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock) []types.Address {
 	addresses := make([]types.Address, 0)
 	for _, b := range ipBlocks {
 		exceptIPNet := make([]*net.IPNet, 0, len(b.Except))
-		for _, c := range b.Except {
+		for i := range b.Except {
+			c := b.Except[i]
 			exceptIPNet = append(exceptIPNet, ip.IPNetToNetIPNet(&c))
 		}
 		diffCIDRs, err := ip.DiffFromCIDRs(ip.IPNetToNetIPNet(&b.CIDR), exceptIPNet)

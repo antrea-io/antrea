@@ -31,7 +31,8 @@ type Response struct {
 func listTransform(l interface{}) (interface{}, error) {
 	groups := l.(*cpv1beta.AppliedToGroupList)
 	result := []Response{}
-	for _, group := range groups.Items {
+	for i := range groups.Items {
+		group := groups.Items[i]
 		o, _ := objectTransform(&group)
 		result = append(result, o.(Response))
 	}

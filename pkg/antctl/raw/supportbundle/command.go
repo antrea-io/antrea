@@ -317,7 +317,8 @@ func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antre
 			return hit
 		}
 	}
-	for _, node := range nodeList.Items {
+	for i := range nodeList.Items {
+		node := nodeList.Items[i]
 		if !matcher(node.Name) {
 			continue
 		}

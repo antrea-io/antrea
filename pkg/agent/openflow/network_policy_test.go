@@ -560,6 +560,7 @@ func parseAddresses(addrs []string) []types.Address {
 	var addresses = make([]types.Address, 0)
 	for _, addr := range addrs {
 		if !strings.Contains(addr, ".") {
+			// #nosec G109: parseAddresses is only called on constant test inputs, no potential integer overflow
 			ofPort, _ := strconv.Atoi(addr)
 			addresses = append(addresses, NewOFPortAddress(int32(ofPort)))
 		} else if strings.Contains(addr, "/") {
