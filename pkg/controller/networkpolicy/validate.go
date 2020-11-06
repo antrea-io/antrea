@@ -28,13 +28,14 @@ import (
 )
 
 var (
-	// reservedTierPriorities stores the reserved priority range from 251-255.
-	// The priority 250 is reserved for default Tier but not part of this set in
-	// order to be able to create the Tier by Antrea.
-	reservedTierPriorities = sets.NewInt32(int32(251), int32(252), int32(253), int32(254), int32(255))
+	// reservedTierPriorities stores the reserved priority range from 251, 252, 254 and 255.
+	// The priority 250 is reserved for default Tier but not part of this set in order to be
+	// able to create the Tier by Antrea. Same for priority 253 which is reserved for the
+	// baseline tier.
+	reservedTierPriorities = sets.NewInt32(int32(251), int32(252), int32(254), int32(255))
 	// reservedTierNames stores the set of Tier names which cannot be deleted
 	// since they are created by Antrea.
-	reservedTierNames = sets.NewString("application", "platform", "networkops", "securityops", "emergency")
+	reservedTierNames = sets.NewString("baseline", "application", "platform", "networkops", "securityops", "emergency")
 )
 
 type NetworkPolicyValidator struct {
