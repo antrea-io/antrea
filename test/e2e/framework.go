@@ -999,6 +999,7 @@ var lettersAndDigits = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 func randSeq(n int) string {
 	b := make([]rune, n)
 	for i := range b {
+		// #nosec G404: random number generator not used for security purposes
 		randIdx := rand.Intn(len(lettersAndDigits))
 		b[i] = lettersAndDigits[randIdx]
 	}

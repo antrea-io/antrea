@@ -44,6 +44,7 @@ func TestWinFirewallRules(t *testing.T) {
 	err := client.AddRuleAllowIP(inRule, FWRuleIn, podCIDR)
 	require.Nil(t, err)
 	err = client.AddRuleAllowIP(outRule, FWRuleOut, podCIDR)
+	require.Nil(t, err)
 	checkExistence(expectedRules, true)
 
 	err = client.DelFirewallRuleByName(inRule)

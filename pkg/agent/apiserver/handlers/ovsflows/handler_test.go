@@ -94,7 +94,8 @@ func TestPodFlows(t *testing.T) {
 			expectedStatus: http.StatusNotFound,
 		},
 	}
-	for _, tc := range testcases {
+	for i := range testcases {
+		tc := testcases[i]
 		i := interfacestoretest.NewMockInterfaceStore(ctrl)
 		q := aqtest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetInterfaceStore().Return(i).Times(1)
@@ -139,7 +140,8 @@ func TestNetworkPolicyFlows(t *testing.T) {
 			expectedStatus: http.StatusNotFound,
 		},
 	}
-	for _, tc := range testcases {
+	for i := range testcases {
+		tc := testcases[i]
 		npq := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 		q := aqtest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetNetworkPolicyInfoQuerier().Return(npq).Times(1)
@@ -179,7 +181,8 @@ func TestTableFlows(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 	}
-	for _, tc := range testcases {
+	for i := range testcases {
+		tc := testcases[i]
 		ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
 		q := aqtest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(1)

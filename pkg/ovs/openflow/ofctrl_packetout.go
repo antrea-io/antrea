@@ -205,7 +205,9 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 		b.pktOut.IPHeader.Length = 20 + b.pktOut.ICMPHeader.Len()
 	} else if b.pktOut.TCPHeader != nil {
 		b.pktOut.TCPHeader.HdrLen = 5
+		// #nosec G404: random number generator not used for security purposes
 		b.pktOut.TCPHeader.SeqNum = rand.Uint32()
+		// #nosec G404: random number generator not used for security purposes
 		b.pktOut.TCPHeader.AckNum = rand.Uint32()
 		b.pktOut.TCPHeader.Checksum = b.tcpHeaderChecksum()
 		b.pktOut.IPHeader.Length = 20 + b.pktOut.TCPHeader.Len()
@@ -214,6 +216,7 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 		b.pktOut.UDPHeader.Checksum = b.udpHeaderChecksum()
 		b.pktOut.IPHeader.Length = 20 + b.pktOut.UDPHeader.Len()
 	}
+	// #nosec G404: random number generator not used for security purposes
 	b.pktOut.IPHeader.Id = uint16(rand.Uint32())
 	// Set IP version in the IP Header.
 	if b.pktOut.IPHeader.NWSrc.To4() != nil {

@@ -175,7 +175,8 @@ func TestPodFlows(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 	}
-	for _, tc := range testcases {
+	for i := range testcases {
+		tc := testcases[i]
 		q := aqtest.NewMockAgentQuerier(ctrl)
 		i := interfacestoretest.NewMockInterfaceStore(ctrl)
 		ofc := oftest.NewMockClient(ctrl)
