@@ -30,8 +30,8 @@ Add-VMNetworkAdapter -ManagementOS -Name $InterfaceAlias -SwitchName $hnsSwitchN
 Set-NetIPInterface -ifAlias $INTERFACE_TO_ADD_SERVICE_IP -Forwarding Enabled
 
 if ($StopKubeProxyOnCreation) {
-  # Restart kube-proxy to make new created inteface can be used.
-  # Kill kube-proxy and the process will be recreated by kube-proxy pod.
+  # Restart kube-proxy to ensure that the newly created interface can be used.
+  # Kill kube-proxy and the process will be automatically restarted by the kube-proxy Pod.
   Write-Host "killing running kube-proxy process if exists..."
   taskkill /im rancher-wins-kube-proxy.exe /f
 }

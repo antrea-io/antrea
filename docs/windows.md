@@ -173,8 +173,9 @@ curl.exe -LO https://github.com/kubernetes-sigs/sig-windows-tools/releases/lates
 
 4. Prepare node environment needed by antrea-agent
 
-Run following commands to prepare node environment needed by antrea-agent:
-```
+Run the following commands to prepare the Node environment needed by antrea-agent:
+
+```powershell
 mkdir c:\k\antrea
 cd c:\k\antrea
 curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1
@@ -182,37 +183,39 @@ curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/w
 curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Prepare-AntreaAgent.ps1
 .\Prepare-AntreaAgent.ps1
 ```
-The script `Prepare-AntreaAgent.ps1` completes following tasks:
+
+The script `Prepare-AntreaAgent.ps1` performs following tasks:
+
 - Prepare network adapter for kube-proxy.
 
     kube-proxy needs a network adapter to configure Kubernetes Service IPs and
     uses the adapter for proxying connections to Service. Use following script
     to create the network adapter. The adapter will be deleted automatically by
-    Windows after Windows Node reboots.
+    Windows after the Windows Node reboots.
 
 - Remove stale network resources created by antrea-agent.
 
-    After Windows Node reboots, there will be stale network resources which
+    After the Windows Node reboots, there will be stale network resources which
     need to be cleaned before starting antrea-agent.
-
-> Note: The script must be executed evey time the node is restarted.
 
 As you know from the task details from above, the script must be executed every
 time you restart the Node to prepare the environment for antrea-agent.
 
 You could make the script be executed automatically after Windows startup by
-some methods. Here're two examples for your reference:
+using different methods. Here're two examples for your reference:
 
 - Example1: Update kubelet service.
 
 Insert following line in kubelet service script `c:\k\StartKubelet.ps1` to invoke
 `Prepare-AntreaAgent.ps1` when starting kubelet service:
-```
+
+```powershell
 & C:\k\Prepare-AntreaAgent.ps1
 ```
 
 - Example2: Create a ScheduledJob that runs at startup.
- ```
+
+```powershell
 $trigger = New-JobTrigger -AtStartup
 $options = New-ScheduledJobOption -RunElevated
 Register-ScheduledJob -Name PrepareAntreaAgent -Trigger $trigger  -ScriptBlock { Invoke-Expression C:\k\antrea\Prepare-AntreaAgent.ps1 } -ScheduledJobOption $options

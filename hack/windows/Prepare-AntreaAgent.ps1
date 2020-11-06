@@ -4,8 +4,8 @@ Prepare environment for antrea-agent.
 
 .DESCRIPTION
 This script prepares environment needed by antrea-agent which includes:
-- Cleaning stale Antrea network resources if exist.
-- Prepare a service network interface which is needed by kube-proxy. Without the interface, kube-proxy can not
+- Cleaning stale Antrea network resources if they exist.
+- Prepare a service network interface which is needed by kube-proxy. Without the interface, kube-proxy cannot
   provide the proxy for Kubernetes services.
 #>
 
@@ -24,7 +24,7 @@ if ($AntreaHnsNetwork) {
     }
 }
 if ($NeedCleanNetwork) {
-    Write-Host "Cleaning stale Antrea network resources if exist..."
+    Write-Host "Cleaning stale Antrea network resources if they exist..."
     & $CleanAntreaNetworkScript
 }
 # Enure OVS services are running.
