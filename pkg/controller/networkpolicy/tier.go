@@ -34,12 +34,16 @@ var (
 	// maxSupportedTiers is the soft limit on the maximum number of supported
 	// Tiers.
 	maxSupportedTiers = 20
-	// defaultTierPriority maintains the lowest priority for the system generated
-	// default Tier.
+	// defaultTierPriority maintains the priority for the system generated default Tier.
+	// This is the lowest priority for tiers that will be enforced before K8s NetworkPolicies.
 	defaultTierPriority = int32(250)
+	// baselineTierPriority maintains the priority for the system generated baseline Tier.
+	// This is the tier that will be enforced after K8s NetworkPolicies.
+	baselineTierPriority = int32(253)
 	// priorityMap maintains the Tier priority associated with system generated
 	// Tier names.
 	priorityMap = map[string]int32{
+		"baseline":    baselineTierPriority,
 		"application": defaultTierPriority,
 		"platform":    int32(150),
 		"networkops":  int32(100),
@@ -48,9 +52,18 @@ var (
 	}
 	// staticTierSet maintains the names of the static tiers such that they can
 	// be converted to corresponding Tier CRD names.
-	staticTierSet = sets.NewString("Emergency", "SecurityOps", "NetworkOps", "Platform", "Application")
+	staticTierSet = sets.NewString("Emergency", "SecurityOps", "NetworkOps", "Platform", "Application", "Baseline")
 	// systemGeneratedTiers are the Tier CRs to be created at init.
 	systemGeneratedTiers = []*secv1alpha1.Tier{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "baseline",
+			},
+			Spec: secv1alpha1.TierSpec{
+				Priority:    priorityMap["baseline"],
+				Description: "[READ-ONLY]: System generated Baseline Tier",
+			},
+		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "application",

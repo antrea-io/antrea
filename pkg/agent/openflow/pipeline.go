@@ -35,32 +35,30 @@ import (
 
 const (
 	// Flow table id index
-	ClassifierTable             binding.TableIDType = 0
-	uplinkTable                 binding.TableIDType = 5
-	spoofGuardTable             binding.TableIDType = 10
-	arpResponderTable           binding.TableIDType = 20
-	serviceHairpinTable         binding.TableIDType = 29
-	conntrackTable              binding.TableIDType = 30
-	conntrackStateTable         binding.TableIDType = 31
-	sessionAffinityTable        binding.TableIDType = 40
-	dnatTable                   binding.TableIDType = 40
-	serviceLBTable              binding.TableIDType = 41
-	endpointDNATTable           binding.TableIDType = 42
-	MultiTierEgressRuleTable    binding.TableIDType = 45
-	DefaultTierEgressRuleTable  binding.TableIDType = 49
-	EgressRuleTable             binding.TableIDType = 50
-	EgressDefaultTable          binding.TableIDType = 60
-	EgressMetricTable           binding.TableIDType = 61
-	l3ForwardingTable           binding.TableIDType = 70
-	l2ForwardingCalcTable       binding.TableIDType = 80
-	MultiTierIngressRuleTable   binding.TableIDType = 85
-	DefaultTierIngressRuleTable binding.TableIDType = 89
-	IngressRuleTable            binding.TableIDType = 90
-	IngressDefaultTable         binding.TableIDType = 100
-	IngressMetricTable          binding.TableIDType = 101
-	conntrackCommitTable        binding.TableIDType = 105
-	hairpinSNATTable            binding.TableIDType = 106
-	L2ForwardingOutTable        binding.TableIDType = 110
+	ClassifierTable              binding.TableIDType = 0
+	uplinkTable                  binding.TableIDType = 5
+	spoofGuardTable              binding.TableIDType = 10
+	arpResponderTable            binding.TableIDType = 20
+	serviceHairpinTable          binding.TableIDType = 29
+	conntrackTable               binding.TableIDType = 30
+	conntrackStateTable          binding.TableIDType = 31
+	sessionAffinityTable         binding.TableIDType = 40
+	dnatTable                    binding.TableIDType = 40
+	serviceLBTable               binding.TableIDType = 41
+	endpointDNATTable            binding.TableIDType = 42
+	AntreaPolicyEgressRuleTable  binding.TableIDType = 45
+	EgressRuleTable              binding.TableIDType = 50
+	EgressDefaultTable           binding.TableIDType = 60
+	EgressMetricTable            binding.TableIDType = 61
+	l3ForwardingTable            binding.TableIDType = 70
+	l2ForwardingCalcTable        binding.TableIDType = 80
+	AntreaPolicyIngressRuleTable binding.TableIDType = 85
+	IngressRuleTable             binding.TableIDType = 90
+	IngressDefaultTable          binding.TableIDType = 100
+	IngressMetricTable           binding.TableIDType = 101
+	conntrackCommitTable         binding.TableIDType = 105
+	hairpinSNATTable             binding.TableIDType = 106
+	L2ForwardingOutTable         binding.TableIDType = 110
 
 	// Flow priority level
 	priorityHigh            = uint16(210)
@@ -84,10 +82,9 @@ var (
 	// egressTables map records all IDs of tables related to
 	// egress rules.
 	egressTables = map[binding.TableIDType]struct{}{
-		MultiTierEgressRuleTable:   {},
-		DefaultTierEgressRuleTable: {},
-		EgressRuleTable:            {},
-		EgressDefaultTable:         {},
+		AntreaPolicyEgressRuleTable: {},
+		EgressRuleTable:             {},
+		EgressDefaultTable:          {},
 	}
 
 	FlowTables = []struct {
@@ -105,15 +102,13 @@ var (
 		{sessionAffinityTable, "SessionAffinity"},
 		{serviceLBTable, "ServiceLB"},
 		{endpointDNATTable, "EndpointDNAT"},
-		{MultiTierEgressRuleTable, "AntreaPolicyMultiTierEgressRule"},
-		{DefaultTierEgressRuleTable, "AntreaPolicyAppTierEgressRule"},
+		{AntreaPolicyEgressRuleTable, "AntreaPolicyEgressRule"},
 		{EgressRuleTable, "EgressRule"},
 		{EgressDefaultTable, "EgressDefaultRule"},
 		{EgressMetricTable, "EgressMetric"},
 		{l3ForwardingTable, "l3Forwarding"},
 		{l2ForwardingCalcTable, "L2Forwarding"},
-		{MultiTierIngressRuleTable, "AntreaPolicyMultiTierIngressRule"},
-		{DefaultTierIngressRuleTable, "AntreaPolicyAppTierIngressRule"},
+		{AntreaPolicyIngressRuleTable, "AntreaPolicyIngressRule"},
 		{IngressRuleTable, "IngressRule"},
 		{IngressDefaultTable, "IngressDefaultRule"},
 		{IngressMetricTable, "IngressMetric"},
@@ -148,29 +143,29 @@ func GetFlowTableNumber(tableName string) binding.TableIDType {
 
 func GetAntreaPolicyEgressTables() []binding.TableIDType {
 	return []binding.TableIDType{
-		MultiTierEgressRuleTable,
-		DefaultTierEgressRuleTable,
+		AntreaPolicyEgressRuleTable,
+		EgressDefaultTable,
 	}
 }
 
 func GetAntreaPolicyIngressTables() []binding.TableIDType {
 	return []binding.TableIDType{
-		MultiTierIngressRuleTable,
-		DefaultTierIngressRuleTable,
+		AntreaPolicyIngressRuleTable,
+		IngressDefaultTable,
 	}
 }
 
-func GetAntreaPolicySingleTierTables() []binding.TableIDType {
+func GetAntreaPolicyBaselineTierTables() []binding.TableIDType {
 	return []binding.TableIDType{
-		DefaultTierEgressRuleTable,
-		DefaultTierIngressRuleTable,
+		EgressDefaultTable,
+		IngressDefaultTable,
 	}
 }
 
 func GetAntreaPolicyMultiTierTables() []binding.TableIDType {
 	return []binding.TableIDType{
-		MultiTierEgressRuleTable,
-		MultiTierIngressRuleTable,
+		AntreaPolicyEgressRuleTable,
+		AntreaPolicyIngressRuleTable,
 	}
 }
 
@@ -1475,7 +1470,7 @@ func priorityIndexFunc(obj interface{}) ([]string, error) {
 func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) map[binding.TableIDType]binding.Table {
 	var egressEntryTable, IngressEntryTable binding.TableIDType
 	if enableAntreaNP {
-		egressEntryTable, IngressEntryTable = MultiTierEgressRuleTable, MultiTierIngressRuleTable
+		egressEntryTable, IngressEntryTable = AntreaPolicyEgressRuleTable, AntreaPolicyIngressRuleTable
 	} else {
 		egressEntryTable, IngressEntryTable = EgressRuleTable, IngressRuleTable
 	}
@@ -1526,10 +1521,8 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 	if !enableAntreaNP {
 		return pipeline
 	}
-	pipeline[MultiTierEgressRuleTable] = bridge.CreateTable(MultiTierEgressRuleTable, DefaultTierEgressRuleTable, binding.TableMissActionNext)
-	pipeline[DefaultTierEgressRuleTable] = bridge.CreateTable(DefaultTierEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
-	pipeline[MultiTierIngressRuleTable] = bridge.CreateTable(MultiTierIngressRuleTable, DefaultTierIngressRuleTable, binding.TableMissActionNext)
-	pipeline[DefaultTierIngressRuleTable] = bridge.CreateTable(DefaultTierIngressRuleTable, IngressRuleTable, binding.TableMissActionNext)
+	pipeline[AntreaPolicyEgressRuleTable] = bridge.CreateTable(AntreaPolicyEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
+	pipeline[AntreaPolicyIngressRuleTable] = bridge.CreateTable(AntreaPolicyIngressRuleTable, IngressRuleTable, binding.TableMissActionNext)
 	return pipeline
 }
 
