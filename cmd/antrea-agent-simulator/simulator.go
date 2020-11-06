@@ -1,30 +1,42 @@
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package main under directory cmd parses and validates user input,
+// instantiates and initializes objects imported from pkg, and runs
+// the process.
 package main
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent"
-
-	"context"
-
-	"k8s.io/apimachinery/pkg/util/wait"
-	componentbaseconfig "k8s.io/component-base/config"
-
-	//"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
-	//"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	//"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	"github.com/vmware-tanzu/antrea/pkg/version"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 )
@@ -67,20 +79,16 @@ func createClusterCli(kubeConfig *rest.Config) (clientset.Interface, aggregatorc
 
 func run(configFile string) error {
 	klog.Infof("Starting Antrea agent simulator (version %s)", version.GetFullVersion())
-	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
-	//k8sClient, _, crdClient, err := k8s.CreateClients(o.config.ClientConnection)
-	//k8sClient, _, _, err := createOutClusterCli(configFile)
 	k8sClient, _, _, err := createInClusterCli()
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
-	//informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
-	//crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 
 	nodeName, err := env.GetNodeName()
 	if err != nil {
 		return fmt.Errorf("failed to get hostname: %v", err)
 	}
+
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(componentbaseconfig.ClientConnectionConfiguration{}, k8sClient)
 
@@ -88,12 +96,12 @@ func run(configFile string) error {
 		return err
 	}
 
-	//create the stop chan with signals
+	// Create the stop chan with signals
 	stopCh := signals.RegisterSignalHandlers()
 
 	go antreaClientProvider.Run(stopCh)
 
-	//add loop to check whether client is ready
+	// Add loop to check whether client is ready
 	attempts := 0
 	if err := wait.PollImmediateUntil(200*time.Millisecond, func() (bool, error) {
 		if attempts%10 == 0 {
@@ -115,10 +123,10 @@ func run(configFile string) error {
 		FieldSelector: fields.OneTermEqualSelector("nodeName", nodeName).String(),
 	}
 	klog.Infof("nodename: %s", nodeName)
-	//get watchers from antrea client
+
 	fullSyncWaitGroup := sync.WaitGroup{}
 
-	//Wrapper watcher to call watch
+	// Wrapper watcher to call watch
 	networkPolicyControllerWatcher := &watchWrapper{
 		func() (watch.Interface, error) {
 			antreaClient, err := antreaClientProvider.GetAntreaClient()
@@ -154,7 +162,7 @@ func run(configFile string) error {
 	}
 	fullSyncWaitGroup.Add(3)
 
-	//call watch by goroutine with wait.NonSlidingUntil
+	// watch NetworkPolicies, AddressGroups, AppliedToGroups
 	go wait.NonSlidingUntil(networkPolicyControllerWatcher.watch, 5*time.Second, stopCh)
 	go wait.NonSlidingUntil(addressGroupWatcher.watch, 5*time.Second, stopCh)
 	go wait.NonSlidingUntil(appliedGroupWatcher.watch, 5*time.Second, stopCh)
@@ -166,7 +174,6 @@ func run(configFile string) error {
 }
 
 type watchWrapper struct {
-	//w                 watch.Interface
 	watchFunc         func() (watch.Interface, error)
 	name              string
 	fullSyncWaitGroup *sync.WaitGroup
@@ -180,18 +187,24 @@ type simulator struct {
 
 func (w *watchWrapper) watch() {
 	klog.Infof("Starting watch for %s", w.name)
+
+	// Call the watch func which is initialized in watchWrapper
 	watcher, err := w.watchFunc()
 	if err != nil {
 		klog.Warningf("Failed to start watch for %s: %v", w.name, err)
 		return
 	}
 	eventCount := 0
+
+	// Stop the watcher upon exit
 	defer func() {
 		klog.Infof("Stopped watch for %s, total items received %d", w.name, eventCount)
 		watcher.Stop()
 	}()
 	initCount := 0
 	w.fullSyncWaitGroup.Done()
+
+	// Watch the init events from chan, and log the events
 loop:
 	for {
 		select {
@@ -212,6 +225,7 @@ loop:
 	klog.Infof("Received %d init events for %s", initCount, w.name)
 	eventCount += initCount
 
+	// Watch the events from chan, and log the events
 	for {
 		select {
 		case event, ok := <-watcher.ResultChan():
