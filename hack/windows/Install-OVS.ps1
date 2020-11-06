@@ -129,11 +129,13 @@ function ConfigOVS() {
     }
     # Create and start ovsdb-server service.
     Log "Create and start ovsdb-server service"
-    sc.exe create ovsdb-server binPath= "$OVSInstallDir\usr\sbin\ovsdb-server.exe $OVSInstallDir\etc\openvswitch\conf.db  -vfile:info --remote=punix:db.sock  --remote=ptcp:6640  --log-file  --pidfile --service --service-monitor" start= auto
+    sc.exe create ovsdb-server binPath= "$OVSInstallDir\usr\sbin\ovsdb-server.exe $OVSInstallDir\etc\openvswitch\conf.db  -vfile:info --remote=punix:db.sock  --remote=ptcp:6640  --log-file  --pidfile --service" start= auto
+    sc.exe failure ovsdb-server reset= 0 actions= restart/0/restart/0/restart/0
     Start-Service ovsdb-server
     # Create and start ovs-vswitchd service.
     Log "Create and start ovs-vswitchd service."
-    sc.exe create ovs-vswitchd binpath="$OVSInstallDir\usr\sbin\ovs-vswitchd.exe  --pidfile -vfile:info --log-file  --service --service-monitor" start= auto
+    sc.exe create ovs-vswitchd binpath="$OVSInstallDir\usr\sbin\ovs-vswitchd.exe  --pidfile -vfile:info --log-file  --service" start= auto depend= "ovsdb-server"
+    sc.exe failure ovs-vswitchd reset= 0 actions= restart/0/restart/0/restart/0
     Start-Service ovs-vswitchd
     # Set OVS version.
     $OVS_VERSION=$(Get-Item $OVSInstallDir\driver\ovsext.sys).VersionInfo.ProductVersion
