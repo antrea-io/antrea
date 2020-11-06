@@ -677,8 +677,6 @@ func (c *client) SendTraceflowPacket(
 	inPort uint32,
 	outPort int32) error {
 
-	regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
-
 	packetOutBuilder := c.bridge.BuildPacketOut()
 	parsedSrcMAC, _ := net.ParseMAC(srcMAC)
 	parsedDstMAC, _ := net.ParseMAC(dstMAC)
@@ -724,30 +722,30 @@ func (c *client) SendTraceflowPacket(
 	if outPort != -1 {
 		packetOutBuilder = packetOutBuilder.SetOutport(uint32(outPort))
 	}
-	packetOutBuilder = packetOutBuilder.AddLoadAction(regName, uint64(dataplaneTag), OfTraceflowMarkRange)
+	packetOutBuilder = packetOutBuilder.AddLoadAction(binding.NxmFieldIPToS, uint64(dataplaneTag), traceflowTagToSRange)
 
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
 func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
-	flow := c.traceflowL2ForwardOutputFlow(dataplaneTag, cookie.Default)
+	flows := c.traceflowL2ForwardOutputFlows(dataplaneTag, cookie.Default)
+	if err := c.AddAll(flows); err != nil {
+		return err
+	}
+	flow := c.traceflowConnectionTrackFlows(dataplaneTag, cookie.Default)
 	if err := c.Add(flow); err != nil {
 		return err
 	}
-	flow = c.traceflowConnectionTrackFlows(dataplaneTag, cookie.Default)
-	if err := c.Add(flow); err != nil {
-		return err
-	}
-	flows := []binding.Flow{}
 	c.conjMatchFlowLock.Lock()
 	defer c.conjMatchFlowLock.Unlock()
+	flows = []binding.Flow{}
 	for _, ctx := range c.globalConjMatchFlowCache {
 		if ctx.dropFlow != nil {
 			flows = append(
 				flows,
 				ctx.dropFlow.CopyToBuilder(priorityNormal+2, false).
-					MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
+					MatchIPDscp(dataplaneTag).
 					SetHardTimeout(300).
 					Action().SendToController(uint8(PacketInReasonTF)).
 					Done())
