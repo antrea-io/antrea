@@ -109,7 +109,9 @@ func (m *Collector) collect() *statsCollection {
 	for ofID, ruleStats := range ruleStatsMap {
 		policyRef := m.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ofID)
 		if policyRef == nil {
-			klog.Infof("Cannot find NetworkPolicy that has ofID %v", ofID)
+			// This should not happen because the rule flow ID to rule mapping is
+			// preserved for 5 seconds even after the rule deletion.
+			klog.Warningf("Cannot find NetworkPolicy that has ofID %v", ofID)
 			continue
 		}
 		klog.V(4).Infof("Converting ofID %v to policy %s", ofID, policyRef.ToString())

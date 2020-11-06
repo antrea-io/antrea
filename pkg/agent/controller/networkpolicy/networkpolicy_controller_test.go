@@ -106,8 +106,8 @@ func (r *mockReconciler) RunIDAllocatorWorker(_ <-chan struct{}) {
 	return
 }
 
-func (r *mockReconciler) GetRuleByFlowID(_ uint32) (*agenttypes.PolicyRule, error) {
-	return nil, nil
+func (r *mockReconciler) GetRuleByFlowID(_ uint32) (*agenttypes.PolicyRule, bool, error) {
+	return nil, false, nil
 }
 
 func (r *mockReconciler) getLastRealized(ruleID string) (*CompletedRule, bool) {

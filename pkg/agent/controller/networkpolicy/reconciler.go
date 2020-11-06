@@ -17,7 +17,6 @@ package networkpolicy
 import (
 	"encoding/binary"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"net"
 	"strconv"
 	"strings"
@@ -26,6 +25,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
@@ -55,11 +55,11 @@ type Reconciler interface {
 	// Forget cleanups the actual state of Openflow entries of the specified ruleID.
 	Forget(ruleID string) error
 
-	// GetRuleByFlowID return the rule from async rule cache in idAllocator cache.
-	GetRuleByFlowID(ruleID uint32) (*types.PolicyRule, error)
+	// GetRuleByFlowID returns the rule from the async rule cache in idAllocator cache.
+	GetRuleByFlowID(ruleID uint32) (*types.PolicyRule, bool, error)
 
-	// RunIDAllocatorWorker runs worker that deletes rules from cache in idAllocator
-	// asynchronously.
+	// RunIDAllocatorWorker runs the worker that deletes the rules from the cache
+	// in idAllocator.
 	RunIDAllocatorWorker(stopCh <-chan struct{})
 }
 
@@ -205,18 +205,18 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 		ofClient:          ofClient,
 		ifaceStore:        ifaceStore,
 		lastRealizeds:     sync.Map{},
-		idAllocator: newIDAllocator(),
+		idAllocator:       newIDAllocator(),
 		priorityAssigners: priorityAssigners,
 	}
 	return reconciler
 }
 
-// RunIDAllocatorWorker runs worker that deletes rules from cache in idAllocator
-// asynchronously.
+// RunIDAllocatorWorker runs the worker that deletes the rules from the cache in
+// idAllocator.
 func (r *reconciler) RunIDAllocatorWorker(stopCh <-chan struct{}) {
-	wait.Until(r.idAllocator.worker, time.Second, stopCh)
-
-	<- stopCh
+	defer r.idAllocator.deleteQueue.ShutDown()
+	go wait.Until(r.idAllocator.worker, time.Second, stopCh)
+	<-stopCh
 }
 
 // Reconcile checks whether the provided rule have been enforced or not, and
@@ -504,7 +504,7 @@ func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) er
 	}
 	if err := r.ofClient.BatchInstallPolicyRuleFlows(allOFRules); err != nil {
 		for _, rule := range allOFRules {
-			r.idAllocator.forgetRule(rule.FlowID)
+			r.idAllocator.forgetRule(rule.FlowID, asyncDeleteInterval)
 		}
 		return err
 	}
@@ -556,7 +556,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				}
 				err := r.idAllocator.allocateForRule(ofRule)
 				if err != nil {
-					return fmt.Errorf("error allocating Openflow ID")
+					return err
 				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err
@@ -639,7 +639,7 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule) error {
 	klog.V(2).Infof("Installing ofRule %d (Direction: %v, From: %d, To: %d, Service: %d)",
 		ofRule.FlowID, ofRule.Direction, len(ofRule.From), len(ofRule.To), len(ofRule.Service))
 	if err := r.ofClient.InstallPolicyRuleFlows(ofRule); err != nil {
-		r.idAllocator.forgetRule(ofRule.FlowID)
+		r.idAllocator.forgetRule(ofRule.FlowID, asyncDeleteInterval)
 		return fmt.Errorf("error installing ofRule %v: %v", ofRule.FlowID, err)
 	}
 	return nil
@@ -691,7 +691,7 @@ func (r *reconciler) uninstallOFRule(ofID uint32, table binding.TableIDType) err
 			priorityAssigner.assigner.Release(uint16(priorityNum))
 		}
 	}
-	r.idAllocator.forgetRule(ofID)
+	r.idAllocator.forgetRule(ofID, asyncDeleteInterval)
 	return nil
 }
 
@@ -725,7 +725,7 @@ func (r *reconciler) Forget(ruleID string) error {
 	return nil
 }
 
-func (r *reconciler) GetRuleByFlowID(ruleFlowID uint32) (*types.PolicyRule, error) {
+func (r *reconciler) GetRuleByFlowID(ruleFlowID uint32) (*types.PolicyRule, bool, error) {
 	return r.idAllocator.getRuleFromAsyncCache(ruleFlowID)
 }
 

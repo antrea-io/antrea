@@ -27,10 +27,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
-const (
-	testAsyncDeleteInterval = time.Millisecond * 5
-)
-
 func TestNewIDAllocator(t *testing.T) {
 	tests := []struct {
 		name                    string
@@ -115,8 +111,9 @@ func TestAllocateForRule(t *testing.T) {
 				t.Fatalf("Got error %v, expected %v", actualErr, tt.expectedErr)
 			}
 			assert.Equalf(t, tt.expectedID, tt.rule.FlowID, "Got id %v, expected %v", tt.rule.FlowID, tt.expectedID)
-			ruleFromCache, err := a.getRuleFromAsyncCache(tt.expectedID)
-			assert.Nilf(t, err, "getRuleFromAsyncCache should return valid rule with id: %v", tt.expectedID)
+			ruleFromCache, exists, err := a.getRuleFromAsyncCache(tt.expectedID)
+			assert.Truef(t, exists, "Rule with id %d should present in the async rule cache", tt.expectedID)
+			assert.NoErrorf(t, err, "getRuleFromAsyncCache should return valid rule with id: %v", tt.expectedID)
 			assert.Equalf(t, tt.rule, ruleFromCache, "getRuleFromAsyncCache should return expected rule")
 		})
 	}
@@ -200,7 +197,7 @@ func TestWorker(t *testing.T) {
 			defer close(stopCh)
 			go wait.Until(a.worker, time.Millisecond, stopCh)
 
-			a.asyncRuleCache.deleteQueue.AddAfter(tt.rule.FlowID, testAsyncDeleteInterval)
+			a.forgetRule(tt.rule.FlowID, 5*time.Millisecond)
 			conditionFunc := func() (bool, error) {
 				a.Lock()
 				defer a.Unlock()
@@ -209,11 +206,12 @@ func TestWorker(t *testing.T) {
 				}
 				return false, nil
 			}
-			if err := wait.Poll(time.Millisecond, time.Millisecond * 10, conditionFunc); err != nil {
+			if err := wait.Poll(time.Millisecond, time.Millisecond*10, conditionFunc); err != nil {
 				t.Fatalf("Expect the rule with id %v to be deleted from async rule cache", tt.expectedID)
 			}
-			_, err := a.getRuleFromAsyncCache(tt.expectedID)
-			assert.NotNilf(t, err, "Expect rule to be not present in asyncRuleCache")
+			_, exists, err := a.getRuleFromAsyncCache(tt.expectedID)
+			assert.Falsef(t, exists, "Expect rule to be not present in asyncRuleCache")
+			assert.NoErrorf(t, err, "getRuleFromAsyncCache should not return any error")
 		})
 	}
 }

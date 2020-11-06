@@ -23,11 +23,12 @@ import (
 
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 )
 
-const (
+var (
 	asyncDeleteInterval = time.Second * 5
 )
 
@@ -49,7 +50,16 @@ type idAllocator struct {
 	availableSlice []uint32
 	// asyncRuleCache maintains rules in a cache and deletes the rules asynchronously
 	// after a given delete interval.
-	asyncRuleCache *asyncRuleCache
+	asyncRuleCache cache.Store
+	// deleteQueue is used to place a rule ID after a given delay for deleting the
+	// the rule in the asyncRuleCache.
+	deleteQueue workqueue.DelayingInterface
+}
+
+// asyncRuleCacheKeyFunc knows how to get key of a *rule.
+func asyncRuleCacheKeyFunc(obj interface{}) (string, error) {
+	rule := obj.(*types.PolicyRule)
+	return strconv.Itoa(int(rule.FlowID)), nil
 }
 
 // newIDAllocator returns a new *idAllocator.
@@ -57,7 +67,8 @@ type idAllocator struct {
 func newIDAllocator(allocatedIDs ...uint32) *idAllocator {
 	allocator := &idAllocator{
 		availableSet:   make(map[uint32]struct{}),
-		asyncRuleCache: NewAsyncRuleCache(),
+		asyncRuleCache: cache.NewStore(asyncRuleCacheKeyFunc),
+		deleteQueue:    workqueue.NewNamedDelayingQueue("async_delete_networkpolicyrule"),
 	}
 
 	var maxID uint32
@@ -92,7 +103,7 @@ func (a *idAllocator) allocateForRule(rule *types.PolicyRule) error {
 
 		// Add ID to the rule and the rule to asyncRuleCache.
 		rule.FlowID = id
-		a.asyncRuleCache.rules.Add(rule)
+		a.asyncRuleCache.Add(rule)
 
 		return nil
 	}
@@ -103,51 +114,55 @@ func (a *idAllocator) allocateForRule(rule *types.PolicyRule) error {
 
 	// Add ID to the rule and the rule to asyncRuleCache.
 	rule.FlowID = a.lastAllocatedID
-	a.asyncRuleCache.rules.Add(rule)
+	a.asyncRuleCache.Add(rule)
 
 	return nil
 }
 
 // forgetRule adds the rule to the async delete queue with a given delay.
-func (a *idAllocator) forgetRule(ruleID uint32) {
-	a.asyncRuleCache.deleteQueue.AddAfter(ruleID, asyncDeleteInterval)
+func (a *idAllocator) forgetRule(ruleID uint32, deleteAfter time.Duration) {
+	a.deleteQueue.AddAfter(ruleID, deleteAfter)
 }
 
-func (a *idAllocator) getRuleFromAsyncCache(ruleID uint32) (*types.PolicyRule, error) {
-	rule, exists, err := a.asyncRuleCache.rules.GetByKey(strconv.Itoa(int(ruleID)))
-	if err != nil {
-		return nil, err
+func (a *idAllocator) getRuleFromAsyncCache(ruleID uint32) (*types.PolicyRule, bool, error) {
+	rule, exists, err := a.asyncRuleCache.GetByKey(strconv.Itoa(int(ruleID)))
+	if err != nil || !exists {
+		return nil, exists, err
 	}
-	if !exists {
-		return nil, fmt.Errorf("rule is not present in async rule cache")
-	}
-	return rule.(*types.PolicyRule), nil
+	return rule.(*types.PolicyRule), exists, nil
 }
 
-// worker runs a worker thread that just dequeues item from asyncRuleCache.deleteQueue,
-// deletes them from asyncRuleCache, and releases the associated ID.
+// worker runs a worker thread that just dequeues item from deleteQueue,
+// deletes them from the asyncRuleCache, and releases the associated ID.
 func (a *idAllocator) worker() {
 	for a.processDeleteQueueItem() {
 	}
 }
 
 func (a *idAllocator) processDeleteQueueItem() bool {
-	key, quit := a.asyncRuleCache.deleteQueue.Get()
+	key, quit := a.deleteQueue.Get()
 	if quit {
 		return false
 	}
-	defer a.asyncRuleCache.deleteQueue.Done(key)
+	defer a.deleteQueue.Done(key)
 
-	rule, err := a.getRuleFromAsyncCache(key.(uint32))
-	if err != nil {
-		return false
+	rule, exists, err := a.getRuleFromAsyncCache(key.(uint32))
+	if !exists {
+		klog.Warningf("Rule with id %v is not present in the async rule cache", key.(uint32))
+		return true
 	}
-	if err := a.asyncRuleCache.rules.Delete(rule); err != nil {
-		return false
+	if err != nil {
+		klog.Errorf("Unexpected error when trying to get rule with id %d: %v", key.(uint32), err)
+		return true
+	}
+	if err := a.asyncRuleCache.Delete(rule); err != nil {
+		klog.Errorf("Unexpected error when trying to delete rule: %v", err)
+		return true
 	}
 
 	if err := a.release(key.(uint32)); err != nil {
-		return false
+		klog.Errorf("Unexpected error when releasing id %d: %v", key.(uint32), err)
+		return true
 	}
 
 	return true
@@ -167,23 +182,4 @@ func (a *idAllocator) release(id uint32) error {
 	a.availableSet[id] = struct{}{}
 	a.availableSlice = append(a.availableSlice, id)
 	return nil
-}
-
-// asyncRuleCache maintains asynchronous NetworkPolicy rule cache with ID as the key.
-type asyncRuleCache struct {
-	rules       cache.Store
-	deleteQueue workqueue.DelayingInterface
-}
-
-// asyncRuleCacheKeyFunc knows how to get key of a *rule.
-func asyncRuleCacheKeyFunc(obj interface{}) (string, error) {
-	rule := obj.(*types.PolicyRule)
-	return strconv.Itoa(int(rule.FlowID)), nil
-}
-
-func NewAsyncRuleCache() *asyncRuleCache {
-	return &asyncRuleCache{
-		rules:       cache.NewStore(asyncRuleCacheKeyFunc),
-		deleteQueue: workqueue.NewNamedDelayingQueue("async_delete_networkpolicyrule"),
-	}
 }
