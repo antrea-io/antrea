@@ -48,9 +48,9 @@ func objectTransform(o interface{}) (interface{}, error) {
 
 func listTransform(l interface{}) (interface{}, error) {
 	policyList := l.(*cpv1beta1.NetworkPolicyList)
-	result := []Response{}
-	for _, item := range policyList.Items {
-		o, _ := objectTransform(&item)
+	result := make([]Response, 0, len(policyList.Items))
+	for i := range policyList.Items {
+		o, _ := objectTransform(&policyList.Items[i])
 		result = append(result, o.(Response))
 	}
 	return result, nil

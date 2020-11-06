@@ -78,16 +78,14 @@ func TestRouteOperation(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(routes2))
 
-	desiredDestinations := []string{
-		dest2,
-	}
-	err = client.Reconcile(desiredDestinations)
+	err = client.Reconcile([]string{dest2})
 	require.Nil(t, err)
 	routes3, err := nr.GetNetRoutes(gwLink, destCIDR1)
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes3))
 
 	err = client.DeleteRoutes(destCIDR2)
+	require.Nil(t, err)
 	routes4, err := nr.GetNetRoutes(gwLink, destCIDR2)
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes4))

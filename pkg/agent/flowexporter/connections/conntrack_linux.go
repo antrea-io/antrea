@@ -97,7 +97,8 @@ func (nfct *netFilterConnTrack) DumpFilter(filter conntrack.Filter) ([]*flowexpo
 		return nil, err
 	}
 	antreaConns := make([]*flowexporter.Connection, len(conns))
-	for i, conn := range conns {
+	for i := range conns {
+		conn := conns[i]
 		antreaConns[i] = netlinkFlowToAntreaConnection(&conn)
 	}
 

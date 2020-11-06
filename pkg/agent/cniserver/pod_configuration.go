@@ -56,7 +56,7 @@ const (
 )
 
 const (
-	defaultOVSInterfaceType int = iota
+	defaultOVSInterfaceType int = iota //nolint suppress deadcode check for windows
 	internalOVSInterfaceType
 )
 

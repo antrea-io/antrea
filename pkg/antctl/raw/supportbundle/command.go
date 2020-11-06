@@ -294,7 +294,8 @@ func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antre
 	if err != nil {
 		return nil, err
 	}
-	for _, node := range nodeList.Items {
+	for i := range nodeList.Items {
+		node := nodeList.Items[i]
 		if match, _ := filepath.Match(nameFilter, node.Name); !match {
 			continue
 		}

@@ -44,8 +44,8 @@ type fwRuleProtocol string
 
 const (
 	fwRuleIPProtocol  fwRuleProtocol = "Any"
-	fwRuleTCPProtocol fwRuleProtocol = "TCP"
-	fwRuleUDPProtocol fwRuleProtocol = "UDP"
+	fwRuleTCPProtocol fwRuleProtocol = "TCP" //nolint: deadcode
+	fwRuleUDPProtocol fwRuleProtocol = "UDP" //nolint: deadcode
 )
 
 const (
