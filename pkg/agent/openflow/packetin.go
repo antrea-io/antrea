@@ -27,10 +27,10 @@ type PacketInHandler interface {
 }
 
 const (
-	// Action explicitly output to controller.
-	ofprAction ofpPacketInReason = 1
 	// Max packetInQueue size.
 	packetInQueueSize int = 256
+	// PacketIn reasons
+	PacketInReasonTF ofpPacketInReason = 1
 )
 
 func (c *client) RegisterPacketInHandler(packetHandlerName string, packetInHandler interface{}) {
@@ -47,7 +47,7 @@ func (c *client) StartPacketInHandler(stopCh <-chan struct{}) {
 		return
 	}
 	ch := make(chan *ofctrl.PacketIn)
-	err := c.SubscribePacketIn(uint8(ofprAction), ch)
+	err := c.SubscribePacketIn(uint8(PacketInReasonTF), ch)
 	if err != nil {
 		klog.Errorf("Subscribe PacketIn failed %+v", err)
 		return

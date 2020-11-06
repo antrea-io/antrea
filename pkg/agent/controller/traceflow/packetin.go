@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -70,13 +71,16 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	var match *ofctrl.MatchField
 
 	// Get data plane tag.
-	if match = getMatchRegField(matchers, uint32(openflow.TraceflowReg)); match == nil {
-		return nil, nil, errors.New("traceflow data plane tag not found")
-	}
-	rngTag := openflow13.NewNXRange(int(openflow.OfTraceflowMarkRange[0]), int(openflow.OfTraceflowMarkRange[1]))
-	tag, err := getInfoInReg(match, rngTag)
-	if err != nil {
-		return nil, nil, err
+	// Directly read data plane tag from packet.
+	var tag uint8
+	if pktIn.Data.Ethertype == protocol.IPv4_MSG {
+		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
+		if !ok {
+			return nil, nil, errors.New("invalid traceflow IPv4 packet")
+		}
+		tag = ipPacket.DSCP
+	} else {
+		return nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", pktIn.Data.Ethertype)
 	}
 
 	// Get traceflow CRD from cache by data plane tag.
@@ -176,10 +180,20 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 				return nil, nil, err
 			}
 		}
-		if tunnelDstIP != "" && tunnelDstIP != c.nodeConfig.NodeIPAddr.IP.String() {
+		var outputPort uint32
+		if match = getMatchRegField(matchers, uint32(openflow.PortCacheReg)); match != nil {
+			outputPort, err = getInfoInReg(match, nil)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		if (c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.DefaultTunOFPort) || outputPort == config.HostGatewayOFPort {
+			// Output port is Tunnel/Gateway port, packet is forwarded.
+			// tunnelDstIP is valid IP in encapMode, and empty string in other modes.
 			ob.TunnelDstIP = tunnelDstIP
 			ob.Action = opsv1alpha1.Forwarded
 		} else {
+			// Output port is Pod port, packet is delivered.
 			ob.Action = opsv1alpha1.Delivered
 		}
 		ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))

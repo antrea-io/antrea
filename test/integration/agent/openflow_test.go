@@ -242,11 +242,7 @@ func testInitialize(t *testing.T, config *testConfig) {
 }
 
 func testInstallTunnelFlows(t *testing.T, config *testConfig) {
-	err := c.InitialTLVMap()
-	if err != nil {
-		t.Fatalf("Failed to install TLV Map: %v", err)
-	}
-	err = c.InstallDefaultTunnelFlows(config.tunnelOFPort)
+	err := c.InstallDefaultTunnelFlows(config.tunnelOFPort)
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries for tunnel port: %v", err)
 	}
