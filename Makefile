@@ -159,7 +159,7 @@ antctl-release:
 .linux-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover github.com/vmware-tanzu/antrea/pkg/...
+	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover github.com/vmware-tanzu/antrea/cmd/... github.com/vmware-tanzu/antrea/pkg/...
 
 .PHONY: tidy
 tidy:
