@@ -30,8 +30,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
-func newAppliedToGroupPodMember(name, namespace string) *controlplane.GroupMemberPod {
-	return &controlplane.GroupMemberPod{Pod: &controlplane.PodReference{Name: name, Namespace: namespace}}
+func newAppliedToGroupPodMember(name, namespace string) *controlplane.GroupMember {
+	return &controlplane.GroupMember{Pod: &controlplane.PodReference{Name: name, Namespace: namespace}}
 }
 
 func newAppliedToGroupMemberExternalEntity(name, namespace string) *controlplane.GroupMember {
@@ -60,14 +60,14 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 			fieldSelector: fields.Everything(),
 			operations: func(store storage.Interface) {
 				store.Create(&types.AppliedToGroup{
-					Name:       "foo",
-					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-					PodsByNode: map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node2": controlplane.NewGroupMemberPodSet(pod2)},
+					Name:              "foo",
+					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1), "node2": controlplane.NewGroupMemberSet(pod2)},
 				})
 				store.Update(&types.AppliedToGroup{
-					Name:       "foo",
-					SpanMeta:   types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-					PodsByNode: map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node2": controlplane.NewGroupMemberPodSet(pod3)},
+					Name:              "foo",
+					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1), "node2": controlplane.NewGroupMemberSet(pod3)},
 				})
 				store.Create(&types.AppliedToGroup{
 					Name:              "bar",
@@ -83,13 +83,13 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 			expected: []watch.Event{
 				{Type: watch.Bookmark, Object: nil},
 				{Type: watch.Added, Object: &controlplane.AppliedToGroup{
-					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-					Pods:       []controlplane.GroupMemberPod{*pod1, *pod2},
+					ObjectMeta:   metav1.ObjectMeta{Name: "foo"},
+					GroupMembers: []controlplane.GroupMember{*pod1, *pod2},
 				}},
 				{Type: watch.Modified, Object: &controlplane.AppliedToGroupPatch{
-					ObjectMeta:  metav1.ObjectMeta{Name: "foo"},
-					AddedPods:   []controlplane.GroupMemberPod{*pod3},
-					RemovedPods: []controlplane.GroupMemberPod{*pod2},
+					ObjectMeta:          metav1.ObjectMeta{Name: "foo"},
+					AddedGroupMembers:   []controlplane.GroupMember{*pod3},
+					RemovedGroupMembers: []controlplane.GroupMember{*pod2},
 				}},
 				{Type: watch.Added, Object: &controlplane.AppliedToGroup{
 					ObjectMeta:   metav1.ObjectMeta{Name: "bar"},
@@ -110,51 +110,43 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 				store.Create(&types.AppliedToGroup{
 					Name:              "foo",
 					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
-					PodsByNode:        map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node2": controlplane.NewGroupMemberPodSet(pod2)},
-					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1), "node2": controlplane.NewGroupMemberSet(ee2)},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1, ee1), "node2": controlplane.NewGroupMemberSet(pod2, ee2)},
 				})
 				// This should be seen as an added event as it makes foo span node3 for the first time.
 				store.Update(&types.AppliedToGroup{
 					Name:              "foo",
 					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
-					PodsByNode:        map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node3": controlplane.NewGroupMemberPodSet(pod3)},
-					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1), "node2": controlplane.NewGroupMemberSet(ee3)},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1, ee1), "node3": controlplane.NewGroupMemberSet(pod3, ee3)},
 				})
 				// This should be seen as a modified event as it updates appliedToGroups of node3.
 				store.Update(&types.AppliedToGroup{
 					Name:              "foo",
 					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
-					PodsByNode:        map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1), "node3": controlplane.NewGroupMemberPodSet(pod4)},
-					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1), "node3": controlplane.NewGroupMemberSet(ee4)},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1, ee1), "node3": controlplane.NewGroupMemberSet(pod4, ee4)},
 				})
 				// This should not be seen as a modified event as the change doesn't span node3.
 				store.Update(&types.AppliedToGroup{
 					Name:              "foo",
 					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node3")},
-					PodsByNode:        map[string]controlplane.GroupMemberPodSet{"node3": controlplane.NewGroupMemberPodSet(pod4)},
-					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node3": controlplane.NewGroupMemberSet(ee4)},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node3": controlplane.NewGroupMemberSet(pod4, ee4)},
 				})
 				// This should be seen as a deleted event as it makes foo not span node3 any more.
 				store.Update(&types.AppliedToGroup{
 					Name:              "foo",
 					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1")},
-					PodsByNode:        map[string]controlplane.GroupMemberPodSet{"node1": controlplane.NewGroupMemberPodSet(pod1)},
-					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1)},
+					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1, ee1)},
 				})
 			},
 			expected: []watch.Event{
 				{Type: watch.Bookmark, Object: nil},
 				{Type: watch.Added, Object: &controlplane.AppliedToGroup{
 					ObjectMeta:   metav1.ObjectMeta{Name: "foo"},
-					Pods:         []controlplane.GroupMemberPod{*pod3},
-					GroupMembers: []controlplane.GroupMember{*ee3},
+					GroupMembers: []controlplane.GroupMember{*pod3, *ee3},
 				}},
 				{Type: watch.Modified, Object: &controlplane.AppliedToGroupPatch{
 					ObjectMeta:          metav1.ObjectMeta{Name: "foo"},
-					AddedPods:           []controlplane.GroupMemberPod{*pod4},
-					RemovedPods:         []controlplane.GroupMemberPod{*pod3},
-					AddedGroupMembers:   []controlplane.GroupMember{*ee4},
-					RemovedGroupMembers: []controlplane.GroupMember{*ee3},
+					AddedGroupMembers:   []controlplane.GroupMember{*pod4, *ee4},
+					RemovedGroupMembers: []controlplane.GroupMember{*pod3, *ee3},
 				}},
 				{Type: watch.Deleted, Object: &controlplane.AppliedToGroup{
 					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
@@ -183,8 +175,8 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}
-					if !assert.ElementsMatch(t, expectedObj.Pods, actualObj.Pods) {
-						t.Errorf("Expected Pods %v, got %v", expectedObj.Pods, actualObj.Pods)
+					if !assert.ElementsMatch(t, expectedObj.GroupMembers, actualObj.GroupMembers) {
+						t.Errorf("Expected GroupMembers %v, got %v", expectedObj.GroupMembers, actualObj.GroupMembers)
 					}
 				case watch.Modified:
 					actualObj := actualEvent.Object.(*controlplane.AppliedToGroupPatch)
@@ -192,11 +184,11 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
 						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
 					}
-					if !assert.ElementsMatch(t, expectedObj.AddedPods, actualObj.AddedPods) {
-						t.Errorf("Expected Pods %v, got %v", expectedObj.AddedPods, actualObj.AddedPods)
+					if !assert.ElementsMatch(t, expectedObj.AddedGroupMembers, actualObj.AddedGroupMembers) {
+						t.Errorf("Expected GroupMembers %v, got %v", expectedObj.AddedGroupMembers, actualObj.AddedGroupMembers)
 					}
-					if !assert.ElementsMatch(t, expectedObj.RemovedPods, actualObj.RemovedPods) {
-						t.Errorf("Expected Pods %v, got %v", expectedObj.RemovedPods, actualObj.RemovedPods)
+					if !assert.ElementsMatch(t, expectedObj.RemovedGroupMembers, actualObj.RemovedGroupMembers) {
+						t.Errorf("Expected GroupMembers %v, got %v", expectedObj.RemovedGroupMembers, actualObj.RemovedGroupMembers)
 					}
 				}
 			}

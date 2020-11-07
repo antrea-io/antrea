@@ -36,16 +36,6 @@ func init() {
 // RegisterConversions adds conversion functions to the given scheme.
 // Public to allow building arbitrary schemes.
 func RegisterConversions(s *runtime.Scheme) error {
-	if err := s.AddGeneratedConversionFunc((*AddressGroup)(nil), (*controlplane.AddressGroup)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_AddressGroup_To_controlplane_AddressGroup(a.(*AddressGroup), b.(*controlplane.AddressGroup), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*controlplane.AddressGroup)(nil), (*AddressGroup)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_controlplane_AddressGroup_To_v1beta1_AddressGroup(a.(*controlplane.AddressGroup), b.(*AddressGroup), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*AddressGroupList)(nil), (*controlplane.AddressGroupList)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_AddressGroupList_To_controlplane_AddressGroupList(a.(*AddressGroupList), b.(*controlplane.AddressGroupList), scope)
 	}); err != nil {
@@ -53,26 +43,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*controlplane.AddressGroupList)(nil), (*AddressGroupList)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_controlplane_AddressGroupList_To_v1beta1_AddressGroupList(a.(*controlplane.AddressGroupList), b.(*AddressGroupList), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*AddressGroupPatch)(nil), (*controlplane.AddressGroupPatch)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_AddressGroupPatch_To_controlplane_AddressGroupPatch(a.(*AddressGroupPatch), b.(*controlplane.AddressGroupPatch), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*controlplane.AddressGroupPatch)(nil), (*AddressGroupPatch)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(a.(*controlplane.AddressGroupPatch), b.(*AddressGroupPatch), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*AppliedToGroup)(nil), (*controlplane.AppliedToGroup)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_AppliedToGroup_To_controlplane_AppliedToGroup(a.(*AppliedToGroup), b.(*controlplane.AppliedToGroup), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*controlplane.AppliedToGroup)(nil), (*AppliedToGroup)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_controlplane_AppliedToGroup_To_v1beta1_AppliedToGroup(a.(*controlplane.AppliedToGroup), b.(*AppliedToGroup), scope)
 	}); err != nil {
 		return err
 	}
@@ -86,26 +56,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*AppliedToGroupPatch)(nil), (*controlplane.AppliedToGroupPatch)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch(a.(*AppliedToGroupPatch), b.(*controlplane.AppliedToGroupPatch), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*controlplane.AppliedToGroupPatch)(nil), (*AppliedToGroupPatch)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(a.(*controlplane.AppliedToGroupPatch), b.(*AppliedToGroupPatch), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*Endpoint)(nil), (*controlplane.Endpoint)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_Endpoint_To_controlplane_Endpoint(a.(*Endpoint), b.(*controlplane.Endpoint), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*controlplane.Endpoint)(nil), (*Endpoint)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_controlplane_Endpoint_To_v1beta1_Endpoint(a.(*controlplane.Endpoint), b.(*Endpoint), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*ExternalEntityReference)(nil), (*controlplane.ExternalEntityReference)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_ExternalEntityReference_To_controlplane_ExternalEntityReference(a.(*ExternalEntityReference), b.(*controlplane.ExternalEntityReference), scope)
 	}); err != nil {
@@ -113,26 +63,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*controlplane.ExternalEntityReference)(nil), (*ExternalEntityReference)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_controlplane_ExternalEntityReference_To_v1beta1_ExternalEntityReference(a.(*controlplane.ExternalEntityReference), b.(*ExternalEntityReference), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*GroupMember)(nil), (*controlplane.GroupMember)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_GroupMember_To_controlplane_GroupMember(a.(*GroupMember), b.(*controlplane.GroupMember), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*controlplane.GroupMember)(nil), (*GroupMember)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_controlplane_GroupMember_To_v1beta1_GroupMember(a.(*controlplane.GroupMember), b.(*GroupMember), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*GroupMemberPod)(nil), (*controlplane.GroupMemberPod)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMemberPod(a.(*GroupMemberPod), b.(*controlplane.GroupMemberPod), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*controlplane.GroupMemberPod)(nil), (*GroupMemberPod)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_controlplane_GroupMemberPod_To_v1beta1_GroupMemberPod(a.(*controlplane.GroupMemberPod), b.(*GroupMemberPod), scope)
 	}); err != nil {
 		return err
 	}
@@ -256,36 +186,115 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddConversionFunc((*controlplane.AddressGroupPatch)(nil), (*AddressGroupPatch)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(a.(*controlplane.AddressGroupPatch), b.(*AddressGroupPatch), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*controlplane.AddressGroup)(nil), (*AddressGroup)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_AddressGroup_To_v1beta1_AddressGroup(a.(*controlplane.AddressGroup), b.(*AddressGroup), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*controlplane.AppliedToGroupPatch)(nil), (*AppliedToGroupPatch)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(a.(*controlplane.AppliedToGroupPatch), b.(*AppliedToGroupPatch), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*controlplane.AppliedToGroup)(nil), (*AppliedToGroup)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_AppliedToGroup_To_v1beta1_AppliedToGroup(a.(*controlplane.AppliedToGroup), b.(*AppliedToGroup), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*controlplane.GroupMember)(nil), (*GroupMember)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_GroupMember_To_v1beta1_GroupMember(a.(*controlplane.GroupMember), b.(*GroupMember), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*controlplane.GroupMember)(nil), (*GroupMemberPod)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(a.(*controlplane.GroupMember), b.(*GroupMemberPod), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*AddressGroupPatch)(nil), (*controlplane.AddressGroupPatch)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_AddressGroupPatch_To_controlplane_AddressGroupPatch(a.(*AddressGroupPatch), b.(*controlplane.AddressGroupPatch), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*AddressGroup)(nil), (*controlplane.AddressGroup)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_AddressGroup_To_controlplane_AddressGroup(a.(*AddressGroup), b.(*controlplane.AddressGroup), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*AppliedToGroupPatch)(nil), (*controlplane.AppliedToGroupPatch)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch(a.(*AppliedToGroupPatch), b.(*controlplane.AppliedToGroupPatch), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*AppliedToGroup)(nil), (*controlplane.AppliedToGroup)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_AppliedToGroup_To_controlplane_AppliedToGroup(a.(*AppliedToGroup), b.(*controlplane.AppliedToGroup), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*GroupMemberPod)(nil), (*controlplane.GroupMember)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(a.(*GroupMemberPod), b.(*controlplane.GroupMember), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*GroupMember)(nil), (*controlplane.GroupMember)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_GroupMember_To_controlplane_GroupMember(a.(*GroupMember), b.(*controlplane.GroupMember), scope)
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
 func autoConvert_v1beta1_AddressGroup_To_controlplane_AddressGroup(in *AddressGroup, out *controlplane.AddressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.Pods = *(*[]controlplane.GroupMemberPod)(unsafe.Pointer(&in.Pods))
-	out.GroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.GroupMembers))
+	// WARNING: in.Pods requires manual conversion: does not exist in peer-type
+	if in.GroupMembers != nil {
+		in, out := &in.GroupMembers, &out.GroupMembers
+		*out = make([]controlplane.GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.GroupMembers = nil
+	}
 	return nil
-}
-
-// Convert_v1beta1_AddressGroup_To_controlplane_AddressGroup is an autogenerated conversion function.
-func Convert_v1beta1_AddressGroup_To_controlplane_AddressGroup(in *AddressGroup, out *controlplane.AddressGroup, s conversion.Scope) error {
-	return autoConvert_v1beta1_AddressGroup_To_controlplane_AddressGroup(in, out, s)
 }
 
 func autoConvert_controlplane_AddressGroup_To_v1beta1_AddressGroup(in *controlplane.AddressGroup, out *AddressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.Pods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.Pods))
-	out.GroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.GroupMembers))
+	if in.GroupMembers != nil {
+		in, out := &in.GroupMembers, &out.GroupMembers
+		*out = make([]GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.GroupMembers = nil
+	}
 	return nil
-}
-
-// Convert_controlplane_AddressGroup_To_v1beta1_AddressGroup is an autogenerated conversion function.
-func Convert_controlplane_AddressGroup_To_v1beta1_AddressGroup(in *controlplane.AddressGroup, out *AddressGroup, s conversion.Scope) error {
-	return autoConvert_controlplane_AddressGroup_To_v1beta1_AddressGroup(in, out, s)
 }
 
 func autoConvert_v1beta1_AddressGroupList_To_controlplane_AddressGroupList(in *AddressGroupList, out *controlplane.AddressGroupList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	out.Items = *(*[]controlplane.AddressGroup)(unsafe.Pointer(&in.Items))
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]controlplane.AddressGroup, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_AddressGroup_To_controlplane_AddressGroup(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
 	return nil
 }
 
@@ -296,7 +305,17 @@ func Convert_v1beta1_AddressGroupList_To_controlplane_AddressGroupList(in *Addre
 
 func autoConvert_controlplane_AddressGroupList_To_v1beta1_AddressGroupList(in *controlplane.AddressGroupList, out *AddressGroupList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	out.Items = *(*[]AddressGroup)(unsafe.Pointer(&in.Items))
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]AddressGroup, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_AddressGroup_To_v1beta1_AddressGroup(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
 	return nil
 }
 
@@ -307,59 +326,106 @@ func Convert_controlplane_AddressGroupList_To_v1beta1_AddressGroupList(in *contr
 
 func autoConvert_v1beta1_AddressGroupPatch_To_controlplane_AddressGroupPatch(in *AddressGroupPatch, out *controlplane.AddressGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.AddedPods = *(*[]controlplane.GroupMemberPod)(unsafe.Pointer(&in.AddedPods))
-	out.RemovedPods = *(*[]controlplane.GroupMemberPod)(unsafe.Pointer(&in.RemovedPods))
-	out.AddedGroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.AddedGroupMembers))
-	out.RemovedGroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.RemovedGroupMembers))
+	// WARNING: in.AddedPods requires manual conversion: does not exist in peer-type
+	// WARNING: in.RemovedPods requires manual conversion: does not exist in peer-type
+	if in.AddedGroupMembers != nil {
+		in, out := &in.AddedGroupMembers, &out.AddedGroupMembers
+		*out = make([]controlplane.GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.AddedGroupMembers = nil
+	}
+	if in.RemovedGroupMembers != nil {
+		in, out := &in.RemovedGroupMembers, &out.RemovedGroupMembers
+		*out = make([]controlplane.GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.RemovedGroupMembers = nil
+	}
 	return nil
-}
-
-// Convert_v1beta1_AddressGroupPatch_To_controlplane_AddressGroupPatch is an autogenerated conversion function.
-func Convert_v1beta1_AddressGroupPatch_To_controlplane_AddressGroupPatch(in *AddressGroupPatch, out *controlplane.AddressGroupPatch, s conversion.Scope) error {
-	return autoConvert_v1beta1_AddressGroupPatch_To_controlplane_AddressGroupPatch(in, out, s)
 }
 
 func autoConvert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *controlplane.AddressGroupPatch, out *AddressGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.AddedPods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.AddedPods))
-	out.RemovedPods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.RemovedPods))
-	out.AddedGroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.AddedGroupMembers))
-	out.RemovedGroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.RemovedGroupMembers))
+	if in.AddedGroupMembers != nil {
+		in, out := &in.AddedGroupMembers, &out.AddedGroupMembers
+		*out = make([]GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.AddedGroupMembers = nil
+	}
+	if in.RemovedGroupMembers != nil {
+		in, out := &in.RemovedGroupMembers, &out.RemovedGroupMembers
+		*out = make([]GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.RemovedGroupMembers = nil
+	}
 	return nil
-}
-
-// Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch is an autogenerated conversion function.
-func Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *controlplane.AddressGroupPatch, out *AddressGroupPatch, s conversion.Scope) error {
-	return autoConvert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in, out, s)
 }
 
 func autoConvert_v1beta1_AppliedToGroup_To_controlplane_AppliedToGroup(in *AppliedToGroup, out *controlplane.AppliedToGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.Pods = *(*[]controlplane.GroupMemberPod)(unsafe.Pointer(&in.Pods))
-	out.GroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.GroupMembers))
+	// WARNING: in.Pods requires manual conversion: does not exist in peer-type
+	if in.GroupMembers != nil {
+		in, out := &in.GroupMembers, &out.GroupMembers
+		*out = make([]controlplane.GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.GroupMembers = nil
+	}
 	return nil
-}
-
-// Convert_v1beta1_AppliedToGroup_To_controlplane_AppliedToGroup is an autogenerated conversion function.
-func Convert_v1beta1_AppliedToGroup_To_controlplane_AppliedToGroup(in *AppliedToGroup, out *controlplane.AppliedToGroup, s conversion.Scope) error {
-	return autoConvert_v1beta1_AppliedToGroup_To_controlplane_AppliedToGroup(in, out, s)
 }
 
 func autoConvert_controlplane_AppliedToGroup_To_v1beta1_AppliedToGroup(in *controlplane.AppliedToGroup, out *AppliedToGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.Pods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.Pods))
-	out.GroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.GroupMembers))
+	if in.GroupMembers != nil {
+		in, out := &in.GroupMembers, &out.GroupMembers
+		*out = make([]GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.GroupMembers = nil
+	}
 	return nil
-}
-
-// Convert_controlplane_AppliedToGroup_To_v1beta1_AppliedToGroup is an autogenerated conversion function.
-func Convert_controlplane_AppliedToGroup_To_v1beta1_AppliedToGroup(in *controlplane.AppliedToGroup, out *AppliedToGroup, s conversion.Scope) error {
-	return autoConvert_controlplane_AppliedToGroup_To_v1beta1_AppliedToGroup(in, out, s)
 }
 
 func autoConvert_v1beta1_AppliedToGroupList_To_controlplane_AppliedToGroupList(in *AppliedToGroupList, out *controlplane.AppliedToGroupList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	out.Items = *(*[]controlplane.AppliedToGroup)(unsafe.Pointer(&in.Items))
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]controlplane.AppliedToGroup, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_AppliedToGroup_To_controlplane_AppliedToGroup(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
 	return nil
 }
 
@@ -370,7 +436,17 @@ func Convert_v1beta1_AppliedToGroupList_To_controlplane_AppliedToGroupList(in *A
 
 func autoConvert_controlplane_AppliedToGroupList_To_v1beta1_AppliedToGroupList(in *controlplane.AppliedToGroupList, out *AppliedToGroupList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	out.Items = *(*[]AppliedToGroup)(unsafe.Pointer(&in.Items))
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]AppliedToGroup, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_AppliedToGroup_To_v1beta1_AppliedToGroup(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
 	return nil
 }
 
@@ -381,52 +457,58 @@ func Convert_controlplane_AppliedToGroupList_To_v1beta1_AppliedToGroupList(in *c
 
 func autoConvert_v1beta1_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch(in *AppliedToGroupPatch, out *controlplane.AppliedToGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.AddedPods = *(*[]controlplane.GroupMemberPod)(unsafe.Pointer(&in.AddedPods))
-	out.RemovedPods = *(*[]controlplane.GroupMemberPod)(unsafe.Pointer(&in.RemovedPods))
-	out.AddedGroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.AddedGroupMembers))
-	out.RemovedGroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.RemovedGroupMembers))
+	// WARNING: in.AddedPods requires manual conversion: does not exist in peer-type
+	// WARNING: in.RemovedPods requires manual conversion: does not exist in peer-type
+	if in.AddedGroupMembers != nil {
+		in, out := &in.AddedGroupMembers, &out.AddedGroupMembers
+		*out = make([]controlplane.GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.AddedGroupMembers = nil
+	}
+	if in.RemovedGroupMembers != nil {
+		in, out := &in.RemovedGroupMembers, &out.RemovedGroupMembers
+		*out = make([]controlplane.GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.RemovedGroupMembers = nil
+	}
 	return nil
-}
-
-// Convert_v1beta1_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch is an autogenerated conversion function.
-func Convert_v1beta1_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch(in *AppliedToGroupPatch, out *controlplane.AppliedToGroupPatch, s conversion.Scope) error {
-	return autoConvert_v1beta1_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch(in, out, s)
 }
 
 func autoConvert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in *controlplane.AppliedToGroupPatch, out *AppliedToGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.AddedPods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.AddedPods))
-	out.RemovedPods = *(*[]GroupMemberPod)(unsafe.Pointer(&in.RemovedPods))
-	out.AddedGroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.AddedGroupMembers))
-	out.RemovedGroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.RemovedGroupMembers))
+	if in.AddedGroupMembers != nil {
+		in, out := &in.AddedGroupMembers, &out.AddedGroupMembers
+		*out = make([]GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.AddedGroupMembers = nil
+	}
+	if in.RemovedGroupMembers != nil {
+		in, out := &in.RemovedGroupMembers, &out.RemovedGroupMembers
+		*out = make([]GroupMember, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.RemovedGroupMembers = nil
+	}
 	return nil
-}
-
-// Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch is an autogenerated conversion function.
-func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in *controlplane.AppliedToGroupPatch, out *AppliedToGroupPatch, s conversion.Scope) error {
-	return autoConvert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in, out, s)
-}
-
-func autoConvert_v1beta1_Endpoint_To_controlplane_Endpoint(in *Endpoint, out *controlplane.Endpoint, s conversion.Scope) error {
-	out.IP = *(*controlplane.IPAddress)(unsafe.Pointer(&in.IP))
-	out.Ports = *(*[]controlplane.NamedPort)(unsafe.Pointer(&in.Ports))
-	return nil
-}
-
-// Convert_v1beta1_Endpoint_To_controlplane_Endpoint is an autogenerated conversion function.
-func Convert_v1beta1_Endpoint_To_controlplane_Endpoint(in *Endpoint, out *controlplane.Endpoint, s conversion.Scope) error {
-	return autoConvert_v1beta1_Endpoint_To_controlplane_Endpoint(in, out, s)
-}
-
-func autoConvert_controlplane_Endpoint_To_v1beta1_Endpoint(in *controlplane.Endpoint, out *Endpoint, s conversion.Scope) error {
-	out.IP = *(*IPAddress)(unsafe.Pointer(&in.IP))
-	out.Ports = *(*[]NamedPort)(unsafe.Pointer(&in.Ports))
-	return nil
-}
-
-// Convert_controlplane_Endpoint_To_v1beta1_Endpoint is an autogenerated conversion function.
-func Convert_controlplane_Endpoint_To_v1beta1_Endpoint(in *controlplane.Endpoint, out *Endpoint, s conversion.Scope) error {
-	return autoConvert_controlplane_Endpoint_To_v1beta1_Endpoint(in, out, s)
 }
 
 func autoConvert_v1beta1_ExternalEntityReference_To_controlplane_ExternalEntityReference(in *ExternalEntityReference, out *controlplane.ExternalEntityReference, s conversion.Scope) error {
@@ -454,49 +536,16 @@ func Convert_controlplane_ExternalEntityReference_To_v1beta1_ExternalEntityRefer
 func autoConvert_v1beta1_GroupMember_To_controlplane_GroupMember(in *GroupMember, out *controlplane.GroupMember, s conversion.Scope) error {
 	out.Pod = (*controlplane.PodReference)(unsafe.Pointer(in.Pod))
 	out.ExternalEntity = (*controlplane.ExternalEntityReference)(unsafe.Pointer(in.ExternalEntity))
-	out.Endpoints = *(*[]controlplane.Endpoint)(unsafe.Pointer(&in.Endpoints))
+	// WARNING: in.Endpoints requires manual conversion: does not exist in peer-type
 	return nil
-}
-
-// Convert_v1beta1_GroupMember_To_controlplane_GroupMember is an autogenerated conversion function.
-func Convert_v1beta1_GroupMember_To_controlplane_GroupMember(in *GroupMember, out *controlplane.GroupMember, s conversion.Scope) error {
-	return autoConvert_v1beta1_GroupMember_To_controlplane_GroupMember(in, out, s)
 }
 
 func autoConvert_controlplane_GroupMember_To_v1beta1_GroupMember(in *controlplane.GroupMember, out *GroupMember, s conversion.Scope) error {
 	out.Pod = (*PodReference)(unsafe.Pointer(in.Pod))
 	out.ExternalEntity = (*ExternalEntityReference)(unsafe.Pointer(in.ExternalEntity))
-	out.Endpoints = *(*[]Endpoint)(unsafe.Pointer(&in.Endpoints))
+	// WARNING: in.IPs requires manual conversion: does not exist in peer-type
+	// WARNING: in.Ports requires manual conversion: does not exist in peer-type
 	return nil
-}
-
-// Convert_controlplane_GroupMember_To_v1beta1_GroupMember is an autogenerated conversion function.
-func Convert_controlplane_GroupMember_To_v1beta1_GroupMember(in *controlplane.GroupMember, out *GroupMember, s conversion.Scope) error {
-	return autoConvert_controlplane_GroupMember_To_v1beta1_GroupMember(in, out, s)
-}
-
-func autoConvert_v1beta1_GroupMemberPod_To_controlplane_GroupMemberPod(in *GroupMemberPod, out *controlplane.GroupMemberPod, s conversion.Scope) error {
-	out.Pod = (*controlplane.PodReference)(unsafe.Pointer(in.Pod))
-	out.IP = *(*controlplane.IPAddress)(unsafe.Pointer(&in.IP))
-	out.Ports = *(*[]controlplane.NamedPort)(unsafe.Pointer(&in.Ports))
-	return nil
-}
-
-// Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMemberPod is an autogenerated conversion function.
-func Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMemberPod(in *GroupMemberPod, out *controlplane.GroupMemberPod, s conversion.Scope) error {
-	return autoConvert_v1beta1_GroupMemberPod_To_controlplane_GroupMemberPod(in, out, s)
-}
-
-func autoConvert_controlplane_GroupMemberPod_To_v1beta1_GroupMemberPod(in *controlplane.GroupMemberPod, out *GroupMemberPod, s conversion.Scope) error {
-	out.Pod = (*PodReference)(unsafe.Pointer(in.Pod))
-	out.IP = *(*IPAddress)(unsafe.Pointer(&in.IP))
-	out.Ports = *(*[]NamedPort)(unsafe.Pointer(&in.Ports))
-	return nil
-}
-
-// Convert_controlplane_GroupMemberPod_To_v1beta1_GroupMemberPod is an autogenerated conversion function.
-func Convert_controlplane_GroupMemberPod_To_v1beta1_GroupMemberPod(in *controlplane.GroupMemberPod, out *GroupMemberPod, s conversion.Scope) error {
-	return autoConvert_controlplane_GroupMemberPod_To_v1beta1_GroupMemberPod(in, out, s)
 }
 
 func autoConvert_v1beta1_IPBlock_To_controlplane_IPBlock(in *IPBlock, out *controlplane.IPBlock, s conversion.Scope) error {
@@ -682,6 +731,7 @@ func autoConvert_v1beta1_NetworkPolicyRule_To_controlplane_NetworkPolicyRule(in 
 	out.Services = *(*[]controlplane.Service)(unsafe.Pointer(&in.Services))
 	out.Priority = in.Priority
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
+	out.EnableLogging = in.EnableLogging
 	return nil
 }
 
@@ -701,6 +751,7 @@ func autoConvert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(in 
 	out.Services = *(*[]Service)(unsafe.Pointer(&in.Services))
 	out.Priority = in.Priority
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
+	out.EnableLogging = in.EnableLogging
 	return nil
 }
 

@@ -6,18 +6,24 @@ import (
 )
 
 func BenchmarkNormalizeGroupMemberPod(b *testing.B) {
-	pod := &GroupMemberPod{Pod: &PodReference{Namespace: "foo", Name: "bar"}, IP: IPAddress(net.ParseIP("1.1.1.1"))}
+	pod := &GroupMember{Pod: &PodReference{
+		Namespace: "foo", Name: "bar"},
+		IPs: []IPAddress{IPAddress(net.ParseIP("1.1.1.1"))},
+	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		normalizeGroupMemberPod(pod)
+		normalizeGroupMember(pod)
 	}
 }
 
 func BenchmarkInsert(b *testing.B) {
-	pod := &GroupMemberPod{Pod: &PodReference{Namespace: "foo", Name: "bar"}, IP: IPAddress(net.ParseIP("1.1.1.1"))}
-	pods := NewGroupMemberPodSet()
+	pod := &GroupMember{Pod: &PodReference{
+		Namespace: "foo", Name: "bar"},
+		IPs: []IPAddress{IPAddress(net.ParseIP("1.1.1.1"))},
+	}
+	pods := NewGroupMemberSet()
 
 	b.ReportAllocs()
 	b.ResetTimer()

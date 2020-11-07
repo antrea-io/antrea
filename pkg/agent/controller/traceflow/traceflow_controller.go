@@ -126,7 +126,7 @@ func NewTraceflowController(
 		resyncPeriod,
 	)
 	// Register packetInHandler
-	c.ofClient.RegisterPacketInHandler("traceflow", c)
+	c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonTF), "traceflow", c)
 	// Add serviceLister if AntreaProxy enabled
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		c.serviceLister = informerFactory.Core().V1().Services().Lister()
@@ -324,7 +324,6 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	// Calculate destination MAC/IP.
 	dstMAC := ""
 	dstIP := tf.Spec.Destination.IP
-	dstNodeIP := ""
 	if dstIP != "" {
 		dstPodInterface, hasInterface := c.interfaceStore.GetInterfaceByIP(dstIP)
 		if hasInterface {
@@ -342,7 +341,6 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 			}
 			// dstMAC is "" here, will be set to Gateway MAC in ofClient.SendTraceflowPacket
 			dstIP = dstPod.Status.PodIP
-			dstNodeIP = dstPod.Status.HostIP
 		}
 	} else if tf.Spec.Destination.Service != "" {
 		dstSvc, err := c.serviceLister.Services(tf.Spec.Destination.Namespace).Get(tf.Spec.Destination.Service)
@@ -352,17 +350,9 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		dstIP = dstSvc.Spec.ClusterIP
 		flagsTCP = 2
 	}
-	// Check encap status if no dstMAC found which means the destination is Service or the destination Pod/IP is not on local Node.
 	if dstMAC == "" {
-		peerIP := net.ParseIP(dstNodeIP)
-		if c.networkConfig.TunnelType == ovsconfig.GeneveTunnel && (tf.Spec.Destination.Pod == "" || c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(peerIP, c.nodeConfig.NodeIPAddr)) {
-			// If the destination is Service/IP or the packet will be encapsulated to remote Node, wait a small period for other Nodes.
-			time.Sleep(time.Duration(injectPacketDelay) * time.Second)
-		} else {
-			// Inter-node traceflow is only available when the packet is encapsulated in Geneve tunnel.
-			return errors.New(fmt.Sprintf("inter-node traceflow is not available in current configuration, TunnelType: %s, EncapMode: %s, localIP: %s, peerIP: %s",
-				c.networkConfig.TunnelType, c.networkConfig.TrafficEncapMode.String(), c.nodeConfig.NodeIPAddr.String(), dstNodeIP))
-		}
+		// If the destination is Service/IP or the packet will be sent to remote Node, wait a small period for other Nodes.
+		time.Sleep(time.Duration(injectPacketDelay) * time.Second)
 	}
 
 	// Protocol is 0 (IPv6 Hop-by-Hop Option) if not set in CRD, which is not supported by Traceflow

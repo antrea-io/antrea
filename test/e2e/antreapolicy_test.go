@@ -16,10 +16,12 @@ package e2e
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,6 +44,9 @@ var (
 const (
 	// provide enough time for policies to be enforced & deleted by the CNI plugin.
 	networkPolicyDelay = 2 * time.Second
+	// audit log directory on Antrea Agent
+	logDir      = "/var/log/antrea/networkpolicy/"
+	logfileName = "np.log"
 )
 
 func failOnError(err error, t *testing.T) {
@@ -311,12 +316,73 @@ func testCNPDropEgress(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+// testBaselineNamespaceIsolation tests that a CNP in the baseline Tier is able to enforce default namespace isolation,
+// which can be later overridden by developer K8s NetworkPolicies.
+func testBaselineNamespaceIsolation(t *testing.T) {
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	nsExpOtherThanX := metav1.LabelSelectorRequirement{
+		Key:      "ns",
+		Operator: metav1.LabelSelectorOpNotIn,
+		Values:   []string{"x"},
+	}
+	builder = builder.SetName("cnp-baseline-isolate-ns-x").
+		SetTier("baseline").
+		SetPriority(1.0).
+		SetAppliedToGroup(nil, map[string]string{"ns": "x"}, nil, nil)
+	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil,
+		nil, &[]metav1.LabelSelectorRequirement{nsExpOtherThanX}, secv1alpha1.RuleActionDrop)
+
+	// create a K8s NetworkPolicy for Pods in namespace x to allow ingress traffic from Pods in the same namespace,
+	// as well as from the y/a Pod. It should open up ingress from y/a since it's evaluated before the baseline tier.
+	k8sNPBuilder := &NetworkPolicySpecBuilder{}
+	k8sNPBuilder = k8sNPBuilder.SetName("x", "allow-ns-x-and-y-a").
+		SetTypeIngress().
+		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
+			nil, map[string]string{"ns": "x"}, nil, nil).
+		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
+			map[string]string{"pod": "a"}, map[string]string{"ns": "y"}, nil, nil)
+
+	reachability := NewReachability(allPods, true)
+	reachability.Expect(Pod("y/b"), Pod("x/a"), false)
+	reachability.Expect(Pod("y/c"), Pod("x/a"), false)
+	reachability.Expect(Pod("z/a"), Pod("x/a"), false)
+	reachability.Expect(Pod("z/b"), Pod("x/a"), false)
+	reachability.Expect(Pod("z/c"), Pod("x/a"), false)
+	reachability.Expect(Pod("y/b"), Pod("x/b"), false)
+	reachability.Expect(Pod("y/c"), Pod("x/b"), false)
+	reachability.Expect(Pod("z/a"), Pod("x/b"), false)
+	reachability.Expect(Pod("z/b"), Pod("x/b"), false)
+	reachability.Expect(Pod("z/c"), Pod("x/b"), false)
+	reachability.Expect(Pod("y/b"), Pod("x/c"), false)
+	reachability.Expect(Pod("y/c"), Pod("x/c"), false)
+	reachability.Expect(Pod("z/a"), Pod("x/c"), false)
+	reachability.Expect(Pod("z/b"), Pod("x/c"), false)
+	reachability.Expect(Pod("z/c"), Pod("x/c"), false)
+
+	testStep := []*TestStep{
+		{
+			"Port 80",
+			reachability,
+			[]metav1.Object{builder.Get(), k8sNPBuilder.Get()},
+			80,
+			0,
+		},
+	}
+	testCase := []*TestCase{
+		{"CNP baseline tier namespace isolation", testStep},
+	}
+	executeTests(t, testCase)
+	// Cleanup the K8s NetworkPolicy created for this test.
+	failOnError(k8sUtils.CleanNetworkPolicies([]string{"x"}), t)
+	time.Sleep(networkPolicyDelay)
+}
+
 // testCNPPriorityOverride tests priority overriding in three Policies. Those three Policies are applied in a specific order to
 // test priority reassignment, and each controls a smaller set of traffic patterns as priority increases.
 func testCNPPriorityOverride(t *testing.T) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("cnp-priority1").
-		SetPriority(1.01).
+		SetPriority(1.001).
 		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
 	podZBIP, _ := podIPs["z/b"]
 	cidr := podZBIP + "/32"
@@ -326,7 +392,7 @@ func testCNPPriorityOverride(t *testing.T) {
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
 	builder2 = builder2.SetName("cnp-priority2").
-		SetPriority(1.02).
+		SetPriority(1.002).
 		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
 	// Medium priority. Allows traffic from z to x/a.
 	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
@@ -334,7 +400,7 @@ func testCNPPriorityOverride(t *testing.T) {
 
 	builder3 := &ClusterNetworkPolicySpecBuilder{}
 	builder3 = builder3.SetName("cnp-priority3").
-		SetPriority(1.03).
+		SetPriority(1.003).
 		SetAppliedToGroup(nil, map[string]string{"ns": "x"}, nil, nil)
 	// Lowest priority. Drops traffic from z to x.
 	builder3.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
@@ -652,6 +718,51 @@ func testANPBasic(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+// testAuditLoggingBasic tests that a audit log is generated when egress drop applied
+func testAuditLoggingBasic(t *testing.T, data *TestData) {
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-log-cnp-deny").
+		SetPriority(1.0).
+		SetAppliedToGroup(map[string]string{"pod": "a"}, map[string]string{"ns": "x"}, nil, nil)
+	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"ns": "z"},
+		nil, nil, secv1alpha1.RuleActionDrop)
+	builder.AddEgressLogging()
+
+	_, err := k8sUtils.CreateOrUpdateCNP(builder.Get())
+	failOnError(err, t)
+	time.Sleep(networkPolicyDelay)
+
+	// generate some traffic that will be dropped by test-log-cnp-deny
+	k8sUtils.Probe("x", "a", "z", "a", p80)
+	k8sUtils.Probe("x", "a", "z", "b", p80)
+	k8sUtils.Probe("x", "a", "z", "c", p80)
+	time.Sleep(networkPolicyDelay)
+
+	podXA, _ := k8sUtils.GetPod("x", "a")
+	// nodeName is guaranteed to be set at this stage, since the framework waits for all Pods to be in Running phase
+	nodeName := podXA.Spec.NodeName
+	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	if err != nil {
+		t.Errorf("error occurred when trying to get the Antrea Agent pod running on node %s: %v", nodeName, err)
+	}
+	cmd := []string{"cat", logDir + logfileName}
+	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
+	if err != nil || stderr != "" {
+		t.Errorf("error occurred when inspecting the audit log file. err: %v, stderr: %v", err, stderr)
+	}
+	assert.Equalf(t, true, strings.Contains(stdout, "test-log-cnp-deny"), "audit log does not contain entries for test-log-cnp-deny")
+
+	destinations := []string{"z/a", "z/b", "z/c"}
+	srcIP, _ := podIPs["x/a"]
+	for _, d := range destinations {
+		dstIP, _ := podIPs[d]
+		// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
+		pattern := `Drop [0-9]+ SRC: ` + srcIP + ` DEST: ` + dstIP
+		assert.Regexp(t, pattern, stdout, "audit log does not contain expected entry for x/a to %s", d)
+	}
+	failOnError(k8sUtils.CleanCNPs(), t)
+}
+
 // executeTests runs all the tests in testList and prints results
 func executeTests(t *testing.T, testList []*TestCase) {
 	for _, testCase := range testList {
@@ -755,6 +866,7 @@ func TestAntreaPolicy(t *testing.T) {
 		// testcases below do not depend on underlying k8s NetworkPolicies
 		t.Run("Case=CNPAllowNoDefaultIsolation", func(t *testing.T) { testCNPAllowNoDefaultIsolation(t) })
 		t.Run("Case=CNPDropEgress", func(t *testing.T) { testCNPDropEgress(t) })
+		t.Run("Case=CNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
 		t.Run("Case=CNPPrioirtyOverride", func(t *testing.T) { testCNPPriorityOverride(t) })
 		t.Run("Case=CNPTierOverride", func(t *testing.T) { testCNPTierOverride(t) })
 		t.Run("Case=CNPCustomTiers", func(t *testing.T) { testCNPCustomTiers(t) })
@@ -762,7 +874,11 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=CNPRulePriority", func(t *testing.T) { testCNPRulePrioirty(t) })
 		t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })
 	})
-
+	// print results for reachability tests
 	printResults()
+
+	t.Run("TestGroupAuditLogging", func(t *testing.T) {
+		t.Run("Case=AuditLoggingBasic", func(t *testing.T) { testAuditLoggingBasic(t, data) })
+	})
 	k8sUtils.Cleanup(namespaces)
 }

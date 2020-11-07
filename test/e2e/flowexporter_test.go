@@ -37,14 +37,14 @@ func TestFlowExporter(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil, false); err != nil {
+	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest client Pod: %v", err)
 	}
 	podAIP, err := data.podWaitForIP(defaultTimeout, "perftest-a", testNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false); err != nil {
+	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
 	podBIP, err := data.podWaitForIP(defaultTimeout, "perftest-b", testNamespace)

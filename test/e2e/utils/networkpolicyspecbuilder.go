@@ -143,8 +143,9 @@ func (n *NetworkPolicySpecBuilder) WithEgressDNS() *NetworkPolicySpecBuilder {
 		Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
 	}
 
-	for _, e := range n.Spec.Egress {
+	for i, e := range n.Spec.Egress {
 		e.Ports = append(e.Ports, route53)
+		n.Spec.Egress[i] = e
 	}
 	return n
 }

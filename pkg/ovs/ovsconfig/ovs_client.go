@@ -769,6 +769,7 @@ func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
 	return nil
 }
 
+// GetOVSVersion either returns the version of OVS, or an error.
 func (br *OVSBridge) GetOVSVersion() (string, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 
@@ -783,12 +784,29 @@ func (br *OVSBridge) GetOVSVersion() (string, Error) {
 		klog.Error("Transaction failed: ", err)
 		return "", NewTransactionError(err, temporary)
 	}
-	if len(res[0].Rows) == 0 {
-		klog.Warning("Could not find ovs_version")
-		return "", nil
-	}
 
-	return res[0].Rows[0].(map[string]interface{})["ovs_version"].(string), nil
+	if len(res[0].Rows) == 0 {
+		klog.Warning("Could not find ovs_version in the OVS query result")
+		return "", NewTransactionError(fmt.Errorf("no results from OVS query"), false)
+	} else {
+		return parseOvsVersion(res[0].Rows[0])
+	}
+}
+
+// parseOvsVersion parses the version from an interface type, which can be a map of string[interface] or string[string], and returns it as a string, we have special logic here so that a panic doesn't happen.
+func parseOvsVersion(ovsReturnRow interface{}) (string, Error) {
+	errorMessage := fmt.Errorf("unexpected transaction result when querying OVSDB %v", defaultOvsVersionMessage)
+	switch obj := ovsReturnRow.(type) {
+	case map[string]string:
+		if _, ok := obj["ovs_version"]; ok {
+			return obj["ovs_version"], nil
+		}
+	case map[string]interface{}:
+		if _, ok := obj["ovs_version"]; ok {
+			return obj["ovs_version"].(string), nil
+		}
+	}
+	return "", NewTransactionError(errorMessage, false)
 }
 
 // AddOVSOtherConfig adds the given configs to the "other_config" column of

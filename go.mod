@@ -49,6 +49,7 @@ require (
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/grpc v1.26.0
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.2.8
 	k8s.io/api v0.18.4
 	k8s.io/apimachinery v0.18.4
@@ -58,6 +59,7 @@ require (
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.18.4
 	k8s.io/kube-openapi v0.0.0-20200410145947-61e04a5be9a6
+	k8s.io/kubectl v0.18.4
 	k8s.io/utils v0.0.0-20200410111917-5770800c2500
 )
 

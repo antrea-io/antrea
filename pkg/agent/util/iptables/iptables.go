@@ -1,3 +1,5 @@
+// +build !windows
+
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,10 +38,12 @@ const (
 	MasqueradeTarget = "MASQUERADE"
 	MarkTarget       = "MARK"
 	ConnTrackTarget  = "CT"
+	NoTrackTarget    = "NOTRACK"
 
 	PreRoutingChain  = "PREROUTING"
 	ForwardChain     = "FORWARD"
 	PostRoutingChain = "POSTROUTING"
+	OutputChain      = "OUTPUT"
 
 	waitSeconds              = 10
 	waitIntervalMicroSeconds = 200000

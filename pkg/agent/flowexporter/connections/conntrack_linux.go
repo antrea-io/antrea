@@ -32,12 +32,13 @@ import (
 var _ ConnTrackDumper = new(connTrackSystem)
 
 type connTrackSystem struct {
-	nodeConfig  *config.NodeConfig
-	serviceCIDR *net.IPNet
-	connTrack   NetFilterConnTrack
+	nodeConfig           *config.NodeConfig
+	serviceCIDR          *net.IPNet
+	isAntreaProxyEnabled bool
+	connTrack            NetFilterConnTrack
 }
 
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackSystem {
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, isAntreaProxyEnabled bool) *connTrackSystem {
 	if err := SetupConntrackParameters(); err != nil {
 		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
 		klog.Errorf("Error when setting up conntrack parameters, some information may be missing from exported flows: %v", err)
@@ -45,6 +46,7 @@ func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *
 	return &connTrackSystem{
 		nodeConfig,
 		serviceCIDR,
+		isAntreaProxyEnabled,
 		&netFilterConnTrack{},
 	}
 }
@@ -65,7 +67,7 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
 
-	filteredConns := filterAntreaConns(conns, ct.nodeConfig, ct.serviceCIDR, zoneFilter)
+	filteredConns := filterAntreaConns(conns, ct.nodeConfig, ct.serviceCIDR, zoneFilter, ct.isAntreaProxyEnabled)
 	klog.V(2).Infof("No. of flow exporter considered flows in Antrea zoneID: %d", len(filteredConns))
 
 	return filteredConns, len(conns), nil
@@ -97,7 +99,8 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 		return nil, err
 	}
 	antreaConns := make([]*flowexporter.Connection, len(conns))
-	for i, conn := range conns {
+	for i := range conns {
+		conn := conns[i]
 		antreaConns[i] = netlinkFlowToAntreaConnection(&conn)
 	}
 
@@ -132,6 +135,7 @@ func netlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 		IsActive:                true,
 		DoExport:                true,
 		Zone:                    conn.Zone,
+		Mark:                    conn.Mark,
 		StatusFlag:              uint32(conn.Status.Value),
 		TupleOrig:               tupleOrig,
 		TupleReply:              tupleReply,

@@ -43,11 +43,11 @@ type appliedToGroupEvent struct {
 // 1. Added event will be generated if the Selectors was not interested in the object but is now.
 // 2. Modified event will be generated if the Selectors was and is interested in the object.
 // 3. Deleted event will be generated if the Selectors was interested in the object but is not now.
-// 4. If nodeName is specified, only Pods that hosted by the Node will be in the event.
+// 4. If nodeName is specified, only GroupMembers that hosted by the Node will be in the event.
 func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	prevObjSelected, currObjSelected := isSelected(event.Key, event.PrevGroup, event.CurrGroup, selectors, isInitEvent)
 
-	// If nodeName is specified in selectors, only Pods that hosted by the Node should be in the event.
+	// If nodeName is specified in selectors, only GroupMembers that hosted by the Node should be in the event.
 	nodeName, nodeSpecified := selectors.Field.RequiresExactMatch("nodeName")
 
 	switch {
@@ -69,38 +69,19 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isI
 		obj.UID = event.CurrGroup.UID
 		obj.Name = event.CurrGroup.Name
 
-		var currPods, prevPods controlplane.GroupMemberPodSet
-		// TODO: Eventually pods should be unified as GroupMember
 		var currMembers, prevMembers controlplane.GroupMemberSet
 		if nodeSpecified {
-			// TODO: Deprecate currPods and prevPods
-			currPods = event.CurrGroup.PodsByNode[nodeName]
-			prevPods = event.PrevGroup.PodsByNode[nodeName]
 			currMembers = event.CurrGroup.GroupMemberByNode[nodeName]
 			prevMembers = event.PrevGroup.GroupMemberByNode[nodeName]
 		} else {
-			currPods = controlplane.GroupMemberPodSet{}
 			currMembers = controlplane.GroupMemberSet{}
-			for _, pods := range event.CurrGroup.PodsByNode {
-				currPods = currPods.Union(pods)
-			}
 			for _, members := range event.CurrGroup.GroupMemberByNode {
 				currMembers = currMembers.Union(members)
 			}
-			prevPods = controlplane.GroupMemberPodSet{}
 			prevMembers = controlplane.GroupMemberSet{}
-			for _, pods := range event.PrevGroup.PodsByNode {
-				prevPods = prevPods.Union(pods)
-			}
 			for _, members := range event.PrevGroup.GroupMemberByNode {
 				prevMembers = prevMembers.Union(members)
 			}
-		}
-		for _, pod := range currPods.Difference(prevPods) {
-			obj.AddedPods = append(obj.AddedPods, *pod)
-		}
-		for _, pod := range prevPods.Difference(currPods) {
-			obj.RemovedPods = append(obj.RemovedPods, *pod)
 		}
 		for _, member := range currMembers.Difference(prevMembers) {
 			obj.AddedGroupMembers = append(obj.AddedGroupMembers, *member)
@@ -109,7 +90,7 @@ func (event *appliedToGroupEvent) ToWatchEvent(selectors *storage.Selectors, isI
 			obj.RemovedGroupMembers = append(obj.RemovedGroupMembers, *member)
 		}
 
-		if len(obj.AddedPods)+len(obj.RemovedPods)+len(obj.AddedGroupMembers)+len(obj.RemovedGroupMembers) == 0 {
+		if len(obj.AddedGroupMembers)+len(obj.RemovedGroupMembers) == 0 {
 			// No change for the watcher.
 			return nil
 		}
@@ -152,33 +133,21 @@ func genAppliedToGroupEvent(key string, prevObj, currObj interface{}, rv uint64)
 }
 
 // ToAppliedToGroupMsg converts the stored AppliedToGroup to its message form.
-// If includeBody is true, Pods will be copied.
-// If nodeName is provided, only Pods that hosted by the Node will be copied.
+// If includeBody is true, GroupMembers will be copied.
+// If nodeName is provided, only GroupMembers that hosted by the Node will be copied.
 func ToAppliedToGroupMsg(in *types.AppliedToGroup, out *controlplane.AppliedToGroup, includeBody bool, nodeName *string) {
 	out.Name = in.Name
 	out.UID = in.UID
-	if !includeBody || in.PodsByNode == nil {
+	if !includeBody || in.GroupMemberByNode == nil {
 		return
 	}
 	if nodeName != nil {
-		// TODO: deprecate PodsByNode
-		if pods, exists := in.PodsByNode[*nodeName]; exists {
-			for _, pod := range pods {
-				out.Pods = append(out.Pods, *pod)
-			}
-		}
 		if members, exists := in.GroupMemberByNode[*nodeName]; exists {
 			for _, member := range members {
 				out.GroupMembers = append(out.GroupMembers, *member)
 			}
 		}
 	} else {
-		// TODO: deprecate PodsByNode
-		for _, pods := range in.PodsByNode {
-			for _, pod := range pods {
-				out.Pods = append(out.Pods, *pod)
-			}
-		}
 		for _, members := range in.GroupMemberByNode {
 			for _, member := range members {
 				out.GroupMembers = append(out.GroupMembers, *member)

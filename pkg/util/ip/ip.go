@@ -20,7 +20,7 @@ import (
 	"net"
 	"sort"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 const (
@@ -130,7 +130,7 @@ func mergeCIDRs(cidrBlocks []*net.IPNet) []*net.IPNet {
 }
 
 // Function to transform Antrea IPNet to net.IPNet
-func IPNetToNetIPNet(ipNet *v1beta1.IPNet) *net.IPNet {
+func IPNetToNetIPNet(ipNet *v1beta2.IPNet) *net.IPNet {
 	ip := net.IP(ipNet.IP)
 	var bits int
 	if ip.To4() != nil {
@@ -142,7 +142,7 @@ func IPNetToNetIPNet(ipNet *v1beta1.IPNet) *net.IPNet {
 }
 
 // NetIPNetToIPNet transforms net.IPNet to Antrea IPNet
-func NetIPNetToIPNet(ipNet *net.IPNet) *v1beta1.IPNet {
+func NetIPNetToIPNet(ipNet *net.IPNet) *v1beta2.IPNet {
 	prefix, _ := ipNet.Mask.Size()
-	return &v1beta1.IPNet{IP: v1beta1.IPAddress(ipNet.IP), PrefixLength: int32(prefix)}
+	return &v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet.IP), PrefixLength: int32(prefix)}
 }

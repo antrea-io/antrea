@@ -21,12 +21,10 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
 
 const (
-	ipfixCollectorImage = "antrea/ipfix-collector:06252020.1"
+	ipfixCollectorImage = "antrea/ipfix-collector:10282020.1"
 	ipfixCollectorPort  = "4739"
 )
 
@@ -51,18 +49,6 @@ func skipIfNumNodesLessThan(tb testing.TB, required int) {
 func skipIfRunCoverage(tb testing.TB, reason string) {
 	if testOptions.enableCoverage {
 		tb.Skipf("Skipping test for the '%s' when run coverage: %s", tb.Name(), reason)
-	}
-}
-
-func skipIfEncapModeIs(tb testing.TB, data *TestData, encapModes []config.TrafficEncapModeType) {
-	currentEncapMode, err := data.GetEncapMode()
-	if err != nil {
-		tb.Fatalf("Failed to get encap mode: %v", err)
-	}
-	for _, encapMode := range encapModes {
-		if currentEncapMode == encapMode {
-			tb.Skipf("Skipping test for encap mode '%s'", encapMode.String())
-		}
 	}
 }
 
@@ -129,7 +115,7 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error) {
 		return nil, err
 	}
 	// Create pod using ipfix collector image
-	if err := data.createPodOnNode("ipfix-collector", masterNodeName(), ipfixCollectorImage, nil, nil, nil, nil, true); err != nil {
+	if err := data.createPodOnNode("ipfix-collector", masterNodeName(), ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Fatalf("Error when creating the ipfix collector Pod: %v", err)
 	}
 	ipfixCollectorIP, err := data.podWaitForIP(defaultTimeout, "ipfix-collector", testNamespace)

@@ -70,8 +70,30 @@ var (
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats: {Default: false, PreRelease: featuregate.Alpha},
 	}
+
+	// UnsupportedFeaturesOnWindows records the features not supported on
+	// a Windows Node. Antrea Agent on a Windows Node checks the enabled
+	// features, and fails the startup if an unsupported feature is enabled.
+	// We do not define a separate defaultAntreaFeatureGates map for
+	// Windows, because Agent code assumes all features are registered (
+	// FeatureGate.Enabled(feature) will panic if the feature is not added
+	// to the FeatureGate).
+	// In future, if a feature is supported on both Linux and Windows, but
+	// can have different FeatureSpecs between Linux and Windows, we should
+	// still define a separate defaultAntreaFeatureGates map for Windows.
+	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{}
 )
 
 func init() {
 	runtime.Must(DefaultMutableFeatureGate.Add(defaultAntreaFeatureGates))
+}
+
+// SupportedOnWindows checks whether a feature is supported on a Windows Node.
+func SupportedOnWindows(feature featuregate.Feature) bool {
+	_, exists := defaultAntreaFeatureGates[feature]
+	if !exists {
+		return false
+	}
+	_, exists = unsupportedFeaturesOnWindows[feature]
+	return !exists
 }

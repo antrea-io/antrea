@@ -81,6 +81,7 @@ func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
 		return fmt.Errorf("no positional arguments are supported")
 	}
+
 	// Validate service CIDR configuration
 	_, _, err := net.ParseCIDR(o.config.ServiceCIDR)
 	if err != nil {
@@ -100,9 +101,16 @@ func (o *Options) validate(args []string) error {
 	if !ok {
 		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
 	}
+
+	// Check if the enabled features are supported on the OS.
+	err = o.checkUnsupportedFeatures()
+	if err != nil {
+		return err
+	}
+
 	if encapMode.SupportsNoEncap() {
 		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-			return fmt.Errorf("Mode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
+			return fmt.Errorf("TrafficEncapMode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
 		}
 		if o.config.EnableIPSecTunnel {
 			return fmt.Errorf("IPsec tunnel may only be enabled in %s mode", config.TrafficEncapModeEncap)
@@ -117,7 +125,7 @@ func (o *Options) validate(args []string) error {
 		o.config.NoSNAT = true
 	}
 	if err := o.validateFlowExporterConfig(); err != nil {
-		return fmt.Errorf("Failed to validate flow exporter config: %v", err)
+		return fmt.Errorf("failed to validate flow exporter config: %v", err)
 	}
 	return nil
 }

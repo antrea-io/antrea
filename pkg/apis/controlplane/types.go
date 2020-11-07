@@ -28,8 +28,6 @@ import (
 type AppliedToGroup struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	// Pods is a list of Pods selected by this group.
-	Pods []GroupMemberPod
 	// GroupMembers is a list of resources selected by this group.
 	GroupMembers []GroupMember
 }
@@ -52,16 +50,6 @@ type NamedPort struct {
 	Protocol Protocol
 }
 
-// GroupMemberPod represents a Pod related member to be populated in Groups.
-type GroupMemberPod struct {
-	// Pod maintains the reference to the Pod.
-	Pod *PodReference
-	// IP maintains the IPAddress of the Pod.
-	IP IPAddress
-	// Ports maintain the list of named port associated with this Pod member.
-	Ports []NamedPort
-}
-
 // ExternalEntityReference represents a ExternalEntity Reference.
 type ExternalEntityReference struct {
 	// The name of this ExternalEntity.
@@ -70,24 +58,16 @@ type ExternalEntityReference struct {
 	Namespace string
 }
 
-// Endpoint represents an external endpoint.
-type Endpoint struct {
-	// IP is the IP address of the Endpoint.
-	IP IPAddress
-	// Ports is the list NamedPort of the Endpoint.
-	Ports []NamedPort
-}
-
 // GroupMember represents an resource member to be populated in Groups.
 type GroupMember struct {
 	// Pod maintains the reference to the Pod.
 	Pod *PodReference
-
 	// ExternalEntity maintains the reference to the ExternalEntity.
 	ExternalEntity *ExternalEntityReference
-
-	// Endpoints maintains a list of EndPoints associated with this GroupMember.
-	Endpoints []Endpoint
+	// IP is the IP address of the Endpoints associated with the GroupMember.
+	IPs []IPAddress
+	// Ports is the list NamedPort of the GroupMember.
+	Ports []NamedPort
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -95,8 +75,6 @@ type GroupMember struct {
 type AppliedToGroupPatch struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	AddedPods           []GroupMemberPod
-	RemovedPods         []GroupMemberPod
 	AddedGroupMembers   []GroupMember
 	RemovedGroupMembers []GroupMember
 }
@@ -114,8 +92,6 @@ type AppliedToGroupList struct {
 type AddressGroup struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	// Pods is a list of Pods selected by this group.
-	Pods []GroupMemberPod
 	// GroupMembers is a list of GroupMember selected by this group.
 	GroupMembers []GroupMember
 }
@@ -134,8 +110,6 @@ type IPNet struct {
 type AddressGroupPatch struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	AddedPods           []GroupMemberPod
-	RemovedPods         []GroupMemberPod
 	AddedGroupMembers   []GroupMember
 	RemovedGroupMembers []GroupMember
 }
@@ -172,7 +146,7 @@ type NetworkPolicyReference struct {
 type NetworkPolicy struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	// Rules is a list of rules to be applied to the selected Pods.
+	// Rules is a list of rules to be applied to the selected GroupMembers.
 	Rules []NetworkPolicyRule
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
 	AppliedToGroups []string
@@ -200,9 +174,9 @@ type NetworkPolicyRule struct {
 	// If it's set to In, From must be set and To must not be set.
 	// If it's set to Out, To must be set and From must not be set.
 	Direction Direction
-	// From represents sources which should be able to access the pods selected by the policy.
+	// From represents sources which should be able to access the GroupMembers selected by the policy.
 	From NetworkPolicyPeer
-	// To represents destinations which should be able to be accessed by the pods selected by the policy.
+	// To represents destinations which should be able to be accessed by the GroupMembers selected by the policy.
 	To NetworkPolicyPeer
 	// Services is a list of services which should be matched.
 	Services []Service
@@ -213,6 +187,9 @@ type NetworkPolicyRule struct {
 	// action “nil” defaults to Allow action, which would be the case for rules created for
 	// K8s NetworkPolicy.
 	Action *secv1alpha1.RuleAction
+	// EnableLogging is used to indicate if agent should generate logs
+	// when rules are matched. Should be default to false.
+	EnableLogging bool
 }
 
 // Protocol defines network protocols supported for things like container ports.

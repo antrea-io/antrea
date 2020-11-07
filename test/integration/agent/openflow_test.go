@@ -33,7 +33,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	k8stypes "github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -167,20 +167,20 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	toList := []string{"192.168.3.4", "192.168.3.5"}
 
 	port2 := intstr.FromInt(8080)
-	tcpProtocol := v1beta1.ProtocolTCP
+	tcpProtocol := v1beta2.ProtocolTCP
 	defaultAction := secv1alpha1.RuleActionAllow
-	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
+	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
-		Direction: v1beta1.DirectionIn,
+		Direction: v1beta2.DirectionIn,
 		From:      prepareIPAddresses(fromList),
 		To:        toIPList,
-		Service:   []v1beta1.Service{npPort1},
+		Service:   []v1beta2.Service{npPort1},
 		Action:    &defaultAction,
 		FlowID:    ruleID,
 		TableID:   ofClient.IngressRuleTable,
-		PolicyRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		PolicyRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "np1",
 			UID:       "uid1",
@@ -242,11 +242,7 @@ func testInitialize(t *testing.T, config *testConfig) {
 }
 
 func testInstallTunnelFlows(t *testing.T, config *testConfig) {
-	err := c.InitialTLVMap()
-	if err != nil {
-		t.Fatalf("Failed to install TLV Map: %v", err)
-	}
-	err = c.InstallDefaultTunnelFlows(config.tunnelOFPort)
+	err := c.InstallDefaultTunnelFlows(config.tunnelOFPort)
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries for tunnel port: %v", err)
 	}
@@ -336,20 +332,20 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	toList := []string{"192.168.3.4", "192.168.3.5"}
 
 	port2 := intstr.FromInt(8080)
-	tcpProtocol := v1beta1.ProtocolTCP
+	tcpProtocol := v1beta2.ProtocolTCP
 	defaultAction := secv1alpha1.RuleActionAllow
-	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
+	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
-		Direction: v1beta1.DirectionIn,
+		Direction: v1beta2.DirectionIn,
 		From:      prepareIPAddresses(fromList),
 		To:        toIPList,
-		Service:   []v1beta1.Service{npPort1},
+		Service:   []v1beta2.Service{npPort1},
 		Action:    &defaultAction,
 		FlowID:    ruleID,
 		TableID:   ofClient.IngressRuleTable,
-		PolicyRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		PolicyRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "np1",
 			UID:       "uid1",
@@ -382,17 +378,17 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	ruleID2 := uint32(101)
 	toList2 := []string{"192.168.3.4"}
 	toIPList2 := prepareIPAddresses(toList2)
-	udpProtocol := v1beta1.ProtocolUDP
-	npPort2 := v1beta1.Service{Protocol: &udpProtocol}
+	udpProtocol := v1beta2.ProtocolUDP
+	npPort2 := v1beta2.Service{Protocol: &udpProtocol}
 	rule2 := &types.PolicyRule{
-		Direction: v1beta1.DirectionIn,
+		Direction: v1beta2.DirectionIn,
 		To:        toIPList2,
-		Service:   []v1beta1.Service{npPort2},
+		Service:   []v1beta2.Service{npPort2},
 		Action:    &defaultAction,
 		FlowID:    ruleID2,
 		TableID:   ofClient.IngressRuleTable,
-		PolicyRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		PolicyRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "np1",
 			UID:       "uid1",

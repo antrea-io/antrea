@@ -5,13 +5,11 @@ Param(
 )
 
 $ErrorActionPreference = "Stop"
-# TODO: set up HTTPS so that the archive can be downloaded securely. In the
-# meantime, we use a SHA256 hash to ensure that the downloaded archive is
-# correct.
 $OVSDownloadURL = "https://downloads.antrea.io/ovs/ovs-2.14.0-antrea.1-win64.zip"
+# Use a SHA256 hash to ensure that the downloaded archive iscorrect.
 $OVSPublishedHash = 'E81800A6B8E157C948BAE548E5AFB425B2AD98CE18BC8C6148AB5B7F81E76B7D'
 $OVSDownloadDir = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition)
-$InstallLog = "$OVSDownloadDir\install.log"
+$InstallLog = "$OVSDownloadDir\install_ovs.log"
 $OVSZip = "$OVSDownloadDir\ovs-win64.zip"
 
 if ($DownloadDir -ne "") {
@@ -27,7 +25,7 @@ if ($DownloadURL -ne "") {
 
 function Log($Info) {
     $time = $(get-date -Format g)
-    Write-Host "$time $Info `n`r" | Tee-Object $InstallLog -Append
+    "$time $Info `n`r" | Tee-Object $InstallLog -Append | Write-Host
 }
 
 function CreatePath($Path){
@@ -131,37 +129,21 @@ function ConfigOVS() {
     }
     # Create and start ovsdb-server service.
     Log "Create and start ovsdb-server service"
-    sc.exe create ovsdb-server binPath= "$OVSInstallDir\usr\sbin\ovsdb-server.exe $OVSInstallDir\etc\openvswitch\conf.db  -vfile:info --remote=punix:db.sock  --remote=ptcp:6640  --log-file  --pidfile --service --service-monitor" start= auto
+    sc.exe create ovsdb-server binPath= "$OVSInstallDir\usr\sbin\ovsdb-server.exe $OVSInstallDir\etc\openvswitch\conf.db  -vfile:info --remote=punix:db.sock  --remote=ptcp:6640  --log-file  --pidfile --service" start= auto
+    sc.exe failure ovsdb-server reset= 0 actions= restart/0/restart/0/restart/0
     Start-Service ovsdb-server
-    $MaxRetryCount = 10
-    $RetryCountRange = 1..$MaxRetryCount
-    $OVSDBServiceStarted = $false
-    foreach ($RetryCount in $RetryCountRange) {
-        Log "Waiting for ovsdb-server service start ($RetryCount/$MaxRetryCount)..."
-        if (ServiceExists("ovsdb-server")) {
-            $OVSDBServiceStarted = $true
-            break
-        }
-        if ($RetryCount -eq $MaxRetryCount) {
-            break
-        }
-        Start-Sleep -Seconds 5
-    }
-    if (!$OVSDBServiceStarted) {
-        Log "Waiting for ovsdb-server service start timeout to set the OVS version."
-        LOG "Please manually set the OVS version after installation."
-    } else {
-        # Set OVS version.
-        Log "Set OVS version: $OVS_VERSION"
-        $OVS_VERSION=$(Get-Item $OVSInstallDir\driver\ovsext.sys).VersionInfo.ProductVersion
-        ovs-vsctl --no-wait set Open_vSwitch . ovs_version=$OVS_VERSION
-    }
-
     # Create and start ovs-vswitchd service.
     Log "Create and start ovs-vswitchd service."
-    sc.exe create ovs-vswitchd binpath="$OVSInstallDir\usr\sbin\ovs-vswitchd.exe  --pidfile -vfile:info --log-file  --service --service-monitor" start= auto
+    sc.exe create ovs-vswitchd binpath="$OVSInstallDir\usr\sbin\ovs-vswitchd.exe  --pidfile -vfile:info --log-file  --service" start= auto depend= "ovsdb-server"
+    sc.exe failure ovs-vswitchd reset= 0 actions= restart/0/restart/0/restart/0
     Start-Service ovs-vswitchd
+    # Set OVS version.
+    $OVS_VERSION=$(Get-Item $OVSInstallDir\driver\ovsext.sys).VersionInfo.ProductVersion
+    Log "Set OVS version to: $OVS_VERSION"
+    ovs-vsctl --no-wait set Open_vSwitch . ovs_version=$OVS_VERSION
 }
+
+Log "Installation log location: $InstallLog"
 
 CheckIfOVSInstalled
 

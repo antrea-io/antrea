@@ -37,7 +37,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
@@ -90,7 +90,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		crdClient,
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
-		crdInformerFactory.Core().V1alpha1().ExternalEntities(),
+		crdInformerFactory.Core().V1alpha2().ExternalEntities(),
 		informerFactory.Networking().V1().NetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().NetworkPolicies(),
@@ -107,7 +107,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),
-		crdInformerFactory.Core().V1alpha1().ExternalEntities().Informer().GetStore(),
+		crdInformerFactory.Core().V1alpha2().ExternalEntities().Informer().GetStore(),
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
@@ -162,9 +162,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -194,9 +193,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidB",
-				Name:      "npB",
-				Namespace: "nsA",
+				UID:  "uidB",
+				Name: "uidB",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -235,9 +233,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidB",
-				Name:      "npB",
-				Namespace: "nsA",
+				UID:  "uidB",
+				Name: "uidB",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -271,9 +268,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidC",
-				Name:      "npC",
-				Namespace: "nsA",
+				UID:  "uidC",
+				Name: "uidC",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -298,9 +294,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidD",
-				Name:      "npD",
-				Namespace: "nsA",
+				UID:  "uidD",
+				Name: "uidD",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -354,9 +349,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidE",
-				Name:      "npE",
-				Namespace: "nsA",
+				UID:  "uidE",
+				Name: "uidE",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -433,9 +427,8 @@ func TestAddNetworkPolicy(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidF",
-				Name:      "npF",
-				Namespace: "nsA",
+				UID:  "uidF",
+				Name: "uidF",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -482,7 +475,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, npc := newController()
 			npc.addNetworkPolicy(tt.inputPolicy)
-			key, _ := keyFunc(tt.inputPolicy)
+			key := internalNetworkPolicyKeyFunc(tt.inputPolicy)
 			actualPolicyObj, _, _ := npc.internalNetworkPolicyStore.Get(key)
 			actualPolicy := actualPolicyObj.(*antreatypes.NetworkPolicy)
 			assert.Equal(t, tt.expPolicy, actualPolicy)
@@ -512,7 +505,7 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	assert.False(t, found, "expected AppliedToGroup to be deleted")
 	adgs := npc.addressGroupStore.List()
 	assert.Len(t, adgs, 0, "expected empty AddressGroup list")
-	key, _ := keyFunc(npObj)
+	key := internalNetworkPolicyKeyFunc(npObj)
 	_, found, _ = npc.internalNetworkPolicyStore.Get(key)
 	assert.False(t, found, "expected internal NetworkPolicy to be deleted")
 }
@@ -581,9 +574,8 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				},
 			},
 			expNetworkPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -632,9 +624,8 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				},
 			},
 			expNetworkPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -675,9 +666,8 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				},
 			},
 			expNetworkPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -708,9 +698,8 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				},
 			},
 			expNetworkPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -758,9 +747,8 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				},
 			},
 			expNetworkPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -826,9 +814,8 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 				},
 			},
 			expNetworkPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -864,7 +851,7 @@ func TestUpdateNetworkPolicy(t *testing.T) {
 			_, npc := newController()
 			npc.addNetworkPolicy(oldNP)
 			npc.updateNetworkPolicy(oldNP, tt.updatedNetworkPolicy)
-			key, _ := keyFunc(oldNP)
+			key := internalNetworkPolicyKeyFunc(oldNP)
 			actualPolicyObj, _, _ := npc.internalNetworkPolicyStore.Get(key)
 			actualPolicy := actualPolicyObj.(*antreatypes.NetworkPolicy)
 			if actualAppliedToGroups := len(npc.appliedToGroupStore.List()); actualAppliedToGroups != tt.expAppliedToGroups {
@@ -1203,7 +1190,7 @@ func TestAddPod(t *testing.T) {
 			npc.syncAddressGroup(outGroupID)
 			appGroupObj, _, _ := npc.appliedToGroupStore.Get(appGroupID)
 			appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
-			podsAdded := appGroup.PodsByNode["nodeA"]
+			podsAdded := appGroup.GroupMemberByNode["nodeA"]
 			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
@@ -1213,9 +1200,12 @@ func TestAddPod(t *testing.T) {
 			} else {
 				assert.Len(t, podsAdded, 0, "expected Pod not to match AppliedToGroup")
 			}
-			memberPod := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
-			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod))
-			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod))
+			memberPod := &controlplane.GroupMember{
+				Pod: &controlplane.PodReference{Name: "podA", Namespace: "nsA"},
+				IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
+			}
+			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(memberPod))
+			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(memberPod))
 		})
 	}
 }
@@ -1277,7 +1267,7 @@ func TestDeletePod(t *testing.T) {
 	npc.syncAppliedToGroup(matchAppGID)
 	appGroupObj, _, _ := npc.appliedToGroupStore.Get(matchAppGID)
 	appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
-	podsAdded := appGroup.PodsByNode[nodeName]
+	podsAdded := appGroup.GroupMemberByNode[nodeName]
 	// Ensure Pod1 reference is removed from AppliedToGroup.
 	assert.Len(t, podsAdded, 0, "expected Pod to be deleted from AppliedToGroup")
 	// Delete Pod P2 matching the NetworkPolicy Rule.
@@ -1286,272 +1276,8 @@ func TestDeletePod(t *testing.T) {
 	updatedAddrGroupObj, _, _ := npc.addressGroupStore.Get(addrGroup.Name)
 	updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
 	// Ensure Pod2 IP is removed from AddressGroup.
-	memberPod2 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress(p2IP)}
-	assert.False(t, updatedAddrGroup.Pods.Has(memberPod2))
-}
-
-func TestAddExternalEntity(t *testing.T) {
-	selectorSpec := metav1.LabelSelector{
-		MatchLabels: map[string]string{"group": "appliedTo"},
-	}
-	selectorIn := metav1.LabelSelector{
-		MatchLabels: map[string]string{"inGroup": "inAddress"},
-	}
-	selectorOut := metav1.LabelSelector{
-		MatchLabels: map[string]string{"outGroup": "outAddress"},
-	}
-	appliedPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "podA",
-			Namespace: "nsA",
-			Labels: map[string]string{
-				"group": "appliedTo",
-			},
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{{
-				Name: "container-1",
-			}},
-			NodeName: "nodeA",
-		},
-		Status: corev1.PodStatus{
-			Conditions: []corev1.PodCondition{
-				{
-					Type:   corev1.PodReady,
-					Status: corev1.ConditionTrue,
-				},
-			},
-			PodIP: "1.2.3.4",
-		},
-	}
-	testANPObj := getEETestANP(selectorSpec, selectorIn, selectorOut)
-	tests := []struct {
-		name                 string
-		addedExternalEntity  *v1alpha1.ExternalEntity
-		inAddressGroupMatch  bool
-		outAddressGroupMatch bool
-	}{
-		{
-			"no-match-ee",
-			&v1alpha1.ExternalEntity{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "eeA",
-					Namespace: "nsA",
-					Labels:    map[string]string{"group": "none"},
-				},
-			},
-			false,
-			false,
-		},
-		{
-			"ee-match-ingress",
-			&v1alpha1.ExternalEntity{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "eeB",
-					Namespace: "nsA",
-					Labels:    map[string]string{"inGroup": "inAddress"},
-				},
-			},
-			true,
-			false,
-		},
-		{
-			"ee-match-ingress-egress",
-			&v1alpha1.ExternalEntity{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "eeC",
-					Namespace: "nsA",
-					Labels: map[string]string{
-						"inGroup":  "inAddress",
-						"outGroup": "outAddress",
-					},
-				},
-			},
-			true,
-			true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
-			npc.addANP(testANPObj)
-			npc.podStore.Add(appliedPod)
-			npc.externalEntityStore.Add(tt.addedExternalEntity)
-			appGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorSpec, nil, nil).NormalizedName)
-			inGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorIn).NormalizedName)
-			outGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorOut).NormalizedName)
-
-			npc.addPod(appliedPod)
-			npc.addExternalEntity(tt.addedExternalEntity)
-			atGroups, addrGroups := getQueuedGroups(npc)
-			assert.Equal(t, true, atGroups.Has(appGroupID))
-			assert.Equal(t, tt.inAddressGroupMatch, addrGroups.Has(inGroupID))
-			assert.Equal(t, tt.outAddressGroupMatch, addrGroups.Has(outGroupID))
-
-			npc.syncAppliedToGroup(appGroupID)
-			npc.syncAddressGroup(inGroupID)
-			npc.syncAddressGroup(outGroupID)
-			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
-			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
-			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
-			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			member := externalEntityToGroupMember(tt.addedExternalEntity)
-			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(member))
-			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(member))
-		})
-	}
-}
-
-func TestUpdateExternalEntity(t *testing.T) {
-	selectorSpec := metav1.LabelSelector{
-		MatchLabels: map[string]string{"group": "appliedTo"},
-	}
-	selectorIn := metav1.LabelSelector{
-		MatchLabels: map[string]string{"inGroup": "inAddress"},
-	}
-	selectorOut := metav1.LabelSelector{
-		MatchLabels: map[string]string{"outGroup": "outAddress"},
-	}
-	selectorOut2 := metav1.LabelSelector{
-		MatchLabels: map[string]string{"outGroup": "outAddress2"},
-	}
-	testANPObj := getEETestANP(selectorSpec, selectorIn, selectorOut)
-	testANPObj2 := getEETestANP(selectorSpec, selectorIn, selectorOut2)
-	ee1 := &v1alpha1.ExternalEntity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "eeC",
-			Namespace: "nsA",
-			Labels: map[string]string{
-				"outGroup": "outAddress",
-			},
-		},
-	}
-	ee2 := &v1alpha1.ExternalEntity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "eeC",
-			Namespace: "nsA",
-			Labels: map[string]string{
-				"outGroup": "outAddress2",
-			},
-		},
-	}
-	ee3 := &v1alpha1.ExternalEntity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "eeC",
-			Namespace: "nsA",
-			Labels: map[string]string{
-				"outGroup": "outAddress3",
-			},
-		},
-	}
-	outGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorOut).NormalizedName)
-	outGroupID2 := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorOut2).NormalizedName)
-	_, npc := newController()
-	npc.addANP(testANPObj)
-	npc.addANP(testANPObj2)
-	npc.updateExternalEntity(ee3, ee1)
-	_, addrGroups := getQueuedGroups(npc)
-	assert.Equal(t, true, addrGroups.Has(outGroupID))
-	assert.Equal(t, false, addrGroups.Has(outGroupID2))
-	// outGroupID and outGroupID2 should both be queued (EE removed and EE added)
-	npc.updateExternalEntity(ee1, ee2)
-	_, addrGroups = getQueuedGroups(npc)
-	assert.Equal(t, true, addrGroups.Has(outGroupID))
-	assert.Equal(t, true, addrGroups.Has(outGroupID2))
-	// only outGroupID2 should be queued (EE removed)
-	npc.updateExternalEntity(ee2, ee3)
-	_, addrGroups = getQueuedGroups(npc)
-	assert.Equal(t, false, addrGroups.Has(outGroupID))
-	assert.Equal(t, true, addrGroups.Has(outGroupID2))
-
-}
-
-func TestDeleteExternalEntity(t *testing.T) {
-	selectorSpec := metav1.LabelSelector{
-		MatchLabels: map[string]string{"group": "appliedTo"},
-	}
-	selectorIn := metav1.LabelSelector{
-		MatchLabels: map[string]string{"inGroup": "inAddress"},
-	}
-	selectorOut := metav1.LabelSelector{
-		MatchLabels: map[string]string{"outGroup": "outAddress"},
-	}
-	testANPObj := getEETestANP(selectorSpec, selectorIn, selectorOut)
-	tests := []struct {
-		name                 string
-		addedExternalEntity  *v1alpha1.ExternalEntity
-		inAddressGroupMatch  bool
-		outAddressGroupMatch bool
-	}{
-		{
-			"no-match-ee",
-			&v1alpha1.ExternalEntity{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "eeA",
-					Namespace: "nsA",
-					Labels:    map[string]string{"group": "none"},
-				},
-			},
-			false,
-			false,
-		},
-		{
-			"ee-match-ingress",
-			&v1alpha1.ExternalEntity{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "eeB",
-					Namespace: "nsA",
-					Labels:    map[string]string{"inGroup": "inAddress"},
-				},
-			},
-			true,
-			false,
-		},
-		{
-			"ee-match-ingress-egress",
-			&v1alpha1.ExternalEntity{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "eeC",
-					Namespace: "nsA",
-					Labels: map[string]string{
-						"inGroup":  "inAddress",
-						"outGroup": "outAddress",
-					},
-				},
-			},
-			true,
-			true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
-			npc.addANP(testANPObj)
-			npc.externalEntityStore.Add(tt.addedExternalEntity)
-			npc.addExternalEntity(tt.addedExternalEntity)
-			inGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorIn).NormalizedName)
-			outGroupID := getNormalizedUID(toGroupSelector("nsA", nil, nil, &selectorOut).NormalizedName)
-			npc.syncAddressGroup(inGroupID)
-			npc.syncAddressGroup(outGroupID)
-
-			npc.externalEntityStore.Delete(tt.addedExternalEntity)
-			npc.deleteExternalEntity(tt.addedExternalEntity)
-			npc.syncAddressGroup(inGroupID)
-			npc.syncAddressGroup(outGroupID)
-			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
-			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
-			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
-			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			member := externalEntityToGroupMember(tt.addedExternalEntity)
-
-			if tt.inAddressGroupMatch {
-				assert.Equal(t, false, updatedInAddrGroup.GroupMembers.Has(member))
-			}
-			if tt.outAddressGroupMatch {
-				assert.Equal(t, false, updatedOutAddrGroup.GroupMembers.Has(member))
-			}
-		})
-	}
+	memberPod2 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress(p2IP)}}
+	assert.False(t, updatedAddrGroup.GroupMembers.Has(memberPod2))
 }
 
 func TestAddNamespace(t *testing.T) {
@@ -1660,12 +1386,18 @@ func TestAddNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			memberPod1 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.2.3.4")}
-			memberPod2 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("2.2.3.4")}
-			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod1))
-			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.Pods.Has(memberPod2))
-			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod1))
-			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.Pods.Has(memberPod2))
+			memberPod1 := &controlplane.GroupMember{
+				Pod: &controlplane.PodReference{Name: "p1", Namespace: "nsA"},
+				IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
+			}
+			memberPod2 := &controlplane.GroupMember{
+				Pod: &controlplane.PodReference{Name: "p2", Namespace: "nsA"},
+				IPs: []controlplane.IPAddress{ipStrToIPAddress("2.2.3.4")},
+			}
+			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(memberPod1))
+			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(memberPod2))
+			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(memberPod1))
+			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(memberPod2))
 		})
 	}
 }
@@ -1782,15 +1514,15 @@ func TestDeleteNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			memberPod1 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.1.1.1")}
-			memberPod2 := &controlplane.GroupMemberPod{IP: ipStrToIPAddress("1.1.1.2")}
+			memberPod1 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.1")}}
+			memberPod2 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.2")}}
 			if tt.inAddressGroupMatch {
-				assert.False(t, updatedInAddrGroup.Pods.Has(memberPod1))
-				assert.False(t, updatedInAddrGroup.Pods.Has(memberPod2))
+				assert.False(t, updatedInAddrGroup.GroupMembers.Has(memberPod1))
+				assert.False(t, updatedInAddrGroup.GroupMembers.Has(memberPod2))
 			}
 			if tt.outAddressGroupMatch {
-				assert.False(t, updatedOutAddrGroup.Pods.Has(memberPod1))
-				assert.False(t, updatedOutAddrGroup.Pods.Has(memberPod2))
+				assert.False(t, updatedOutAddrGroup.GroupMembers.Has(memberPod1))
+				assert.False(t, updatedOutAddrGroup.GroupMembers.Has(memberPod2))
 			}
 		})
 	}
@@ -1839,14 +1571,14 @@ func TestFilterAddressGroupsForPodOrExternalEntity(t *testing.T) {
 	pod1.Labels = map[string]string{"purpose": "test-select"}
 	pod2 := getPod("pod2", "ns1", "node1", "1.1.1.2", false)
 	pod3 := getPod("pod3", "ns2", "node1", "1.1.1.3", false)
-	ee1 := &v1alpha1.ExternalEntity{
+	ee1 := &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ee1",
 			Namespace: "ns1",
 			Labels:    map[string]string{"platform": "aws"},
 		},
 	}
-	ee2 := &v1alpha1.ExternalEntity{
+	ee2 := &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ee2",
 			Namespace: "ns1",
@@ -1943,14 +1675,14 @@ func TestFilterAppliedToGroupsForPodOrExternalEntity(t *testing.T) {
 	pod1.Labels = map[string]string{"purpose": "test-select"}
 	pod2 := getPod("pod2", "ns1", "node1", "1.1.1.2", false)
 	pod3 := getPod("pod3", "ns2", "node1", "1.1.1.3", false)
-	ee1 := &v1alpha1.ExternalEntity{
+	ee1 := &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ee1",
 			Namespace: "ns1",
 			Labels:    map[string]string{"platform": "aws"},
 		},
 	}
-	ee2 := &v1alpha1.ExternalEntity{
+	ee2 := &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ee2",
 			Namespace: "ns1",
@@ -2458,9 +2190,8 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -2489,9 +2220,8 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -2543,9 +2273,8 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -2622,9 +2351,8 @@ func TestProcessNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.K8sNetworkPolicy,
 					Namespace: "nsA",
@@ -2686,22 +2414,21 @@ func TestProcessNetworkPolicy(t *testing.T) {
 	}
 }
 
-func TestPodToMemberPod(t *testing.T) {
+func TestPodToGroupMember(t *testing.T) {
 	namedPod := getPod("", "", "", "", true)
 	unNamedPod := getPod("", "", "", "", false)
 	tests := []struct {
 		name         string
 		inputPod     *corev1.Pod
-		expMemberPod controlplane.GroupMemberPod
+		expMemberPod controlplane.GroupMember
 		includeIP    bool
-		includeRef   bool
 		namedPort    bool
 	}{
 		{
 			name:     "namedport-pod-with-ip-ref",
 			inputPod: namedPod,
-			expMemberPod: controlplane.GroupMemberPod{
-				IP: ipStrToIPAddress(namedPod.Status.PodIP),
+			expMemberPod: controlplane.GroupMember{
+				IPs: []controlplane.IPAddress{ipStrToIPAddress(namedPod.Status.PodIP)},
 				Pod: &controlplane.PodReference{
 					Name:      namedPod.Name,
 					Namespace: namedPod.Namespace,
@@ -2714,31 +2441,14 @@ func TestPodToMemberPod(t *testing.T) {
 					},
 				},
 			},
-			includeIP:  true,
-			includeRef: true,
-			namedPort:  true,
+			includeIP: true,
+			namedPort: true,
 		},
 		{
 			name:     "namedport-pod-with-ip",
 			inputPod: namedPod,
-			expMemberPod: controlplane.GroupMemberPod{
-				IP: ipStrToIPAddress(namedPod.Status.PodIP),
-				Ports: []controlplane.NamedPort{
-					{
-						Port:     80,
-						Name:     "http",
-						Protocol: "tcp",
-					},
-				},
-			},
-			includeIP:  true,
-			includeRef: false,
-			namedPort:  true,
-		},
-		{
-			name:     "namedport-pod-with-ref",
-			inputPod: namedPod,
-			expMemberPod: controlplane.GroupMemberPod{
+			expMemberPod: controlplane.GroupMember{
+				IPs: []controlplane.IPAddress{ipStrToIPAddress(namedPod.Status.PodIP)},
 				Pod: &controlplane.PodReference{
 					Name:      namedPod.Name,
 					Namespace: namedPod.Namespace,
@@ -2751,38 +2461,58 @@ func TestPodToMemberPod(t *testing.T) {
 					},
 				},
 			},
-			includeIP:  false,
-			includeRef: true,
-			namedPort:  true,
+			includeIP: true,
+			namedPort: true,
+		},
+		{
+			name:     "namedport-pod-with-ref",
+			inputPod: namedPod,
+			expMemberPod: controlplane.GroupMember{
+				Pod: &controlplane.PodReference{
+					Name:      namedPod.Name,
+					Namespace: namedPod.Namespace,
+				},
+				Ports: []controlplane.NamedPort{
+					{
+						Port:     80,
+						Name:     "http",
+						Protocol: "tcp",
+					},
+				},
+			},
+			includeIP: false,
+			namedPort: true,
 		},
 		{
 			name:     "unnamedport-pod-with-ref",
 			inputPod: unNamedPod,
-			expMemberPod: controlplane.GroupMemberPod{
+			expMemberPod: controlplane.GroupMember{
 				Pod: &controlplane.PodReference{
 					Name:      unNamedPod.Name,
 					Namespace: unNamedPod.Namespace,
 				},
 			},
-			includeIP:  false,
-			includeRef: true,
-			namedPort:  false,
+			includeIP: false,
+			namedPort: false,
 		},
 		{
 			name:     "unnamedport-pod-with-ip",
 			inputPod: unNamedPod,
-			expMemberPod: controlplane.GroupMemberPod{
-				IP: ipStrToIPAddress(unNamedPod.Status.PodIP),
+			expMemberPod: controlplane.GroupMember{
+				Pod: &controlplane.PodReference{
+					Name:      unNamedPod.Name,
+					Namespace: unNamedPod.Namespace,
+				},
+				IPs: []controlplane.IPAddress{ipStrToIPAddress(unNamedPod.Status.PodIP)},
 			},
-			includeIP:  true,
-			includeRef: false,
-			namedPort:  false,
+			includeIP: true,
+			namedPort: false,
 		},
 		{
 			name:     "unnamedport-pod-with-ip-ref",
 			inputPod: unNamedPod,
-			expMemberPod: controlplane.GroupMemberPod{
-				IP: ipStrToIPAddress(unNamedPod.Status.PodIP),
+			expMemberPod: controlplane.GroupMember{
+				IPs: []controlplane.IPAddress{ipStrToIPAddress(unNamedPod.Status.PodIP)},
 				Pod: &controlplane.PodReference{
 					Name:      unNamedPod.Name,
 					Namespace: unNamedPod.Namespace,
@@ -2795,29 +2525,23 @@ func TestPodToMemberPod(t *testing.T) {
 					},
 				},
 			},
-			includeIP:  true,
-			includeRef: true,
-			namedPort:  false,
+			includeIP: true,
+			namedPort: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualMemberPod := podToMemberPod(tt.inputPod, tt.includeIP, tt.includeRef)
-			// Case where the PodReference must not be populated.
-			if !tt.includeRef {
-				if actualMemberPod.Pod != nil {
-					t.Errorf("podToMemberPod() got unexpected PodReference %v, want nil", *(*actualMemberPod).Pod)
-				}
-			} else if !reflect.DeepEqual(*(*actualMemberPod).Pod, *(tt.expMemberPod).Pod) {
+			actualMemberPod := podToGroupMember(tt.inputPod, tt.includeIP)
+			if !reflect.DeepEqual(*(*actualMemberPod).Pod, *(tt.expMemberPod).Pod) {
 				t.Errorf("podToMemberPod() got unexpected PodReference %v, want %v", *(*actualMemberPod).Pod, *(tt.expMemberPod).Pod)
 			}
 			// Case where the IPAddress must not be populated.
 			if !tt.includeIP {
-				if actualMemberPod.IP != nil {
-					t.Errorf("podToMemberPod() got unexpected IP %v, want nil", actualMemberPod.IP)
+				if len(actualMemberPod.IPs) > 0 {
+					t.Errorf("podToMemberPod() got unexpected IP %v, want nil", actualMemberPod.IPs)
 				}
-			} else if bytes.Compare(actualMemberPod.IP, tt.expMemberPod.IP) != 0 {
-				t.Errorf("podToMemberPod() got unexpected IP %v, want %v", actualMemberPod.IP, tt.expMemberPod.IP)
+			} else if !comparePodIPs(actualMemberPod.IPs, tt.expMemberPod.IPs) {
+				t.Errorf("podToMemberPod() got unexpected IP %v, want %v", actualMemberPod.IPs, tt.expMemberPod.IPs)
 			}
 			if !tt.namedPort {
 				if len(actualMemberPod.Ports) > 0 {
@@ -2828,6 +2552,27 @@ func TestPodToMemberPod(t *testing.T) {
 			}
 		})
 	}
+}
+
+func comparePodIPs(actIPs, expIPs []controlplane.IPAddress) bool {
+	if len(actIPs) != len(expIPs) {
+		return false
+	}
+	for _, ip := range actIPs {
+		if !containsPodIP(expIPs, ip) {
+			return false
+		}
+	}
+	return true
+}
+
+func containsPodIP(expIPs []controlplane.IPAddress, actIP controlplane.IPAddress) bool {
+	for _, expIP := range expIPs {
+		if bytes.Compare(actIP, expIP) == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCIDRStrToIPNet(t *testing.T) {

@@ -26,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 )
 
@@ -44,8 +43,6 @@ func TestTraceflowIntraNode(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
-	skipIfEncapModeIs(t, data, []config.TrafficEncapModeType{config.TrafficEncapModeNoEncap, config.TrafficEncapModeNetworkPolicyOnly})
 
 	if err = data.enableTraceflow(t); err != nil {
 		t.Fatal("Error when enabling Traceflow")
@@ -325,7 +322,6 @@ func TestTraceflowIntraNode(t *testing.T) {
 
 // TestTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
 func TestTraceflowInterNode(t *testing.T) {
-	skipIfProviderIs(t, "kind", "Inter nodes test needs Geneve tunnel")
 	skipIfNumNodesLessThan(t, 2)
 
 	data, err := setupTest(t)
@@ -750,7 +746,7 @@ func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.Network
 // waitForNetworkpolicyRealized waits for the NetworkPolicy to be realized by the antrea-agent Pod.
 func (data *TestData) waitForNetworkpolicyRealized(pod string, networkpolicy string) error {
 	if err := wait.Poll(200*time.Millisecond, 5*time.Second, func() (bool, error) {
-		cmds := []string{"antctl", "get", "networkpolicy", networkpolicy, "-n", testNamespace}
+		cmds := []string{"antctl", "get", "networkpolicy", "-S", networkpolicy, "-n", testNamespace}
 		if _, stderr, err := runAntctl(pod, cmds, data); err != nil {
 			if strings.Contains(stderr, "server could not find the requested resource") {
 				return false, nil

@@ -31,9 +31,10 @@ $GOPATH/bin/client-gen \
   --input-base "${ANTREA_PKG}/pkg/apis/" \
   --input "clusterinformation/v1beta1" \
   --input "controlplane/v1beta1" \
+  --input "controlplane/v1beta2" \
   --input "system/v1beta1" \
   --input "security/v1alpha1" \
-  --input "core/v1alpha1" \
+  --input "core/v1alpha2" \
   --input "ops/v1alpha1" \
   --input "stats/v1alpha1" \
   --output-package "${ANTREA_PKG}/pkg/client/clientset" \
@@ -44,14 +45,14 @@ $GOPATH/bin/client-gen \
 
 # Generate listers with K8s codegen tools.
 $GOPATH/bin/lister-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
   --output-package "${ANTREA_PKG}/pkg/client/listers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 # Generate informers with K8s codegen tools.
 $GOPATH/bin/informer-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
   --versioned-clientset-package "${ANTREA_PKG}/pkg/client/clientset/versioned" \
   --listers-package "${ANTREA_PKG}/pkg/client/listers" \
@@ -62,9 +63,10 @@ $GOPATH/bin/deepcopy-gen \
   --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/core/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/stats" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
@@ -72,13 +74,14 @@ $GOPATH/bin/deepcopy-gen \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/conversion-gen  \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta1,${ANTREA_PKG}/pkg/apis/controlplane/" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2,${ANTREA_PKG}/pkg/apis/controlplane/v1beta1,${ANTREA_PKG}/pkg/apis/controlplane/" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1,${ANTREA_PKG}/pkg/apis/stats/" \
   -O zz_generated.conversion \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/openapi-gen  \
   --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
@@ -126,7 +129,7 @@ git checkout HEAD -- hack/boilerplate/license_header.raw.txt
 go mod vendor
 $GOPATH/bin/go-to-protobuf \
   --proto-import vendor \
-  --packages "${ANTREA_PKG}/pkg/apis/stats/v1alpha1,${ANTREA_PKG}/pkg/apis/controlplane/v1beta1" \
+  --packages "${ANTREA_PKG}/pkg/apis/stats/v1alpha1,${ANTREA_PKG}/pkg/apis/controlplane/v1beta1,${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
   --go-header-file hack/boilerplate/license_header.go.txt
 # Clean up vendor directory.
 rm -rf vendor
