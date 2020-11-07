@@ -128,7 +128,7 @@ spec:
   config: '{
     "cniVersion": "0.3.1",
     "name": "antrea",
-    "plugins": [ { "type": "antrea", "ipam": { "type": "host-local" } }, { "type": "portmap", "capabilities": {"portMappings": true} }]
+    "plugins": [ { "type": "antrea", "ipam": { "type": "host-local" } }, { "type": "portmap", "capabilities": {"portMappings": true}, { "type": "bandwidth", "capabilities": {"bandwidth": true} }]
 }'
 ```
 ## Deploy Antrea Image with hw-offload enabled

@@ -49,7 +49,7 @@ Your feedback is more than welcome!
 * Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
 [#antrea](https://kubernetes.slack.com/messages/CR2J23M0X) channel.
 * Attend the [project weekly meeting](https://VMware.zoom.us/j/823654111?pwd=MEV6blNtUUtqallVSkVFSGZtQ1kwUT09),
-every two weeks on Tuesday at 4AM GMT (9PM PDT, 6AM CET, 12PM China).
+every two weeks on Tuesday at 5AM UTC (9PM PDT, 6AM CET, 10.30AM IST, 1PM China).
   + [Meeting minutes](https://github.com/vmware-tanzu/antrea/wiki/Community-Meetings)
   + [Meeting recordings](https://www.youtube.com/playlist?list=PLH5zTfQ3otSA6EOYDNb-MvcQRXACdCbQw)
 * Join our mailing lists to always stay up-to-date with Antrea development:
