@@ -211,8 +211,17 @@ func (b *ClusterNetworkPolicySpecBuilder) WithEgressDNS() *ClusterNetworkPolicyS
 		Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
 	}
 
-	for _, e := range b.Spec.Egress {
+	for i, e := range b.Spec.Egress {
 		e.Ports = append(e.Ports, route53)
+		b.Spec.Egress[i] = e
+	}
+	return b
+}
+
+func (b *ClusterNetworkPolicySpecBuilder) AddEgressLogging() *ClusterNetworkPolicySpecBuilder {
+	for i, e := range b.Spec.Egress {
+		e.EnableLogging = true
+		b.Spec.Egress[i] = e
 	}
 	return b
 }

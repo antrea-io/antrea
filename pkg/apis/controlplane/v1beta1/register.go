@@ -26,19 +26,6 @@ const GroupName = "controlplane.antrea.tanzu.vmware.com"
 var (
 	// SchemeGroupVersion is group version used to register these objects.
 	SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v1beta1"}
-
-	AppliedToGroupVersionResource = schema.GroupVersionResource{
-		Group:    SchemeGroupVersion.Group,
-		Version:  SchemeGroupVersion.Version,
-		Resource: "appliedtogroups"}
-	AddressGroupVersionResource = schema.GroupVersionResource{
-		Group:    SchemeGroupVersion.Group,
-		Version:  SchemeGroupVersion.Version,
-		Resource: "addressgroups"}
-	NetworkPolicyVersionResource = schema.GroupVersionResource{
-		Group:    SchemeGroupVersion.Group,
-		Version:  SchemeGroupVersion.Version,
-		Resource: "networkpolicies"}
 )
 
 // Resource takes an unqualified resource and returns a Group qualified GroupResource.

@@ -41,7 +41,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/stats"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
@@ -107,7 +107,7 @@ func run(o *Options) error {
 		TrafficEncapMode:  encapMode,
 		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
 
-	routeClient, err := route.NewClient(serviceCIDRNet, encapMode, o.config.NoSNAT)
+	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
@@ -162,15 +162,17 @@ func run(o *Options) error {
 	// podUpdates is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated Pods.
-	podUpdates := make(chan v1beta1.PodReference, 100)
-	networkPolicyController := networkpolicy.NewNetworkPolicyController(
+	podUpdates := make(chan v1beta2.PodReference, 100)
+	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
 		ifaceStore,
 		nodeConfig.Name,
 		podUpdates,
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
-
+	if err != nil {
+		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
+	}
 	isChaining := false
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
@@ -255,16 +257,23 @@ func run(o *Options) error {
 	}
 	go apiServer.Run(stopCh)
 
+	// Start PacketIn for features and specify their own reason.
+	var packetInReasons []uint8
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		go ofClient.StartPacketInHandler(stopCh)
+		packetInReasons = append(packetInReasons, uint8(openflow.PacketInReasonTF))
+	}
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		packetInReasons = append(packetInReasons, uint8(openflow.PacketInReasonNP))
+	}
+	if len(packetInReasons) > 0 {
+		go ofClient.StartPacketInHandler(packetInReasons, stopCh)
 	}
 
 	// Initialize flow exporter to start go routines to poll conntrack flows and export IPFIX flow records
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		connStore := connections.NewConnectionStore(
-			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, o.config.OVSDatapathType),
+			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, o.config.OVSDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
 			ifaceStore,
-			serviceCIDRNet,
 			proxier,
 			o.pollInterval)
 		pollDone := make(chan struct{})

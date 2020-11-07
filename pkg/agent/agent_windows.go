@@ -146,7 +146,7 @@ func (i *Initializer) prepareOVSBridge() error {
 		return err
 	}
 	uplinkInterface := interfacestore.NewUplinkInterface(uplink)
-	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUId, config.UplinkOFPort}
+	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUId, config.UplinkOFPort} //nolint: govet
 	i.ifaceStore.AddInterface(uplinkInterface)
 	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 

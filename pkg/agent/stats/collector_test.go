@@ -23,31 +23,31 @@ import (
 
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	agenttypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 )
 
 var (
-	np1 = cpv1beta1.NetworkPolicyReference{
-		Type:      cpv1beta1.K8sNetworkPolicy,
+	np1 = cpv1beta.NetworkPolicyReference{
+		Type:      cpv1beta.K8sNetworkPolicy,
 		Namespace: "foo",
 		Name:      "bar",
 		UID:       "uid1",
 	}
-	np2 = cpv1beta1.NetworkPolicyReference{
-		Type:      cpv1beta1.K8sNetworkPolicy,
+	np2 = cpv1beta.NetworkPolicyReference{
+		Type:      cpv1beta.K8sNetworkPolicy,
 		Namespace: "foo",
 		Name:      "baz",
 		UID:       "uid2",
 	}
-	acnp1 = cpv1beta1.NetworkPolicyReference{
-		Type:      cpv1beta1.AntreaClusterNetworkPolicy,
+	acnp1 = cpv1beta.NetworkPolicyReference{
+		Type:      cpv1beta.AntreaClusterNetworkPolicy,
 		Namespace: "",
 		Name:      "baz",
 		UID:       "uid3",
 	}
-	anp1 = cpv1beta1.NetworkPolicyReference{
-		Type:      cpv1beta1.AntreaNetworkPolicy,
+	anp1 = cpv1beta.NetworkPolicyReference{
+		Type:      cpv1beta.AntreaNetworkPolicy,
 		Namespace: "foo",
 		Name:      "bar",
 		UID:       "uid4",
@@ -61,7 +61,7 @@ func TestCollect(t *testing.T) {
 	tests := []struct {
 		name                    string
 		ruleStats               map[uint32]*agenttypes.RuleMetric
-		ofIDToPolicyMap         map[uint32]*cpv1beta1.NetworkPolicyReference
+		ofIDToPolicyMap         map[uint32]*cpv1beta.NetworkPolicyReference
 		expectedStatsCollection *statsCollection
 	}{
 		{
@@ -83,7 +83,7 @@ func TestCollect(t *testing.T) {
 					Sessions: 3,
 				},
 			},
-			ofIDToPolicyMap: map[uint32]*cpv1beta1.NetworkPolicyReference{
+			ofIDToPolicyMap: map[uint32]*cpv1beta.NetworkPolicyReference{
 				1: &np1,
 				2: &np1,
 				3: &np2,
@@ -124,7 +124,7 @@ func TestCollect(t *testing.T) {
 					Sessions: 3,
 				},
 			},
-			ofIDToPolicyMap: map[uint32]*cpv1beta1.NetworkPolicyReference{
+			ofIDToPolicyMap: map[uint32]*cpv1beta.NetworkPolicyReference{
 				1: &np1,
 				2: &acnp1,
 				3: &anp1,
@@ -167,7 +167,7 @@ func TestCollect(t *testing.T) {
 					Sessions: 1,
 				},
 			},
-			ofIDToPolicyMap: map[uint32]*cpv1beta1.NetworkPolicyReference{
+			ofIDToPolicyMap: map[uint32]*cpv1beta.NetworkPolicyReference{
 				1: &np1,
 				2: nil,
 			},
@@ -204,7 +204,7 @@ func TestCalculateDiff(t *testing.T) {
 		name              string
 		lastStats         map[types.UID]*statsv1alpha1.TrafficStats
 		curStats          map[types.UID]*statsv1alpha1.TrafficStats
-		expectedstatsList []cpv1beta1.NetworkPolicyStats
+		expectedstatsList []cpv1beta.NetworkPolicyStats
 	}{
 		{
 			name: "new networkpolicy and existing networkpolicy",
@@ -227,9 +227,9 @@ func TestCalculateDiff(t *testing.T) {
 					Sessions: 3,
 				},
 			},
-			expectedstatsList: []cpv1beta1.NetworkPolicyStats{
+			expectedstatsList: []cpv1beta.NetworkPolicyStats{
 				{
-					NetworkPolicy: cpv1beta1.NetworkPolicyReference{UID: "uid1"},
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
 					TrafficStats: statsv1alpha1.TrafficStats{
 						Bytes:    24,
 						Packets:  2,
@@ -237,7 +237,7 @@ func TestCalculateDiff(t *testing.T) {
 					},
 				},
 				{
-					NetworkPolicy: cpv1beta1.NetworkPolicyReference{UID: "uid2"},
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid2"},
 					TrafficStats: statsv1alpha1.TrafficStats{
 						Bytes:    30,
 						Packets:  5,
@@ -272,7 +272,7 @@ func TestCalculateDiff(t *testing.T) {
 					Sessions: 0,
 				},
 			},
-			expectedstatsList: []cpv1beta1.NetworkPolicyStats{},
+			expectedstatsList: []cpv1beta.NetworkPolicyStats{},
 		},
 		{
 			name: "negative statistic",
@@ -300,9 +300,9 @@ func TestCalculateDiff(t *testing.T) {
 					Sessions: 1,
 				},
 			},
-			expectedstatsList: []cpv1beta1.NetworkPolicyStats{
+			expectedstatsList: []cpv1beta.NetworkPolicyStats{
 				{
-					NetworkPolicy: cpv1beta1.NetworkPolicyReference{UID: "uid1"},
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
 					TrafficStats: statsv1alpha1.TrafficStats{
 						Bytes:    3,
 						Packets:  3,
@@ -310,7 +310,7 @@ func TestCalculateDiff(t *testing.T) {
 					},
 				},
 				{
-					NetworkPolicy: cpv1beta1.NetworkPolicyReference{UID: "uid2"},
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid2"},
 					TrafficStats: statsv1alpha1.TrafficStats{
 						Bytes:    1,
 						Packets:  1,

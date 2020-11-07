@@ -153,6 +153,10 @@ created in the above step.
         {
           "type": "portmap",
           "capabilities": {"portMappings": true}
+        },
+        {
+          "type": "bandwidth",
+          "capabilities": {"bandwidth": true}
         }
       ]
     }

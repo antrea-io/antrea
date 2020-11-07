@@ -27,5 +27,10 @@ if [ ! -f /host/opt/cni/bin/portmap ]; then
     install -m 755 /opt/cni/bin/portmap /host/opt/cni/bin/portmap
 fi
 
+# Install bandwidth CNI binary file
+if [ ! -f /host/opt/cni/bin/bandwidth ]; then
+    install -m 755 /opt/cni/bin/bandwidth /host/opt/cni/bin/bandwidth
+fi
+
 # Load the OVS kernel module
 modprobe openvswitch

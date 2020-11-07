@@ -1,3 +1,19 @@
+// +build !windows
+
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package agent
 
 import (
@@ -127,7 +143,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
 	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
 	// TODO: Enhance the integration test by testing service.
-	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, nil, nil, testPollInterval)
+	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, nil, testPollInterval)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)

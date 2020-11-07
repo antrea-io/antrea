@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -71,12 +72,20 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
-	addressGroups := r.addressGroupStore.List()
-	list := new(controlplane.AddressGroupList)
-	list.Items = make([]controlplane.AddressGroup, len(addressGroups))
-	for i := range addressGroups {
-		store.ToAddressGroupMsg(addressGroups[i].(*types.AddressGroup), &list.Items[i], true)
+	labelSelector := labels.Everything()
+	if options != nil && options.LabelSelector != nil {
+		labelSelector = options.LabelSelector
 	}
+	addressGroups := r.addressGroupStore.List()
+	items := make([]controlplane.AddressGroup, 0, len(addressGroups))
+	for i := range addressGroups {
+		var item controlplane.AddressGroup
+		store.ToAddressGroupMsg(addressGroups[i].(*types.AddressGroup), &item, true)
+		if labelSelector.Matches(labels.Set(item.Labels)) {
+			items = append(items, item)
+		}
+	}
+	list := &controlplane.AddressGroupList{Items: items}
 	return list, nil
 }
 

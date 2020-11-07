@@ -159,7 +159,7 @@ antctl-release:
 .linux-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover github.com/vmware-tanzu/antrea/pkg/...
+	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover github.com/vmware-tanzu/antrea/cmd/... github.com/vmware-tanzu/antrea/pkg/...
 
 .PHONY: tidy
 tidy:
@@ -190,7 +190,7 @@ fmt:
 
 .golangci-bin:
 	@echo "===> Installing Golangci-lint <==="
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.21.0
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.32.1
 
 .PHONY: golangci
 golangci: .golangci-bin

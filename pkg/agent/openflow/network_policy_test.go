@@ -30,7 +30,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	mocks "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
@@ -142,14 +142,14 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	defaultAction := secv1alpha1.RuleActionAllow
 	ruleID1 := uint32(101)
 	rule1 := &types.PolicyRule{
-		Direction: v1beta1.DirectionOut,
+		Direction: v1beta2.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.30", "192.168.1.50"}),
 		Action:    &defaultAction,
 		Priority:  nil,
 		FlowID:    ruleID1,
 		TableID:   EgressRuleTable,
-		PolicyRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		PolicyRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "np1",
 			UID:       "id1",
@@ -175,14 +175,14 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 	ruleID2 := uint32(102)
 	rule2 := &types.PolicyRule{
-		Direction: v1beta1.DirectionOut,
+		Direction: v1beta2.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
 		Action:    &defaultAction,
 		To:        parseAddresses([]string{"0.0.0.0/0"}),
 		FlowID:    ruleID2,
 		TableID:   EgressRuleTable,
-		PolicyRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		PolicyRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "np1",
 			UID:       "id1",
@@ -213,19 +213,19 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	ruleID3 := uint32(103)
 	port1 := intstr.FromInt(8080)
 	port2 := intstr.FromInt(8081)
-	tcpProtocol := v1beta1.ProtocolTCP
-	npPort1 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port1}
-	npPort2 := v1beta1.Service{Protocol: &tcpProtocol, Port: &port2}
+	tcpProtocol := v1beta2.ProtocolTCP
+	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port1}
+	npPort2 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
 	rule3 := &types.PolicyRule{
-		Direction: v1beta1.DirectionOut,
+		Direction: v1beta2.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.60"}),
 		To:        parseAddresses([]string{"192.168.2.0/24"}),
 		Action:    &defaultAction,
-		Service:   []v1beta1.Service{npPort1, npPort2},
+		Service:   []v1beta2.Service{npPort1, npPort2},
 		FlowID:    ruleID3,
 		TableID:   EgressRuleTable,
-		PolicyRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		PolicyRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "np1",
 			UID:       "id1",
@@ -282,14 +282,14 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 
 	ruleID1 := uint32(10)
 	rule1 := &types.PolicyRule{
-		Direction: v1beta1.DirectionOut,
+		Direction: v1beta2.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
 		Action:    &defaultAction,
 		To:        parseAddresses([]string{"0.0.0.0/0"}),
 		FlowID:    ruleID1,
 		TableID:   EgressRuleTable,
-		PolicyRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.K8sNetworkPolicy,
+		PolicyRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "np1",
 			UID:       "id1",
@@ -297,15 +297,15 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 	}
 	ruleID2 := uint32(20)
 	rule2 := &types.PolicyRule{
-		Direction: v1beta1.DirectionOut,
+		Direction: v1beta2.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.60"}),
 		Action:    &defaultAction,
 		Priority:  &priorityRule2,
 		To:        parseAddresses([]string{"192.168.1.70"}),
 		FlowID:    ruleID2,
-		TableID:   DefaultTierEgressRuleTable,
-		PolicyRef: &v1beta1.NetworkPolicyReference{
-			Type:      v1beta1.AntreaNetworkPolicy,
+		TableID:   AntreaPolicyEgressRuleTable,
+		PolicyRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.AntreaNetworkPolicy,
 			Namespace: "ns1",
 			Name:      "np2",
 			UID:       "id2",
@@ -560,6 +560,7 @@ func parseAddresses(addrs []string) []types.Address {
 	var addresses = make([]types.Address, 0)
 	for _, addr := range addrs {
 		if !strings.Contains(addr, ".") {
+			// #nosec G109: parseAddresses is only called on constant test inputs, no potential integer overflow
 			ofPort, _ := strconv.Atoi(addr)
 			addresses = append(addresses, NewOFPortAddress(int32(ofPort)))
 		} else if strings.Contains(addr, "/") {
@@ -588,18 +589,18 @@ func prepareClient(ctrl *gomock.Controller) *client {
 	)
 	bridge := mocks.NewMockBridge(ctrl)
 	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	cnpOutTable = createMockTable(ctrl, DefaultTierEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
+	cnpOutTable = createMockTable(ctrl, AntreaPolicyEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
 	outTable = createMockTable(ctrl, EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext)
 	outDropTable = createMockTable(ctrl, EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext)
 	metricTable = createMockTable(ctrl, EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext)
 	outAllowTable = createMockTable(ctrl, l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext)
 	c = &client{
 		pipeline: map[binding.TableIDType]binding.Table{
-			DefaultTierEgressRuleTable: cnpOutTable,
-			EgressRuleTable:            outTable,
-			EgressDefaultTable:         outDropTable,
-			EgressMetricTable:          metricTable,
-			l3ForwardingTable:          outAllowTable,
+			AntreaPolicyEgressRuleTable: cnpOutTable,
+			EgressRuleTable:             outTable,
+			EgressDefaultTable:          outDropTable,
+			EgressMetricTable:           metricTable,
+			l3ForwardingTable:           outAllowTable,
 		},
 		policyCache:              policyCache,
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},

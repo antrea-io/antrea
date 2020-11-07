@@ -21,7 +21,7 @@ package networkpolicy
 import (
 	"k8s.io/apimachinery/pkg/types"
 
-	cpv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
@@ -63,8 +63,8 @@ type Policy struct {
 
 type Rule struct {
 	PolicyRef
-	Direction cpv1beta1.Direction `json:"direction,omitempty"`
-	RuleIndex int                 `json:"ruleindex,omitempty"`
+	Direction cpv1beta.Direction `json:"direction,omitempty"`
+	RuleIndex int                `json:"ruleindex,omitempty"`
 }
 
 // NewEndpointQuerier returns a new *endpointQuerier.
@@ -162,9 +162,9 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 	for _, internalPolicy := range applied {
 		responsePolicy := Policy{
 			PolicyRef: PolicyRef{
-				Namespace: internalPolicy.Namespace,
-				Name:      internalPolicy.Name,
-				UID:       internalPolicy.UID,
+				Namespace: internalPolicy.SourceRef.Namespace,
+				Name:      internalPolicy.SourceRef.Name,
+				UID:       internalPolicy.SourceRef.UID,
 			},
 		}
 		responsePolicies = append(responsePolicies, responsePolicy)
@@ -174,11 +174,11 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 	for _, internalPolicy := range egress {
 		newRule := Rule{
 			PolicyRef: PolicyRef{
-				Namespace: internalPolicy.policy.Namespace,
-				Name:      internalPolicy.policy.Name,
-				UID:       internalPolicy.policy.UID,
+				Namespace: internalPolicy.policy.SourceRef.Namespace,
+				Name:      internalPolicy.policy.SourceRef.Name,
+				UID:       internalPolicy.policy.SourceRef.UID,
 			},
-			Direction: cpv1beta1.DirectionOut,
+			Direction: cpv1beta.DirectionOut,
 			RuleIndex: internalPolicy.index,
 		}
 		responseRules = append(responseRules, newRule)
@@ -186,11 +186,11 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 	for _, internalPolicy := range ingress {
 		newRule := Rule{
 			PolicyRef: PolicyRef{
-				Namespace: internalPolicy.policy.Namespace,
-				Name:      internalPolicy.policy.Name,
-				UID:       internalPolicy.policy.UID,
+				Namespace: internalPolicy.policy.SourceRef.Namespace,
+				Name:      internalPolicy.policy.SourceRef.Name,
+				UID:       internalPolicy.policy.SourceRef.UID,
 			},
-			Direction: cpv1beta1.DirectionIn,
+			Direction: cpv1beta.DirectionIn,
 			RuleIndex: internalPolicy.index,
 		}
 		responseRules = append(responseRules, newRule)

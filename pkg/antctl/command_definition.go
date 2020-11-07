@@ -34,7 +34,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 )
 
@@ -560,9 +560,9 @@ func (cd *commandDefinition) tableOutputForQueryEndpoint(obj interface{}, writer
 		egress, ingress := make([][]string, 0), make([][]string, 0)
 		for _, rule := range endpoint.Rules {
 			ruleStr := []string{rule.Name, rule.Namespace, strconv.Itoa(rule.RuleIndex), string(rule.UID)}
-			if rule.Direction == v1beta1.DirectionIn {
+			if rule.Direction == v1beta2.DirectionIn {
 				ingress = append(ingress, ruleStr)
-			} else if rule.Direction == v1beta1.DirectionOut {
+			} else if rule.Direction == v1beta2.DirectionOut {
 				egress = append(egress, ruleStr)
 			}
 		}

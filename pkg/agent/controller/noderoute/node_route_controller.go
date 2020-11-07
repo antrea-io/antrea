@@ -67,7 +67,7 @@ type Controller struct {
 	nodeListerSynced cache.InformerSynced
 	queue            workqueue.RateLimitingInterface
 	// installedNodes records routes and flows installation states of Nodes.
-	// The key is the host name of the Node, the value is the podCIDR of the Node.
+	// The key is the host name of the Node, the value is the nodeRouteInfo of the Node.
 	// A node will be in the map after its flows and routes are installed successfully.
 	installedNodes *sync.Map
 }
@@ -114,8 +114,15 @@ func NewNodeRouteController(
 	return controller
 }
 
+// nodeRouteInfo is the route related information extracted from corev1.Node.
+type nodeRouteInfo struct {
+	podCIDR   *net.IPNet
+	nodeIP    net.IP
+	gatewayIP net.IP
+}
+
 // enqueueNode adds an object to the controller work queue
-// obj could be an *corev1.Node, or a DeletionFinalStateUnknown item.
+// obj could be a *corev1.Node, or a DeletionFinalStateUnknown item.
 func (c *Controller) enqueueNode(obj interface{}) {
 	node, isNode := obj.(*corev1.Node)
 	if !isNode {
@@ -353,13 +360,13 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 func (c *Controller) deleteNodeRoute(nodeName string) error {
 	klog.Infof("Deleting routes and flows to Node %s", nodeName)
 
-	podCIDR, installed := c.installedNodes.Load(nodeName)
+	obj, installed := c.installedNodes.Load(nodeName)
 	if !installed {
 		// Route is not added for this Node.
 		return nil
 	}
-
-	if err := c.routeClient.DeleteRoutes(podCIDR.(*net.IPNet)); err != nil {
+	nodeRouteInfo := obj.(*nodeRouteInfo)
+	if err := c.routeClient.DeleteRoutes(nodeRouteInfo.podCIDR); err != nil {
 		return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 	}
 
@@ -435,7 +442,11 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	if err := c.routeClient.AddRoutes(peerPodCIDR, peerNodeIP, peerGatewayIP); err != nil {
 		return err
 	}
-	c.installedNodes.Store(nodeName, peerPodCIDR)
+	c.installedNodes.Store(nodeName, &nodeRouteInfo{
+		podCIDR:   peerPodCIDR,
+		nodeIP:    peerNodeIP,
+		gatewayIP: peerGatewayIP,
+	})
 	return err
 }
 

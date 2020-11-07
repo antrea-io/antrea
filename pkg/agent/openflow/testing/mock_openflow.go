@@ -24,7 +24,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	v1beta2 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	openflow "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	proxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 	net "net"
@@ -167,10 +167,10 @@ func (mr *MockClientMockRecorder) GetPodFlowKeys(arg0 interface{}) *gomock.Call 
 }
 
 // GetPolicyFromConjunction mocks base method
-func (m *MockClient) GetPolicyFromConjunction(arg0 uint32) *v1beta1.NetworkPolicyReference {
+func (m *MockClient) GetPolicyFromConjunction(arg0 uint32) *v1beta2.NetworkPolicyReference {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPolicyFromConjunction", arg0)
-	ret0, _ := ret[0].(*v1beta1.NetworkPolicyReference)
+	ret0, _ := ret[0].(*v1beta2.NetworkPolicyReference)
 	return ret0
 }
 
@@ -178,6 +178,21 @@ func (m *MockClient) GetPolicyFromConjunction(arg0 uint32) *v1beta1.NetworkPolic
 func (mr *MockClientMockRecorder) GetPolicyFromConjunction(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPolicyFromConjunction", reflect.TypeOf((*MockClient)(nil).GetPolicyFromConjunction), arg0)
+}
+
+// GetPolicyInfoFromConjunction mocks base method
+func (m *MockClient) GetPolicyInfoFromConjunction(arg0 uint32) (string, string) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPolicyInfoFromConjunction", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(string)
+	return ret0, ret1
+}
+
+// GetPolicyInfoFromConjunction indicates an expected call of GetPolicyInfoFromConjunction
+func (mr *MockClientMockRecorder) GetPolicyInfoFromConjunction(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPolicyInfoFromConjunction", reflect.TypeOf((*MockClient)(nil).GetPolicyInfoFromConjunction), arg0)
 }
 
 // GetTunnelVirtualMAC mocks base method
@@ -462,15 +477,15 @@ func (mr *MockClientMockRecorder) ReassignFlowPriorities(arg0, arg1 interface{})
 }
 
 // RegisterPacketInHandler mocks base method
-func (m *MockClient) RegisterPacketInHandler(arg0 string, arg1 interface{}) {
+func (m *MockClient) RegisterPacketInHandler(arg0 byte, arg1 string, arg2 interface{}) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RegisterPacketInHandler", arg0, arg1)
+	m.ctrl.Call(m, "RegisterPacketInHandler", arg0, arg1, arg2)
 }
 
 // RegisterPacketInHandler indicates an expected call of RegisterPacketInHandler
-func (mr *MockClientMockRecorder) RegisterPacketInHandler(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) RegisterPacketInHandler(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPacketInHandler", reflect.TypeOf((*MockClient)(nil).RegisterPacketInHandler), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPacketInHandler", reflect.TypeOf((*MockClient)(nil).RegisterPacketInHandler), arg0, arg1, arg2)
 }
 
 // ReplayFlows mocks base method
@@ -500,15 +515,15 @@ func (mr *MockClientMockRecorder) SendTraceflowPacket(arg0, arg1, arg2, arg3, ar
 }
 
 // StartPacketInHandler mocks base method
-func (m *MockClient) StartPacketInHandler(arg0 <-chan struct{}) {
+func (m *MockClient) StartPacketInHandler(arg0 []byte, arg1 <-chan struct{}) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartPacketInHandler", arg0)
+	m.ctrl.Call(m, "StartPacketInHandler", arg0, arg1)
 }
 
 // StartPacketInHandler indicates an expected call of StartPacketInHandler
-func (mr *MockClientMockRecorder) StartPacketInHandler(arg0 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) StartPacketInHandler(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPacketInHandler", reflect.TypeOf((*MockClient)(nil).StartPacketInHandler), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPacketInHandler", reflect.TypeOf((*MockClient)(nil).StartPacketInHandler), arg0, arg1)
 }
 
 // SubscribePacketIn mocks base method

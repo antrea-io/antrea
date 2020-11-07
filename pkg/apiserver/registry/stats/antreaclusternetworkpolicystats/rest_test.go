@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
@@ -129,6 +130,7 @@ func TestRESTList(t *testing.T) {
 		name                      string
 		networkPolicyStatsEnabled bool
 		antreaPolicyEnabled       bool
+		labelSelector             labels.Selector
 		stats                     map[string]statsv1alpha1.AntreaClusterNetworkPolicyStats
 		expectedObj               runtime.Object
 		expectedErr               bool
@@ -187,6 +189,46 @@ func TestRESTList(t *testing.T) {
 			},
 			expectedErr: false,
 		},
+		{
+			name:                      "label selector selecting nothing",
+			networkPolicyStatsEnabled: true,
+			antreaPolicyEnabled:       true,
+			labelSelector:             labels.Nothing(),
+			stats: map[string]statsv1alpha1.AntreaClusterNetworkPolicyStats{
+				"foo": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "foo",
+					},
+				},
+			},
+			expectedObj: &statsv1alpha1.AntreaClusterNetworkPolicyStatsList{
+				Items: []statsv1alpha1.AntreaClusterNetworkPolicyStats{},
+			},
+			expectedErr: false,
+		},
+		{
+			name:                      "label selector selecting everything",
+			networkPolicyStatsEnabled: true,
+			antreaPolicyEnabled:       true,
+			labelSelector:             labels.Everything(),
+			stats: map[string]statsv1alpha1.AntreaClusterNetworkPolicyStats{
+				"foo": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "foo",
+					},
+				},
+			},
+			expectedObj: &statsv1alpha1.AntreaClusterNetworkPolicyStatsList{
+				Items: []statsv1alpha1.AntreaClusterNetworkPolicyStats{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "foo",
+						},
+					},
+				},
+			},
+			expectedErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -196,7 +238,7 @@ func TestRESTList(t *testing.T) {
 			r := &REST{
 				statsProvider: &fakeStatsProvider{stats: tt.stats},
 			}
-			actualObj, err := r.List(context.TODO(), &internalversion.ListOptions{})
+			actualObj, err := r.List(context.TODO(), &internalversion.ListOptions{LabelSelector: tt.labelSelector})
 			if tt.expectedErr {
 				require.Error(t, err)
 			} else {

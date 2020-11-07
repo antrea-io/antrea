@@ -41,18 +41,18 @@ var protocols = map[string]uint8{
 var _ ConnTrackDumper = new(connTrackOvsCtl)
 
 type connTrackOvsCtl struct {
-	nodeConfig   *config.NodeConfig
-	serviceCIDR  *net.IPNet
-	ovsctlClient ovsctl.OVSCtlClient
+	nodeConfig           *config.NodeConfig
+	serviceCIDR          *net.IPNet
+	ovsctlClient         ovsctl.OVSCtlClient
+	isAntreaProxyEnabled bool
 }
 
-func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet) *connTrackOvsCtl {
-	ovsctlClient := ovsctl.NewClient(nodeConfig.OVSBridge)
-
+func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, isAntreaProxyEnabled bool) *connTrackOvsCtl {
 	return &connTrackOvsCtl{
 		nodeConfig,
 		serviceCIDR,
-		ovsctlClient,
+		ovsctl.NewClient(nodeConfig.OVSBridge),
+		isAntreaProxyEnabled,
 	}
 }
 
@@ -63,7 +63,7 @@ func (ct *connTrackOvsCtl) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
 
-	filteredConns := filterAntreaConns(conns, ct.nodeConfig, ct.serviceCIDR, zoneFilter)
+	filteredConns := filterAntreaConns(conns, ct.nodeConfig, ct.serviceCIDR, zoneFilter, ct.isAntreaProxyEnabled)
 	klog.V(2).Infof("FlowExporter considered flows: %d", len(filteredConns))
 
 	return filteredConns, totalConns, nil
@@ -96,7 +96,7 @@ func (ct *connTrackOvsCtl) ovsAppctlDumpConnections(zoneFilter uint16) ([]*flowe
 
 // flowStringToAntreaConnection parses the flow string and converts to Antrea connection.
 // Example of flow string:
-// "tcp,orig=(src=10.10.1.2,dst=10.10.1.3,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=10.10.1.3,dst=10.10.1.2,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397"
+// "tcp,orig=(src=10.10.1.2,dst=10.10.1.3,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=10.10.1.3,dst=10.10.1.2,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,mark=32,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397"
 func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter.Connection, error) {
 	conn := flowexporter.Connection{}
 	flowSlice := strings.Split(flow, ",")
@@ -204,6 +204,13 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 				inZone = true
 				conn.Zone = uint16(val)
 			}
+		case strings.Contains(fs, "mark"):
+			fields := strings.Split(fs, "=")
+			val, err := strconv.Atoi(fields[len(fields)-1])
+			if err != nil {
+				return nil, fmt.Errorf("conversion of mark '%s' to int failed", fields[len(fields)-1])
+			}
+			conn.Mark = uint32(val)
 		case strings.Contains(fs, "timeout"):
 			fields := strings.Split(fs, "=")
 			val, err := strconv.Atoi(fields[len(fields)-1])

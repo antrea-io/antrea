@@ -7,8 +7,6 @@ toc:
         url: /getting-started
       - page: Deploying on kind
         url: /kind
-      - page: Manual Installation
-        url: /contributors/manual-installation
       - page: Configuration
         url: /configuration
   - title: Cloud Deployment
@@ -49,6 +47,10 @@ toc:
         url: /traceflow-guide
       - page: Versioning
         url: /versioning
+      - page: Antrea API Groups
+        url: /api
+      - page: Antrea API Reference
+        url: /api-reference
   - title: Windows
     subfolderitems:
       - page: Windows Deployment
@@ -71,6 +73,8 @@ toc:
         url: /contributors/issue-management
       - page: GitHub Labels
         url: /contributors/github-labels
+      - page: Manual Installation
+        url: /contributors/manual-installation
   - title: Project Information
     subfolderitems: 
     - page: Contributing to Antrea

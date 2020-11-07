@@ -20,9 +20,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
@@ -30,7 +30,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
 )
 
 // REST implements rest.Storage for NetworkPolicies.
@@ -60,12 +59,7 @@ func (r *REST) NewList() runtime.Object {
 }
 
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	ns, ok := request.NamespaceFrom(ctx)
-	if !ok || len(ns) == 0 {
-		return nil, errors.NewBadRequest("Namespace parameter required.")
-	}
-	key := k8s.NamespacedName(ns, name)
-	networkPolicy, exists, err := r.networkPolicyStore.Get(key)
+	networkPolicy, exists, err := r.networkPolicyStore.Get(name)
 	if err != nil {
 		return nil, errors.NewInternalError(err)
 	}
@@ -78,32 +72,29 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
-	ns, namespaceScoped := request.NamespaceFrom(ctx)
+	labelSelector := labels.Everything()
+	if options != nil && options.LabelSelector != nil {
+		labelSelector = options.LabelSelector
+	}
 	networkPolicies := r.networkPolicyStore.List()
-	list := new(controlplane.NetworkPolicyList)
+	items := make([]controlplane.NetworkPolicy, 0, len(networkPolicies))
 	for i := range networkPolicies {
-		if !namespaceScoped || len(ns) == 0 || networkPolicies[i].(*types.NetworkPolicy).Namespace == ns {
-			policy := controlplane.NetworkPolicy{}
-			store.ToNetworkPolicyMsg(networkPolicies[i].(*types.NetworkPolicy), &policy, true)
-			list.Items = append(list.Items, policy)
+		var item controlplane.NetworkPolicy
+		store.ToNetworkPolicyMsg(networkPolicies[i].(*types.NetworkPolicy), &item, true)
+		if labelSelector.Matches(labels.Set(item.Labels)) {
+			items = append(items, item)
 		}
 	}
+	list := &controlplane.NetworkPolicyList{Items: items}
 	return list, nil
 }
 
 func (r *REST) NamespaceScoped() bool {
-	return true
+	return false
 }
 
 func (r *REST) Watch(ctx context.Context, options *internalversion.ListOptions) (watch.Interface, error) {
 	key, label, field := networkpolicy.GetSelectors(options)
-	if len(key) > 0 {
-		ns, ok := request.NamespaceFrom(ctx)
-		if !ok || len(ns) == 0 {
-			return nil, errors.NewBadRequest("Namespace parameter required.")
-		}
-		key = k8s.NamespacedName(ns, key)
-	}
 	return r.networkPolicyStore.Watch(ctx, key, label, field)
 }
 

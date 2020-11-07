@@ -16,7 +16,6 @@ package connections
 
 import (
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
@@ -40,18 +39,16 @@ type ConnectionStore struct {
 	connections   map[flowexporter.ConnectionKey]flowexporter.Connection
 	connDumper    ConnTrackDumper
 	ifaceStore    interfacestore.InterfaceStore
-	serviceCIDR   *net.IPNet
 	antreaProxier proxy.Proxier
 	pollInterval  time.Duration
 	mutex         sync.Mutex
 }
 
-func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, serviceCIDR *net.IPNet, proxier proxy.Proxier, pollInterval time.Duration) *ConnectionStore {
+func NewConnectionStore(connTrackDumper ConnTrackDumper, ifaceStore interfacestore.InterfaceStore, proxier proxy.Proxier, pollInterval time.Duration) *ConnectionStore {
 	return &ConnectionStore{
 		connections:   make(map[flowexporter.ConnectionKey]flowexporter.Connection),
 		connDumper:    connTrackDumper,
 		ifaceStore:    ifaceStore,
-		serviceCIDR:   serviceCIDR,
 		antreaProxier: proxier,
 		pollInterval:  pollInterval,
 	}
@@ -131,7 +128,7 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 
 		// Process Pod-to-Service flows when Antrea Proxy is enabled.
 		if cs.antreaProxier != nil {
-			if cs.serviceCIDR.Contains(conn.TupleOrig.DestinationAddress) {
+			if conn.Mark == openflow.ServiceCTMark {
 				clusterIP := conn.TupleOrig.DestinationAddress.String()
 				svcPort := conn.TupleOrig.DestinationPort
 				protocol, err := lookupServiceProtocol(conn.TupleOrig.Protocol)

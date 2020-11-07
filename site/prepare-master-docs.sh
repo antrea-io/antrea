@@ -63,6 +63,7 @@ copy_markdowns_to_docs_master
 # This is done after copy_markdowns_to_docs_master, to overwrite changes made by
 # that function
 copy_root_markdowns_to_docs_master
+cp -f ../../api-reference.md .
 
 popd
 

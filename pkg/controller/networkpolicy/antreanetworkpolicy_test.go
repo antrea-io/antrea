@@ -89,9 +89,8 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "npA",
-				Namespace: "ns1",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.AntreaNetworkPolicy,
 					Namespace: "ns1",
@@ -175,9 +174,8 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidB",
-				Name:      "npB",
-				Namespace: "ns2",
+				UID:  "uidB",
+				Name: "uidB",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.AntreaNetworkPolicy,
 					Namespace: "ns2",
@@ -279,9 +277,8 @@ func TestAddANP(t *testing.T) {
 				},
 			},
 			expPolicy: &antreatypes.NetworkPolicy{
-				UID:       "uidA",
-				Name:      "anpA",
-				Namespace: "nsA",
+				UID:  "uidA",
+				Name: "uidA",
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.AntreaNetworkPolicy,
 					Namespace: "nsA",
@@ -316,7 +313,7 @@ func TestAddANP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, npc := newController()
 			npc.addANP(tt.inputPolicy)
-			key, _ := keyFunc(tt.inputPolicy)
+			key := internalNetworkPolicyKeyFunc(tt.inputPolicy)
 			actualPolicyObj, _, _ := npc.internalNetworkPolicyStore.Get(key)
 			actualPolicy := actualPolicyObj.(*antreatypes.NetworkPolicy)
 
@@ -338,7 +335,7 @@ func TestDeleteANP(t *testing.T) {
 	assert.False(t, found, "expected AppliedToGroup to be deleted")
 	adgs := npc.addressGroupStore.List()
 	assert.Len(t, adgs, 0, "expected empty AddressGroup list")
-	key, _ := keyFunc(anpObj)
+	key := internalNetworkPolicyKeyFunc(anpObj)
 	_, found, _ = npc.internalNetworkPolicyStore.Get(key)
 	assert.False(t, found, "expected internal NetworkPolicy to be deleted")
 }

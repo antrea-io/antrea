@@ -26,7 +26,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
 )
 
 const (
@@ -103,7 +102,6 @@ func genNetworkPolicyEvent(key string, prevObj, currObj interface{}, rv uint64) 
 // ToNetworkPolicyMsg converts the stored NetworkPolicy to its message form.
 // If includeBody is true, Rules and AppliedToGroups will be copied.
 func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *controlplane.NetworkPolicy, includeBody bool) {
-	out.Namespace = in.Namespace
 	out.Name = in.Name
 	out.UID = in.UID
 	out.SourceRef = in.SourceRef
@@ -123,7 +121,7 @@ func NetworkPolicyKeyFunc(obj interface{}) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("object is not *types.NetworkPolicy: %v", obj)
 	}
-	return k8s.NamespacedName(policy.Namespace, policy.Name), nil
+	return policy.Name, nil
 }
 
 // NewNetworkPolicyStore creates a store of NetworkPolicy.

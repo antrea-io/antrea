@@ -25,7 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -218,13 +218,16 @@ type Client interface {
 	InitialTLVMap() error
 
 	// Find network policy and namespace by conjunction ID.
-	GetPolicyFromConjunction(ruleID uint32) *v1beta1.NetworkPolicyReference
+	GetPolicyFromConjunction(ruleID uint32) *v1beta2.NetworkPolicyReference
 
-	// RegisterPacketInHandler registers PacketIn handler to process PacketIn event.
-	RegisterPacketInHandler(packetHandlerName string, packetInHandler interface{})
+	// Find Network Policy reference and OFpriority by conjunction ID.
+	GetPolicyInfoFromConjunction(ruleID uint32) (string, string)
+
 	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received
 	// packets through registered handlers.
-	StartPacketInHandler(stopCh <-chan struct{})
+	RegisterPacketInHandler(packetHandlerReason uint8, packetHandlerName string, packetInHandler interface{})
+
+	StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{})
 	// Get traffic metrics of each NetworkPolicy rule.
 	NetworkPolicyMetrics() map[uint32]*types.RuleMetric
 }
@@ -674,8 +677,6 @@ func (c *client) SendTraceflowPacket(
 	inPort uint32,
 	outPort int32) error {
 
-	regName := fmt.Sprintf("%s%d", binding.NxmFieldReg, TraceflowReg)
-
 	packetOutBuilder := c.bridge.BuildPacketOut()
 	parsedSrcMAC, _ := net.ParseMAC(srcMAC)
 	parsedDstMAC, _ := net.ParseMAC(dstMAC)
@@ -705,6 +706,7 @@ func (c *client) SendTraceflowPacket(
 	case 6:
 		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
 		if TCPSrcPort == 0 {
+			// #nosec G404: random number generator not used for security purposes
 			TCPSrcPort = uint16(rand.Uint32())
 		}
 		packetOutBuilder = packetOutBuilder.SetTCPSrcPort(TCPSrcPort)
@@ -720,32 +722,32 @@ func (c *client) SendTraceflowPacket(
 	if outPort != -1 {
 		packetOutBuilder = packetOutBuilder.SetOutport(uint32(outPort))
 	}
-	packetOutBuilder = packetOutBuilder.AddLoadAction(regName, uint64(dataplaneTag), OfTraceflowMarkRange)
+	packetOutBuilder = packetOutBuilder.AddLoadAction(binding.NxmFieldIPToS, uint64(dataplaneTag), traceflowTagToSRange)
 
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
 func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
-	flow := c.traceflowL2ForwardOutputFlow(dataplaneTag, cookie.Default)
+	flows := c.traceflowL2ForwardOutputFlows(dataplaneTag, cookie.Default)
+	if err := c.AddAll(flows); err != nil {
+		return err
+	}
+	flow := c.traceflowConnectionTrackFlows(dataplaneTag, cookie.Default)
 	if err := c.Add(flow); err != nil {
 		return err
 	}
-	flow = c.traceflowConnectionTrackFlows(dataplaneTag, cookie.Default)
-	if err := c.Add(flow); err != nil {
-		return err
-	}
-	flows := []binding.Flow{}
 	c.conjMatchFlowLock.Lock()
 	defer c.conjMatchFlowLock.Unlock()
+	flows = []binding.Flow{}
 	for _, ctx := range c.globalConjMatchFlowCache {
 		if ctx.dropFlow != nil {
 			flows = append(
 				flows,
 				ctx.dropFlow.CopyToBuilder(priorityNormal+2, false).
-					MatchRegRange(int(TraceflowReg), uint32(dataplaneTag), OfTraceflowMarkRange).
+					MatchIPDscp(dataplaneTag).
 					SetHardTimeout(300).
-					Action().SendToController(1).
+					Action().SendToController(uint8(PacketInReasonTF)).
 					Done())
 		}
 	}
