@@ -54,7 +54,8 @@ function Install-AntreaAgent {
         [parameter(Mandatory = $false, HelpMessage="Kubernetes home path")] [string] $KubernetesHome="c:\k",
         [parameter(Mandatory = $false, HelpMessage="kubeconfig file path")] [string] $KubeConfig="c:\k\config",
         [parameter(Mandatory = $false, HelpMessage="Antrea version to use")] [string] $AntreaVersion="latest",
-        [parameter(Mandatory = $false, HelpMessage="Antrea home path")] [string] $AntreaHome="c:\k\antrea"
+        [parameter(Mandatory = $false, HelpMessage="Antrea home path")] [string] $AntreaHome="c:\k\antrea",
+        [parameter(Mandatory = $false, HelpMessage="Regenerate antrea-agent configuration files")] [bool] $ReconfigureAntreaAgent=$false
     )
     $ErrorActionPreference = "Stop"
 
@@ -117,25 +118,60 @@ function Install-AntreaAgent {
 
     New-DirectoryIfNotExist $AntreaEtc
     Get-WebFileIfNotExist $AntreaCNIConfigFile "$AntreaRawUrlBase/build/yamls/windows/base/conf/antrea-cni.conflist"
-    if (!(Test-Path $AntreaAgentConfigPath)) {
-        Get-WebFileIfNotExist $AntreaAgentConfigPath "$AntreaRawUrlBase/build/yamls/windows/base/conf/antrea-agent.conf"
-        yq w -i $AntreaAgentConfigPath clientConnection.kubeconfig $AntreaEtc\antrea-agent.kubeconfig
-        yq w -i $AntreaAgentConfigPath antreaClientConnection.kubeconfig $AntreaEtc\antrea-agent.antrea.kubeconfig
+    Get-WebFileIfNotExist $AntreaAgentConfigPath "$AntreaRawUrlBase/build/yamls/windows/base/conf/antrea-agent.conf"
+    yq w -i $AntreaAgentConfigPath clientConnection.kubeconfig $AntreaEtc\antrea-agent.kubeconfig
+    yq w -i $AntreaAgentConfigPath antreaClientConnection.kubeconfig $AntreaEtc\antrea-agent.antrea.kubeconfig
+    if (!$ReconfigureAntreaAgent -and (Test-Path $AntreaEtc\antrea-agent.kubeconfig) -and (Test-Path $AntreaEtc\antrea-agent.antrea.kubeconfig)) {
+        Write-Host Write-Host "Skip setting antrea-agent configurtion."
+        return $true
+    }
+    if (!(Test-Path $AntreaEtc\antrea-agent.kubeconfig) -or $ReconfigureAntreaAgent) {
+        Write-Host "Creating antrea-agent config file: $AntreaAgentConfigPath"
+        rm $AntreaEtc\antrea-agent.kubeconfig -Force -ErrorAction SilentlyContinue
         # Create the kubeconfig file that contains the K8s APIServer service and the token of antrea ServiceAccount.
         $APIServer=$(kubectl --kubeconfig=$KubeConfig get service kubernetes -o jsonpath='{.spec.clusterIP}')
+        if (!$?) {
+            Write-Host "Fail to get Kubernetes Service IP"
+            return $false
+        }
         $APIServerPort=$(kubectl --kubeconfig=$KubeConfig get service kubernetes -o jsonpath='{.spec.ports[0].port}')
+        if (!$?) {
+            Write-Host "Fail to get Kubernetes Service port"
+            return $false
+        }
         $APIServer="https://$APIServer" + ":" + $APIServerPort
         $TOKEN=$(kubectl --kubeconfig=$KubeConfig get secrets -n kube-system -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='antrea-agent')].data.token}")
+        if (!$?) {
+            Write-Host "Fail to get antrea-agent service-account token"
+            return $false
+        }
         $TOKEN=$([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($TOKEN)))
         kubectl config --kubeconfig=$AntreaEtc\antrea-agent.kubeconfig set-cluster kubernetes --server=$APIServer --insecure-skip-tls-verify
         kubectl config --kubeconfig=$AntreaEtc\antrea-agent.kubeconfig set-credentials antrea-agent --token=$TOKEN
         kubectl config --kubeconfig=$AntreaEtc\antrea-agent.kubeconfig set-context antrea-agent@kubernetes --cluster=kubernetes --user=antrea-agent
         kubectl config --kubeconfig=$AntreaEtc\antrea-agent.kubeconfig use-context antrea-agent@kubernetes
-
+    }
+    if (!(Test-Path $AntreaEtc\antrea-agent.antrea.kubeconfig) -or $ReconfigureAntreaAgent) {
+        Write-Host "Creating antrea-agent config file: $AntreaAgentConfigPath"
+        rm $AntreaEtc\antrea-agent.antrea.kubeconfig -Force -ErrorAction SilentlyContinue
         # Create the kubeconfig file that contains the antrea-controller APIServer service and the token of antrea ServiceAccount.
         $AntreaAPISServer=$(kubectl --kubeconfig=$KubeConfig get service -n kube-system antrea -o jsonpath='{.spec.clusterIP}')
+        if (!$?) {
+            Write-Host "Fail to get antrea Service IP"
+            return $false
+        }
         $AntreaAPISServerPort=$(kubectl --kubeconfig=$KubeConfig get service -n kube-system antrea -o jsonpath='{.spec.ports[0].port}')
+        if (!$?) {
+            Write-Host "Fail to get antrea Service port"
+            return $false
+        }
         $AntreaAPISServer="https://$AntreaAPISServer" + ":" + $AntreaAPISServerPort
+        $TOKEN=$(kubectl --kubeconfig=$KubeConfig get secrets -n kube-system -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='antrea-agent')].data.token}")
+        if (!$?) {
+            Write-Host "Fail to get antrea-agent service-account token"
+            return $false
+        }
+        $TOKEN=$([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($TOKEN)))
         kubectl config --kubeconfig=$AntreaEtc\antrea-agent.antrea.kubeconfig set-cluster antrea --server=$AntreaAPISServer --insecure-skip-tls-verify
         kubectl config --kubeconfig=$AntreaEtc\antrea-agent.antrea.kubeconfig set-credentials antrea-agent --token=$TOKEN
         kubectl config --kubeconfig=$AntreaEtc\antrea-agent.antrea.kubeconfig set-context antrea-agent@antrea --cluster=antrea --user=antrea-agent

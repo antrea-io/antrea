@@ -4,7 +4,8 @@ Param(
     [parameter(Mandatory = $false, HelpMessage="kubeconfig file path")] [string] $KubeConfig="c:\k\config",
     [parameter(Mandatory = $false, HelpMessage="Antrea version to use")] [string] $AntreaVersion="latest",
     [parameter(Mandatory = $false, HelpMessage="Antrea home path")] [string] $AntreaHome="c:\k\antrea",
-    [parameter(Mandatory = $false, HelpMessage="Start kube-proxy")] [bool] $StartKubeProxy=$true
+    [parameter(Mandatory = $false, HelpMessage="Start kube-proxy")] [bool] $StartKubeProxy=$true,
+    [parameter(Mandatory = $false, HelpMessage="Regenerate antrea-agent configuration files")] [bool] $ReconfigureAntreaAgent=$false
 )
 $ErrorActionPreference = "Stop"
 
@@ -65,7 +66,15 @@ if (!(Test-Path $helper))
 }
 
 Write-Host "Checking kube-proxy and antrea-agent installation..."
-if (!(Install-AntreaAgent -KubernetesVersion $KubernetesVersion -KubernetesHome $KubernetesHome -KubeConfig $KubeConfig -AntreaVersion $AntreaVersion -AntreaHome $AntreaHome)) {
+$InstallAgentArgs = @{
+    "-KubernetesVersion" = $KubernetesVersion;
+    "-KubernetesHome" = $KubernetesHome;
+    "-KubeConfig" = $KubeConfig;
+    "-AntreaVersion" = $AntreaVersion;
+    "-AntreaHome" = $AntreaHome;
+    "-ReconfigureAntreaAgent" = $ReconfigureAntreaAgent
+}
+if (!(Install-AntreaAgent @InstallAgentArgs)) {
     Write-Host "Failed to install antrea-agent, exit"
     exit 1
 }
