@@ -24,6 +24,7 @@
       - [Pod-to-Service Traffic](#pod-to-service-traffic)
     - [Flow Records](#flow-records)
     - [Node Throughput](#node-throughput)
+    - [Network Policy](#network-policy)
 <!-- /toc -->
 
 ## Overview
@@ -119,16 +120,22 @@ the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 
 #### IEs from Antrea IE Registry
 
-| IPFIX Information Element | Enterprise ID | Field ID | Type        |
-|---------------------------|---------------|----------|-------------|
-| sourcePodNamespace        | 56506         | 100      | string      |
-| sourcePodName             | 56506         | 101      | string      |
-| destinationPodNamespace   | 56506         | 102      | string      |
-| destinationPodName        | 56506         | 103      | string      |
-| sourceNodeName            | 56506         | 104      | string      |
-| destinationNodeName       | 56506         | 105      | string      |
-| destinationClusterIPv4    | 56506         | 106      | ipv4Address |
-| destinationServicePortName| 56506         | 109      | string      |
+| IPFIX Information Element    | Enterprise ID | Field ID | Type        |
+|------------------------------|---------------|----------|-------------|
+| sourcePodNamespace           | 56506         | 100      | string      |
+| sourcePodName                | 56506         | 101      | string      |
+| destinationPodNamespace      | 56506         | 102      | string      |
+| destinationPodName           | 56506         | 103      | string      |
+| sourceNodeName               | 56506         | 104      | string      |
+| destinationNodeName          | 56506         | 105      | string      |
+| destinationClusterIPv4       | 56506         | 106      | ipv4Address |
+| destinationClusterIPv6       | 56506         | 107      | ipv6Address |
+| destinationServicePort       | 56506         | 108      | unsigned16  |
+| destinationServicePortName   | 56506         | 109      | string      |
+| ingressNetworkPolicyName     | 56506         | 110      | string      |
+| ingressNetworkPolicyNamespace| 56506         | 111      | string      |
+| egressNetworkPolicyName      | 56506         | 112      | string      |
+| egressNetworkPolicyNamespace | 56506         | 113      | string      |
 
 ### Supported capabilities
 
@@ -251,3 +258,14 @@ Visualization Node Throughput Dashboard">
 
 <img src="https://downloads.antrea.io/static/flow-visualization-node-2.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
+
+#### Network Policy 
+Network Policy dashboard provides filters over ingress network policy name and namespace, egress 
+network policy name and namespace to view corresponding flow throughput under network policy.
+<img src="https://downloads.antrea.io/static/flow-visualization-np-1.png" width="900" alt="Flow
+Visualization Network Policy Dashboard">
+
+With filters applied:
+
+<img src="https://downloads.antrea.io/static/flow-visualization-np-2.png" width="900" alt="Flow
+Visualization Network Policy Dashboard">
