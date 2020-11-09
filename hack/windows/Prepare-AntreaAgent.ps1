@@ -5,8 +5,8 @@ Prepare environment for antrea-agent.
 .DESCRIPTION
 This script prepares environment needed by antrea-agent which includes:
 - Cleaning stale Antrea network resources if they exist.
-- Prepare a service network interface which is needed by kube-proxy. Without the interface, kube-proxy cannot
-  provide the proxy for Kubernetes services.
+- Prepare a network interface which is needed by kube-proxy. Without the interface, kube-proxy cannot
+  provide the proxy for Kubernetes Services.
 #>
 
 $ErrorActionPreference = 'Stop'

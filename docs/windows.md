@@ -171,7 +171,7 @@ curl.exe -LO https://github.com/kubernetes-sigs/sig-windows-tools/releases/lates
 .\PrepareNode.ps1 -KubernetesVersion v1.18.0
 ```
 
-4. Prepare node environment needed by antrea-agent
+4. Prepare Node environment needed by antrea-agent
 
 Run the following commands to prepare the Node environment needed by antrea-agent:
 
@@ -188,7 +188,7 @@ The script `Prepare-AntreaAgent.ps1` performs following tasks:
 
 - Prepare network adapter for kube-proxy.
 
-    kube-proxy needs a network adapter to configure Kubernetes Service IPs and
+    kube-proxy needs a network adapter to configure Kubernetes Services IPs and
     uses the adapter for proxying connections to Service. Use following script
     to create the network adapter. The adapter will be deleted automatically by
     Windows after the Windows Node reboots.
