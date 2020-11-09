@@ -131,7 +131,7 @@
           - nobody123_nobody123_
           only_trigger_phrase: false
           trigger_permit_all: true
-          status_context: jenkins-integration
+          status_context: Integration tests
           status_url: null
           success_status: Build finished.
           failure_status: Failed.
