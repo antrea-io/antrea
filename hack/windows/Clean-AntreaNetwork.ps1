@@ -18,7 +18,7 @@ function GetHnsnetworkId($NetName) {
 $AntreaHnsNetworkName = "antrea-hnsnetwork"
 
 Write-Host "Delete OVS bridge: br-int"
-ovs-vsctl.exe --no-wait del-br br-int
+ovs-vsctl.exe --no-wait --if-exists del-br br-int
 $MaxRetryCount = 10
 $RetryCountRange = 1..$MaxRetryCount
 $BrIntDeleted = $false
