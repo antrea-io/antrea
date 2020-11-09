@@ -23,15 +23,20 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 func ExecOutputTrim(cmd string) (string, error) {
@@ -92,26 +97,89 @@ func TestInitialize(t *testing.T) {
 
 	tcs := []struct {
 		// variations
-		mode config.TrafficEncapModeType
+		networkConfig        *config.NetworkConfig
+		xtablesHoldDuration  time.Duration
+		expectNoTrackRules   bool
+		expectUDPPortInRules int
 	}{
-		{mode: config.TrafficEncapModeNoEncap},
-		{mode: config.TrafficEncapModeHybrid},
-		{mode: config.TrafficEncapModeEncap},
+		{
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+			},
+			expectNoTrackRules: false,
+		},
+		{
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeHybrid,
+				TunnelType:       ovsconfig.GeneveTunnel,
+			},
+			expectNoTrackRules:   true,
+			expectUDPPortInRules: 6081,
+		},
+		{
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+				TunnelType:       ovsconfig.VXLANTunnel,
+			},
+			expectNoTrackRules:   true,
+			expectUDPPortInRules: 4789,
+		},
+		{
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+			},
+			xtablesHoldDuration: 5 * time.Second,
+			expectNoTrackRules:  false,
+		},
 	}
 
 	for _, tc := range tcs {
-		t.Logf("Running Initialize test with mode %s node config %s", tc.mode, nodeConfig)
-		routeClient, err := route.NewClient(serviceCIDR, tc.mode)
+		t.Logf("Running Initialize test with mode %s node config %s", tc.networkConfig.TrafficEncapMode, nodeConfig)
+		routeClient, err := route.NewClient(serviceCIDR, tc.networkConfig.TrafficEncapMode)
 		if err != nil {
 			t.Error(err)
 		}
-		if err := routeClient.Initialize(nodeConfig); err != nil {
+
+		var xtablesReleasedTime, initializedTime time.Time
+		if tc.xtablesHoldDuration > 0 {
+			closeFn, err := iptables.Lock(iptables.XtablesLockFilePath, 1*time.Second)
+			require.NoError(t, err)
+			go func() {
+				time.Sleep(tc.xtablesHoldDuration)
+				xtablesReleasedTime = time.Now()
+				closeFn()
+			}()
+		}
+		inited1 := make(chan struct{})
+		if err := routeClient.Initialize(nodeConfig, func() {
+			initializedTime = time.Now()
+			close(inited1)
+		}); err != nil {
 			t.Error(err)
 		}
 
+		select {
+		case <-time.After(tc.xtablesHoldDuration + 3*time.Second):
+			t.Errorf("Initialize didn't finish in time when the xtables was held by others for %v", tc.xtablesHoldDuration)
+		case <-inited1:
+		}
+
+		if tc.xtablesHoldDuration > 0 {
+			assert.True(t, initializedTime.After(xtablesReleasedTime), "Initialize shouldn't finish before xtables lock was released")
+		}
+
+		inited2 := make(chan struct{})
 		// Call initialize twice and verify no duplicates
-		if err := routeClient.Initialize(nodeConfig); err != nil {
+		if err := routeClient.Initialize(nodeConfig, func() {
+			close(inited2)
+		}); err != nil {
 			t.Error(err)
+		}
+
+		select {
+		case <-time.After(3 * time.Second):
+			t.Errorf("Initialize didn't finish in time when the xtables was not held by others")
+		case <-inited2:
 		}
 
 		// verify ipset
@@ -178,7 +246,7 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if err := routeClient.Initialize(nodeConfig); err != nil {
+		if err := routeClient.Initialize(nodeConfig, func() {}); err != nil {
 			t.Error(err)
 		}
 
@@ -282,7 +350,7 @@ func TestReconcile(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if err := routeClient.Initialize(nodeConfig); err != nil {
+		if err := routeClient.Initialize(nodeConfig, func() {}); err != nil {
 			t.Error(err)
 		}
 
@@ -330,7 +398,7 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if err := routeClient.Initialize(nodeConfig); err != nil {
+	if err := routeClient.Initialize(nodeConfig, func() {}); err != nil {
 		t.Error(err)
 	}
 	// Verify gw IP

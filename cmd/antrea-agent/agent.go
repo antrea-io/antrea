@@ -118,6 +118,9 @@ func run(o *Options) error {
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
 
+	// networkReadyCh is used to notify that the Node's network is ready.
+	// Functions that rely on the Node's network should wait for the channel to close.
+	networkReadyCh := make(chan struct{})
 	// Initialize agent and node network.
 	agentInitializer := agent.NewInitializer(
 		k8sClient,
@@ -130,6 +133,7 @@ func run(o *Options) error {
 		o.config.DefaultMTU,
 		serviceCIDRNet,
 		networkConfig,
+		networkReadyCh,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
 	err = agentInitializer.Initialize()
 	if err != nil {
@@ -189,7 +193,8 @@ func run(o *Options) error {
 		k8sClient,
 		podUpdates,
 		isChaining,
-		routeClient)
+		routeClient,
+		networkReadyCh)
 	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, o.config.OVSDatapathType)
 	if err != nil {
 		return fmt.Errorf("error initializing CNI server: %v", err)

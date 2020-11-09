@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -74,7 +75,7 @@ func NewClient(serviceCIDR *net.IPNet, encapMode config.TrafficEncapModeType) (*
 
 // Initialize initializes all infrastructures required to route container packets in host network.
 // It is idempotent and can be safely called on every startup.
-func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
+func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.nodeConfig = nodeConfig
 
 	// Sets up the ipset that will be used in iptables.
@@ -83,9 +84,8 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 	}
 
 	// Sets up the iptables infrastructure required to route packets in host network.
-	if err := c.initIPTables(); err != nil {
-		return fmt.Errorf("failed to initialize iptables: %v", err)
-	}
+	// It's called in a goroutine because xtables lock may not be acquired immediately.
+	go c.initIPTablesOnce(done)
 
 	// Sets up the IP routes and IP rule required to route packets in host network.
 	if err := c.initIPRoutes(); err != nil {
@@ -107,6 +107,22 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig) error {
 	}
 
 	return nil
+}
+
+// initIPTablesOnce starts a loop that initializes the iptables infrastructure.
+// It returns after one successful execution.
+func (c *Client) initIPTablesOnce(done func()) {
+	defer done()
+	backoffTime := 2 * time.Second
+	for {
+		if err := c.initIPTables(); err != nil {
+			klog.Errorf("Failed to initialize iptables: %v - will retry in %v", err, backoffTime)
+			time.Sleep(backoffTime)
+			continue
+		}
+		klog.Info("Initialized iptables")
+		return
+	}
 }
 
 // initIPSet ensures that the required ipset exists and it has the initial members.
