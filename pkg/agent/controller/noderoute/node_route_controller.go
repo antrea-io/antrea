@@ -114,13 +114,6 @@ func NewNodeRouteController(
 	return controller
 }
 
-// nodeRouteInfo is the route related information extracted from corev1.Node.
-type nodeRouteInfo struct {
-	podCIDR   *net.IPNet
-	nodeIP    net.IP
-	gatewayIP net.IP
-}
-
 // enqueueNode adds an object to the controller work queue
 // obj could be a *corev1.Node, or a DeletionFinalStateUnknown item.
 func (c *Controller) enqueueNode(obj interface{}) {

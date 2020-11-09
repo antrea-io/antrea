@@ -10,11 +10,7 @@ require (
 )
 
 replace (
-<<<<<<< HEAD
 	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20201109024835-6fd225d8c8d1
-=======
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200728094531-d5b4d75f2cc3
->>>>>>> 964affb ([IPv6] Change openflow pipeline for L2 Pod networking (#1040))
 	github.com/vmware-tanzu/antrea => ../../
 	// Octant v0.13.1 and Antrea use different versions of github.com/googleapis/gnostic.
 	// Octant v0.13.1 uses v0.4.1 and Antrea uses v0.1.0.

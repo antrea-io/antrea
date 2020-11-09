@@ -45,6 +45,7 @@ func TestRouteOperation(t *testing.T) {
 	peerNodeIP1 := net.ParseIP("10.0.0.2")
 	peerNodeIP2 := net.ParseIP("10.0.0.3")
 	gwIP1 := net.ParseIP("192.168.2.1")
+	_, podIPv4CIDR, _ := net.ParseCIDR("192.168.1.0/24")
 	_, destCIDR1, _ := net.ParseCIDR("192.168.2.0/24")
 	dest2 := "192.168.3.0/24"
 	gwIP2 := net.ParseIP("192.168.3.1")
@@ -56,6 +57,7 @@ func TestRouteOperation(t *testing.T) {
 	client, err := NewClient(serviceCIDR, &config.NetworkConfig{}, false)
 	require.Nil(t, err)
 	nodeConfig := &config.NodeConfig{
+		PodIPv4CIDR: podIPv4CIDR,
 		GatewayConfig: &config.GatewayConfig{
 			Name:      hostGateway,
 			LinkIndex: gwLink,

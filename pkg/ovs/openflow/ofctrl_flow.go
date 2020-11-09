@@ -93,6 +93,10 @@ func (f *ofFlow) FlowPriority() uint16 {
 	return f.Match.Priority
 }
 
+func (f *ofFlow) FlowProtocol() Protocol {
+	return f.protocol
+}
+
 func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMessage, error) {
 	var operation int
 	switch entryOper {
