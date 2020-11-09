@@ -775,10 +775,12 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 	// Copy default drop rules
 	for _, ctx := range c.globalConjMatchFlowCache {
 		if ctx.dropFlow != nil {
+			copyFlowBuilder := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
+			if ctx.dropFlow.FlowProtocol() == "" {
+				copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+			}
 			flows = append(
-				flows,
-				ctx.dropFlow.CopyToBuilder(priorityNormal+2, false).
-					MatchIPDscp(dataplaneTag).
+				flows, copyFlowBuilder.MatchIPDscp(dataplaneTag).
 					SetHardTimeout(300).
 					Action().SendToController(uint8(PacketInReasonTF)).
 					Done())

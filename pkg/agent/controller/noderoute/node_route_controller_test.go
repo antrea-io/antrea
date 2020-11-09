@@ -61,8 +61,8 @@ func newController(t *testing.T) (*fakeController, func()) {
 	routeClient := routetest.NewMockInterface(ctrl)
 	interfaceStore := interfacestore.NewInterfaceStore()
 	c := NewNodeRouteController(clientset, informerFactory, ofClient, ovsClient, routeClient, interfaceStore, &config.NetworkConfig{}, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
-		IP:  nil,
-		MAC: gatewayMAC,
+		IPv4: nil,
+		MAC:  gatewayMAC,
 	}})
 	return &fakeController{
 		Controller:      c,
@@ -124,7 +124,8 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		defer close(finishCh)
 
 		c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
-		c.ofClient.EXPECT().InstallNodeFlows("node1", gatewayMAC, *podCIDR, podCIDRGateway, nodeIP1, uint32(config.DefaultTunOFPort), uint32(0)).Times(1)
+		// The 2nd argument is Any() because it is not safe to use pointer as key in a map. peerConfigs map[*net.IPNet]net.IP
+		c.ofClient.EXPECT().InstallNodeFlows("node1", gatewayMAC, gomock.Any(), nodeIP1, uint32(config.DefaultTunOFPort), uint32(0)).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR, nodeIP1, podCIDRGateway).Times(1)
 		c.processNextWorkItem()
 
@@ -139,7 +140,8 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		c.processNextWorkItem()
 
 		// After node1 is deleted, routes and flows should be installed for node2 successfully.
-		c.ofClient.EXPECT().InstallNodeFlows("node2", gatewayMAC, *podCIDR, podCIDRGateway, nodeIP2, uint32(config.DefaultTunOFPort), uint32(0)).Times(1)
+		// The 2nd argument is Any() because it is not safe to use pointer as key in a map. peerConfigs map[*net.IPNet]net.IP
+		c.ofClient.EXPECT().InstallNodeFlows("node2", gatewayMAC, gomock.Any(), nodeIP2, uint32(config.DefaultTunOFPort), uint32(0)).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR, nodeIP2, podCIDRGateway).Times(1)
 		c.processNextWorkItem()
 	}()

@@ -157,6 +157,7 @@ type Flow interface {
 	OFEntry
 	// Returns the flow priority associated with OFEntry
 	FlowPriority() uint16
+	FlowProtocol() Protocol
 	MatchString() string
 	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow.
 	// It copies the original actions of the Flow only if copyActions is set to true, and

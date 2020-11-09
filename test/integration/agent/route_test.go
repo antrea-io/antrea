@@ -507,7 +507,7 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 		NodeIPAddr:    nodeIP,
 		GatewayConfig: dualGWConfig,
 	}
-	err = routeClient.Initialize(dualNodeConfig)
+	err = routeClient.Initialize(dualNodeConfig, func() {})
 	assert.Nil(t, err)
 
 	tcs := []struct {

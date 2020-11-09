@@ -447,6 +447,20 @@ func (mr *MockFlowMockRecorder) FlowPriority() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FlowPriority", reflect.TypeOf((*MockFlow)(nil).FlowPriority))
 }
 
+// FlowProtocol mocks base method
+func (m *MockFlow) FlowProtocol() openflow.Protocol {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FlowProtocol")
+	ret0, _ := ret[0].(openflow.Protocol)
+	return ret0
+}
+
+// FlowProtocol indicates an expected call of FlowProtocol
+func (mr *MockFlowMockRecorder) FlowProtocol() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FlowProtocol", reflect.TypeOf((*MockFlow)(nil).FlowProtocol))
+}
+
 // GetBundleMessage mocks base method
 func (m *MockFlow) GetBundleMessage(arg0 openflow.OFOperation) (ofctrl.OpenFlowModMessage, error) {
 	m.ctrl.T.Helper()

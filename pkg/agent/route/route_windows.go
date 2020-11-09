@@ -191,9 +191,6 @@ func (c *Client) listRoutes() (map[string]*netroute.Route, error) {
 
 // initFwRules adds Windows Firewall rules to accept the traffic that is sent to or from local Pods.
 func (c *Client) initFwRules() error {
-	if c.nodeConfig.PodIPv4CIDR == nil {
-		return errors.New("no valid IPv4 PodCIDR")
-	}
 	err := c.fwClient.AddRuleAllowIP(inboundFirewallRuleName, winfirewall.FWRuleIn, c.nodeConfig.PodIPv4CIDR)
 	if err != nil {
 		return err

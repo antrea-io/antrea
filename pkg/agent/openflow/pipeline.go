@@ -35,33 +35,33 @@ import (
 
 const (
 	// Flow table id index
-	ClassifierTable             binding.TableIDType = 0
-	uplinkTable                 binding.TableIDType = 5
-	spoofGuardTable             binding.TableIDType = 10
-	arpResponderTable           binding.TableIDType = 20
-	ipv6Table                   binding.TableIDType = 21
-	serviceHairpinTable         binding.TableIDType = 29
-	conntrackTable              binding.TableIDType = 30
-	conntrackStateTable         binding.TableIDType = 31
-	sessionAffinityTable        binding.TableIDType = 40
-	dnatTable                   binding.TableIDType = 40
-	serviceLBTable              binding.TableIDType = 41
-	endpointDNATTable           binding.TableIDType = 42
-	AntreaPolicyEgressRuleTable binding.TableIDType = 45
-	DefaultTierEgressRuleTable  binding.TableIDType = 49
-	EgressRuleTable             binding.TableIDType = 50
-	EgressDefaultTable          binding.TableIDType = 60
-	EgressMetricTable           binding.TableIDType = 61
-	l3ForwardingTable           binding.TableIDType = 70
-	l2ForwardingCalcTable       binding.TableIDType = 80
+	ClassifierTable              binding.TableIDType = 0
+	uplinkTable                  binding.TableIDType = 5
+	spoofGuardTable              binding.TableIDType = 10
+	arpResponderTable            binding.TableIDType = 20
+	ipv6Table                    binding.TableIDType = 21
+	serviceHairpinTable          binding.TableIDType = 29
+	conntrackTable               binding.TableIDType = 30
+	conntrackStateTable          binding.TableIDType = 31
+	sessionAffinityTable         binding.TableIDType = 40
+	dnatTable                    binding.TableIDType = 40
+	serviceLBTable               binding.TableIDType = 41
+	endpointDNATTable            binding.TableIDType = 42
+	AntreaPolicyEgressRuleTable  binding.TableIDType = 45
+	DefaultTierEgressRuleTable   binding.TableIDType = 49
+	EgressRuleTable              binding.TableIDType = 50
+	EgressDefaultTable           binding.TableIDType = 60
+	EgressMetricTable            binding.TableIDType = 61
+	l3ForwardingTable            binding.TableIDType = 70
+	l2ForwardingCalcTable        binding.TableIDType = 80
 	AntreaPolicyIngressRuleTable binding.TableIDType = 85
-	DefaultTierIngressRuleTable binding.TableIDType = 89
-	IngressRuleTable            binding.TableIDType = 90
-	IngressDefaultTable         binding.TableIDType = 100
-	IngressMetricTable          binding.TableIDType = 101
-	conntrackCommitTable        binding.TableIDType = 105
-	hairpinSNATTable            binding.TableIDType = 106
-	L2ForwardingOutTable        binding.TableIDType = 110
+	DefaultTierIngressRuleTable  binding.TableIDType = 89
+	IngressRuleTable             binding.TableIDType = 90
+	IngressDefaultTable          binding.TableIDType = 100
+	IngressMetricTable           binding.TableIDType = 101
+	conntrackCommitTable         binding.TableIDType = 105
+	hairpinSNATTable             binding.TableIDType = 106
+	L2ForwardingOutTable         binding.TableIDType = 110
 
 	// Flow priority level
 	priorityHigh            = uint16(210)
