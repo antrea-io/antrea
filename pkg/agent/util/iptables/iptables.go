@@ -128,7 +128,7 @@ func (c *Client) Restore(data []byte, flush bool) error {
 	if c.restoreWaitSupported {
 		cmd.Args = append(cmd.Args, "-w", strconv.Itoa(waitSeconds), "-W", strconv.Itoa(waitIntervalMicroSeconds))
 	} else {
-		unlockFunc, err := lock(xtablesLockFilePath, waitSeconds*time.Second)
+		unlockFunc, err := Lock(XtablesLockFilePath, waitSeconds*time.Second)
 		if err != nil {
 			return err
 		}
