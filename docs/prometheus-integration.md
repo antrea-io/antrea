@@ -153,8 +153,6 @@ errors, partitioned by operation type (add, modify and delete).
 flow operations, partitioned by operation type (add, modify and delete).
 - **antrea_agent_ovs_total_flow_count:** Total flow count of all OVS flow
 tables.
-- **antrea_agent_runtime_info:** Antrea agent runtime info (Deprecated since
-Antrea 0.10.0), defined as labels. The value of the gauge is always set to 1.
 
 ## Antrea Controller Metrics
 - **antrea_controller_address_group_processed:** The total number of
@@ -175,9 +173,6 @@ InternalNetworkPolicyQueue
 internal-networkpolicy processed
 - **antrea_controller_network_policy_sync_duration_milliseconds:** The
 duration of syncing internal-networkpolicy
-- **antrea_controller_runtime_info:** Antrea controller runtime info
-(Deprecated since Antrea 0.10.0), defined as labels. The value of the gauge
-is always set to 1.
 
 ## Common Metrics Provided by Infrastructure
 ## Apiserver Metrics
