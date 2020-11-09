@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
@@ -29,14 +30,14 @@ import (
 const NPLAnnotationStr = "npl.antrea.io"
 
 type NPLEPAnnotation struct {
-	PodPort  string `json:"Podport"`
-	NodeIP   string `json:"Nodeip"`
-	NodePort string `json:"Nodeport"`
+	PodPort  string `json:"podPort"`
+	NodeIP   string `json:"nodeIP"`
+	NodePort string `json:"nodePort"`
 }
 
 func Stringify(serialize interface{}) string {
-	json_marshalled, _ := json.Marshal(serialize)
-	return string(json_marshalled)
+	jsonMarshalled, _ := json.Marshal(serialize)
+	return string(jsonMarshalled)
 }
 
 func IsNodePortInAnnotation(s []NPLEPAnnotation, nodeport string) bool {
@@ -70,12 +71,9 @@ func assignPodAnnotation(pod *corev1.Pod, containerPort, nodeIP, nodePort string
 				NodeIP:   nodeIP,
 				NodePort: nodePort,
 			})
-		} else {
-			// mapping for the containerPort already exists
-			// TODO
 		}
 	} else {
-		annotations = []NPLEPAnnotation{NPLEPAnnotation{
+		annotations = []NPLEPAnnotation{{
 			PodPort:  containerPort,
 			NodeIP:   nodeIP,
 			NodePort: nodePort,
@@ -110,17 +108,20 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort string) {
 
 // RemoveNPLAnnotationFromPods : Removes npl annotations from all pods
 func (c *Controller) RemoveNPLAnnotationFromPods() {
-	podList, err := c.KubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		klog.Warningf("Unable to list Pods")
-		return
-	}
 	nodeName, err := env.GetNodeName()
 	if err != nil {
 		klog.Warningf("Failed to get nodename, NPL annotation can not be removed for pods")
 		return
 	}
-	for _, pod := range podList.Items {
+	podList, err := c.KubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
+		FieldSelector:   "spec.nodeName=" + nodeName,
+		ResourceVersion: "0",
+	})
+	if err != nil {
+		klog.Warningf("Unable to list Pods, err: %v", err)
+		return
+	}
+	for i, pod := range podList.Items {
 		if nodeName != pod.Spec.NodeName {
 			continue
 		}
@@ -131,7 +132,10 @@ func (c *Controller) RemoveNPLAnnotationFromPods() {
 		klog.Infof("Removing all NPL annotation from pod: %s, ns: %s", pod.Name, pod.Namespace)
 		delete(podAnnotation, NPLAnnotationStr)
 		pod.Annotations = podAnnotation
-		c.KubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), &pod, metav1.UpdateOptions{})
+		_, err = c.KubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), &podList.Items[i], metav1.UpdateOptions{})
+		if err != nil {
+			klog.Warningf("Failed to update NPL annotation for pod: %s, ns: %s, err: %v", pod.Name, pod.Namespace, err)
+		}
 	}
 }
 
@@ -140,7 +144,7 @@ func (c *Controller) updatePodAnnotation(pod *corev1.Pod) error {
 		klog.Warningf("Unable to update pod %s with annotation: %+v", pod.Name, err)
 		return err
 	}
-	klog.Infof("Successfully updated pod %s %s annotation", pod.Name, pod.Namespace)
+	klog.Infof("Successfully updated pod %s/%s annotation", pod.Namespace, pod.Name)
 	return nil
 }
 

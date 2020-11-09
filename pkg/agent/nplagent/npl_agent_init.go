@@ -23,6 +23,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
+
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 )

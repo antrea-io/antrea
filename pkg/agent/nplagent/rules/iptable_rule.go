@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
+
 	"k8s.io/klog"
 )
 
@@ -41,8 +41,6 @@ func NewIPTableRules() *IPTableRules {
 	}
 	return &iptRule
 }
-
-var once sync.Once
 
 func (ipt *IPTableRules) Init() bool {
 	if !ipt.DeleteAllRules() {
@@ -94,13 +92,13 @@ func (ipt *IPTableRules) DeleteRule(port int, podip string) bool {
 }
 
 // GetAllRules : Get list of all NPL rules progammed in the node
-func (ipt *IPTableRules) GetAllRules(podPort map[int]string) bool {
+func (ipt *IPTableRules) GetAllRules() (map[int]string, bool) {
+	m := make(map[int]string)
 	rules, err := ipt.table.ListRules(iptables.NATTable, NodePortLocalChain)
 	if err != nil {
 		klog.Warningf("Failed to list IPTABLES rules for NPL: %v", err)
-		return false
+		return m, false
 	}
-	m := make(map[int]string)
 	for i := range rules {
 		splitRule := strings.Fields(rules[i])
 		// A rule has details about the node port, port ip and port number.
@@ -120,8 +118,8 @@ func (ipt *IPTableRules) GetAllRules(podPort map[int]string) bool {
 		//TODO: Need to check whether it's a proper ip:port combination
 		m[port] = splitRule[11]
 	}
-	podPort = m
-	return true
+	//podPort = m
+	return m, true
 }
 
 // DeleteAllRules : Delete all NPL rules progammed in the node

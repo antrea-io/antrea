@@ -154,7 +154,7 @@ func (c *Client) DeleteChain(table string, chain string) error {
 		}
 		err = c.ipts[idx].DeleteChain(table, chain)
 		if err != nil {
-			return fmt.Errorf("error deleteing chain %s from table %s: %v", chain, table, err)
+			return fmt.Errorf("error deleting chain %s from table %s: %v", chain, table, err)
 		}
 		klog.V(2).Infof("Deleted chain %s from table %s", chain, table)
 	}

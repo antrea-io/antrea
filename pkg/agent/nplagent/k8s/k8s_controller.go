@@ -17,19 +17,17 @@
 package k8s
 
 import (
-	"sync"
 	"time"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 )
-
-var ctrlonce sync.Once
 
 const podResyncPeriod = 60 * time.Minute
 

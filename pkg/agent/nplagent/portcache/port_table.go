@@ -21,14 +21,10 @@ import (
 	"sync"
 
 	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/rules"
-	"k8s.io/klog"
-)
 
-const (
-	successStatus = 0
-	pendingStatus = 1
-	failStatus    = 2
+	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/rules"
+
+	"k8s.io/klog"
 )
 
 type NodePortData struct {
@@ -68,8 +64,7 @@ func GetPortTable() *PortTable {
 }
 
 func (pt *PortTable) PopulatePortTable(r rules.PodPortRules) {
-	portMap := make(map[int]string)
-	ok := r.GetAllRules(portMap)
+	portMap, ok := r.GetAllRules()
 	if !ok {
 		klog.Warningf("Could not populate port table cache")
 		return

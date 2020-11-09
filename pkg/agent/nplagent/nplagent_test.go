@@ -26,8 +26,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -55,8 +57,9 @@ func (PPRTest) SyncState(podPort map[int]string) bool {
 	return true
 }
 
-func (PPRTest) GetAllRules(podPort map[int]string) bool {
-	return true
+func (PPRTest) GetAllRules() (map[int]string, bool) {
+	m := make(map[int]string)
+	return m, true
 }
 
 func (PPRTest) DeleteAllRules() bool {

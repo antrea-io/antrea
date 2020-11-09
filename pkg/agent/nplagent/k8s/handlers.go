@@ -20,13 +20,10 @@ import (
 	"fmt"
 
 	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
 )
-
-var portTable *portcache.PortTable
 
 func (c *Controller) addRuleForPod(pod *corev1.Pod) {
 	podIP, nodeIP := pod.Status.PodIP, pod.Status.HostIP

@@ -20,7 +20,7 @@ type PodPortRules interface {
 	Init() bool
 	AddRule(port int, podip string) bool
 	DeleteRule(port int, podip string) bool
-	GetAllRules(podPort map[int]string) bool
+	GetAllRules() (map[int]string, bool)
 	DeleteAllRules() bool
 }
 
