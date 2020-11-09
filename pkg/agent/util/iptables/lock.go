@@ -24,13 +24,13 @@ import (
 )
 
 const (
-	xtablesLockFilePath       = "/var/run/xtables.lock"
+	XtablesLockFilePath       = "/var/run/xtables.lock"
 	xtablesLockFilePermission = 0600
 )
 
-// lock acquires the provided file lock. It's thread-safe.
+// Lock acquires the provided file lock. It's thread-safe.
 // It will block until the lock is acquired or the timeout is reached.
-func lock(lockFilePath string, timeout time.Duration) (func() error, error) {
+func Lock(lockFilePath string, timeout time.Duration) (func() error, error) {
 	lockFile, err := os.OpenFile(lockFilePath, os.O_CREATE, xtablesLockFilePermission)
 	if err != nil {
 		return nil, fmt.Errorf("error opening xtables lock file: %v", err)

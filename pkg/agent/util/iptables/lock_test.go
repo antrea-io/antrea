@@ -42,7 +42,7 @@ func TestLock(t *testing.T) {
 			name:         "lock-already-acquired",
 			lockFilePath: filePath2,
 			prepareFunc: func(filePath string) {
-				lock(filePath, 2*time.Second)
+				Lock(filePath, 2*time.Second)
 			},
 			wantErr: true,
 		},
@@ -50,7 +50,7 @@ func TestLock(t *testing.T) {
 			name:         "lock-already-released",
 			lockFilePath: filePath3,
 			prepareFunc: func(filePath string) {
-				unlockFunc, _ := lock(filePath, 2*time.Second)
+				unlockFunc, _ := Lock(filePath, 2*time.Second)
 				unlockFunc()
 			},
 			wantErr: false,
@@ -59,7 +59,7 @@ func TestLock(t *testing.T) {
 			name:         "lock-released-in-one-second",
 			lockFilePath: filePath4,
 			prepareFunc: func(filePath string) {
-				unlockFunc, _ := lock(filePath, 2*time.Second)
+				unlockFunc, _ := Lock(filePath, 2*time.Second)
 				go func() {
 					time.Sleep(1 * time.Second)
 					unlockFunc()
@@ -74,7 +74,7 @@ func TestLock(t *testing.T) {
 			if tt.prepareFunc != nil {
 				tt.prepareFunc(tt.lockFilePath)
 			}
-			unlockFunc, err := lock(tt.lockFilePath, 2*time.Second)
+			unlockFunc, err := Lock(tt.lockFilePath, 2*time.Second)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("lock() error = %v, wantErr %v", err, tt.wantErr)
 			}

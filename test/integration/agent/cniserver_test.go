@@ -287,12 +287,13 @@ func ipVersion(ip net.IP) string {
 }
 
 type cmdAddDelTester struct {
-	server   *cniserver.CNIServer
-	ctx      context.Context
-	testNS   ns.NetNS
-	targetNS ns.NetNS
-	request  *cnimsg.CniCmdRequest
-	vethName string
+	server         *cniserver.CNIServer
+	ctx            context.Context
+	testNS         ns.NetNS
+	targetNS       ns.NetNS
+	request        *cnimsg.CniCmdRequest
+	vethName       string
+	networkReadyCh chan struct{}
 }
 
 func (tester *cmdAddDelTester) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
@@ -564,13 +565,15 @@ func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := interfacestore.NewInterfaceStore()
 	testNodeConfig.NodeMTU = 1450
+	tester.networkReadyCh = make(chan struct{})
 	tester.server = cniserver.New(testSock,
 		"",
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
 		make(chan v1beta1.PodReference, 100),
 		false,
-		nil)
+		nil,
+		tester.networkReadyCh)
 	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
 	ctx := context.Background()
 	tester.ctx = ctx
@@ -606,6 +609,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	ovsServiceMock.EXPECT().GetOFPort(ovsPortname).Return(int32(10), nil).AnyTimes()
 	ofServiceMock.EXPECT().InstallPodFlows(ovsPortname, mock.Any(), mock.Any(), mock.Any(), mock.Any()).Return(nil)
 
+	close(tester.networkReadyCh)
 	// Test ip allocation
 	prevResult, err := tester.cmdAddTest(tc, dataDir)
 	testRequire.Nil(err)
@@ -720,13 +724,16 @@ func setupChainTest(
 
 	if newServer {
 		routeMock = routetest.NewMockInterface(controller)
+		networkReadyCh := make(chan struct{})
+		close(networkReadyCh)
 		server = cniserver.New(testSock,
 			"",
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
 			make(chan v1beta1.PodReference, 100),
 			true,
-			routeMock)
+			routeMock,
+			networkReadyCh)
 	} else {
 		server = inServer
 	}

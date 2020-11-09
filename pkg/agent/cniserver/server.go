@@ -22,6 +22,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -42,6 +43,15 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+)
+
+const (
+	// networkReadyTimeout is the maximum time the CNI server will wait for network ready when processing CNI Add
+	// requests. If timeout occurs, tryAgainLaterResponse will be returned.
+	// The default runtime request timeout of kubelet is 2 minutes.
+	// https://github.com/kubernetes/kubernetes/blob/v1.19.3/staging/src/k8s.io/kubelet/config/v1beta1/types.go#L451
+	// networkReadyTimeout is set to a shorter time so it returns a clear message to the runtime.
+	networkReadyTimeout = 30 * time.Second
 )
 
 // containerAccessArbitrator is used to ensure that concurrent goroutines cannot perfom operations
@@ -100,6 +110,8 @@ type CNIServer struct {
 	podUpdates  chan<- v1beta1.PodReference
 	isChaining  bool
 	routeClient route.Interface
+	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
+	networkReadyCh <-chan struct{}
 }
 
 var supportedCNIVersionSet map[string]bool
@@ -184,7 +196,7 @@ func (s *CNIServer) loadNetworkConfig(request *cnipb.CniCmdRequest) (*CNIConfig,
 	if cniConfig.MTU == 0 {
 		cniConfig.MTU = s.nodeConfig.NodeMTU
 	}
-	klog.Infof("Load network configurations: %v", cniConfig)
+	klog.V(3).Infof("Load network configurations: %v", cniConfig)
 	return cniConfig, nil
 }
 
@@ -348,6 +360,13 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		return response, nil
 	}
 
+	select {
+	case <-time.After(networkReadyTimeout):
+		klog.Errorf("Cannot process CmdAdd request for container %v because network is not ready", cniConfig.ContainerId)
+		return s.tryAgainLaterResponse(), nil
+	case <-s.networkReadyCh:
+	}
+
 	cniVersion := cniConfig.CNIVersion
 	result := &current.Result{CNIVersion: cniVersion}
 	netNS := s.hostNetNsPath(cniConfig.Netns)
@@ -358,12 +377,12 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		// Rollback to delete configurations once ADD is failure.
 		if !success {
 			if isInfraContainer {
-				klog.Warningf("CmdAdd has failed, and try to rollback")
+				klog.Warningf("CmdAdd for container %v failed, and try to rollback", cniConfig.ContainerId)
 				if _, err := s.CmdDel(ctx, request); err != nil {
 					klog.Warningf("Failed to rollback after CNI add failure: %v", err)
 				}
 			} else {
-				klog.Warningf("CmdAdd has failed")
+				klog.Warningf("CmdAdd for container %v failed", cniConfig.ContainerId)
 			}
 		}
 	}()
@@ -392,11 +411,11 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		// Request IP Address from IPAM driver.
 		ipamResult, err = ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, infraContainer)
 		if err != nil {
-			klog.Errorf("Failed to add IP addresses from IPAM driver: %v", err)
+			klog.Errorf("Failed to request IP addresses for container %v: %v", cniConfig.ContainerId, err)
 			return s.ipamFailureResponse(err), nil
 		}
 	}
-	klog.Infof("Added ip addresses from IPAM driver, %v", ipamResult)
+	klog.Infof("Requested ip addresses for container %v: %v", cniConfig.ContainerId, ipamResult)
 	result.IPs = ipamResult.IPs
 	result.Routes = ipamResult.Routes
 	// Ensure interface gateway setting and mapping relations between result.Interfaces and result.IPs
@@ -425,7 +444,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 
 	var resultBytes bytes.Buffer
 	_ = result.PrintTo(&resultBytes)
-	klog.Infof("CmdAdd succeeded")
+	klog.Infof("CmdAdd for container %v succeeded", cniConfig.ContainerId)
 	// mark success as true to avoid rollback
 	success = true
 	return &cnipb.CniCmdResponse{CniResult: resultBytes.Bytes()}, nil
@@ -449,15 +468,16 @@ func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (
 	}
 	// Release IP to IPAM driver
 	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, infraContainer); err != nil {
-		klog.Errorf("Failed to delete IP addresses by IPAM driver: %v", err)
+		klog.Errorf("Failed to delete IP addresses for container %v: %v", cniConfig.ContainerId, err)
 		return s.ipamFailureResponse(err), nil
 	}
-	klog.Info("Deleted IP addresses by IPAM driver")
+	klog.Infof("Deleted IP addresses for container %v", cniConfig.ContainerId)
 	// Remove host interface and OVS configuration
 	if err := s.podConfigurator.removeInterfaces(cniConfig.ContainerId); err != nil {
 		klog.Errorf("Failed to remove interfaces for container %s: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
+	klog.Infof("CmdDel for container %v succeeded", cniConfig.ContainerId)
 	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
 }
 
@@ -479,7 +499,7 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	}
 
 	if err := ipam.ExecIPAMCheck(cniConfig.CniCmdArgs, cniConfig.IPAM.Type); err != nil {
-		klog.Errorf("Failed to check IPAM configuration: %v", err)
+		klog.Errorf("Failed to check IPAM configuration for container %v: %v", cniConfig.ContainerId, err)
 		return s.ipamFailureResponse(err), nil
 	}
 
@@ -491,7 +511,7 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 			return response, nil
 		}
 	}
-	klog.Info("Succeed to check network configuration")
+	klog.Infof("CmdCheck for container %v succeeded", cniConfig.ContainerId)
 	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
 }
 
@@ -502,6 +522,7 @@ func New(
 	podUpdates chan<- v1beta1.PodReference,
 	isChaining bool,
 	routeClient route.Interface,
+	networkReadyCh <-chan struct{},
 ) *CNIServer {
 	return &CNIServer{
 		cniSocket:            cniSocket,
@@ -514,6 +535,7 @@ func New(
 		podUpdates:           podUpdates,
 		isChaining:           isChaining,
 		routeClient:          routeClient,
+		networkReadyCh:       networkReadyCh,
 	}
 }
 

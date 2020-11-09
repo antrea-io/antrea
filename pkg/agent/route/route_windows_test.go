@@ -60,8 +60,10 @@ func TestRouteOperation(t *testing.T) {
 			LinkIndex: gwLink,
 		},
 	}
-	err = client.Initialize(nodeConfig)
+	called := false
+	err = client.Initialize(nodeConfig, func() { called = true })
 	require.Nil(t, err)
+	require.True(t, called)
 
 	// Add initial routes.
 	err = client.AddRoutes(destCIDR1, peerNodeIP, gwIP1)
