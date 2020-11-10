@@ -21,9 +21,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
@@ -52,6 +54,13 @@ type Reconciler interface {
 
 	// Forget cleanups the actual state of Openflow entries of the specified ruleID.
 	Forget(ruleID string) error
+
+	// GetRuleByFlowID returns the rule from the async rule cache in idAllocator cache.
+	GetRuleByFlowID(ruleID uint32) (*types.PolicyRule, bool, error)
+
+	// RunIDAllocatorWorker runs the worker that deletes the rules from the cache
+	// in idAllocator.
+	RunIDAllocatorWorker(stopCh <-chan struct{})
 }
 
 // servicesKey is used to identify Services based on their numbered ports.
@@ -172,7 +181,7 @@ type reconciler struct {
 	// It's a mapping from ruleID to *lastRealized.
 	lastRealizeds sync.Map
 
-	// idAllocator provides interfaces to allocate and release uint32 id.
+	// idAllocator provides interfaces to allocateForRule and release uint32 id.
 	idAllocator *idAllocator
 
 	// priorityAssigners provides interfaces to manage OF priorities for each OVS table.
@@ -200,6 +209,14 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 		priorityAssigners: priorityAssigners,
 	}
 	return reconciler
+}
+
+// RunIDAllocatorWorker runs the worker that deletes the rules from the cache in
+// idAllocator.
+func (r *reconciler) RunIDAllocatorWorker(stopCh <-chan struct{}) {
+	defer r.idAllocator.deleteQueue.ShutDown()
+	go wait.Until(r.idAllocator.worker, time.Second, stopCh)
+	<-stopCh
 }
 
 // Reconcile checks whether the provided rule have been enforced or not, and
@@ -366,16 +383,15 @@ func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16, table binding.
 	ofRuleByServicesMap, lastRealized := r.computeOFRulesForAdd(rule, ofPriority, table)
 	for svcKey, ofRule := range ofRuleByServicesMap {
 		// Each pod group gets an Openflow ID.
-		ofID, err := r.idAllocator.allocate()
+		err := r.idAllocator.allocateForRule(ofRule)
 		if err != nil {
 			return fmt.Errorf("error allocating Openflow ID")
 		}
-		ofRule.FlowID = ofID
 		if err = r.installOFRule(ofRule); err != nil {
 			return err
 		}
 		// Record ofID only if its Openflow is installed successfully.
-		lastRealized.ofIDs[svcKey] = ofID
+		lastRealized.ofIDs[svcKey] = ofRule.FlowID
 	}
 	return nil
 }
@@ -475,21 +491,20 @@ func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) er
 		ofRuleByServicesMap, lastRealized := r.computeOFRulesForAdd(rule, ofPriorities[idx], ruleTable)
 		lastRealizeds[idx] = lastRealized
 		for svcKey, ofRule := range ofRuleByServicesMap {
-			ofID, err := r.idAllocator.allocate()
+			err := r.idAllocator.allocateForRule(ofRule)
 			if err != nil {
 				return fmt.Errorf("error allocating Openflow ID")
 			}
-			ofRule.FlowID = ofID
 			allOFRules = append(allOFRules, ofRule)
 			if ofIDUpdateMaps[idx] == nil {
 				ofIDUpdateMaps[idx] = make(map[servicesKey]uint32)
 			}
-			ofIDUpdateMaps[idx][svcKey] = ofID
+			ofIDUpdateMaps[idx][svcKey] = ofRule.FlowID
 		}
 	}
 	if err := r.ofClient.BatchInstallPolicyRuleFlows(allOFRules); err != nil {
 		for _, rule := range allOFRules {
-			r.idAllocator.release(rule.FlowID)
+			r.idAllocator.forgetRule(rule.FlowID, asyncDeleteInterval)
 		}
 		return err
 	}
@@ -527,10 +542,6 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 			ofID, exists := lastRealized.ofIDs[svcKey]
 			// Install a new Openflow rule if this group doesn't exist, otherwise do incremental update.
 			if !exists {
-				ofID, err := r.idAllocator.allocate()
-				if err != nil {
-					return fmt.Errorf("error allocating Openflow ID")
-				}
 				ofRule := &types.PolicyRule{
 					Direction:     v1beta2.DirectionIn,
 					From:          append(from1, from2...),
@@ -543,10 +554,14 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					PolicyRef:     newRule.SourceRef,
 					EnableLogging: newRule.EnableLogging,
 				}
+				err := r.idAllocator.allocateForRule(ofRule)
+				if err != nil {
+					return err
+				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err
 				}
-				lastRealized.ofIDs[svcKey] = ofID
+				lastRealized.ofIDs[svcKey] = ofRule.FlowID
 			} else {
 				addedTo := ofPortsToOFAddresses(newOFPorts.Difference(lastRealized.podOFPorts[svcKey]))
 				deletedTo := ofPortsToOFAddresses(lastRealized.podOFPorts[svcKey].Difference(newOFPorts))
@@ -576,10 +591,6 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 		for svcKey, members := range memberByServicesMap {
 			ofID, exists := lastRealized.ofIDs[svcKey]
 			if !exists {
-				ofID, err := r.idAllocator.allocate()
-				if err != nil {
-					return fmt.Errorf("error allocating Openflow ID")
-				}
 				ofRule := &types.PolicyRule{
 					Direction:     v1beta2.DirectionOut,
 					From:          from,
@@ -592,10 +603,14 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					PolicyRef:     newRule.SourceRef,
 					EnableLogging: newRule.EnableLogging,
 				}
+				err := r.idAllocator.allocateForRule(ofRule)
+				if err != nil {
+					return fmt.Errorf("error allocating Openflow ID")
+				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err
 				}
-				lastRealized.ofIDs[svcKey] = ofID
+				lastRealized.ofIDs[svcKey] = ofRule.FlowID
 			} else {
 				addedTo := groupMembersToOFAddresses(members.Difference(prevMembersByServicesMap[svcKey]))
 				deletedTo := groupMembersToOFAddresses(prevMembersByServicesMap[svcKey].Difference(members))
@@ -624,7 +639,7 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule) error {
 	klog.V(2).Infof("Installing ofRule %d (Direction: %v, From: %d, To: %d, Service: %d)",
 		ofRule.FlowID, ofRule.Direction, len(ofRule.From), len(ofRule.To), len(ofRule.Service))
 	if err := r.ofClient.InstallPolicyRuleFlows(ofRule); err != nil {
-		r.idAllocator.release(ofRule.FlowID)
+		r.idAllocator.forgetRule(ofRule.FlowID, asyncDeleteInterval)
 		return fmt.Errorf("error installing ofRule %v: %v", ofRule.FlowID, err)
 	}
 	return nil
@@ -676,10 +691,7 @@ func (r *reconciler) uninstallOFRule(ofID uint32, table binding.TableIDType) err
 			priorityAssigner.assigner.Release(uint16(priorityNum))
 		}
 	}
-	if err := r.idAllocator.release(ofID); err != nil {
-		// This should never happen. If it does, it is a programming error.
-		klog.Errorf("Error releasing Openflow ID for ofRule %v: %v", ofID, err)
-	}
+	r.idAllocator.forgetRule(ofID, asyncDeleteInterval)
 	return nil
 }
 
@@ -711,6 +723,10 @@ func (r *reconciler) Forget(ruleID string) error {
 
 	r.lastRealizeds.Delete(ruleID)
 	return nil
+}
+
+func (r *reconciler) GetRuleByFlowID(ruleFlowID uint32) (*types.PolicyRule, bool, error) {
+	return r.idAllocator.getRuleFromAsyncCache(ruleFlowID)
 }
 
 func (r *reconciler) getPodOFPorts(members v1beta2.GroupMemberSet) sets.Int32 {

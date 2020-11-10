@@ -740,15 +740,15 @@ func (c *client) InstallPolicyRuleFlows(rule *types.PolicyRule) error {
 
 // calculateActionFlowChangesForRule calculates and updates the actionFlows for the conjunction corresponded to the ofPolicyRule.
 func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *policyRuleConjunction {
-	ruleID := rule.FlowID
+	ruleOfID := rule.FlowID
 	// Check if the policyRuleConjunction is added into cache or not. If yes, return nil.
-	conj := c.getPolicyRuleConjunction(ruleID)
+	conj := c.getPolicyRuleConjunction(ruleOfID)
 	if conj != nil {
-		klog.V(2).Infof("PolicyRuleConjunction %d is already added in cache", ruleID)
+		klog.V(2).Infof("PolicyRuleConjunction %d is already added in cache", ruleOfID)
 		return nil
 	}
 	conj = &policyRuleConjunction{
-		id:    ruleID,
+		id:    ruleOfID,
 		npRef: rule.PolicyRef,
 	}
 	nClause, ruleTable, dropTable := conj.calculateClauses(rule, c)
@@ -764,11 +764,11 @@ func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *poli
 		var actionFlows []binding.Flow
 		var metricFlows []binding.Flow
 		if rule.IsAntreaNetworkPolicyRule() && *rule.Action == secv1alpha1.RuleActionDrop {
-			metricFlows = append(metricFlows, c.dropRuleMetricFlow(ruleID, isIngress))
-			actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleID, ruleTable.GetID(), rule.Priority, rule.EnableLogging))
+			metricFlows = append(metricFlows, c.dropRuleMetricFlow(ruleOfID, isIngress))
+			actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleOfID, ruleTable.GetID(), rule.Priority, rule.EnableLogging))
 		} else {
-			metricFlows = append(metricFlows, c.allowRulesMetricFlows(ruleID, isIngress)...)
-			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority, rule.EnableLogging))
+			metricFlows = append(metricFlows, c.allowRulesMetricFlows(ruleOfID, isIngress)...)
+			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleOfID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority, rule.EnableLogging))
 		}
 		conj.actionFlows = actionFlows
 		conj.metricFlows = metricFlows
@@ -1005,14 +1005,6 @@ func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction 
 		return nil
 	}
 	return conj.(*policyRuleConjunction)
-}
-
-func (c *client) GetPolicyFromConjunction(ruleID uint32) *v1beta2.NetworkPolicyReference {
-	conjunction := c.getPolicyRuleConjunction(ruleID)
-	if conjunction == nil {
-		return nil
-	}
-	return conjunction.npRef
 }
 
 func (c *client) GetPolicyInfoFromConjunction(ruleID uint32) (string, string) {

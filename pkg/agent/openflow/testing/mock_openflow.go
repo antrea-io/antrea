@@ -24,7 +24,6 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
-	v1beta2 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	openflow "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	proxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 	net "net"
@@ -164,20 +163,6 @@ func (m *MockClient) GetPodFlowKeys(arg0 string) []string {
 func (mr *MockClientMockRecorder) GetPodFlowKeys(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPodFlowKeys", reflect.TypeOf((*MockClient)(nil).GetPodFlowKeys), arg0)
-}
-
-// GetPolicyFromConjunction mocks base method
-func (m *MockClient) GetPolicyFromConjunction(arg0 uint32) *v1beta2.NetworkPolicyReference {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPolicyFromConjunction", arg0)
-	ret0, _ := ret[0].(*v1beta2.NetworkPolicyReference)
-	return ret0
-}
-
-// GetPolicyFromConjunction indicates an expected call of GetPolicyFromConjunction
-func (mr *MockClientMockRecorder) GetPolicyFromConjunction(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPolicyFromConjunction", reflect.TypeOf((*MockClient)(nil).GetPolicyFromConjunction), arg0)
 }
 
 // GetPolicyInfoFromConjunction mocks base method
