@@ -124,9 +124,9 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier s
 	reason := ""
 	switch op {
 	case admv1.Create, admv1.Update:
-		if ruleNameUnique, msg := v.validateRuleName(append(ingress, egress...)); !ruleNameUnique {
+		if isUnique := v.validateRuleName(ingress, egress); !isUnique {
 			allowed = false
-			reason = msg
+			reason = "rules names are not unique, or policy has duplicate rules, or collision occurred in generated rule names"
 			break
 		}
 		// "tier" must exist before referencing
@@ -146,20 +146,18 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier s
 }
 
 // validateRuleName validates if the name of each rule is unique within a policy
-func (v *NetworkPolicyValidator) validateRuleName(rules []secv1alpha1.Rule) (bool, string) {
+func (v *NetworkPolicyValidator) validateRuleName(ingress, egress []secv1alpha1.Rule) bool {
 	uniqueRuleName := sets.NewString()
-	for _, rule := range rules {
-		// If a rule doesn't have a name, it means that
-		// mutatingWebhook skip its generation due to illegal input
-		if rule.Name == "" {
-			return false, "policy has duplicate rules, or collision occurred in generated rule names"
+	isUnique := func(rules []secv1alpha1.Rule) bool {
+		for _, rule := range rules {
+			if uniqueRuleName.Has(rule.Name) {
+				return false
+			}
+			uniqueRuleName.Insert(rule.Name)
 		}
-		if uniqueRuleName.Has(rule.Name) {
-			return false, "rules names must be unique within the policy"
-		}
-		uniqueRuleName.Insert(rule.Name)
+		return true
 	}
-	return true, ""
+	return isUnique(ingress) && isUnique(egress)
 }
 
 // validateTier validates the admission of a Tier resource

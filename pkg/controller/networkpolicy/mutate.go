@@ -23,7 +23,6 @@ import (
 
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
@@ -109,16 +108,8 @@ func (m *NetworkPolicyMutator) mutateAntreaPolicyRuleName(op admv1.Operation, in
 	var patch []byte
 	switch op {
 	case admv1.Create, admv1.Update:
-		ruleNames := sets.NewString()
-		for _, rule := range ingress {
-			ruleNames.Insert(rule.Name)
-		}
-		for _, rule := range egress {
-			ruleNames.Insert(rule.Name)
-		}
-
-		ingressRulePaths, ingressRuleNames := generateRuleNames(ruleNames, "ingress", ingress)
-		egressRulePaths, egressRuleNames := generateRuleNames(ruleNames, "egress", egress)
+		ingressRulePaths, ingressRuleNames := generateRuleNames("ingress", ingress)
+		egressRulePaths, egressRuleNames := generateRuleNames("egress", egress)
 
 		genPatch, err := createReplacePatch(append(ingressRulePaths, egressRulePaths...), append(ingressRuleNames, egressRuleNames...))
 		if err != nil {
@@ -136,19 +127,12 @@ func (m *NetworkPolicyMutator) mutateAntreaPolicyRuleName(op admv1.Operation, in
 }
 
 // generateRuleNames generates unique rule names and returns a list of json paths and the corresponding list of generated names
-func generateRuleNames(ruleNames sets.String, prefix string, rules []secv1alpha1.Rule) ([]string, []string) {
+func generateRuleNames(prefix string, rules []secv1alpha1.Rule) ([]string, []string) {
 	var paths []string
 	var values []string
 	for idx, rule := range rules {
 		if rule.Name == "" {
 			genName := fmt.Sprintf("%s-%s-%s", prefix, strings.ToLower(string(*rule.Action)), hashRule(rule))
-			// If an existing name is generated, it means there are duplicate rules or
-			// one of rule-names contains hash value of other rules, which is illegal.
-			// MutatingWebhook will skip auto-gen of this rule name as a signal to ValidatingWebhook that an error needs to be reported.
-			if ruleNames.Has(genName) {
-				break
-			}
-			ruleNames.Insert(genName)
 			paths = append(paths, fmt.Sprintf("/spec/%s/%d/name", prefix, idx))
 			values = append(values, genName)
 		}
