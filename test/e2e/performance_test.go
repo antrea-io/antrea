@@ -36,8 +36,6 @@ const (
 	perfTestAppLabel                = "antrea-perf-test"
 	podsConnectionNetworkPolicyName = "pods.ingress"
 	workloadNetworkPolicyName       = "workloads.ingress"
-	perftoolImage                   = "antrea/perftool"
-	nginxImage                      = "nginx"
 	perftoolContainerName           = "perftool"
 	nginxContainerName              = "nginx"
 )

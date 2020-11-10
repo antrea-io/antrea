@@ -23,11 +23,6 @@ import (
 	"time"
 )
 
-const (
-	ipfixCollectorImage = "antrea/ipfix-collector:10282020.1"
-	ipfixCollectorPort  = "4739"
-)
-
 func skipIfNotBenchmarkTest(tb testing.TB) {
 	if !testOptions.withBench {
 		tb.Skipf("Skipping benchmark test: %s", tb.Name())
