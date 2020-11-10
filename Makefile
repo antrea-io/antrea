@@ -170,7 +170,7 @@ antctl-release:
 .windows-test-unit:
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test github.com/vmware-tanzu/antrea/cmd/... github.com/vmware-tanzu/antrea/pkg/...
+	$(GO) test -v github.com/vmware-tanzu/antrea/cmd/... github.com/vmware-tanzu/antrea/pkg/...
 
 .PHONY: tidy
 tidy:
