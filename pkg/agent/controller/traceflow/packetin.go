@@ -137,7 +137,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		ob.Component = opsv1alpha1.NetworkPolicy
 		ob.ComponentInfo = openflow.GetFlowTableName(openflow.EgressRuleTable)
 		ob.Action = opsv1alpha1.Forwarded
-		npRef := c.ofClient.GetPolicyFromConjunction(egressInfo)
+		npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressInfo)
 		if npRef != nil {
 			ob.NetworkPolicy = npRef.ToString()
 		}
@@ -154,7 +154,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		ob.Component = opsv1alpha1.NetworkPolicy
 		ob.ComponentInfo = openflow.GetFlowTableName(openflow.IngressRuleTable)
 		ob.Action = opsv1alpha1.Forwarded
-		npRef := c.ofClient.GetPolicyFromConjunction(ingressInfo)
+		npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressInfo)
 		if npRef != nil {
 			ob.NetworkPolicy = npRef.ToString()
 		}

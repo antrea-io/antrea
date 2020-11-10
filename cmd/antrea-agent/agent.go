@@ -93,13 +93,6 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
 
-	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
-	// NetworkPolicy stats.
-	var statsCollector *stats.Collector
-	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		statsCollector = stats.NewCollector(antreaClientProvider, ofClient)
-	}
-
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	networkConfig := &config.NetworkConfig{
@@ -148,21 +141,6 @@ func run(o *Options) error {
 		networkConfig,
 		nodeConfig)
 
-	var traceflowController *traceflow.Controller
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		traceflowController = traceflow.NewTraceflowController(
-			k8sClient,
-			informerFactory,
-			crdClient,
-			traceflowInformer,
-			ofClient,
-			ovsBridgeClient,
-			ifaceStore,
-			networkConfig,
-			nodeConfig,
-			serviceCIDRNet)
-	}
-
 	// podUpdates is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated Pods.
@@ -177,6 +155,14 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
 	}
+
+	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
+	// NetworkPolicy stats.
+	var statsCollector *stats.Collector
+	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
+		statsCollector = stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController)
+	}
+
 	isChaining := false
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
@@ -197,6 +183,22 @@ func run(o *Options) error {
 	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, o.config.OVSDatapathType)
 	if err != nil {
 		return fmt.Errorf("error initializing CNI server: %v", err)
+	}
+
+	var traceflowController *traceflow.Controller
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		traceflowController = traceflow.NewTraceflowController(
+			k8sClient,
+			informerFactory,
+			crdClient,
+			traceflowInformer,
+			ofClient,
+			networkPolicyController,
+			ovsBridgeClient,
+			ifaceStore,
+			networkConfig,
+			nodeConfig,
+			serviceCIDRNet)
 	}
 
 	// TODO: we should call this after installing flows for initial node routes

@@ -17,8 +17,14 @@ package networkpolicy
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 func TestNewIDAllocator(t *testing.T) {
@@ -61,28 +67,38 @@ func TestNewIDAllocator(t *testing.T) {
 	}
 }
 
-func TestAllocate(t *testing.T) {
+func TestAllocateForRule(t *testing.T) {
+	rule := &types.PolicyRule{
+		Direction: v1beta2.DirectionIn,
+		From:      []types.Address{},
+		To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+		Service:   nil,
+	}
 	tests := []struct {
 		name        string
 		args        []uint32
+		rule        *types.PolicyRule
 		expectedID  uint32
 		expectedErr error
 	}{
 		{
 			"zero-allocated-ids",
 			nil,
+			rule,
 			1,
 			nil,
 		},
 		{
 			"consecutive-allocated-ids",
 			[]uint32{1, 2},
+			rule,
 			3,
 			nil,
 		},
 		{
 			"inconsecutive-allocated-ids",
 			[]uint32{1, 7, 5},
+			rule,
 			2,
 			nil,
 		},
@@ -90,11 +106,15 @@ func TestAllocate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := newIDAllocator(tt.args...)
-			actualID, actualErr := a.allocate()
+			actualErr := a.allocateForRule(tt.rule)
 			if actualErr != tt.expectedErr {
 				t.Fatalf("Got error %v, expected %v", actualErr, tt.expectedErr)
 			}
-			assert.Equalf(t, tt.expectedID, actualID, "Got id %v, expected %v", actualID, tt.expectedID)
+			assert.Equalf(t, tt.expectedID, tt.rule.FlowID, "Got id %v, expected %v", tt.rule.FlowID, tt.expectedID)
+			ruleFromCache, exists, err := a.getRuleFromAsyncCache(tt.expectedID)
+			assert.Truef(t, exists, "Rule with id %d should present in the async rule cache", tt.expectedID)
+			assert.NoErrorf(t, err, "getRuleFromAsyncCache should return valid rule with id: %v", tt.expectedID)
+			assert.Equalf(t, tt.rule, ruleFromCache, "getRuleFromAsyncCache should return expected rule")
 		})
 	}
 }
@@ -140,6 +160,58 @@ func TestRelease(t *testing.T) {
 			assert.Equalf(t, tt.expectedErr, actualErr, "Got error %v, expected %v", actualErr, tt.expectedErr)
 			assert.Equalf(t, tt.expectedAvailableSets, a.availableSet, "Got availableSet %v, expected %v", a.availableSet, tt.expectedAvailableSets)
 			assert.Equalf(t, tt.expectedAvailableSlice, a.availableSlice, "Got availableSlice %v, expected %v", a.availableSlice, tt.expectedAvailableSlice)
+		})
+	}
+}
+
+func TestWorker(t *testing.T) {
+	rule := &types.PolicyRule{
+		Direction: v1beta2.DirectionIn,
+		From:      []types.Address{},
+		To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+		Service:   nil,
+	}
+	tests := []struct {
+		name        string
+		args        []uint32
+		rule        *types.PolicyRule
+		expectedID  uint32
+		expectedErr error
+	}{
+		{
+			"delete-rule-from-async-rule-cache",
+			nil,
+			rule,
+			1,
+			nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := newIDAllocator(tt.args...)
+			actualErr := a.allocateForRule(tt.rule)
+			if actualErr != tt.expectedErr {
+				t.Fatalf("Got error %v, expected %v", actualErr, tt.expectedErr)
+			}
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			go wait.Until(a.worker, time.Millisecond, stopCh)
+
+			a.forgetRule(tt.rule.FlowID, 5*time.Millisecond)
+			conditionFunc := func() (bool, error) {
+				a.Lock()
+				defer a.Unlock()
+				if len(a.availableSlice) > 0 {
+					return true, nil
+				}
+				return false, nil
+			}
+			if err := wait.Poll(time.Millisecond, time.Millisecond*10, conditionFunc); err != nil {
+				t.Fatalf("Expect the rule with id %v to be deleted from async rule cache", tt.expectedID)
+			}
+			_, exists, err := a.getRuleFromAsyncCache(tt.expectedID)
+			assert.Falsef(t, exists, "Expect rule to be not present in asyncRuleCache")
+			assert.NoErrorf(t, err, "getRuleFromAsyncCache should not return any error")
 		})
 	}
 }
