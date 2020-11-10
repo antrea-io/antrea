@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 )
 
@@ -746,18 +747,16 @@ func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.Network
 // waitForNetworkpolicyRealized waits for the NetworkPolicy to be realized by the antrea-agent Pod.
 func (data *TestData) waitForNetworkpolicyRealized(pod string, networkpolicy string) error {
 	if err := wait.Poll(200*time.Millisecond, 5*time.Second, func() (bool, error) {
-		cmds := []string{"antctl", "get", "networkpolicy", "-S", networkpolicy, "-n", testNamespace}
-		if _, stderr, err := runAntctl(pod, cmds, data); err != nil {
-			if strings.Contains(stderr, "server could not find the requested resource") {
-				return false, nil
-			}
-			return false, err
+		cmds := []string{"antctl", "get", "networkpolicy", "-S", networkpolicy, "-n", testNamespace, "-T", "K8sNP"}
+		stdout, stderr, err := runAntctl(pod, cmds, data)
+		if err != nil {
+			return false, fmt.Errorf("Error when executing antctl get NetworkPolicy, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
 		}
-		return true, nil
+		return strings.Contains(stdout, fmt.Sprintf("%s:%s/%s", v1beta2.K8sNetworkPolicy, testNamespace, networkpolicy)), nil
 	}); err == wait.ErrWaitTimeout {
 		return fmt.Errorf("NetworkPolicy %s isn't realized in time", networkpolicy)
 	} else if err != nil {
-		return fmt.Errorf("Error when executing antctl get NetworkPolicy: %v", err)
+		return err
 	}
 	return nil
 }
