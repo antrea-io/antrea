@@ -45,6 +45,11 @@ type Foobar struct {
 	Foo string `json:"foo"`
 }
 
+var (
+	AntreaPolicyTierPriority = int32(250)
+	AntreaPolicyPriority     = float64(1.0)
+)
+
 func TestCommandList_tableOutputForGetCommands(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
@@ -172,6 +177,8 @@ foo2
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "880db7e8-fc2a-4030-aefe-09afc5f341ad",
 						},
+						TierPriority:    &AntreaPolicyTierPriority,
+						Priority:        &AntreaPolicyPriority,
 						AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c"},
 						Rules: []cpv1beta.NetworkPolicyRule{
 							{
@@ -192,9 +199,9 @@ foo2
 					},
 				},
 			},
-			expected: `NAME                                 APPLIED-TO                                       RULES SOURCE                               
-6001549b-ba63-4752-8267-30f52b4332db 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1     K8sNetworkPolicy:default/allow-all   
-880db7e8-fc2a-4030-aefe-09afc5f341ad 32ef631b-6817-5a18-86eb-93f4abf0467c             2     AntreaNetworkPolicy:default/allow-all
+			expected: `NAME                                 APPLIED-TO                                       RULES SOURCE                                TIER-PRIORITY PRIORITY
+6001549b-ba63-4752-8267-30f52b4332db 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1     K8sNetworkPolicy:default/allow-all    <NONE>        <NONE>  
+880db7e8-fc2a-4030-aefe-09afc5f341ad 32ef631b-6817-5a18-86eb-93f4abf0467c             2     AntreaNetworkPolicy:default/allow-all 250           1       
 `,
 		},
 		{

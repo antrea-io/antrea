@@ -51,16 +51,31 @@ func Transform(reader io.Reader, single bool) (interface{}, error) {
 	)(reader, single)
 }
 
+func priorityToString(p interface{}) string {
+	if reflect.ValueOf(p).IsNil() {
+		return ""
+	} else if pInt32, ok := p.(*int32); ok {
+		return strconv.Itoa(int(*pInt32))
+	} else {
+		pFloat64, _ := p.(*float64)
+		return strconv.FormatFloat(*pFloat64, 'f', -1, 64)
+	}
+}
+
 var _ common.TableOutput = new(Response)
 
 func (r Response) GetTableHeader() []string {
-	return []string{"NAME", "APPLIED-TO", "RULES", "SOURCE"}
+	return []string{"NAME", "APPLIED-TO", "RULES", "SOURCE", "TIER-PRIORITY", "PRIORITY"}
 }
 
 func (r Response) GetTableRow(maxColumnLength int) []string {
-	return []string{r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength), strconv.Itoa(len(r.Rules)), r.SourceRef.ToString()}
+	return []string{
+		r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength),
+		strconv.Itoa(len(r.Rules)), r.SourceRef.ToString(),
+		priorityToString(r.TierPriority), priorityToString(r.Priority),
+	}
 }
 
 func (r Response) SortRows() bool {
-	return true
+	return false
 }

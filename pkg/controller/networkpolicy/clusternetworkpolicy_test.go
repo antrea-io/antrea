@@ -101,7 +101,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &defaultTierPriority,
+				TierPriority: &DefaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -185,7 +185,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidB",
 				},
 				Priority:     &p10,
-				TierPriority: &defaultTierPriority,
+				TierPriority: &DefaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -333,7 +333,7 @@ func TestAddCNP(t *testing.T) {
 	appTier := secv1alpha1.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "application", UID: "tA"},
 		Spec: secv1alpha1.TierSpec{
-			Priority: defaultTierPriority,
+			Priority: DefaultTierPriority,
 		},
 	}
 	allowAction := secv1alpha1.RuleActionAllow
@@ -390,7 +390,7 @@ func TestAddCNP(t *testing.T) {
 					UID:  "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &defaultTierPriority,
+				TierPriority: &DefaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -448,7 +448,7 @@ func TestAddCNP(t *testing.T) {
 					UID:  "uidB",
 				},
 				Priority:     &p10,
-				TierPriority: &defaultTierPriority,
+				TierPriority: &DefaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -640,7 +640,7 @@ func TestAddCNP(t *testing.T) {
 					UID:  "uidF",
 				},
 				Priority:     &p10,
-				TierPriority: &defaultTierPriority,
+				TierPriority: &DefaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -724,7 +724,7 @@ func TestAddCNP(t *testing.T) {
 					UID:  "uidG",
 				},
 				Priority:     &p10,
-				TierPriority: &defaultTierPriority,
+				TierPriority: &DefaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -810,7 +810,7 @@ func TestGetTierPriority(t *testing.T) {
 		{
 			name:      "empty-tier-name",
 			inputTier: nil,
-			expPrio:   defaultTierPriority,
+			expPrio:   DefaultTierPriority,
 		},
 		{
 			name: "tier10",

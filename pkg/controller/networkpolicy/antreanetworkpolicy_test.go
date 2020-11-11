@@ -98,7 +98,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 					UID:       "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &defaultTierPriority,
+				TierPriority: &DefaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -183,7 +183,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 					UID:       "uidB",
 				},
 				Priority:     &p10,
-				TierPriority: &defaultTierPriority,
+				TierPriority: &DefaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -286,7 +286,7 @@ func TestAddANP(t *testing.T) {
 					UID:       "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &defaultTierPriority,
+				TierPriority: &DefaultTierPriority,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
