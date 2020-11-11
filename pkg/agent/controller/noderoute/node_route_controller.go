@@ -17,7 +17,6 @@ package noderoute
 import (
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -45,12 +44,14 @@ const (
 	// Interval of reprocessing every node.
 	nodeResyncPeriod = 60 * time.Second
 	// How long to wait before retrying the processing of a node change
-	minRetryDelay = 5 * time.Second
-	maxRetryDelay = 300 * time.Second
+	minRetryDelay = 2 * time.Second
+	maxRetryDelay = 120 * time.Second
 	// Default number of workers processing a node change
 	defaultWorkers = 4
 
 	ovsExternalIDNodeName = "node-name"
+
+	nodeRouteInfoPodCIDRIndexName = "podCIDR"
 )
 
 // Controller is responsible for setting up necessary IP routes and Openflow entries for inter-node traffic.
@@ -69,7 +70,7 @@ type Controller struct {
 	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the podCIDR of the Node.
 	// A node will be in the map after its flows and routes are installed successfully.
-	installedNodes *sync.Map
+	installedNodes cache.Indexer
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -96,7 +97,7 @@ func NewNodeRouteController(
 		nodeLister:       nodeInformer.Lister(),
 		nodeListerSynced: nodeInformer.Informer().HasSynced,
 		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
-		installedNodes:   &sync.Map{}}
+		installedNodes:   cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc})}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(cur interface{}) {
@@ -112,6 +113,22 @@ func NewNodeRouteController(
 		nodeResyncPeriod,
 	)
 	return controller
+}
+
+func nodeRouteInfoKeyFunc(obj interface{}) (string, error) {
+	return obj.(*nodeRouteInfo).nodeName, nil
+}
+
+func nodeRouteInfoPodCIDRIndexFunc(obj interface{}) ([]string, error) {
+	return []string{obj.(*nodeRouteInfo).podCIDR.String()}, nil
+}
+
+// nodeRouteInfo is the route related information extracted from corev1.Node.
+type nodeRouteInfo struct {
+	nodeName  string
+	podCIDR   *net.IPNet
+	nodeIP    net.IP
+	gatewayIP net.IP
 }
 
 // enqueueNode adds an object to the controller work queue
@@ -353,20 +370,20 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 func (c *Controller) deleteNodeRoute(nodeName string) error {
 	klog.Infof("Deleting routes and flows to Node %s", nodeName)
 
-	podCIDR, installed := c.installedNodes.Load(nodeName)
+	obj, installed, _ := c.installedNodes.GetByKey(nodeName)
 	if !installed {
 		// Route is not added for this Node.
 		return nil
 	}
-
-	if err := c.routeClient.DeleteRoutes(podCIDR.(*net.IPNet)); err != nil {
+	nodeRouteInfo := obj.(*nodeRouteInfo)
+	if err := c.routeClient.DeleteRoutes(nodeRouteInfo.podCIDR); err != nil {
 		return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
 	}
 
 	if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
 		return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
 	}
-	c.installedNodes.Delete(nodeName)
+	c.installedNodes.Delete(obj)
 
 	if c.networkConfig.EnableIPSecTunnel {
 		interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
@@ -385,7 +402,7 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 }
 
 func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
-	if _, installed := c.installedNodes.Load(nodeName); installed {
+	if _, installed, _ := c.installedNodes.GetByKey(nodeName); installed {
 		// Route is already added for this Node.
 		return nil
 	}
@@ -398,6 +415,22 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		// Does not help to return an error and trigger controller retries.
 		return nil
 	}
+
+	nodesHaveSamePodCIDR, _ := c.installedNodes.ByIndex(nodeRouteInfoPodCIDRIndexName, node.Spec.PodCIDR)
+	// PodCIDRs can be released from deleted Nodes and allocated to new Nodes. For server side, it won't happen that a
+	// PodCIDR is allocated to more than one Node at any point. However, for client side, if a resync happens to occur
+	// when there are Node creation and deletion events, the informer will generate the events in a way that all
+	// creation events come before deletion ones even they actually happen in the opposite order on the server side.
+	// See https://github.com/kubernetes/kubernetes/blob/v1.18.2/staging/src/k8s.io/client-go/tools/cache/delta_fifo.go#L503-L512
+	// Therefore, a PodCIDR may appear in a new Node before the Node that previously owns it is removed. To ensure the
+	// stale routes, flows, and relevant cache of this podCIDR are removed appropriately, we wait for the Node deletion
+	// event to be processed before proceeding, or the route installation and uninstallation operations may override or
+	// conflict with each other.
+	if len(nodesHaveSamePodCIDR) > 0 {
+		// Return an error so that the Node will be put back to the workqueue and will be retried later.
+		return fmt.Errorf("skipping addNodeRoute for Node %s because podCIDR %s is duplicate with Node %s, will retry later", nodeName, node.Spec.PodCIDR, nodesHaveSamePodCIDR[0].(*nodeRouteInfo).nodeName)
+	}
+
 	peerPodCIDRAddr, peerPodCIDR, err := net.ParseCIDR(node.Spec.PodCIDR)
 	if err != nil {
 		klog.Errorf("Failed to parse PodCIDR %s for Node %s", node.Spec.PodCIDR, nodeName)
@@ -435,7 +468,13 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	if err := c.routeClient.AddRoutes(peerPodCIDR, peerNodeIP, peerGatewayIP); err != nil {
 		return err
 	}
-	c.installedNodes.Store(nodeName, peerPodCIDR)
+
+	c.installedNodes.Add(&nodeRouteInfo{
+		nodeName:  nodeName,
+		podCIDR:   peerPodCIDR,
+		nodeIP:    peerNodeIP,
+		gatewayIP: peerGatewayIP,
+	})
 	return err
 }
 
