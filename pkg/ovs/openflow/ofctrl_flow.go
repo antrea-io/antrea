@@ -31,6 +31,8 @@ type ofFlow struct {
 	// ctStates is a temporary variable to maintain openflow13.CTStates. When FlowBuilder.Done is called, it is used to
 	// set the CtStates field in ofctrl.Flow.Match.
 	ctStates *openflow13.CTStates
+	// isDropFlow is true if this flow actions contain "drop"
+	isDropFlow bool
 }
 
 // Reset updates the ofFlow.Flow.Table field with ofFlow.table.Table.
@@ -134,7 +136,14 @@ func (f *ofFlow) CopyToBuilder(priority uint16, copyActions bool) FlowBuilder {
 		matchers: f.matchers,
 		protocol: f.protocol,
 	}
+	if copyActions {
+		newFlow.isDropFlow = f.isDropFlow
+	}
 	return &ofFlowBuilder{newFlow}
+}
+
+func (f *ofFlow) IsDropFlow() bool {
+	return f.isDropFlow
 }
 
 func (r *Range) ToNXRange() *openflow13.NXRange {

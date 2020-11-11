@@ -133,10 +133,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		if err != nil {
 			return nil, nil, err
 		}
-		ob := new(opsv1alpha1.Observation)
-		ob.Component = opsv1alpha1.NetworkPolicy
-		ob.ComponentInfo = openflow.GetFlowTableName(openflow.EgressRuleTable)
-		ob.Action = opsv1alpha1.Forwarded
+		ob := getNetworkPolicyObservation(tableID, false)
 		npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressInfo)
 		if npRef != nil {
 			ob.NetworkPolicy = npRef.ToString()
@@ -150,10 +147,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		if err != nil {
 			return nil, nil, err
 		}
-		ob := new(opsv1alpha1.Observation)
-		ob.Component = opsv1alpha1.NetworkPolicy
-		ob.ComponentInfo = openflow.GetFlowTableName(openflow.IngressRuleTable)
-		ob.Action = opsv1alpha1.Forwarded
+		ob := getNetworkPolicyObservation(tableID, true)
 		npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressInfo)
 		if npRef != nil {
 			ob.NetworkPolicy = npRef.ToString()
@@ -162,11 +156,21 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	}
 
 	// Get drop table.
-	if tableID == uint8(openflow.EgressDefaultTable) || tableID == uint8(openflow.IngressDefaultTable) {
-		ob := new(opsv1alpha1.Observation)
-		ob.Action = opsv1alpha1.Dropped
-		ob.Component = opsv1alpha1.NetworkPolicy
-		ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
+	if tableID == uint8(openflow.EgressMetricTable) || tableID == uint8(openflow.IngressMetricTable) {
+		ob := getNetworkPolicyObservation(tableID, tableID == uint8(openflow.IngressMetricTable))
+		if match = getMatchRegField(matchers, uint32(openflow.CNPDropConjunctionIDReg)); match != nil {
+			dropConjInfo, err := getInfoInReg(match, nil)
+			if err != nil {
+				return nil, nil, err
+			}
+			npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(dropConjInfo)
+			if npRef != nil {
+				ob.NetworkPolicy = npRef.ToString()
+			}
+		}
+		obs = append(obs, *ob)
+	} else if tableID == uint8(openflow.EgressDefaultTable) || tableID == uint8(openflow.IngressDefaultTable) {
+		ob := getNetworkPolicyObservation(tableID, tableID == uint8(openflow.IngressDefaultTable))
 		obs = append(obs, *ob)
 	}
 
@@ -242,4 +246,31 @@ func getInfoInCtNwDstField(matchers *ofctrl.Matchers) (string, error) {
 		return "", errors.New("packet-in conntrack IP destination value cannot be retrieved from metadata")
 	}
 	return regValue.String(), nil
+}
+
+func getNetworkPolicyObservation(tableID uint8, ingress bool) *opsv1alpha1.Observation {
+	ob := new(opsv1alpha1.Observation)
+	ob.Component = opsv1alpha1.NetworkPolicy
+	if ingress {
+		switch tableID {
+		case uint8(openflow.IngressMetricTable), uint8(openflow.IngressDefaultTable):
+			// Packet dropped by ANP/default drop rule
+			ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
+			ob.Action = opsv1alpha1.Dropped
+		default:
+			ob.ComponentInfo = openflow.GetFlowTableName(openflow.IngressRuleTable)
+			ob.Action = opsv1alpha1.Forwarded
+		}
+	} else {
+		switch tableID {
+		case uint8(openflow.EgressMetricTable), uint8(openflow.EgressDefaultTable):
+			// Packet dropped by ANP/default drop rule
+			ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
+			ob.Action = opsv1alpha1.Dropped
+		default:
+			ob.ComponentInfo = openflow.GetFlowTableName(openflow.EgressRuleTable)
+			ob.Action = opsv1alpha1.Forwarded
+		}
+	}
+	return ob
 }

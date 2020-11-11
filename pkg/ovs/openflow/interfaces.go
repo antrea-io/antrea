@@ -157,6 +157,7 @@ type Flow interface {
 	// It copies the original actions of the Flow only if copyActions is set to true, and
 	// resets the priority in the new FlowBuilder if the provided priority is not 0.
 	CopyToBuilder(priority uint16, copyActions bool) FlowBuilder
+	IsDropFlow() bool
 }
 
 type Action interface {
