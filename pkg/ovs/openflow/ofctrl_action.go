@@ -17,6 +17,7 @@ type ofFlowAction struct {
 // Drop is an action to drop packets.
 func (a *ofFlowAction) Drop() FlowBuilder {
 	a.builder.Drop()
+	a.builder.isDropFlow = true
 	return a.builder
 }
 
@@ -318,11 +319,13 @@ func (a *ofFlowAction) Note(notes string) FlowBuilder {
 }
 
 func (a *ofFlowAction) SendToController(reason uint8) FlowBuilder {
-	controllerAct := &ofctrl.NXController{
-		ControllerID: a.builder.ofFlow.Table.Switch.GetControllerID(),
-		Reason:       reason,
+	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
+		controllerAct := &ofctrl.NXController{
+			ControllerID: a.builder.ofFlow.Table.Switch.GetControllerID(),
+			Reason:       reason,
+		}
+		a.builder.ApplyAction(controllerAct)
 	}
-	a.builder.ApplyAction(controllerAct)
 	return a.builder
 }
 
