@@ -151,7 +151,7 @@ type CNIConfig struct {
 //     gateway (if missing) based on the subnet and setting the interface pointer to the container
 //     interface
 //   * if there is no default route, add one using the provided default gateway
-func updateResultIfaceConfig(result *current.Result, defaultV4Gateway net.IP) {
+func updateResultIfaceConfig(result *current.Result, defaultIPv4Gateway net.IP, defaultIPv6Gateway net.IP) {
 	for _, ipc := range result.IPs {
 		// result.Interfaces[0] is host interface, and result.Interfaces[1] is container interface
 		ipc.Interface = current.Int(1)
@@ -162,21 +162,29 @@ func updateResultIfaceConfig(result *current.Result, defaultV4Gateway net.IP) {
 		}
 	}
 
-	foundDefaultRoute := false
-	defaultRouteDst := "0.0.0.0/0"
+	foundV4DefaultRoute := false
+	foundV6DefaultRoute := false
+	defaultV4RouteDst := "0.0.0.0/0"
+	defaultV6RouteDst := "::/0"
 	if result.Routes != nil {
 		for _, rt := range result.Routes {
-			if rt.Dst.String() == defaultRouteDst {
-				foundDefaultRoute = true
-				break
+			if rt.Dst.String() == defaultV4RouteDst {
+				foundV4DefaultRoute = true
+			} else if rt.Dst.String() == defaultV6RouteDst {
+				foundV6DefaultRoute = true
 			}
 		}
 	} else {
 		result.Routes = []*cnitypes.Route{}
 	}
-	if !foundDefaultRoute {
-		_, defaultRouteDstNet, _ := net.ParseCIDR(defaultRouteDst)
-		result.Routes = append(result.Routes, &cnitypes.Route{Dst: *defaultRouteDstNet, GW: defaultV4Gateway})
+
+	if (!foundV4DefaultRoute) && (defaultIPv4Gateway != nil) {
+		_, defaultV4RouteDstNet, _ := net.ParseCIDR(defaultV4RouteDst)
+		result.Routes = append(result.Routes, &cnitypes.Route{Dst: *defaultV4RouteDstNet, GW: defaultIPv4Gateway})
+	}
+	if (!foundV6DefaultRoute) && (defaultIPv6Gateway != nil) {
+		_, defaultV6RouteDstNet, _ := net.ParseCIDR(defaultV6RouteDst)
+		result.Routes = append(result.Routes, &cnitypes.Route{Dst: *defaultV6RouteDstNet, GW: defaultIPv6Gateway})
 	}
 }
 
@@ -231,8 +239,14 @@ func (s *CNIServer) checkRequestMessage(request *cnipb.CniCmdRequest) (*CNIConfi
 }
 
 func (s *CNIServer) updateLocalIPAMSubnet(cniConfig *CNIConfig) {
-	cniConfig.NetworkConfig.IPAM.Gateway = s.nodeConfig.GatewayConfig.IP.String()
-	cniConfig.NetworkConfig.IPAM.Subnet = s.nodeConfig.PodCIDR.String()
+	if (s.nodeConfig.GatewayConfig.IPv4 != nil) && (s.nodeConfig.PodIPv4CIDR != nil) {
+		cniConfig.NetworkConfig.IPAM.Ranges = append(cniConfig.NetworkConfig.IPAM.Ranges,
+			ipam.RangeSet{ipam.Range{Subnet: s.nodeConfig.PodIPv4CIDR.String(), Gateway: s.nodeConfig.GatewayConfig.IPv4.String()}})
+	}
+	if (s.nodeConfig.GatewayConfig.IPv6 != nil) && (s.nodeConfig.PodIPv6CIDR != nil) {
+		cniConfig.NetworkConfig.IPAM.Ranges = append(cniConfig.NetworkConfig.IPAM.Ranges,
+			ipam.RangeSet{ipam.Range{Subnet: s.nodeConfig.PodIPv6CIDR.String(), Gateway: s.nodeConfig.GatewayConfig.IPv6.String()}})
+	}
 	cniConfig.NetworkConfiguration, _ = json.Marshal(cniConfig.NetworkConfig)
 }
 
@@ -419,7 +433,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	result.IPs = ipamResult.IPs
 	result.Routes = ipamResult.Routes
 	// Ensure interface gateway setting and mapping relations between result.Interfaces and result.IPs
-	updateResultIfaceConfig(result, s.nodeConfig.GatewayConfig.IP)
+	updateResultIfaceConfig(result, s.nodeConfig.GatewayConfig.IPv4, s.nodeConfig.GatewayConfig.IPv6)
 	// Setup pod interfaces and connect to ovs bridge
 	podName := string(cniConfig.K8S_POD_NAME)
 	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)

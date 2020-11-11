@@ -44,6 +44,7 @@ type Client struct {
 }
 
 // NewClient returns a route client.
+// Todo: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy completely.
 func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
 	nr := netroute.New()
 	return &Client{
@@ -190,11 +191,11 @@ func (c *Client) listRoutes() (map[string]*netroute.Route, error) {
 
 // initFwRules adds Windows Firewall rules to accept the traffic that is sent to or from local Pods.
 func (c *Client) initFwRules() error {
-	err := c.fwClient.AddRuleAllowIP(inboundFirewallRuleName, winfirewall.FWRuleIn, c.nodeConfig.PodCIDR)
+	err := c.fwClient.AddRuleAllowIP(inboundFirewallRuleName, winfirewall.FWRuleIn, c.nodeConfig.PodIPv4CIDR)
 	if err != nil {
 		return err
 	}
-	err = c.fwClient.AddRuleAllowIP(outboundFirewallRuleName, winfirewall.FWRuleOut, c.nodeConfig.PodCIDR)
+	err = c.fwClient.AddRuleAllowIP(outboundFirewallRuleName, winfirewall.FWRuleOut, c.nodeConfig.PodIPv4CIDR)
 	if err != nil {
 		return err
 	}

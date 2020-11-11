@@ -26,7 +26,8 @@ type Interface interface {
 	// It should be idempotent and can be safely called on every startup.
 	Initialize(nodeConfig *config.NodeConfig, done func()) error
 
-	// Reconcile should remove orphaned routes and related configuration based on the desired podCIDRs.
+	// Reconcile should remove orphaned routes and related configuration based on the desired podCIDRs. If IPv6 is enabled
+	// in the cluster, Reconcile should also remove the orphaned IPv6 neighbors.
 	Reconcile(podCIDRs []string) error
 
 	// AddRoutes should add routes to the provided podCIDR.
