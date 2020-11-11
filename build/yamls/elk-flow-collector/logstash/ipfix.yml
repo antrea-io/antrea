@@ -1,4 +1,4 @@
-# ipfix fields definition file. Antrea-specific fields are with Enterprise ID 55829
+# ipfix fields definition file. Antrea-specific fields are with Enterprise ID 56506
 ---
 0:
   0:
@@ -364,10 +364,10 @@
     - :uint32
     - :observationDomainId
   150:
-    - :int64
+    - :uint32
     - :flowStartSeconds
   151:
-    - :int64
+    - :uint32
     - :flowEndSeconds
   152:
     - :uint64
@@ -4027,7 +4027,7 @@
     - :ixiaThreatIPv6
 
 # Antrea
-55829:
+56506:
   100:
     - :string
     - :sourcePodNamespace
@@ -4048,10 +4048,25 @@
     - :destinationNodeName
   106:
     - :ip4_addr
-    - :destinationClusterIP
+    - :destinationClusterIPv4
   107:
+    - :ip6_addr
+    - :destinationClusterIPv6
+  108:
     - :uint16
     - :destinationServicePort
-  108:
+  109:
     - :string
     - :destinationServicePortName
+  110:
+    - :string
+    - :ingressNetworkPolicyName
+  111:
+    - :string
+    - :ingressNetworkPolicyNamespace
+  112:
+    - :string
+    - :egressNetworkPolicyName
+  113:
+    - :string
+    - :egressNetworkPolicyNamespace
