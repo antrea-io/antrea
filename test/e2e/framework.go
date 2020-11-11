@@ -35,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -88,11 +89,14 @@ type ClusterNode struct {
 }
 
 type ClusterInfo struct {
-	numWorkerNodes int
-	numNodes       int
-	podNetworkCIDR string
-	masterNodeName string
-	nodes          map[int]ClusterNode
+	numWorkerNodes   int
+	numNodes         int
+	podV4NetworkCIDR string
+	podV6NetworkCIDR string
+	svcV4NetworkCIDR string
+	svcV6NetworkCIDR string
+	masterNodeName   string
+	nodes            map[int]ClusterNode
 }
 
 var clusterInfo ClusterInfo
@@ -122,6 +126,36 @@ type TestData struct {
 }
 
 var testData *TestData
+
+type PodIPs struct {
+	ipv4      *net.IP
+	ipv6      *net.IP
+	ipStrings []string
+}
+
+func (p PodIPs) String() string {
+	res := ""
+	if p.ipv4 != nil {
+		res += fmt.Sprintf("IPv4: %s, ", p.ipv4.String())
+	}
+	if p.ipv6 != nil {
+		res += fmt.Sprintf("IPv6: %s, ", p.ipv6.String())
+	}
+	return fmt.Sprintf("%sIP strings: %s", res, strings.Join(p.ipStrings, ", "))
+}
+
+func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
+	if len(p.ipStrings) == 0 && len(p1.ipStrings) == 0 {
+		return true
+	}
+	if p.ipv4 != nil && p1.ipv4 != nil && p.ipv4.Equal(*(p1.ipv4)) {
+		return true
+	}
+	if p.ipv6 != nil && p1.ipv6 != nil && p.ipv6.Equal(*(p1.ipv6)) {
+		return true
+	}
+	return false
+}
 
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
 // (including if idx is 0, which is reserved for the master Node)
@@ -208,23 +242,61 @@ func collectClusterInfo() error {
 	clusterInfo.numNodes = workerIdx
 	clusterInfo.numWorkerNodes = clusterInfo.numNodes - 1
 
-	// retrieve cluster CIDR
-	if err := func() error {
-		cmd := "kubectl cluster-info dump | grep cluster-cidr"
+	retrieveCIDRs := func(cmd string, reg string) ([]string, error) {
+		res := make([]string, 2)
 		rc, stdout, _, err := RunCommandOnNode(clusterInfo.masterNodeName, cmd)
 		if err != nil || rc != 0 {
-			return fmt.Errorf("error when running the following command `%s` on master Node: %v, %s", cmd, err, stdout)
+			return res, fmt.Errorf("error when running the following command `%s` on master Node: %v, %s", cmd, err, stdout)
 		}
-		re := regexp.MustCompile(`cluster-cidr=([^"]+)`)
+		re := regexp.MustCompile(reg)
 		if matches := re.FindStringSubmatch(stdout); len(matches) == 0 {
-			return fmt.Errorf("cannot retrieve cluster CIDR, unexpected kubectl output: %s", stdout)
+			return res, fmt.Errorf("cannot retrieve CIDR, unexpected kubectl output: %s", stdout)
 		} else {
-			clusterInfo.podNetworkCIDR = matches[1]
+			cidrs := strings.Split(matches[1], ",")
+			if len(cidrs) == 1 {
+				_, cidr, err := net.ParseCIDR(cidrs[0])
+				if err != nil {
+					return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+				}
+				if cidr.IP.To4() != nil {
+					res[0] = cidrs[0]
+				} else {
+					res[1] = cidrs[0]
+				}
+			} else if len(cidrs) == 2 {
+				_, cidr, err := net.ParseCIDR(cidrs[0])
+				if err != nil {
+					return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+				}
+				if cidr.IP.To4() != nil {
+					res[0] = cidrs[0]
+					res[1] = cidrs[1]
+				} else {
+					res[0] = cidrs[1]
+					res[1] = cidrs[0]
+				}
+			} else {
+				return res, fmt.Errorf("unexpected cluster CIDR: %s", matches[1])
+			}
 		}
-		return nil
-	}(); err != nil {
+		return res, nil
+	}
+
+	// retrieve cluster CIDRs
+	podCIDRs, err := retrieveCIDRs("kubectl cluster-info dump | grep cluster-cidr", `cluster-cidr=([^"]+)`)
+	if err != nil {
 		return err
 	}
+	clusterInfo.podV4NetworkCIDR = podCIDRs[0]
+	clusterInfo.podV6NetworkCIDR = podCIDRs[1]
+
+	// retrieve service CIDRs
+	svcCIDRs, err := retrieveCIDRs("kubectl cluster-info dump | grep service-cluster-ip-range", `service-cluster-ip-range=([^"]+)`)
+	if err != nil {
+		return err
+	}
+	clusterInfo.svcV4NetworkCIDR = svcCIDRs[0]
+	clusterInfo.svcV6NetworkCIDR = svcCIDRs[1]
 
 	return nil
 }
@@ -708,22 +780,73 @@ func (data *TestData) podWaitForRunning(timeout time.Duration, name, namespace s
 	return err
 }
 
-// podWaitForIP polls the K8s apiserver until the specified Pod is in the "running" state (or until
-// the provided timeout expires). The function then returns the IP address assigned to the Pod.
-func (data *TestData) podWaitForIP(timeout time.Duration, name, namespace string) (string, error) {
+// podWaitForIPs polls the K8s apiserver until the specified Pod is in the "running" state (or until
+// the provided timeout expires). The function then returns the IP addresses assigned to the Pod. If the
+// Pod is not using "hostNetwork", the function also checks that an IP address exists in each required
+// Address Family in the cluster.
+func (data *TestData) podWaitForIPs(timeout time.Duration, name, namespace string) (*PodIPs, error) {
 	pod, err := data.podWaitFor(timeout, name, namespace, func(pod *corev1.Pod) (bool, error) {
 		return pod.Status.Phase == corev1.PodRunning, nil
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	// According to the K8s API documentation (https://godoc.org/k8s.io/api/core/v1#PodStatus),
 	// the PodIP field should only be empty if the Pod has not yet been scheduled, and "running"
 	// implies scheduled.
 	if pod.Status.PodIP == "" {
-		return "", fmt.Errorf("pod is running but has no assigned IP, which should never happen")
+		return nil, fmt.Errorf("Pod is running but has no assigned IP, which should never happen")
 	}
-	return pod.Status.PodIP, nil
+	podIPStrings := sets.NewString(pod.Status.PodIP)
+	for _, podIP := range pod.Status.PodIPs {
+		ipStr := strings.TrimSpace(podIP.IP)
+		if ipStr != "" {
+			podIPStrings.Insert(ipStr)
+		}
+	}
+	ips, err := parsePodIPs(podIPStrings)
+	if err != nil {
+		return nil, err
+	}
+
+	if !pod.Spec.HostNetwork {
+		if clusterInfo.podV4NetworkCIDR != "" && ips.ipv4 == nil {
+			return nil, fmt.Errorf("no IPv4 address is assigned while cluster was configured with IPv4 Pod CIDR %s", clusterInfo.podV4NetworkCIDR)
+		}
+		if clusterInfo.podV6NetworkCIDR != "" && ips.ipv6 == nil {
+			return nil, fmt.Errorf("no IPv6 address is assigned while cluster was configured with IPv6 Pod CIDR %s", clusterInfo.podV6NetworkCIDR)
+		}
+	}
+	return ips, nil
+}
+
+func parsePodIPs(podIPStrings sets.String) (*PodIPs, error) {
+	ips := new(PodIPs)
+	for idx := range podIPStrings.List() {
+		ipStr := podIPStrings.List()[idx]
+		ip := net.ParseIP(ipStr)
+		if ip.To4() != nil {
+			if ips.ipv4 != nil && ipStr != ips.ipv4.String() {
+				return nil, fmt.Errorf("Pod is assigned multiple IPv4 addresses: %s and %s", ips.ipv4.String(), ipStr)
+			}
+			if ips.ipv4 == nil {
+				ips.ipv4 = &ip
+				ips.ipStrings = append(ips.ipStrings, ipStr)
+			}
+		} else {
+			if ips.ipv6 != nil && ipStr != ips.ipv6.String() {
+				return nil, fmt.Errorf("Pod is assigned multiple IPv6 addresses: %s and %s", ips.ipv6.String(), ipStr)
+			}
+			if ips.ipv6 == nil {
+				ips.ipv6 = &ip
+				ips.ipStrings = append(ips.ipStrings, ipStr)
+			}
+		}
+	}
+	if len(ips.ipStrings) == 0 {
+		return nil, fmt.Errorf("pod is running but has no assigned IP, which should never happen")
+	}
+	return ips, nil
 }
 
 // deleteAntreaAgentOnNode deletes the antrea-agent Pod on a specific Node and measure how long it
@@ -899,11 +1022,7 @@ func (data *TestData) restartAntreaAgentPods(timeout time.Duration) error {
 }
 
 // validatePodIP checks that the provided IP address is in the Pod Network CIDR for the cluster.
-func validatePodIP(podNetworkCIDR, podIP string) (bool, error) {
-	ip := net.ParseIP(podIP)
-	if ip == nil {
-		return false, fmt.Errorf("'%s' is not a valid IP address", podIP)
-	}
+func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 	_, cidr, err := net.ParseCIDR(podNetworkCIDR)
 	if err != nil {
 		return false, fmt.Errorf("podNetworkCIDR '%s' is not a valid CIDR", podNetworkCIDR)
@@ -1096,10 +1215,21 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	return sent, received, loss, nil
 }
 
-func (data *TestData) runPingCommandFromTestPod(podName string, targetIP string, count int) error {
-	cmd := []string{"ping", "-c", strconv.Itoa(count), targetIP}
-	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
-	return err
+func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *PodIPs, count int) error {
+	var cmd []string
+	if targetPodIPs.ipv4 != nil {
+		cmd = []string{"ping", "-c", strconv.Itoa(count), targetPodIPs.ipv4.String()}
+		if _, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd); err != nil {
+			return err
+		}
+	}
+	if targetPodIPs.ipv6 != nil {
+		cmd = []string{"ping", "-6", "-c", strconv.Itoa(count), targetPodIPs.ipv6.String()}
+		if _, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (data *TestData) runNetcatCommandFromTestPod(podName string, server string, port int) error {

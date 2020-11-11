@@ -26,10 +26,16 @@ import (
 
 var ipamDrivers map[string]IPAMDriver
 
-type IPAMConfig struct {
-	Type    string `json:"type,omitempty"`
-	Subnet  string `json:"subnet,omitempty"`
+type Range struct {
+	Subnet  string `json:"subnet"`
 	Gateway string `json:"gateway,omitempty"`
+}
+
+type RangeSet []Range
+
+type IPAMConfig struct {
+	Type   string     `json:"type,omitempty"`
+	Ranges []RangeSet `json:"ranges,omitempty"`
 }
 
 type IPAMDriver interface {

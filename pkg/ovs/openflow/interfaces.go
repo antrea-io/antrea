@@ -35,12 +35,17 @@ const (
 )
 
 const (
-	ProtocolIP   Protocol = "ip"
-	ProtocolARP  Protocol = "arp"
-	ProtocolTCP  Protocol = "tcp"
-	ProtocolUDP  Protocol = "udp"
-	ProtocolSCTP Protocol = "sctp"
-	ProtocolICMP Protocol = "icmp"
+	ProtocolIP     Protocol = "ip"
+	ProtocolIPv6   Protocol = "ipv6"
+	ProtocolARP    Protocol = "arp"
+	ProtocolTCP    Protocol = "tcp"
+	ProtocolTCPv6  Protocol = "tcpv6"
+	ProtocolUDP    Protocol = "udp"
+	ProtocolUDPv6  Protocol = "udpv6"
+	ProtocolSCTP   Protocol = "sctp"
+	ProtocolSCTPv6 Protocol = "sctpv6"
+	ProtocolICMP   Protocol = "icmp"
+	ProtocolICMPv6 Protocol = "icmpv6"
 )
 
 const (
@@ -152,6 +157,7 @@ type Flow interface {
 	OFEntry
 	// Returns the flow priority associated with OFEntry
 	FlowPriority() uint16
+	FlowProtocol() Protocol
 	MatchString() string
 	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow.
 	// It copies the original actions of the Flow only if copyActions is set to true, and
@@ -221,6 +227,8 @@ type FlowBuilder interface {
 	MatchCTLabelRange(high, low uint64, bitRange Range) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
 	MatchDstPort(port uint16, portMask *uint16) FlowBuilder
+	MatchICMPv6Type(icmp6Type byte) FlowBuilder
+	MatchICMPv6Code(icmp6Code byte) FlowBuilder
 	MatchTunMetadata(index int, data uint32) FlowBuilder
 	// MatchCTSrcIP matches the source IPv4 address of the connection tracker original direction tuple.
 	MatchCTSrcIP(ip net.IP) FlowBuilder

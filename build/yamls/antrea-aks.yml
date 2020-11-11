@@ -212,7 +212,7 @@ spec:
                 items:
                   properties:
                     ip:
-                      format: ipv4
+                      pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                       type: string
                     name:
                       type: string
@@ -485,7 +485,7 @@ spec:
                   - ip
                 properties:
                   ip:
-                    format: ipv4
+                    pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                     type: string
                   namespace:
                     type: string
@@ -503,7 +503,7 @@ spec:
                       protocol:
                         type: integer
                       srcIP:
-                        format: ipv4
+                        pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                         type: string
                       ttl:
                         type: integer
@@ -1056,7 +1056,8 @@ data:
     featureGates:
     # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
-    # Service traffic.
+    # Service traffic. Antrea proxy doesn't support an IPv6 only cluster or a Dual-Stack cluster
+    # before PR #1102[https://github.com/vmware-tanzu/antrea/pull/1102] is merged.
       AntreaProxy: true
 
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
@@ -1123,6 +1124,12 @@ data:
     # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
     # for the GRE tunnel type.
     #enableIPSecTunnel: false
+
+    # ClusterIP CIDR range for IPv6 Services. It's required when using kube-proxy to provide IPv6 Service in a Dual-Stack
+    # cluster or an IPv6 only cluster. The value should be the same as the configuration for kube-apiserver specified by
+    # --service-cluster-ip-range. When AntreaProxy is enabled, this parameter is not needed.
+    # No default value for this field.
+    #serviceCIDRv6:
 
     # The port for the antrea-agent APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
@@ -1202,7 +1209,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-2fm49f65tg
+  name: antrea-config-hmttgfbf78
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1309,7 +1316,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-2fm49f65tg
+          name: antrea-config-hmttgfbf78
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1573,7 +1580,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-2fm49f65tg
+          name: antrea-config-hmttgfbf78
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

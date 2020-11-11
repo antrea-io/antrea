@@ -39,20 +39,23 @@ const (
 	GREOverhead    = 38
 	// IPsec ESP can add a maximum of 38 bytes to the packet including the ESP
 	// header and trailer.
-	IpsecESPOverhead = 38
+	IpsecESPOverhead  = 38
+	IPv6ExtraOverhead = 20
 )
 
 type GatewayConfig struct {
 	// Name is the name of host gateway, e.g. antrea-gw0.
 	Name string
-	IP   net.IP
+
+	IPv4 net.IP
+	IPv6 net.IP
 	MAC  net.HardwareAddr
 	// LinkIndex is the link index of host gateway.
 	LinkIndex int
 }
 
 func (g *GatewayConfig) String() string {
-	return fmt.Sprintf("Name %s: IP %s, MAC %s", g.Name, g.IP, g.MAC)
+	return fmt.Sprintf("Name %s: IPv4 %s, IPv6 %s, MAC %s", g.Name, g.IPv4, g.IPv6, g.MAC)
 }
 
 type AdapterNetConfig struct {
@@ -74,9 +77,12 @@ type NodeConfig struct {
 	// The name of the default tunnel interface. Defaults to "antrea-tun0", but can
 	// be overridden by the discovered tunnel interface name from the OVS bridge.
 	DefaultTunName string
-	// The CIDR block to allocate Pod IPs out of.
-	// It's nil for the networkPolicyOnly trafficEncapMode which doesn't do IPAM.
-	PodCIDR *net.IPNet
+	// The CIDR block from which to allocate IPv4 address to Pod.
+	// It's nil for the net workPolicyOnly trafficEncapMode which doesn't do IPAM.
+	PodIPv4CIDR *net.IPNet
+	// The CIDR block from where to allocate IPv6 address to Pod.
+	// It's nil for the net workPolicyOnly trafficEncapMode which doesn't do IPAM.
+	PodIPv6CIDR *net.IPNet
 	// The Node's IP used in Kubernetes. It has the network mask information.
 	NodeIPAddr *net.IPNet
 	// Set either via defaultMTU config in antrea.yaml or auto discovered.
@@ -90,8 +96,8 @@ type NodeConfig struct {
 }
 
 func (n *NodeConfig) String() string {
-	return fmt.Sprintf("NodeName: %s, OVSBridge: %s, PodCIDR: %s, NodeIP: %s, Gateway: %s",
-		n.Name, n.OVSBridge, n.PodCIDR, n.NodeIPAddr, n.GatewayConfig)
+	return fmt.Sprintf("NodeName: %s, OVSBridge: %s, PodIPv4CIDR: %s, PodIPv6CIDR: %s, NodeIP: %s, Gateway: %s",
+		n.Name, n.OVSBridge, n.PodIPv4CIDR, n.PodIPv6CIDR, n.NodeIPAddr, n.GatewayConfig)
 }
 
 // User provided network configuration parameters.

@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -173,7 +174,13 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 		}
 		trans, _ := restclient.TransportFor(&clientConfig)
 		hc := &http.Client{Transport: trans, Timeout: 5 * time.Second}
-		req, err := http.NewRequest("GET", fmt.Sprintf("https://%s:%d/healthz", antreaController.Status.PodIP, apis.AntreaControllerAPIPort), nil)
+		var reqURL string
+		if net.ParseIP(antreaController.Status.PodIP).To4() != nil {
+			reqURL = fmt.Sprintf("https://%s:%d/healthz", antreaController.Status.PodIP, apis.AntreaControllerAPIPort)
+		} else {
+			reqURL = fmt.Sprintf("https://[%s]:%d/healthz", antreaController.Status.PodIP, apis.AntreaControllerAPIPort)
+		}
+		req, err := http.NewRequest("GET", reqURL, nil)
 		if err != nil {
 			return false, err
 		}

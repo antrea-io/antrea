@@ -70,8 +70,15 @@ func testSupportBundle(name string, t *testing.T) {
 	// Acquire token.
 	token, err := getAccessToken(podName, fmt.Sprintf("antrea-%s", name), tokenPath, data)
 	require.NoError(t, err)
-	podIP, err := data.podWaitForIP(defaultTimeout, podName, metav1.NamespaceSystem)
+	podIP, err := data.podWaitForIPs(defaultTimeout, podName, metav1.NamespaceSystem)
 	require.NoError(t, err)
+
+	for _, podIPStr := range podIP.ipStrings {
+		getAndCheckSupportBundle(t, name, podIPStr, podPort, token, data)
+	}
+}
+
+func getAndCheckSupportBundle(t *testing.T, name, podIP, podPort, token string, data *TestData) {
 	// Setup clients.
 	localConfig := rest.CopyConfig(data.kubeConfig)
 	localConfig.Host = net.JoinHostPort(podIP, podPort)
@@ -131,6 +138,7 @@ func testSupportBundle(name string, t *testing.T) {
 	bundle, err = clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.Equal(t, systemv1beta1.SupportBundleStatusNone, bundle.Status)
+
 }
 
 func TestSupportBundleController(t *testing.T) {

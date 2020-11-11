@@ -106,7 +106,7 @@ func prepareInterfaceConfigs(contID, podName, podNS, ifName string, ip *net.IP) 
 	}
 	iface := &interfacestore.InterfaceConfig{
 		InterfaceName:            ifName,
-		IP:                       *ip,
+		IPs:                      []net.IP{*ip},
 		ContainerInterfaceConfig: podConfig,
 	}
 	return iface

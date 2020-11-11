@@ -86,9 +86,14 @@ var (
 	// uuid.NewV4() function.
 	uuidNamespace = uuid.FromStringOrNil("5a5e7dd9-e3fb-49bb-b263-9bab25c95841")
 
-	// matchAllPeer is a NetworkPolicyPeer matching all source/destination IP addresses.
+	// matchAllPeer is a NetworkPolicyPeer matching all source/destination IP addresses. Both IPv4 Any (0.0.0.0/0) and
+	// IPv6 Any (::/0) are added into the IPBlocks, and Antrea Agent should decide if both two are used according the
+	// supported IP protocols configured in the cluster.
 	matchAllPeer = controlplane.NetworkPolicyPeer{
-		IPBlocks: []controlplane.IPBlock{{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv4zero), PrefixLength: 0}}},
+		IPBlocks: []controlplane.IPBlock{
+			{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv4zero), PrefixLength: 0}},
+			{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv6zero), PrefixLength: 0}},
+		},
 	}
 	// matchAllPodsPeer is a networkingv1.NetworkPolicyPeer matching all Pods from all Namespaces.
 	matchAllPodsPeer = networkingv1.NetworkPolicyPeer{
@@ -1279,7 +1284,9 @@ func podToGroupMember(pod *v1.Pod, includeIP bool) *controlplane.GroupMember {
 		}
 	}
 	if includeIP {
-		memberPod.IPs = []controlplane.IPAddress{ipStrToIPAddress(pod.Status.PodIP)}
+		for _, podIP := range pod.Status.PodIPs {
+			memberPod.IPs = append(memberPod.IPs, ipStrToIPAddress(podIP.IP))
+		}
 	}
 	podRef := controlplane.PodReference{
 		Name:      pod.Name,
