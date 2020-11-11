@@ -15,22 +15,17 @@ install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
 # Hence, delete older 10-antrea.conf file.
 rm -f /host/etc/cni/net.d/10-antrea.conf
 
-# Install the loopback plugin if not already present
-# It is required by kubelet on Linux when using docker as the container runtime
+# Install the loopback plugin.
+# It is required by kubelet on Linux when using docker as the container runtime.
+# We replace the binary files even they are already present on the Node to make
+# sure expected versions are used.
+install -m 755 /opt/cni/bin/loopback /host/opt/cni/bin/loopback
 
-if [ ! -f /host/opt/cni/bin/loopback ]; then
-    install -m 755 /opt/cni/bin/loopback /host/opt/cni/bin/loopback
-fi
+# Install PortMap CNI binary file. It is required to support hostPort.
+install -m 755 /opt/cni/bin/portmap /host/opt/cni/bin/portmap
 
-# Install PortMap CNI binary file
-if [ ! -f /host/opt/cni/bin/portmap ]; then
-    install -m 755 /opt/cni/bin/portmap /host/opt/cni/bin/portmap
-fi
-
-# Install bandwidth CNI binary file
-if [ ! -f /host/opt/cni/bin/bandwidth ]; then
-    install -m 755 /opt/cni/bin/bandwidth /host/opt/cni/bin/bandwidth
-fi
+# Install bandwidth CNI binary file, It is required to support traffic shaping.
+install -m 755 /opt/cni/bin/bandwidth /host/opt/cni/bin/bandwidth
 
 # Load the OVS kernel module
 modprobe openvswitch
