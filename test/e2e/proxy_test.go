@@ -37,7 +37,7 @@ func skipIfProxyDisabled(t *testing.T, data *TestData) {
 	if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
 		t.Fatalf("Error when detecting proxy: %v", err)
 	} else if !featureGate.Enabled(features.AntreaProxy) {
-		t.Skip()
+		t.Skip("Skipping test because AntreaProxy is not enabled")
 	}
 }
 

@@ -103,8 +103,8 @@ jobs:
         path: log.tar.gz
         retention-days: 30
 
-  test-e2e-encap-proxy:
-    name: E2e tests on a Kind cluster on Linux with proxy enabled
+  test-e2e-encap-no-proxy:
+    name: E2e tests on a Kind cluster on Linux with AntreaProxy disabled
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-18.04]
     steps:
@@ -131,15 +131,15 @@ jobs:
     - name: Run e2e tests
       run: |
         mkdir log
-        mkdir test-e2e-encap-proxy-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-proxy-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --proxy --coverage
+        mkdir test-e2e-encap-no-proxy-coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-no-proxy-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --no-proxy --coverage
     - name: Tar coverage files
-      run: tar -czf test-e2e-encap-proxy-coverage.tar.gz test-e2e-encap-proxy-coverage
-    - name: Upload coverage for test-e2e-encap-proxy-coverage
+      run: tar -czf test-e2e-encap-no-proxy-coverage.tar.gz test-e2e-encap-no-proxy-coverage
+    - name: Upload coverage for test-e2e-encap-no-proxy-coverage
       uses: actions/upload-artifact@v2
       with:
-        name: test-e2e-encap-proxy-coverage
-        path: test-e2e-encap-proxy-coverage.tar.gz
+        name: test-e2e-encap-no-proxy-coverage
+        path: test-e2e-encap-no-proxy-coverage.tar.gz
         retention-days: 30
     - name: Codecov
       uses: codecov/codecov-action@v1
@@ -147,8 +147,8 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: '*antrea*'
         flags: kind-e2e-tests
-        name: codecov-test-e2e-encap-proxy
-        directory: test-e2e-encap-proxy-coverage
+        name: codecov-test-e2e-encap-no-proxy
+        directory: test-e2e-encap-no-proxy-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -156,7 +156,7 @@ jobs:
       uses: actions/upload-artifact@v2
       if: ${{ failure() }}
       with:
-        name: e2e-kind-encap-proxy.tar.gz
+        name: e2e-kind-encap-no-proxy.tar.gz
         path: log.tar.gz
         retention-days: 30
 
@@ -415,7 +415,7 @@ jobs:
   # yet.
   artifact-cleanup:
     name: Delete uploaded images
-    needs: [build-antrea-coverage-image, build-antrea-image, test-e2e-encap, test-e2e-encap-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-np, test-netpol-tmp, validate-prometheus-metrics-doc]
+    needs: [build-antrea-coverage-image, build-antrea-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-np, test-netpol-tmp, validate-prometheus-metrics-doc]
     if: ${{ always() }}
     runs-on: [ubuntu-18.04]
     steps:

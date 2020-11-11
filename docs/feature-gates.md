@@ -33,11 +33,11 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 
 | Feature Name            | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
 | ----------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | ----- |
-| `AntreaProxy`           | Agent              | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                | Must be enabled for Windows. |
-| `AntreaPolicy`          | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | No                 | Agent side config required from v0.9.0+. |
-| `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8.0        | N/A          | N/A        | Yes                |       |
-| `FlowExporter`          | Agent              | `false` | Alpha | v0.9.0        | N/A          | N/A        | Yes                |       |
-| `NetworkPolicyStats`    | Agent + Controller | `false` | Alpha | v0.10.0       | N/A          | N/A        | No                 |       |
+| `AntreaProxy`           | Agent              | `false` | Alpha | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
+| `AntreaPolicy`          | Agent + Controller | `false` | Alpha | v0.8          | N/A          | N/A        | No                 | Agent side config required from v0.9.0+. |
+| `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8          | v0.11        | N/A        | Yes                |       |
+| `FlowExporter`          | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
+| `NetworkPolicyStats`    | Agent + Controller | `false` | Alpha | v0.10         | N/A          | N/A        | No                 |       |
 
 ## Description and Requirements of Features
 
@@ -81,11 +81,14 @@ this [document](traceflow-guide.md) for more information.
 
 #### Requirements for this Feature
 
-This feature can only be used in "encap" mode when the Geneve tunnel type is
-being used. Note that this is the default configuration for both Linux and
-Windows. In order to support cluster Services as the destination for tracing
-requests, `AntreaProxy` should be enabled (it is not enabled by default for
-Linux Nodes in "encap" mode)..
+Until Antrea v0.11, this feature could only be used in "encap" mode, with the
+Geneve tunnel type (default configuration for both Linux and Windows). In v0.11,
+this feature was graduated to Beta (enabled by default) and this requirement was
+lifted.
+
+In order to support cluster Services as the destination for tracing requests,
+`AntreaProxy` should be enabled, which is the default starting with Antrea
+v0.11.
 
 ### Flow Exporter
 

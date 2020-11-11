@@ -21,7 +21,7 @@ data:
     # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic.
-      AntreaProxy: true
+    #  AntreaProxy: true
 
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
     #  FlowExporter: false
@@ -54,7 +54,7 @@ data:
     #apiPort: 10350
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
-    #enablePrometheusMetrics: false
+    #enablePrometheusMetrics: true
 
     # Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also enables
     # the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge. If no L4 transport proto is given,
@@ -88,7 +88,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-5ht8dmf8tk
+  name: antrea-windows-config-6d4gc5kdc8
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -176,7 +176,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-5ht8dmf8tk
+          name: antrea-windows-config-6d4gc5kdc8
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
