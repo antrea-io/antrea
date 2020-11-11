@@ -11,6 +11,44 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.10.2 - 2020-11-11
+
+### Added
+
+- Use logrotate to rotate OVS log files written to the Node and avoid filling up the disk partition; log rotation can be configured by changing the "--log_file_max_num" and "--log_file_max_size" command-line arguments for "start_ovs" in the Antrea manifest. ([#1329](https://github.com/vmware-tanzu/antrea/pull/1329), [@jianjuns])
+
+### Changed
+
+- Update Octant plugin installation guide to simplify the steps when deploying Octant as a Pod. ([#1473](https://github.com/vmware-tanzu/antrea/pull/1473), [@mengdie-song])
+
+### Fixed
+
+- Use IP DSCP field instead of Geneve TLV metadata to encode the Traceflow data-plane tag. ([#1466](https://github.com/vmware-tanzu/antrea/pull/1466), [@gran-vmv])
+   * This works around an OVS issue which was causing inter-Node Traceflow requests to frequently hang unless no other traffic was present in the cluster network
+   * Traceflow can now be used regardless of the traffic mode: this includes other tunneling protocols (e.g. VXLAN) and noEncap mode
+- Update version of libOpenflow to fix a deadlock when an OpenFlow bundle times out, which was causing the Node to run out of Pod IPs; the issue was introduced in v0.10.0. ([#1511](https://github.com/vmware-tanzu/antrea/pull/1511), [@weiqiangt] [@tnqn])
+- Do not fail Agent initialization if xtables lock cannot be acquired within a short amount of time, as it only creates more xtables lock contention and prevents Pod from being created. ([#1497](https://github.com/vmware-tanzu/antrea/pull/1497), [@tnqn])
+- Bump up portmap CNI plugin version to 0.8.7 to further reduce the xtables lock contention. ([#1534](https://github.com/vmware-tanzu/antrea/pull/1534), [@tnqn])
+- When a new Node is allocated the same Pod CIDR as a recently-deleted Node by the K8s control-plane, do not process the Node creation event in the Antrea Agent until after the deletion event for the old Node has been processed. ([#1526](https://github.com/vmware-tanzu/antrea/pull/1526), [@tnqn])
+- Fix SessionAffinity implementation in AntreaProxy for non-TCP traffic (UDP & SCTP): the match defined in the learn action was incorrect as the transport protocol was hardcoded to TCP. ([#1398](https://github.com/vmware-tanzu/antrea/pull/1398), [@wenyingd])
+- Respect the provided label selector in Antrea aggregated APIs instead of always returning the complete list of objects for each resource type. ([#1481](https://github.com/vmware-tanzu/antrea/pull/1481), [@tnqn])
+- When the destination is a Service in a Traceflow request, automatically set the TCP SYN flag so the packet can be processed by AntreaProxy correctly. ([#1386](https://github.com/vmware-tanzu/antrea/pull/1386) [#1378](https://github.com/vmware-tanzu/antrea/pull/1378), [@lzhecheng] [@mengdie-song])
+- Ignore Antrea-native policy resources in the Agent if the `AntreaPolicy` feature is not enabled, to avoid crashes. ([#1336](https://github.com/vmware-tanzu/antrea/pull/1336), [@jianjuns])
+- When removing Service flows in AntreaProxy, remove Endpoint flows at the very end to avoid "inifinite" packet recirculation in some scenarios. ([#1381](https://github.com/vmware-tanzu/antrea/pull/1381), [@weiqiangt])
+- Set OVS version after the ovs-vswitchd service is started in the Windows installation script to ensure it can always be set successfully. ([#1423](https://github.com/vmware-tanzu/antrea/pull/1423), [@ruicao93] [@jayunit100]) [Windows]
+- Ensure that the "appliedTo" and "priority" fields are required in the OpenAPI spec for the ClusterNetworkPolicy CRD. ([#1359](https://github.com/vmware-tanzu/antrea/pull/1359), [@abhiraut])
+- Always restart OVS services on Windows in case of failure. ([#1495](https://github.com/vmware-tanzu/antrea/pull/1495), [@ruicao93]) [Windows]
+- Validate the Agent configuration on startup and log an error message if any enabled feature is not supported by the OS (in particular on Windows Nodes). ([#1468](https://github.com/vmware-tanzu/antrea/pull/1468), [@jianjuns])
+- Add sanity checks for IPsec and log helpful error messages if some packages or components are missing. ([#1430](https://github.com/vmware-tanzu/antrea/pull/1430), [@antoninbas])
+- Fix reference Kibana dashboard configuration file for FlowExporter feature: some IPFIX IE names did not match the names from the Antrea registry. ([#1370](https://github.com/vmware-tanzu/antrea/pull/1370), [@zyiou])
+
+## 0.10.1 - 2020-09-30
+
+### Fixed
+
+- Fix OpenAPI spec for the ClusterNetworkPolicy CRD: the incorrect spec was causing all CNPs with egress rules to be rejected by kubectl and the K8s apiserver. ([#1314](https://github.com/vmware-tanzu/antrea/pull/1314), [@abhiraut])
+   * this only affects users which enable the `AntreaPolicy` Feature Gate in their cluster and create ClusterNetworkPolicies
+
 ## 0.10.0 - 2020-09-24
 
 Includes all the bug fixes from [0.9.1], [0.9.2] and [0.9.3].
@@ -481,6 +519,7 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [@Dyanngg]: https://github.com/Dyanngg
 [@gran-vmv]: https://github.com/gran-vmv
 [@jakesokol1]: https://github.com/jakesokol1
+[@jayunit100]: https://github.com/jayunit100
 [@jianjuns]: https://github.com/jianjuns
 [@lzhecheng]: https://github.com/lzhecheng
 [@MatthewHinton56]: https://github.com/MatthewHinton56
