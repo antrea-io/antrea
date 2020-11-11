@@ -417,6 +417,7 @@ except for policies that are created in the Baseline Tier. Antrea-native policie
 created in the Baseline Tier will be enforced after K8s NetworkPolicies, and their
 egress rules are installed in the [EgressDefaultTable] and [EgressRuleTable]
 respectively, i.e.
+
 ```text
 Baseline Tier     ->  EgressDefaultTable(60)
 K8s NetworkPolicy ->  EgressRuleTable(50)
@@ -434,26 +435,18 @@ table 45, you should see something like this:
 5. table=45, priority=14000,udp,tp_dst=53 actions=conjunction(1,3/3)
 6. table=45, priority=0 actions=resubmit(,50)
 ```
-Notice how we use the OVS built-in `conjunction` action to implement policies
-efficiently. This enables us to do a conjunctive match across multiple
-dimensions (source IP, destination IP, port) efficiently without "exploding" the
-number of flows. By definition of a conjunctive match, we have at least 2
-dimensions. For our use-case we have at most 3 dimensions.
-
-The only requirements on `conj_id` is for it to be a unique 32-bit integer
-within the table. At the moment we use a single custom allocator, which is
-common to all tables that can have NetworkPolicy flows installed (45, 50,
-60, 85, 90 and 100). This is why `conj_id` is set to 1 in the above example
-(2 was allocated for the egress rule of our K8s NetworkPolicy example).
+Similar to [K8s NetworkPolicy implementation](#egressruletable-50),
+AntreaPolicyEgressRuleTable also relies on the OVS built-in `conjunction` action to
+implement policies efficiently.
 
 The above example flows read as follow: if the source IP address is in set
 {10.10.1.6}, and the destination IP address is in the set {10.10.1.8}, and the
 destination TCP port is in the set {53}, then use the `conjunction` action with
 id 1, which stores the `conj_id` 1 in `ct_label[32..63]` for egress metrics collection
 purposes, and forwards the packet to EgressMetricsTable, then [L3ForwardingTable].
-Otherwise, go to the table corresponding to the next tier in precedence,
-or in the case of the Application tier (lowest precedence before K8s NetworkPolicy),
-go to [EgressRuleTable].
+Otherwise, go to [EgressRuleTable] if no conjunctive flow above priority 0 is matched.
+This corresponds to the case where the packet is not matched by any of the Antrea-native
+policy egress rules in any tier (except for the "baseline" tier).
 
 If the `conjunction` action is matched, packets are "allowed" or "dropped"
 based on the `action` field of the policy rule. If allowed, they follow a similar
@@ -483,9 +476,18 @@ you dump the flows for this table, you should see something like this:
 7. table=50, priority=190,conj_id=2,ip actions=load:0x2->NXM_NX_REG5[],ct(commit,table=61,zone=65520,exec(load:0x2->NXM_NX_CT_LABEL[32..63]))
 8. table=50, priority=0 actions=goto_table:60
 ```
-Similar to [Antrea-native NetworkPolicy implementation](#antreapolicyegressruletable-45),
-EgressRuleTable also relies on the OVS built-in `conjunction` action to implement
-policies efficiently.
+Notice how we use the OVS built-in `conjunction` action to implement policies
+efficiently. This enables us to do a conjunctive match across multiple
+dimensions (source IP, destination IP, port) efficiently without "exploding" the
+number of flows. By definition of a conjunctive match, we have at least 2
+dimensions. For our use-case we have at most 3 dimensions.
+
+The only requirements on `conj_id` is for it to be a unique 32-bit integer
+within the table. At the moment we use a single custom allocator, which is
+common to all tables that can have NetworkPolicy flows installed (45, 50,
+60, 85, 90 and 100). This is why `conj_id` is set to 2 in the above example
+(1 was allocated for the egress rule of our Antrea-native NetworkPolicy example
+in the previous section).
 
 The above example flows read as follow: if the source IP address is in set
 {10.10.1.2, 10.10.1.3}, and the destination IP address is in the set {10.10.1.2,
@@ -638,7 +640,7 @@ need to support more cases for L2 multicast / broadcast traffic.
 
 ### AntreaPolicyIngressRuleTable (85)
 
-This table is very similar to [AntreaPolicyEgressRuleTable], but implement
+This table is very similar to [AntreaPolicyEgressRuleTable], but implements
 the ingress rules of Antrea-native Policies. Depending on the tier to which the policy
 belongs to, the rules will be installed in a table corresponding to that tier.
 The ingress table to tier mappings is as follows:
@@ -655,12 +657,12 @@ Since the example ACNP resides in the Application tier, if you dump the flows
 for table 85, you should see something like this:
 
 ```text
-1. table=89, priority=64990,ct_state=-new+est,ip actions=resubmit(,105)
-2. table=89, priority=14000,conj_id=4,ip actions=load:0x4->NXM_NX_REG3[],load:0x1->NXM_NX_REG0[20],resubmit(,101)
-3. table=89, priority=14000,ip,nw_src=10.10.1.7 actions=conjunction(4,1/3)
-4. table=89, priority=14000,ip,reg1=0x19c actions=conjunction(4,2/3)
-5. table=89, priority=14000,tcp,tp_dst=80 actions=conjunction(4,3/3)
-6. table=89, priority=0 actions=resubmit(,90)
+1. table=85, priority=64990,ct_state=-new+est,ip actions=resubmit(,105)
+2. table=85, priority=14000,conj_id=4,ip actions=load:0x4->NXM_NX_REG3[],load:0x1->NXM_NX_REG0[20],resubmit(,101)
+3. table=85, priority=14000,ip,nw_src=10.10.1.7 actions=conjunction(4,1/3)
+4. table=85, priority=14000,ip,reg1=0x19c actions=conjunction(4,2/3)
+5. table=85, priority=14000,tcp,tp_dst=80 actions=conjunction(4,3/3)
+6. table=85, priority=0 actions=resubmit(,90)
 ```
 
 As for [AntreaPolicyEgressRuleTable], flow 1 (highest priority) ensures that for
@@ -675,9 +677,9 @@ the `conj_id` 4 into NXM_NX_REG3, a register used by Antrea internally to
 indicate the disposition of the packet is Drop, and forward the packet to
 IngressMetricsTable for it to be dropped.
 
-Otherwise, go to the next AntreaPolicyRuleTable belonging to the next
-tier in precedence, or in the case of the Application tier (lowest precedence
-before K8s NetworkPolicies), go to the [IngressRuleTable].
+Otherwise, go to [IngressRuleTable] if no conjunctive flow above priority 0 is matched.
+This corresponds to the case where the packet is not matched by any of the Antrea-native
+policy ingress rules in any tier (except for the "baseline" tier).
 One notable difference is how we use OF ports to identify the destination of
 the traffic, while we use IP addresses in [AntreaPolicyEgressRuleTable] to
 identify the source of the traffic. More details regarding this can be found
@@ -753,7 +755,7 @@ the flows:
 3. table=100, priority=0 actions=goto_table:105
 ```
 
-Also similar to the [EgressDefaultTable], this table is also used to implement 
+Similar to the [EgressDefaultTable], this table is also used to implement
 Antrea-native policy ingress rules that are created in the Baseline Tier.
 Since the Baseline Tier is meant to be enforced after K8s NetworkPolicies, the
 corresponding flows will be created at a lower priority than K8s default drop flows.
