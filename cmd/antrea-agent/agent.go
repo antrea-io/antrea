@@ -51,6 +51,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/version"
+	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 // informerDefaultResync is the default resync period if a handler doesn't specify one.
@@ -174,9 +175,15 @@ func run(o *Options) error {
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
 	}
-	var proxier proxy.Proxier
+	var proxier k8sproxy.Provider
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
+		if nodeConfig.PodIPv4CIDR != nil && nodeConfig.PodIPv6CIDR != nil {
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
+		} else if nodeConfig.PodIPv4CIDR != nil {
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
+		} else {
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
+		}
 	}
 	cniServer := cniserver.New(
 		o.config.CNISocket,

@@ -57,7 +57,7 @@ type ServiceHandler interface {
 	// OnServiceDelete is called whenever deletion of an existing service
 	// object is observed.
 	OnServiceDelete(service *v1.Service)
-	// OnServiceSynced is called once all the initial even handlers were
+	// OnServiceSynced is called once all the initial event handlers were
 	// called and the state is fully propagated to local cache.
 	OnServiceSynced()
 }
@@ -71,7 +71,7 @@ type EndpointsHandler interface {
 	// OnEndpointsUpdate is called whenever modification of an existing
 	// endpoints object is observed.
 	OnEndpointsUpdate(oldEndpoints, endpoints *v1.Endpoints)
-	// OnEndpointsDelete is called whever deletion of an existing endpoints
+	// OnEndpointsDelete is called whenever deletion of an existing endpoints
 	// object is observed.
 	OnEndpointsDelete(endpoints *v1.Endpoints)
 	// OnEndpointsSynced is called once all the initial event handlers were
@@ -112,7 +112,7 @@ func (c *EndpointsConfig) RegisterEventHandler(handler EndpointsHandler) {
 func (c *EndpointsConfig) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting endpoints config controller")
 
-	if !cache.WaitForCacheSync(stopCh, c.listerSynced) {
+	if !cache.WaitForNamedCacheSync("endpoints config", stopCh, c.listerSynced) {
 		return
 	}
 
@@ -203,7 +203,7 @@ func (c *ServiceConfig) RegisterEventHandler(handler ServiceHandler) {
 func (c *ServiceConfig) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting service config controller")
 
-	if !cache.WaitForCacheSync(stopCh, c.listerSynced) {
+	if !cache.WaitForNamedCacheSync("service config", stopCh, c.listerSynced) {
 		return
 	}
 
