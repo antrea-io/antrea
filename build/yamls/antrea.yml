@@ -1118,7 +1118,7 @@ data:
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic. Antrea proxy doesn't support an IPv6 only cluster or a Dual-Stack cluster
     # before PR #1102[https://github.com/vmware-tanzu/antrea/pull/1102] is merged.
-    #  AntreaProxy: false
+    #  AntreaProxy: true
 
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: false
