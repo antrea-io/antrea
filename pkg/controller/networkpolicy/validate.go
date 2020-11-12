@@ -124,9 +124,9 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier s
 	reason := ""
 	switch op {
 	case admv1.Create, admv1.Update:
-		if ruleNameUnique := v.validateRuleName(ingress, egress); !ruleNameUnique {
+		if isUnique := v.validateRuleName(ingress, egress); !isUnique {
 			allowed = false
-			reason = fmt.Sprint("rules names must be unique within the policy")
+			reason = "rules names are not unique, or policy has duplicate rules, or collision occurred in generated rule names"
 			break
 		}
 		// "tier" must exist before referencing
@@ -153,14 +153,11 @@ func (v *NetworkPolicyValidator) validateRuleName(ingress, egress []secv1alpha1.
 			if uniqueRuleName.Has(rule.Name) {
 				return false
 			}
-			if rule.Name != "" {
-				uniqueRuleName.Insert(rule.Name)
-			}
+			uniqueRuleName.Insert(rule.Name)
 		}
 		return true
 	}
 	return isUnique(ingress) && isUnique(egress)
-
 }
 
 // validateTier validates the admission of a Tier resource
