@@ -134,7 +134,7 @@ you will see these addresses show up in the OVS flows.
 
 In addition to the above tables created for K8s NetworkPolicy, Antrea creates
 additional dedicated tables to support the [Antrea-native policies](/docs/antrea-network-policy.md)
-([AntreaPolicyEgressRuleTables] and [AntreaPolicyIngressRuleTables]).
+([AntreaPolicyEgressRuleTable] and [AntreaPolicyIngressRuleTable]).
 
 Consider the following Antrea ClusterNetworkPolicy (ACNP) in the Application tier as an
 example for the remainder of this document.
@@ -406,42 +406,47 @@ In the future this table may support an additional mode of operations, in which
 it will implement kube-proxy functionality and take care of performing
 load-balancing / DNAT on traffic destined to services.
 
-### AntreaPolicyEgressRuleTables (45, 49)
+### AntreaPolicyEgressRuleTable (45)
 
-For these two tables, you will need to keep in mind the ACNP
+For this table, you will need to keep in mind the ACNP
 [specification](#antrea-networkpolicy-crd-implementation)
 that we are using.
 
-These two tables are used to implement the egress rules across all Antrea-native policies.
-Depending on the tier to which the ACNP or ANP belongs to, the rules will be 
-installed in a table corresponding to that tier. The egress table to tier mappings 
-is as follows:
+This table is used to implement the egress rules across all Antrea-native policies,
+except for policies that are created in the Baseline Tier. Antrea-native policies
+created in the Baseline Tier will be enforced after K8s NetworkPolicies, and their
+egress rules are installed in the [EgressDefaultTable] and [EgressRuleTable]
+respectively, i.e.
 
 ```text
-Application tier -> DefaultTierEgressRuleTable(49)
-All other tiers  -> MultiTierEgressRuleTable(45)
+Baseline Tier     ->  EgressDefaultTable(60)
+K8s NetworkPolicy ->  EgressRuleTable(50)
+All other Tiers   ->  AntreaPolicyEgressRuleTable(45)
 ```
 
 Since the example ACNP resides in the Application tier, if you dump the flows for
-table 49, you should see something like this:
+table 45, you should see something like this:
 
 ```text
-1. table=49, priority=64990,ct_state=-new+est,ip actions=resubmit(,70)
-2. table=49, priority=58600,conj_id=2,ip actions=load:0x2->NXM_NX_REG6[],resubmit(,70)
-3. table=49, priority=58600,ip,nw_src=10.10.1.6 actions=conjunction(2,1/3)
-4. table=49, priority=58600,ip,nw_dst=10.10.1.8 actions=conjunction(2,2/3)
-5. table=49, priority=58600,udp,tp_dst=53 actions=conjunction(2,3/3)
-6. table=49, priority=0 actions=resubmit(,50)
+1. table=45, priority=64990,ct_state=-new+est,ip actions=resubmit(,61)
+2. table=45, priority=14000,conj_id=1,ip actions=load:0x1->NXM_NX_REG5[],ct(commit,table=61,zone=65520,exec(load:0x1->NXM_NX_CT_LABEL[32..63]))
+3. table=45, priority=14000,ip,nw_src=10.10.1.6 actions=conjunction(1,1/3)
+4. table=45, priority=14000,ip,nw_dst=10.10.1.8 actions=conjunction(1,2/3)
+5. table=45, priority=14000,udp,tp_dst=53 actions=conjunction(1,3/3)
+6. table=45, priority=0 actions=resubmit(,50)
 ```
+Similar to [K8s NetworkPolicy implementation](#egressruletable-50),
+AntreaPolicyEgressRuleTable also relies on the OVS built-in `conjunction` action to
+implement policies efficiently.
 
-Similar to K8s NetworkPolicy implementation, AntreaPolicyEgressRuleTables also rely on
-the OVS built-in `conjunction` action to implement policies efficiently.
 The above example flows read as follow: if the source IP address is in set
 {10.10.1.6}, and the destination IP address is in the set {10.10.1.8}, and the
 destination TCP port is in the set {53}, then use the `conjunction` action with
-id 2, which goes to [L3ForwardingTable]. Otherwise, go to the table corresponding
-to the next tier in precedence, or in the case of the Application tier (lowest
-precedence), go to the [EgressRuleTable].
+id 1, which stores the `conj_id` 1 in `ct_label[32..63]` for egress metrics collection
+purposes, and forwards the packet to EgressMetricsTable, then [L3ForwardingTable].
+Otherwise, go to [EgressRuleTable] if no conjunctive flow above priority 0 is matched.
+This corresponds to the case where the packet is not matched by any of the Antrea-native
+policy egress rules in any tier (except for the "baseline" tier).
 
 If the `conjunction` action is matched, packets are "allowed" or "dropped"
 based on the `action` field of the policy rule. If allowed, they follow a similar
@@ -468,27 +473,27 @@ you dump the flows for this table, you should see something like this:
 4. table=50, priority=200,ip,nw_dst=10.10.1.2 actions=conjunction(2,2/3)
 5. table=50, priority=200,ip,nw_dst=10.10.1.3 actions=conjunction(2,2/3)
 6. table=50, priority=200,tcp,tp_dst=80 actions=conjunction(2,3/3)
-7. table=50, priority=190,conj_id=2,ip actions=goto_table:70
+7. table=50, priority=190,conj_id=2,ip actions=load:0x2->NXM_NX_REG5[],ct(commit,table=61,zone=65520,exec(load:0x2->NXM_NX_CT_LABEL[32..63]))
 8. table=50, priority=0 actions=goto_table:60
 ```
-
 Notice how we use the OVS built-in `conjunction` action to implement policies
 efficiently. This enables us to do a conjunctive match across multiple
 dimensions (source IP, destination IP, port) efficiently without "exploding" the
 number of flows. By definition of a conjunctive match, we have at least 2
 dimensions. For our use-case we have at most 3 dimensions.
 
+The only requirements on `conj_id` is for it to be a unique 32-bit integer
+within the table. At the moment we use a single custom allocator, which is
+common to all tables that can have NetworkPolicy flows installed (45, 50,
+60, 85, 90 and 100). This is why `conj_id` is set to 2 in the above example
+(1 was allocated for the egress rule of our Antrea-native NetworkPolicy example
+in the previous section).
+
 The above example flows read as follow: if the source IP address is in set
 {10.10.1.2, 10.10.1.3}, and the destination IP address is in the set {10.10.1.2,
 10.10.1.3}, and the destination TCP port is in the set {80}, then use the
-`conjunction` action with id 2, which goes to
-[L3ForwardingTable]. Otherwise, go to [EgressDefaultTable].
-
-The only requirements on `conj_id` is for it to be a unique 32-bit integer
-within the table. At the moment we use a single custom allocator, which is
-common to [EgressRuleTable] and [IngressRuleTable]. This is why `conj_id` is set
-to 2 in the above example (1 was allocated for the ingress rule of our Network
-Policy example).
+`conjunction` action with id 2, which goes to EgressMetricsTable, and then
+[L3ForwardingTable]. Otherwise, packet goes to [EgressDefaultTable].
 
 If the Network Policy specification includes exceptions (`except` field), then
 the table will include multiple flows with conjunctive match, corresponding to
@@ -515,9 +520,9 @@ Pod has been applied a Network Policy - which is what we do for the
 
 This table complements [EgressRuleTable] for Network Policy egress rule
 implementation. In K8s, when a Network Policy is applied to a set of Pods, the
-default behavior for these Pods become "deny" (it becomes an [isolated
-Pod](https://kubernetes.io/docs/concepts/services-networking/network-policies/#isolated-and-non-isolated-pods)). This
-table is in charge of dropping traffic originating from Pods to which a Network
+default behavior for these Pods become "deny" (it becomes an [isolated Pod](
+https://kubernetes.io/docs/concepts/services-networking/network-policies/#isolated-and-non-isolated-pods)).
+This table is in charge of dropping traffic originating from Pods to which a Network
 Policy (with an egress rule) is applied, and which did not match any of the
 whitelist rules.
 
@@ -528,11 +533,24 @@ confirmed by dumping the flows:
 ```text
 1. table=60, priority=200,ip,nw_src=10.10.1.2 actions=drop
 2. table=60, priority=200,ip,nw_src=10.10.1.3 actions=drop
-3. table=60, priority=0 actions=goto_table:70
+3. table=60, priority=0 actions=goto_table:61
+```
+
+This table is also used to implement Antrea-native policy egress rules that are
+created in the Baseline Tier. Since the Baseline Tier is meant to be enforced
+after K8s NetworkPolicies, the corresponding flows will be created at a lower
+priority than K8s default drop flows. For example, a baseline rule to drop
+egress traffic to 10.0.10.0/24 will for a namespace will look like the following:
+
+```text
+1. table=60, priority=80,ip,nw_src=10.10.1.11 actions=conjunction(5,1/2)
+2. table=60, priority=80,ip,nw_src=10.10.1.10 actions=conjunction(5,1/2)
+3. table=60, priority=80,ip,nw_dst=10.0.10.0/24 actions=conjunction(5,2)
+4. table=60, priority=80,conj_id=5,ip actions=load:0x3->NXM_NX_REG5[],load:0x1->NXM_NX_REG0[20],resubmit(,61)
 ```
 
 The table-miss flow entry, which is used for non-isolated Pods, forwards
-traffic to the next table ([L3ForwardingTable]).
+traffic to the next table EgressMetricsTable, then ([L3ForwardingTable]).
 
 ### L3ForwardingTable (70)
 
@@ -620,48 +638,54 @@ non-ARP and non-IP (assuming any can be received by the switch) is actually
 dropped much earlier in the pipeline ([SpoofGuardTable]). In the future, we may
 need to support more cases for L2 multicast / broadcast traffic.
 
-### AntreaPolicyIngressRuleTables (85, 89)
+### AntreaPolicyIngressRuleTable (85)
 
-These two tables are very similar to [AntreaPolicyEgressRuleTables], but implement
+This table is very similar to [AntreaPolicyEgressRuleTable], but implements
 the ingress rules of Antrea-native Policies. Depending on the tier to which the policy
 belongs to, the rules will be installed in a table corresponding to that tier.
 The ingress table to tier mappings is as follows:
 
 ```text
-Application tier -> DefaultTierIngressRuleTable(89)
-All other tiers  -> MultiTierIngressRuleTable(85)
+Baseline Tier     ->  IngressDefaultTable(100)
+K8s NetworkPolicy ->  IngressRuleTable(90)
+All other Tiers   ->  AntreaPolicyIngressRuleTable(85)
 ```
 
-Again for these two tables, you will need to keep in mind the ACNP
+Again for this table, you will need to keep in mind the ACNP
 [specification](#antrea-networkpolicy-crd-implementation) that we are using.
 Since the example ACNP resides in the Application tier, if you dump the flows
-for table 89, you should see something like this:
+for table 85, you should see something like this:
 
 ```text
-1. table=89, priority=64990,ct_state=-new+est,ip actions=resubmit(,105)
-2. table=89, priority=58600,conj_id=1,ip actions=drop
-3. table=89, priority=58600,ip,nw_src=10.10.1.7 actions=conjunction(1,1/3)
-4. table=89, priority=58600,ip,reg1=0x19c actions=conjunction(1,2/3)
-5. table=89, priority=58600,tcp,tp_dst=80 actions=conjunction(1,3/3)
-6. table=89, priority=0 actions=resubmit(,90)
+1. table=85, priority=64990,ct_state=-new+est,ip actions=resubmit(,105)
+2. table=85, priority=14000,conj_id=4,ip actions=load:0x4->NXM_NX_REG3[],load:0x1->NXM_NX_REG0[20],resubmit(,101)
+3. table=85, priority=14000,ip,nw_src=10.10.1.7 actions=conjunction(4,1/3)
+4. table=85, priority=14000,ip,reg1=0x19c actions=conjunction(4,2/3)
+5. table=85, priority=14000,tcp,tp_dst=80 actions=conjunction(4,3/3)
+6. table=85, priority=0 actions=resubmit(,90)
 ```
 
-As for [AntreaPolicyEgressRuleTables], flow 1 (highest priority) ensures that for
-established connections packets go straight to [L2ForwardingOutTable],
-with no other match required.
+As for [AntreaPolicyEgressRuleTable], flow 1 (highest priority) ensures that for
+established connections packets go straight to IngressMetricsTable,
+then [L2ForwardingOutTable], with no other match required.
 
 The rest of the flows read as follows: if the source IP address is in set
 {10.10.1.7}, and the destination OF port is in the set {412} (which
 correspond to IP addresses {10.10.1.6}), and the destination TCP port
-is in the set {80}, then use `conjunction` action with id 1, which drops the
-packet. Otherwise, go to the next AntreaPolicyRuleTable belonging to the next
-tier in precedence, or in the case of the Application tier (lowest precedence),
-go to the [IngressRuleTable]. One notable difference is how we use OF ports to
-identify the destination of the traffic, while we use IP addresses in
-[AntreaPolicyEgressRuleTables] to identify the source of the traffic. More details
-regarding this can be found in the following [IngressRuleTable] section.
+is in the set {80}, then use `conjunction` action with id 4, which loads
+the `conj_id` 4 into NXM_NX_REG3, a register used by Antrea internally to
+indicate the disposition of the packet is Drop, and forward the packet to
+IngressMetricsTable for it to be dropped.
 
-As seen in [AntreaPolicyEgressRuleTables], the default action is to evaluate K8s
+Otherwise, go to [IngressRuleTable] if no conjunctive flow above priority 0 is matched.
+This corresponds to the case where the packet is not matched by any of the Antrea-native
+policy ingress rules in any tier (except for the "baseline" tier).
+One notable difference is how we use OF ports to identify the destination of
+the traffic, while we use IP addresses in [AntreaPolicyEgressRuleTable] to
+identify the source of the traffic. More details regarding this can be found
+in the following [IngressRuleTable] section.
+
+As seen in [AntreaPolicyEgressRuleTable], the default action is to evaluate K8s
 Network Policy [IngressRuleTable] and a AntreaPolicyIngressDefaultTable does not exist.
 
 ### IngressRuleTable (90)
@@ -675,21 +699,21 @@ are allowed to talk to each other using TCP on port 80, but nothing else.
 If you dump the flows for this table, you should see something like this:
 
 ```text
-1. table=90, priority=210,ct_state=-new+est,ip actions=goto_table:105
+1. table=90, priority=210,ct_state=-new+est,ip actions=goto_table:101
 2. table=90, priority=210,ip,nw_src=10.10.1.1 actions=goto_table:105
-3. table=90, priority=200,ip,nw_src=10.10.1.2 actions=conjunction(1,1/3)
-4. table=90, priority=200,ip,nw_src=10.10.1.3 actions=conjunction(1,1/3)
-5. table=90, priority=200,ip,reg1=0x3 actions=conjunction(1,2/3)
-6. table=90, priority=200,ip,reg1=0x4 actions=conjunction(1,2/3)
-7. table=90, priority=200,tcp,tp_dst=80 actions=conjunction(1,3/3)
-8. table=90, priority=190,conj_id=1,ip actions=goto_table:105
+3. table=90, priority=200,ip,nw_src=10.10.1.2 actions=conjunction(3,1/3)
+4. table=90, priority=200,ip,nw_src=10.10.1.3 actions=conjunction(3,1/3)
+5. table=90, priority=200,ip,reg1=0x3 actions=conjunction(3,2/3)
+6. table=90, priority=200,ip,reg1=0x4 actions=conjunction(3,2/3)
+7. table=90, priority=200,tcp,tp_dst=80 actions=conjunction(3,3/3)
+8. table=90, priority=190,conj_id=3,ip actions=load:0x3->NXM_NX_REG6[],ct(commit,table=101,zone=65520,exec(load:0x3->NXM_NX_CT_LABEL[0..31]))
 9. table=90, priority=0 actions=goto_table:100
 ```
 
 As for [EgressRuleTable], flow 1 (highest priority) ensures that for established
 connections - as a reminder all connections are committed in
-[ConntrackCommitTable] - packets go straight to [L2ForwardingOutTable], with no
-other match required.
+[ConntrackCommitTable] - packets go straight to IngressMetricsTable,
+then [L2ForwardingOutTable], with no other match required.
 
 Flow 2 ensures that traffic from the local gateway cannot be dropped because of
 Network Policies. This ensures that K8s [liveness
@@ -699,14 +723,15 @@ can go through.
 The rest of the flows read as follows: if the source IP address is in set
 {10.10.1.2, 10.10.1.3}, and the destination OF port is in the set {3, 4} (which
 correspond to IP addresses {10.10.1.2, 10.10.1.3}, and the destination TCP port
-is in the set {80}, then use `conjunction` action with id 1, which goes
-to [L2ForwardingOutTable]. Otherwise, go to [IngressDefaultTable]. One
-notable difference is how we use OF ports to identify the destination of the
-traffic, while we use IP addresses in [EgressRuleTable] to identify the source
-of the traffic. We do this as an increased security measure in case a local Pod
-is misbehaving and trying to access another local Pod using the correct
-destination MAC address but a different destination IP address to bypass an
-egress Network Policy rule. This is also why the Network Policy ingress rules
+is in the set {80}, then use `conjunction` action with id 3, which stores the
+`conj_id` 3 in `ct_label[0..31]` for egress metrics collection purposes, and forwards
+the packet to IngressMetricsTable, then [L2ForwardingOutTable]. Otherwise, go to
+[IngressDefaultTable]. One notable difference is how we use OF ports to identify
+the destination of the traffic, while we use IP addresses in [EgressRuleTable]
+to identify the source of the traffic. We do this as an increased security measure
+in case a local Pod is misbehaving and trying to access another local Pod using
+the correct destination MAC address but a different destination IP address to bypass
+an egress Network Policy rule. This is also why the Network Policy ingress rules
 are enforced after the egress port has been determined.
 
 ### IngressDefaultTable (100)
@@ -728,6 +753,22 @@ the flows:
 1. table=100, priority=200,ip,reg1=0x3 actions=drop
 2. table=100, priority=200,ip,reg1=0x4 actions=drop
 3. table=100, priority=0 actions=goto_table:105
+```
+
+Similar to the [EgressDefaultTable], this table is also used to implement
+Antrea-native policy ingress rules that are created in the Baseline Tier.
+Since the Baseline Tier is meant to be enforced after K8s NetworkPolicies, the
+corresponding flows will be created at a lower priority than K8s default drop flows.
+For example, a baseline rule to isolate ingress traffic for a namespace will look
+like the following:
+
+```text
+table=100, priority=80,ip,reg1=0xb actions=conjunction(6,2/3)
+table=100, priority=80,ip,reg1=0xc actions=conjunction(6,2/3)
+table=100, priority=80,ip,nw_src=10.10.1.9 actions=conjunction(6,1/3)
+table=100, priority=80,ip,nw_src=10.10.1.7 actions=conjunction(6,1/3)
+table=100, priority=80,tcp,tp_dst=8080 actions=conjunction(6,3/3)
+table=100, priority=80,conj_id=6,ip actions=load:0x6->NXM_NX_REG3[],load:0x1->NXM_NX_REG0[20],resubmit(,101)
 ```
 
 The table-miss flow entry, which is used for non-isolated Pods, forwards
@@ -783,12 +824,12 @@ resolved by the "dmac" table, [L2ForwardingCalcTable]). IP packets for which
 [ConntrackTable]: #conntracktable-30
 [ConntrackStateTable]: #conntrackstatetable-31
 [DNATTable]: #dnattable-40
-[AntreaPolicyEgressRuleTables]: #antreapolicyegressruletables-45-49
+[AntreaPolicyEgressRuleTable]: #antreapolicyegressruletable-45
 [EgressRuleTable]: #egressruletable-50
 [EgressDefaultTable]: #egressdefaulttable-60
 [L3ForwardingTable]: #l3forwardingtable-70
 [L2ForwardingCalcTable]: #l2forwardingcalctable-80
-[AntreaPolicyIngressRuleTables]: #antreapolicyingressruletables-85-89
+[AntreaPolicyIngressRuleTable]: #antreapolicyingressruletable-85
 [IngressRuleTable]: #ingressruletable-90
 [IngressDefaultTable]: #ingressdefaulttable-100
 [ConntrackCommitTable]: #conntrackcommittable-105
