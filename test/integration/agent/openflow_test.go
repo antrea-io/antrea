@@ -266,7 +266,7 @@ func testInstallTunnelFlows(t *testing.T, config *testConfig) {
 }
 
 func testInstallServiceFlows(t *testing.T, config *testConfig) {
-	err := c.InstallClusterServiceFlows()
+	err := c.InstallClusterServiceFlows(true, true)
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries to skip service CIDR from egress table: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestProxyServiceFlows(t *testing.T) {
 
 func installServiceFlows(t *testing.T, gid uint32, svc svcConfig, endpointList []k8sproxy.Endpoint, stickyMaxAgeSeconds uint16) {
 	groupID := ofconfig.GroupIDType(gid)
-	err := c.InstallEndpointFlows(svc.protocol, endpointList)
+	err := c.InstallEndpointFlows(svc.protocol, endpointList, false)
 	assert.NoError(t, err, "no error should return when installing flows for Endpoints")
 	err = c.InstallServiceGroup(groupID, svc.withSessionAffinity, endpointList)
 	assert.NoError(t, err, "no error should return when installing groups for Service")

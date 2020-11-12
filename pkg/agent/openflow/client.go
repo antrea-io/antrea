@@ -55,7 +55,7 @@ type Client interface {
 
 	// InstallClusterServiceFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once.
-	InstallClusterServiceFlows() error
+	InstallClusterServiceFlows(useIPv4, useIPv6 bool) error
 
 	// InstallDefaultTunnelFlows sets up the classification flow for the default (flow based) tunnel.
 	InstallDefaultTunnelFlows(tunnelOFPort uint32) error
@@ -101,7 +101,7 @@ type Client interface {
 	// InstallEndpointFlows installs flows for accessing Endpoints.
 	// If an Endpoint is on the current Node, then flows for hairpin and endpoint
 	// L2 forwarding should also be installed.
-	InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error
+	InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint, isIPv6 bool) error
 	// UninstallEndpointFlows removes flows of the Endpoint installed by
 	// InstallEndpointFlows.
 	UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error
@@ -400,16 +400,20 @@ func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
 	return nil
 }
 
-func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error {
+func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint, isIPv6 bool) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
+	parser := func(ipStr string) net.IP { return net.ParseIP(ipStr).To4() }
+	if isIPv6 {
+		parser = func(ipStr string) net.IP { return net.ParseIP(ipStr).To16() }
+	}
 	for _, endpoint := range endpoints {
 		var flows []binding.Flow
 		endpointPort, _ := endpoint.Port()
-		endpointIP := net.ParseIP(endpoint.IP()).To4()
+		endpointIP := parser(endpoint.IP())
 		portVal := uint16(endpointPort)
-		cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpointIP, endpointPort, protocol)
+		cacheKey := fmt.Sprintf("Endpoints_%s_%d_%s", endpointIP, endpointPort, protocol)
 		flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
 		if endpoint.GetIsLocal() {
 			flows = append(flows, c.hairpinSNATFlow(endpointIP))
@@ -429,7 +433,7 @@ func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint prox
 	if err != nil {
 		return fmt.Errorf("error when getting port: %w", err)
 	}
-	cacheKey := fmt.Sprintf("Endpoints:%s:%d:%s", endpoint.IP(), port, protocol)
+	cacheKey := fmt.Sprintf("Endpoints_%s_%d_%s", endpoint.IP(), port, protocol)
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
@@ -441,14 +445,14 @@ func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, 
 	if affinityTimeout != 0 {
 		flows = append(flows, c.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout))
 	}
-	cacheKey := fmt.Sprintf("Service:%s:%d:%s", svcIP, svcPort, protocol)
+	cacheKey := fmt.Sprintf("Service_%s_%d_%s", svcIP, svcPort, protocol)
 	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
 }
 
 func (c *client) UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	cacheKey := fmt.Sprintf("Service:%s:%d:%s", svcIP, svcPort, protocol)
+	cacheKey := fmt.Sprintf("Service_%s_%d_%s", svcIP, svcPort, protocol)
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
@@ -457,17 +461,25 @@ func (c *client) InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPor
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
 	flows = append(flows, c.loadBalancerServiceFromOutsideFlow(config.UplinkOFPort, config.HostGatewayOFPort, svcIP, svcPort, protocol))
-	cacheKey := fmt.Sprintf("LoadBalancerService:%s:%d:%s", svcIP, svcPort, protocol)
+	cacheKey := fmt.Sprintf("LoadBalancerService_%s_%d_%s", svcIP, svcPort, protocol)
 	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
 }
 
-func (c *client) InstallClusterServiceFlows() error {
+func (c *client) InstallClusterServiceFlows(useIPv4, useIPv6 bool) error {
 	flows := []binding.Flow{
-		c.l2ForwardOutputServiceHairpinFlow(),
-		c.serviceHairpinResponseDNATFlow(),
 		c.serviceNeedLBFlow(),
 		c.sessionAffinityReselectFlow(),
-		c.serviceLBBypassFlow(),
+		c.l2ForwardOutputServiceHairpinFlow(),
+	}
+	if useIPv4 {
+		flows = append(flows,
+			c.serviceHairpinResponseDNATFlow(binding.ProtocolIP),
+			c.serviceLBBypassFlow(binding.ProtocolIP))
+	}
+	if useIPv6 {
+		flows = append(flows,
+			c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6),
+			c.serviceLBBypassFlow(binding.ProtocolIPv6))
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err

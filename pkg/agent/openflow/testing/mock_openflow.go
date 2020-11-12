@@ -252,17 +252,17 @@ func (mr *MockClientMockRecorder) InstallClusterServiceCIDRFlows(arg0, arg1 inte
 }
 
 // InstallClusterServiceFlows mocks base method
-func (m *MockClient) InstallClusterServiceFlows() error {
+func (m *MockClient) InstallClusterServiceFlows(arg0, arg1 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallClusterServiceFlows")
+	ret := m.ctrl.Call(m, "InstallClusterServiceFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallClusterServiceFlows indicates an expected call of InstallClusterServiceFlows
-func (mr *MockClientMockRecorder) InstallClusterServiceFlows() *gomock.Call {
+func (mr *MockClientMockRecorder) InstallClusterServiceFlows(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallClusterServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallClusterServiceFlows))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallClusterServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallClusterServiceFlows), arg0, arg1)
 }
 
 // InstallDefaultTunnelFlows mocks base method
@@ -280,17 +280,17 @@ func (mr *MockClientMockRecorder) InstallDefaultTunnelFlows(arg0 interface{}) *g
 }
 
 // InstallEndpointFlows mocks base method
-func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 []proxy.Endpoint) error {
+func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 []proxy.Endpoint, arg2 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallEndpointFlows", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallEndpointFlows", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallEndpointFlows indicates an expected call of InstallEndpointFlows
-func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).InstallEndpointFlows), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).InstallEndpointFlows), arg0, arg1, arg2)
 }
 
 // InstallExternalFlows mocks base method

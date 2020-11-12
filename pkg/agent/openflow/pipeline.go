@@ -207,6 +207,7 @@ const (
 	// CNPDropConjunctionIDReg reuses reg3 which will also be used for storing endpoint IP to store the rule ID. Since
 	// the service selection will finish when a packet hitting NetworkPolicy related rules, there is no conflict.
 	CNPDropConjunctionIDReg regType = 3
+	endpointIPv6XXReg       regType = 3 // xxReg3 will occupy reg12-reg15
 	// marksRegServiceNeedLB indicates a packet need to do service selection.
 	marksRegServiceNeedLB uint32 = 0b001
 	// marksRegServiceSelected indicates a packet has done service selection.
@@ -263,6 +264,8 @@ var (
 	// endpointIPRegRange takes a 32-bit range of register endpointIPReg to store
 	// the selected Service Endpoint IP.
 	endpointIPRegRange = binding.Range{0, 31}
+	// the selected Service Endpoint IPv6.
+	endpointIPv6XXRegRange = binding.Range{0, 127}
 	// endpointPortRegRange takes a 16-bit range of register endpointPortReg to store
 	// the selected Service Endpoint port.
 	endpointPortRegRange = binding.Range{0, 15}
@@ -282,6 +285,7 @@ var (
 
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	hairpinIP           = net.ParseIP("169.254.169.252").To4()
+	hairpinIPv6         = net.ParseIP("FE80::aabb:ccdd:eeff").To16()
 )
 
 type OFEntryOperations interface {
@@ -538,7 +542,18 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Action().CT(false, connectionTrackTable.GetNext(), CtZone).NAT().CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
+			connectionTrackTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+				Action().CT(false, connectionTrackTable.GetNext(), CtZoneV6).NAT().CTDone().
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
 			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIP).
+				MatchCTStateTrk(true).
+				MatchCTMark(ServiceCTMark, nil).
+				MatchRegRange(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Action().GotoTable(connectionTrackCommitTable.GetNext()).
+				Done(),
+			connectionTrackCommitTable.BuildFlow(priorityLow).MatchProtocol(binding.ProtocolIPv6).
 				MatchCTStateTrk(true).
 				MatchCTMark(ServiceCTMark, nil).
 				MatchRegRange(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
@@ -679,9 +694,9 @@ func (c *client) ctRewriteDstMACFlows(gatewayMAC net.HardwareAddr, category cook
 
 // serviceLBBypassFlow makes packets that belong to a tracked connection bypass
 // service LB tables and enter egressRuleTable directly.
-func (c *client) serviceLBBypassFlow() binding.Flow {
+func (c *client) serviceLBBypassFlow(ipProtocol binding.Protocol) binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
 		MatchCTMark(ServiceCTMark, nil).
 		MatchCTStateNew(false).MatchCTStateTrk(true).
 		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
@@ -754,7 +769,7 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cook
 // l2ForwardOutputServiceHairpinFlow uses in_port action for Service
 // hairpin packets to avoid packets from being dropped by OVS.
 func (c *client) l2ForwardOutputServiceHairpinFlow() binding.Flow {
-	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityHigh).
 		MatchRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
 		Action().OutputInPort().
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
@@ -976,10 +991,18 @@ func getIPProtocol(ip net.IP) binding.Protocol {
 
 // serviceHairpinResponseDNATFlow generates the flow which transforms destination
 // IP of the hairpin packet to the source IP.
-func (c *client) serviceHairpinResponseDNATFlow() binding.Flow {
-	return c.pipeline[serviceHairpinTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchDstIP(hairpinIP).
-		Action().Move("NXM_OF_IP_SRC", "NXM_OF_IP_DST").
+func (c *client) serviceHairpinResponseDNATFlow(ipProtocol binding.Protocol) binding.Flow {
+	hpIP := hairpinIP
+	from := "NXM_OF_IP_SRC"
+	to := "NXM_OF_IP_DST"
+	if ipProtocol == binding.ProtocolIPv6 {
+		hpIP = hairpinIPv6
+		from = "NXM_NX_IPV6_SRC"
+		to = "NXM_NX_IPV6_SRC"
+	}
+	return c.pipeline[serviceHairpinTable].BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
+		MatchDstIP(hpIP).
+		Action().Move(from, to).
 		Action().LoadRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
 		Action().GotoTable(conntrackTable).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
@@ -1126,40 +1149,38 @@ func (c *client) dropRuleMetricFlow(conjunctionID uint32, ingress bool) binding.
 // handle multicast packets, Neighbor Solicitation and ND Advertisement packets properly.
 func (c *client) ipv6Flows(category cookie.Category) []binding.Flow {
 	var flows []binding.Flow
-	// TODO: Remove the flag after finishing Antrea Proxy changes
-	if !c.enableProxy {
-		_, ipv6LinkLocalIpnet, _ := net.ParseCIDR(ipv6LinkLocalAddr)
-		_, ipv6MulticastIpnet, _ := net.ParseCIDR(ipv6MulticastAddr)
-		flows = append(flows,
-			// Allow IPv6 packets (e.g. Multicast Listener Report Message V2) which are sent from link-local addresses in spoofGuardTable,
-			// so that these packets will not be dropped.
-			c.pipeline[spoofGuardTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
-				MatchSrcIPNet(*ipv6LinkLocalIpnet).
-				Action().GotoTable(ipv6Table).
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-			// Handle IPv6 Neighbor Solicitation and Neighbor Advertisement as a regular L2 learning Switch by using normal.
-			c.pipeline[ipv6Table].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolICMPv6).
-				MatchICMPv6Type(135).
-				MatchICMPv6Code(0).
-				Action().Normal().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-			c.pipeline[ipv6Table].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolICMPv6).
-				MatchICMPv6Type(136).
-				MatchICMPv6Code(0).
-				Action().Normal().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-			// Handle IPv6 multicast packets as a regular L2 learning Switch by using normal.
-			// It is used to ensure that all kinds of IPv6 multicast packets are properly handled (e.g. Multicast Listener Report Message V2).
-			c.pipeline[ipv6Table].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
-				MatchDstIPNet(*ipv6MulticastIpnet).
-				Action().Normal().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-		)
-	}
+
+	_, ipv6LinkLocalIpnet, _ := net.ParseCIDR(ipv6LinkLocalAddr)
+	_, ipv6MulticastIpnet, _ := net.ParseCIDR(ipv6MulticastAddr)
+	flows = append(flows,
+		// Allow IPv6 packets (e.g. Multicast Listener Report Message V2) which are sent from link-local addresses in spoofGuardTable,
+		// so that these packets will not be dropped.
+		c.pipeline[spoofGuardTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+			MatchSrcIPNet(*ipv6LinkLocalIpnet).
+			Action().GotoTable(ipv6Table).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Handle IPv6 Neighbor Solicitation and Neighbor Advertisement as a regular L2 learning Switch by using normal.
+		c.pipeline[ipv6Table].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolICMPv6).
+			MatchICMPv6Type(135).
+			MatchICMPv6Code(0).
+			Action().Normal().
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		c.pipeline[ipv6Table].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolICMPv6).
+			MatchICMPv6Type(136).
+			MatchICMPv6Code(0).
+			Action().Normal().
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// Handle IPv6 multicast packets as a regular L2 learning Switch by using normal.
+		// It is used to ensure that all kinds of IPv6 multicast packets are properly handled (e.g. Multicast Listener Report Message V2).
+		c.pipeline[ipv6Table].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+			MatchDstIPNet(*ipv6MulticastIpnet).
+			Action().Normal().
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+	)
 	return flows
 }
 
@@ -1561,24 +1582,50 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 	learnFlowBuilderLearnAction := learnFlowBuilder.
 		Action().Learn(sessionAffinityTable, priorityNormal, affinityTimeout, 0, cookieID).
 		DeleteLearned()
-	if protocol == binding.ProtocolTCP {
+	ipProtocol := binding.ProtocolIP
+	switch protocol {
+	case binding.ProtocolTCP:
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedTCPDstPort()
-	} else if protocol == binding.ProtocolUDP {
+	case binding.ProtocolUDP:
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedUDPDstPort()
-	} else if protocol == binding.ProtocolSCTP {
+	case binding.ProtocolSCTP:
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedSCTPDstPort()
+	case binding.ProtocolTCPv6:
+		ipProtocol = binding.ProtocolIPv6
+		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedTCPv6DstPort()
+	case binding.ProtocolUDPv6:
+		ipProtocol = binding.ProtocolIPv6
+		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedUDPv6DstPort()
+	case binding.ProtocolSCTPv6:
+		ipProtocol = binding.ProtocolIPv6
+		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedSCTPv6DstPort()
 	}
-	return learnFlowBuilderLearnAction.
-		MatchLearnedDstIP().
-		MatchLearnedSrcIP().
-		LoadRegToReg(int(endpointIPReg), int(endpointIPReg), endpointIPRegRange, endpointIPRegRange).
-		LoadRegToReg(int(endpointPortReg), int(endpointPortReg), endpointPortRegRange, endpointPortRegRange).
-		LoadReg(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
-		LoadReg(int(marksReg), macRewriteMark, macRewriteMarkRange).
-		Done().
-		Action().LoadRegRange(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
-		Action().GotoTable(endpointDNATTable).
-		Done()
+	if ipProtocol == binding.ProtocolIP {
+		return learnFlowBuilderLearnAction.
+			MatchLearnedDstIP().
+			MatchLearnedSrcIP().
+			LoadRegToReg(int(endpointIPReg), int(endpointIPReg), endpointIPRegRange, endpointIPRegRange).
+			LoadRegToReg(int(endpointPortReg), int(endpointPortReg), endpointPortRegRange, endpointPortRegRange).
+			LoadReg(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
+			LoadReg(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			Done().
+			Action().LoadRegRange(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
+			Action().GotoTable(endpointDNATTable).
+			Done()
+	} else if ipProtocol == binding.ProtocolIPv6 {
+		return learnFlowBuilderLearnAction.
+			MatchLearnedDstIP().
+			MatchLearnedSrcIP().
+			LoadXXRegToXXReg(int(endpointIPv6XXReg), int(endpointIPv6XXReg), endpointIPv6XXRegRange, endpointIPv6XXRegRange).
+			LoadRegToReg(int(endpointPortReg), int(endpointPortReg), endpointPortRegRange, endpointPortRegRange).
+			LoadReg(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
+			LoadReg(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			Done().
+			Action().LoadRegRange(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
+			Action().GotoTable(endpointDNATTable).
+			Done()
+	}
+	return nil
 }
 
 // serviceLBFlow generates the flow which uses the specific group to do Endpoint
@@ -1598,15 +1645,24 @@ func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPor
 // to the Endpoint IP according to the Endpoint selection decision which is stored
 // in regs.
 func (c *client) endpointDNATFlow(endpointIP net.IP, endpointPort uint16, protocol binding.Protocol) binding.Flow {
-	ipVal := binary.BigEndian.Uint32(endpointIP)
+	ipProtocol := getIPProtocol(endpointIP)
 	unionVal := (marksRegServiceSelected << endpointPortRegRange.Length()) + uint32(endpointPort)
 	table := c.pipeline[endpointDNATTable]
-	return table.BuildFlow(priorityNormal).
+
+	flowBuilder := table.BuildFlow(priorityNormal).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-		MatchProtocol(protocol).
-		MatchReg(int(endpointIPReg), ipVal).
 		MatchRegRange(int(endpointPortReg), unionVal, binding.Range{0, 18}).
-		Action().CT(true, table.GetNext(), CtZone).
+		MatchProtocol(protocol)
+	if ipProtocol == binding.ProtocolIP {
+		ipVal := binary.BigEndian.Uint32(endpointIP.To4())
+		flowBuilder = flowBuilder.MatchReg(int(endpointIPReg), ipVal).
+			MatchRegRange(int(endpointPortReg), unionVal, binding.Range{0, 18})
+	} else {
+		ipVal := []byte(endpointIP)
+		flowBuilder = flowBuilder.MatchXXReg(int(endpointIPv6XXReg), ipVal).
+			MatchRegRange(int(endpointPortReg), unionVal, binding.Range{0, 18})
+	}
+	return flowBuilder.Action().CT(true, table.GetNext(), CtZone).
 		DNAT(
 			&binding.IPRange{StartIP: endpointIP, EndIP: endpointIP},
 			&binding.PortRange{StartPort: endpointPort, EndPort: endpointPort},
@@ -1619,12 +1675,17 @@ func (c *client) endpointDNATFlow(endpointIP net.IP, endpointPort uint16, protoc
 // hairpinSNATFlow generates the flow which does SNAT for Service
 // hairpin packets and loads the hairpin mark to markReg.
 func (c *client) hairpinSNATFlow(endpointIP net.IP) binding.Flow {
+	ipProtocol := getIPProtocol(endpointIP)
+	hpIP := hairpinIP
+	if ipProtocol == binding.ProtocolIPv6 {
+		hpIP = hairpinIPv6
+	}
 	return c.pipeline[hairpinSNATTable].BuildFlow(priorityNormal).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-		MatchProtocol(binding.ProtocolIP).
+		MatchProtocol(ipProtocol).
 		MatchDstIP(endpointIP).
 		MatchSrcIP(endpointIP).
-		Action().SetSrcIP(hairpinIP).
+		Action().SetSrcIP(hpIP).
 		Action().LoadRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
 		Action().GotoTable(L2ForwardingOutTable).
 		Done()
@@ -1649,16 +1710,28 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 
 	for _, endpoint := range endpoints {
 		endpointPort, _ := endpoint.Port()
-		endpointIP := net.ParseIP(endpoint.IP()).To4()
-		ipVal := binary.BigEndian.Uint32(endpointIP)
+		endpointIP := net.ParseIP(endpoint.IP())
 		portVal := uint16(endpointPort)
-		group = group.Bucket().Weight(100).
-			LoadReg(int(endpointIPReg), ipVal).
-			LoadRegRange(int(endpointPortReg), uint32(portVal), endpointPortRegRange).
-			LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
-			LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
-			ResubmitToTable(resubmitTableID).
-			Done()
+		ipProtocol := getIPProtocol(endpointIP)
+		if ipProtocol == binding.ProtocolIP {
+			ipVal := binary.BigEndian.Uint32(endpointIP.To4())
+			group = group.Bucket().Weight(100).
+				LoadReg(int(endpointIPReg), ipVal).
+				LoadRegRange(int(endpointPortReg), uint32(portVal), endpointPortRegRange).
+				LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
+				LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+				ResubmitToTable(resubmitTableID).
+				Done()
+		} else if ipProtocol == binding.ProtocolIPv6 {
+			ipVal := []byte(endpointIP)
+			group = group.Bucket().Weight(100).
+				LoadXXReg(int(endpointIPv6XXReg), ipVal).
+				LoadRegRange(int(endpointPortReg), uint32(portVal), endpointPortRegRange).
+				LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
+				LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+				ResubmitToTable(resubmitTableID).
+				Done()
+		}
 	}
 	return group
 }
