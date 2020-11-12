@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -25,6 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/features"
@@ -881,4 +883,65 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=AuditLoggingBasic", func(t *testing.T) { testAuditLoggingBasic(t, data) })
 	})
 	k8sUtils.Cleanup(namespaces)
+}
+
+func TestAntreaPolicyStatus(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfAntreaPolicyDisabled(t, data)
+
+	_, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-0", masterNodeName())
+	defer cleanupFunc()
+	_, _, cleanupFunc = createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-1", workerNodeName(1))
+	defer cleanupFunc()
+
+	anpBuilder := &AntreaNetworkPolicySpecBuilder{}
+	anpBuilder = anpBuilder.SetName(testNamespace, "anp-applied-to-two-nodes").
+		SetPriority(1.0).
+		SetAppliedToGroup(map[string]string{"app": "nginx"}, nil)
+	anpBuilder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+		nil, nil, secv1alpha1.RuleActionAllow)
+	anp := anpBuilder.Get()
+	log.Debugf("creating ANP %v", anp.Name)
+	_, err = data.securityClient.NetworkPolicies(anp.Namespace).Create(context.TODO(), anp, metav1.CreateOptions{})
+	assert.NoError(t, err)
+	defer data.securityClient.NetworkPolicies(anp.Namespace).Delete(context.TODO(), anp.Name, metav1.DeleteOptions{})
+
+	cnpBuilder := &ClusterNetworkPolicySpecBuilder{}
+	cnpBuilder = cnpBuilder.SetName("cnp-applied-to-two-nodes").
+		SetPriority(1.0).
+		SetAppliedToGroup(map[string]string{"app": "nginx"}, nil, nil, nil)
+	cnpBuilder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+		nil, nil, secv1alpha1.RuleActionAllow)
+	cnp := cnpBuilder.Get()
+	log.Debugf("creating CNP %v", cnp.Name)
+	_, err = data.securityClient.ClusterNetworkPolicies().Create(context.TODO(), cnp, metav1.CreateOptions{})
+	assert.NoError(t, err)
+	defer data.securityClient.ClusterNetworkPolicies().Delete(context.TODO(), cnp.Name, metav1.DeleteOptions{})
+
+	expectedStatus := secv1alpha1.NetworkPolicyStatus{
+		Phase:                secv1alpha1.NetworkPolicyRealized,
+		ObservedGeneration:   1,
+		CurrentNodesRealized: 2,
+		DesiredNodesRealized: 2,
+	}
+	err = wait.Poll(100*time.Millisecond, 3*time.Second, func() (bool, error) {
+		anp, err := data.securityClient.NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return anp.Status == expectedStatus, nil
+	})
+	assert.NoError(t, err, "Antrea NetworkPolicy failed to reach expected status")
+	err = wait.Poll(100*time.Millisecond, 3*time.Second, func() (bool, error) {
+		anp, err := data.securityClient.ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return anp.Status == expectedStatus, nil
+	})
+	assert.NoError(t, err, "Antrea ClusterNetworkPolicy failed to reach expected status")
 }

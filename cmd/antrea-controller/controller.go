@@ -115,6 +115,11 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore)
 
+	var networkPolicyStatusController *networkpolicy.StatusController
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		networkPolicyStatusController = networkpolicy.NewStatusController(crdClient, networkPolicyStore, cnpInformer, anpInformer)
+	}
+
 	endpointQuerier := networkpolicy.NewEndpointQuerier(networkPolicyController)
 
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
@@ -144,6 +149,7 @@ func run(o *Options) error {
 		controllerQuerier,
 		endpointQuerier,
 		networkPolicyController,
+		networkPolicyStatusController,
 		statsAggregator,
 		o.config.EnablePrometheusMetrics)
 	if err != nil {
@@ -187,6 +193,10 @@ func run(o *Options) error {
 		go traceflowController.Run(stopCh)
 	}
 
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		go networkPolicyStatusController.Run(stopCh)
+	}
+
 	<-stopCh
 	klog.Info("Stopping Antrea controller")
 	return nil
@@ -203,6 +213,7 @@ func createAPIServerConfig(kubeconfig string,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
+	networkPolicyStatusController *networkpolicy.StatusController,
 	statsAggregator *stats.Aggregator,
 	enableMetrics bool) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
@@ -254,6 +265,7 @@ func createAPIServerConfig(kubeconfig string,
 		caCertController,
 		statsAggregator,
 		controllerQuerier,
+		networkPolicyStatusController,
 		endpointQuerier,
 		npController), nil
 }

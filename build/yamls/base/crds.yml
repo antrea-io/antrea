@@ -271,6 +271,16 @@ spec:
           format: float
           description: The Priority of this ClusterNetworkPolicy relative to other policies.
           jsonPath: .spec.priority
+        - name: Desired Nodes
+          type: number
+          format: int32
+          description: The total number of Nodes that should realize the NetworkPolicy.
+          jsonPath: .status.desiredNodesRealized
+        - name: Current Nodes
+          type: number
+          format: int32
+          description: The number of Nodes that have realized the NetworkPolicy.
+          jsonPath: .status.currentNodesRealized
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -381,6 +391,19 @@ spec:
                         type: string
                       enableLogging:
                         type: boolean
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                observedGeneration:
+                  type: integer
+                currentNodesRealized:
+                  type: integer
+                desiredNodesRealized:
+                  type: integer
+      subresources:
+        status: {}
   scope: Cluster
   names:
     plural: clusternetworkpolicies
@@ -411,6 +434,16 @@ spec:
           format: float
           description: The Priority of this Antrea NetworkPolicy relative to other policies.
           jsonPath: .spec.priority
+        - name: Desired Nodes
+          type: number
+          format: int32
+          description: The total number of Nodes that should realize the NetworkPolicy.
+          jsonPath: .status.desiredNodesRealized
+        - name: Current Nodes
+          type: number
+          format: int32
+          description: The number of Nodes that have realized the NetworkPolicy.
+          jsonPath: .status.currentNodesRealized
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -524,6 +557,19 @@ spec:
                         type: string
                       enableLogging:
                         type: boolean
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                observedGeneration:
+                  type: integer
+                currentNodesRealized:
+                  type: integer
+                desiredNodesRealized:
+                  type: integer
+      subresources:
+        status: {}
   scope: Namespaced
   names:
     plural: networkpolicies
