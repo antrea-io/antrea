@@ -87,6 +87,7 @@ jobs:
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: '*antrea*'
         flags: kind-e2e-tests
         name: codecov-test-e2e-encap
@@ -143,6 +144,7 @@ jobs:
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: '*antrea*'
         flags: kind-e2e-tests
         name: codecov-test-e2e-encap-proxy
@@ -199,6 +201,7 @@ jobs:
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: '*antrea*'
         flags: kind-e2e-tests
         name: codecov-test-e2e-noencap
@@ -255,6 +258,7 @@ jobs:
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: '*antrea*'
         flags: kind-e2e-tests
         name: codecov-test-e2e-hybrid
@@ -311,6 +315,7 @@ jobs:
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: '*antrea*'
         flags: kind-e2e-tests
         name: codecov-test-e2e-np-encap

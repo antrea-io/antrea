@@ -47,7 +47,20 @@ func runAntctl(podName string, cmds []string, data *TestData) (string, string, e
 		containerName = "antrea-controller"
 	}
 	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, containerName, cmds)
+	// remove Bincover metadata if needed
+	if err == nil {
+		index := strings.Index(stdout, "START_BINCOVER_METADATA")
+		if index != -1 {
+			stdout = stdout[:index]
+		}
+	}
 	return stdout, stderr, err
+}
+
+func antctlCoverageArgs(antctlPath string) []string {
+	const timeFormat = "20060102T150405Z0700"
+	timeStamp := time.Now().Format(timeFormat)
+	return []string{antctlPath, "-test.run=TestBincoverRunMain", fmt.Sprintf("-test.coverprofile=antctl-%s.out", timeStamp)}
 }
 
 // TestAntctlAgentLocalAccess ensures antctl is accessible in a agent Pod.
@@ -62,7 +75,15 @@ func TestAntctlAgentLocalAccess(t *testing.T) {
 		t.Fatalf("Error when getting antrea-agent pod name: %v", err)
 	}
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeAgent) {
-		args := append([]string{"antctl", "-v"}, c...)
+		args := []string{}
+		if testOptions.enableCoverage {
+			antctlCovArgs := antctlCoverageArgs("antctl-coverage")
+			args = append(antctlCovArgs, c...)
+		} else {
+			args = append([]string{"antctl", "-v"}, c...)
+		}
+		t.Logf("args: %s", args)
+
 		cmd := strings.Join(args, " ")
 		t.Run(cmd, func(t *testing.T) {
 			stdout, stderr, err := runAntctl(podName, args, data)
@@ -74,7 +95,7 @@ func TestAntctlAgentLocalAccess(t *testing.T) {
 	}
 }
 
-func copyAntctlToNode(data *TestData, nodeName string, nodeAntctlPath string) error {
+func copyAntctlToNode(data *TestData, nodeName string, antctlName string, nodeAntctlPath string) error {
 	podName, err := data.getAntreaPodOnNode(masterNodeName())
 	if err != nil {
 		return fmt.Errorf("error when retrieving Antrea Controller Pod name: %v", err)
@@ -82,13 +103,13 @@ func copyAntctlToNode(data *TestData, nodeName string, nodeAntctlPath string) er
 	// Just try our best to clean up.
 	RunCommandOnNode(nodeName, fmt.Sprintf("rm -f %s", nodeAntctlPath))
 	// Copy antctl from the controller Pod to the Node.
-	cmd := fmt.Sprintf("kubectl cp %s/%s:/usr/local/bin/antctl %s", antreaNamespace, podName, nodeAntctlPath)
+	cmd := fmt.Sprintf("kubectl cp %s/%s:/usr/local/bin/%s %s", antreaNamespace, podName, antctlName, nodeAntctlPath)
 	rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
 	if err != nil {
 		return fmt.Errorf("error when running command '%s' on Node: %v", cmd, err)
 	}
 	if rc != 0 {
-		return fmt.Errorf("error when copying antctl from %s, stdout: <%v>, stderr: <%v>", podName, stdout, stderr)
+		return fmt.Errorf("error when copying %s from %s, stdout: <%v>, stderr: <%v>", antctlName, podName, stdout, stderr)
 	}
 	// Make sure the antctl binary is executable on the Node.
 	cmd = fmt.Sprintf("chmod +x %s", nodeAntctlPath)
@@ -111,24 +132,44 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	antctlName := "antctl"
 	nodeAntctlPath := "~/antctl"
-	if err := copyAntctlToNode(data, masterNodeName(), nodeAntctlPath); err != nil {
-		t.Fatalf("Cannot copy antctl on master Node: %v", err)
+	if testOptions.enableCoverage {
+		antctlName = "antctl-coverage"
+		nodeAntctlPath = "~/antctl-coverage"
+	}
+	if err := copyAntctlToNode(data, masterNodeName(), antctlName, nodeAntctlPath); err != nil {
+		t.Fatalf("Cannot copy %s on master Node: %v", antctlName, err)
 	}
 
 	testCmds := []cmdAndReturnCode{}
 	// Add all controller commands.
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeController) {
 		cmd := append([]string{nodeAntctlPath, "-v"}, c...)
+		if testOptions.enableCoverage {
+			antctlCovArgs := antctlCoverageArgs(nodeAntctlPath)
+			cmd = append(antctlCovArgs, c...)
+		}
 		testCmds = append(testCmds, cmdAndReturnCode{args: cmd, expectedReturnCode: 0})
 	}
-	testCmds = append(testCmds,
-		// Malformed config
-		cmdAndReturnCode{
-			args:               []string{nodeAntctlPath, "-v", "version", "--kubeconfig", "/dev/null"},
-			expectedReturnCode: 1,
-		},
-	)
+	if testOptions.enableCoverage {
+		testCmds = append(testCmds,
+			// Malformed config
+			cmdAndReturnCode{
+				args:               []string{nodeAntctlPath, "version", "--kubeconfig", "/dev/null"},
+				expectedReturnCode: 1,
+			},
+		)
+
+	} else {
+		testCmds = append(testCmds,
+			// Malformed config
+			cmdAndReturnCode{
+				args:               []string{nodeAntctlPath, "-v", "version", "--kubeconfig", "/dev/null"},
+				expectedReturnCode: 1,
+			},
+		)
+	}
 
 	for _, tc := range testCmds {
 		cmd := strings.Join(tc.args, " ")
@@ -179,7 +220,7 @@ func TestAntctlVerboseMode(t *testing.T) {
 
 // runAntctProxy runs the antctl reverse proxy on the provided Node; to stop the
 // proxy call the returned function.
-func runAntctProxy(nodeName string, nodeAntctlPath string, proxyPort int, agentNodeName string) (func() error, error) {
+func runAntctProxy(nodeName string, antctlName string, nodeAntctlPath string, proxyPort int, agentNodeName string) (func() error, error) {
 	waitCh := make(chan struct{})
 	go func() {
 		proxyCmd := []string{nodeAntctlPath, "proxy"}
@@ -195,7 +236,7 @@ func runAntctProxy(nodeName string, nodeAntctlPath string, proxyPort int, agentN
 	// wait for 1 second to make sure the proxy is running and to detect if
 	// it errors on start.
 	time.Sleep(time.Second)
-	cmd := "pgrep antctl"
+	cmd := fmt.Sprintf("pgrep %s", antctlName)
 	rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("error when running command '%s' on Node: %v", cmd, err)
@@ -229,9 +270,14 @@ func TestAntctlProxy(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	antctlName := "antctl"
 	nodeAntctlPath := "~/antctl"
-	if err := copyAntctlToNode(data, masterNodeName(), nodeAntctlPath); err != nil {
-		t.Fatalf("Cannot copy antctl on master Node: %v", err)
+	if testOptions.enableCoverage {
+		antctlName = "antctl-coverage"
+		nodeAntctlPath = "~/antctl-coverage"
+	}
+	if err := copyAntctlToNode(data, masterNodeName(), antctlName, nodeAntctlPath); err != nil {
+		t.Fatalf("Cannot copy %s on master Node: %v", antctlName, err)
 	}
 
 	checkAPIAccess := func() error {
@@ -258,7 +304,7 @@ func TestAntctlProxy(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Starting antctl proxy")
-			stopProxyFn, err := runAntctProxy(masterNodeName(), nodeAntctlPath, proxyPort, "")
+			stopProxyFn, err := runAntctProxy(masterNodeName(), antctlName, nodeAntctlPath, proxyPort, "")
 			if err != nil {
 				t.Fatalf("Could not start antctl proxy: %v", err)
 			}

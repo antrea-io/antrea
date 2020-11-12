@@ -657,7 +657,7 @@ func (i *Initializer) initializeIPSec() error {
 	// PID files before starting the OVS daemons, it is safe to assume that
 	// if this file exists, the IPsec monitor is indeed running.
 	const ovsMonitorIPSecPID = "/var/run/openvswitch/ovs-monitor-ipsec.pid"
-	timer := time.NewTimer(5 * time.Second)
+	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
