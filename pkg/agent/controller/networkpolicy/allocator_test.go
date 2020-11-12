@@ -27,6 +27,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
+var (
+	testDeleteInterval = 5 * time.Millisecond
+)
+
 func TestNewIDAllocator(t *testing.T) {
 	tests := []struct {
 		name                    string
@@ -59,7 +63,7 @@ func TestNewIDAllocator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := newIDAllocator(tt.args...)
+			got := newIDAllocator(testDeleteInterval, tt.args...)
 			assert.Equalf(t, tt.expectedLastAllocatedID, got.lastAllocatedID, "Got lastAllocatedID %v, expected %v", got.lastAllocatedID, tt.expectedLastAllocatedID)
 			assert.Equalf(t, tt.expectedAvailableSets, got.availableSet, "Got availableSet %v, expected %v", got.availableSet, tt.expectedAvailableSets)
 			assert.Equalf(t, tt.expectedAvailableSlice, got.availableSlice, "Got availableSlice %v, expected %v", got.availableSlice, tt.expectedAvailableSlice)
@@ -105,7 +109,7 @@ func TestAllocateForRule(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := newIDAllocator(tt.args...)
+			a := newIDAllocator(testDeleteInterval, tt.args...)
 			actualErr := a.allocateForRule(tt.rule)
 			if actualErr != tt.expectedErr {
 				t.Fatalf("Got error %v, expected %v", actualErr, tt.expectedErr)
@@ -155,7 +159,7 @@ func TestRelease(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := newIDAllocator(tt.newArgs...)
+			a := newIDAllocator(testDeleteInterval, tt.newArgs...)
 			actualErr := a.release(tt.releaseArgs)
 			assert.Equalf(t, tt.expectedErr, actualErr, "Got error %v, expected %v", actualErr, tt.expectedErr)
 			assert.Equalf(t, tt.expectedAvailableSets, a.availableSet, "Got availableSet %v, expected %v", a.availableSet, tt.expectedAvailableSets)
@@ -172,15 +176,25 @@ func TestWorker(t *testing.T) {
 		Service:   nil,
 	}
 	tests := []struct {
-		name        string
-		args        []uint32
-		rule        *types.PolicyRule
-		expectedID  uint32
-		expectedErr error
+		name              string
+		args              []uint32
+		minDeleteInterval time.Duration
+		rule              *types.PolicyRule
+		expectedID        uint32
+		expectedErr       error
 	}{
 		{
-			"delete-rule-from-async-rule-cache",
+			"delete-rule-with-async-delete-interval",
 			nil,
+			5 * time.Millisecond,
+			rule,
+			1,
+			nil,
+		},
+		{
+			"delete-rule-with-flow-poll-interval",
+			nil,
+			1 * time.Millisecond,
 			rule,
 			1,
 			nil,
@@ -188,7 +202,8 @@ func TestWorker(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := newIDAllocator(tt.args...)
+			minAsyncDeleteInterval = tt.minDeleteInterval
+			a := newIDAllocator(testDeleteInterval, tt.args...)
 			actualErr := a.allocateForRule(tt.rule)
 			if actualErr != tt.expectedErr {
 				t.Fatalf("Got error %v, expected %v", actualErr, tt.expectedErr)
@@ -197,7 +212,8 @@ func TestWorker(t *testing.T) {
 			defer close(stopCh)
 			go wait.Until(a.worker, time.Millisecond, stopCh)
 
-			a.forgetRule(tt.rule.FlowID, 5*time.Millisecond)
+			start := time.Now()
+			a.forgetRule(tt.rule.FlowID)
 			conditionFunc := func() (bool, error) {
 				a.Lock()
 				defer a.Unlock()
@@ -206,12 +222,15 @@ func TestWorker(t *testing.T) {
 				}
 				return false, nil
 			}
-			if err := wait.Poll(time.Millisecond, time.Millisecond*10, conditionFunc); err != nil {
+			if err := wait.PollImmediate(time.Millisecond, time.Millisecond*10, conditionFunc); err != nil {
 				t.Fatalf("Expect the rule with id %v to be deleted from async rule cache", tt.expectedID)
 			}
 			_, exists, err := a.getRuleFromAsyncCache(tt.expectedID)
 			assert.Falsef(t, exists, "Expect rule to be not present in asyncRuleCache")
 			assert.NoErrorf(t, err, "getRuleFromAsyncCache should not return any error")
+
+			elapsedTime := time.Since(start)
+			assert.GreaterOrEqualf(t, int64(elapsedTime)/int64(time.Millisecond), int64(5), "rule should be there for at least 5ms")
 		})
 	}
 }

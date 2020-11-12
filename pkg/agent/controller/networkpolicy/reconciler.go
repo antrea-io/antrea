@@ -193,7 +193,7 @@ type reconciler struct {
 }
 
 // newReconciler returns a new *reconciler.
-func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore) *reconciler {
+func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, asyncRuleDeleteInterval time.Duration) *reconciler {
 	priorityAssigners := map[binding.TableIDType]*tablePriorityAssigner{}
 	for _, table := range openflow.GetAntreaPolicyBaselineTierTables() {
 		priorityAssigners[table] = &tablePriorityAssigner{
@@ -209,7 +209,7 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 		ofClient:          ofClient,
 		ifaceStore:        ifaceStore,
 		lastRealizeds:     sync.Map{},
-		idAllocator:       newIDAllocator(),
+		idAllocator:       newIDAllocator(asyncRuleDeleteInterval),
 		priorityAssigners: priorityAssigners,
 	}
 	// Check if ofClient is nil or not to be compatible with unit tests.
@@ -513,7 +513,7 @@ func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) er
 	}
 	if err := r.ofClient.BatchInstallPolicyRuleFlows(allOFRules); err != nil {
 		for _, rule := range allOFRules {
-			r.idAllocator.forgetRule(rule.FlowID, asyncDeleteInterval)
+			r.idAllocator.forgetRule(rule.FlowID)
 		}
 		return err
 	}
@@ -648,7 +648,7 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule) error {
 	klog.V(2).Infof("Installing ofRule %d (Direction: %v, From: %d, To: %d, Service: %d)",
 		ofRule.FlowID, ofRule.Direction, len(ofRule.From), len(ofRule.To), len(ofRule.Service))
 	if err := r.ofClient.InstallPolicyRuleFlows(ofRule); err != nil {
-		r.idAllocator.forgetRule(ofRule.FlowID, asyncDeleteInterval)
+		r.idAllocator.forgetRule(ofRule.FlowID)
 		return fmt.Errorf("error installing ofRule %v: %v", ofRule.FlowID, err)
 	}
 	return nil
@@ -700,7 +700,7 @@ func (r *reconciler) uninstallOFRule(ofID uint32, table binding.TableIDType) err
 			priorityAssigner.assigner.Release(uint16(priorityNum))
 		}
 	}
-	r.idAllocator.forgetRule(ofID, asyncDeleteInterval)
+	r.idAllocator.forgetRule(ofID)
 	return nil
 }
 

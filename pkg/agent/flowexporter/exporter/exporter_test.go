@@ -176,6 +176,8 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 			mockDataRec.EXPECT().AddInfoElement(ie, uint64(0)).Return(tempBytes, nil)
 		case "sourcePodName", "sourcePodNamespace", "sourceNodeName", "destinationPodName", "destinationPodNamespace", "destinationNodeName", "destinationServicePortName":
 			mockDataRec.EXPECT().AddInfoElement(ie, "").Return(tempBytes, nil)
+		case "ingressNetworkPolicyName", "ingressNetworkPolicyNamespace", "egressNetworkPolicyName", "egressNetworkPolicyNamespace":
+			mockDataRec.EXPECT().AddInfoElement(ie, "").Return(tempBytes, nil)
 		}
 	}
 	mockDataRec.EXPECT().GetRecord().Return(dataRecord)
