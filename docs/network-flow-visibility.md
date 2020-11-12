@@ -152,8 +152,8 @@ of the flow record from the source Node, where the flow originates from, and ign
 the flow record from the destination Node, where the destination Pod resides. Due
 to this we miss key information such as destination Pod info, ingress NetworkPolicy
 info, stats from the destination Node, etc. In the future, this behavior will be
-changed when we add the support for the correlation of the flow records that belong
-to a single flow. 
+changed when we add support for correlating the different flow records (from source
+and destination Nodes) that belong to the same flow.
 
 #### Connection Metrics
 
