@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TestFlowExporter runs flow exporter to export flow records for flows.
@@ -33,7 +35,6 @@ func TestFlowExporter(t *testing.T) {
 	// TODO: remove this limitation after flow_exporter supports IPv6
 	skipIfIPv6Cluster(t)
 	skipIfNotIPv4Cluster(t)
-	// Should I add skipBenchmark as this runs iperf?
 	data, err := setupTestWithIPFIXCollector(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -55,6 +56,54 @@ func TestFlowExporter(t *testing.T) {
 		t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
 	}
 
+	// Add NetworkPolicy between two iperf Pods.
+	np1, err := data.createNetworkPolicy("test-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		Ingress: []networkingv1.NetworkPolicyIngressRule{{
+			From: []networkingv1.NetworkPolicyPeer{{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"antrea-e2e": "perftest-a",
+					},
+				}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(np1); err != nil {
+			t.Fatalf("Error when deleting network policy: %v", err)
+		}
+	}()
+	np2, err := data.createNetworkPolicy("test-networkpolicy-egress", &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+		Egress: []networkingv1.NetworkPolicyEgressRule{{
+			To: []networkingv1.NetworkPolicyPeer{{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"antrea-e2e": "perftest-b",
+					},
+				}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(np2); err != nil {
+			t.Fatalf("Error when deleting network policy: %v", err)
+		}
+	}()
+	// Wait for network policies to be realized.
+	if err := WaitNetworkPolicyRealize(1, data); err != nil {
+		t.Fatalf("Error when waiting for network policy to be realized: %v", err)
+	}
+	t.Log("Network policies are realized.")
 	podAIPStr := podAIP.ipv4.String()
 	podBIPStr := podBIP.ipv4.String()
 	checkRecordsWithPodIPs(t, data, podAIPStr, podBIPStr, false)
@@ -134,19 +183,31 @@ func checkRecordsWithPodIPs(t *testing.T, data *TestData, podAIP string, podBIP 
 
 		if strings.Contains(record, podAIP) && strings.Contains(record, podBIP) {
 			dataRecordsIntraNode = dataRecordsIntraNode + 1
-			// Check if records have both Pod name and Pod namespace or not
+			// Check if records have both Pod name and Pod namespace or not.
 			if !strings.Contains(record, hex.EncodeToString([]byte("perftest-a"))) {
-				t.Fatalf("Records with podAIP does not have pod name")
+				t.Fatalf("Records with PodAIP does not have Pod name")
 			}
 			if !strings.Contains(record, hex.EncodeToString([]byte("perftest-b"))) {
-				t.Fatalf("Records with podBIP does not have pod name")
+				t.Fatalf("Records with PodBIP does not have Pod name")
 			}
 			if !strings.Contains(record, hex.EncodeToString([]byte(testNamespace))) {
-				t.Fatalf("Records with podAIP and podBIP does not have pod namespace")
+				t.Fatalf("Records with PodAIP and PodBIP does not have Pod Namespace")
+			}
+			// In Kind clusters, there are two flow records for the iperf flow.
+			// One of them has no bytes and we ignore that flow record.
+			if !strings.Contains(record, "octetDeltaCount: 0") {
+				// Check if records have both ingress and egress network policies.
+				if !strings.Contains(record, hex.EncodeToString([]byte("test-networkpolicy-ingress"))) {
+					t.Fatalf("Records does not have NetworkPolicy name with ingress rule")
+				}
+				if !strings.Contains(record, hex.EncodeToString([]byte("test-networkpolicy-egress"))) {
+					t.Fatalf("Records does not have NetworkPolicy name with egress rule")
+				}
 			}
 			// Check the bandwidth using octetDeltaCount in data records sent in second ipfix interval
 			if strings.Contains(record, "seqno=2") || strings.Contains(record, "seqno=3") {
-				// One of them has no bytes ignore that
+				// In Kind clusters, there are two flow records for the iperf flow.
+				// One of them has no bytes and we ignore that flow record.
 				if !strings.Contains(record, "octetDeltaCount: 0") {
 					//split the record in lines to compute bandwidth
 					splitLines := strings.Split(record, "\n")

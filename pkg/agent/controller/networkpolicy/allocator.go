@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	asyncDeleteInterval = time.Second * 5
+	minAsyncDeleteInterval = time.Second * 5
 )
 
 // idAllocator provides interfaces to allocate and release uint32 IDs. It's thread-safe.
@@ -54,6 +54,8 @@ type idAllocator struct {
 	// deleteQueue is used to place a rule ID after a given delay for deleting the
 	// the rule in the asyncRuleCache.
 	deleteQueue workqueue.DelayingInterface
+	// deleteInterval is the delay interval for deleting the rule in the asyncRuleCache.
+	deleteInterval time.Duration
 }
 
 // asyncRuleCacheKeyFunc knows how to get key of a *rule.
@@ -64,11 +66,18 @@ func asyncRuleCacheKeyFunc(obj interface{}) (string, error) {
 
 // newIDAllocator returns a new *idAllocator.
 // It takes a list of allocated IDs, which can be used for the restart case.
-func newIDAllocator(allocatedIDs ...uint32) *idAllocator {
+func newIDAllocator(asyncRuleDeleteInterval time.Duration, allocatedIDs ...uint32) *idAllocator {
 	allocator := &idAllocator{
 		availableSet:   make(map[uint32]struct{}),
 		asyncRuleCache: cache.NewStore(asyncRuleCacheKeyFunc),
 		deleteQueue:    workqueue.NewNamedDelayingQueue("async_delete_networkpolicyrule"),
+	}
+
+	// Set the deleteInterval.
+	if minAsyncDeleteInterval > asyncRuleDeleteInterval {
+		allocator.deleteInterval = minAsyncDeleteInterval
+	} else {
+		allocator.deleteInterval = asyncRuleDeleteInterval
 	}
 
 	var maxID uint32
@@ -120,8 +129,8 @@ func (a *idAllocator) allocateForRule(rule *types.PolicyRule) error {
 }
 
 // forgetRule adds the rule to the async delete queue with a given delay.
-func (a *idAllocator) forgetRule(ruleID uint32, deleteAfter time.Duration) {
-	a.deleteQueue.AddAfter(ruleID, deleteAfter)
+func (a *idAllocator) forgetRule(ruleID uint32) {
+	a.deleteQueue.AddAfter(ruleID, a.deleteInterval)
 }
 
 func (a *idAllocator) getRuleFromAsyncCache(ruleID uint32) (*types.PolicyRule, bool, error) {

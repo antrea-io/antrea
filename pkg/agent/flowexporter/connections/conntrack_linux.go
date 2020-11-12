@@ -136,6 +136,8 @@ func netlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 		DoExport:                true,
 		Zone:                    conn.Zone,
 		Mark:                    conn.Mark,
+		Labels:                  conn.Labels,
+		LabelsMask:              conn.LabelsMask,
 		StatusFlag:              uint32(conn.Status.Value),
 		TupleOrig:               tupleOrig,
 		TupleReply:              tupleReply,

@@ -230,7 +230,7 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	}
 
 	b.Log("Waiting for the workload network policy to be realized")
-	err = waitNetworkPolicyRealize(policyRules, data)
+	err = WaitNetworkPolicyRealize(policyRules, data)
 	if err != nil {
 		b.Fatalf("Checking network policies realization failed: %v", err)
 	}
@@ -258,7 +258,7 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 			err := populateWorkloadNetworkPolicy(generateWorkloadNetworkPolicy(policyRules), data)
 			if err != nil {
 				// cannot use Fatal in a goroutine
-				// if populating policies fails, waitNetworkPolicyRealize will
+				// if populating policies fails, WaitNetworkPolicyRealize will
 				// eventually time out and the test will fail, although it would be
 				// better to fail early in that case.
 				b.Errorf("Error when populating workload network policy: %v", err)
@@ -267,7 +267,7 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 
 		b.Log("Waiting for the network policy to be realized")
 		b.StartTimer()
-		err := waitNetworkPolicyRealize(policyRules, data)
+		err := WaitNetworkPolicyRealize(policyRules, data)
 		if err != nil {
 			b.Fatalf("Checking network policies realization failed: %v", err)
 		}
@@ -281,7 +281,7 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 	}
 }
 
-func waitNetworkPolicyRealize(policyRules int, data *TestData) error {
+func WaitNetworkPolicyRealize(policyRules int, data *TestData) error {
 	return wait.PollImmediate(50*time.Millisecond, *realizeTimeout, func() (bool, error) {
 		return checkRealize(policyRules, data)
 	})

@@ -90,11 +90,12 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
 	podUpdates <-chan v1beta2.PodReference,
-	antreaPolicyEnabled bool) (*Controller, error) {
+	antreaPolicyEnabled bool,
+	asyncRuleDeleteInterval time.Duration) (*Controller, error) {
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
-		reconciler:           newReconciler(ofClient, ifaceStore),
+		reconciler:           newReconciler(ofClient, ifaceStore, asyncRuleDeleteInterval),
 		ofClient:             ofClient,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
 	}
