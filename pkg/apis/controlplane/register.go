@@ -53,6 +53,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&AddressGroupList{},
 		&NetworkPolicy{},
 		&NetworkPolicyList{},
+		&NetworkPolicyStatus{},
 		&NodeStatsSummary{},
 	)
 	return nil

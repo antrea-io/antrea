@@ -115,6 +115,13 @@ rules:
   - apiGroups:
       - security.antrea.tanzu.vmware.com
     resources:
+      - clusternetworkpolicies/status
+      - networkpolicies/status
+    verbs:
+      - update
+  - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
       - tiers
     verbs:
       - get

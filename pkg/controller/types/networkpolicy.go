@@ -25,6 +25,7 @@ import (
 // SpanMeta describes the span information of an object.
 type SpanMeta struct {
 	// NodeNames is a set of node names that this object should be sent to.
+	// nil means it's not calculated yet while empty set means the span is 0 Node.
 	NodeNames sets.String
 }
 
@@ -97,6 +98,8 @@ type NetworkPolicy struct {
 	UID types.UID
 	// Name of the internal Network Policy, must be unique across all Network Policy types.
 	Name string
+	// Generation of the internal Network Policy. It's inherited from the original Network Policy.
+	Generation int64
 	// Reference to the original Network Policy.
 	SourceRef *controlplane.NetworkPolicyReference
 	// Priority represents the relative priority of this Network Policy as compared to

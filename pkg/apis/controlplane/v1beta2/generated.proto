@@ -176,6 +176,15 @@ message NetworkPolicyList {
   repeated NetworkPolicy items = 2;
 }
 
+// NetworkPolicyNodeStatus is the status of a NetworkPolicy on a Node.
+message NetworkPolicyNodeStatus {
+  // The name of the Node that produces the status.
+  optional string nodeName = 1;
+
+  // The generation realized by the Node.
+  optional int64 generation = 2;
+}
+
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
 // It could be a list of names of AddressGroups and/or a list of IPBlock.
 message NetworkPolicyPeer {
@@ -236,6 +245,15 @@ message NetworkPolicyStats {
 
   // The stats of the NetworkPolicy.
   optional github.com.vmware_tanzu.antrea.pkg.apis.stats.v1alpha1.TrafficStats trafficStats = 2;
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// NetworkPolicyStatus is the status of a NetworkPolicy.
+message NetworkPolicyStatus {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  // Nodes contains statuses produced on a list of Nodes.
+  repeated NetworkPolicyNodeStatus nodes = 2;
 }
 
 // NodeStatsSummary contains stats produced on a Node. It's used by the antrea-agents to report stats to the antrea-controller.
