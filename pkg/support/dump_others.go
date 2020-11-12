@@ -21,12 +21,13 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"time"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
 )
 
-func (d *agentDumper) DumpLog(basedir string) error {
+func (d *agentDumper) DumpLog(basedir string, days uint32) error {
 	logDirFlag := flag.CommandLine.Lookup("log_dir")
 	var logDir string
 	if logDirFlag == nil {
@@ -36,10 +37,15 @@ func (d *agentDumper) DumpLog(basedir string) error {
 	} else {
 		logDir = logDirFlag.Value.String()
 	}
-	if err := fileCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent"); err != nil {
+	var timeFilter *time.Time
+	if days > 0 {
+		placeholder := time.Now().Add(-24 * time.Duration(days) * time.Hour)
+		timeFilter = &placeholder
+	}
+	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent", timeFilter); err != nil {
 		return err
 	}
-	return fileCopy(d.fs, path.Join(basedir, "logs", "ovs"), logDir, "ovs")
+	return directoryCopy(d.fs, path.Join(basedir, "logs", "ovs"), logDir, "ovs", timeFilter)
 }
 
 func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {

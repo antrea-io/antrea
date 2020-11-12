@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime/pprof"
 	"strings"
+	"time"
 
 	"github.com/spf13/afero"
 	"k8s.io/utils/exec"
@@ -35,7 +36,7 @@ type AgentDumper interface {
 	DumpHostNetworkInfo(basedir string) error
 	// DumpLog should create files that contains container logs of the agent
 	// Pod under the basedir.
-	DumpLog(basedir string) error
+	DumpLog(basedir string, days uint32) error
 	// DumpAgentInfo should create a file that contains AgentInfo of the agent Pod
 	// under the basedir.
 	DumpAgentInfo(basedir string) error
@@ -54,7 +55,7 @@ type AgentDumper interface {
 type ControllerDumper interface {
 	// DumpLog should create files that contains container logs of the controller
 	// Pod under the basedir.
-	DumpLog(basedir string) error
+	DumpLog(basedir string, days uint32) error
 	// DumpControllerInfo should create a file that contains ControllerInfo of
 	// the controller Pod under the basedir.
 	DumpControllerInfo(basedir string) error
@@ -92,10 +93,11 @@ func dumpNetworkPolicyResources(fs afero.Fs, executor exec.Interface, basedir st
 	return dumpAntctlGet(fs, executor, "addressgroups", basedir)
 }
 
-// fileCopy copies files under the srcDir to the targetDir. Only files whose
-// name matches the prefixFilter will be copied. Copied files will be located
-// under the same relative path.
-func fileCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string) error {
+// directoryCopy copies files under the srcDir to the targetDir. Only files whose
+// name matches the prefixFilter will be copied, at the same time, if the timeFilter is set,
+// only files whose modTime later than the timeFilter will be copied. Copied files will be
+// located under the same relative path.
+func directoryCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string, timeFilter *time.Time) error {
 	err := fs.MkdirAll(targetDir, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("error when creating target dir: %w", err)
@@ -108,6 +110,9 @@ func fileCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string)
 			return nil
 		}
 		if !strings.HasPrefix(info.Name(), prefixFilter) {
+			return nil
+		}
+		if timeFilter != nil && info.ModTime().Before(*timeFilter) {
 			return nil
 		}
 		targetPath := path.Join(targetDir, info.Name())
@@ -150,7 +155,7 @@ func (d *controllerDumper) DumpNetworkPolicyResources(basedir string) error {
 	return dumpNetworkPolicyResources(d.fs, d.executor, basedir)
 }
 
-func (d *controllerDumper) DumpLog(basedir string) error {
+func (d *controllerDumper) DumpLog(basedir string, days uint32) error {
 	logDirFlag := flag.CommandLine.Lookup("log_dir")
 	var logDir string
 	if logDirFlag == nil {
@@ -160,7 +165,12 @@ func (d *controllerDumper) DumpLog(basedir string) error {
 	} else {
 		logDir = logDirFlag.Value.String()
 	}
-	return fileCopy(d.fs, path.Join(basedir, "logs", "controller"), logDir, "antrea-controller")
+	var timeFilter *time.Time
+	if days > 0 {
+		placeholder := time.Now().Add(-24 * time.Duration(days) * time.Hour)
+		timeFilter = &placeholder
+	}
+	return directoryCopy(d.fs, path.Join(basedir, "logs", "controller"), logDir, "antrea-controller", timeFilter)
 }
 
 func (d *controllerDumper) DumpHeapPprof(basedir string) error {

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"time"
 )
 
 const (
@@ -31,7 +32,7 @@ const (
 
 // Todo: Logs for OVS and kubelet are collected from the fixed path currently, more enhancements are needed to support
 // collecting them from a configurable path in the future.
-func (d *agentDumper) DumpLog(basedir string) error {
+func (d *agentDumper) DumpLog(basedir string, days uint32) error {
 	logDirFlag := flag.CommandLine.Lookup("log_dir")
 	var logDir string
 	if logDirFlag == nil {
@@ -41,15 +42,20 @@ func (d *agentDumper) DumpLog(basedir string) error {
 	} else {
 		logDir = logDirFlag.Value.String()
 	}
-	if err := fileCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "rancher-wins-antrea-agent"); err != nil {
+	var timeFilter *time.Time
+	if days > 0 {
+		placeholder := time.Now().Add(-24 * time.Duration(days) * time.Hour)
+		timeFilter = &placeholder
+	}
+	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "rancher-wins-antrea-agent", timeFilter); err != nil {
 		return err
 	}
 	// Dump OVS logs.
-	if err := fileCopy(d.fs, path.Join(basedir, "logs", "ovs"), antreaWindowsOVSLogDir, "ovs"); err != nil {
+	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "ovs"), antreaWindowsOVSLogDir, "ovs", timeFilter); err != nil {
 		return err
 	}
 	// Dump kubelet logs.
-	if err := fileCopy(d.fs, path.Join(basedir, "logs", "kubelet"), antreaWindowsKubeletLogDir, "kubelet"); err != nil {
+	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "kubelet"), antreaWindowsKubeletLogDir, "kubelet", timeFilter); err != nil {
 		return err
 	}
 	return nil

@@ -66,6 +66,7 @@ var option = &struct {
 	labelSelector  string
 	controllerOnly bool
 	nodeListFile   string
+	days           uint32
 }{}
 
 var remoteControllerLongDescription = strings.TrimSpace(`
@@ -109,6 +110,7 @@ func init() {
 		Command.Flags().StringVarP(&option.labelSelector, "label-selector", "l", "", "selector (label query) to filter Nodes for agent bundles, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2)")
 		Command.Flags().BoolVar(&option.controllerOnly, "controller-only", false, "only collect the support bundle of Antrea controller")
 		Command.Flags().StringVarP(&option.nodeListFile, "node-list-file", "f", "", "only collect the support bundle of Antrea controller")
+		Command.Flags().Uint32Var(&option.days, "days", 0, "only collect logs that generated since specific days ago")
 		Command.RunE = controllerRemoteRunE
 	}
 }
@@ -186,7 +188,7 @@ func request(component string, client *rest.RESTClient) error {
 	var err error
 	_, err = client.Post().
 		Resource("supportbundles").
-		Body(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: component}}).
+		Body(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: component}, Days: option.days}).
 		DoRaw(context.TODO())
 	if err == nil {
 		return nil

@@ -133,17 +133,18 @@ func (r *supportBundleREST) Create(ctx context.Context, obj runtime.Object, _ re
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	r.cache = &systemv1beta1.SupportBundle{
 		ObjectMeta: metav1.ObjectMeta{Name: r.mode},
+		Days:       requestBundle.Days,
 		Status:     systemv1beta1.SupportBundleStatusCollecting,
 	}
 	r.cancelFunc = cancelFunc
-
+	cacheCopy := r.cache.DeepCopy()
 	go func() {
 		var err error
 		var b *systemv1beta1.SupportBundle
 		if r.mode == modeAgent {
-			b, err = r.collectAgent(ctx)
+			b, err = r.collectAgent(ctx, cacheCopy)
 		} else if r.mode == modeController {
-			b, err = r.collectController(ctx)
+			b, err = r.collectController(ctx, cacheCopy)
 		}
 		func() {
 			r.statusLocker.Lock()
@@ -249,11 +250,11 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 	}, nil
 }
 
-func (r *supportBundleREST) collectAgent(ctx context.Context) (*systemv1beta1.SupportBundle, error) {
+func (r *supportBundleREST) collectAgent(ctx context.Context, cacheCopy *systemv1beta1.SupportBundle) (*systemv1beta1.SupportBundle, error) {
 	dumper := support.NewAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient, r.aq, r.npq)
 	return r.collect(
 		ctx,
-		dumper.DumpLog,
+		func(basedir string) error { return dumper.DumpLog(basedir, cacheCopy.Days) },
 		dumper.DumpHostNetworkInfo,
 		dumper.DumpFlows,
 		dumper.DumpNetworkPolicyResources,
@@ -263,11 +264,11 @@ func (r *supportBundleREST) collectAgent(ctx context.Context) (*systemv1beta1.Su
 	)
 }
 
-func (r *supportBundleREST) collectController(ctx context.Context) (*systemv1beta1.SupportBundle, error) {
+func (r *supportBundleREST) collectController(ctx context.Context, cacheCopy *systemv1beta1.SupportBundle) (*systemv1beta1.SupportBundle, error) {
 	dumper := support.NewControllerDumper(defaultFS, defaultExecutor)
 	return r.collect(
 		ctx,
-		dumper.DumpLog,
+		func(basedir string) error { return dumper.DumpLog(basedir, cacheCopy.Days) },
 		dumper.DumpNetworkPolicyResources,
 		dumper.DumpControllerInfo,
 		dumper.DumpHeapPprof,
