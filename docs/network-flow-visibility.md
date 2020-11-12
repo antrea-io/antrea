@@ -140,18 +140,20 @@ statistics such as data throughput (bits per second), packet throughput (packets
 per second), cumulative byte count, cumulative packet count etc. Pod-To-Service
 flow visibility is supported only [when Antrea Proxy enabled](feature-gates.md). 
 
-Kubernetes information such as Node name, Pod name, Pod Namespace, Service name
-etc. is added to the flow records. For flow records that are exported from any given
-Antrea Agent, we only provide the information of Kubernetes entities that are local
-to the Antrea Agent. In the future, we plan to extend this feature to provide
-information about remote Kubernetes entities such as remote Node name, remote Pod
-name etc.
+Kubernetes information such as Node name, Pod name, Pod Namespace, Service name, 
+NetworkPolicy name and NetworkPolicy Namespace, is added to the flow records. For
+flow records that are exported from any given Antrea Agent, we only provide the
+information of Kubernetes entities that are local to the Antrea Agent. In the future,
+we plan to extend this feature to provide information about remote Kubernetes entities
+such as remote Node name, remote Pod name etc.
 
 Please note that in the case of inter-Node flows, we are exporting only one copy
-of the flow record from the source Node, where the flow is originated from, and
-ignore the flow record from the destination Node, where the destination Pod resides.
-In the future, this behavior will be changed when the support for Network Policy
-is added as both hosts may apply different Network Policies and Rules.
+of the flow record from the source Node, where the flow originates from, and ignore
+the flow record from the destination Node, where the destination Pod resides. Due
+to this we miss key information such as destination Pod info, ingress NetworkPolicy
+info, stats from the destination Node, etc. In the future, this behavior will be
+changed when we add support for correlating the different flow records (from source
+and destination Nodes) that belong to the same flow.
 
 #### Connection Metrics
 
