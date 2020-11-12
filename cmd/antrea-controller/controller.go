@@ -70,6 +70,8 @@ const (
 
 var allowedPaths = []string{
 	"/healthz",
+	"/mutate/acnp",
+	"/mutate/anp",
 	"/validate/tier",
 	"/validate/acnp",
 	"/validate/anp",

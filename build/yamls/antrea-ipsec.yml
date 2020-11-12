@@ -1002,8 +1002,10 @@ rules:
 - apiGroups:
   - admissionregistration.k8s.io
   resourceNames:
+  - crdmutator.antrea.tanzu.vmware.com
   - crdvalidator.antrea.tanzu.vmware.com
   resources:
+  - mutatingwebhookconfigurations
   - validatingwebhookconfigurations
   verbs:
   - get
@@ -1723,6 +1725,58 @@ spec:
         name: xtables-lock
   updateStrategy:
     type: RollingUpdate
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  labels:
+    app: antrea
+  name: crdmutator.antrea.tanzu.vmware.com
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /mutate/acnp
+  name: acnpmutator.antrea.tanzu.vmware.com
+  rules:
+  - apiGroups:
+    - security.antrea.tanzu.vmware.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clusternetworkpolicies
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /mutate/anp
+  name: anpmutator.antrea.tanzu.vmware.com
+  rules:
+  - apiGroups:
+    - security.antrea.tanzu.vmware.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - networkpolicies
+    scope: Namespaced
+  sideEffects: None
+  timeoutSeconds: 5
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
