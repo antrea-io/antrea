@@ -28,7 +28,8 @@ import (
 )
 
 var (
-	testDeleteInterval = 5 * time.Millisecond
+	testAsyncDeleteInterval    = 50 * time.Millisecond
+	testMinAsyncDeleteInterval = 100 * time.Millisecond
 )
 
 func TestNewIDAllocator(t *testing.T) {
@@ -63,7 +64,8 @@ func TestNewIDAllocator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := newIDAllocator(testDeleteInterval, tt.args...)
+			minAsyncDeleteInterval = testMinAsyncDeleteInterval
+			got := newIDAllocator(testAsyncDeleteInterval, tt.args...)
 			assert.Equalf(t, tt.expectedLastAllocatedID, got.lastAllocatedID, "Got lastAllocatedID %v, expected %v", got.lastAllocatedID, tt.expectedLastAllocatedID)
 			assert.Equalf(t, tt.expectedAvailableSets, got.availableSet, "Got availableSet %v, expected %v", got.availableSet, tt.expectedAvailableSets)
 			assert.Equalf(t, tt.expectedAvailableSlice, got.availableSlice, "Got availableSlice %v, expected %v", got.availableSlice, tt.expectedAvailableSlice)
@@ -109,7 +111,8 @@ func TestAllocateForRule(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := newIDAllocator(testDeleteInterval, tt.args...)
+			minAsyncDeleteInterval = testMinAsyncDeleteInterval
+			a := newIDAllocator(testAsyncDeleteInterval, tt.args...)
 			actualErr := a.allocateForRule(tt.rule)
 			if actualErr != tt.expectedErr {
 				t.Fatalf("Got error %v, expected %v", actualErr, tt.expectedErr)
@@ -159,7 +162,8 @@ func TestRelease(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := newIDAllocator(testDeleteInterval, tt.newArgs...)
+			minAsyncDeleteInterval = testMinAsyncDeleteInterval
+			a := newIDAllocator(testAsyncDeleteInterval, tt.newArgs...)
 			actualErr := a.release(tt.releaseArgs)
 			assert.Equalf(t, tt.expectedErr, actualErr, "Got error %v, expected %v", actualErr, tt.expectedErr)
 			assert.Equalf(t, tt.expectedAvailableSets, a.availableSet, "Got availableSet %v, expected %v", a.availableSet, tt.expectedAvailableSets)
@@ -168,7 +172,7 @@ func TestRelease(t *testing.T) {
 	}
 }
 
-func TestWorker(t *testing.T) {
+func TestIdAllocatorWorker(t *testing.T) {
 	rule := &types.PolicyRule{
 		Direction: v1beta2.DirectionIn,
 		From:      []types.Address{},
@@ -176,25 +180,29 @@ func TestWorker(t *testing.T) {
 		Service:   nil,
 	}
 	tests := []struct {
-		name              string
-		args              []uint32
-		minDeleteInterval time.Duration
-		rule              *types.PolicyRule
-		expectedID        uint32
-		expectedErr       error
+		name                    string
+		args                    []uint32
+		testAsyncDeleteInterval time.Duration
+		rule                    *types.PolicyRule
+		expectedID              uint32
+		expectedErr             error
 	}{
 		{
-			"delete-rule-with-async-delete-interval",
+			// testMinAsyncDeleteInterval(100ms) is larger than testAsyncDeleteInterval(50ms),
+			// so rule should take at least 100ms to be deleted.
+			"delete-rule-with-test-min-async-delete-interval",
 			nil,
-			5 * time.Millisecond,
+			50 * time.Millisecond,
 			rule,
 			1,
 			nil,
 		},
 		{
-			"delete-rule-with-flow-poll-interval",
+			// testAsyncDeleteInterval(200ms) is larger than testMinAsyncDeleteInterval(100ms),
+			// so rule should take at least 200ms to be deleted.
+			"delete-rule-with-test-async-delete-interval",
 			nil,
-			1 * time.Millisecond,
+			200 * time.Millisecond,
 			rule,
 			1,
 			nil,
@@ -202,35 +210,43 @@ func TestWorker(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			minAsyncDeleteInterval = tt.minDeleteInterval
-			a := newIDAllocator(testDeleteInterval, tt.args...)
+			minAsyncDeleteInterval = testMinAsyncDeleteInterval
+			testAsyncDeleteInterval = tt.testAsyncDeleteInterval
+			a := newIDAllocator(testAsyncDeleteInterval, tt.args...)
 			actualErr := a.allocateForRule(tt.rule)
 			if actualErr != tt.expectedErr {
 				t.Fatalf("Got error %v, expected %v", actualErr, tt.expectedErr)
 			}
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-			go wait.Until(a.worker, time.Millisecond, stopCh)
+			defer a.deleteQueue.ShutDown()
+			go wait.Until(a.worker, 50*time.Millisecond, stopCh)
 
-			start := time.Now()
 			a.forgetRule(tt.rule.FlowID)
+
+			startTime := time.Now()
+			var elapsedTime time.Duration
 			conditionFunc := func() (bool, error) {
 				a.Lock()
 				defer a.Unlock()
+				if startTime.IsZero() {
+					startTime = time.Now()
+				}
 				if len(a.availableSlice) > 0 {
+					elapsedTime = time.Since(startTime)
 					return true, nil
 				}
 				return false, nil
 			}
-			if err := wait.PollImmediate(time.Millisecond, time.Millisecond*10, conditionFunc); err != nil {
+
+			if err := wait.PollImmediate(50*time.Millisecond, time.Second, conditionFunc); err != nil {
 				t.Fatalf("Expect the rule with id %v to be deleted from async rule cache", tt.expectedID)
 			}
 			_, exists, err := a.getRuleFromAsyncCache(tt.expectedID)
-			assert.Falsef(t, exists, "Expect rule to be not present in asyncRuleCache")
+			assert.Falsef(t, exists, "Rule should not be present in asyncRuleCache")
 			assert.NoErrorf(t, err, "getRuleFromAsyncCache should not return any error")
-
-			elapsedTime := time.Since(start)
-			assert.GreaterOrEqualf(t, int64(elapsedTime)/int64(time.Millisecond), int64(5), "rule should be there for at least 5ms")
+			// Delta accounts for both deletion time of rule after adding it to deleteQueue and time taken to run the condition function once the poll happens.
+			assert.InDeltaf(t, int64(elapsedTime)/int64(time.Millisecond), int64(a.deleteInterval)/int64(time.Millisecond), 100, "rule should be in cache for about %v", a.deleteInterval)
 		})
 	}
 }
