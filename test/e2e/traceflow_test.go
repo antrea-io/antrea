@@ -26,8 +26,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
 type testcase struct {
@@ -35,6 +37,19 @@ type testcase struct {
 	tf              *v1alpha1.Traceflow
 	expectedPhase   v1alpha1.TraceflowPhase
 	expectedResults []v1alpha1.NodeResult
+}
+
+func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
+	if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
+		t.Fatalf("Error when detecting traceflow: %v", err)
+	} else if !featureGate.Enabled(features.AntreaProxy) {
+		t.Skip("Skipping test because Traceflow is not enabled in the Agent")
+	}
+	if featureGate, err := data.GetControllerFeatures(antreaNamespace); err != nil {
+		t.Fatalf("Error when detecting traceflow: %v", err)
+	} else if !featureGate.Enabled(features.AntreaProxy) {
+		t.Skip("Skipping test because Traceflow is not enabled in the Controller")
+	}
 }
 
 // TestTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
@@ -46,8 +61,14 @@ func TestTraceflowIntraNode(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	if err = data.enableTraceflow(t); err != nil {
-		t.Fatal("Error when enabling Traceflow")
+	skipIfTraceflowDisabled(t, data)
+	encapMode, err := data.GetEncapMode()
+	if err != nil {
+		t.Fatalf("Failed to retrieve encap mode: %v", err)
+	}
+	if encapMode != config.TrafficEncapModeNoEncap {
+		// https://github.com/vmware-tanzu/antrea/issues/897
+		skipIfProviderIs(t, "kind", "Skipping inter-Node Traceflow test for Kind because of #897")
 	}
 
 	node1 := nodeName(0)
@@ -333,9 +354,7 @@ func TestTraceflowInterNode(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	if err = data.enableTraceflow(t); err != nil {
-		t.Fatal("Error when enabling Traceflow")
-	}
+	skipIfTraceflowDisabled(t, data)
 
 	node1 := nodeName(0)
 	node2 := nodeName(1)
@@ -685,21 +704,6 @@ func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1alpha1
 		return nil, err
 	}
 	return tf, nil
-}
-
-func (data *TestData) enableTraceflow(t *testing.T) error {
-	// Enable Traceflow in antrea-controller and antrea-agent ConfigMap.
-	// Use Geneve tunnel.
-	return data.mutateAntreaConfigMap(func(data map[string]string) {
-		antreaControllerConf, _ := data["antrea-controller.conf"]
-		antreaControllerConf = strings.Replace(antreaControllerConf, "#  Traceflow: false", "  Traceflow: true", 1)
-		data["antrea-controller.conf"] = antreaControllerConf
-		antreaAgentConf, _ := data["antrea-agent.conf"]
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#  Traceflow: false", "  Traceflow: true", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#  AntreaProxy: false", "  AntreaProxy: true", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#tunnelType: geneve", "tunnelType: geneve", 1)
-		data["antrea-agent.conf"] = antreaAgentConf
-	}, true, true)
 }
 
 // compareObservations compares expected results and actual results.

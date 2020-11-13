@@ -1118,12 +1118,11 @@ data:
     featureGates:
     # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
-    # Service traffic. Antrea proxy doesn't support an IPv6 only cluster or a Dual-Stack cluster
-    # before PR #1102[https://github.com/vmware-tanzu/antrea/pull/1102] is merged.
-    #  AntreaProxy: false
+    # Service traffic.
+    #  AntreaProxy: true
 
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
-    #  Traceflow: false
+    #  Traceflow: true
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
@@ -1204,7 +1203,7 @@ data:
     #apiPort: 10350
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
-    #enablePrometheusMetrics: false
+    #enablePrometheusMetrics: true
 
     # Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also enables
     # the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge. If no L4 transport proto is given,
@@ -1245,7 +1244,7 @@ data:
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
-    #  Traceflow: false
+    #  Traceflow: true
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
@@ -1261,7 +1260,7 @@ data:
     #apiPort: 10349
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
-    #enablePrometheusMetrics: false
+    #enablePrometheusMetrics: true
 
     # Indicates whether to use auto-generated self-signed TLS certificate.
     # If false, A Secret named "antrea-controller-tls" must be provided with the following keys:
@@ -1276,7 +1275,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-kgd27dftgd
+  name: antrea-config-2k6g59bdkg
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1392,7 +1391,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-kgd27dftgd
+          name: antrea-config-2k6g59bdkg
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1691,7 +1690,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-kgd27dftgd
+          name: antrea-config-2k6g59bdkg
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

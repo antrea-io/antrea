@@ -276,8 +276,7 @@ function deliver_antrea {
 
     sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
 
-    # Configure and append antrea-prometheus.yml to antrea.yml
-    sed -i "s|#enablePrometheusMetrics: false|enablePrometheusMetrics: true|g" $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
+    # Append antrea-prometheus.yml to antrea.yml
     echo "---" >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
     cat $GIT_CHECKOUT_DIR/build/yamls/antrea-prometheus.yml >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
 
