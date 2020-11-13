@@ -11,6 +11,59 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.11.0 - 2020-11-13
+
+Includes all the changes from [0.10.1] and [0.10.2].
+
+The AntreaProxy feature is graduated from Alpha to Beta and is therefore enabled by default.
+
+The Traceflow feature is graduated from Alpha to Beta and is therefore enabled by default.
+
+Support for Prometheus metrics is graduated from Alpha to Beta and Antrea metrics are therefore exposed by default.
+
+### Added
+
+- Support for IPv6 and dual-stack clusters. ([#1518](https://github.com/vmware-tanzu/antrea/pull/1518) [#1102](https://github.com/vmware-tanzu/antrea/pull/1102), [@wenyingd] [@lzhecheng] [@mengdie-song] [@ksamoray])
+  * Note that the FlowExporter feature does not support IPv6 and should not be enabled in clusters where IPv6 addresses are used
+- Add "status" field to the Antrea-native policy CRDs to report the realization status of policies (how many Nodes are currently enforcing the policy). ([#1442](https://github.com/vmware-tanzu/antrea/pull/1442), [@tnqn])
+  * Each Agent reports its status using an internal API in "controlplane.antrea.tanzu.vmware.com" and everything is aggregated by the Controller which updates the "status" field
+- Support for audit logging for Antrea-native policy rules: logging can now be enabled for individual rules with the "enableLogging" field and logs will be written in human-readable format to "/var/log/antrea/networkpolicy/np.log" on the Node's filesystem. ([#1216](https://github.com/vmware-tanzu/antrea/pull/1216), [@qiyueyao])
+- Add "name" field for individual rules in Antrea-native policy CRDs and auto-generate rule names when they are not provided by the user. ([#1330](https://github.com/vmware-tanzu/antrea/pull/1330) [#1451](https://github.com/vmware-tanzu/antrea/pull/1451), [@GraysonWu])
+- Add "baseline" tier for Antrea-native policies: policies in that tier are enforced after (i.e. with a lower precedence) than K8s network policies. ([#1450](https://github.com/vmware-tanzu/antrea/pull/1450), [@Dyanngg])
+- Add support for Antrea-native policies to the "antctl get netpol" command. ([#1301](https://github.com/vmware-tanzu/antrea/pull/1301), [@GraysonWu])
+- Add config option to disable SNAT for Pod-to-External traffic in noEncap mode, in case the Pod CIDR is routable in the Node network. ([#1394](https://github.com/vmware-tanzu/antrea/pull/1394), [@jianjuns])
+- Add NetworkPolicy information (Namespace and Name of the NetworkPolicy allowing the connection) to the IPFIX flow records exported by the Agent when FlowExporter is enabled. ([#1268](https://github.com/vmware-tanzu/antrea/pull/1268), [@srikartati])
+- Support for the FlowExporter feature for Windows Nodes. ([#1321](https://github.com/vmware-tanzu/antrea/pull/1321), [@dreamtalen]) [Windows]
+- Add support for Pod [Traffic Shaping] by leveraging the upstream [bandwidth plugin], maintained by the CNI project. ([#1414](https://github.com/vmware-tanzu/antrea/pull/1414), [@tnqn])
+- Add "antctl log-level" command to change log verbosity of a specific Antrea Agent or of the Controller at runtime; it invokes the "/loglevel" API. ([#1340](https://github.com/vmware-tanzu/antrea/pull/1340), [@jianjuns])
+- Introduce the "antctl proxy" command, which gives antctl the ability to operate as a reverse proxy for the Antrea API, in order to simplify troubleshooting and profiling Antrea. ([#1452](https://github.com/vmware-tanzu/antrea/pull/1452), [@antoninbas])
+- Support for providing a list of Node names when generating a support bundle with antctl. ([#1267](https://github.com/vmware-tanzu/antrea/pull/1267), [@weiqiangt])
+- Additional documentation:
+  * Add list of supported Prometheus metrics ([#726](https://github.com/vmware-tanzu/antrea/pull/726), [@ksamoray])
+  * Document Antrea API groups and versioning policy. ([#1352](https://github.com/vmware-tanzu/antrea/pull/1352) [#1469](https://github.com/vmware-tanzu/antrea/pull/1469), [@antoninbas])
+  * Start security recommendations document ([#1296](https://github.com/vmware-tanzu/antrea/pull/1296), [@antoninbas])
+  * Document available kubectl commands for Antrea-native policies ([#1323](https://github.com/vmware-tanzu/antrea/pull/1323), [@abhiraut])
+
+### Changed
+
+- Upgrade the "controlplane.antrea.tanzu.vmware.com" API to v1beta2; the Antrea Controller still serves version v1beta1 of the API which is now deprecated. ([#1467](https://github.com/vmware-tanzu/antrea/pull/1467), [@Dyanngg] [@tnqn])
+  * Internal NetworkPolicy objects in "controlplane.antrea.tanzu.vmware.com/v1beta2" are cluster-scoped instead of Namespace-scoped and collisions between Antrea-native policies and K8s policies are no longer possible
+- Upgrade the "core.antrea.tanzu.vmware.com" API to v1alpha2 and remove the v1alpha1 version. ([#1467](https://github.com/vmware-tanzu/antrea/pull/1467), [@Dyanngg])
+- Remove deprecated Prometheus metrics "antrea_agent_runtime_info" and "antrea_controller_runtime_info". ([#1503](https://github.com/vmware-tanzu/antrea/pull/1503), [@srikartati])
+- Remove unnecessary writes to "send_redirects" Kernel parameters in the Agent; in theory antrea-agent no longer needs to be run as a "privileged" container, although it is recommended to keep doing so for the FlowExporter feature. ([#1364](https://github.com/vmware-tanzu/antrea/pull/1364), [@tnqn])
+- Do not track Geneve / VXLAN overlay traffic in the host network; this improves data-plane performance when kube-proxy installs a large number of iptables rules. ([#1425](https://github.com/vmware-tanzu/antrea/pull/1425), [@tnqn])
+- Optimize OpenFlow priority assignment in the Agent when converting policies to flows, by assigning all the rule priorities for a given policy in batch. ([#1331](https://github.com/vmware-tanzu/antrea/pull/1331), [@Dyanngg])
+- Upgrade Octant to v0.16.1 and leverage support for "alerts" in the UI to display error messages to users when Traceflow request parameters are invalid or when an error occurs. ([#1371](https://github.com/vmware-tanzu/antrea/pull/1371), [@ZhangYW18])
+- More robust script for preparing Windows Nodes before running the Antrea Agent. ([#1480](https://github.com/vmware-tanzu/antrea/pull/1480), [@ruicao93])
+- Remove dependency on the serviceCIDR configuration parameter in the FlowExporter implementation, when AntreaProxy is enabled. ([#1380](https://github.com/vmware-tanzu/antrea/pull/1380), [@srikartati])
+- Cache mapping from OVS flow ID to original NetworkPolicy in the Agent for a small time interval after the flow has been deleted, to ensure the information remains accessible when generating stats reports or flow records. ([#1411](https://github.com/vmware-tanzu/antrea/pull/1411), [@srikartati])
+- Officially-supported Go version is no longer 1.13 but 1.15. ([#1420](https://github.com/vmware-tanzu/antrea/pull/1420), [@antoninbas]).
+
+### Fixed
+
+- Support for Antrea-native policies in Traceflow: without this change all the Traceflow requests would time out and fail. ([#1361](https://github.com/vmware-tanzu/antrea/pull/1361), [@gran-vmv])
+- Use 32-bit unsigned integers for timestamps in flow records instead of 64-bit signed integers, as per the [IPFIX RFC](https://tools.ietf.org/html/rfc7011#section-6.1.7). ([#1479](https://github.com/vmware-tanzu/antrea/pull/1479), [@zyiou])
+
 ## 0.10.2 - 2020-11-11
 
 ### Added
@@ -505,10 +558,14 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [Default cluster roles]: https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles
 [Aggregated ClusterRoles]: https://kubernetes.io/docs/reference/access-authn-authz/rbac/#aggregated-clusterroles
 [Admission webhooks]: https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/
+[Traffic Shaping]: https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/#support-traffic-shaping
+[bandwidth plugin]: https://github.com/containernetworking/plugins/tree/master/plugins/meta/bandwidth
 
 [0.9.1]: #091---2020-08-21
 [0.9.2]: #092---2020-08-27
 [0.9.3]: #093---2020-09-03
+[0.10.1]: #0101---2020-09-30
+[0.10.2]: #0102---2020-11-11
 
 [@AbdYsn]: https://github.com/AbdYsn
 [@abhiraut]: https://github.com/abhiraut
@@ -518,13 +575,16 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [@dreamtalen]: https://github.com/dreamtalen
 [@Dyanngg]: https://github.com/Dyanngg
 [@gran-vmv]: https://github.com/gran-vmv
+[@GraysonWu]: https://github.com/GraysonWu
 [@jakesokol1]: https://github.com/jakesokol1
 [@jayunit100]: https://github.com/jayunit100
 [@jianjuns]: https://github.com/jianjuns
+[@ksamoray]: https://github.com/ksamoray
 [@lzhecheng]: https://github.com/lzhecheng
 [@MatthewHinton56]: https://github.com/MatthewHinton56
 [@mengdie-song]: https://github.com/mengdie-song
 [@moshe010]: https://github.com/moshe010
+[@qiyueyao]: https://github.com/qiyueyao
 [@reachjainrahul]: https://github.com/reachjainrahul
 [@ruicao93]: https://github.com/ruicao93
 [@srikartati]: https://github.com/srikartati
