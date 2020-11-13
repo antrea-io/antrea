@@ -34,12 +34,14 @@ const (
 	AntreaPolicy featuregate.Feature = "AntreaPolicy"
 
 	// alpha: v0.8
+	// beta: v0.11
 	// Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
 	// It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
 	// Service traffic.
 	AntreaProxy featuregate.Feature = "AntreaProxy"
 
 	// alpha: v0.8
+	// beta: v0.11
 	// Allows to trace path from a generated packet.
 	Traceflow featuregate.Feature = "Traceflow"
 
@@ -65,8 +67,8 @@ var (
 	// available throughout Antrea binaries.
 	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		AntreaPolicy:       {Default: false, PreRelease: featuregate.Alpha},
-		AntreaProxy:        {Default: false, PreRelease: featuregate.Alpha},
-		Traceflow:          {Default: false, PreRelease: featuregate.Alpha},
+		AntreaProxy:        {Default: true, PreRelease: featuregate.Beta},
+		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats: {Default: false, PreRelease: featuregate.Alpha},
 	}
