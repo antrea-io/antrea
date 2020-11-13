@@ -1653,16 +1653,18 @@ func (c *client) endpointDNATFlow(endpointIP net.IP, endpointPort uint16, protoc
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		MatchRegRange(int(endpointPortReg), unionVal, binding.Range{0, 18}).
 		MatchProtocol(protocol)
+	ctZone := CtZone
 	if ipProtocol == binding.ProtocolIP {
 		ipVal := binary.BigEndian.Uint32(endpointIP.To4())
 		flowBuilder = flowBuilder.MatchReg(int(endpointIPReg), ipVal).
 			MatchRegRange(int(endpointPortReg), unionVal, binding.Range{0, 18})
 	} else {
+		ctZone = CtZoneV6
 		ipVal := []byte(endpointIP)
 		flowBuilder = flowBuilder.MatchXXReg(int(endpointIPv6XXReg), ipVal).
 			MatchRegRange(int(endpointPortReg), unionVal, binding.Range{0, 18})
 	}
-	return flowBuilder.Action().CT(true, table.GetNext(), CtZone).
+	return flowBuilder.Action().CT(true, table.GetNext(), ctZone).
 		DNAT(
 			&binding.IPRange{StartIP: endpointIP, EndIP: endpointIP},
 			&binding.PortRange{StartPort: endpointPort, EndPort: endpointPort},
