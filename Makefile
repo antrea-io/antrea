@@ -70,6 +70,11 @@ windows-bin:
 	GOOS=windows $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-cni \
 		github.com/vmware-tanzu/antrea/cmd/antrea-agent
 
+.PHONY: flow-aggregator
+flow-aggregator:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/flow-aggregator
+
 .PHONY: test-unit test-integration
 ifeq ($(UNAME_S),Linux)
 test-unit: .linux-test-unit
@@ -294,6 +299,7 @@ manifest:
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --cloud AKS --encap-mode networkPolicyOnly > build/yamls/antrea-aks.yml
 	$(CURDIR)/hack/generate-manifest-octant.sh --mode dev > build/yamls/antrea-octant.yml
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
+	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev > build/yamls/flow-aggregator.yml
 
 .PHONY: manifest-coverage
 manifest-coverage:
@@ -305,6 +311,16 @@ octant-antrea-ubuntu:
 	@echo "===> Building antrea/octant-antrea-ubuntu Docker image <==="
 	docker build --pull -t antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.octant.ubuntu .
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/octant-antrea-ubuntu
+
+.PHONY: flow-aggregator-ubuntu
+flow-aggregator-ubuntu:
+	@echo "===> Building antrea/flow-aggregator Docker image <==="
+ifneq ($(DOCKER_REGISTRY),"")
+	docker build -t antrea/flow-aggregator:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile .
+else
+	docker build --pull -t antrea/flow-aggregator:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile .
+endif
+	docker tag antrea/flow-aggregator:$(DOCKER_IMG_VERSION) antrea/flow-aggregator
 
 .PHONY: verify
 verify:

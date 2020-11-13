@@ -5,11 +5,13 @@ on:
     - master
     - release-*
     - ipv6
+    - feature/flow-aggregator
   push:
     branches:
     - master
     - release-*
     - ipv6
+    - feature/flow-aggregator
 jobs:
 
 
