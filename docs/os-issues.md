@@ -62,6 +62,7 @@ notes](https://coreos.com/releases/).
 | Issues |
 | ------ |
 | [#591](https://github.com/vmware-tanzu/antrea/issues/591) |
+| [#1516](https://github.com/vmware-tanzu/antrea/issues/1516) |
 
 If your K8s Nodes are running Photon OS 3.0, you may see error messages in the
 antrea-agent logs like this one: `"Received bundle error msg: [...]"`. These
@@ -94,3 +95,21 @@ the Pod network:
 ```
 iptables -A INPUT -i antrea-gw0 -j ACCEPT
 ```
+
+### Pod Traffic Shaping
+
+Antrea provides support for Pod [Traffic Shaping](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/#support-traffic-shaping)
+by leveraging the open-source [bandwidth plugin](https://github.com/containernetworking/plugins/tree/master/plugins/meta/bandwidth)
+maintained by the CNI project. This plugin requires the following Kernel
+modules: `ifb`, `sch_tbf` and `sch_ingress`. It seems that at the moment Photon
+OS 3.0 is built without the `ifb` Kernel module, which you can confirm by
+running `modprobe --dry-run ifb`: an error would indicate that the module is
+indeed missing. Without this module, Pods with the
+`kubernetes.io/egress-bandwidth` annotation cannot be created successfully. Pods
+with no traffic shaping annotation, or which only use the
+`kubernetes.io/ingress-bandwidth` annotation, can still be created successfully
+as they do not require the creation of an `ifb` device.
+
+If Photon OS is patched to enable `ifb`, we will update this documentation to
+reflect this change, and include information about which Photon OS version can
+support egress traffic shaping.
