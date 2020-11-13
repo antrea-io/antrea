@@ -109,6 +109,8 @@ func TestPodTrafficShaping(t *testing.T) {
 	// Test is flaky on dual-stack clusters: https://github.com/vmware-tanzu/antrea/issues/1543.
 	// So we disable it except for IPv4 single-stack clusters for now.
 	skipIfIPv6Cluster(t)
+	nodeName := masterNodeName()
+	skipIfMissingKernelModule(t, nodeName, []string{"ifb", "sch_tbf", "sch_ingress"})
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -138,7 +140,7 @@ func TestPodTrafficShaping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clientPodName := fmt.Sprintf("client-a-%d", i)
 			serverPodName := fmt.Sprintf("server-a-%d", i)
-			if err := data.createPodOnNode(clientPodName, masterNodeName(), perftoolImage, nil, nil, nil, nil, false, func(pod *v1.Pod) {
+			if err := data.createPodOnNode(clientPodName, nodeName, perftoolImage, nil, nil, nil, nil, false, func(pod *v1.Pod) {
 				pod.Annotations = map[string]string{
 					"kubernetes.io/egress-bandwidth": fmt.Sprintf("%dM", tt.clientEgressBandwidth),
 				}
@@ -149,7 +151,7 @@ func TestPodTrafficShaping(t *testing.T) {
 			if err := data.podWaitForRunning(defaultTimeout, clientPodName, testNamespace); err != nil {
 				t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 			}
-			if err := data.createPodOnNode(serverPodName, masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, func(pod *v1.Pod) {
+			if err := data.createPodOnNode(serverPodName, nodeName, perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, func(pod *v1.Pod) {
 				pod.Annotations = map[string]string{
 					"kubernetes.io/ingress-bandwidth": fmt.Sprintf("%dM", tt.serverIngressBandwidth),
 				}

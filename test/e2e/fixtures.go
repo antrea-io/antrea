@@ -70,6 +70,21 @@ func skipIfNotIPv6Cluster(tb testing.TB) {
 	}
 }
 
+func skipIfMissingKernelModule(tb testing.TB, nodeName string, requiredModules []string) {
+	for _, module := range requiredModules {
+		// modprobe with "--dry-run" does not require root privileges
+		cmd := fmt.Sprintf("modprobe --dry-run %s", module)
+		rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
+		if err != nil {
+			tb.Skipf("Skipping test as modprobe could not be run to confirm the presence of module '%s': %v", module, err)
+		}
+		if rc != 0 {
+			tb.Skipf("Skipping test as modprobe exited with an error when trying to confirm the presence of module '%s' - stdout: %s - stderr: %s", module, stdout, stderr)
+		}
+	}
+	tb.Logf("The following modules have been found on Node '%s': %v", nodeName, requiredModules)
+}
+
 func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	tb.Logf("Applying Antrea YAML")
 	if err := data.deployAntrea(); err != nil {
