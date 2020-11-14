@@ -35,9 +35,9 @@ func (c *Controller) addRuleForPod(pod *corev1.Pod) {
 	for _, container := range podContainers {
 		for _, cport := range container.Ports {
 			port := fmt.Sprint(cport.ContainerPort)
-			nodePort, ok := c.PortTable.AddRule(podIP, int(cport.ContainerPort))
+			nodePort, ok := c.portTable.AddRule(podIP, int(cport.ContainerPort))
 			if !ok {
-				klog.Warningf("failed to add rule for podIP: %s, port: %d", podIP, cport.ContainerPort)
+				klog.Warningf("Failed to add rule for podIP: %s, port: %d", podIP, cport.ContainerPort)
 				continue
 			}
 			assignPodAnnotation(pod, port, nodeIP, fmt.Sprint(nodePort))
@@ -46,65 +46,90 @@ func (c *Controller) addRuleForPod(pod *corev1.Pod) {
 }
 
 // HandleAddPod handles pod annotations in NPL for an added pod
-func (c *Controller) HandleAddPod(pod *corev1.Pod) {
+//func (c *Controller) HandleAddPod(pod *corev1.Pod) {
+func (c *Controller) HandleAddPod(obj interface{}) {
+	klog.Infof("Got add pod")
+	pod := obj.(*corev1.Pod).DeepCopy()
 	klog.Infof("Got add event for pod: %s/%s", pod.Namespace, pod.Name)
 	c.addRuleForPod(pod)
-	c.updatePodAnnotation(pod)
+	if pod.Annotations[NPLAnnotationStr] != "" {
+		c.updatePodAnnotation(pod)
+	}
 }
 
 // HandleDeletePod handles pod annotations for a deleted pod
-func (c *Controller) HandleDeletePod(pod *corev1.Pod) {
+//func (c *Controller) HandleDeletePod(pod *corev1.Pod) {
+func (c *Controller) HandleDeletePod(obj interface{}) {
+	pod := obj.(*corev1.Pod).DeepCopy()
 	klog.Infof("Got delete event for pod: %s/%s", pod.Namespace, pod.Name)
 	podIP := pod.Status.PodIP
+	if podIP == "" {
+		return
+	}
 
 	for _, container := range pod.Spec.Containers {
 		for _, cport := range container.Ports {
-			c.PortTable.DeleteRule(podIP, int(cport.ContainerPort))
+			c.portTable.DeleteRule(podIP, int(cport.ContainerPort))
 		}
 	}
 }
 
 // HandleUpdatePod handles pod annotations for a updated pod
-func (c *Controller) HandleUpdatePod(old, newp *corev1.Pod) {
-	klog.Infof("Got update for pod: %s/%s", newp.Namespace, newp.Name)
-	podIP := newp.Status.PodIP
+//func (c *Controller) HandleUpdatePod(old, newp *corev1.Pod) {
+func (c *Controller) HandleUpdatePod(oldObj, newObj interface{}) {
+	oldPod := oldObj.(*corev1.Pod).DeepCopy()
+	newPod := newObj.(*corev1.Pod).DeepCopy()
 
-	// if the namespace of the pod has changed and has gone out of our scope, we need to delete it
-	if old.Namespace != newp.Namespace {
-		c.HandleDeletePod(newp)
+	klog.Infof("Got update for pod: %s/%s", newPod.Namespace, newPod.Name)
+	podIP := newPod.Status.PodIP
+
+	if podIP == "" {
 		return
 	}
 
 	var newPodPorts []string
-	newPodContainers := newp.Spec.Containers
+	newPodContainers := newPod.Spec.Containers
 	for _, container := range newPodContainers {
 		for _, cport := range container.Ports {
 			port := fmt.Sprint(cport.ContainerPort)
 			newPodPorts = append(newPodPorts, port)
-			if !c.PortTable.RuleExists(podIP, int(cport.ContainerPort)) {
-				c.addRuleForPod(newp)
+			if !c.portTable.RuleExists(podIP, int(cport.ContainerPort)) {
+				c.addRuleForPod(newPod)
 			}
 		}
 	}
 
 	// oldPodPorts: [8080, 8081] newPodPorts: [8082, 8081] portsToRemove should have: [8080]
-	oldPodContainers := old.Spec.Containers
-	oldPodIP := old.Status.PodIP
-	for _, container := range oldPodContainers {
-		for _, cport := range container.Ports {
-			port := fmt.Sprint(cport.ContainerPort)
-			if !nplutils.HasElem(newPodPorts, port) {
-				// removed port
-				nodePort := getNodeportFromPodAnnotation(newp, port)
-				if nodePort == "" && c.PortTable.GetEntryByPodIPPort(oldPodIP, int(cport.ContainerPort)) == nil {
-					break
-				}
-				ok := c.PortTable.DeleteRule(podIP, int(cport.ContainerPort))
-				if ok {
-					removeFromPodAnnotation(newp, port)
+	oldPodContainers := oldPod.Spec.Containers
+	oldPodIP := oldPod.Status.PodIP
+
+	if oldPodIP != "" {
+		for _, container := range oldPodContainers {
+			for _, cport := range container.Ports {
+				port := fmt.Sprint(cport.ContainerPort)
+
+				if !nplutils.HasElem(newPodPorts, port) {
+					// removed port
+					nodePort := getNodeportFromPodAnnotation(newPod, port)
+					if nodePort == "" && c.portTable.GetEntryByPodIPPort(oldPodIP, int(cport.ContainerPort)) == nil {
+						break
+					}
+					ok := c.portTable.DeleteRule(podIP, int(cport.ContainerPort))
+					if ok {
+						removeFromPodAnnotation(newPod, port)
+					}
 				}
 			}
 		}
 	}
-	c.updatePodAnnotation(newp)
+	if podAnnotationChanged(newPod, oldPod) {
+		c.updatePodAnnotation(newPod)
+	}
+}
+
+func podAnnotationChanged(newPod, oldPod *corev1.Pod) bool {
+	if newPod.Annotations[NPLAnnotationStr] != oldPod.Annotations[NPLAnnotationStr] {
+		return true
+	}
+	return false
 }

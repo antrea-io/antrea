@@ -20,69 +20,17 @@ import (
 	"time"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
 
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
 )
 
 const podResyncPeriod = 60 * time.Minute
 
 type Controller struct {
-	PortTable  *portcache.PortTable
-	KubeClient clientset.Interface
+	portTable  *portcache.PortTable
+	kubeClient clientset.Interface
 }
 
-func NewNPLController(kubeClient clientset.Interface) *Controller {
-	return &Controller{KubeClient: kubeClient}
-}
-
-func (c *Controller) SetupEventHandlers(k8sinfo informers.SharedInformerFactory) {
-	nodeName, err := env.GetNodeName()
-	if err != nil {
-		klog.Warningf("Failed to get nodename, event handlers won't be started for NPL")
-		return
-	}
-	podEventHandler := cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			addPod := obj.(*corev1.Pod).DeepCopy()
-			//if nplutils.GetHostname() == addPod.Spec.NodeName {
-			if nodeName == addPod.Spec.NodeName {
-				c.HandleAddPod(addPod)
-			}
-		},
-
-		DeleteFunc: func(obj interface{}) {
-			deletePod, ok := obj.(*corev1.Pod)
-			if !ok {
-				// Pod was deleted but its final state is unrecorded.
-				tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-				if !ok {
-					klog.Warningf("couldn't get object from tombstone %#v", obj)
-					return
-				}
-				deletePod, ok = tombstone.Obj.(*corev1.Pod)
-				if !ok {
-					klog.Warningf("Tombstone contained object that is not a Pod: %#v", obj)
-					return
-				}
-			}
-			if nodeName == deletePod.Spec.NodeName {
-				c.HandleDeletePod(deletePod)
-			}
-		},
-
-		UpdateFunc: func(old, cur interface{}) {
-			oldPod, newPod := old.(*corev1.Pod).DeepCopy(), cur.(*corev1.Pod).DeepCopy()
-			if oldPod.ResourceVersion != newPod.ResourceVersion &&
-				nodeName == newPod.Spec.NodeName {
-				c.HandleUpdatePod(oldPod, newPod)
-			}
-		},
-	}
-	podInformer := k8sinfo.Core().V1().Pods()
-	podInformer.Informer().AddEventHandlerWithResyncPeriod(podEventHandler, podResyncPeriod)
+func NewNPLController(kubeClient clientset.Interface, pt *portcache.PortTable) *Controller {
+	return &Controller{kubeClient: kubeClient, portTable: pt}
 }

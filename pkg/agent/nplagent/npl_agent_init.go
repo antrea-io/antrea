@@ -19,35 +19,58 @@ package nplagent
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 // InitializeNPLAgent : start NodePortLocal (NPL) agent
 // Initialize port table cache to keep a track of node ports available for use of NPL
 // SetupEventHandlers to handle pod add, update and delete events
 // When a Pod gets created, a free node port is obtained from the port table cache and a DNAT rule is added to send traffic to the pod ip:port
-func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange string) error {
-	c := k8s.NewNPLController(kubeClient)
+func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange string, stop <-chan struct{}) error {
+	nodeName, err := env.GetNodeName()
+	if err != nil {
+		return fmt.Errorf("Could not get node name while initializing NPL: %v", err)
+	}
 	start, end, err := lib.ParsePortsRange(portRange)
 	if err != nil {
 		return fmt.Errorf("something went wrong while fetching port range: %v", err)
 	}
 	var ok bool
-	c.PortTable, ok = portcache.NewPortTable(start, end)
+	portTable, ok := portcache.NewPortTable(start, end)
 	if !ok {
 		return errors.New("NPL port table could not be initialized")
 	}
-	ok = c.PortTable.PodPortRules.Init()
+	ok = portTable.PodPortRules.Init()
 	if !ok {
 		return errors.New("NPL rules for pod ports could not be initialized")
 	}
+	c := k8s.NewNPLController(kubeClient, portTable)
 	c.RemoveNPLAnnotationFromPods()
-	c.SetupEventHandlers(informerFactory)
+
+	// Watch only the pods which belong to the node where the agent is running
+	fieldSelector := fields.OneTermEqualSelector("spec.nodeName", nodeName)
+	lw := cache.NewListWatchFromClient(kubeClient.CoreV1().RESTClient(), "pods", metav1.NamespaceAll, fieldSelector)
+	_, controller := cache.NewInformer(lw, &corev1.Pod{}, 5*time.Second,
+		cache.ResourceEventHandlerFuncs{
+			AddFunc:    c.HandleAddPod,
+			DeleteFunc: c.HandleDeletePod,
+			UpdateFunc: c.HandleUpdatePod,
+		},
+	)
+
+	go controller.Run(stop)
 	return nil
 }

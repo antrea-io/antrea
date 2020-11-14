@@ -26,7 +26,7 @@ import (
 	"k8s.io/klog"
 )
 
-// HasElem : check if a slice contains an element
+// HasElem checks if a slice contains an element
 func HasElem(s interface{}, elem interface{}) bool {
 	arrV := reflect.ValueOf(s)
 
@@ -43,7 +43,7 @@ func HasElem(s interface{}, elem interface{}) bool {
 	return false
 }
 
-// ParsePortsRange : parse port range and check if valid
+// ParsePortsRange parses port range and check if valid
 func ParsePortsRange(portRangeConfig string) (start, end int, err error) {
 	portsRange := strings.Split(portRangeConfig, "-")
 	if len(portsRange) != 2 {
@@ -65,7 +65,7 @@ func ParsePortsRange(portRangeConfig string) (start, end int, err error) {
 	return start, end, nil
 }
 
-// IsPortAvailable : Check if a port is free or being used by any other process
+// IsPortAvailable checks if a port is free or being used by any other process
 func IsPortAvailable(mPort int) bool {
 	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_STREAM, unix.IPPROTO_TCP)
 	if err != nil {

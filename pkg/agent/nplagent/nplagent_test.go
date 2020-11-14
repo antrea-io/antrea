@@ -34,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 )
 
 // Mock PortPortRule for tests to simulate IPTable
@@ -88,6 +89,7 @@ var defaultPort = 80
 
 var kubeClient *k8sfake.Clientset
 var c *k8s.Controller
+var portTable *portcache.PortTable
 
 func getTestPod() corev1.Pod {
 	testPod := corev1.Pod{
@@ -148,10 +150,17 @@ func TestMain(t *testing.T) {
 	kubeClient = k8sfake.NewSimpleClientset()
 
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
-	c = k8s.NewNPLController(kubeClient)
+	portTable = NewPortTable()
+	c = k8s.NewNPLController(kubeClient, portTable)
 
-	c.PortTable = NewPortTable()
-	c.SetupEventHandlers(informerFactory)
+	podEventHandler := cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { c.HandleAddPod(obj) },
+		DeleteFunc: func(obj interface{}) { c.HandleDeletePod(obj) },
+		UpdateFunc: func(old, new interface{}) { c.HandleUpdatePod(old, new) },
+	}
+	podInformer := informerFactory.Core().V1().Pods()
+	podInformer.Informer().AddEventHandlerWithResyncPeriod(podEventHandler, 5*time.Second)
+
 	stopCh := make(chan struct{})
 	informerFactory.Start(stopCh)
 }
@@ -166,14 +175,15 @@ func TestPodAdd(t *testing.T) {
 	a := assert.New(t)
 
 	testPod := getTestPod()
-	p, err := c.KubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod, metav1.CreateOptions{})
+	p, err := kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Pod creation failed with err: %v", err)
 	}
 	t.Logf("successfully created Pod: %v", p)
 
 	compareWithRetry(t, func() bool {
-		updatedPod, err := c.KubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
+		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
+
 		if err != nil {
 			t.Fatalf("Failed to update pod: %v", err)
 		}
@@ -190,12 +200,13 @@ func TestPodAdd(t *testing.T) {
 	}
 
 	a.Equal(nplData[0].Nodeip, defaultHostIP)
-	a.Equal(nplData[0].Podport, fmt.Sprint(defaultPort))
-	a.Equal(c.PortTable.RuleExists(defaultPodIP, defaultPort), true)
+	portTable.RuleExists(defaultPodIP, defaultPort)
+	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
 }
 
 // Test that any update in the Pod container port is reflected in pod annotation and local port cache
 func TestPodUpdate(t *testing.T) {
+	fmt.Println("here start update")
 	var ann map[string]string
 	var nplData []nplAnnotation
 	var data string
@@ -205,14 +216,14 @@ func TestPodUpdate(t *testing.T) {
 	testPod := getTestPod()
 	testPod.Spec.Containers[0].Ports[0].ContainerPort = 8080
 	testPod.ResourceVersion = "2"
-	p, err := c.KubeClient.CoreV1().Pods(defaultNS).Update(context.TODO(), &testPod, metav1.UpdateOptions{})
+	p, err := kubeClient.CoreV1().Pods(defaultNS).Update(context.TODO(), &testPod, metav1.UpdateOptions{})
 	if err != nil {
 		t.Fatalf("Pod creation failed with err: %v", err)
 	}
 	t.Logf("successfully created Pod: %v", p)
 
 	compareWithRetry(t, func() string {
-		updatedPod, err := c.KubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
+		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("Failed to update pod: %v", err)
 		}
@@ -224,20 +235,20 @@ func TestPodUpdate(t *testing.T) {
 		}
 		return nplData[0].Podport
 	}, "8080", 20*time.Second)
-	a.Equal(c.PortTable.RuleExists(defaultPodIP, defaultPort), false)
-	a.Equal(c.PortTable.RuleExists(defaultPodIP, 8080), true)
+	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), false)
+	a.Equal(portTable.RuleExists(defaultPodIP, 8080), true)
 }
 
 // Make sure that when a pod gets deleted, corresponding entry gets deleted from local port cache also
 func TestPodDel(t *testing.T) {
-	err := c.KubeClient.CoreV1().Pods(defaultNS).Delete(context.TODO(), defaultPodName, metav1.DeleteOptions{})
+	err := kubeClient.CoreV1().Pods(defaultNS).Delete(context.TODO(), defaultPodName, metav1.DeleteOptions{})
 	if err != nil {
 		t.Fatalf("Pod deletion failed with err: %v", err)
 	}
 	t.Logf("successfully deleted Pod: %s", defaultPodName)
 
 	compareWithRetry(t, func() bool {
-		return c.PortTable.RuleExists(defaultPodIP, 8080)
+		return portTable.RuleExists(defaultPodIP, 8080)
 	}, false, 20*time.Second)
 }
 
@@ -252,14 +263,14 @@ func TestPodAddMultiPort(t *testing.T) {
 	testPod := getTestPod()
 	newPort := corev1.ContainerPort{ContainerPort: 90}
 	testPod.Spec.Containers[0].Ports = append(testPod.Spec.Containers[0].Ports, newPort)
-	p, err := c.KubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod, metav1.CreateOptions{})
+	p, err := kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Pod creation failed with err: %v", err)
 	}
 	t.Logf("successfully created Pod: %v", p)
 
 	compareWithRetry(t, func() bool {
-		updatedPod, err := c.KubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
+		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("Failed to update pod: %v", err)
 		}
@@ -276,11 +287,11 @@ func TestPodAddMultiPort(t *testing.T) {
 
 	a.Equal(nplData[0].Nodeip, defaultHostIP)
 	a.Equal(nplData[0].Podport, fmt.Sprint(defaultPort))
-	a.Equal(c.PortTable.RuleExists(defaultPodIP, defaultPort), true)
+	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
 
 	a.Equal(nplData[1].Nodeip, defaultHostIP)
 	a.Equal(nplData[1].Podport, "90")
-	a.Equal(c.PortTable.RuleExists(defaultPodIP, 90), true)
+	a.Equal(portTable.RuleExists(defaultPodIP, 90), true)
 }
 
 // Create Multiple Pods and test that annotations for both te pods are updated correctly
@@ -295,7 +306,7 @@ func TestAddMultiplePods(t *testing.T) {
 	testPod1 := getTestPod()
 	testPod1.Name = "pod1"
 	testPod1.Status.PodIP = "10.10.10.1"
-	p, err := c.KubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod1, metav1.CreateOptions{})
+	p, err := kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod1, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Pod creation failed with err: %v", err)
 	}
@@ -304,14 +315,14 @@ func TestAddMultiplePods(t *testing.T) {
 	testPod2 := getTestPod()
 	testPod2.Name = "pod2"
 	testPod2.Status.PodIP = "10.10.10.2"
-	p, err = c.KubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod2, metav1.CreateOptions{})
+	p, err = kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod2, metav1.CreateOptions{})
 	if err != nil {
 		t.Errorf("Pod creation failed with err: %v", err)
 	}
 	t.Logf("successfully created Pod: %v", p)
 
 	compareWithRetry(t, func() bool {
-		updatedPod, err := c.KubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod1.Name, metav1.GetOptions{})
+		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod1.Name, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("Failed to update pod: %v", err)
 		}
@@ -329,10 +340,10 @@ func TestAddMultiplePods(t *testing.T) {
 
 	a.Equal(nplData[0].Nodeip, defaultHostIP)
 	a.Equal(nplData[0].Podport, fmt.Sprint(defaultPort))
-	a.Equal(c.PortTable.RuleExists(testPod1.Status.PodIP, defaultPort), true)
+	a.Equal(portTable.RuleExists(testPod1.Status.PodIP, defaultPort), true)
 
 	compareWithRetry(t, func() bool {
-		updatedPod, err := c.KubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod2.Name, metav1.GetOptions{})
+		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod2.Name, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("Failed to update pod: %v", err)
 		}
@@ -348,5 +359,5 @@ func TestAddMultiplePods(t *testing.T) {
 
 	a.Equal(nplData[0].Nodeip, defaultHostIP)
 	a.Equal(nplData[0].Podport, fmt.Sprint(defaultPort))
-	a.Equal(c.PortTable.RuleExists(testPod2.Status.PodIP, defaultPort), true)
+	a.Equal(portTable.RuleExists(testPod2.Status.PodIP, defaultPort), true)
 }

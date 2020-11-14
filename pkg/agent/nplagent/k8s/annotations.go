@@ -35,12 +35,12 @@ type NPLEPAnnotation struct {
 	NodePort string `json:"nodePort"`
 }
 
-func Stringify(serialize interface{}) string {
+func stringify(serialize interface{}) string {
 	jsonMarshalled, _ := json.Marshal(serialize)
 	return string(jsonMarshalled)
 }
 
-func IsNodePortInAnnotation(s []NPLEPAnnotation, nodeport string) bool {
+func isNodePortInAnnotation(s []NPLEPAnnotation, nodeport string) bool {
 	for _, i := range s {
 		if i.NodePort == nodeport {
 			return true
@@ -51,21 +51,21 @@ func IsNodePortInAnnotation(s []NPLEPAnnotation, nodeport string) bool {
 
 func assignPodAnnotation(pod *corev1.Pod, containerPort, nodeIP, nodePort string) {
 	var err error
-	current := make(map[string]string)
-	if pod.Annotations != nil {
-		current = pod.Annotations
+	current := pod.Annotations
+	if current == nil {
+		current = make(map[string]string)
 	}
 
-	klog.Infof("Building annotation for pod: %s\tport: %s --> %s:%s", pod.Name, containerPort, nodeIP, nodePort)
+	klog.V(0).Infof("Building annotation for pod: %s\tport: %s --> %s:%s", pod.Name, containerPort, nodeIP, nodePort)
 
 	var annotations []NPLEPAnnotation
 	// nplEP annotation exists
 	if current[NPLAnnotationStr] != "" {
 		if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
-			klog.Warningf("Unable to unmarshal NPLEP annotation")
+			klog.Warningf("Unable to unmarshal NPLEP annotation: %v", current[NPLAnnotationStr])
 		}
 
-		if !IsNodePortInAnnotation(annotations, nodePort) {
+		if !isNodePortInAnnotation(annotations, nodePort) {
 			annotations = append(annotations, NPLEPAnnotation{
 				PodPort:  containerPort,
 				NodeIP:   nodeIP,
@@ -80,7 +80,7 @@ func assignPodAnnotation(pod *corev1.Pod, containerPort, nodeIP, nodePort string
 		}}
 	}
 
-	current[NPLAnnotationStr] = Stringify(annotations)
+	current[NPLAnnotationStr] = stringify(annotations)
 	pod.Annotations = current
 }
 
@@ -88,10 +88,10 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort string) {
 	var err error
 	current := pod.Annotations
 
-	klog.Infof("Removing annotation from pod: %s\tport: %s", pod.Name, containerPort)
+	klog.V(0).Infof("Removing annotation from pod: %s\tport: %s", pod.Name, containerPort)
 	var annotations []NPLEPAnnotation
 	if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
-		klog.Warningf("Unable to unmarshal NPLEP annotation")
+		klog.Warningf("Unable to unmarshal NPLEP annotation: %v", current[NPLAnnotationStr])
 		return
 	}
 
@@ -102,18 +102,18 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort string) {
 		}
 	}
 
-	current[NPLAnnotationStr] = Stringify(annotations)
+	current[NPLAnnotationStr] = stringify(annotations)
 	pod.Annotations = current
 }
 
-// RemoveNPLAnnotationFromPods : Removes npl annotations from all pods
+// RemoveNPLAnnotationFromPods Removes npl annotations from all pods
 func (c *Controller) RemoveNPLAnnotationFromPods() {
 	nodeName, err := env.GetNodeName()
 	if err != nil {
 		klog.Warningf("Failed to get nodename, NPL annotation can not be removed for pods")
 		return
 	}
-	podList, err := c.KubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
+	podList, err := c.kubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
 		FieldSelector:   "spec.nodeName=" + nodeName,
 		ResourceVersion: "0",
 	})
@@ -122,29 +122,26 @@ func (c *Controller) RemoveNPLAnnotationFromPods() {
 		return
 	}
 	for i, pod := range podList.Items {
-		if nodeName != pod.Spec.NodeName {
-			continue
-		}
 		podAnnotation := pod.GetAnnotations()
 		if podAnnotation == nil {
+			continue
+		}
+		if _, exists := podAnnotation[NPLAnnotationStr]; !exists {
 			continue
 		}
 		klog.Infof("Removing all NPL annotation from pod: %s, ns: %s", pod.Name, pod.Namespace)
 		delete(podAnnotation, NPLAnnotationStr)
 		pod.Annotations = podAnnotation
-		_, err = c.KubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), &podList.Items[i], metav1.UpdateOptions{})
-		if err != nil {
-			klog.Warningf("Failed to update NPL annotation for pod: %s, ns: %s, err: %v", pod.Name, pod.Namespace, err)
-		}
+		c.updatePodAnnotation(&podList.Items[i])
 	}
 }
 
 func (c *Controller) updatePodAnnotation(pod *corev1.Pod) error {
-	if _, err := c.KubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{}); err != nil {
+	if _, err := c.kubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{}); err != nil {
 		klog.Warningf("Unable to update pod %s with annotation: %+v", pod.Name, err)
 		return err
 	}
-	klog.Infof("Successfully updated pod %s/%s annotation", pod.Namespace, pod.Name)
+	klog.V(0).Infof("Successfully updated pod %s/%s annotation", pod.Namespace, pod.Name)
 	return nil
 }
 
